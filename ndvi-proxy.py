@@ -76,6 +76,8 @@ def index_formula(index):
         return "(s.B08 - s.B03) / (s.B08 + s.B03)"
     if index == "NDRE":
         return "(s.B08 - s.B05) / (s.B08 + s.B05)"
+    if index == "NDMI":  # umidade da vegetacao (SWIR B11)
+        return "(s.B08 - s.B11) / (s.B08 + s.B11)"
     return "(s.B08 - s.B04) / (s.B08 + s.B04)"  # NDVI
 
 # máscara de nuvem via SCL (Scene Classification): 0 no-data,1 saturated,3 shadow,8/9 cloud,10 cirrus,11 snow
@@ -83,7 +85,7 @@ CLOUD_MASK = "(s.SCL===0||s.SCL===1||s.SCL===3||s.SCL===8||s.SCL===9||s.SCL===10
 
 def evalscript_image(index):
     return """//VERSION=3
-function setup(){ return { input:["B03","B04","B05","B08","SCL","dataMask"], output:{bands:4} }; }
+function setup(){ return { input:["B03","B04","B05","B08","B11","SCL","dataMask"], output:{bands:4} }; }
 function ramp(v){
   // paleta tipo vegetacao: marrom -> vermelho -> amarelo -> verde claro -> verde escuro
   var stops=[[-0.2,[0.4,0.27,0.18]],[0.0,[0.66,0.27,0.14]],[0.2,[0.9,0.45,0.2]],
@@ -104,9 +106,16 @@ function evaluatePixel(s){
 }
 """.replace("%FORMULA%", index_formula(index)).replace("%CLOUD%", CLOUD_MASK)
 
+def evalscript_truecolor():
+    # Cor real recente (sem mascara de nuvem — para ver a imagem atual do terreno)
+    return ("//VERSION=3\n"
+        "function setup(){ return { input:[\"B02\",\"B03\",\"B04\",\"dataMask\"], output:{bands:4} }; }\n"
+        "function evaluatePixel(s){ if(s.dataMask===0) return [0,0,0,0];\n"
+        "  var g=2.8; return [Math.min(1,s.B04*g), Math.min(1,s.B03*g), Math.min(1,s.B02*g), 1]; }")
+
 def evalscript_stats(index):
     return """//VERSION=3
-function setup(){ return { input:[{bands:["B03","B04","B05","B08","SCL","dataMask"]}],
+function setup(){ return { input:[{bands:["B03","B04","B05","B08","B11","SCL","dataMask"]}],
   output:[{id:"idx",bands:1,sampleType:"FLOAT32"},{id:"dataMask",bands:1}] }; }
 function evaluatePixel(s){
   var bad = (s.dataMask===0 || %CLOUD%);
@@ -130,7 +139,7 @@ def api_post(url, payload, accept):
 def evalscript_raw(index):
     # 2 bandas: L = (indice+1)/2 (0..1 -> 0..255), A = valido(1)/invalido(0). Para medir por quadra no app.
     return ("//VERSION=3\n"
-        "function setup(){ return { input:[\"B03\",\"B04\",\"B05\",\"B08\",\"SCL\",\"dataMask\"], output:{bands:2} }; }\n"
+        "function setup(){ return { input:[\"B03\",\"B04\",\"B05\",\"B08\",\"B11\",\"SCL\",\"dataMask\"], output:{bands:2} }; }\n"
         "function evaluatePixel(s){ if(s.dataMask===0 || " + CLOUD_MASK + ") return [0,0];\n"
         "  var v=" + index_formula(index) + "; if(v<-1)v=-1; if(v>1)v=1; return [(v+1)/2, 1]; }")
 
@@ -158,7 +167,9 @@ def do_index(index, date, bbox, width, geometry=None, raw=False):
         },
         "output": {"width": width, "height": height,
                    "responses": [{"identifier": "default", "format": {"type": "image/png"}}]},
-        "evalscript": (evalscript_raw(index) if raw else evalscript_image(index)),
+        "evalscript": (evalscript_raw(index) if raw
+                       else (evalscript_truecolor() if (index or "").upper() == "TRUECOLOR"
+                             else evalscript_image(index))),
     }
     if geometry:
         payload["input"]["bounds"]["geometry"] = geometry  # recorta o índice só dentro das quadras
@@ -211,26 +222,26 @@ def do_point(lat, lng, date):
     except Exception:
         frm = date; to = date
     evalscript = ("//VERSION=3\n"
-        "function setup(){ return { input:[{bands:[\"B03\",\"B04\",\"B05\",\"B08\",\"SCL\",\"dataMask\"]}], "
+        "function setup(){ return { input:[{bands:[\"B03\",\"B04\",\"B05\",\"B08\",\"B11\",\"SCL\",\"dataMask\"]}], "
         "output:[{id:\"ndvi\",bands:1,sampleType:\"FLOAT32\"},{id:\"ndre\",bands:1,sampleType:\"FLOAT32\"},"
-        "{id:\"gndvi\",bands:1,sampleType:\"FLOAT32\"},{id:\"dataMask\",bands:1}] }; }\n"
+        "{id:\"gndvi\",bands:1,sampleType:\"FLOAT32\"},{id:\"ndmi\",bands:1,sampleType:\"FLOAT32\"},{id:\"dataMask\",bands:1}] }; }\n"
         "function evaluatePixel(s){ var bad=(s.dataMask===0||" + CLOUD_MASK + ");\n"
         "  return { ndvi:[(s.B08-s.B04)/(s.B08+s.B04)], ndre:[(s.B08-s.B05)/(s.B08+s.B05)], "
-        "gndvi:[(s.B08-s.B03)/(s.B08+s.B03)], dataMask:[bad?0:1] }; }")
+        "gndvi:[(s.B08-s.B03)/(s.B08+s.B03)], ndmi:[(s.B08-s.B11)/(s.B08+s.B11)], dataMask:[bad?0:1] }; }")
     payload = {
         "input": {"bounds": {"geometry": poly, "properties": {"crs": CRS84}},
                   "data": [{"type": "sentinel-2-l2a", "dataFilter": {"mosaickingOrder": "leastCC"}}]},
         "aggregation": {"timeRange": {"from": frm + "T00:00:00Z", "to": to + "T23:59:59Z"},
                         "aggregationInterval": {"of": "P7D"}, "evalscript": evalscript, "resx": 10, "resy": 10},
         "calculations": {"ndvi": {"statistics": {"default": {}}}, "ndre": {"statistics": {"default": {}}},
-                         "gndvi": {"statistics": {"default": {}}}},
+                         "gndvi": {"statistics": {"default": {}}}, "ndmi": {"statistics": {"default": {}}}},
     }
     raw, _ = api_post(STATS_URL, payload, "application/json")
     d = json.loads(raw.decode())
-    res = {"ndvi": None, "ndre": None, "gndvi": None, "date": None}
+    res = {"ndvi": None, "ndre": None, "gndvi": None, "ndmi": None, "date": None}
     for it in d.get("data", []):
         outs = it.get("outputs", {}); ok = False
-        for k in ["ndvi", "ndre", "gndvi"]:
+        for k in ["ndvi", "ndre", "gndvi", "ndmi"]:
             st = (((outs.get(k, {}) or {}).get("bands", {}) or {}).get("B0", {}) or {}).get("stats", {})
             if st and (st.get("sampleCount", 0) - st.get("noDataCount", 0)) > 0 and st.get("mean") is not None:
                 res[k] = round(st.get("mean"), 3); ok = True

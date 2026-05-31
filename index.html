@@ -391,10 +391,8 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
-<button class="btn-sm" onclick="toggleLegend()">LEGENDA</button>
 </div>
 </div>
-<div class="legend-panel" id="legendPanel"></div>
 <div class="agenda-panel" id="agendaPanel"></div>
 <div class="map-container">
 <div id="map"></div>
@@ -712,11 +710,34 @@ function initMap(){
     { maxZoom:21, maxNativeZoom:19, attribution:'Imagery \u00a9 Esri, Maxar, Earthstar Geographics' }).addTo(_map);
   _qLayer = LF.layerGroup().addTo(_map);
   _map.attributionControl.setPrefix('');
+  try{ LF.control.scale({ metric:true, imperial:false, maxWidth:150, position:'bottomleft' }).addTo(_map); }catch(e){}
+  addHaControl();
   setTimeout(function(){ try{ _map.invalidateSize(); }catch(e){} }, 200);
   window.addEventListener('resize', function(){ try{ _map.invalidateSize(); }catch(e){} });
   _geo = loadGeoref();
   if(_geo){ _map.fitBounds(geoBounds(_geo)); }
   else { setTimeout(startGeoref, 250); }
+}
+
+/* ---- R\u00e9gua de escala: refer\u00eancia de 1 hectare (quadrado 100\u00d7100 m) ---- */
+var _haRef=null;
+function toggleHaRef(){
+  if(!_map) return;
+  var b=document.getElementById('haRefBtn');
+  if(_haRef){ _map.removeLayer(_haRef); _haRef=null; if(b)b.classList.remove('on'); return; }
+  var c=_map.getCenter(), m=grMeters(c.lat), dLat=50/m.mlat, dLng=50/m.mlng; /* 1 ha = 100 m x 100 m */
+  _haRef=LF.rectangle([[c.lat-dLat,c.lng-dLng],[c.lat+dLat,c.lng+dLng]],{color:'#fff',weight:1.5,dashArray:'5,4',fill:false,interactive:false}).addTo(_map);
+  _haRef.bindTooltip('1 ha (100\u00d7100 m)',{permanent:true,direction:'center',className:'ha-tip'}).openTooltip();
+  if(b)b.classList.add('on');
+}
+function addHaControl(){
+  if(!_map || _map.__haCtl) return; _map.__haCtl=true;
+  if(!document.getElementById('haCtlCss')){ var s=document.createElement('style'); s.id='haCtlCss';
+    s.textContent='.ha-ctl button{font:700 11px/1 system-ui,sans-serif;background:rgba(22,24,22,.9);color:#e9e9e9;border:1px solid #3a3a3a;border-radius:5px;padding:5px 8px;cursor:pointer}.ha-ctl button.on{background:#e9e9e9;color:#161816}.ha-tip{background:rgba(20,22,20,.85);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none}.ha-tip:before{display:none}.leaflet-control-scale-line{background:rgba(22,24,22,.7);color:#e9e9e9;border-color:#888;border-top:none}';
+    document.head.appendChild(s); }
+  var C=LF.control({position:'bottomleft'});
+  C.onAdd=function(){ var d=LF.DomUtil.create('div','ha-ctl'); d.innerHTML='<button id="haRefBtn" title="Mostrar um quadrado de 1 hectare (100\u00d7100 m) no centro do mapa">1 ha</button>'; LF.DomEvent.disableClickPropagation(d); d.querySelector('button').onclick=toggleHaRef; return d; };
+  C.addTo(_map);
 }
 
 /* ---- Modo de alinhamento (encaixe da imagem no sat\u00e9lite) ---- */
@@ -906,11 +927,26 @@ function buildEditPanel(){
 /* ===== Nuvem (Supabase): dados compartilhados + tempo real ===== */
 var SUPABASE_URL='https://atgmvbdcknslpmnjvnia.supabase.co';
 var SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Z212YmRja25zbHBtbmp2bmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY3ODUsImV4cCI6MjA5NTgwMjc4NX0.KK_G_ulSGXk770gTJWkEQ2R4JY0Ua1--0iOMNGRzQWg';
-var SB=null, _cloudApplying=false, _cloudTimer=null;
+var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=false, _cloudPending=null;
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
 function cloudState(){ ensureQGEO(); return { data:data, qgeo:QGEO, georef:_geo }; }
+/* Indicador visível de sincronização (toque = forçar sync) */
+function cloudBadge(kind,txt){
+  if(!document.getElementById('cloudBadgeCss')){
+    var s=document.createElement('style'); s.id='cloudBadgeCss';
+    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:62px;z-index:1400;font:600 12px/1 system-ui,-apple-system,sans-serif;padding:6px 12px;border-radius:999px;color:#e9e9e9;background:rgba(22,24,22,.88);border:1px solid #3a3a3a;box-shadow:0 2px 10px rgba(0,0,0,.45);cursor:pointer;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.5}.cb-saving{color:#d3e2d3}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
+    document.head.appendChild(s);
+  }
+  var el=document.getElementById('cloudBadge');
+  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Sincronização com a nuvem (toque para forçar)'; el.onclick=function(){ cloudSyncNow(); }; document.body.appendChild(el); }
+  var L={saving:'⟳ salvando…', saved:'☁︎ salvo', error:'⚠︎ erro — toque p/ tentar', offline:'⌁ sem conexão', idle:'☁︎'};
+  el.className='cloud-badge cb-'+(kind||'idle');
+  el.textContent=(L[kind||'idle']||L.idle)+(txt?(' '+txt):'');
+}
 function cloudApply(st){
   if(!st) return;
+  /* não atropela edição de quadra em andamento — guarda e aplica ao terminar */
+  if(window._qEditing){ _cloudPending=st; return; }
   _cloudApplying=true;
   try{
     if(st.data && typeof st.data==='object'){ data=st.data; try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} }
@@ -921,29 +957,46 @@ function cloudApply(st){
   }catch(e){}
   _cloudApplying=false;
 }
+function cloudApplyPending(){ if(_cloudPending && !window._qEditing){ var p=_cloudPending; _cloudPending=null; cloudApply(p); } }
 function cloudSave(){
   if(!cloudInit() || _cloudApplying) return;
-  try{ SB.from('app_state').update({ state: cloudState(), updated_at: new Date().toISOString() }).eq('id',1).then(function(){},function(){}); }catch(e){}
+  cloudBadge('saving');
+  try{
+    SB.from('app_state').update({ state: cloudState(), updated_at: new Date().toISOString() }).eq('id',1)
+      .then(function(res){ if(res && res.error){ cloudBadge('error'); } else { cloudBadge('saved'); } },
+            function(){ cloudBadge('error'); });
+  }catch(e){ cloudBadge('error'); }
 }
-function cloudSaveSoon(){ if(_cloudApplying) return; clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
+function cloudSaveSoon(){ if(_cloudApplying) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
+function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }
 function cloudSubscribe(){
   if(!SB) return;
   try{
-    SB.channel('app_state_rt').on('postgres_changes', {event:'UPDATE', schema:'public', table:'app_state'}, function(p){
+    if(_cloudCh){ try{ SB.removeChannel(_cloudCh); }catch(e){} _cloudCh=null; }
+    _cloudCh=SB.channel('app_state_rt').on('postgres_changes', {event:'UPDATE', schema:'public', table:'app_state'}, function(p){
       if(p && p.new && p.new.state) cloudApply(p.new.state);
-    }).subscribe();
-  }catch(e){}
+    }).subscribe(function(status){
+      if(status==='SUBSCRIBED'){ _cloudReady=true; cloudBadge('saved'); }
+      else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED'){ _cloudReady=false; cloudBadge('offline'); clearTimeout(window._cloudReTimer); window._cloudReTimer=setTimeout(cloudSubscribe, 4000); }
+    });
+  }catch(e){ cloudBadge('offline'); }
 }
 function cloudStart(){
-  if(!cloudInit()) return;
+  if(!cloudInit()){ return; }
+  cloudBadge('saving');
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
+      if(res && res.error){ cloudBadge('error'); }
       var st = res && res.data && res.data.state;
-      if(st && st.data && Object.keys(st.data).length){ cloudApply(st); }
+      if(st && st.data && Object.keys(st.data).length){ cloudApply(st); cloudBadge('saved'); }
       else { cloudSave(); }
       cloudSubscribe();
-    }, function(){});
-  }catch(e){}
+    }, function(){ cloudBadge('offline'); });
+  }catch(e){ cloudBadge('offline'); }
+  if(!window.__cloudNet){ window.__cloudNet=true;
+    window.addEventListener('online', function(){ cloudBadge('saving'); cloudSubscribe(); cloudSyncNow(); });
+    window.addEventListener('offline', function(){ cloudBadge('offline'); });
+  }
 }
 
 function render(){
@@ -985,9 +1038,10 @@ function render(){
   if(editMode) drawVertexHandles();
 }
 
-/* ============ LEGEND ============ */
-function toggleLegend(){legO=!legO;document.getElementById("legendPanel").classList.toggle("open",legO)}
+/* ============ LEGEND (removida da UI — funções mantidas como no-op seguro) ============ */
+function toggleLegend(){ var p=document.getElementById("legendPanel"); if(p){ legO=!legO; p.classList.toggle("open",legO); } }
 function renderLeg(){
+  if(!document.getElementById("legendPanel")) return;
   var cs={};var vals=Object.values(data);for(var i=0;i<vals.length;i++){var d=vals[i];if(d.cultura)cs[d.cultura]=(cs[d.cultura]||0)+1}
   var h='<div class="lg-title">CULTURAS</div><div class="lg-crops">';
   var entries=Object.entries(cs).sort(function(a,b){return b[1]-a[1]});
@@ -1072,7 +1126,8 @@ function updateAgendaBadge(){
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
 var NDVI_PROXY='https://ndvi-iracemapolis.onrender.com';
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null;
-var ndviArea='quadras'; /* 'quadras' = área das quadras da Plantec | 'view' = área visível do mapa (GPS / outras estações) */
+/* NDVI usa sempre a área visível do mapa; o checkbox "Apenas quadras" liga/desliga o recorte. */
+var _ndviMoveT=null;
 function pointInRing(x,y,ring){ var inside=false,i,j;
   for(i=0,j=ring.length-1;i<ring.length;j=i++){ var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
     if(((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
@@ -1124,16 +1179,9 @@ function quadrasMultiPolygon(){
   return { type:"MultiPolygon", coordinates: polys };
 }
 function ndviSetClip(v){ ndviClip=!!v; ndviLoadImage(); }
-function ndviSetArea(a){
-  if(a===ndviArea){ buildNdviPanel(); return; }
-  ndviArea=a;
-  if(a==='view') ndviClip=false; /* fora das quadras não há recorte */
-  buildNdviPanel();
-  ndviStatus(a==='view'?'Modo "onde estou": mova o mapa (ou 📍 GPS) e toque em "Carregar aqui".':'Modo quadras (Plantec).');
-  ndviLoadDates();
-  if(ndviIndex && ndviDate) ndviLoadImage();
-}
-function ndviReloadArea(){ ndviLoadDates(); if(ndviIndex && ndviDate) ndviLoadImage(); else ndviStatus('Escolha um índice (NDVI/NDRE/GNDVI) e uma data.'); }
+function ndviRefresh(){ ndviLoadDates(); if(ndviIndex && ndviDate) ndviLoadImage(); else ndviStatus('Escolha um índice e uma data.'); }
+/* Ao mover/zoom o mapa com um índice ativo, recarrega a camada para a nova área (debounce) */
+function ndviOnMove(){ var p=document.getElementById('ndviPanel'); if(!(p && p.style.display==='block' && ndviIndex && ndviDate)) return; clearTimeout(_ndviMoveT); _ndviMoveT=setTimeout(function(){ ndviLoadImage(); }, 700); }
 function stationBBox(){
   ensureQGEO(); var a=99,b=999,c=-99,d=-999;
   Object.keys(QGEO||{}).forEach(function(id){ QGEO[id].forEach(function(p){ if(p[0]<a)a=p[0]; if(p[0]>c)c=p[0]; if(p[1]<b)b=p[1]; if(p[1]>d)d=p[1]; }); });
@@ -1142,7 +1190,7 @@ function stationBBox(){
 }
 /* BBox usado pelo NDVI: 'quadras' = Plantec; 'view' = o que está visível no mapa (qualquer lugar, via GPS) */
 function ndviBBox(){
-  if(ndviArea==='view' && _map){
+  if(_map){
     var b=_map.getBounds(), w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth();
     var cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25; /* ~27 km — evita pedido gigante/baixa resolução */
     if(e-w>maxSpan){ w=cx-maxSpan/2; e=cx+maxSpan/2; }
@@ -1171,7 +1219,7 @@ function onProbeClick(e){
    .then(function(r){return r.json();}).then(function(d){
      if(d.error){ pop.setContent('<div class="ndvi-pop-b">Erro: '+esc(d.error)+'</div>'); return; }
      function row(l,v){ return '<div class="ndvi-pop-row"><span>'+l+'</span><b>'+(v==null?'—':(v>0?'+':'')+v.toFixed(2))+'</b></div>'; }
-     pop.setContent('<div class="ndvi-pop-b"><div class="ndvi-pop-t">'+(q?('Quadra '+esc(q)):'fora das quadras')+' &middot; '+(d.date||ndviDate)+'</div>'+row('NDVI',d.ndvi)+row('NDRE',d.ndre)+row('GNDVI',d.gndvi)+'</div>');
+     pop.setContent('<div class="ndvi-pop-b"><div class="ndvi-pop-t">'+(q?('Quadra '+esc(q)):'fora das quadras')+' &middot; '+(d.date||ndviDate)+'</div>'+row('NDVI',d.ndvi)+row('NDRE',d.ndre)+row('GNDVI',d.gndvi)+row('NDMI',d.ndmi)+'</div>');
    }).catch(function(){ pop.setContent('<div class="ndvi-pop-b">Proxy desligado? Rode python3 ndvi-proxy.py</div>'); });
 }
 function locateMe(){
@@ -1183,28 +1231,27 @@ function locateMe(){
     _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(_map);
     _gpsMarker.bindPopup('📍 Você está aqui'+(pos.coords.accuracy?' (±'+Math.round(pos.coords.accuracy)+' m)':'')).openPopup();
     _map.setView(ll, Math.max(_map.getZoom()||16,17));
-    if(ndviArea==='view' && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviReloadArea(); }catch(e){} }, 400); }
+    if(ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
   }, function(err){ alert('Não consegui o GPS.\\nObs.: abrindo o arquivo direto (file://) o navegador bloqueia o GPS — funciona via localhost/https ou no app instalado.\\n('+err.message+')'); }, {enableHighAccuracy:true, timeout:10000, maximumAge:5000});
 }
 function toggleNdvi(){
   var p=document.getElementById('ndviPanel');
   if(p && p.style.display==='block'){ p.style.display='none'; return; }
   if(!_map) initMap();
-  ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras (modo "onde estou") */
+  ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras */
+  if(_map && !_map.__ndviMove){ _map.__ndviMove=true; _map.on('moveend', ndviOnMove); }
   buildNdviPanel(); ndviCheckProxy();
 }
 function buildNdviPanel(){
   var p=document.getElementById('ndviPanel');
   if(!p){ p=document.createElement('div'); p.id='ndviPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
-  function btn(ix){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+ix+'</button>'; }
+  function btn(ix,label){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+(label||ix)+'</button>'; }
   p.innerHTML='<div class="gr-title">🛰️ ÍNDICES (Sentinel-2)</div>'+
-    '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
-    '<div class="ndvi-ixrow" style="margin-top:4px"><button class="ndvi-ix'+(ndviArea==='quadras'?' on':'')+'" style="flex:1" onclick="ndviSetArea(\'quadras\')" title="Área das quadras da Plantec">🏠 Quadras</button><button class="ndvi-ix'+(ndviArea==='view'?' on':'')+'" style="flex:1" onclick="ndviSetArea(\'view\')" title="Usar a área visível do mapa — funciona em qualquer lugar (GPS / outras estações)">🌍 Onde estou</button></div>'+
-    (ndviArea==='view'?'<div class="gr-btns" style="margin:4px 0 2px"><button class="ndvi-ix" style="flex:1" onclick="locateMe()">📍 Ir pro meu GPS</button><button class="ndvi-ix" style="flex:1" onclick="ndviReloadArea()" title="Recarregar o índice depois de mover o mapa">🔄 Carregar aqui</button></div>':'')+
+    '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+btn('TRUECOLOR','🛰️ Cor real')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
     '<label class="gr-ctl"><span>Opacidade</span><input type="range" min="0.2" max="1" step="0.05" value="'+ndviOpacity+'" oninput="ndviSetOpacity(this.value)"></label>'+
-    (ndviArea==='quadras'?'<label class="gr-ctl" style="cursor:pointer"><span>Só nas quadras</span><input type="checkbox" '+(ndviClip?'checked':'')+' onchange="ndviSetClip(this.checked)" style="flex:none;width:auto"></label>':'')+
+    '<label class="gr-ctl" style="cursor:pointer"><span>Apenas quadras</span><input type="checkbox" '+(ndviClip?'checked':'')+' onchange="ndviSetClip(this.checked)" style="flex:none;width:auto"></label>'+
     '<div class="ndvi-legend"><span>baixo</span><i class="ndvi-bar"></i><span>alto</span></div>'+
     '<div class="ndvi-ticks"><span>-0.2</span><span>0.2</span><span>0.5</span><span>0.8</span></div>'+
     '<div class="gr-btns" style="margin:6px 0 2px"><button class="ndvi-ix'+(ndviProbe?' on':'')+'" style="flex:1" onclick="ndviToggleProbe()">🔎 '+(ndviProbe?'Consultando — clique no mapa':'Consultar ponto')+'</button></div>'+
@@ -1247,7 +1294,8 @@ function ndviLoadImage(){
      var bu=URL.createObjectURL(blob), img=new Image();
      img.onload=function(){
        var iw=img.naturalWidth||1024, ih=img.naturalHeight||1024, url=bu;
-       if(ndviClip && ndviArea==='quadras'){
+       var isTC=(ndviIndex==='TRUECOLOR');
+       if(ndviClip && !isTC){
          try{
            var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
            var ctx=cv.getContext('2d'); ctx.beginPath();
@@ -1262,8 +1310,8 @@ function ndviLoadImage(){
        if(ndviOverlay) _map.removeLayer(ndviOverlay);
        ndviOverlay=LF.imageOverlay(url,[[s,w],[n,e]],{opacity:ndviOpacity}).addTo(_map);
        ndviOverlay.bringToFront();
-       ndviStatus(ndviIndex+' • '+ndviDate+((ndviClip&&ndviArea==='quadras')?' (só nas quadras)':(ndviArea==='view'?' (área visível)':'')),'ok');
-       computeQuadraMeans();
+       if(isTC){ ndviStatus('Cor real (Sentinel-2) • '+ndviDate,'ok'); ndviMeans=null; renderNdviRank(); }
+       else { ndviStatus(ndviIndex+' • '+ndviDate+(ndviClip?' (apenas quadras)':''),'ok'); computeQuadraMeans(); }
      };
      img.onerror=function(){ ndviStatus('Erro ao carregar a imagem.','err'); };
      img.src=bu;
