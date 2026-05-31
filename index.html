@@ -1025,7 +1025,7 @@ function updateAgendaBadge(){
 
 /* ============ DETAIL PANEL ============ */
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
-var NDVI_PROXY='http://localhost:8799';
+var NDVI_PROXY='https://ndvi-iracemapolis.onrender.com';
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null;
 function pointInRing(x,y,ring){ var inside=false,i,j;
   for(i=0,j=ring.length-1;i<ring.length;j=i++){ var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
