@@ -1,0 +1,5 @@
+{
+  "client_id": "COLE_AQUI_O_CLIENT_ID",
+  "client_secret": "COLE_AQUI_O_CLIENT_SECRET",
+  "_ajuda": "Renomeie este arquivo para ndvi-credenciais.json e cole sua credencial do Copernicus (shapps.dataspace.copernicus.eu/dashboard -> User settings -> OAuth clients). NÃO compartilhe este arquivo."
+}

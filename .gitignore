@@ -1,0 +1,7 @@
+# NUNCA versionar a credencial (segredo do Copernicus)
+ndvi-credenciais.json
+
+# Python / sistema
+__pycache__/
+*.pyc
+.DS_Store
