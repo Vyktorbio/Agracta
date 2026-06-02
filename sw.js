@@ -2,10 +2,11 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'iracema-app-v5';
+var CACHE = 'iracema-app-v6';
 var ASSETS = [
   './', './index.html',
   './vendor/leaflet.js', './vendor/leaflet.css',
+  './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js', './vendor/supabase.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'

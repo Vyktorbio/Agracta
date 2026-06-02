@@ -310,11 +310,11 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 </style>
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0c100c">
+<meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Iracemápolis">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Multiespectral">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 <style>
@@ -485,10 +485,118 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 *::-webkit-scrollbar-thumb:hover{background:#36463c;border:2px solid transparent;background-clip:padding-box}
 *::-webkit-scrollbar-track{background:transparent}
 </style>
+<style id="lightTheme">
+/* ===================== TEMA CLARO (cinza claro, profissional) =====================
+   Mantém o layout; só inverte as cores do "casco". Cores semânticas (NDVI, estágios,
+   culturas, status) e os rótulos sobre o satélite NÃO são alterados. ============== */
+:root{
+  --bg:#eaeeec; --surface:#ffffff; --surface-2:#f3f6f4; --surface-3:#eef1ef;
+  --border:#dce2de; --border-soft:#e9edea;
+  --text:#1d2723; --text-2:#55615b; --text-3:#8a948e;
+  --accent:#1f8a52; --accent-d:#15663c; --accent-deep:#e3f3ea; --accent-soft:rgba(31,138,82,.10);
+  --info:#2f7dd1; --warn:#c77f1a; --danger:#d84b43;
+  --shadow:0 14px 40px rgba(30,50,40,.16); --shadow-sm:0 6px 20px rgba(30,50,40,.10);
+}
+html,body{background:var(--bg)} body{color:var(--text)}
+*::-webkit-scrollbar-thumb{background:#cfd6d1} *::-webkit-scrollbar-thumb:hover{background:#b8c1bb}
+
+/* Header */
+.top-bar{background:linear-gradient(180deg,#ffffff,#f4f6f4);border-bottom:1px solid var(--border);box-shadow:0 2px 10px rgba(30,50,40,.06)}
+.top-bar h1{color:#16201b} .top-bar-sub{color:var(--accent)} .top-bar-info{color:var(--text-3)}
+.btn-sm{background:#fff;border:1px solid var(--border);color:var(--text-2)}
+.btn-sm:hover{background:#eef3f0;border-color:#cfd6d1;color:var(--text)}
+.btn-sm.active{background:var(--accent-deep);border-color:#bfe0cd;color:var(--accent-d)}
+.today-badge{background:var(--accent-deep);color:var(--accent-d)}
+
+/* Controles do mapa */
+.leaflet-bar a{background:rgba(255,255,255,.96)!important;color:#2a352f!important;border-bottom:1px solid var(--border)!important}
+.leaflet-bar a:hover{background:#fff!important;color:var(--accent)!important}
+.leaflet-control-attribution{background:rgba(255,255,255,.72)!important;color:#5a6661!important}
+.leaflet-control-attribution a{color:#3f4d47!important}
+.leaflet-control-scale-line{background:rgba(255,255,255,.82)!important;color:#28312c!important;border-color:#9aa6a0!important}
+
+/* Dock */
+.toolbar-extra button{background:rgba(255,255,255,.92);border:1px solid var(--border);color:#222b26}
+.toolbar-extra button:hover{background:#fff;border-color:#cfd6d1}
+.toolbar-extra button[onclick*="toggleNdvi"]{color:var(--accent-d);border-color:#bfe0cd}
+#menuBtn{color:var(--text-2)}
+
+/* Backdrops */
+.overlay{background:rgba(40,52,46,.42)} .search-overlay,.se-overlay{background:rgba(40,52,46,.5)} .ndvi-modal{background:rgba(40,52,46,.4)}
+
+/* Painel detalhe + edit (fundo já vira branco pelos tokens) */
+.panel-qid{color:#16201b} .panel-qlbl{color:var(--accent-d)}
+.info-l,.prog-t,.prog-p,.fen-title,.studies-title,.sd-section-title,.sd-meta-lbl,.se-field label,.ag-group-title,.edit-subtitle,.e-hint{color:var(--text-3)}
+.info-v{color:var(--text)} .prog-bar{background:#e6eae7}
+.fen-item{background:#f3f6f4;border-color:var(--border)} .fen-code{color:var(--text-2)} .fen-dap{color:var(--text-3)}
+.studies-wrap{border-top-color:var(--border)} .q-noest{background:#f6f8f7;border:1px dashed var(--border);color:var(--text-3)}
+.study-card,.study-card-v2{background:#f6f8f7;border-color:var(--border)} .study-card-v2:hover{border-color:#bfe0cd}
+.study-name,.study-card-v2-codigo{color:#1d2723} .study-meta,.study-card-v2-desc,.study-card-v2-meta{color:var(--text-2)}
+.studies-add,.sd-add,.se-add-trat,.eval-add-btn{background:var(--accent-soft);color:var(--accent-d);border:1px solid #bfe0cd}
+.p-btn-close,.e-cancel,.btn-cancel,.gr-cancel{background:#eef1ef;color:var(--text-2);border:1px solid var(--border)}
+.e-inp,.gr-ctl select,.search-box input,.se-field input,.se-field select,.se-field textarea,.loc-box input,.auth-i,.se-trat input{color:var(--text);background:#fff}
+.e-inp::placeholder,.search-box input::placeholder,.auth-i::placeholder,.loc-box input::placeholder{color:#9aa49e}
+.e-cult-row{background:#f6f8f7}
+
+/* NDVI / alinhamento */
+.ndvi-panel,.gr-panel{background:rgba(255,255,255,.97)!important;border:1px solid var(--border)!important}
+.gr-title{color:var(--accent-d)} .gr-hint,.gr-ctl,.gr-op{color:var(--text-2)} .gr-hint b{color:#16201b}
+.ndvi-ix{background:#f3f6f4;color:var(--text-2);border-color:var(--border)}
+.ndvi-ix.on{background:var(--accent-deep);color:var(--accent-d);border-color:#bfe0cd}
+.ndvi-status{color:var(--text-2)} .ndvi-legend,.ndvi-ticks,.ndvi-rank-title{color:var(--text-3)}
+.ndvi-rank-row{color:var(--text)} .ndvi-rank-row:hover{background:#eef3f0;border-color:var(--border)} .ndvi-rank-row b{color:var(--accent-d)}
+.ndvi-modal-box{background:#fff;border-color:var(--border);color:var(--text)} .ndvi-modal-top{color:var(--text)} .ndvi-svg{border-color:var(--border)}
+.q-ndvi{background:rgba(255,255,255,.86)!important;color:#16201b!important;border-color:var(--border)!important}
+.ndvi-pop .leaflet-popup-content-wrapper,.ndvi-pop .leaflet-popup-tip{background:#fff!important;color:var(--text)!important;border-color:var(--border)!important}
+.ndvi-pop-t{color:var(--text-2)} .ndvi-pop-row b{color:var(--accent-d)} .ndvi-pop a.leaflet-popup-close-button{color:var(--text-3)}
+
+/* Agenda / Legenda */
+.agenda-panel,.legend-panel{background:rgba(255,255,255,.98)!important;border-color:var(--border)!important}
+.ag-title{color:var(--accent-d)} .ag-item{background:#f6f8f7;border-color:var(--border)} .ag-item:hover{background:#eef3f0}
+.ag-item-qid{color:#1d2723} .ag-item-name{color:var(--text-2)} .ag-item-type,.ag-empty,.lg-title{color:var(--text-3)} .ag-close{color:var(--text-2)}
+
+/* Hoje + Detalhe de estudo (telas cheias) */
+.today-overlay,.sd-overlay{background:#eef1ef}
+.today-head,.sd-header{background:#eef1ef;border-bottom-color:var(--border)}
+.today-title,.sd-codigo{color:var(--accent-d)} .today-date{color:var(--text-2)}
+.today-sum-item{background:#fff;border-color:var(--border)} .today-sum-n{color:#1d2723} .today-sum-l{color:var(--text-3)}
+.today-section-title{color:var(--text-3);border-top-color:var(--border)}
+.today-card{background:#fff;border-color:var(--border)} .today-card-head{background:#f3f6f4} .today-card-quadra{color:var(--text-2)} .today-card-evt{color:var(--text)}
+.today-back,.sd-back{background:#fff;border-color:var(--border);color:var(--accent-d)} .today-empty{color:var(--text-2)} .today-empty-sub{color:var(--text-3)}
+.sd-meta{background:#fff;border-color:var(--border)} .sd-meta-item{border-bottom-color:var(--border)}
+.sd-descricao{background:#f6f8f7;border-left-color:#bfe0cd;color:var(--text)} .sd-empty,.se-empty{background:#f6f8f7;border-color:var(--border);color:var(--text-3)}
+.trat-table{background:#fff;border-color:var(--border)} .trat-head{background:#eef3f0;color:var(--text-2)} .trat-row{border-top-color:var(--border)} .trat-id{color:var(--accent-d)}
+.evento-item{background:#f6f8f7;border-color:var(--border)} .evento-data,.evento-subtipo,.evento-obs{color:var(--text)} .evento-del{color:var(--text-3)}
+
+/* Editar estudo */
+.se-panel{background:#fff;border-color:var(--border);color:var(--text)} .se-head h3{color:var(--accent-d)} .se-x{color:var(--text-2)}
+.se-section-title{color:var(--accent-d);border-top-color:var(--border)} .se-trat{background:#f6f8f7;border-color:var(--border)}
+
+/* Busca */
+.search-box input,.search-close{background:#fff;border-color:var(--border)} .search-close{color:var(--text-2)}
+.search-item{background:#fff;border-color:var(--border)} .search-item:hover{background:#eef3f0;border-color:#cfd6d1}
+.search-item-id{color:var(--accent-d)} .search-item-tag{background:#eef1ef;color:var(--text-2)} .search-item-sub{color:var(--text-2)} .search-item-meta,.search-empty{color:var(--text-3)}
+
+/* Login (CSS injetado por JS -> precisa de !important) */
+.auth-gate{background:radial-gradient(120% 80% at 50% 0%,#fbfdfc,#e7ebe9)!important}
+.auth-box{background:#fff!important;border-color:var(--border)!important}
+.auth-title{color:#16201b!important} .auth-sub,.auth-foot{color:var(--text-3)!important} .auth-l{color:var(--text-2)!important}
+.auth-i{background:#fff!important;color:var(--text)!important;border-color:var(--border)!important}
+.auth-i::placeholder{color:#9aa49e}
+
+/* Componentes injetados via JS (vêm depois no cascade -> !important) */
+.cloud-badge{background:rgba(255,255,255,.92)!important;color:#3a463f!important;border-color:var(--border)!important}
+.main-menu{background:#fff!important;border-color:var(--border)!important} .main-menu button{color:#222b26!important} .main-menu button:hover{background:#eef3f0!important} .main-menu .mm-sep{background:var(--border)!important} .main-menu .mm-user{color:var(--text-3)!important}
+.ha-ctl button{background:rgba(255,255,255,.95)!important;color:#28312c!important;border-color:var(--border)!important} .ha-tip{background:rgba(255,255,255,.9)!important;color:#28312c!important}
+.loc-menu{background:#fff!important;border-color:var(--border)!important} .loc-mi{color:#222b26!important} .loc-mi:hover{background:#eef3f0!important} .loc-mi.on{background:var(--accent-deep)!important} .loc-mi .sub{color:var(--text-3)!important} .loc-sep{background:var(--border)!important}
+.loc-modal{background:rgba(40,52,46,.5)!important} .loc-box{background:#fff!important;color:var(--text)!important} .loc-ri{border-color:var(--border)!important;color:var(--text)!important} .loc-ri:hover{background:#eef3f0!important}
+.loc-chip{background:#fff!important;border-color:var(--border)!important} .loc-chip b{color:#16201b!important} .loc-box h3{color:var(--accent-d)!important}
+.rot-ctl button{background:rgba(255,255,255,.95)!important;color:#28312c!important;border-color:var(--border)!important} .rot-ctl button:hover{color:var(--accent-d)!important}
+</style>
 </head>
 <body>
 <div class="top-bar">
-<div><div class="top-bar-sub">Imageamento multiespectral</div><h1>GEORREFERENCIADO</h1></div>
+<div><div class="top-bar-sub">Agricultura de precisão</div><h1>Imageamento Multiespectral</h1></div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
@@ -1115,7 +1223,7 @@ function criarLocal(){
 
 /* ---- Menu de ferramentas (☰): Editar quadras / Alinhar / Backup / Importar ---- */
 function _menuCss(){ if(document.getElementById('menuCss'))return; var s=document.createElement('style'); s.id='menuCss';
-  s.textContent='.main-menu{position:fixed;bottom:60px;right:14px;z-index:60;background:#0e120e;border:1px solid #2a3a2a;border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;min-width:200px}.main-menu button{background:none;border:none;color:#cfe0cf;text-align:left;padding:12px 15px;font:600 13px system-ui,sans-serif;cursor:pointer;white-space:nowrap}.main-menu button:hover{background:#16241a}.main-menu .mm-sep{height:1px;background:#1e2e1e;margin:0}.main-menu .mm-user{padding:8px 15px 2px;font:600 11px system-ui,sans-serif;color:#6d7f73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}';
+  s.textContent='.main-menu{position:fixed;bottom:60px;right:14px;z-index:1500;background:#0e120e;border:1px solid #2a3a2a;border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;min-width:200px}.main-menu button{background:none;border:none;color:#cfe0cf;text-align:left;padding:12px 15px;font:600 13px system-ui,sans-serif;cursor:pointer;white-space:nowrap}.main-menu button:hover{background:#16241a}.main-menu .mm-sep{height:1px;background:#1e2e1e;margin:0}.main-menu .mm-user{padding:8px 15px 2px;font:600 11px system-ui,sans-serif;color:#6d7f73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}';
   document.head.appendChild(s);
 }
 function closeMainMenu(){ var m=document.getElementById('mainMenu'); if(m) m.remove(); document.removeEventListener('click', _mainMenuOutside, true); }
@@ -1833,14 +1941,14 @@ function showD(id){
   if(dap!==null&&dap>=0)h+='<div class="prog-wrap"><div class="prog-top"><span class="prog-t">PROGRESSO</span><span class="prog-p">'+Math.round(prog)+'%</span></div><div class="prog-bar"><div class="prog-fill" style="width:'+prog+'%;background:linear-gradient(90deg,'+ac+','+st.c+')"></div></div></div>';
 
   h+='<div class="fen-wrap"><div class="fen-title">FENOLOGIA · ESCALA BBCH</div><div class="fen-row">';
-  for(var i=0;i<t.length;i++){if(t[i].m>=9999)continue;var a=st.s===t[i].s;h+='<div class="fen-item" style="background:'+(a?t[i].c+'22':'#111')+';border-color:'+(a?t[i].c:'#222')+'"><div class="fen-code" style="color:'+(a?t[i].c:'#555')+'">'+esc(t[i].s)+'</div><div class="fen-dap" style="color:'+(a?t[i].c:'#444')+'">\u2264'+t[i].m+'d</div></div>'}
+  for(var i=0;i<t.length;i++){if(t[i].m>=9999)continue;var a=st.s===t[i].s;h+='<div class="fen-item"'+(a?' style="background:'+t[i].c+'22;border-color:'+t[i].c+'"':'')+'><div class="fen-code"'+(a?' style="color:'+t[i].c+'"':'')+'>'+esc(t[i].s)+'</div><div class="fen-dap"'+(a?' style="color:'+t[i].c+'"':'')+'>\u2264'+t[i].m+'d</div></div>'}
   h+='</div></div>';
 
   // STUDIES SECTION
   h+='<div class="studies-wrap"><div class="studies-head"><div class="studies-title">ESTUDOS ('+(d.estudos||[]).length+')</div><button class="studies-add" onclick="openStudyEdit(\''+id+'\',null)">+ ADICIONAR</button></div>';
 
   if(!(d.estudos||[]).length){
-    h+='<div style="font-size:10px;color:#555;text-align:center;padding:14px;font-style:italic;background:#0a110a;border-radius:6px;border:1px dashed #1a2a1a">Nenhum estudo cadastrado nesta quadra</div>';
+    h+='<div class="q-noest" style="font-size:10px;text-align:center;padding:14px;font-style:italic;border-radius:6px">Nenhum estudo cadastrado nesta quadra</div>';
   }else{
     (d.estudos||[]).forEach(function(study){
       h+=renderStudyCard(id,study);
