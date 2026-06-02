@@ -1077,7 +1077,7 @@ function criarLocal(){
 
 /* ---- Menu de ferramentas (☰): Editar quadras / Alinhar / Backup / Importar ---- */
 function _menuCss(){ if(document.getElementById('menuCss'))return; var s=document.createElement('style'); s.id='menuCss';
-  s.textContent='.main-menu{position:fixed;bottom:60px;right:14px;z-index:60;background:#0e120e;border:1px solid #2a3a2a;border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;min-width:200px}.main-menu button{background:none;border:none;color:#cfe0cf;text-align:left;padding:12px 15px;font:600 13px system-ui,sans-serif;cursor:pointer;white-space:nowrap}.main-menu button:hover{background:#16241a}.main-menu .mm-sep{height:1px;background:#1e2e1e;margin:0}';
+  s.textContent='.main-menu{position:fixed;bottom:60px;right:14px;z-index:60;background:#0e120e;border:1px solid #2a3a2a;border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;min-width:200px}.main-menu button{background:none;border:none;color:#cfe0cf;text-align:left;padding:12px 15px;font:600 13px system-ui,sans-serif;cursor:pointer;white-space:nowrap}.main-menu button:hover{background:#16241a}.main-menu .mm-sep{height:1px;background:#1e2e1e;margin:0}.main-menu .mm-user{padding:8px 15px 2px;font:600 11px system-ui,sans-serif;color:#6d7f73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}';
   document.head.appendChild(s);
 }
 function closeMainMenu(){ var m=document.getElementById('mainMenu'); if(m) m.remove(); document.removeEventListener('click', _mainMenuOutside, true); }
@@ -1091,7 +1091,8 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();startGeoref()">📍 Alinhar mapa</button>'+
     '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();exportData()">💾 Backup</button>'+
-    '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>';
+    '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>'+
+    (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">🚪 Sair</button>'):'');
   document.body.appendChild(m);
   setTimeout(function(){ document.addEventListener('click', _mainMenuOutside, true); },0);
 }
@@ -1279,6 +1280,79 @@ function cloudSubscribe(){
       else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED'){ _cloudReady=false; cloudBadge('offline'); clearTimeout(window._cloudReTimer); window._cloudReTimer=setTimeout(cloudSubscribe, 4000); }
     });
   }catch(e){ cloudBadge('offline'); }
+}
+/* ===================== LOGIN (Supabase Auth) ===================== */
+var _authUser=null, _appStarted=false;
+function authBusy(b){ var btn=document.getElementById('authBtn'); if(btn){ btn.disabled=!!b; btn.textContent=b?'Entrando…':'Entrar'; } }
+function authErr(msg){ var e=document.getElementById('authErr'); if(e){ e.textContent=msg||''; e.style.display=msg?'block':'none'; } }
+function traduzAuthErro(m){ m=String(m||'');
+  if(/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
+  if(/Email not confirmed/i.test(m)) return 'E-mail ainda não confirmado. Fale com o administrador.';
+  if(/network|fetch|Failed/i.test(m)) return 'Sem conexão com o servidor. Tente de novo.';
+  return m; }
+function _authCss(){ if(document.getElementById('authCss'))return; var s=document.createElement('style'); s.id='authCss';
+  s.textContent='.auth-gate{position:fixed;inset:0;z-index:3000;background:radial-gradient(120% 80% at 50% 0%,#0f1713,#070a08);display:none;align-items:center;justify-content:center;padding:20px}.auth-gate.on{display:flex}'+
+  '.auth-box{width:100%;max-width:360px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.6);padding:26px 22px;font-family:var(--font,system-ui)}'+
+  '.auth-logo{font-size:9px;letter-spacing:3px;color:var(--accent,#37d684);font-weight:700;text-align:center}'+
+  '.auth-title{font-size:19px;font-weight:800;color:#f2f7f3;text-align:center;margin:3px 0}'+
+  '.auth-sub{font-size:12px;color:var(--text-3,#6d7f73);text-align:center;margin-bottom:16px}'+
+  '.auth-l{display:block;font-size:10px;letter-spacing:1px;color:var(--text-2,#9fb1a5);font-weight:700;margin:12px 0 4px}'+
+  '.auth-i{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:#eaf0ea;padding:12px;font-size:15px;outline:none}'+
+  '.auth-i:focus{border-color:var(--accent-d,#1f8a52)}'+
+  '.auth-btn{width:100%;margin-top:18px;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#1f9a5d,#178048);color:#eafff2}'+
+  '.auth-btn:disabled{opacity:.6;cursor:default}'+
+  '.auth-err{display:none;margin-top:12px;background:rgba(255,107,107,.12);border:1px solid #7a2b22;color:#ffb3a8;font-size:12px;padding:9px 11px;border-radius:9px;text-align:center}'+
+  '.auth-foot{margin-top:16px;font-size:11px;color:var(--text-3,#6d7f73);text-align:center;line-height:1.5}';
+  document.head.appendChild(s); }
+function buildAuthGate(){
+  _authCss();
+  var g=document.getElementById('authGate');
+  if(!g){ g=document.createElement('div'); g.id='authGate'; g.className='auth-gate'; document.body.appendChild(g); }
+  g.innerHTML='<form class="auth-box" onsubmit="return false">'+
+    '<div class="auth-logo">IMAGEAMENTO MULTIESPECTRAL</div>'+
+    '<div class="auth-title">Entrar</div>'+
+    '<div class="auth-sub">Acesso restrito · use sua conta</div>'+
+    '<label class="auth-l">E-MAIL</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
+    '<label class="auth-l">SENHA</label><input id="authPass" class="auth-i" type="password" autocomplete="current-password" placeholder="••••••••">'+
+    '<div id="authErr" class="auth-err"></div>'+
+    '<button id="authBtn" class="auth-btn" onclick="doLogin()">Entrar</button>'+
+    '<div class="auth-foot">Esqueceu a senha? Fale com o administrador.</div>'+
+    '</form>';
+  var p=document.getElementById('authPass'); if(p) p.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); doLogin(); } };
+  var em=document.getElementById('authEmail'); if(em) em.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); var pp=document.getElementById('authPass'); if(pp) pp.focus(); } };
+}
+function showAuthGate(){ buildAuthGate(); var g=document.getElementById('authGate'); if(g) g.classList.add('on'); setTimeout(function(){ var em=document.getElementById('authEmail'); if(em&&!em.value) em.focus(); },60); }
+function hideAuthGate(){ var g=document.getElementById('authGate'); if(g) g.classList.remove('on'); }
+function doLogin(){
+  if(!cloudInit()){ authErr('Sem conexão com o servidor.'); return; }
+  var email=((document.getElementById('authEmail')||{}).value||'').trim();
+  var pass=(document.getElementById('authPass')||{}).value||'';
+  if(!email||!pass){ authErr('Preencha e-mail e senha.'); return; }
+  authErr(''); authBusy(true);
+  SB.auth.signInWithPassword({email:email, password:pass}).then(function(res){
+    authBusy(false);
+    if(res && res.error){ authErr(traduzAuthErro(res.error.message)); }
+  }, function(){ authBusy(false); authErr('Falha de conexão.'); });
+}
+function doLogout(){ if(typeof closeMainMenu==='function') closeMainMenu(); if(SB){ try{ SB.auth.signOut(); }catch(e){} } }
+function onAuthed(user){
+  _authUser=user; hideAuthGate();
+  if(!_appStarted){ _appStarted=true; cloudStart(); }
+  else if(typeof cloudResync==='function'){ cloudResync(); }
+}
+/* Gate de login: só libera o app (e a leitura/escrita na nuvem) após autenticar.
+   A sessão persiste no navegador (supabase) -> funciona offline no campo depois do 1º login. */
+function authInit(){
+  if(!cloudInit()){ if(!_appStarted){ _appStarted=true; if(typeof cloudStart==='function') cloudStart(); } return; }
+  buildAuthGate();
+  SB.auth.getSession().then(function(res){
+    var session = res && res.data && res.data.session;
+    if(session && session.user){ onAuthed(session.user); } else { showAuthGate(); }
+  }, function(){ showAuthGate(); });
+  SB.auth.onAuthStateChange(function(event, session){
+    if(session && session.user){ onAuthed(session.user); }
+    else { _authUser=null; showAuthGate(); }
+  });
 }
 function cloudStart(){
   if(!cloudInit()){ return; }
@@ -3308,7 +3382,7 @@ function init(){
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
-  if(typeof cloudStart==='function') cloudStart();
+  if(typeof authInit==='function') authInit(); else if(typeof cloudStart==='function') cloudStart();
   }catch(e){
     var b=document.createElement('div');
     b.style.cssText='position:fixed;top:50px;left:8px;right:8px;background:#300;color:#fff;padding:10px;z-index:9999;font:12px monospace;border:1px solid #f55;border-radius:6px;white-space:pre-wrap';
