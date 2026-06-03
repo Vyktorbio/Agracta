@@ -583,6 +583,10 @@ html,body{background:var(--bg)} body{color:var(--text)}
 .auth-title{color:#16201b!important} .auth-sub,.auth-foot{color:var(--text-3)!important} .auth-l{color:var(--text-2)!important}
 .auth-i{background:#fff!important;color:var(--text)!important;border-color:var(--border)!important}
 .auth-i::placeholder{color:#9aa49e}
+/* Tela cheia (só o mapa) */
+body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-control-container,body.map-full #cloudBadge{display:none!important}
+.full-exit{position:fixed;top:10px;right:10px;z-index:2000;display:none;background:rgba(255,255,255,.92);border:1px solid var(--border,#dce2de);color:#222b26;border-radius:11px;padding:9px 13px;font:600 13px -apple-system,system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(30,50,40,.22);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.full-exit:hover{background:#fff}
 
 /* Componentes injetados via JS (vêm depois no cascade -> !important) */
 .cloud-badge{background:rgba(255,255,255,.92)!important;color:#3a463f!important;border-color:var(--border)!important}
@@ -975,9 +979,9 @@ function addRotateControl(){
     var d=LF.DomUtil.create('div','rot-ctl');
     d.innerHTML='<button class="rot-l" title="Girar \u00e0 esquerda">\u27f2</button><button class="rot-n" title="Apontar para o Norte (0\u00b0)">N</button><button class="rot-r" title="Girar \u00e0 direita">\u27f3</button>';
     LF.DomEvent.disableClickPropagation(d); LF.DomEvent.disableScrollPropagation(d);
-    d.querySelector('.rot-l').onclick=function(){ _map.setBearing((_map.getBearing()||0)+5); };
+    d.querySelector('.rot-l').onclick=function(){ _map.setBearing((_map.getBearing()||0)+2); };
     d.querySelector('.rot-n').onclick=function(){ _map.setBearing(0); };
-    d.querySelector('.rot-r').onclick=function(){ _map.setBearing((_map.getBearing()||0)-5); };
+    d.querySelector('.rot-r').onclick=function(){ _map.setBearing((_map.getBearing()||0)-2); };
     return d;
   };
   C.addTo(_map);
@@ -1291,12 +1295,25 @@ function installApp(){
   if(isiOS()){ alert('📲 Instalar no iPhone:\n\n1) Abra este site no SAFARI (não dentro do WhatsApp/Instagram)\n2) Toque em Compartilhar (o quadrado com a seta ↑, na barra de baixo)\n3) Role e toque em "Adicionar à Tela de Início"\n4) Toque em "Adicionar"\n\nPronto: vira um ícone na sua tela.'); return; }
   alert('📲 Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
 }
+/* Tela cheia: esconde o "casco" e mostra só o mapa */
+function toggleFullscreenMap(){
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  var on=document.body.classList.toggle('map-full');
+  var ex=document.getElementById('fullExit');
+  if(on){
+    if(!ex){ ex=document.createElement('button'); ex.id='fullExit'; ex.className='full-exit'; ex.innerHTML='⤢ Sair da tela cheia'; ex.onclick=toggleFullscreenMap; document.body.appendChild(ex); }
+    ex.style.display='block';
+  } else if(ex){ ex.style.display='none'; }
+  setTimeout(function(){ try{ if(_map) _map.invalidateSize(); }catch(e){} }, 160);
+}
 function toggleMainMenu(){
   if(document.getElementById('mainMenu')){ closeMainMenu(); return; }
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">📲 Instalar app</button><div class="mm-sep"></div>':'')+
+    '<button onclick="toggleFullscreenMap()">⤢ Tela cheia (só o mapa)</button>'+
+    '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">✏️ Editar quadras</button>'+
     '<button onclick="closeMainMenu();startGeoref()">📍 Alinhar mapa</button>'+
     '<div class="mm-sep"></div>'+
@@ -2134,14 +2151,17 @@ function renderEcRows(){
 function ecAddRow(){ ecReadRows(); _ecRows.push({cultura:'',cultivar:'',plantio:''}); renderEcRows(); }
 function ecDelRow(i){ ecReadRows(); _ecRows.splice(i,1); if(!_ecRows.length)_ecRows.push({cultura:'',cultivar:'',plantio:''}); renderEcRows(); }
 function openE(id){
-  closeDetail();curE=id;
+  closeDetail();curE=id; ensureLocais();
   var d=data[id]||{};
   _ecRows=getCulturas(d).map(function(c){return {cultura:c.cultura,cultivar:c.cultivar||'',plantio:c.plantio||''};});
   if(!_ecRows.length)_ecRows=[{cultura:'',cultivar:'',plantio:''}];
   var dl='<datalist id="clOpts">'+CL.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>';
+  var curLoc=(QLOCAL[id]||HOME_LOCAL);
+  var locOpts=Object.keys(LOCAIS).map(function(lid){ return '<option value="'+lid+'"'+(curLoc===lid?' selected':'')+'>'+esc(LOCAIS[lid].nome)+'</option>'; }).join('');
   document.getElementById("ePnl").innerHTML=
     '<div class="edit-title">EDITAR QUADRA</div>'+dl+
     '<label class="e-lbl">NOME DA QUADRA</label><input id="eqnome" class="e-inp" value="'+esc(quadraNome(id))+'" placeholder="Ex.: A1" autocomplete="off">'+
+    '<label class="e-lbl">LOCAL</label><select id="eqloc" class="e-inp">'+locOpts+'</select>'+
     '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
     '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
     '<label class="e-lbl">\u00c1REA (HA)</label><input id="ea" class="e-inp" value="'+(d.area||"")+'" placeholder="1.0" type="number" step="0.01">'+
@@ -2160,6 +2180,14 @@ function saveE(){
     var dup=quadrasDoLocal(loc).some(function(q){ return q!==curE && quadraNome(q).toLowerCase()===novoNome.toLowerCase(); });
     if(dup){ alert('Já existe uma quadra chamada "'+novoNome+'" neste local.'); return; }
     QNOME[curE]=novoNome; saveQNome();
+  }
+  /* Mover para outro local */
+  var novoLoc=((document.getElementById('eqloc')||{}).value)||'';
+  if(novoLoc && LOCAIS[novoLoc] && novoLoc!==(QLOCAL[curE]||HOME_LOCAL)){
+    var nm=quadraNome(curE);
+    var dupDest=quadrasDoLocal(novoLoc).some(function(q){ return q!==curE && quadraNome(q).toLowerCase()===nm.toLowerCase(); });
+    if(dupDest){ alert('No local de destino já existe uma quadra "'+nm+'". Renomeie antes de mover.'); return; }
+    QLOCAL[curE]=novoLoc; saveQLocal();
   }
   ecReadRows();
   var culturas=_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
