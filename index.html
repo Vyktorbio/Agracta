@@ -2106,11 +2106,39 @@ function quadraCenter(id){
   var sLat=0,sLng=0; pts.forEach(function(p){sLat+=p[0];sLng+=p[1];});
   return [sLat/pts.length, sLng/pts.length];
 }
+/* Comprimento × largura reais (m) da quadra: retângulo de MENOR ÁREA que a encaixa
+   (rotating-calipers sobre o fecho convexo). Independe da orientação em relação ao norte —
+   mede ao longo dos eixos da própria quadra, então serve pra planejar parcelas. */
+function quadraDims(id){
+  ensureQGEO();
+  var pts=QGEO&&QGEO[id]; if(!pts||pts.length<3) return null;
+  var la0=0,lo0=0; pts.forEach(function(p){la0+=p[0];lo0+=p[1];}); la0/=pts.length; lo0/=pts.length;
+  var k=Math.cos(la0*Math.PI/180);
+  var m=pts.map(function(p){ return {x:(p[1]-lo0)*111320*k, y:(p[0]-la0)*110540}; });
+  var P=m.slice().sort(function(a,b){ return a.x-b.x || a.y-b.y; });
+  function cross(o,a,b){ return (a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); }
+  var lo=[],up=[],i;
+  for(i=0;i<P.length;i++){ while(lo.length>=2 && cross(lo[lo.length-2],lo[lo.length-1],P[i])<=0) lo.pop(); lo.push(P[i]); }
+  for(i=P.length-1;i>=0;i--){ while(up.length>=2 && cross(up[up.length-2],up[up.length-1],P[i])<=0) up.pop(); up.push(P[i]); }
+  lo.pop(); up.pop(); var H=lo.concat(up); if(H.length<3) H=m;
+  var best=null;
+  for(i=0;i<H.length;i++){
+    var a=H[i], b=H[(i+1)%H.length], ex=b.x-a.x, ey=b.y-a.y, len=Math.sqrt(ex*ex+ey*ey);
+    if(len<1e-9) continue;
+    var ux=ex/len, uy=ey/len, minu=1e18,maxu=-1e18,minv=1e18,maxv=-1e18;
+    for(var j=0;j<H.length;j++){ var du=H[j].x*ux+H[j].y*uy, dv=-H[j].x*uy+H[j].y*ux;
+      if(du<minu)minu=du; if(du>maxu)maxu=du; if(dv<minv)minv=dv; if(dv>maxv)maxv=dv; }
+    var w=maxu-minu, hgt=maxv-minv, area=w*hgt;
+    if(!best || area<best.area) best={area:area, a:w, b:hgt};
+  }
+  if(!best) return null;
+  return { comprimento:Math.max(best.a,best.b), largura:Math.min(best.a,best.b) };
+}
 
 function showD(id){
   curV=id;
   var d=data[id]||{},dap=cDAP(d.plantio),st=gS(d.cultura,dap),ac=gC(d.cultura),pd=pD(d.plantio);
-  var aHa=quadraAreaHa(id), ctr=quadraCenter(id);
+  var aHa=quadraAreaHa(id), ctr=quadraCenter(id), dim=quadraDims(id);
   var t=FEN[d.cultura]||FEN._,prog=0;
   if(dap!==null&&dap>=0){var tot=(t.length>=2)?t[t.length-2].m:120;prog=Math.min(100,(dap/tot)*100)}
 
@@ -2120,6 +2148,7 @@ function showD(id){
 
   h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#789;border-top:1px solid #1a2a1a;padding-top:10px">'+
      '<span title="Área calculada do polígono">&#128208; <b style="color:#9ac49a">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:#566">medida</span></span>'+
+     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">&#128207; <b style="color:#9ac49a">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:#566">C&times;L</span></span>':'')+
      (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:#9ac49a">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
      '</div>';
   var _cs=getCulturas(d);
