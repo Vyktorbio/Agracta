@@ -1496,8 +1496,15 @@ function cloudSave(){
       if(_cloudRev!=null && cRev > _cloudRev){ if(cs) cloudApply(cs); cloudBadge('saved'); return; } /* nuvem mais nova */
       if(!allowShrink && cs && (cLoc>localLoc || cQ>localQ)){ cloudApply(cs); cloudBadge('saved'); return; } /* não encolhe */
       _cloudRev=(cRev||0)+1; localState.rev=_cloudRev;
+      if(allowShrink) localState._allowShrink=true; /* avisa o banco: este encolhimento é exclusão intencional */
       SB.from('app_state').update({ state: localState, updated_at:new Date().toISOString() }).eq('id',1)
-        .then(function(r2){ cloudBadge(r2&&r2.error?'error':'saved'); }, function(){ cloudBadge('error'); });
+        .then(function(r2){
+          if(r2 && r2.error){
+            /* o banco RECUSOU (gravação velha/destrutiva ou conflito) -> não insiste; puxa a versão boa da nuvem */
+            cloudBadge('error','— sincronizando');
+            setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 600);
+          } else { cloudBadge('saved'); }
+        }, function(){ cloudBadge('error'); });
     }, function(){ cloudBadge('error'); });
   }catch(e){ cloudBadge('error'); }
 }
