@@ -3348,7 +3348,10 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-table th,.av-table td{border:1px solid var(--border,#2a3a2a);padding:4px 6px;text-align:center;white-space:nowrap}'+
   '.av-table th{background:var(--surface-2,#11210f);color:var(--text-2,#9ab39a);font-weight:700}'+
   '.av-tname{font-weight:700;color:var(--accent,#37d684);background:var(--surface-2,#11210f)}'+
-  '.av-cell{width:62px;box-sizing:border-box;background:var(--surface,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:6px;padding:5px;font-size:12px;text-align:center}'+
+  '.av-cellwrap{display:flex;align-items:center;gap:3px}'+
+  '.av-step{flex:none;width:30px;height:32px;border:1px solid var(--border,#2a3a2a);background:rgba(127,170,127,.14);color:#9ac49a;border-radius:7px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation}'+
+  '.av-step:active{background:rgba(127,170,127,.3)}'+
+  '.av-cell{width:48px;box-sizing:border-box;background:var(--surface,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:6px;padding:5px 3px;font-size:13px;text-align:center}'+
   '.av-addcol{background:rgba(127,170,127,.15);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'+
   '.av-delcol{background:none;border:none;color:#a77;cursor:pointer;font-size:13px;margin-left:5px;padding:0}.av-delcol:hover{color:#ff8a80}'+
   '.av-hint{font-size:11px;color:#9a8;font-style:italic;margin:4px 0}.av-gridbtns{margin-top:6px}';
@@ -3366,7 +3369,7 @@ function renderAvGrid(){
   ts.forEach(function(t){
     var row=_avGrid.notas[t.id]||{};
     html+='<tr><td class="av-tname" title="'+esc(t.produto||'')+'">'+esc(t.id)+'</td>';
-    vs.forEach(function(v){ html+='<td><input class="av-cell" data-t="'+esc(t.id)+'" data-v="'+esc(v)+'" value="'+esc(row[v]||'')+'"></td>'; });
+    vs.forEach(function(v){ html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+esc(t.id)+'" data-v="'+esc(v)+'" value="'+esc(row[v]||'')+'" inputmode="decimal"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>'; });
     html+='<td></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -3380,6 +3383,11 @@ function _avSyncInputs(){
     if(!_avGrid.notas[t]) _avGrid.notas[t]={};
     _avGrid.notas[t][v]=inp.value;
   });
+}
+function avBump(el,delta){
+  var inp=el.parentNode.querySelector('.av-cell'); if(!inp) return;
+  var n=parseFloat(inp.value); if(isNaN(n)) n=0; n+=delta; if(n<0) n=0;
+  inp.value=(n%1===0)?String(n):n.toFixed(1);
 }
 function avAddCol(){
   _avSyncInputs();
