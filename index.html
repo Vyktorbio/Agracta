@@ -1266,32 +1266,40 @@ function addHaControl(){
   C.addTo(_map);
 }
 /* ---- Medição de área: desenho manual ou contorno andando com GPS ---- */
-var _measure={open:false,mode:null,pts:[],ghost:null,layer:null,gpsWatch:null,lastGps:null,cursorEl:null,touchPoint:null,lastTouchTs:0,touchBound:false,docBound:false,panelHot:false,needsRedraw:false};
+var _measure={open:false,mode:null,pts:[],layer:null,shapeLayer:null,handleLayer:null,gpsWatch:null,lastGps:null,lastTouchTs:0,touchBound:false,panelHot:false,touchStart:null,touchMoved:false,draggingPoint:false};
 function measureCss(){ if(document.getElementById('measureCss'))return; var s=document.createElement('style'); s.id='measureCss';
   s.textContent='.measure-panel{position:fixed;left:12px;bottom:80px;z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid var(--border,#26322b);border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:var(--text,#e8efe9);font-family:var(--font,system-ui);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
   '.measure-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.measure-title{font-size:12px;font-weight:900;letter-spacing:1px;color:var(--accent,#37d684);text-transform:uppercase}.measure-x{background:none;border:none;color:var(--text-3,#7c8a80);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
   '.measure-read{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}.measure-kpi{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px;min-width:0}.measure-kpi b{display:block;font-size:18px;line-height:1.05;color:var(--text,#e8efe9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.measure-kpi span{display:block;font-size:9px;color:var(--text-3,#7c8a80);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}.measure-kpi.main{grid-column:1/3}.measure-kpi.main b{font-size:27px;color:var(--accent,#37d684)}'+
   '.measure-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.measure-actions button{border:1px solid var(--border,#26322b);background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border-radius:9px;padding:9px 8px;font-weight:800;font-size:12px;cursor:pointer}.measure-actions button.on{background:var(--accent-deep,#103225);border-color:var(--accent-d,#1f8a52);color:var(--accent,#37d684)}.measure-actions button.danger{color:#ff9a8a;border-color:#5a2a2a;background:#2a1616}'+
-  '.measure-note{font-size:11px;color:var(--text-3,#7c8a80);line-height:1.35;margin-top:8px}.measure-dot{width:14px;height:14px;border-radius:50%;background:#37d684;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.5)}'+
+  '.measure-note{font-size:11px;color:var(--text-3,#7c8a80);line-height:1.35;margin-top:8px}.measure-handle{cursor:grab}.measure-dot{width:18px;height:18px;border-radius:50%;background:#37d684;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);cursor:grab;touch-action:none;box-sizing:border-box}.measure-dot:after{content:"";display:block;width:6px;height:6px;margin:3px auto 0;border-radius:50%;background:rgba(15,21,18,.52)}.measure-handle.leaflet-drag-target .measure-dot,.measure-dot:active{background:#ffd166;transform:scale(1.12)}'+
   '.measure-panel.drawing{width:268px;padding:9px;bottom:72px}.measure-panel.drawing .measure-head{margin-bottom:6px}.measure-panel.drawing .measure-read{grid-template-columns:1.28fr .88fr .55fr;gap:5px;margin-bottom:7px}.measure-panel.drawing .measure-kpi{padding:6px;border-radius:8px}.measure-panel.drawing .measure-kpi.main{grid-column:auto}.measure-panel.drawing .measure-kpi b{font-size:14px}.measure-panel.drawing .measure-kpi.main b{font-size:18px}.measure-panel.drawing .measure-actions{gap:6px}.measure-panel.drawing .measure-actions button{padding:8px 6px;font-size:11px}.measure-panel.drawing .measure-note{margin-top:6px;font-size:10px}'+
-  '.leaflet-container.measure-drawing-map{cursor:crosshair;touch-action:none}.measure-cursor{position:absolute;z-index:1300;width:38px;height:70px;pointer-events:none;transform:translate(-19px,-4px);display:none}.measure-cursor:before{content:"";position:absolute;left:18px;top:4px;width:2px;height:44px;background:#fff;border-radius:2px;box-shadow:0 0 0 1px rgba(15,21,18,.45),0 2px 8px rgba(0,0,0,.35)}.measure-cursor:after{content:"";position:absolute;left:8px;top:44px;width:22px;height:22px;border-radius:50%;background:#37d684;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.55)}.measure-cursor i{position:absolute;left:15px;top:0;width:8px;height:8px;border-radius:50%;background:#37d684;border:2px solid #fff;box-shadow:0 1px 7px rgba(0,0,0,.55)}';
+  '.leaflet-container.measure-drawing-map{cursor:crosshair;touch-action:none}';
   document.head.appendChild(s); }
 function measureEnsureLayer(){ if(!_map) initMap(); if(!_measure.layer) _measure.layer=LF.layerGroup().addTo(_map); return _measure.layer; }
+function measureEnsureSubLayers(){
+  var root=measureEnsureLayer();
+  if(!_measure.shapeLayer){ _measure.shapeLayer=LF.layerGroup(); root.addLayer(_measure.shapeLayer); }
+  if(!_measure.handleLayer){ _measure.handleLayer=LF.layerGroup(); root.addLayer(_measure.handleLayer); }
+  return {shape:_measure.shapeLayer,handles:_measure.handleLayer};
+}
 function toggleMeasure(){ if(_measure.open) closeMeasure(); else openMeasure(); }
 function openMeasure(){
   if(!_map) initMap();
   measureCss(); measureEnsureLayer(); _measure.open=true;
   if(!document.getElementById('measurePanel')){ var p=document.createElement('div'); p.id='measurePanel'; p.className='measure-panel'; document.body.appendChild(p); }
-  measureRenderPanel();
+  measureDraw();
 }
 function closeMeasure(){
   measureStopDraw(); measureStopGps(); _measure.open=false;
   var p=document.getElementById('measurePanel'); if(p)p.remove();
+  render();
+  if(_measure.pts.length) measureDraw();
 }
 function measureRenderPanel(){
   if(!_measure.open)return;
   var p=document.getElementById('measurePanel'); if(!p)return;
-  var pts=_measure.ghost||_measure.pts, st=measureStats(pts), gpsOn=!!_measure.gpsWatch, drawing=_measure.mode==='draw', shownPts=drawing?_measure.pts.length:pts.length;
+  var pts=_measure.pts, st=measureStats(pts), gpsOn=!!_measure.gpsWatch, drawing=_measure.mode==='draw', shownPts=pts.length;
   p.className='measure-panel'+(drawing?' drawing':'');
   var readHtml=drawing
     ? '<div class="measure-kpi main"><b>'+esc(fmtHa(st.area))+'</b><span>área</span></div>'+
@@ -1320,7 +1328,7 @@ function measureRenderPanel(){
 }
 function measureNote(){
   if(_measure.gpsWatch) return 'GPS registrando o contorno.';
-  if(_measure.mode==='draw') return 'Arraste o dedo: a ponta verde marca onde o ponto vai cair. Solte para confirmar.';
+  if(_measure.mode==='draw') return 'Toque no mapa para adicionar pontos. Arraste as bolinhas para ajustar o contorno.';
   if(_haRef) return 'Referência de 1 ha ligada; arraste o centro ou gire pelo pegador.';
   return 'Escolha Desenhar ou GPS.';
 }
@@ -1331,79 +1339,33 @@ function measureToggleHaRef(){
 }
 function measureBindPanelGuard(p){
   if(!p)return;
-  p.onmouseenter=function(){ measureEnterPanel(); };
+  p.onmouseenter=function(){ _measure.panelHot=true; };
   p.onmouseleave=function(){ _measure.panelHot=false; };
   p.onmousemove=function(ev){ if(ev)ev.stopPropagation(); };
   p.onclick=function(ev){ if(ev)ev.stopPropagation(); };
-  p.ontouchstart=function(ev){ _measure.panelHot=true; if(ev)ev.stopPropagation(); measureClearPreview(false); };
+  p.ontouchstart=function(ev){ _measure.panelHot=true; if(ev)ev.stopPropagation(); };
   p.ontouchmove=function(ev){ if(ev)ev.stopPropagation(); };
   p.ontouchend=function(ev){ _measure.panelHot=false; if(ev)ev.stopPropagation(); };
   p.ontouchcancel=function(ev){ _measure.panelHot=false; if(ev)ev.stopPropagation(); };
 }
-function measureEnterPanel(){
-  if(_measure.mode!=='draw')return;
-  _measure.panelHot=true;
-  measureClearPreview(true);
-}
-function measureClearPreview(redraw){
-  var had=!!_measure.ghost||!!_measure.touchPoint||!!_measure.needsRedraw;
-  _measure.ghost=null;
-  _measure.touchPoint=null;
-  measureHideCursor();
-  if(!had)return;
-  if(redraw){
-    _measure.needsRedraw=false;
-    measureDraw();
-  }else{
-    _measure.needsRedraw=true;
-  }
-}
-function measureCursorEl(){
-  if(!_map)return null;
-  var c=_map.getContainer();
-  if(!_measure.cursorEl || _measure.cursorEl.parentNode!==c){
-    var el=document.createElement('div');
-    el.className='measure-cursor';
-    el.innerHTML='<i></i>';
-    c.appendChild(el);
-    _measure.cursorEl=el;
-  }
-  return _measure.cursorEl;
-}
-function measureShowCursor(cp){
-  var el=measureCursorEl(); if(!el || !cp)return;
-  el.style.left=cp.x+'px';
-  el.style.top=cp.y+'px';
-  el.style.display='block';
-}
-function measureHideCursor(){
-  if(_measure.cursorEl) _measure.cursorEl.style.display='none';
-}
 function measureClampPoint(cp){
   var c=_map&&_map.getContainer?_map.getContainer():null; if(!c)return cp;
   return LF.point(Math.max(8, Math.min(c.clientWidth-8, cp.x)), Math.max(8, Math.min(c.clientHeight-8, cp.y)));
-}
-function measureGhostLatLng(ll){
-  if(!ll)return;
-  var pt=[ll.lat,ll.lng];
-  _measure.ghost=_measure.pts.length?_measure.pts.concat([pt]):[pt];
-  measureDraw(_measure.ghost,true);
 }
 function measureTouchContainerPoint(ev){
   if(!_map)return null;
   var c=_map.getContainer(), r=c.getBoundingClientRect();
   var t=(ev.touches&&ev.touches[0])||(ev.changedTouches&&ev.changedTouches[0]);
   if(!t)return null;
-  return measureClampPoint(LF.point(t.clientX-r.left, t.clientY-r.top-58));
+  return measureClampPoint(LF.point(t.clientX-r.left, t.clientY-r.top));
 }
 function measureBindTouchDraw(on){
   if(!_map)return;
   var c=_map.getContainer();
   if(on){
     c.classList.add('measure-drawing-map');
-    measureBindDocumentDraw(true);
     if(_measure.touchBound)return;
-    c.addEventListener('touchstart',measureOnTouchMove,{passive:false});
+    c.addEventListener('touchstart',measureOnTouchStart,{passive:false});
     c.addEventListener('touchmove',measureOnTouchMove,{passive:false});
     c.addEventListener('touchend',measureOnTouchEnd,{passive:false});
     c.addEventListener('touchcancel',measureOnTouchCancel,{passive:false});
@@ -1411,29 +1373,16 @@ function measureBindTouchDraw(on){
     return;
   }
   c.classList.remove('measure-drawing-map');
-  measureBindDocumentDraw(false);
   if(!_measure.touchBound)return;
-  c.removeEventListener('touchstart',measureOnTouchMove);
+  c.removeEventListener('touchstart',measureOnTouchStart);
   c.removeEventListener('touchmove',measureOnTouchMove);
   c.removeEventListener('touchend',measureOnTouchEnd);
   c.removeEventListener('touchcancel',measureOnTouchCancel);
   _measure.touchBound=false;
 }
-function measureBindDocumentDraw(on){
-  if(on){
-    if(_measure.docBound)return;
-    document.addEventListener('mousemove',measureOnDocumentMouseMove,true);
-    _measure.docBound=true;
-    return;
-  }
-  if(!_measure.docBound)return;
-  document.removeEventListener('mousemove',measureOnDocumentMouseMove,true);
-  _measure.docBound=false;
-}
-function measureOnDocumentMouseMove(ev){
-  if(_measure.mode!=='draw')return;
-  if(measureClientInPanel(ev.clientX,ev.clientY,12)){ measureEnterPanel(); return; }
-  if(_measure.panelHot&&!measureClientInPanel(ev.clientX,ev.clientY,24)) _measure.panelHot=false;
+function measureTouchOnHandle(ev){
+  var t=ev&&ev.target;
+  return !!(t&&t.closest&&t.closest('.measure-handle'));
 }
 function measureSetMode(mode){
   openMeasure();
@@ -1443,68 +1392,76 @@ function measureSetMode(mode){
     if(_map){
       _map.getContainer().style.cursor='crosshair';
       _map.on('click', measureOnClick);
-      _map.on('mousemove', measureOnMove);
       measureBindTouchDraw(true);
       try{ _map.doubleClickZoom.disable(); }catch(e){}
     }
   }else _measure.mode=null;
+  render();
   measureRenderPanel();
 }
 function measureStopDraw(){
-  var hadPreview=!!_measure.ghost||!!_measure.touchPoint||!!_measure.needsRedraw;
   if(_map){
     _map.off('click', measureOnClick);
-    _map.off('mousemove', measureOnMove);
     _map.getContainer().style.cursor='';
     measureBindTouchDraw(false);
     try{ _map.doubleClickZoom.enable(); }catch(e){}
   }
-  _measure.ghost=null; _measure.touchPoint=null; _measure.panelHot=false; _measure.needsRedraw=false; measureHideCursor();
-  if(hadPreview&&_measure.layer) measureDraw();
+  _measure.mode=null;
+  _measure.touchStart=null; _measure.touchMoved=false; _measure.panelHot=false; _measure.draggingPoint=false;
 }
 function measureOnClick(e){
   if(_measure.mode!=='draw')return;
+  if(_measure.draggingPoint)return;
   if(Date.now()-(_measure.lastTouchTs||0)<500)return;
+  if(e&&e.originalEvent&&measureTouchOnHandle(e.originalEvent))return;
   _measure.pts.push([e.latlng.lat,e.latlng.lng]);
-  _measure.ghost=null;
   measureDraw();
 }
-function measureOnMove(e){
-  if(_measure.mode!=='draw'||_measure.panelHot)return;
-  if(e&&e.originalEvent&&measureClientInPanel(e.originalEvent.clientX,e.originalEvent.clientY)){ measureEnterPanel(); return; }
-  measureShowCursor(e.containerPoint||_map.latLngToContainerPoint(e.latlng));
-  measureGhostLatLng(e.latlng);
-}
-function measureOnTouchMove(ev){
-  if(_measure.mode!=='draw'||_measure.panelHot)return;
+function measureOnTouchStart(ev){
+  if(_measure.mode!=='draw'||_measure.panelHot||measureTouchOnHandle(ev))return;
   var t=(ev.touches&&ev.touches[0])||(ev.changedTouches&&ev.changedTouches[0]);
   if(t&&measureClientInPanel(t.clientX,t.clientY)){
-    if(ev.cancelable)ev.preventDefault();
-    measureEnterPanel();
+    _measure.panelHot=true;
     return;
   }
   var cp=measureTouchContainerPoint(ev); if(!cp)return;
   if(ev.cancelable)ev.preventDefault();
-  var ll=_map.containerPointToLatLng(cp);
-  _measure.touchPoint=[ll.lat,ll.lng];
-  measureShowCursor(cp);
-  measureGhostLatLng(ll);
+  _measure.touchStart={x:cp.x,y:cp.y};
+  _measure.touchMoved=false;
+}
+function measureOnTouchMove(ev){
+  if(_measure.mode!=='draw'||_measure.panelHot||measureTouchOnHandle(ev))return;
+  var t=(ev.touches&&ev.touches[0])||(ev.changedTouches&&ev.changedTouches[0]);
+  if(t&&measureClientInPanel(t.clientX,t.clientY)){
+    if(ev.cancelable)ev.preventDefault();
+    _measure.panelHot=true;
+    return;
+  }
+  var cp=measureTouchContainerPoint(ev); if(!cp)return;
+  if(ev.cancelable)ev.preventDefault();
+  if(_measure.touchStart){
+    var dx=cp.x-_measure.touchStart.x, dy=cp.y-_measure.touchStart.y;
+    if(Math.sqrt(dx*dx+dy*dy)>10) _measure.touchMoved=true;
+  }
 }
 function measureOnTouchEnd(ev){
   if(_measure.mode!=='draw')return;
+  if(measureTouchOnHandle(ev)){ _measure.touchStart=null; return; }
   if(ev.cancelable)ev.preventDefault();
-  if(_measure.touchPoint){
-    _measure.pts.push(_measure.touchPoint);
-    _measure.touchPoint=null;
-    _measure.ghost=null;
+  if(_measure.touchStart&&!_measure.touchMoved){
+    var cp=measureTouchContainerPoint(ev); if(!cp) cp=LF.point(_measure.touchStart.x,_measure.touchStart.y);
+    var ll=_map.containerPointToLatLng(cp);
+    _measure.pts.push([ll.lat,ll.lng]);
     _measure.lastTouchTs=Date.now();
     measureDraw();
   }
-  measureHideCursor();
+  _measure.touchStart=null;
+  _measure.touchMoved=false;
 }
 function measureOnTouchCancel(ev){
   if(ev&&ev.cancelable)ev.preventDefault();
-  measureClearPreview(true);
+  _measure.touchStart=null;
+  _measure.touchMoved=false;
 }
 function measureClientInPanel(x,y,margin){
   var p=document.getElementById('measurePanel'); if(!p)return false;
@@ -1529,14 +1486,25 @@ function measureGpsToggle(){
 function measureStopGps(){
   if(_measure.gpsWatch){ try{ navigator.geolocation.clearWatch(_measure.gpsWatch); }catch(e){} _measure.gpsWatch=null; }
 }
-function measureUndo(){ if(_measure.pts.length)_measure.pts.pop(); _measure.ghost=null; measureDraw(); }
-function measureClear(){ _measure.pts=[]; _measure.ghost=null; _measure.touchPoint=null; _measure.lastGps=null; measureHideCursor(); if(_measure.layer)_measure.layer.clearLayers(); measureRenderPanel(); }
-function measureDraw(usePts,isGhost){
-  var layer=measureEnsureLayer(); layer.clearLayers();
-  var pts=usePts||_measure.pts, ll=pts.map(function(p){return [p[0],p[1]];});
-  if(ll.length>1) LF.polyline(ll,{color:'#37d684',weight:3,opacity:(isGhost ? .55 : .95),dashArray:isGhost?'5,5':null}).addTo(layer);
-  if(ll.length>2) LF.polygon(ll,{color:'#37d684',weight:2,fillColor:'#37d684',fillOpacity:(isGhost ? .10 : .18)}).addTo(layer);
-  _measure.pts.forEach(function(p){ LF.marker(p,{icon:LF.divIcon({className:'',html:'<div class="measure-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]})}).addTo(layer); });
+function measureUndo(){ if(_measure.pts.length)_measure.pts.pop(); measureDraw(); }
+function measureClear(){ _measure.pts=[]; _measure.touchStart=null; _measure.touchMoved=false; _measure.lastGps=null; if(_measure.shapeLayer)_measure.shapeLayer.clearLayers(); if(_measure.handleLayer)_measure.handleLayer.clearLayers(); measureRenderPanel(); }
+function measureDrawShape(){
+  var layers=measureEnsureSubLayers(), ll=_measure.pts.map(function(p){return [p[0],p[1]];});
+  layers.shape.clearLayers();
+  if(ll.length>1) LF.polyline(ll,{color:'#37d684',weight:3,opacity:.95}).addTo(layers.shape);
+  if(ll.length>2) LF.polygon(ll,{color:'#37d684',weight:2,fillColor:'#37d684',fillOpacity:.18}).addTo(layers.shape);
+}
+function measureDraw(){
+  var layers=measureEnsureSubLayers();
+  layers.handles.clearLayers();
+  measureDrawShape();
+  _measure.pts.forEach(function(p,i){
+    var m=LF.marker(p,{draggable:!!_measure.open,zIndexOffset:1300,icon:LF.divIcon({className:'measure-handle',html:'<div class="measure-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(layers.handles);
+    m.on('dragstart',function(){ _measure.draggingPoint=true; });
+    m.on('drag',function(){ var ll=m.getLatLng(); _measure.pts[i]=[ll.lat,ll.lng]; measureDrawShape(); measureRenderPanel(); });
+    m.on('dragend',function(){ _measure.draggingPoint=false; measureDraw(); });
+    m.on('click',function(ev){ if(ev&&ev.originalEvent) LF.DomEvent.stopPropagation(ev.originalEvent); });
+  });
   measureRenderPanel();
 }
 function measureDistance(a,b){
@@ -2368,10 +2336,10 @@ function render(){
     var hasAlert=quadraHasAlert(id);
     var isEd=(editMode && id===editId);
 
-    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':ac,weight:isEd?3:2,opacity:0.95,fillColor:ac,fillOpacity:isEd?0.18:0.08,interactive:(!drawMode && !ndviProbe)});
+    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':ac,weight:isEd?3:2,opacity:0.95,fillColor:ac,fillOpacity:isEd?0.18:0.08,interactive:(!drawMode && !ndviProbe && !(_measure&&_measure.mode==='draw'))});
     (function(qid){
       if(!drawMode){
-        poly.on('click',function(){ if(editMode) selectQuadra(qid); else showD(qid); });
+        poly.on('click',function(){ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
         if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:0.25,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:0.08,weight:2});}); }
       }
     })(id);
