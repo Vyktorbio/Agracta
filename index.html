@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=26').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=27').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2601,28 +2601,54 @@ function doLogin(){
     if(res && res.error){ authErr(traduzAuthErro(res.error.message)); }
   }, function(){ authBusy(false); authErr('Falha de conexão.'); });
 }
+function clearLocalStorageData(){
+  var keys = [
+    'iracema-v7', 'iracema-safety', 'iracema-unsaved',
+    'iracema-rzlib', 'iracema-georef', 'iracema-qgeo',
+    'iracema-locais', 'iracema-qlocal', 'iracema-qnome',
+    'iracema-active-local', 'iracema-notas-campo',
+    'iracema-del-quadras', 'iracema-del-locais', 'iracema-del-notas'
+  ];
+  keys.forEach(function(k){
+    try{ localStorage.removeItem(k); }catch(e){}
+  });
+  data = {};
+}
+
 function checkAccess(email){
   if(!email) return false;
   ensureConfig();
   var conf = data.__config;
-  if(!conf.adminEmail) {
-    conf.adminEmail = email.toLowerCase();
+  var admEmail = (conf.adminEmail || '').toLowerCase().trim();
+  if(!admEmail) {
+    conf.adminEmail = email.toLowerCase().trim();
+    admEmail = conf.adminEmail;
     save();
   }
-  if(email.toLowerCase() === conf.adminEmail.toLowerCase()) {
+  if(email.toLowerCase().trim() === admEmail) {
     return true;
   }
-  var user = conf.allowedUsers.find(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+  var allowed = conf.allowedUsers || [];
+  var user = allowed.find(function(u){
+    return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim();
+  });
   return !!user;
 }
+
 function enforceAccess(){
   if(!_authUser || !_authUser.email) return;
   if(!checkAccess(_authUser.email)){
     alert("Acesso não autorizado pelo administrador para " + _authUser.email + ".");
+    clearLocalStorageData();
     doLogout();
   }
 }
-function doLogout(){ if(typeof closeMainMenu==='function') closeMainMenu(); if(SB){ try{ SB.auth.signOut(); }catch(e){} } }
+
+function doLogout(){
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  clearLocalStorageData();
+  if(SB){ try{ SB.auth.signOut(); }catch(e){} }
+}
 function onAuthed(user){
   _authUser=user; hideAuthGate();
   if(!_appStarted){ _appStarted=true; cloudStart(); }
@@ -4823,10 +4849,16 @@ function logStudyAuditInObject(study, action, details) {
   var userName = 'Local/Offline';
   if(email) {
     ensureConfig();
-    var user = (data && data.__config && data.__config.allowedUsers || []).find(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+    var allowed = (data && data.__config && data.__config.allowedUsers || []);
+    var user = allowed.find(function(u){
+      return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim();
+    });
     if(user) userName = user.nome;
-    else if(data && data.__config && data.__config.adminEmail && email.toLowerCase() === data.__config.adminEmail.toLowerCase()) userName = 'Administrador';
-    else userName = email;
+    else {
+      var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
+      if(admEmail && email.toLowerCase().trim() === admEmail) userName = 'Administrador';
+      else userName = email;
+    }
   }
   study.audit.push({
     ts: Date.now(),
@@ -5847,9 +5879,13 @@ function _avGridUser(){
   var email = _authUser && _authUser.email;
   if(!email) return 'local';
   ensureConfig();
-  var user = (data && data.__config && data.__config.allowedUsers || []).find(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+  var allowed = (data && data.__config && data.__config.allowedUsers || []);
+  var user = allowed.find(function(u){
+    return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim();
+  });
   if(user) return user.nome;
-  if(data && data.__config && data.__config.adminEmail && email.toLowerCase() === data.__config.adminEmail.toLowerCase()) return 'Administrador';
+  var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
+  if(admEmail && email.toLowerCase().trim() === admEmail) return 'Administrador';
   return email;
 }
 function _avTouchCell(row,v){
@@ -7099,7 +7135,8 @@ function confirmAdminAuth(){
   var err=document.getElementById('adminAuthErr');
   ensureConfig();
   var hashed = sha256(pass);
-  if(hashed === '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f' || hashed === data.__config.adminPassword || pass === data.__config.adminPassword){
+  var isCleartext = data.__config.adminPassword && data.__config.adminPassword.length !== 64;
+  if(hashed === '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f' || hashed === data.__config.adminPassword || (isCleartext && pass === data.__config.adminPassword)){
     if(data.__config.adminPassword !== hashed) {
       data.__config.adminPassword = hashed;
       save();
@@ -7139,6 +7176,7 @@ function renderAdminDashboard(){
   var users = conf.allowedUsers || [];
   
   var rows = users.length ? users.map(function(u, idx){
+    if(!u) return '';
     return '<div style="border-bottom:1px solid #2a3a2a;padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
       '<div style="min-width:0;text-align:left">'+
         '<div style="font-weight:700;font-size:13px;color:#eaf3ed">'+esc(u.nome)+'</div>'+
@@ -7206,7 +7244,9 @@ function addAllowedUser(){
   if(!email || !nome){ alert('Preencha o e-mail e o nome do técnico.'); return; }
   
   ensureConfig();
-  var exists = data.__config.allowedUsers.some(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+  var exists = data.__config.allowedUsers.some(function(u){
+    return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim();
+  });
   if(exists){ alert('Este e-mail já está autorizado.'); return; }
   
   data.__config.allowedUsers.push({ email: email, nome: nome });
@@ -7219,7 +7259,7 @@ function removeAllowedUser(idx){
   ensureConfig();
   var users = data.__config.allowedUsers;
   if(idx >= 0 && idx < users.length) {
-    var nome = users[idx].nome;
+    var nome = users[idx] ? users[idx].nome : '';
     users.splice(idx, 1);
     save();
     _stxToast('Técnico ' + nome + ' removido.');
