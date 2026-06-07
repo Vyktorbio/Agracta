@@ -142,9 +142,9 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .sd-overlay{position:fixed;inset:0;background:#080e08;display:none;z-index:1000;overflow-y:auto}
 .sd-overlay.open{display:block}
 .sd-panel{max-width:640px;margin:0 auto;padding:14px 14px 80px 14px;color:#d0d8d0}
-.sd-header{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#080e08;padding:8px 0 14px;border-bottom:1px solid #1a2a1a;margin-bottom:12px;z-index:2}
+.sd-header{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#080e08;padding:8px 0 14px;border-bottom:1px solid #1a2a1a;margin-bottom:12px;z-index:2;flex-wrap:wrap}
 .sd-back{background:none;border:1px solid #2a3a2a;color:#8c8;padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer}
-.sd-codigo{flex:1;font-size:20px;font-weight:700;color:#afa;letter-spacing:0.3px;word-break:break-all}
+.sd-codigo{flex:1 1 140px;min-width:0;font-size:20px;font-weight:700;color:#afa;letter-spacing:0.3px;overflow-wrap:anywhere;line-height:1.15}
 .sd-actions{display:flex;gap:6px}
 .sd-meta{background:rgba(20,30,20,0.5);border:1px solid #1a2a1a;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
 .sd-meta-item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #1a2a1a}
@@ -630,23 +630,24 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 
 /* Header compacto, com cara de ferramenta de campo */
 .top-bar{
-  min-height:58px!important;
-  padding:8px 14px!important;
+  min-height:40px!important;
+  padding:4px 10px!important;
   background:linear-gradient(180deg,rgba(14,19,17,.94),rgba(12,17,15,.9))!important;
   border-bottom:1px solid rgba(255,255,255,.1)!important;
-  box-shadow:0 10px 26px rgba(0,0,0,.24)!important;
+  box-shadow:0 6px 18px rgba(0,0,0,.22)!important;
   backdrop-filter:blur(18px)!important;
   -webkit-backdrop-filter:blur(18px)!important;
-  gap:12px!important;
+  gap:8px!important;
+  flex-wrap:nowrap!important;
 }
 .top-bar>div:first-child{display:flex;align-items:center;gap:10px;min-width:0}
 .top-bar h1{display:flex;align-items:center;gap:9px;color:#f7fbf8!important;font-size:16px!important;font-weight:850!important;letter-spacing:.1px!important;line-height:1!important;white-space:nowrap}
-.top-bar h1:before{content:"";width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--vm-accent),var(--vm-accent-2));box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),0 5px 14px rgba(33,168,107,.26)}
+.top-bar>div:first-child:before{content:"";width:20px;height:20px;border-radius:6px;flex:none;background:linear-gradient(135deg,var(--vm-accent),var(--vm-accent-2));box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),0 4px 10px rgba(33,168,107,.22)}
 .top-bar-right{gap:8px!important;align-items:center!important}
-.top-bar-info{height:30px;display:inline-flex;align-items:center;color:#c4cdc7!important;font-size:11px!important;font-weight:650!important;padding:0 8px;border-left:1px solid rgba(255,255,255,.11);margin-right:0!important}
+.top-bar-info{height:24px;display:inline-flex;align-items:center;color:#c4cdc7!important;font-size:11px!important;font-weight:600!important;padding:0 6px;border-left:1px solid rgba(255,255,255,.11);margin-right:0!important}
 
 .btn-sm{
-  height:32px!important;
+  height:28px!important;
   display:inline-flex!important;
   align-items:center!important;
   justify-content:center!important;
@@ -839,21 +840,25 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .av-auto-nav button{background:#17291f!important;color:#cfeada!important;border:1px solid #2f6b45!important}
 
 @media (max-width:700px){
-  .top-bar{align-items:stretch!important;padding:8px 10px!important;gap:8px!important}
-  .top-bar>div:first-child{justify-content:space-between}
+  .top-bar{align-items:center!important;flex-direction:row!important;padding:5px 10px!important;gap:8px!important}
+  .top-bar>div:first-child{min-width:0;flex:0 1 auto}
   .top-bar-right{justify-content:flex-start!important;overflow-x:auto!important;flex-wrap:nowrap!important;padding-bottom:1px}
   .top-bar-info{display:none!important}
-  .loc-chip{max-width:56vw!important}
+  .loc-chip{max-width:50vw!important}
+  .loc-chip .sub,.loc-chip .car{display:none!important}
   .toolbar-extra{left:auto!important;right:10px!important;bottom:10px!important;display:flex!important;gap:7px!important}
   .toolbar-extra button{min-width:0!important;height:auto!important;padding:0!important}
   .tool-ico{display:inline-flex!important;height:42px;min-width:46px;font-size:12px}
   .panel,.edit-panel,.se-panel{max-width:calc(100vw - 18px)!important}
+  .sd-codigo{flex:1 1 100%!important;order:3;font-size:17px!important;letter-spacing:0!important}
+  .sd-header .sd-back{order:1}
+  .sd-actions{order:2;flex:1 1 auto;justify-content:flex-end;flex-wrap:wrap}
 }
 </style>
 </head>
 <body>
 <div class="top-bar">
-<div><h1>Mapa de Estudos</h1></div>
+<div class="tb-brand"></div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
