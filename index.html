@@ -2747,6 +2747,66 @@ function locateMe(){
     draw(b,true);
   });
 }
+/* ===================== NAVEGAÇÃO GPS ATÉ UM PONTO (quadra / estudo / pin) ===================== */
+var _navWatch=null,_navTarget=null,_navLine=null,_navTgtMarker=null,_navHeading=null,_navLabel='',_navOrient=null,_navCentered=false;
+function _bearing(a,b){ var p1=a[0]*Math.PI/180,p2=b[0]*Math.PI/180,dl=(b[1]-a[1])*Math.PI/180; var y=Math.sin(dl)*Math.cos(p2),x=Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
+function _cardinal(b){ return ['Norte','Nordeste','Leste','Sudeste','Sul','Sudoeste','Oeste','Noroeste'][Math.round((((b%360)+360)%360)/45)%8]; }
+function _navCss(){ if(document.getElementById('navCss'))return; var s=document.createElement('style'); s.id='navCss';
+  s.textContent='.nav-hud{position:fixed;top:46px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(12,18,15,.94);color:#eafaea;border:1px solid #2a4a2a;border-radius:14px;padding:10px 12px;box-shadow:0 8px 30px rgba(0,0,0,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);width:min(92vw,360px);font-family:-apple-system,system-ui,sans-serif}'+
+  '.nav-row{display:flex;align-items:center;gap:12px}'+
+  '.nav-arrow{font-size:30px;line-height:1;color:#37d684;transition:transform .25s ease;flex:none;width:34px;text-align:center}'+
+  '.nav-info{flex:1;min-width:0}.nav-dist{font-size:26px;font-weight:900;line-height:1;color:#eafaea}'+
+  '.nav-dir{font-size:12px;color:#bfe6cd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+  '.nav-stop{flex:none;background:#3a1414;color:#ffb3a8;border:1px solid #7a2b22;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}'+
+  '.nav-sub{font-size:11px;color:#9ac49a;margin-top:6px;text-align:center}'+
+  '.nav-target .nav-tg{width:20px;height:20px;border-radius:50%;background:rgba(55,214,132,.3);border:3px solid #37d684;box-shadow:0 0 0 2px rgba(0,0,0,.35)}';
+  document.head.appendChild(s); }
+function navStartQuadra(id){ var c=(typeof quadraCenter==='function')?quadraCenter(id):null; if(!c){ alert('Esta quadra não tem geometria no mapa.'); return; } navStart(c[0],c[1],'Quadra '+quadraNome(id)); }
+function navStart(lat,lng,label){
+  if(!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
+  if(!_map) initMap();
+  navStop();
+  _navTarget=[lat,lng]; _navLabel=label||'destino'; _navCentered=false;
+  try{ if(typeof closeDetail==='function') closeDetail(); }catch(e){}
+  ['sdOvl','dOvl','eeOvl'].forEach(function(o){ var el=document.getElementById(o); if(el) el.classList.remove('open'); });
+  _navCss();
+  _navTgtMarker=LF.marker(_navTarget,{icon:LF.divIcon({className:'nav-target',html:'<div class="nav-tg"></div>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:1500}).addTo(_map);
+  _navHud(); _navInitHeading();
+  try{ _navWatch=navigator.geolocation.watchPosition(_navOnPos, function(err){ var s=document.getElementById('navSub'); if(s) s.textContent='GPS: '+((err&&err.message)||'sem sinal')+' (precisa de https/app)'; }, {enableHighAccuracy:true,maximumAge:1000,timeout:20000}); }catch(e){}
+}
+function _navHud(){ var h=document.getElementById('navHud'); if(!h){ h=document.createElement('div'); h.id='navHud'; h.className='nav-hud'; document.body.appendChild(h); }
+  h.innerHTML='<div class="nav-row"><div class="nav-arrow" id="navArrow">&#9650;</div><div class="nav-info"><div class="nav-dist" id="navDist">— m</div><div class="nav-dir" id="navDir">'+esc(_navLabel)+'</div></div><button class="nav-stop" onclick="navStop()">Parar</button></div><div class="nav-sub" id="navSub">obtendo GPS…</div>'; }
+function _navOnPos(p){
+  if(!_navTarget) return;
+  var me=[p.coords.latitude,p.coords.longitude], acc=(p.coords.accuracy!=null?p.coords.accuracy:null);
+  if(_gpsMarker) _map.removeLayer(_gpsMarker);
+  _gpsMarker=LF.marker(me,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400}).addTo(_map);
+  if(_navLine) _map.removeLayer(_navLine);
+  _navLine=LF.polyline([me,_navTarget],{color:'#37d684',weight:4,opacity:.9,dashArray:'2 9'}).addTo(_map);
+  var dist=measureDistance(me,_navTarget), brg=_bearing(me,_navTarget);
+  if(!_navCentered){ _navCentered=true; try{ _map.fitBounds(LF.latLngBounds([me,_navTarget]).pad(0.35)); }catch(e){} }
+  var dEl=document.getElementById('navDist'),dirEl=document.getElementById('navDir'),arEl=document.getElementById('navArrow'),sub=document.getElementById('navSub');
+  if(dEl){ dEl.textContent=(dist<1000?Math.round(dist)+' m':(dist/1000).toFixed(2)+' km'); dEl.style.color=(dist<=5?'#37d684':'#eafaea'); }
+  if(dirEl) dirEl.textContent=_navLabel+' · '+_cardinal(brg)+' '+Math.round(brg)+'°';
+  if(arEl) arEl.style.transform='rotate('+(brg-(_navHeading!=null?_navHeading:0))+'deg)';
+  if(sub){ if(dist<=5) sub.textContent='✓ Você chegou! (±'+(acc!=null?Math.round(acc):'?')+' m)'; else sub.textContent=(_navHeading!=null?'Siga a seta':'Rumo (do Norte): '+_cardinal(brg))+' · ±'+(acc!=null?Math.round(acc):'?')+' m'; }
+}
+function _navInitHeading(){
+  function onO(ev){ var hd=null; if(ev.webkitCompassHeading!=null) hd=ev.webkitCompassHeading; else if(ev.absolute===true && ev.alpha!=null) hd=(360-ev.alpha)%360; if(hd!=null) _navHeading=hd; }
+  _navOrient=onO;
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){ DeviceOrientationEvent.requestPermission().then(function(st){ if(st==='granted') window.addEventListener('deviceorientation',onO,true); }).catch(function(){}); }
+    else { window.addEventListener('deviceorientationabsolute',onO,true); window.addEventListener('deviceorientation',onO,true); }
+  }catch(e){}
+}
+function navStop(){
+  if(_navWatch!=null){ try{ navigator.geolocation.clearWatch(_navWatch); }catch(e){} _navWatch=null; }
+  if(_navOrient){ try{ window.removeEventListener('deviceorientationabsolute',_navOrient,true); window.removeEventListener('deviceorientation',_navOrient,true); }catch(e){} _navOrient=null; }
+  if(_navLine){ try{ _map.removeLayer(_navLine); }catch(e){} _navLine=null; }
+  if(_navTgtMarker){ try{ _map.removeLayer(_navTgtMarker); }catch(e){} _navTgtMarker=null; }
+  _navHeading=null; _navTarget=null; _navCentered=false;
+  var h=document.getElementById('navHud'); if(h) h.remove();
+}
 /* ===================== CLIMA — estação meteorológica (Ecowitt) ===================== */
 var CLIMA_PROXY=NDVI_PROXY;
 var _climaStations=null, climaMac=null, _climaTimer=null, _climaMode='estacao', _climaWhere=null;
@@ -3273,7 +3333,7 @@ function showD(id){
   }
   h+='</div>';
 
-  h+='</div><div class="panel-btns"><button class="p-btn" style="background:#11210f;color:#8aa88a;border:1px solid #2a3a2a" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button><button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">EDITAR QUADRA</button><button class="p-btn p-btn-close" onclick="closeDetail()">FECHAR</button></div>';
+  h+='</div><div class="panel-btns"><button class="p-btn" style="background:#11210f;color:#8aa88a;border:1px solid #2a3a2a" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button><button class="p-btn" style="background:#11210f;color:#8aa88a;border:1px solid #2a3a2a" onclick="navStartQuadra(\''+id+'\')">'+ic('pin',14)+' Ir até</button><button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">EDITAR QUADRA</button><button class="p-btn p-btn-close" onclick="closeDetail()">FECHAR</button></div>';
   document.getElementById("dPnl").innerHTML=h;
   document.getElementById("dOvl").classList.add("open");
 }
@@ -4246,6 +4306,7 @@ function openStudyDetail(qid,sid){
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">'+ic('copy',15)+' Copiar</button>';
+  h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
   h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
   if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
   h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">EDITAR</button>';
