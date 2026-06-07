@@ -643,6 +643,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .top-bar>div:first-child{display:flex;align-items:center;gap:10px;min-width:0}
 .top-bar h1{display:flex;align-items:center;gap:9px;color:#f7fbf8!important;font-size:16px!important;font-weight:850!important;letter-spacing:.1px!important;line-height:1!important;white-space:nowrap}
 /* logo do cabeçalho removido a pedido (mais espaço, mais limpo) */
+.ic{display:inline-block;vertical-align:-3px;flex:none}
+.main-menu button .ic,.loc-mi .ic{margin-right:3px;opacity:.92}
 .top-bar-right{gap:8px!important;align-items:center!important}
 .top-bar-info{height:24px;display:inline-flex;align-items:center;color:#c4cdc7!important;font-size:11px!important;font-weight:600!important;padding:0 6px;border-left:1px solid rgba(255,255,255,.11);margin-right:0!important}
 
@@ -1077,6 +1079,34 @@ function gS(c,dap){
 function gC(c){return CC[c]||CC._}
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function uid(){ try{ if(window.crypto&&crypto.randomUUID) return 's'+crypto.randomUUID(); }catch(e){} return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,6); }
+/* Ícones SVG (estilo Lucide, monocromáticos, herdam a cor do texto via currentColor) */
+function ic(n,sz){ var P={
+  pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  phone:'<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  maximize:'<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
+  sat:'<path d="M4 10a7.31 7.31 0 0 0 10 10Z"/><path d="m9 15 3-3"/><path d="M17 13a6 6 0 0 0-6-6"/><path d="M21 13A10 10 0 0 0 11 3"/>',
+  weather:'<path d="M12 2v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="M20 12h2"/><path d="m17.7 6.3 1.4-1.4"/><path d="M16 12a4 4 0 1 0-8 0"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
+  globe:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+  thermo:'<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/>',
+  droplet:'<path d="M12 2.7s6 5.5 6 10.3a6 6 0 0 1-12 0C6 8.2 12 2.7 12 2.7Z"/>',
+  wind:'<path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/>',
+  rain:'<path d="M16 13a5 5 0 0 0-1-9.9A6 6 0 0 0 4 8a4 4 0 0 0 .5 8H16Z"/><path d="M8 19v2M12 19v2M16 19v2"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  sunrise:'<path d="M12 2v6M4.9 10.9l1.4 1.4M2 18h2M20 18h2M17.7 12.3l1.4-1.4M22 22H2"/><path d="m8 6 4-4 4 4"/><path d="M16 18a4 4 0 0 0-8 0"/>',
+  sunset:'<path d="M12 10V2M4.9 10.9l1.4 1.4M2 18h2M20 18h2M17.7 12.3l1.4-1.4M22 22H2"/><path d="m16 5-4 5-4-5"/><path d="M16 18a4 4 0 0 0-8 0"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'
+}; var s=sz||16; return '<svg class="ic" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(P[n]||'')+'</svg>'; }
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function normStr(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
 
@@ -1804,8 +1834,8 @@ function openLocalMenu(){
   Object.keys(LOCAIS).forEach(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length, on=(id===localAtivo);
     html+='<div class="loc-mi'+(on?' on':'')+'" data-go="'+id+'"><span>'+(on?'✓ ':'')+esc(Lc.nome)+'</span><span class="sub">'+n+'q</span></div>';
   });
-  html+='<div class="loc-sep"></div><div class="loc-mi loc-new" data-new="1">＋ Novo local…</div>'+
-        '<div class="loc-mi loc-manage" data-manage="1">⚙︎ Gerenciar locais</div>';
+  html+='<div class="loc-sep"></div><div class="loc-mi loc-new" data-new="1">'+ic('plus',15)+' Novo local…</div>'+
+        '<div class="loc-mi loc-manage" data-manage="1">'+ic('gear',15)+' Gerenciar locais</div>';
   m.innerHTML=html; document.body.appendChild(m);
   m.style.left=Math.max(8,Math.min(r.left, window.innerWidth-m.offsetWidth-8))+'px';
   m.style.top=((r.bottom||50)+6)+'px';
@@ -1846,7 +1876,7 @@ function gerenciarLocais(){
       '<button class="lm-ren" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
       '<button class="lm-del" onclick="excluirLocal(\''+id+'\')">Excluir</button></div></div>';
   }).join('');
-  m.innerHTML='<div class="loc-box"><h3>⚙︎ Gerenciar locais</h3>'+
+  m.innerHTML='<div class="loc-box"><h3>'+ic('gear',16)+' Gerenciar locais</h3>'+
     '<div style="font-size:11px;color:#8a948e;margin-bottom:8px">Excluir um local remove ele e as quadras dele (pede confirmação digitando o nome). Não dá pra excluir o último.</div>'+
     rows+
     '<div class="row" style="margin-top:12px"><button class="loc-btn loc-cancel" onclick="document.getElementById(\'locManage\').style.display=\'none\'">Fechar</button></div></div>';
@@ -1947,7 +1977,7 @@ function toggleFullscreenMap(){
   var on=document.body.classList.toggle('map-full');
   var ex=document.getElementById('fullExit');
   if(on){
-    if(!ex){ ex=document.createElement('button'); ex.id='fullExit'; ex.className='full-exit'; ex.innerHTML='⤢ Sair'; ex.onclick=toggleFullscreenMap; document.body.appendChild(ex); }
+    if(!ex){ ex=document.createElement('button'); ex.id='fullExit'; ex.className='full-exit'; ex.innerHTML=ic('maximize',14)+' Sair'; ex.onclick=toggleFullscreenMap; document.body.appendChild(ex); }
     ex.style.display='block';
   } else if(ex){ ex.style.display='none'; }
   setTimeout(function(){ try{ if(_map) _map.invalidateSize(); }catch(e){} }, 160);
@@ -1957,18 +1987,18 @@ function toggleMainMenu(){
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
   m.innerHTML=
-    (!isStandalone()?'<button class="mm-install" onclick="installApp()">📲 Instalar app</button><div class="mm-sep"></div>':'')+
-    '<button onclick="toggleFullscreenMap()">⤢ Tela cheia (só o mapa)</button>'+
+    (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
+    '<button onclick="toggleFullscreenMap()">'+ic('maximize')+' Tela cheia (só o mapa)</button>'+
     '<div class="mm-sep"></div>'+
-    '<button onclick="closeMainMenu();toggleQuadraEdit()">✏️ Editar quadras</button>'+
-    '<button onclick="closeMainMenu();startGeoref()">📍 Alinhar mapa</button>'+
+    '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
+    '<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>'+
     '<div class="mm-sep"></div>'+
-    '<button onclick="closeMainMenu();exportXlsx(false)">📊 Exportar planilha (Excel/Sheets)</button>'+
+    '<button onclick="closeMainMenu();exportXlsx(false)">'+ic('sheet')+' Exportar planilha (Excel/Sheets)</button>'+
     '<div class="mm-sep"></div>'+
-    '<button onclick="closeMainMenu();exportData()">💾 Backup (arquivo)</button>'+
-    '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>'+
-    '<button onclick="closeMainMenu();openBackups()">🗂️ Backups (restaurar)</button>'+
-    (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">🚪 Sair</button>'):'');
+    '<button onclick="closeMainMenu();exportData()">'+ic('save')+' Backup (arquivo)</button>'+
+    '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
+    '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
+    (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
   var b=document.getElementById('menuBtn'), r=b?b.getBoundingClientRect():null;
@@ -2712,17 +2742,17 @@ function buildClimaPanel(){
   var p=document.getElementById('climaPanel');
   if(!p){ p=document.createElement('div'); p.id='climaPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
   var modeBtns='<div class="ndvi-ixrow" style="margin-bottom:6px">'+
-    '<button class="ndvi-ix'+(_climaMode==='estacao'?' on':'')+'" onclick="climaSetMode(\'estacao\')">🛰️ Estação</button>'+
-    '<button class="ndvi-ix'+(_climaMode==='local'?' on':'')+'" onclick="climaSetMode(\'local\')">🌍 Local</button></div>';
+    '<button class="ndvi-ix'+(_climaMode==='estacao'?' on':'')+'" onclick="climaSetMode(\'estacao\')">'+ic('sat',14)+' Estação</button>'+
+    '<button class="ndvi-ix'+(_climaMode==='local'?' on':'')+'" onclick="climaSetMode(\'local\')">'+ic('globe',14)+' Local</button></div>';
   var ctrl='';
   if(_climaMode==='estacao'){
     var opts=_climaStations? _climaStations.map(function(st){ return '<option value="'+st.mac+'"'+(st.mac===climaMac?' selected':'')+'>'+esc(st.name)+'</option>'; }).join('') : '';
     ctrl=(_climaStations? '<label class="gr-ctl"><span>Estação</span><select onchange="climaPick(this.value)">'+opts+'</select></label>' : '');
   } else {
     var nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
-    ctrl='<div class="gr-ctl"><span>Local</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis">'+esc(nm)+'</span><button class="ndvi-ix" onclick="climaGps()">📍 GPS</button></div>';
+    ctrl='<div class="gr-ctl"><span>Local</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis">'+esc(nm)+'</span><button class="ndvi-ix" onclick="climaGps()">'+ic('pin',14)+' GPS</button></div>';
   }
-  p.innerHTML='<div class="gr-title">🌦️ CLIMA</div>'+modeBtns+ctrl+
+  p.innerHTML='<div class="gr-title">'+ic('weather',14)+' CLIMA</div>'+modeBtns+ctrl+
     '<div id="climaBody"></div>'+
     '<div class="gr-btns"><button class="gr-cancel" onclick="toggleClima()">Fechar</button></div>';
   p.style.display='block';
@@ -2877,7 +2907,7 @@ function climaRender(d){
     }
   }
   var ts=d.time?new Date(d.time*1000):null;
-  h+='<div class="clima-foot">'+(ts?('atualizado '+ts.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min 🔄</div>';
+  h+='<div class="clima-foot">'+(ts?('atualizado '+ts.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min '+ic('refresh',11)+'</div>';
   b.innerHTML=h;
 }
 function toggleNdvi(){
@@ -2893,7 +2923,7 @@ function buildNdviPanel(){
   var p=document.getElementById('ndviPanel');
   if(!p){ p=document.createElement('div'); p.id='ndviPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
   function btn(ix,label){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+(label||ix)+'</button>'; }
-  p.innerHTML='<div class="gr-title">🛰️ ÍNDICES (Sentinel-2)</div>'+
+  p.innerHTML='<div class="gr-title">'+ic('sat',14)+' ÍNDICES (Sentinel-2)</div>'+
     '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
@@ -2901,7 +2931,7 @@ function buildNdviPanel(){
     '<label class="gr-ctl" style="cursor:pointer"><span>Apenas quadras</span><input type="checkbox" '+(ndviClip?'checked':'')+' onchange="ndviSetClip(this.checked)" style="flex:none;width:auto"></label>'+
     '<div class="ndvi-legend"><span>baixo</span><i class="ndvi-bar"></i><span>alto</span></div>'+
     '<div class="ndvi-ticks"><span>-0.2</span><span>0.2</span><span>0.5</span><span>0.8</span></div>'+
-    '<div class="gr-btns" style="margin:6px 0 2px"><button class="ndvi-ix'+(ndviProbe?' on':'')+'" style="flex:1" onclick="ndviToggleProbe()">🔎 '+(ndviProbe?'Consultando — clique no mapa':'Consultar ponto')+'</button></div>'+
+    '<div class="gr-btns" style="margin:6px 0 2px"><button class="ndvi-ix'+(ndviProbe?' on':'')+'" style="flex:1" onclick="ndviToggleProbe()">'+ic('search',14)+' '+(ndviProbe?'Consultando — clique no mapa':'Consultar ponto')+'</button></div>'+
     '<div id="ndviStatus" class="ndvi-status"></div>'+
     '<div id="ndviRank" class="ndvi-rank"></div>'+
     '<div class="gr-btns"><button class="gr-cancel" onclick="toggleNdvi()">Fechar</button></div>';
@@ -4152,7 +4182,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(qid)+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
-  h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">📄 Copiar</button>';
+  h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">'+ic('copy',15)+' Copiar</button>';
   h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
   if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
   h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">EDITAR</button>';
