@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Mapa de Estudos">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=16').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=17').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2200,6 +2200,12 @@ var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=
    _cloudInitDone: só permite ESCREVER na nuvem DEPOIS de ter LIDO ela uma vez
    (impede que um cliente recém-aberto, com dados velhos, atropele a nuvem). */
 var _cloudRev=null, _cloudInitDone=false;
+var _unsavedChanges=false;
+try{ _unsavedChanges=(localStorage.getItem('iracema-unsaved')==='true'); }catch(e){}
+function setUnsavedChanges(val){
+  _unsavedChanges=val;
+  try{ localStorage.setItem('iracema-unsaved', val?'true':'false'); }catch(e){}
+}
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
 function cloudState(){
   ensureQGEO(); ensureLocais(); ensureNotas();
@@ -2237,6 +2243,10 @@ function cloudApply(st){
   if(window._qEditing || window._avEditing){ _cloudPending=st; return; }
   /* não aplica um estado MAIS ANTIGO sobre um mais novo (protege de push obsoleto/realtime) */
   if(st.rev!=null && _cloudRev!=null && st.rev < _cloudRev){ return; }
+  if(_unsavedChanges){
+    st=cloudMerge(cloudState(), st);
+    setTimeout(cloudSaveSoon, 50);
+  }
   _cloudApplying=true;
   try{
     if(st.rev!=null) _cloudRev=st.rev;
@@ -2393,12 +2403,12 @@ function _cloudSaveAttempt(allowShrink, replace, tries){
             /* banco RECUSOU (rev velha/conflito) -> re-tenta do zero (relê+merge+regrava), preservando o local */
             if(tries<4){ cloudBadge('saving'); setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 250+tries*300); }
             else { cloudBadge('error','— toque p/ tentar'); setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 800); }
-          } else { _cloudRev=newRev; cloudBadge('saved'); }
+          } else { _cloudRev=newRev; setUnsavedChanges(false); cloudBadge('saved'); }
         }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 400+tries*300); } else cloudBadge('error'); });
     }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 500); } else cloudBadge('error'); });
   }catch(e){ cloudBadge('error'); }
 }
-function cloudSaveSoon(){ if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
+function cloudSaveSoon(){ setUnsavedChanges(true); if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
 function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }
 /* Puxa o estado atual da nuvem e aplica (não sobrescreve edição em andamento). */
 function cloudPull(){
@@ -2408,8 +2418,18 @@ function cloudPull(){
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       var st = res && res.data && res.data.state;
       _cloudInitDone=true; /* já lemos a nuvem -> a partir de agora pode escrever */
-      if(st && st.data && Object.keys(st.data).length){ cloudApply(st); }
-      cloudBadge('saved');
+      if(st && st.data && Object.keys(st.data).length){
+        if(_unsavedChanges){
+          var merged=cloudMerge(cloudState(), st);
+          cloudApply(merged);
+          cloudSaveSoon();
+        } else {
+          cloudApply(st);
+          cloudBadge('saved');
+        }
+      } else {
+        cloudBadge('saved');
+      }
     }, function(){ cloudBadge('offline'); });
   }catch(e){ cloudBadge('offline'); }
 }
@@ -2553,7 +2573,16 @@ function cloudStart(){
       if(res && res.error){ cloudBadge('error'); }
       var st = res && res.data && res.data.state;
       _cloudInitDone=true; /* leu a nuvem -> libera escrita (nunca empurra dados velhos antes de ler) */
-      if(st && st.data && Object.keys(st.data).length){ cloudApply(st); cloudBadge('saved'); }
+      if(st && st.data && Object.keys(st.data).length){
+        if(_unsavedChanges){
+          var merged=cloudMerge(cloudState(), st);
+          cloudApply(merged);
+          cloudSaveSoon();
+        } else {
+          cloudApply(st);
+          cloudBadge('saved');
+        }
+      }
       else { cloudSave(); } /* nuvem vazia -> semeia */
       cloudSubscribe();
     }, function(){ cloudBadge('offline'); });
@@ -3057,6 +3086,25 @@ function openNoteModal(lat, lng){
        '<option value="outro">📝 Outro / Observação Geral</option>'+
      '</select>'+
      
+     '<div class="e-row">'+
+       '<div>'+
+         '<label class="e-lbl">SEVERIDADE</label>'+
+         '<select id="noteSeverity" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
+           '<option value="baixa">🟢 Baixa</option>'+
+           '<option value="media">🟡 Média</option>'+
+           '<option value="alta">🔴 Alta</option>'+
+         '</select>'+
+       '</div>'+
+       '<div>'+
+         '<label class="e-lbl">RECOMENDAÇÃO</label>'+
+         '<select id="noteRecommendation" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
+           '<option value="monitorar">🔍 Apenas Monitorar</option>'+
+           '<option value="aplicar">⚠️ Aplicar Tratamento</option>'+
+           '<option value="nenhuma">✅ Nenhuma Ação</option>'+
+         '</select>'+
+       '</div>'+
+     '</div>'+
+     
      '<label class="e-lbl">DESCRIÇÃO DETALHADA</label>'+
      '<textarea id="noteDescription" class="e-inp" rows="4" placeholder="Descreva os sintomas, nível de severidade ou observações gerais..." style="resize:vertical;font-family:inherit;"></textarea>'+
      
@@ -3160,6 +3208,8 @@ function saveNoteForm(event){
   
   var title=document.getElementById('noteTitle').value.trim();
   var category=document.getElementById('noteCategory').value;
+  var severity=document.getElementById('noteSeverity').value;
+  var recommendation=document.getElementById('noteRecommendation').value;
   var description=document.getElementById('noteDescription').value.trim();
   
   if(!title){
@@ -3178,6 +3228,8 @@ function saveNoteForm(event){
     quadraId:qid,
     titulo:title,
     categoria:category,
+    severidade:severity,
+    recomendacao:recommendation,
     descricao:description,
     foto:_tempPhotoBase64,
     criadoEm:new Date().toISOString().split('T')[0],
@@ -3272,6 +3324,28 @@ function getNotePopupHtml(n){
           
   if(n.quadraId){
     h+='<div style="font-size:11px;color:var(--text-2, #aaa);margin-bottom:8px;"><b>Talhão:</b> '+esc(quadraNome(n.quadraId))+'</div>';
+  }
+  
+  var sevLabels={
+    baixa:'🟢 Baixa',
+    media:'🟡 Média',
+    alta:'🔴 Alta'
+  };
+  var recLabels={
+    monitorar:'🔍 Monitorar',
+    aplicar:'⚠️ Aplicar Tratamento',
+    nenhuma:'✅ Nenhuma Ação'
+  };
+  
+  if(n.severidade || n.recomendacao){
+    h+='<div style="font-size:11px;color:var(--text-2, #aaa);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;">';
+    if(n.severidade){
+      h+='<span><b>Severidade:</b> '+(sevLabels[n.severidade]||n.severidade)+'</span>';
+    }
+    if(n.recomendacao){
+      h+='<span><b>Ação:</b> '+(recLabels[n.recomendacao]||n.recomendacao)+'</span>';
+    }
+    h+='</div>';
   }
   
   if(n.descricao){
