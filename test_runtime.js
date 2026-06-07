@@ -122,12 +122,12 @@ try {
       data = {}; // Initialize data object for testing
       ensureConfig();
       if (!data.__config) throw new Error("ensureConfig did not initialize __config");
-      if (data.__config.adminPassword !== 'admin123') throw new Error("default password incorrect");
+      if (data.__config.adminPassword !== 'mPskeYv') throw new Error("default password incorrect");
+      if (data.__config.adminEmail !== 'machadovictorchaves@gmail.com') throw new Error("default admin email incorrect");
 
-      // First email checked should become the adminEmail if empty
-      var isAllowed = checkAccess('admin@agracta.com');
-      if (!isAllowed) throw new Error("First access should set adminEmail and be allowed");
-      if (data.__config.adminEmail !== 'admin@agracta.com') throw new Error("adminEmail not set on first checkAccess");
+      // Admin email check should be allowed
+      var isAllowed = checkAccess('machadovictorchaves@gmail.com');
+      if (!isAllowed) throw new Error("Admin email should be allowed");
 
       // Another email should not be allowed (unauthorized technician)
       var isAllowed2 = checkAccess('tech@agracta.com');
