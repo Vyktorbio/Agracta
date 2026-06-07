@@ -1420,7 +1420,7 @@ function measureRenderPanel(){
   measureBindPanelGuard(p);
 }
 function measureNote(){
-  if(_measure.gpsWatch) return 'GPS registrando o contorno.';
+  if(_measure.gpsWatch) return 'GPS registrando o contorno'+(_measure.lastGps&&_measure.lastGps.accuracy!=null?' · ±'+Math.round(_measure.lastGps.accuracy)+'m'+(_measure.lastGps.accuracy>25?' (impreciso — aguardando melhor sinal)':''):'')+'.';
   if(_measure.mode==='draw') return 'Toque no mapa para adicionar pontos. Arraste as bolinhas para ajustar o contorno.';
   if(_haRef) return 'Referência de 1 ha ligada; arraste o centro ou gire pelo pegador.';
   return 'Escolha Desenhar ou GPS.';
@@ -1567,13 +1567,16 @@ function measureGpsToggle(){
   if(!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
   measureStopDraw(); _measure.mode=null; _measure.lastGps=null;
   _measure.gpsWatch=navigator.geolocation.watchPosition(function(pos){
+    _measure.lastGps=pos.coords;
+    var a=(pos.coords.accuracy==null?9999:pos.coords.accuracy);
+    if(a>25){ measureRenderPanel(); return; } /* leitura imprecisa (±>25m): não cria ponto */
     var ll=[pos.coords.latitude,pos.coords.longitude], last=_measure.pts[_measure.pts.length-1];
     if(!last || measureDistance(last,ll)>=2){
-      _measure.pts.push(ll); _measure.lastGps=pos.coords; measureDraw();
+      _measure.pts.push(ll); measureDraw();
       if(_measure.pts.length===1) try{ _map.setView(ll, Math.max(_map.getZoom()||16,17)); }catch(e){}
     }
   }, function(err){ alert('Não consegui acompanhar o GPS.\n('+err.message+')'); measureStopGps(); measureRenderPanel(); },
-  {enableHighAccuracy:true, timeout:15000, maximumAge:1000});
+  {enableHighAccuracy:true, timeout:15000, maximumAge:0});
   measureRenderPanel();
 }
 function measureStopGps(){
@@ -2671,7 +2674,7 @@ function ndviBBox(){
   return stationBBox();
 }
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
-var ndviProbe=false, _gpsMarker=null;
+var ndviProbe=false, _gpsMarker=null, _gpsCircle=null;
 function quadraAt(lat,lng){ ensureQGEO(); var f=null;
   quadrasAtivas().forEach(function(id){ var pp=QGEO[id]; if(!pp||pp.length<3)return;
     var ring=pp.map(function(p){return [p[1],p[0]];}); if(pointInRing(lng,lat,ring)) f=id; }); return f; }
@@ -2693,17 +2696,42 @@ function onProbeClick(e){
      pop.setContent('<div class="ndvi-pop-b"><div class="ndvi-pop-t">'+(q?('Quadra '+esc(q)):'fora das quadras')+' &middot; '+(d.date||ndviDate)+'</div>'+row('NDVI',d.ndvi)+row('NDRE',d.ndre)+row('GNDVI',d.gndvi)+row('NDMI',d.ndmi)+'</div>');
    }).catch(function(){ pop.setContent('<div class="ndvi-pop-b">Proxy desligado? Rode python3 ndvi-proxy.py</div>'); });
 }
+/* GPS de PRECISÃO: coleta vários sinais por alguns segundos e fica com o de MENOR erro
+   (ignora leituras grosseiras > maxAcc; para cedo quando atinge 'target'). onUpd = cada melhora; onEnd = melhor (ou null). */
+function gpsBest(opts, onUpd, onEnd){
+  opts=opts||{};
+  var target=opts.target||10, maxWait=opts.maxWait||9000, maxAcc=opts.maxAcc||80;
+  if(!navigator.geolocation){ if(onEnd)onEnd(null,'GPS indisponível'); return; }
+  var best=null, watch=null, timer=null, done=false;
+  function finish(reason){ if(done)return; done=true; try{navigator.geolocation.clearWatch(watch);}catch(e){} clearTimeout(timer); if(onEnd)onEnd(best, best?null:(reason||'sem sinal')); }
+  try{
+    watch=navigator.geolocation.watchPosition(function(p){
+      var a=(p.coords.accuracy==null?9999:p.coords.accuracy);
+      if(a>maxAcc) return;
+      if(!best || a<best.acc){ best={lat:p.coords.latitude,lng:p.coords.longitude,acc:a,ts:Date.now()}; if(onUpd)onUpd(best); }
+      if(best && best.acc<=target) finish();
+    }, function(err){ if(!best) finish(err&&err.message); }, {enableHighAccuracy:true, timeout:maxWait, maximumAge:0});
+  }catch(e){ finish('erro'); return; }
+  timer=setTimeout(function(){ finish('timeout'); }, maxWait+500);
+}
 function locateMe(){
   if(!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
   if(!_map) initMap();
-  navigator.geolocation.getCurrentPosition(function(pos){
-    var ll=[pos.coords.latitude, pos.coords.longitude];
+  var centered=false;
+  function draw(b, fim){
+    var ll=[b.lat,b.lng];
     if(_gpsMarker) _map.removeLayer(_gpsMarker);
-    _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(_map);
-    _gpsMarker.bindPopup('📍 Você está aqui'+(pos.coords.accuracy?' (±'+Math.round(pos.coords.accuracy)+' m)':'')).openPopup();
-    _map.setView(ll, Math.max(_map.getZoom()||16,17));
-    if(ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
-  }, function(err){ alert('Não consegui o GPS.\\nObs.: abrindo o arquivo direto (file://) o navegador bloqueia o GPS — funciona via localhost/https ou no app instalado.\\n('+err.message+')'); }, {enableHighAccuracy:true, timeout:10000, maximumAge:5000});
+    _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400}).addTo(_map);
+    if(_gpsCircle) _map.removeLayer(_gpsCircle);
+    _gpsCircle=LF.circle(ll,{radius:Math.max(b.acc,1),color:'#2196f3',weight:1,fillColor:'#2196f3',fillOpacity:.12,interactive:false}).addTo(_map);
+    _gpsMarker.bindPopup('Você está aqui · ±'+Math.round(b.acc)+' m'+(fim?'':' · afinando…')).openPopup();
+    if(!centered){ centered=true; try{ _map.setView(ll, Math.max(_map.getZoom()||16,17)); }catch(e){} }
+    if(fim && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
+  }
+  gpsBest({target:8, maxWait:9000, maxAcc:80}, function(b){ draw(b,false); }, function(b,err){
+    if(!b){ alert('Não consegui o GPS.\nObs.: abrindo o arquivo direto (file://) o navegador bloqueia o GPS — funciona via localhost/https ou no app instalado.'+(err?('\n('+err+')'):'')); return; }
+    draw(b,true);
+  });
 }
 /* ===================== CLIMA — estação meteorológica (Ecowitt) ===================== */
 var CLIMA_PROXY=NDVI_PROXY;
@@ -2766,8 +2794,10 @@ function _climaLocalCoord(){
 function climaGps(){
   if(!navigator.geolocation){ climaSay('GPS indisponível neste aparelho.','err'); return; }
   climaSay('Pegando seu GPS…');
-  navigator.geolocation.getCurrentPosition(function(pos){ climaLocalLoad([pos.coords.latitude,pos.coords.longitude],true); },
-    function(){ climaSay('Não consegui o GPS (precisa de https e permissão).','err'); }, {enableHighAccuracy:true,timeout:12000});
+  gpsBest({target:15, maxWait:8000, maxAcc:300}, null, function(b){
+    if(b) climaLocalLoad([b.lat,b.lng],true);
+    else climaSay('Não consegui o GPS (precisa de https e permissão).','err');
+  });
 }
 function climaLocalLoad(ll,fromGps){
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
@@ -4675,10 +4705,10 @@ function _carimboSet(qid,sid,recId,kind,field,val){
 }
 function _carimboLoc(cb){
   if(!navigator.geolocation){ cb(null); return; }
-  navigator.geolocation.getCurrentPosition(function(p){
-    _lastGps={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy,ts:Date.now()};
-    cb({lat:_lastGps.lat,lng:_lastGps.lng,acc:_lastGps.acc});
-  }, function(){ cb(_lastGps?{lat:_lastGps.lat,lng:_lastGps.lng,acc:_lastGps.acc,cache:true}:null); }, {enableHighAccuracy:true,timeout:6000,maximumAge:120000});
+  gpsBest({target:10, maxWait:8000, maxAcc:120}, null, function(b){
+    if(b){ _lastGps={lat:b.lat,lng:b.lng,acc:b.acc,ts:Date.now()}; cb({lat:b.lat,lng:b.lng,acc:b.acc}); }
+    else cb(_lastGps?{lat:_lastGps.lat,lng:_lastGps.lng,acc:_lastGps.acc,cache:true}:null);
+  });
 }
 function _stationMacForQuadra(qid){
   if(!_climaStations||!_climaStations.length) return null;
