@@ -799,6 +799,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .clima-card .val,.clima-temp .t{color:#16201b!important}
 .clima-card .val small,.clima-foot{color:#6a766e!important}
 .ndvi-panel .gr-cancel{background:#fff!important;color:#26312b!important;border:1px solid var(--vm-line-dark)!important}
+.res-title{font-size:11px;font-weight:800;color:#15663c;margin:9px 0 3px;letter-spacing:.2px}
 .sd-descricao,.sd-empty,.today-empty,.se-empty{background:#fff!important;border-color:var(--vm-line-dark)!important;color:var(--vm-muted-dark)!important}
 .trat-head{background:#edf2ee!important;color:var(--vm-muted-dark)!important}
 .trat-row{border-top-color:var(--vm-line-dark)!important}
@@ -3876,6 +3877,7 @@ function newStudy(){
     numAplicacoes:1,
     tratamentos:[],
     numRepeticoes:4,
+    testemunha:'',
     aplicacoes:[],
     avaliacoes:[],
     avalInicio:"",
@@ -3907,6 +3909,7 @@ function normalizeStudy(s){
   if(typeof s.numAplicacoes!=="number")s.numAplicacoes=parseInt(s.numAplicacoes)||1;
   if(!Array.isArray(s.tratamentos))s.tratamentos=[];
   if(typeof s.numRepeticoes!=="number")s.numRepeticoes=parseInt(s.numRepeticoes)||4;
+  if(typeof s.testemunha!=="string")s.testemunha="";
   if(typeof s.avalInicio!=="string")s.avalInicio="";
   if(typeof s.avalIntervalo!=="number")s.avalIntervalo=parseInt(s.avalIntervalo)||7;
   if(typeof s.avalNum!=="number")s.avalNum=parseInt(s.avalNum)||0;
@@ -4311,12 +4314,14 @@ function openStudyDetail(qid,sid){
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       h+=avGridHtml(a);
+      h+=avResultHtml(study,a);
       h+=carimboHtml(a.carimbo);
       h+='</div>';
     });
     h+='</div>';
   }
   h+='</div>';
+  h+=studyAudpcHtml(study);
 
   /* Botão excluir estudo */
   h+='<div class="sd-danger-zone"><button class="btn-danger" onclick="confirmDeleteStudy(\''+qid+'\',\''+sid+'\')">Excluir estudo</button></div>';
@@ -4535,6 +4540,9 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Repetições por tratamento</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
 
+  h+='<div class="se-field"><label>Testemunha (controle)</label><select id="seTestemunha">'+
+     (s.tratamentos.length? s.tratamentos.map(function(t){ return '<option value="'+esc(t.id)+'"'+(studyTestemunha(s)===t.id?' selected':'')+'>'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+'</option>'; }).join('') : '<option value="">— cadastre os tratamentos primeiro —</option>')+
+     '</select><div class="e-hint">Base do % de controle e da AUDPC (geralmente a sem tratamento).</div></div>';
   h+='<div id="seTratList">';
   if(s.tratamentos.length===0){
     h+='<div class="se-empty">Nenhum tratamento. Clique em + para adicionar.</div>';
@@ -4583,6 +4591,7 @@ function syncStudyInputs(){
   workingStudy.intervaloDias=intVal("seIntervalo",workingStudy.intervaloDias||0);
   workingStudy.numRepeticoes=intVal("seReps",workingStudy.numRepeticoes||4);
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
+  x=el("seTestemunha"); if(x) workingStudy.testemunha=x.value;
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
   workingStudy.avalIntervalo=intVal("seAvalInt",workingStudy.avalIntervalo||7);
   workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
@@ -5036,6 +5045,48 @@ function avGridHtml(a){
     a.variaveis.forEach(function(v){ var val=_avNota(a,rw,v); h+='<td>'+esc(val||'—')+'</td>'; }); h+='</tr>'; });
   h+='</tbody></table></div>';
   return h;
+}
+/* ===== Análise: testemunha selecionável, % de controle e AUDPC ===== */
+function studyTestemunha(s){ var ids=(s.tratamentos||[]).map(function(t){return t.id;}); return (s.testemunha&&ids.indexOf(s.testemunha)>=0)?s.testemunha:(ids[0]||''); }
+function _avMeans(study, av){
+  var rows=_avRowsForStudy(study,false), vars=(av.variaveis||[]), sum={}, cnt={};
+  rows.forEach(function(rw){ vars.forEach(function(v){ var n=parseFloat(String(_avNota(av,rw,v)).replace(',','.')); if(!isNaN(n)){ var k=rw.tratId; (sum[k]=sum[k]||{}); (cnt[k]=cnt[k]||{}); sum[k][v]=(sum[k][v]||0)+n; cnt[k][v]=(cnt[k][v]||0)+1; } }); });
+  var m={}; Object.keys(sum).forEach(function(k){ m[k]={}; vars.forEach(function(v){ if(cnt[k]&&cnt[k][v]) m[k][v]=sum[k][v]/cnt[k][v]; }); }); return m;
+}
+function _r1(x){ return Math.round(x*10)/10; }
+function avResultHtml(study, av){
+  var vars=(av.variaveis||[]); if(!vars.length) return '';
+  var means=_avMeans(study,av); if(!Object.keys(means).length) return '';
+  _avCss(); var test=studyTestemunha(study), ts=(study.tratamentos||[]), h='';
+  vars.forEach(function(v){
+    var tm=(means[test]&&means[test][v]);
+    h+='<div class="res-title">'+esc(v)+' · média &amp; % controle</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>% ctrl</th></tr></thead><tbody>';
+    ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
+      if(t.id===test) ctrl='<b>test.</b>';
+      else if(tm!=null&&tm>0&&mv!=null) ctrl=_r1((tm-mv)/tm*100)+'%';
+      else ctrl='—';
+      h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(mv!=null?_r1(mv):'—')+'</td><td>'+ctrl+'</td></tr>'; });
+    h+='</tbody></table></div>';
+  });
+  return h;
+}
+function studyAudpcHtml(study){
+  var avs=study.avaliacoes.slice().filter(function(a){return a.data && a.variaveis && a.variaveis.length;}).sort(function(a,b){return (a.data||'').localeCompare(b.data||'');});
+  if(avs.length<2) return '';
+  var byVar={}; avs.forEach(function(av){ var m=_avMeans(study,av); (av.variaveis||[]).forEach(function(v){ (byVar[v]=byVar[v]||[]).push({date:av.data,m:m}); }); });
+  var test=studyTestemunha(study), ts=(study.tratamentos||[]), h='';
+  Object.keys(byVar).forEach(function(v){
+    var pts=byVar[v]; if(pts.length<2) return;
+    var t0=new Date(pts[0].date), days=pts.map(function(p){ return Math.max(0,Math.round((new Date(p.date)-t0)/864e5)); });
+    function audpc(tr){ var s=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null) return null; if(prev!=null) s+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return s; }
+    var ta=audpc(test);
+    h+='<div class="res-title">'+esc(v)+' · '+pts.length+' datas, '+days[days.length-1]+'d</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>AUDPC</th><th>% ctrl</th></tr></thead><tbody>';
+    ts.forEach(function(t){ var a=audpc(t.id), ctrl; if(t.id===test)ctrl='<b>test.</b>'; else if(ta!=null&&ta>0&&a!=null)ctrl=_r1((ta-a)/ta*100)+'%'; else ctrl='—';
+      h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(a!=null?Math.round(a):'—')+'</td><td>'+ctrl+'</td></tr>'; });
+    h+='</tbody></table></div>';
+  });
+  if(!h) return '';
+  return '<div class="sd-section"><div class="sd-section-title">AUDPC / progresso da doença <span style="font-weight:400;color:#8a948e">(● testemunha)</span></div>'+h+'</div>';
 }
 
 function openStudyEditAvaliacao(aid,tipoSugerido){
