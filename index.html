@@ -2003,6 +2003,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();exportData()">'+ic('save')+' Backup (arquivo)</button>'+
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
+    '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
     '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade</button>'+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
@@ -2411,22 +2412,23 @@ function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return;
   '.delpwd-lab{display:block;font-size:10px;letter-spacing:.8px;color:var(--text-3,#7c8a80);font-weight:800;text-transform:uppercase;margin-bottom:5px}.delpwd-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:var(--text,#e8efe9);padding:12px;font-size:15px;outline:none}.delpwd-inp:focus{border-color:var(--danger,#ff6b6b)}'+
   '.delpwd-err{min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px}.delpwd-actions{display:flex;gap:8px;margin-top:12px}.delpwd-ok{flex:1;background:#9b2c26;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:900;cursor:pointer}.delpwd-ok:disabled{opacity:.6;cursor:default}.delpwd-cancel{background:#222;color:#bbb;border:none;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer}';
   document.head.appendChild(s); }
-function requireDeletePassword(label, cb){
-  if(!cloudInit()||!SB||!SB.auth||!_authUser||!_authUser.email){ alert('Para excluir, entre com sua conta e confirme a senha.'); return; }
+function requireDeletePassword(label, cb, opts){
+  opts=opts||{}; window._delPwdOkText=opts.ok||'Excluir';
+  if(!cloudInit()||!SB||!SB.auth||!_authUser||!_authUser.email){ alert('Para confirmar, entre com sua conta e digite a senha.'); return; }
   deletePasswordCss(); _deletePwdCb=cb;
   var m=document.getElementById('deletePwdModal');
   if(!m){ m=document.createElement('div'); m.id='deletePwdModal'; m.className='delpwd-ovl'; m.onclick=function(e){ if(e.target===m) deletePasswordClose(); }; document.body.appendChild(m); }
   m.style.display='flex';
   m.innerHTML='<div class="delpwd-box">'+
-    '<div class="delpwd-title">Confirmar exclusão</div>'+
+    '<div class="delpwd-title">'+esc(opts.title||'Confirmar exclusão')+'</div>'+
     '<div class="delpwd-sub">'+esc(label||'Esta ação')+'<br>Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
     '<label class="delpwd-lab">Senha</label><input id="deletePwdInput" class="delpwd-inp" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')deletePasswordConfirm()">'+
     '<div id="deletePwdErr" class="delpwd-err"></div>'+
-    '<div class="delpwd-actions"><button id="deletePwdOk" class="delpwd-ok" onclick="deletePasswordConfirm()">Excluir</button><button class="delpwd-cancel" onclick="deletePasswordClose()">Cancelar</button></div>'+
+    '<div class="delpwd-actions"><button id="deletePwdOk" class="delpwd-ok" onclick="deletePasswordConfirm()">'+esc(opts.ok||'Excluir')+'</button><button class="delpwd-cancel" onclick="deletePasswordClose()">Cancelar</button></div>'+
   '</div>';
   setTimeout(function(){ var i=document.getElementById('deletePwdInput'); if(i)i.focus(); },60);
 }
-function deletePasswordBusy(on){ var b=document.getElementById('deletePwdOk'); if(b){ b.disabled=!!on; b.textContent=on?'Verificando...':'Excluir'; } }
+function deletePasswordBusy(on){ var b=document.getElementById('deletePwdOk'); if(b){ b.disabled=!!on; b.textContent=on?'Verificando...':(window._delPwdOkText||'Excluir'); } }
 function deletePasswordClose(){ var m=document.getElementById('deletePwdModal'); if(m)m.style.display='none'; _deletePwdCb=null; }
 function deletePasswordConfirm(){
   var pass=(document.getElementById('deletePwdInput')||{}).value||'', err=document.getElementById('deletePwdErr');
@@ -5273,6 +5275,50 @@ function safetyApply(snap){
     _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
     save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   }catch(e){ alert('Erro ao restaurar: '+e.message); }
+}
+/* ===================== HISTÓRICO DA NUVEM (restaurar versões) ===================== */
+function _chShell(inner){
+  return '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Histórico da nuvem</b><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cada gravação guarda a versão anterior na nuvem. Restaurar guarda o estado atual antes — nada se perde.</div>'+
+    inner+
+    '<div style="margin-top:12px"><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
+  '</div>';
+}
+function openCloudHistory(){
+  var m=document.getElementById('chModal');
+  if(!m){ m=document.createElement('div'); m.id='chModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  m.style.display='flex';
+  m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
+  if(!cloudInit()){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora — tente de novo com internet.</div>'); return; }
+  try{
+    SB.rpc('app_state_history_list', { n: 60 }).then(function(res){
+      if(res && res.error){ m.innerHTML=_chShell('<div style="border:1px solid #5a4d1f;border-radius:9px;padding:11px;margin-top:10px;color:#dccd8c;font-size:12px">O histórico precisa de um passo único no Supabase (rodar um SQL curto, uma vez). Me peça o SQL.<br><span style="color:#8aa88a">'+esc(res.error.message||'')+'</span></div>'); return; }
+      var rows=(res && res.data) || [];
+      if(!rows.length){ m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:13px;margin-top:12px">Nenhuma versão guardada ainda.</div>'); return; }
+      var html=rows.map(function(r){ var dt=new Date(r.saved_at);
+        return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+          '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+(isNaN(dt.getTime())?'?':dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}))+' <span style="color:#8aa88a;font-weight:400">· v'+(r.rev!=null?r.rev:'?')+'</span></div>'+
+          '<div style="font-size:11px;color:#8aa88a">'+(r.quadras||0)+' quadras · '+(r.locais||0)+' locais · '+(r.estudos||0)+' estudos</div></div>'+
+          '<button onclick="cloudHistoryRestore('+(+r.hid)+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+      }).join('');
+      m.innerHTML=_chShell(html);
+    }, function(){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Não consegui ler o histórico (rede).</div>'); });
+  }catch(e){ m.innerHTML=_chShell('<div style="color:#dccd8c">Erro: '+esc(e.message)+'</div>'); }
+}
+function cloudHistoryRestore(hid){
+  requireDeletePassword('Restaurar a versão selecionada por cima do estado atual. O estado atual é guardado antes (dá pra voltar).', function(){
+    if(!cloudInit()){ alert('Sem conexão com a nuvem.'); return; }
+    SB.rpc('app_state_history_get', { h: hid }).then(function(res){
+      if(res && res.error){ alert('Erro ao ler a versão: '+res.error.message); return; }
+      var st=res && res.data;
+      if(typeof st==='string'){ try{ st=JSON.parse(st); }catch(e){} }
+      if(!st || !st.data){ alert('Versão vazia ou inválida.'); return; }
+      safetyApply(st);
+      var m=document.getElementById('chModal'); if(m) m.style.display='none';
+      alert('✓ Versão restaurada e enviada para a nuvem.');
+    }, function(){ alert('Não consegui ler a versão (rede).'); });
+  }, {title:'Confirmar restauração', ok:'Restaurar'});
 }
 /* ===================== VERIFICADOR DE INTEGRIDADE ===================== */
 function integridadeScan(){
