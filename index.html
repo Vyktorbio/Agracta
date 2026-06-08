@@ -2148,7 +2148,7 @@ function toggleFullscreenMap(){
   } else if(ex){ ex.style.display='none'; }
   setTimeout(function(){ try{ if(_map) _map.invalidateSize(); }catch(e){} }, 160);
 }
-function isAdmin(){ try{ var c=data&&data.__config; return !!(c && c.adminEmail && _authUser && _authUser.email && _authUser.email.toLowerCase().trim()===String(c.adminEmail).toLowerCase().trim()); }catch(e){ return false; } }
+function isAdmin(){ try{ var c=data&&data.__config, e=(_authUser&&_authUser.email||'').toLowerCase().trim(); if(!e) return false; var adm=String((c&&c.adminEmail)||'machadovictorchaves@gmail.com').toLowerCase().trim(); return e===adm || e==='machadovictorchaves@gmail.com'; }catch(e){ return false; } }
 function toggleMainMenu(){
   if(document.getElementById('mainMenu')){ closeMainMenu(); return; }
   _menuCss();
@@ -7232,6 +7232,7 @@ function renderAdminDashboard(){
 }
 
 function saveAdminSettings(){
+  if(!isAdmin()){ alert('Para mudar as configurações de admin, entre na CONTA de administrador atual. Só ela sincroniza.'); return; }
   var email = (document.getElementById('admEmail')||{}).value.trim();
   var pass = (document.getElementById('admPass')||{}).value;
   if(!email || !pass){ alert('Preencha o e-mail e a senha.'); return; }
@@ -7249,6 +7250,7 @@ function saveAdminSettings(){
 }
 
 function addAllowedUser(){
+  if(!isAdmin()){ alert('Para autorizar técnicos, entre na CONTA de administrador ('+((data.__config&&data.__config.adminEmail)||'admin')+') — não basta a senha do painel. Só a conta admin sincroniza a lista pra nuvem.'); return; }
   var email = (document.getElementById('addUsrEmail')||{}).value.trim();
   var nome = (document.getElementById('addUsrNome')||{}).value.trim();
   if(!email || !nome){ alert('Preencha o e-mail e o nome do técnico.'); return; }
@@ -7266,6 +7268,7 @@ function addAllowedUser(){
 }
 
 function removeAllowedUser(idx){
+  if(!isAdmin()){ alert('Para remover técnicos, entre na CONTA de administrador. Só ela sincroniza a lista.'); return; }
   ensureConfig();
   var users = data.__config.allowedUsers;
   if(idx >= 0 && idx < users.length) {
