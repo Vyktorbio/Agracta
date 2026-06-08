@@ -3403,12 +3403,15 @@ function saveNoteForm(event){
   NOTAS_CAMPO.push(newNote);
   saveNotas();
   closeNoteModal();
-  renderNotas();
+  renderNotas(true);
   _stxToast("✓ Nota de campo salva localmente!");
 }
 
-function renderNotas(){
+function renderNotas(force){
   if(!_map || !_notesLayer) return;
+  /* não destrói um popup de nota ABERTO (senão o pin "fecha sozinho" quando o app salva/sincroniza).
+     Só pula no redesenho ambiente (render/sync); ações de nota chamam renderNotas(true). */
+  if(!force){ try{ var _aberto=false; _notesLayer.eachLayer(function(l){ if(l.isPopupOpen && l.isPopupOpen()) _aberto=true; }); if(_aberto) return; }catch(e){} }
   _notesLayer.clearLayers();
   
   ensureNotas();
@@ -3597,7 +3600,8 @@ function toggleNoteResolved(noteId){
   if(idx!==-1){
     NOTAS_CAMPO[idx].resolvido=!NOTAS_CAMPO[idx].resolvido;
     saveNotas();
-    renderNotas();
+    try{ _map.closePopup(); }catch(e){}
+    renderNotas(true);
     _stxToast(NOTAS_CAMPO[idx].resolvido?"✓ Observação marcada como resolvida!":"Observação reaberta.");
   }
 }
@@ -3617,7 +3621,8 @@ function deleteNote(noteId){
     _delNotas[noteId]=Date.now();
     NOTAS_CAMPO.splice(idx,1);
     saveNotas();
-    renderNotas();
+    try{ _map.closePopup(); }catch(e){}
+    renderNotas(true);
     _stxToast("Observação excluída.");
   }
 }
