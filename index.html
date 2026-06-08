@@ -2322,7 +2322,7 @@ function cloudBadge(kind,txt){
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
-  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Sincronização com a nuvem (toque para atualizar)'; el.onclick=function(){ cloudResync(); }; document.body.appendChild(el); }
+  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{ if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
   var L={saving:'⟳ enviando p/ nuvem…', saved:'☁︎ salvo na nuvem', error:'⚠︎ no aparelho · não subiu — toque', offline:'⌁ salvo no aparelho · sem internet', idle:'☁︎'};
   el.className='cloud-badge cb-'+(kind||'idle');
   el.textContent=(L[kind||'idle']||L.idle)+(txt?(' '+txt):'');
@@ -2655,12 +2655,10 @@ function enforceAccess(){
 
 function doLogout(){
   if(typeof closeMainMenu==='function') closeMainMenu();
-  /* Não desloga (nem limpa o local) com gravação PENDENTE -> não perde o que acabou de ser autorizado/editado.
-     Dispara a gravação e pede pra aguardar o selo "salvo na nuvem"; ao tocar Sair de novo (já sincronizado) sai limpo. */
+  /* NUNCA trava o usuário: se houver pendência, dispara a gravação e PERGUNTA — mas sempre deixa sair. */
   if(_cloudInitDone && _unsavedChanges){
     try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){}
-    alert('Salvando na nuvem… aguarde aparecer "salvo na nuvem" e toque em Sair de novo (pra não perder o que você acabou de fazer).');
-    return;
+    if(!confirm('Pode haver dados ainda subindo pra nuvem. Sair mesmo assim?\n\n(Recomendado: toque em Cancelar, espere o selo "salvo na nuvem" e saia de novo.)')) return;
   }
   clearLocalStorageData();
   if(SB){ try{ SB.auth.signOut(); }catch(e){} }
