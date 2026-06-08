@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=31').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=32').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -5153,6 +5153,11 @@ function _avNota(a,row,v){
 function _avStudy(){ var q=data[curV]||{}; return (q.estudos||[]).find(function(s){return s.id===curSid;}); }
 
 /* ============ EVENTOS DE UM ESTUDO (para agenda e timeline) ============ */
+function _avTemNota(a){ /* avaliação foi REGISTRADA quando tem ao menos uma nota de parcela preenchida */
+  if(!a||!a.notas) return false;
+  for(var k in a.notas){ var r=a.notas[k]; if(r&&typeof r==='object'){ for(var v in r){ var x=r[v]; if(x!=null&&String(x).trim()!=='') return true; } } }
+  return false;
+}
 function studyEventsV2(study){
   var out=[];
   /* Aplicações programadas (baseado em dataInicio + intervalo) */
@@ -5185,7 +5190,7 @@ function studyEventsV2(study){
         idx:i+1,
         date:d,
         tipo:a.tipo||"",
-        realizada:!!a.realizada
+        realizada:(!!a.realizada||_avTemNota(a))  /* registrada (tem nota) => sai do HOJE/agenda automaticamente */
       });
     }
   });
@@ -5909,6 +5914,8 @@ function saveAplicacao(){
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl');
   logStudyAuditInObject(study, action, details);
   save();
+  if(typeof updateTodayBadge==='function') updateTodayBadge();
+  if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   closeEventEdit();
   openStudyDetail(curV,curSid);
 }
@@ -6466,6 +6473,8 @@ function saveAvaliacao(){
   if(!av.carimbo) carimbar(curV,curSid,av.id,'aval');
   logStudyAuditInObject(study, action, details);
   save();
+  if(typeof updateTodayBadge==='function') updateTodayBadge();
+  if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   closeEventEdit();
   openStudyDetail(curV,curSid);
 }
@@ -7357,7 +7366,7 @@ if(document.readyState==='loading'){
   setTimeout(init,50);
 }
 window.addEventListener('load',function(){setTimeout(init,100)});
-setInterval(function(){try{if(editMode||drawMode||_grOn)return;render();updateAgendaBadge();if(agO)renderAgenda();}catch(e){}},60000);
+setInterval(function(){try{if(editMode||drawMode||_grOn)return;render();updateAgendaBadge();if(typeof updateTodayBadge==='function')updateTodayBadge();if(agO)renderAgenda();}catch(e){}},60000);
 </script>
 </body>
 </html>
