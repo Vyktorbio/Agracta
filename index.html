@@ -2154,7 +2154,6 @@ function toggleMainMenu(){
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
   var adm=isAdmin();
-  var _ig=0; try{ _ig=(typeof integridadeScan==='function')?integridadeScan().length:0; }catch(e){}
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
@@ -2165,7 +2164,6 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
     '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
-    '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade'+(_ig?' ('+_ig+')':'')+'</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
@@ -6105,7 +6103,7 @@ function _avPersistNow(){
     av.variaveis=(_avGrid.variaveis||[]).slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
     try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
     if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
-    _avCloudSoon(); /* nuvem com folga (poupa bateria) — junta várias células numa gravação */
+    /* nuvem NÃO grava a cada célula (poupa bateria): sobe ao FECHAR a avaliação, no SALVAR, ou no botão "salvar na nuvem". O selo fica "pendente" até lá. */
   }catch(e){}
 }
 function _avSetCell(key,v,val){
@@ -7137,7 +7135,7 @@ function init(){
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
   try{ safetyBackup('ao abrir'); }catch(e){}
   if(typeof authInit==='function') authInit(); else if(typeof cloudStart==='function') cloudStart();
-  setTimeout(function(){ try{ _integToast(); }catch(e){} }, 4000);
+  /* verificação de integridade automática ao abrir: removida a pedido (a função openIntegridade segue no código) */
   }catch(e){
     var b=document.createElement('div');
     b.style.cssText='position:fixed;top:50px;left:8px;right:8px;background:#300;color:#fff;padding:10px;z-index:9999;font:12px monospace;border:1px solid #f55;border-radius:6px;white-space:pre-wrap';
