@@ -2655,6 +2655,13 @@ function enforceAccess(){
 
 function doLogout(){
   if(typeof closeMainMenu==='function') closeMainMenu();
+  /* Não desloga (nem limpa o local) com gravação PENDENTE -> não perde o que acabou de ser autorizado/editado.
+     Dispara a gravação e pede pra aguardar o selo "salvo na nuvem"; ao tocar Sair de novo (já sincronizado) sai limpo. */
+  if(_cloudInitDone && _unsavedChanges){
+    try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){}
+    alert('Salvando na nuvem… aguarde aparecer "salvo na nuvem" e toque em Sair de novo (pra não perder o que você acabou de fazer).');
+    return;
+  }
   clearLocalStorageData();
   if(SB){ try{ SB.auth.signOut(); }catch(e){} }
 }
@@ -7244,8 +7251,8 @@ function saveAdminSettings(){
   } else {
     data.__config.adminPassword = sha256(pass);
   }
-  save();
-  _stxToast('Configurações de Admin salvas e sincronizadas.');
+  save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
+  _stxToast('Configurações salvas — aguarde "salvo na nuvem".');
   renderAdminDashboard();
 }
 
@@ -7262,8 +7269,8 @@ function addAllowedUser(){
   if(exists){ alert('Este e-mail já está autorizado.'); return; }
   
   data.__config.allowedUsers.push({ email: email, nome: nome });
-  save();
-  _stxToast('Técnico ' + nome + ' autorizado.');
+  save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} } /* grava JÁ na nuvem (sem o atraso de 0,9s) */
+  _stxToast('Técnico ' + nome + ' autorizado — aguarde o selo "salvo na nuvem".');
   renderAdminDashboard();
 }
 
@@ -7274,8 +7281,8 @@ function removeAllowedUser(idx){
   if(idx >= 0 && idx < users.length) {
     var nome = users[idx] ? users[idx].nome : '';
     users.splice(idx, 1);
-    save();
-    _stxToast('Técnico ' + nome + ' removido.');
+    save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
+    _stxToast('Técnico ' + nome + ' removido — aguarde "salvo na nuvem".');
     renderAdminDashboard();
   }
 }
