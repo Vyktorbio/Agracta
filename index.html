@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=34').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=35').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -4862,6 +4862,35 @@ function newTratamento(numero){
   };
 }
 
+/* Junta uma avaliação duplicada (mesma data) noutra, sem perder NENHUMA nota (valor preenchido vence). */
+function _fundeAval(keep, extra){
+  if(!keep||!extra) return;
+  if(extra.variaveis&&extra.variaveis.length){ var seen={}; keep.variaveis=(keep.variaveis||[]).concat(extra.variaveis).filter(function(v){ if(seen[v])return false; seen[v]=1; return true; }); }
+  keep.tipos=Object.assign({}, extra.tipos||{}, keep.tipos||{});
+  var en=extra.notas||{}; if(!keep.notas)keep.notas={};
+  for(var k in en){ var er=en[k]||{}; var kr=keep.notas[k]||(keep.notas[k]={}); for(var v2 in er){ var ev=er[v2]; if(ev!=null&&String(ev).trim()!=='' && (kr[v2]==null||String(kr[v2]).trim()==='')) kr[v2]=ev; } }
+  var em=extra.notasMeta||{}; if(!keep.notasMeta)keep.notasMeta={};
+  for(var k2 in em){ if(!keep.notasMeta[k2]) keep.notasMeta[k2]=em[k2]; }
+  if(!keep.tipo&&extra.tipo)keep.tipo=extra.tipo;
+  if(!keep.bbch&&extra.bbch)keep.bbch=extra.bbch;
+  if(!keep.obs&&extra.obs)keep.obs=extra.obs;
+  if(!keep.carimbo&&extra.carimbo)keep.carimbo=extra.carimbo;
+  if(extra.realizada)keep.realizada=true;
+  if(extra.auto===false)keep.auto=false;
+}
+/* Remove avaliações DUPLICADAS por data (vêm de aparelhos diferentes com ids diferentes; o merge mantinha
+   as duas, inflando a contagem — ex.: 36 em vez de 6). Junta os dados; não perde nenhuma nota. */
+function _dedupeAvaliacoes(s){
+  if(!s||!Array.isArray(s.avaliacoes)||s.avaliacoes.length<2) return;
+  if(window._avEditing) return; /* não mexe enquanto uma avaliação está aberta */
+  var byKey={}, order=[], dup=false;
+  s.avaliacoes.forEach(function(a){
+    var key=(a&&a.data)?('d:'+a.data):('id:'+((a&&a.id)||Math.random())); /* sem data => não funde */
+    if(!byKey[key]){ byKey[key]=a; order.push(key); }
+    else { dup=true; _fundeAval(byKey[key], a); }
+  });
+  if(dup) s.avaliacoes=order.map(function(k){return byKey[k];});
+}
 function normalizeStudy(s){
   /* Garante que todos os campos existem mesmo em estudos antigos */
   if(!s)return newStudy();
@@ -4898,6 +4927,7 @@ function normalizeStudy(s){
       return a;
     });
   }else s.avaliacoes=[];
+  _dedupeAvaliacoes(s); /* corrige duplicatas de avaliação acumuladas no merge entre aparelhos */
   if(!Array.isArray(s.audit)) s.audit=[];
   return s;
 }
@@ -5665,7 +5695,7 @@ function gerarAvaliacoesAuto(s){
   for(var i=0;i<n;i++){
     var d=(iv>0)?_isoShift(start,i*iv):start;
     if(temData[d]) continue;
-    s.avaliacoes.push({id:uid(),data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true});
+    s.avaliacoes.push({id:'auto_'+d,data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true}); /* id determinístico por data: 2 aparelhos geram o MESMO id -> o merge não duplica */
     temData[d]=true; add++;
   }
   return add;
