@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=43').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=44').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -3040,23 +3040,16 @@ function stationBBox(){
 }
 /* BBox usado pelo NDVI: 'quadras' = Plantec; 'view' = o que está visível no mapa (qualquer lugar, via GPS) */
 function ndviBBox(){
-  /* COBRE TODAS AS QUADRAS ATIVAS (+ margem). Antes usava só o viewport do mapa, então quadras fora da
-     tela no momento do carregamento (ex.: B5/B6/H2/H3 nas bordas) ficavam sem NDVI. Agora nenhuma fica de fora. */
-  var sb=stationBBox();
-  if(sb && sb[2]>sb[0] && sb[3]>sb[1]){
-    var w=sb[0],s=sb[1],e=sb[2],n=sb[3], cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25; /* cap ~27 km */
+  /* Cobre o que está VISÍVEL no mapa (como funcionava antes). Pra pegar quadras de borda, é só
+     dar um zoom-out até elas aparecerem e recarregar o NDVI. (Cobrir tudo derrubava a qualidade.) */
+  if(_map){
+    var b=_map.getBounds(), w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth();
+    var cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25;
     if(e-w>maxSpan){ w=cx-maxSpan/2; e=cx+maxSpan/2; }
     if(n-s>maxSpan){ s=cy-maxSpan/2; n=cy+maxSpan/2; }
     return [w,s,e,n];
   }
-  if(_map){ /* sem quadras: cai pro que está visível */
-    var b=_map.getBounds(), W=b.getWest(), S=b.getSouth(), E=b.getEast(), N=b.getNorth();
-    var ccx=(W+E)/2, ccy=(S+N)/2, ms=0.25;
-    if(E-W>ms){ W=ccx-ms/2; E=ccx+ms/2; }
-    if(N-S>ms){ S=ccy-ms/2; N=ccy+ms/2; }
-    return [W,S,E,N];
-  }
-  return sb;
+  return stationBBox();
 }
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
 var ndviProbe=false, _gpsMarker=null, _gpsCircle=null;
@@ -5012,7 +5005,7 @@ function normalizeStudy(s){
   if(typeof s.testemunha!=="string")s.testemunha="";
   /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
   s.tratamentos.forEach(function(t){ if(t) t.testemunha=!!t.testemunha; });
-  if(s.testemunha){ var _pt=s.tratamentos.find(function(t){return t&&t.id===s.testemunha;}); if(_pt) _pt.testemunha=true; }
+  if(s.testemunha && !s.tratamentos.some(function(t){return t&&t.testemunha;})){ var _pt=s.tratamentos.find(function(t){return t&&t.id===s.testemunha;}); if(_pt) _pt.testemunha=true; } /* só semeia a testemunha legada se NADA estiver marcado — antes re-marcava o T1 toda vez (bug) */
   if(typeof s.avalInicio!=="string")s.avalInicio="";
   if(typeof s.avalIntervalo!=="number")s.avalIntervalo=parseInt(s.avalIntervalo)||7;
   if(typeof s.avalNum!=="number")s.avalNum=parseInt(s.avalNum)||0;
@@ -5770,6 +5763,7 @@ function syncStudyInputs(){
   workingStudy.avalIntervalo=intVal("seAvalInt",workingStudy.avalIntervalo||7);
   workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
   syncTratInputs();
+  var _ft=(workingStudy.tratamentos||[]).find(function(t){return t&&t.testemunha;}); workingStudy.testemunha=_ft?_ft.id:''; /* legado s.testemunha reflete os checkboxes (não ressuscita T1) */
 }
 
 function syncTratInputs(){
