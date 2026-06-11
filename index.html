@@ -1945,6 +1945,20 @@ function _mergeQGEO(lq,cq,lts,cts,del){
   });
   return {geo:g, ts:t};
 }
+/* Merge genérico de mapa {id:valor} com carimbos {id:ts}: a edição mais NOVA vence por id;
+   empate/sem carimbo => nuvem (aparelho parado não atropela renomeações/movimentações dos outros). */
+function _mergeMapTS(lm,cm,lts,cts){
+  lm=lm||{};cm=cm||{};lts=lts||{};cts=cts||{};
+  var ids={},k; for(k in lm)ids[k]=1; for(k in cm)ids[k]=1;
+  var m={},t={};
+  Object.keys(ids).forEach(function(id){
+    var hasL=(id in lm), hasC=(id in cm), lt=lts[id]||0, ct=cts[id]||0;
+    var useLocal=(hasL&&hasC)?(lt>ct):hasL;
+    m[id]=useLocal?lm[id]:cm[id];
+    var mx=Math.max(lt,ct); if(mx)t[id]=mx;
+  });
+  return {map:m, ts:t};
+}
 function buildQGEOfromP(){ QGEO={}; Object.keys(P).forEach(function(id){ QGEO[id]=P[id].map(function(v){ return pxToLL(v[0],v[1]); }); }); }
 function ensureQGEO(){
   if(QGEO_TS==null) QGEO_TS=loadQGEOTS()||{};
@@ -1963,6 +1977,19 @@ function ensureQGEO(){
 var LOCAIS_KEY="iracema-locais-v1", QLOCAL_KEY="iracema-qlocal-v1", LOCAL_ATIVO_KEY="iracema-local-ativo", QNOME_KEY="iracema-qnome-v1";
 var HOME_LOCAL="iracemapolis";
 var LOCAIS=null, QLOCAL=null, localAtivo=null, _locPick=null, QNOME=null;
+/* Carimbos de config (renomear/mover quadra, renomear local): a edição mais nova vence no merge */
+var QNOMETS_KEY="iracema-qnomets-v1", QLOCALTS_KEY="iracema-qlocalts-v1", LOCAISTS_KEY="iracema-locaists-v1";
+var QNOME_TS=null, QLOCAL_TS=null, LOCAIS_TS=null;
+function ensureCfgTS(){
+  function ld(k){ try{ var s=localStorage.getItem(k); return s?(JSON.parse(s)||{}):{};}catch(e){ return {}; } }
+  if(!QNOME_TS||typeof QNOME_TS!=='object') QNOME_TS=ld(QNOMETS_KEY);
+  if(!QLOCAL_TS||typeof QLOCAL_TS!=='object') QLOCAL_TS=ld(QLOCALTS_KEY);
+  if(!LOCAIS_TS||typeof LOCAIS_TS!=='object') LOCAIS_TS=ld(LOCAISTS_KEY);
+}
+function saveCfgTS(){ try{ localStorage.setItem(QNOMETS_KEY,JSON.stringify(QNOME_TS||{})); localStorage.setItem(QLOCALTS_KEY,JSON.stringify(QLOCAL_TS||{})); localStorage.setItem(LOCAISTS_KEY,JSON.stringify(LOCAIS_TS||{})); }catch(e){} }
+function _touchQNome(id){ ensureCfgTS(); QNOME_TS[id]=Date.now(); saveCfgTS(); }
+function _touchQLocal(id){ ensureCfgTS(); QLOCAL_TS[id]=Date.now(); saveCfgTS(); }
+function _touchLocal(id){ ensureCfgTS(); LOCAIS_TS[id]=Date.now(); saveCfgTS(); }
 function loadLocais(){ try{ var s=localStorage.getItem(LOCAIS_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveLocais(){ try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 function loadQLocal(){ try{ var s=localStorage.getItem(QLOCAL_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
@@ -2136,7 +2163,7 @@ function criarLocal(){
   else if(_map){ var c=_map.getCenter(); centro=[c.lat,c.lng]; zoom=_map.getZoom(); }
   else { centro=ESTACAO_CENTER.slice(); zoom=16; }
   var id=novoLocalId();
-  LOCAIS[id]={nome:nome, centro:centro, zoom:zoom}; saveLocais(); _locPick=null;
+  LOCAIS[id]={nome:nome, centro:centro, zoom:zoom}; _touchLocal(id); saveLocais(); _locPick=null;
   var m=document.getElementById('locModal'); if(m) m.style.display='none';
   setLocalAtivo(id);
   setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ☰ Menu → ✏️ Editar quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
@@ -2157,7 +2184,7 @@ function salvarRenomearLocal(id){
   ensureLocais(); if(!LOCAIS[id]) return;
   var nv=((document.getElementById('locRenInp')||{}).value||'').trim();
   if(!nv){ alert('Dê um nome ao local.'); return; }
-  LOCAIS[id].nome=nv; saveLocais();
+  LOCAIS[id].nome=nv; _touchLocal(id); saveLocais();
   var m=document.getElementById('locModal'); if(m) m.style.display='none';
   if(typeof buildLocalChip==='function') buildLocalChip();
   try{ render(); }catch(e){}
@@ -2289,8 +2316,8 @@ function finishDrawQuadra(){
   if(dup){ alert('J\u00e1 existe uma quadra chamada "'+nome+'" neste local.'); return; }
   var id=novoQuadraId(nome); /* id interno \u00fanico (mesmo se o nome repete em outro local) */
   QGEO[id]=drawPts.slice();
-  QLOCAL[id]=localAtivo;
-  QNOME[id]=nome;
+  QLOCAL[id]=localAtivo; _touchQLocal(id);
+  QNOME[id]=nome; _touchQNome(id);
   if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]};
   _touchQGEO(id); /* quadra nova: carimba agora -> vence aparelho zerado */
   saveQGEO(); saveQLocal(); saveQNome(); save();
@@ -2345,7 +2372,7 @@ function setUnsavedChanges(val){
 }
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
 function cloudState(){
-  ensureQGEO(); ensureLocais(); ensureNotas();
+  ensureQGEO(); ensureLocais(); ensureNotas(); ensureCfgTS();
   return {
     data:data,
     qgeo:QGEO,
@@ -2355,6 +2382,9 @@ function cloudState(){
     locais:LOCAIS,
     qlocal:QLOCAL,
     qnome:QNOME,
+    qnomets:(QNOME_TS||{}),
+    qlocalts:(QLOCAL_TS||{}),
+    locaists:(LOCAIS_TS||{}),
     randomizacoes:RZLIB,
     _deletedQuadras:_delQuadras,
     _deletedLocais:_delLocais,
@@ -2404,6 +2434,10 @@ function cloudApply(st){
     if(st.locais && typeof st.locais==='object'){ LOCAIS=st.locais; try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} }
     if(st.qlocal && typeof st.qlocal==='object'){ QLOCAL=st.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
     if(st.qnome && typeof st.qnome==='object'){ QNOME=st.qnome; try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)); }catch(e){} }
+    if(st.qnomets && typeof st.qnomets==='object'){ QNOME_TS=st.qnomets; }
+    if(st.qlocalts && typeof st.qlocalts==='object'){ QLOCAL_TS=st.qlocalts; }
+    if(st.locaists && typeof st.locaists==='object'){ LOCAIS_TS=st.locaists; }
+    saveCfgTS();
     if(Array.isArray(st.randomizacoes)){ RZLIB=normalizeRZLib(st.randomizacoes); try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){} }
     if(st._deletedQuadras && typeof st._deletedQuadras==='object'){ _delQuadras=_mergeObj(_delQuadras, st._deletedQuadras); }
     if(st._deletedLocais && typeof st._deletedLocais==='object'){ _delLocais=_mergeObj(_delLocais, st._deletedLocais); }
@@ -2505,11 +2539,12 @@ function _mergeStudy(ls,cs){
   return m;
 }
 function _mergeNota(la,ca){
-  var m={};
-  var k;
-  for(k in ca) m[k]=ca[k];
-  for(k in la) m[k]=la[k];
-  m.resolvido = la.resolvido || ca.resolvido;
+  /* a edição mais NOVA vence (permite REABRIR nota resolvida); empate/sem carimbo: local + resolvida vence (compat) */
+  var lt=la._ts||0, ct=ca._ts||0, m={}, k;
+  if(ct>lt){ for(k in la)m[k]=la[k]; for(k in ca)m[k]=ca[k]; }
+  else { for(k in ca)m[k]=ca[k]; for(k in la)m[k]=la[k]; }
+  if(lt||ct) m._ts=Math.max(lt,ct);
+  else m.resolvido = la.resolvido || ca.resolvido;
   if(!m.foto) m.foto = la.foto || ca.foto;
   return m;
 }
@@ -2524,9 +2559,13 @@ function cloudMerge(local,cloud){
   var _mq=_mergeQGEO(local.qgeo,cloud.qgeo,local.qgeots,cloud.qgeots,delQ); out.qgeo=_mq.geo; out.qgeots=_mq.ts; /* mapa: vale o mais recente por quadra */
   function qViva(id){ return !delQ[id] || ((_mq.ts[id]||0) > delQ[id]); } /* recriada DEPOIS da exclusão: viva (lápide não engole) */
   function stripQ(obj){ var o={},k; for(k in (obj||{})){ if(qViva(k)) o[k]=obj[k]; } return o; }
-  out.qlocal=stripQ(_mergeObj(cloud.qlocal,local.qlocal)); /* NUVEM vence: aparelho velho não sobrescreve a config (locais/nomes) */
-  out.qnome=stripQ(_mergeObj(cloud.qnome,local.qnome));
-  out.locais=strip(_mergeObj(cloud.locais,local.locais),delL);
+  /* nomes/locais das quadras e cadastro de locais: a edição mais NOVA vence por id (empate/sem carimbo => nuvem) */
+  var _mn=_mergeMapTS(local.qnome,cloud.qnome,local.qnomets,cloud.qnomets);
+  var _ml=_mergeMapTS(local.qlocal,cloud.qlocal,local.qlocalts,cloud.qlocalts);
+  var _mlo=_mergeMapTS(local.locais,cloud.locais,local.locaists,cloud.locaists);
+  out.qnome=stripQ(_mn.map); out.qnomets=stripQ(_mn.ts);
+  out.qlocal=stripQ(_ml.map); out.qlocalts=stripQ(_ml.ts);
+  out.locais=strip(_mlo.map,delL); out.locaists=strip(_mlo.ts,delL);
   out.randomizacoes=_mergeRZLib(local.randomizacoes,cloud.randomizacoes);
   var _lgt=local.georefts||0,_cgt=cloud.georefts||0; out.georef=(_lgt>_cgt)?(local.georef||cloud.georef):(cloud.georef||local.georef); out.georefts=Math.max(_lgt,_cgt); /* georef: mais recente vence (empate => nuvem) */
   out.notas_campo = _mergeById(local.notas_campo, cloud.notas_campo, _mergeNota, delN);
@@ -3489,7 +3528,8 @@ function saveNoteForm(event){
     descricao:description,
     foto:_tempPhotoBase64,
     criadoEm:new Date().toISOString().split('T')[0],
-    resolvido:false
+    resolvido:false,
+    _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
   };
   
   NOTAS_CAMPO.push(newNote);
@@ -3691,6 +3731,7 @@ function toggleNoteResolved(noteId){
   }
   if(idx!==-1){
     NOTAS_CAMPO[idx].resolvido=!NOTAS_CAMPO[idx].resolvido;
+    NOTAS_CAMPO[idx]._ts=Date.now(); /* carimbo: resolver/reabrir mais novo vence no merge */
     saveNotas();
     try{ _map.closePopup(); }catch(e){}
     renderNotas(true);
@@ -4426,7 +4467,7 @@ function saveE(){
     var loc=QLOCAL[curE]||HOME_LOCAL;
     var dup=quadrasDoLocal(loc).some(function(q){ return q!==curE && quadraNome(q).toLowerCase()===novoNome.toLowerCase(); });
     if(dup){ alert('Já existe uma quadra chamada "'+novoNome+'" neste local.'); return; }
-    QNOME[curE]=novoNome; saveQNome();
+    QNOME[curE]=novoNome; _touchQNome(curE); saveQNome();
   }
   /* Mover para outro local */
   var novoLoc=((document.getElementById('eqloc')||{}).value)||'';
@@ -4434,7 +4475,7 @@ function saveE(){
     var nm=quadraNome(curE);
     var dupDest=quadrasDoLocal(novoLoc).some(function(q){ return q!==curE && quadraNome(q).toLowerCase()===nm.toLowerCase(); });
     if(dupDest){ alert('No local de destino já existe uma quadra "'+nm+'". Renomeie antes de mover.'); return; }
-    QLOCAL[curE]=novoLoc; saveQLocal();
+    QLOCAL[curE]=novoLoc; _touchQLocal(curE); saveQLocal();
   }
   ecReadRows();
   var culturas=_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
