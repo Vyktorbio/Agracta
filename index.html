@@ -768,7 +768,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .leaflet-control-scale-line{height:auto!important;background:rgba(246,247,244,.9)!important;color:#18211d!important;border:1px solid rgba(24,33,29,.22)!important;border-top:0!important;border-radius:0 0 6px 6px!important;font-weight:750!important}
 .leaflet-control-attribution{background:rgba(246,247,244,.74)!important;color:#68736d!important;border-radius:8px 0 0 0!important}
 .leaflet-control-layers{border:0!important;border-radius:10px!important;box-shadow:var(--vm-shadow)!important;background:rgba(246,247,244,.96)!important;color:#18211d!important;overflow:hidden!important}
-.leaflet-control-layers-toggle{width:36px!important;height:36px!important;background-color:rgba(246,247,244,.94)!important;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2318211d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>")!important;background-size:20px 20px!important;background-position:center!important;background-repeat:no-repeat!important;border-radius:10px!important}
+.leaflet-control-layers-toggle{width:36px!important;height:36px!important;background-color:rgba(246,247,244,.94)!important;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2318211d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M13 7 9 3 5 7l4 4'/><path d='m17 11 4 4-4 4-4-4'/><path d='m8 12 4 4 6-6-4-4Z'/><path d='m16 8 3-3'/><path d='M9 21a6 6 0 0 0-6-6'/></svg>")!important;background-size:20px 20px!important;background-position:center!important;background-repeat:no-repeat!important;border-radius:10px!important}
 .leaflet-control-layers-expanded{padding:8px 10px!important;font:600 13px var(--font,system-ui)!important;color:#18211d!important}
 .leaflet-control-layers-base label{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;white-space:nowrap}
 .leaflet-control-layers-selector{margin:0!important;accent-color:#21a86b}
@@ -2942,10 +2942,10 @@ function render(){
     var isEd=(editMode && id===editId);
 
     var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.08);
-    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':_zc,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !(_measure&&_measure.mode==='draw'))});
+    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':_zc,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
     (function(qid,zfo,zona){
       if(!drawMode){
-        poly.on('click',function(){ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
+        poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
         if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.25,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
       }
     })(id,_zfo,_zona);
@@ -3358,6 +3358,7 @@ function toggleScoutingMode(forceState){
     if(banner) banner.style.display='flex';
     _map.getContainer().style.cursor='crosshair';
     _map.on('click', onMapClickScouting);
+    render(); /* re-desenha as quadras NÃO-interativas: o toque vira só da nota (não abre mais a quadra) */
     /* ESC também sai do modo (além do ✕ e de tocar o pin de novo) */
     if(!window.__scoutEsc){ window.__scoutEsc=true;
       document.addEventListener('keydown', function(ev){ if(ev.key==='Escape' && scoutingModeActive) toggleScoutingMode(false); });
@@ -3368,6 +3369,7 @@ function toggleScoutingMode(forceState){
     if(_map) {
       _map.getContainer().style.cursor='';
       _map.off('click', onMapClickScouting);
+      render(); /* devolve a interatividade das quadras */
     }
   }
 }
