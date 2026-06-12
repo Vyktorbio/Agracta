@@ -2750,6 +2750,7 @@ function clearLocalStorageData(){
     'iracema-v7', 'iracema-safety', 'iracema-unsaved',
     'iracema-randomizacoes-v1', 'iracema-georef-v1', 'iracema-qgeo-v1', 'iracema-qgeots-v1', 'iracema-georefts-v1',
     'iracema-locais-v1', 'iracema-qlocal-v1', 'iracema-qnome-v1',
+    'iracema-qnomets-v1', 'iracema-qlocalts-v1', 'iracema-locaists-v1',
     'iracema-local-ativo', 'iracema-notas-v1',
     'iracema-delq-v1', 'iracema-dell-v1', 'iracema-deln-v1'
   ];
@@ -6772,13 +6773,18 @@ function closeEventEdit(){
 /* ===================== BACKUPS LOCAIS (rede de segurança: snapshot antes de ações destrutivas) ===================== */
 function safetySnap(){
   try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
+  try{ if(typeof ensureCfgTS==='function') ensureCfgTS(); }catch(e){}
   return { ts:Date.now(),
     data:(typeof data!=='undefined'?data:{}),
     qgeo:(typeof QGEO!=='undefined'?QGEO:null),
+    qgeots:(typeof QGEO_TS!=='undefined'?QGEO_TS:null),
     georef:(typeof _geo!=='undefined'?_geo:null),
     locais:(typeof LOCAIS!=='undefined'?LOCAIS:null),
     qlocal:(typeof QLOCAL!=='undefined'?QLOCAL:null),
     qnome:(typeof QNOME!=='undefined'?QNOME:null),
+    qnomets:(typeof QNOME_TS!=='undefined'?QNOME_TS:null),
+    qlocalts:(typeof QLOCAL_TS!=='undefined'?QLOCAL_TS:null),
+    locaists:(typeof LOCAIS_TS!=='undefined'?LOCAIS_TS:null),
     randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[]) };
 }
 function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
@@ -6807,6 +6813,12 @@ function safetyApply(snap){
     if(snap.locais){ LOCAIS=snap.locais; if(typeof saveLocais==='function') saveLocais(); }
     if(snap.qlocal){ QLOCAL=snap.qlocal; if(typeof saveQLocal==='function') saveQLocal(); }
     if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
+    if(snap.qgeots && typeof snap.qgeots==='object'){ QGEO_TS=snap.qgeots; if(typeof saveQGEOTS==='function') saveQGEOTS(); }
+    if(typeof ensureCfgTS==='function') ensureCfgTS();
+    if(snap.qnomets && typeof snap.qnomets==='object'){ QNOME_TS=snap.qnomets; }
+    if(snap.qlocalts && typeof snap.qlocalts==='object'){ QLOCAL_TS=snap.qlocalts; }
+    if(snap.locaists && typeof snap.locaists==='object'){ LOCAIS_TS=snap.locaists; }
+    if(typeof saveCfgTS==='function') saveCfgTS();
     if(Array.isArray(snap.randomizacoes)){ RZLIB=normalizeRZLib(snap.randomizacoes); saveRZLib(); }
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
     _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
@@ -6922,14 +6934,26 @@ function openBackups(){
 function exportData(){
   try{
     if(typeof ensureLocais==='function') ensureLocais();
+    if(typeof ensureQGEO==='function') ensureQGEO();
+    if(typeof ensureNotas==='function') ensureNotas();
+    if(typeof ensureCfgTS==='function') ensureCfgTS();
     var payload={
-      _iracema:true, version:4, exported:todayISO(),
+      _iracema:true, version:5, exported:todayISO(),
       data:data,
       qgeo:(typeof QGEO!=='undefined'?QGEO:null),
+      qgeots:(typeof QGEO_TS!=='undefined'?QGEO_TS:null),
       georef:(typeof _geo!=='undefined'?_geo:null),
+      georefts:(typeof GEOREF_TS!=='undefined'?GEOREF_TS:0),
       locais:(typeof LOCAIS!=='undefined'?LOCAIS:null),
       qlocal:(typeof QLOCAL!=='undefined'?QLOCAL:null),
       qnome:(typeof QNOME!=='undefined'?QNOME:null),
+      qnomets:(typeof QNOME_TS!=='undefined'?QNOME_TS:null),
+      qlocalts:(typeof QLOCAL_TS!=='undefined'?QLOCAL_TS:null),
+      locaists:(typeof LOCAIS_TS!=='undefined'?LOCAIS_TS:null),
+      notas_campo:(typeof NOTAS_CAMPO!=='undefined'?NOTAS_CAMPO:[]),
+      _deletedQuadras:(typeof _delQuadras!=='undefined'?_delQuadras:{}),
+      _deletedLocais:(typeof _delLocais!=='undefined'?_delLocais:{}),
+      _deletedNotas:(typeof _delNotas!=='undefined'?_delNotas:{}),
       randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[])
     };
     var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -7030,7 +7054,23 @@ function importData(ev){
       if(ql){ QLOCAL=ql; if(typeof saveQLocal==='function') saveQLocal(); }
       if(qn){ QNOME=qn; if(typeof saveQNome==='function') saveQNome(); }
       if(Array.isArray(rz)){ RZLIB=normalizeRZLib(rz); saveRZLib(); }
+      /* backup v5: carimbos, notas de campo e lápides (compat: v2-v4 simplesmente não os têm) */
+      if(imported && imported._iracema){
+        if(imported.qgeots && typeof imported.qgeots==='object'){ QGEO_TS=imported.qgeots; if(typeof saveQGEOTS==='function') saveQGEOTS(); }
+        if(imported.georefts!=null){ GEOREF_TS=imported.georefts; if(typeof saveGeorefTS==='function') saveGeorefTS(); }
+        if(typeof ensureCfgTS==='function') ensureCfgTS();
+        if(imported.qnomets && typeof imported.qnomets==='object'){ QNOME_TS=imported.qnomets; }
+        if(imported.qlocalts && typeof imported.qlocalts==='object'){ QLOCAL_TS=imported.qlocalts; }
+        if(imported.locaists && typeof imported.locaists==='object'){ LOCAIS_TS=imported.locaists; }
+        if(typeof saveCfgTS==='function') saveCfgTS();
+        if(Array.isArray(imported.notas_campo)){ NOTAS_CAMPO=imported.notas_campo; if(typeof saveNotas==='function') saveNotas(); }
+        if(imported._deletedQuadras && typeof imported._deletedQuadras==='object'){ _delQuadras=imported._deletedQuadras; }
+        if(imported._deletedLocais && typeof imported._deletedLocais==='object'){ _delLocais=imported._deletedLocais; }
+        if(typeof saveDelTombs==='function') saveDelTombs();
+        if(imported._deletedNotas && typeof imported._deletedNotas==='object'){ _delNotas=imported._deletedNotas; try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(_e){} }
+      }
       if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
+      _cloudReplace=true; /* importar backup SUBSTITUI o estado (como o aviso promete) — sem merge com a nuvem */
       save();
       try{ if(_map && _geo && typeof geoBounds==='function') _map.fitBounds(geoBounds(_geo)); }catch(_e){}
       render();updateAgendaBadge();
