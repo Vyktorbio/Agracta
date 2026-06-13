@@ -2732,6 +2732,7 @@ function cloudPull(){
    senão, puxa o mais recente da nuvem. E garante o realtime vivo. */
 function cloudResync(){
   if(!cloudInit()) return;
+  if(_rrOn()){ cloudReadRows().then(function(ok){ if(ok) cloudSubscribeRows(); }); return; } /* modo-linhas: relê das tabelas */
   if(!_cloudInitDone){ cloudPull(); cloudSubscribe(); return; } /* ainda não leu a nuvem -> só puxa */
   if(_cloudTimer){ cloudSyncNow(); }
   else { cloudPull(); }
@@ -2916,6 +2917,10 @@ function deletePasswordConfirm(){
 function cloudStart(){
   if(!cloudInit()){ return; }
   cloudBadge('saving');
+  if(_rrOn()){
+    /* Etapa 3 Fase C: fonte da verdade = tabelas por-linha (escrita segue dupla; blob = backup) */
+    try{ cloudReadRows().then(function(ok){ if(ok) cloudSubscribeRows(); else cloudBadge('offline'); }); }catch(e){ cloudBadge('offline'); }
+  } else {
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       if(res && res.error){ cloudBadge('error'); }
@@ -2935,6 +2940,7 @@ function cloudStart(){
       cloudSubscribe();
     }, function(){ cloudBadge('offline'); });
   }catch(e){ cloudBadge('offline'); }
+  }
   if(!window.__cloudNet){ window.__cloudNet=true;
     window.addEventListener('online', function(){ cloudBadge('saving'); cloudResync(); });
     window.addEventListener('offline', function(){ cloudBadge('offline'); });
@@ -3118,6 +3124,57 @@ function dbUpsertQuadra(qid){ if(!_dwOn()||!qid||qid==='__config') return; try{ 
 function dbUpsertEstudo(qid, est){ if(!_dwOn()||!est||!est.id) return; try{ outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)},{table:'estudos',row:_rowEstudo(qid,est)}]); }catch(e){} }
 function dbUpsertAplicacao(qid, sid, ap){ if(!_dwOn()||!ap||!ap.id) return; try{ var est=((typeof data!=='undefined'&&data[qid]&&(data[qid].estudos||[]).find(function(s){return s.id===sid;}))||{id:sid}); outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)},{table:'estudos',row:_rowEstudo(qid,est)},{table:'aplicacoes',row:_rowAplicacao(sid,ap)}]); }catch(e){} }
 if(!window.__obNet){ window.__obNet=true; try{ window.addEventListener('online', function(){ try{outboxFlush();}catch(e){} }); document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible'){ try{outboxFlush();}catch(e){} } }); }catch(e){} }
+
+/* ===================== ETAPA 3 — FASE C (cliente): LER das tabelas por-linha =====================
+   Atrás da flag _readRows (padrão DESLIGADA → comportamento idêntico ao de hoje). Quando LIGADA,
+   o app carrega o estado das TABELAS (não do blob) e reage ao realtime POR LINHA. As escritas
+   seguem duplas (tabelas + blob), então o blob fica como BACKUP QUENTE → rollback instantâneo
+   com setReadRows(false). Validar ao vivo (shadow 100%) ANTES de ligar pra equipe. */
+function _rrOn(){ try{ if(window._readRows===true) return true; if(window._readRows===false) return false; return localStorage.getItem('agracta-readrows')==='1'; }catch(e){ return window._readRows===true; } }
+function setReadRows(on){ window._readRows=!!on; try{ localStorage.setItem('agracta-readrows', on?'1':'0'); }catch(e){} if(on){ cloudReadRows().then(function(ok){ if(ok) cloudSubscribeRows(); }); } return _rrOn(); }
+function _applyRowsState(S){
+  _cloudApplying=true;
+  try{
+    if(S.data){ data=S.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
+    if(S.qgeo){ QGEO=S.qgeo; saveQGEO(); }
+    if(S.qgeots){ QGEO_TS=S.qgeots; saveQGEOTS(); }
+    if(S.georef){ _geo=S.georef; saveGeoref(_geo); }
+    if(S.georefts!=null){ GEOREF_TS=S.georefts; saveGeorefTS(); }
+    if(S.locais){ LOCAIS=S.locais; try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} }
+    if(S.qlocal){ QLOCAL=S.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
+    if(S.qnome){ QNOME=S.qnome; try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)); }catch(e){} }
+    if(Array.isArray(S.randomizacoes)){ RZLIB=(typeof normalizeRZLib==='function'?normalizeRZLib(S.randomizacoes):S.randomizacoes); try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){} }
+    if(Array.isArray(S.notas_campo)){ NOTAS_CAMPO=S.notas_campo; try{ localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO)); }catch(e){} }
+    if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
+    ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
+    render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+    if(typeof enforceAccess==='function') enforceAccess();
+  }catch(e){}
+  _cloudApplying=false;
+}
+var _rrPending=null, _rrCh=null, _rrTimer=null;
+function cloudReadRows(){
+  if(!cloudInit()) return Promise.resolve(false);
+  return _dbReadAll().then(function(R){
+    if(Object.keys(R).some(function(k){return R[k].error;})){ cloudBadge('offline'); return false; }
+    var S=_dbBuildState(R);
+    if(window._qEditing||window._avEditing){ _rrPending=S; return true; } /* não atropela edição em curso */
+    _applyRowsState(S); _cloudInitDone=true; cloudBadge('saved'); return true;
+  }, function(){ cloudBadge('offline'); return false; });
+}
+function cloudReadRowsApplyPending(){ if(_rrPending && !window._qEditing && !window._avEditing){ var s=_rrPending; _rrPending=null; _applyRowsState(s); } }
+function _rrSoon(){ clearTimeout(_rrTimer); _rrTimer=setTimeout(function(){ if(window._qEditing||window._avEditing){ _rrSoon(); return; } cloudReadRows(); }, 800); }
+function cloudSubscribeRows(){
+  if(!SB) return;
+  try{
+    if(_rrCh){ try{ SB.removeChannel(_rrCh); }catch(e){} _rrCh=null; }
+    _rrCh=SB.channel('agracta_rows_rt');
+    ['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','config'].forEach(function(t){
+      _rrCh.on('postgres_changes',{event:'*',schema:'public',table:t}, function(){ _rrSoon(); });
+    });
+    _rrCh.subscribe(function(status){ if(status==='SUBSCRIBED'){ _cloudReady=true; cloudBadge('saved'); } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){ _cloudReady=false; clearTimeout(window._rrReTimer); window._rrReTimer=setTimeout(cloudSubscribeRows, 4000); } });
+  }catch(e){}
+}
 
 function render(){
   initMap();
@@ -7122,6 +7179,7 @@ function closeEventEdit(){
   draftAp=null;draftAv=null;
   window._avEditing=false;
   try{ if(typeof cloudApplyPending==='function') cloudApplyPending(); }catch(e){}
+  try{ if(typeof cloudReadRowsApplyPending==='function') cloudReadRowsApplyPending(); }catch(e){}
 }
 
 
