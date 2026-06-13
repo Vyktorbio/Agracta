@@ -7807,7 +7807,8 @@ function criarAcessoTecnico(){
   _invocarCriarTecnico(email, nome, senha, false);
 }
 
-/* Lista as CONTAS reais (perfis) — fonte da verdade de quem tem acesso + nome p/ auditoria */
+/* Lista as CONTAS reais (perfis) — fonte da verdade de quem tem acesso + nome p/ auditoria.
+   Status de acesso (ativo/desativado) vem do Auth via a função remover-tecnico (best-effort). */
 function _carregarPerfis(){
   var box=document.getElementById('admPerfisList'); if(!box) return;
   if(!cloudInit()||!SB){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Sem conexão.</div>'; return; }
@@ -7816,19 +7817,50 @@ function _carregarPerfis(){
     var arr=(res.data||[]).slice().sort(function(a,b){ if(a.papel!==b.papel) return a.papel==='admin'?-1:1; return (a.email||'').localeCompare(b.email||''); });
     window._perfisCache=arr;
     if(!arr.length){ box.innerHTML='<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Nenhuma conta ainda. Crie a primeira abaixo.</div>'; return; }
-    box.innerHTML=arr.map(function(p,i){
-      var isAdm=p.papel==='admin';
-      var badge='<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;'+(isAdm?'background:#3a2a0c;color:#ffce5a;border:1px solid #6b531b':'background:#0f2a1a;color:#37d684;border:1px solid #245a36')+'">'+(isAdm?'ADMIN':'TÉCNICO')+'</span>';
-      return '<div style="border-bottom:1px solid #1f2c22;padding:8px 0">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:12px;color:#cfe0d4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.email)+'</div>'+badge+'</div>'+
-        '<div style="display:flex;gap:6px;margin-top:6px">'+
-          '<input id="pf_'+i+'" class="delpwd-inp" style="padding:7px;font-size:12px;flex:1" type="text" value="'+esc(p.nome||'')+'" placeholder="Nome completo (auditoria)">'+
-          '<button onclick="salvarNomePerfil('+i+')" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer">Salvar nome</button>'+
-        '</div>'+
-        (isAdm?'':'<button onclick="redefinirSenhaTecnico('+i+')" style="background:transparent;color:#8a9f90;border:none;padding:5px 0 0;font-size:10px;cursor:pointer;text-decoration:underline">redefinir senha deste técnico</button>')+
-      '</div>';
-    }).join('');
+    var done=function(set){ window._disabledSet=set||{}; _renderPerfisList(arr, window._disabledSet); };
+    try{
+      SB.functions.invoke('remover-tecnico',{body:{action:'status'}}).then(function(r){
+        var set={}; if(r&&r.data&&Array.isArray(r.data.disabled)){ r.data.disabled.forEach(function(e){ set[(e||'').toLowerCase()]=1; }); }
+        done(set);
+      }, function(){ done({}); });
+    }catch(e){ done({}); }
   }, function(){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Falha de conexão ao ler contas.</div>'; });
+}
+function _renderPerfisList(arr, disabledSet){
+  var box=document.getElementById('admPerfisList'); if(!box) return;
+  box.innerHTML=arr.map(function(p,i){
+    var isAdm=p.papel==='admin';
+    var off=!isAdm && !!disabledSet[(p.email||'').toLowerCase()];
+    var badge='<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;'+(isAdm?'background:#3a2a0c;color:#ffce5a;border:1px solid #6b531b':'background:#0f2a1a;color:#37d684;border:1px solid #245a36')+'">'+(isAdm?'ADMIN':'TÉCNICO')+'</span>';
+    var offBadge= off?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;background:#3a1212;color:#ff9a8a;border:1px solid #6b1f1f;margin-right:6px">DESATIVADO</span>':'';
+    return '<div style="border-bottom:1px solid #1f2c22;padding:8px 0;'+(off?'opacity:.7':'')+'">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:12px;color:#cfe0d4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.email)+'</div><div style="white-space:nowrap">'+offBadge+badge+'</div></div>'+
+      '<div style="display:flex;gap:6px;margin-top:6px">'+
+        '<input id="pf_'+i+'" class="delpwd-inp" style="padding:7px;font-size:12px;flex:1" type="text" value="'+esc(p.nome||'')+'" placeholder="Nome completo (auditoria)">'+
+        '<button onclick="salvarNomePerfil('+i+')" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer">Salvar nome</button>'+
+      '</div>'+
+      (isAdm?'':'<div style="display:flex;gap:14px;margin-top:6px"><button onclick="redefinirSenhaTecnico('+i+')" style="background:transparent;color:#8a9f90;border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">redefinir senha</button>'+
+        '<button onclick="alternarAcessoTecnico('+i+','+(off?'true':'false')+')" style="background:transparent;color:'+(off?'#37d684':'#ff9a8a')+';border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">'+(off?'reativar acesso':'desativar acesso')+'</button></div>')+
+    '</div>';
+  }).join('');
+}
+/* Desativa (bane, mantém histórico) ou reativa o acesso — via função remover-tecnico (servidor) */
+function alternarAcessoTecnico(i, isOff){
+  var p=(window._perfisCache||[])[i]; if(!p) return;
+  var acao=isOff?'enable':'disable';
+  if(!confirm((isOff?'REATIVAR':'DESATIVAR')+' o acesso de '+(p.nome||p.email)+'?\n\n'+(isOff?'Ele volta a conseguir entrar no app.':'Ele NÃO consegue mais entrar (a conta e todo o histórico são mantidos).'))) return;
+  if(!cloudInit()||!SB||!SB.functions){ if(typeof _stxToast==='function')_stxToast('Sem conexão.'); return; }
+  if(typeof _stxToast==='function')_stxToast(isOff?'Reativando…':'Desativando…');
+  SB.functions.invoke('remover-tecnico',{body:{email:p.email, action:acao}}).then(function(res){
+    var d=res&&res.data, er=res&&res.error;
+    if(er || !d || d.error){
+      var msg=(d&&d.error)||(er&&er.message)||'Falha.';
+      if(/not found|404|Failed to send|FunctionsFetchError|FunctionsRelayError|non-2xx/i.test(String(msg))) msg='A função "remover-tecnico" ainda não foi publicada no Supabase.';
+      if(typeof _stxToast==='function')_stxToast(msg); return;
+    }
+    if(typeof _stxToast==='function')_stxToast(isOff?'Acesso reativado':'Acesso desativado');
+    _carregarPerfis();
+  }, function(){ if(typeof _stxToast==='function')_stxToast('Falha de conexão.'); });
 }
 /* Salva o NOME no perfil (RLS permite admin) — sem mexer na senha, sem republicar nada */
 function salvarNomePerfil(i){
