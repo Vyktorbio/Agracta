@@ -407,6 +407,74 @@ def do_clima(mac):
         out["time"] = None
     return out
 
+def _hist_values(node):
+    """node = {'list': {epoch: val, ...}} (histórico Ecowitt) -> lista de floats."""
+    if not isinstance(node, dict):
+        return []
+    lst = node.get("list") or {}
+    vals = []
+    for v in (lst.values() if isinstance(lst, dict) else []):
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            pass
+    return vals
+
+def _hist_unit(node, default):
+    return (node.get("unit") if isinstance(node, dict) else None) or default
+
+def do_clima_history(mac, date):
+    """Resumo do DIA (histórico) de uma estação p/ a data YYYY-MM-DD.
+       Devolve o MESMO formato do tempo-real (temp/humidity/rain_day/wind_*),
+       pra o app tratar igual — só que com média/extremos do dia escolhido."""
+    start = date + " 00:00:00"
+    end = date + " 23:59:59"
+    d = ecowitt_get("/device/history", {
+        "mac": mac, "start_date": start, "end_date": end,
+        "call_back": "outdoor,rainfall,wind,solar_and_uvi",
+        "cycle_type": "auto",
+        "temp_unitid": 1, "wind_speed_unitid": 7,
+        "rainfall_unitid": 12, "solar_irradiance_unitid": 16,
+    }) or {}
+    o = d.get("outdoor", {}) or {}
+    r = d.get("rainfall") or d.get("rainfall_piezo") or {}
+    w = d.get("wind", {}) or {}
+    s = d.get("solar_and_uvi", {}) or {}
+    temps = _hist_values(o.get("temperature"))
+    hums = _hist_values(o.get("humidity"))
+    dews = _hist_values(o.get("dew_point"))
+    winds = _hist_values(w.get("wind_speed"))
+    gusts = _hist_values(w.get("wind_gust"))
+    solars = _hist_values(s.get("solar"))
+    rain_daily = _hist_values(r.get("daily"))
+    rain_rate = _hist_values(r.get("rain_rate"))
+
+    def avg(v):
+        return round(sum(v) / len(v), 1) if v else None
+    # chuva do dia: o acumulado diário (pega o maior do dia); senão soma a taxa
+    rain_total = (round(max(rain_daily), 1) if rain_daily
+                  else (round(sum(rain_rate), 1) if rain_rate else None))
+
+    def nd(value, unit):
+        return {"value": value, "unit": unit}
+
+    return {
+        "mac": mac, "date": date, "fonte_hist": True, "samples": len(temps),
+        "temp": nd(avg(temps), _hist_unit(o.get("temperature"), "℃")),
+        "temp_min": nd(round(min(temps), 1) if temps else None, _hist_unit(o.get("temperature"), "℃")),
+        "temp_max": nd(round(max(temps), 1) if temps else None, _hist_unit(o.get("temperature"), "℃")),
+        "dew_point": nd(avg(dews), _hist_unit(o.get("dew_point"), "℃")),
+        "humidity": nd(avg(hums), "%"),
+        "rain_day": nd(rain_total, _hist_unit(r.get("daily"), "mm")),
+        "wind_speed": nd(avg(winds), _hist_unit(w.get("wind_speed"), "km/h")),
+        "wind_gust": nd(round(max(gusts), 1) if gusts else None, _hist_unit(w.get("wind_gust"), "km/h")),
+        "wind_dir": None,
+        "pressure": None,
+        "vpd": None,
+        "solar": nd(avg(solars), _hist_unit(s.get("solar"), "W/m²")),
+        "time": None,
+    }
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -461,6 +529,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_estacoes())
             if u.path == "/clima":
                 return self._json(do_clima(q["mac"]))
+            if u.path == "/clima/historico":
+                return self._json(do_clima_history(q["mac"], q["date"]))
             if u.path == "/dates":
                 bbox = [float(x) for x in q["bbox"].split(",")]
                 return self._json(do_dates(bbox, q["from"], q["to"]))

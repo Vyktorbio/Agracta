@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=44').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=45').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -347,6 +347,9 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .gr-head .gr-title{margin-bottom:0;flex:1}
 .gr-x{background:none;border:none;color:var(--text-3,#7c8a80);font-size:22px;line-height:.8;cursor:pointer;padding:0 2px;margin:-2px -4px 0 0;flex:none}
 .gr-x:hover{color:var(--danger,#e0566b)}
+/* ✕ padrão no canto superior direito de qualquer painel/modal */
+.panel-x-tr{position:absolute;top:10px;right:10px;z-index:6;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:rgba(127,127,127,.10);border:1px solid var(--border,#26322b);color:var(--text-2,#9fb1a5);border-radius:50%;font-size:16px;line-height:1;cursor:pointer;padding:0;transition:color .15s,border-color .15s,background .15s}
+.panel-x-tr:hover{color:var(--danger,#e0566b);border-color:var(--danger,#e0566b);background:rgba(224,86,107,.10)}
 .gr-hint{font-size:11px;color:#9ab39a;line-height:1.45;margin-bottom:9px}
 .gr-hint b{color:#cfe;font-weight:700}
 .gr-op{display:flex;align-items:center;gap:8px;font-size:11px;color:#9ab39a;margin-bottom:10px}
@@ -459,7 +462,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
   --bg:#0a0e0c; --surface:#101613; --surface-2:#0c1210; --surface-3:#161e1a;
   --border:#26322b; --border-soft:#1a221d;
   --text:#e8efe9; --text-2:#9fb1a5; --text-3:#6d7f73;
-  --accent:#37d684; --accent-d:#1f8a52; --accent-deep:#103225; --accent-soft:rgba(55,214,132,.13);
+  --accent:#1f242a; --accent-d:#3a4149; --accent-deep:#eef0f2; --accent-soft:rgba(31,36,42,.08);
   --info:#5aa9e6; --warn:#f4b34d; --danger:#ff6b6b;
   --radius:14px; --radius-sm:11px; --pill:999px;
   --shadow:0 18px 54px rgba(0,0,0,.58); --shadow-sm:0 8px 26px rgba(0,0,0,.46);
@@ -566,7 +569,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
   --bg:#eaeeec; --surface:#ffffff; --surface-2:#f3f6f4; --surface-3:#eef1ef;
   --border:#dce2de; --border-soft:#e9edea;
   --text:#1d2723; --text-2:#55615b; --text-3:#8a948e;
-  --accent:#1f8a52; --accent-d:#15663c; --accent-deep:#e3f3ea; --accent-soft:rgba(31,138,82,.10);
+  --accent:#1f242a; --accent-d:#11151a; --accent-deep:#eef0f2; --accent-soft:rgba(31,36,42,.08);
   --info:#2f7dd1; --warn:#c77f1a; --danger:#d84b43;
   --shadow:0 14px 40px rgba(30,50,40,.16); --shadow-sm:0 6px 20px rgba(30,50,40,.10);
 }
@@ -678,18 +681,18 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
   --vm-bg:#0c1110;
   --vm-glass:rgba(15,20,18,.88);
   --vm-glass-strong:rgba(17,23,21,.95);
-  --vm-panel:#f6f7f4;
-  --vm-panel-2:#eef1ed;
-  --vm-line:rgba(214,222,216,.22);
-  --vm-line-dark:#d8ded8;
-  --vm-text:#f3f7f4;
-  --vm-text-dark:#18211d;
-  --vm-muted:#a9b7ae;
-  --vm-muted-dark:#627069;
-  --vm-accent:#21a86b;
-  --vm-accent-2:#2f85c9;
-  --vm-warn:#d69431;
-  --vm-danger:#d75a4e;
+  --vm-panel:#f6f7f8;
+  --vm-panel-2:#eceef1;
+  --vm-line:rgba(210,214,220,.30);
+  --vm-line-dark:#dfe2e6;
+  --vm-text:#f3f5f7;
+  --vm-text-dark:#15171a;
+  --vm-muted:#a8acb2;
+  --vm-muted-dark:#5b616a;
+  --vm-accent:#1f242a;
+  --vm-accent-2:#3a6ea3;
+  --vm-warn:#b9842f;
+  --vm-danger:#c0492e;
   --vm-shadow:0 12px 34px rgba(0,0,0,.28);
   --vm-shadow-soft:0 8px 20px rgba(19,31,25,.16);
   --font:'Inter',-apple-system,system-ui,sans-serif;
@@ -701,22 +704,22 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .top-bar{
   min-height:40px!important;
   padding:4px 10px!important;
-  background:linear-gradient(180deg,rgba(14,19,17,.94),rgba(12,17,15,.9))!important;
-  border-bottom:1px solid rgba(255,255,255,.1)!important;
-  box-shadow:0 6px 18px rgba(0,0,0,.22)!important;
+  background:rgba(255,255,255,.94)!important;
+  border-bottom:1px solid #e2e5e8!important;
+  box-shadow:0 2px 12px rgba(20,24,28,.10)!important;
   backdrop-filter:blur(18px)!important;
   -webkit-backdrop-filter:blur(18px)!important;
   gap:8px!important;
   flex-wrap:nowrap!important;
 }
 .top-bar>div:first-child{display:flex;align-items:center;gap:10px;min-width:0}
-.top-bar h1{display:flex;align-items:center;gap:9px;color:#f7fbf8!important;font-size:16px!important;font-weight:850!important;letter-spacing:.1px!important;line-height:1!important;white-space:nowrap}
+.top-bar h1{display:flex;align-items:center;gap:9px;color:#15171a!important;font-size:16px!important;font-weight:850!important;letter-spacing:.1px!important;line-height:1!important;white-space:nowrap}
 /* logo do cabeçalho removido a pedido (mais espaço, mais limpo) */
 .ic{display:inline-block;vertical-align:-3px;flex:none;margin-right:4px}
 .main-menu button .ic,.loc-mi .ic{margin-right:6px;opacity:.92}
 .tool-ico .ic{margin:0}
 .top-bar-right{gap:8px!important;align-items:center!important}
-.top-bar-info{height:24px;display:inline-flex;align-items:center;color:#c4cdc7!important;font-size:11px!important;font-weight:600!important;padding:0 6px;border-left:1px solid rgba(255,255,255,.11);margin-right:0!important}
+.top-bar-info{height:24px;display:inline-flex;align-items:center;color:#5b616a!important;font-size:11px!important;font-weight:600!important;padding:0 6px;border-left:1px solid #e2e5e8;margin-right:0!important}
 
 .btn-sm{
   height:28px!important;
@@ -726,21 +729,21 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   gap:6px!important;
   padding:0 11px!important;
   border-radius:8px!important;
-  border:1px solid rgba(255,255,255,.14)!important;
-  background:rgba(255,255,255,.07)!important;
-  color:#d8e0db!important;
+  border:1px solid #dfe2e6!important;
+  background:#f1f3f5!important;
+  color:#2b3138!important;
   box-shadow:none!important;
   font-size:11px!important;
   font-weight:760!important;
   letter-spacing:.28px!important;
   text-transform:uppercase!important;
 }
-.btn-sm:hover{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.22)!important;color:#fff!important}
-.btn-sm.active{background:rgba(33,168,107,.18)!important;border-color:rgba(33,168,107,.45)!important;color:#dff8eb!important}
+.btn-sm:hover{background:#e9ebef!important;border-color:#c9ccd1!important;color:#15171a!important}
+.btn-sm.active{background:#1f242a!important;border-color:#15191e!important;color:#fff!important}
 .btn-search{width:34px!important;padding:0!important;font-size:0!important}
-.btn-search:before{content:"⌕";font-size:19px;line-height:1;color:#dce6df}
-.today-badge{height:18px;min-width:20px;display:inline-flex!important;align-items:center;justify-content:center;border-radius:999px!important;background:#dfe8e2!important;color:#15211b!important;font-size:10px!important;font-weight:850!important;padding:0 6px!important}
-.btn-today.has-urgent,.btn-today.has-today{color:#fff!important}
+.btn-search:before{content:"⌕";font-size:19px;line-height:1;color:#2b3138}
+.today-badge{height:18px;min-width:20px;display:inline-flex!important;align-items:center;justify-content:center;border-radius:999px!important;background:#1f242a!important;color:#fff!important;font-size:10px!important;font-weight:850!important;padding:0 6px!important}
+.btn-today.has-urgent,.btn-today.has-today{color:#15171a!important}
 
 /* Local atual */
 .loc-chip{
@@ -749,16 +752,16 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   padding:0 10px!important;
   gap:7px!important;
   border-radius:8px!important;
-  background:rgba(255,255,255,.07)!important;
-  border:1px solid rgba(255,255,255,.14)!important;
-  color:#d8e0db!important;
+  background:#f1f3f5!important;
+  border:1px solid #dfe2e6!important;
+  color:#2b3138!important;
   max-width:min(48vw,360px)!important;
   box-shadow:none!important;
 }
-.loc-chip:hover{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.22)!important}
-.loc-chip b{color:#fff!important;font-weight:780!important;max-width:min(30vw,220px)!important}
-.loc-chip .sub,.loc-chip .car{color:#b2beb7!important}
-.loc-pin{display:inline-flex;align-items:center;justify-content:center;height:18px;min-width:28px;border-radius:5px;background:rgba(33,168,107,.18);color:#dff8eb;font-size:9px;font-weight:850;letter-spacing:.45px}
+.loc-chip:hover{background:#e9ebef!important;border-color:#c9ccd1!important}
+.loc-chip b{color:#15171a!important;font-weight:780!important;max-width:min(30vw,220px)!important}
+.loc-chip .sub,.loc-chip .car{color:#5b616a!important}
+.loc-pin{display:inline-flex;align-items:center;justify-content:center;height:18px;min-width:28px;border-radius:5px;background:#1f242a;color:#fff;font-size:9px;font-weight:850;letter-spacing:.45px}
 
 /* Mapa e controles */
 #map,.leaflet-container{background:#0e1411!important}
@@ -777,11 +780,11 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .toolbar-extra{
   right:14px!important;
   bottom:14px!important;
-  gap:8px!important;
-  padding:7px!important;
-  border-radius:14px!important;
-  background:rgba(13,18,16,.78)!important;
-  border:1px solid rgba(255,255,255,.14)!important;
+  gap:6px!important;
+  padding:6px!important;
+  border-radius:13px!important;
+  background:rgba(255,255,255,.92)!important;
+  border:1px solid #dfe2e6!important;
   box-shadow:var(--vm-shadow)!important;
   backdrop-filter:blur(18px)!important;
   -webkit-backdrop-filter:blur(18px)!important;
@@ -796,12 +799,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .toolbar-extra button:hover{background:transparent!important;border-color:transparent!important}
 .toolbar-extra button:hover .tool-ico{filter:brightness(1.18)}
 .toolbar-extra button:active .tool-ico{transform:translateY(1px)}
-.tool-ico{height:40px;min-width:48px;padding:0 14px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.11);color:#fff;font-size:13px;font-weight:850;letter-spacing:.3px;transition:filter .15s,transform .07s}
-.tool-ndvi .tool-ico{background:rgba(33,168,107,.30);color:#dbfae8}
-.tool-clima .tool-ico{background:rgba(47,133,201,.32);color:#e0f0ff}
-.tool-measure .tool-ico{background:rgba(214,148,49,.30);color:#fff0d5}
-.tool-gps .tool-ico{background:rgba(215,90,78,.30);color:#ffe2df}
-.tool-note .tool-ico{background:rgba(142,68,173,.30);color:#f5eef8}
+.tool-ico{height:40px;width:40px;min-width:40px;padding:0;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;background:#eceef1;color:#2b3138;font-size:13px;font-weight:850;letter-spacing:.3px;border:1px solid #e2e5e8;transition:filter .15s,transform .07s}
+.tool-ndvi .tool-ico{background:#eceef1;color:#2b3138}
+.tool-clima .tool-ico{background:#eceef1;color:#2b3138}
+.tool-measure .tool-ico{background:#eceef1;color:#2b3138}
+.tool-gps .tool-ico{background:#eceef1;color:#2b3138}
+.tool-note .tool-ico{background:#eceef1;color:#2b3138}
 
 /* Superfícies e modais */
 .panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.main-menu,.loc-menu,.loc-box{
@@ -812,7 +815,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   box-shadow:var(--vm-shadow-soft)!important;
 }
 .overlay,.search-overlay,.se-overlay,.loc-modal,.ndvi-modal{background:rgba(13,18,16,.54)!important;backdrop-filter:blur(8px)!important;-webkit-backdrop-filter:blur(8px)!important}
-.panel-header{background:linear-gradient(180deg,#fff,#f4f6f2);border-bottom:1px solid var(--vm-line-dark)!important;border-radius:12px 12px 0 0}
+.panel-header{background:linear-gradient(180deg,#fff,#f6f7f9);border-bottom:1px solid var(--vm-line-dark)!important;border-radius:12px 12px 0 0}
 .panel-qid,.edit-id,.sd-codigo,.today-title{color:#17211c!important}
 .panel-qlbl,.edit-title,.studies-title,.sd-section-title,.se-section-title,.gr-title,.ag-title{color:var(--vm-accent)!important;letter-spacing:.75px!important}
 .info-l,.prog-t,.prog-p,.fen-title,.sd-meta-lbl,.se-field label,.ag-group-title{color:var(--vm-muted-dark)!important}
@@ -830,12 +833,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 
 /* Botões internos */
 .studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
-  background:linear-gradient(180deg,#239b64,#1c7f51)!important;
+  background:linear-gradient(180deg,#2c323a,#1d2229)!important;
   color:#fff!important;
-  border:1px solid #197448!important;
+  border:1px solid #15191e!important;
   border-radius:9px!important;
   font-weight:780!important;
-  box-shadow:0 6px 14px rgba(28,127,81,.18)!important;
+  box-shadow:0 4px 12px rgba(20,24,28,.18)!important;
 }
 .btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back{
   background:#eef1ed!important;
@@ -849,27 +852,27 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .today-overlay,.sd-overlay{background:#eef1ed!important;color:var(--vm-text-dark)!important}
 .today-head,.sd-header{background:rgba(238,241,237,.94)!important;border-bottom:1px solid var(--vm-line-dark)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important}
 /* Botões do cabeçalho do estudo: contraste no header claro */
-.sd-actions .btn-sm{background:#fff!important;color:#1f4d34!important;border:1px solid #cdd9d0!important;text-transform:none!important;letter-spacing:.1px!important}
-.sd-actions .btn-sm:hover{background:#eef3ef!important;border-color:#9fc7ad!important;color:#15663c!important}
-.sd-actions .btn-sm.active{background:rgba(31,138,82,.16)!important;color:#15663c!important;border-color:#58c98e!important}
+.sd-actions .btn-sm{background:#fff!important;color:#2b3138!important;border:1px solid #d7dbe0!important;text-transform:none!important;letter-spacing:.1px!important}
+.sd-actions .btn-sm:hover{background:#f0f1f3!important;border-color:#b7bdc4!important;color:#15171a!important}
+.sd-actions .btn-sm.active{background:#1f242a!important;color:#fff!important;border-color:#15191e!important}
 /* Menus NDVI e Clima (mesma classe .ndvi-panel): contraste no painel claro */
-.ndvi-panel .gr-title{color:#15663c!important}
-.ndvi-panel .gr-ctl,.ndvi-panel .gr-ctl span{color:#3a4a42!important}
+.ndvi-panel .gr-title{color:#15171a!important}
+.ndvi-panel .gr-ctl,.ndvi-panel .gr-ctl span{color:#44494f!important}
 .ndvi-panel .gr-ctl select{background:#fff!important;color:#16201b!important;border:1px solid var(--vm-line-dark)!important}
 .ndvi-status{color:#5a6b61!important}
 .ndvi-ticks{color:#6a766e!important}
 .ndvi-rank-title{color:#5a6b61!important}
 .ndvi-rank-row{color:#26312b!important;border:1px solid transparent}
-.ndvi-rank-row b{color:#15663c!important}
-.ndvi-rank-row:hover{background:#eef3ef!important;border-color:#bcdcc8!important}
-.ndvi-ix{background:#fff!important;color:#1f4d34!important;border:1px solid #cdd9d0!important}
-.ndvi-ix.on{background:#1f8a52!important;color:#fff!important;border-color:#1f8a52!important}
+.ndvi-rank-row b{color:#15171a!important}
+.ndvi-rank-row:hover{background:#f0f1f3!important;border-color:#c9ccd1!important}
+.ndvi-ix{background:#fff!important;color:#2b3138!important;border:1px solid #d7dbe0!important}
+.ndvi-ix.on{background:#1f242a!important;color:#fff!important;border-color:#15191e!important}
 .clima-card{background:#eef2ee!important;border:1px solid var(--vm-line-dark)!important}
 .clima-card .lab{color:#5a6b61!important}
 .clima-card .val,.clima-temp .t{color:#16201b!important}
 .clima-card .val small,.clima-foot{color:#6a766e!important}
 .ndvi-panel .gr-cancel{background:#fff!important;color:#26312b!important;border:1px solid var(--vm-line-dark)!important}
-.res-title{font-size:11px;font-weight:800;color:#15663c;margin:9px 0 3px;letter-spacing:.2px}
+.res-title{font-size:11px;font-weight:800;color:#15171a;margin:9px 0 3px;letter-spacing:.2px}
 .sd-descricao,.sd-empty,.today-empty,.se-empty{background:#fff!important;border-color:var(--vm-line-dark)!important;color:var(--vm-muted-dark)!important}
 .trat-head{background:#edf2ee!important;color:var(--vm-muted-dark)!important}
 .trat-row{border-top-color:var(--vm-line-dark)!important}
@@ -881,7 +884,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   border:1px solid var(--vm-line-dark)!important;
   border-radius:9px!important;
 }
-.search-box input:focus,.se-field input:focus,.se-field select:focus,.se-field textarea:focus,.e-inp:focus,.loc-box input:focus{border-color:rgba(33,168,107,.65)!important;box-shadow:0 0 0 3px rgba(33,168,107,.12)!important}
+.search-box input:focus,.se-field input:focus,.se-field select:focus,.se-field textarea:focus,.e-inp:focus,.loc-box input:focus{border-color:rgba(31,36,42,.55)!important;box-shadow:0 0 0 3px rgba(31,36,42,.10)!important}
 .search-close{background:#fff!important;border:1px solid var(--vm-line-dark)!important;color:#59665f!important;border-radius:9px!important}
 
 /* Sincronização */
@@ -893,46 +896,68 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   box-shadow:var(--vm-shadow-soft)!important;
   font-weight:760!important;
 }
-.cb-saving{color:#177a4c!important}.cb-error{color:var(--vm-danger)!important}.cb-offline{color:#86621b!important}
+.cb-saving{color:#3a4149!important}.cb-error{color:var(--vm-danger)!important}.cb-offline{color:#86621b!important}
 
 /* Menus injetados */
 .main-menu button,.loc-mi{color:#26312b!important}
-.main-menu button:hover,.loc-mi:hover{background:#edf2ee!important}
-.loc-mi.on{background:#e4f2ea!important;color:#164f35!important}
+.main-menu button:hover,.loc-mi:hover{background:#f0f1f3!important}
+.loc-mi.on{background:#eceef1!important;color:#15171a!important}
 .loc-mi .sub{color:var(--vm-muted-dark)!important}
 
 	/* Medição fica alinhada ao novo visual */
 	.measure-panel{background:rgba(17,23,21,.96)!important;border-color:rgba(255,255,255,.16)!important;border-radius:12px!important;box-shadow:var(--vm-shadow)!important;color:#fff!important}
-	.measure-title{color:#7df0b4!important}
+	.measure-title{color:#d2d6db!important}
 	.measure-x{color:#fff!important}
 	.measure-kpi{border-color:rgba(255,255,255,.16)!important;background:rgba(255,255,255,.09)!important}
 	.measure-kpi b{color:#fff!important}
-	.measure-kpi.main b{color:#7df0b4!important}
+	.measure-kpi.main b{color:#fff!important}
 	.measure-kpi span,.measure-note{color:rgba(255,255,255,.78)!important}
 	.measure-actions button{border-radius:8px!important;background:rgba(255,255,255,.10)!important;color:#fff!important;border-color:rgba(255,255,255,.18)!important}
-	.measure-actions button.on{background:#1f8a52!important;color:#fff!important;border-color:#58d891!important}
+	.measure-actions button.on{background:#e9ebef!important;color:#1c1f24!important;border-color:#e9ebef!important}
 	.measure-actions button.danger{background:#7f251f!important;color:#fff!important;border-color:#c44a40!important}
 
 /* ===== Avaliação: contraste no tema claro (fundo claro→texto escuro; card automático escuro→texto claro) ===== */
-.av-table th{background:#eef2ee!important;color:#2c3a33!important;border-color:#d7ded8!important}
-.av-tname{background:#eef2ee!important;color:#15663c!important}
-.av-cell{background:#fff!important;color:#16201b!important;border-color:#cdd6cf!important}
-.av-cell::placeholder{color:#9aa6a0!important}
-.av-step{background:rgba(31,138,82,.12)!important;color:#15663c!important;border-color:#bcdcc8!important}
-.av-step:active{background:rgba(31,138,82,.26)!important}
-.av-addcol{background:rgba(31,138,82,.12)!important;color:#15663c!important;border-color:#bcdcc8!important}
-.av-delcol{color:#b23b32!important}
-.av-hint,.av-auto-note{color:#55615b!important}
-.av-auto-toggle{background:#1f8a52!important;color:#f1faf3!important}
-.av-auto-toggle.off{background:#eef2ee!important;color:#15663c!important;border:1px solid #bcdcc8!important}
-/* Card de foco (modo automático): fundo escuro -> texto claro, alto contraste */
-.av-auto-box{background:#10211a!important;border:1px solid #2f6b45!important;box-shadow:var(--vm-shadow)!important}
-.av-auto-top{color:#bfe6cd!important}
-.av-auto-main{color:#f2faf4!important}
-.av-auto-sub{color:#aecbb7!important}
-.av-auto-input{background:#fff!important;color:#0f1d16!important;border:1px solid #58d891!important}
-.av-auto-count button{background:#1f7a47!important;color:#eafff2!important;border-color:#34935a!important}
-.av-auto-nav button{background:#17291f!important;color:#cfeada!important;border:1px solid #2f6b45!important}
+.av-table th{background:#eceef1!important;color:#2b3138!important;border-color:#dfe2e6!important}
+.av-tname{background:#eceef1!important;color:#15171a!important}
+.av-cell{background:#fff!important;color:#15171a!important;border-color:#d7dbe0!important}
+.av-cell::placeholder{color:#a0a5ab!important}
+.av-step{background:#f0f1f3!important;color:#2b3138!important;border-color:#d2d6db!important}
+.av-step:active{background:#e3e5e9!important}
+.av-addcol{background:#f0f1f3!important;color:#2b3138!important;border-color:#d2d6db!important}
+.av-delcol{color:#c0492e!important}
+.av-hint,.av-auto-note{color:#5b616a!important}
+.av-auto-toggle{background:#1f242a!important;color:#f3f5f7!important}
+.av-auto-toggle.off{background:#f0f1f3!important;color:#2b3138!important;border:1px solid #d2d6db!important}
+/* Card de foco (modo automático): fundo escuro neutro -> texto claro, alto contraste */
+.av-auto-box{background:#1c1f24!important;border:1px solid #343943!important;box-shadow:var(--vm-shadow)!important}
+.av-auto-top{color:#c4c8ce!important}
+.av-auto-main{color:#f4f6f8!important}
+.av-auto-sub{color:#aab0b8!important}
+.av-auto-input{background:#fff!important;color:#15171a!important;border:1px solid #6b7682!important}
+.av-auto-count button{background:#2c323a!important;color:#f3f5f7!important;border-color:#3f454d!important}
+.av-auto-nav button{background:#22262c!important;color:#d2d6db!important;border:1px solid #343943!important}
+
+/* ===== Banner "PRÓXIMO" (próxima aplicação): herdava cores do tema escuro -> ilegível no painel claro ===== */
+.sd-next{margin:10px 0!important;border-radius:10px!important}
+.sd-next.urgent{background:#fdeceb!important;border:1px solid #e3a59d!important}
+.sd-next.soon{background:#fbf2e2!important;border:1px solid #e6c98a!important}
+.sd-next.normal{background:#eaf2fb!important;border:1px solid #b8d2ec!important}
+.sd-next-lbl{color:#7c8a82!important}
+.sd-next-evt{color:#16201b!important;font-weight:780!important}
+.sd-next-date{color:#55615b!important}
+.sd-next.urgent .sd-next-lbl{color:#b5453a!important}
+.sd-next.soon .sd-next-lbl{color:#9a6a17!important}
+.sd-next.normal .sd-next-lbl{color:#3a6ea3!important}
+/* Mini-banner de próxima ação nos cards de estudo (texto pálido herdado do tema escuro) */
+.study-card-v2-next{font-weight:680!important}
+.study-card-v2-next.urgent{background:#fdeceb!important;color:#b5453a!important}
+.study-card-v2-next.soon{background:#fbf2e2!important;color:#9a6a17!important}
+.study-card-v2-next.normal{background:#eaf2fb!important;color:#3a6ea3!important}
+
+/* ===== Linhas de meta do estudo (CULTURA / DELINEAMENTO / ...): rótulo grudava no valor ===== */
+.sd-meta-item{gap:16px!important;align-items:baseline!important}
+.sd-meta-item>span:last-child{text-align:right}
+.sd-meta-lbl{flex:none!important;white-space:nowrap!important}
 
 @media (max-width:700px){
   .top-bar{align-items:center!important;flex-direction:row!important;padding:5px 10px!important;gap:8px!important}
@@ -941,9 +966,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   .top-bar-info{display:none!important}
   .loc-chip{max-width:50vw!important}
   .loc-chip .sub,.loc-chip .car{display:none!important}
-  .toolbar-extra{left:auto!important;right:10px!important;bottom:10px!important;display:flex!important;gap:7px!important}
+  .toolbar-extra{left:auto!important;right:10px!important;bottom:10px!important;display:flex!important;gap:6px!important}
   .toolbar-extra button{min-width:0!important;height:auto!important;padding:0!important}
-  .tool-ico{display:inline-flex!important;height:42px;min-width:46px;font-size:12px}
+  .tool-ico{display:inline-flex!important;height:42px;width:42px;min-width:42px;font-size:12px}
   .panel,.edit-panel,.se-panel{max-width:calc(100vw - 18px)!important}
   .sd-codigo{flex:1 1 100%!important;order:3;font-size:17px!important;letter-spacing:0!important}
   .sd-header .sd-back{order:1}
@@ -1008,7 +1033,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <button class="tool-clima tool-item" onclick="toggleToolDock(false);toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)" aria-label="Clima"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="M20 12h2"/><path d="m17.7 6.3 1.4-1.4"/><path d="M16 12a4 4 0 1 0-8 0"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></svg></span></button>
 <button class="tool-measure tool-item" onclick="toggleToolDock(false);toggleMeasure()" title="Medir área no mapa ou com o GPS" aria-label="Medir"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/></svg></span></button>
 <button class="tool-note tool-item" onclick="toggleToolDock(false);toggleScoutingMode()" title="Registrar Observação (Nota de Campo)" aria-label="Observação"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></span></button>
-<button class="tool-gps tool-item" onclick="toggleToolDock(false);locateMe()" title="Mostrar minha localização (GPS)" aria-label="GPS"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span></button>
+<button class="tool-gps tool-item" onclick="toggleToolDock(false);locateMe()" title="Mostrar minha localização (GPS)" aria-label="GPS"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></span></button>
 <button class="tool-fab" onclick="toggleToolDock()" title="Ferramentas do mapa" aria-label="Ferramentas do mapa" aria-expanded="false"><span class="tool-ico fab-open"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span><span class="tool-ico fab-close" style="display:none"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
@@ -2146,7 +2171,7 @@ function gerenciarLocais(){
       '<button class="lm-ren" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
       '<button class="lm-del" onclick="excluirLocal(\''+id+'\')">Excluir</button></div></div>';
   }).join('');
-  m.innerHTML='<div class="loc-box"><h3>'+ic('gear',16)+' Gerenciar locais</h3>'+
+  m.innerHTML='<div class="loc-box" style="position:relative"><button class="panel-x-tr" onclick="document.getElementById(\'locManage\').style.display=\'none\'" aria-label="Fechar" title="Fechar">✕</button><h3>'+ic('gear',16)+' Gerenciar locais</h3>'+
     '<div style="font-size:11px;color:#8a948e;margin-bottom:8px">Excluir um local remove ele e as quadras dele (pede confirmação digitando o nome). Não dá pra excluir o último.</div>'+
     rows+
     '<div class="row" style="margin-top:12px"><button class="loc-btn loc-cancel" onclick="document.getElementById(\'locManage\').style.display=\'none\'">Fechar</button></div></div>';
@@ -2260,8 +2285,6 @@ function toggleMainMenu(){
   var adm=isAdmin();
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
-    '<button onclick="closeMainMenu();if(typeof cloudResync===\'function\')cloudResync();if(typeof _stxToast===\'function\')_stxToast(\'Atualizando da nuvem…\');">'+ic('refresh')+' Atualizar (puxar da nuvem)</button>'+
-    '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
     (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
     '<div class="mm-sep"></div>'+
@@ -2614,6 +2637,7 @@ function cloudMerge(local,cloud){
       if(email && (email.toLowerCase().trim() === admEmail.toLowerCase().trim() || email.toLowerCase().trim() === 'machadovictorchaves@gmail.com')){
         isAdmin = true;
       }
+      if(window._adminUnlocked) isAdmin = true; /* destravou o painel com a senha -> autoridade do admin nesta sessão */
       var cfg = isAdmin ? _mergeObj(lq, cq) : _mergeObj(cq, lq); /* escalares (adminEmail/senha) por papel */
       cfg.delUsers = _mergeDelUsers(lq.delUsers, cq.delUsers);
       cfg.allowedUsers = _mergeAllowedUsers(lq.allowedUsers, cq.allowedUsers, cfg.delUsers); /* UNIÃO: nunca perde autorizado, mesmo abrindo aparelho/domínio zerado */
@@ -2734,15 +2758,15 @@ function traduzAuthErro(m){ m=String(m||'');
   if(/network|fetch|Failed/i.test(m)) return 'Sem conexão com o servidor. Tente de novo.';
   return m; }
 function _authCss(){ if(document.getElementById('authCss'))return; var s=document.createElement('style'); s.id='authCss';
-  s.textContent='.auth-gate{position:fixed;inset:0;z-index:3000;background:radial-gradient(110% 80% at 50% 0%,#24342c,#101513 52%,#090d0b);display:none;align-items:center;justify-content:center;padding:20px}.auth-gate.on{display:flex}'+
-  '.auth-box{width:100%;max-width:372px;background:rgba(246,247,244,.96);border:1px solid rgba(255,255,255,.32);border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.42);padding:28px 24px;font-family:var(--font,system-ui)}'+
-  '.auth-logo{font-size:11px;letter-spacing:1.2px;color:#1c7f51;font-weight:850;text-align:center;text-transform:uppercase}'+
+  s.textContent='.auth-gate{position:fixed;inset:0;z-index:3000;background:radial-gradient(120% 90% at 50% 0%,#fbfbfc,#eef0f2 58%,#e4e7ea);display:none;align-items:center;justify-content:center;padding:20px}.auth-gate.on{display:flex}'+
+  '.auth-box{width:100%;max-width:372px;background:#ffffff;border:1px solid #e2e5e8;border-radius:16px;box-shadow:0 24px 60px rgba(20,24,28,.12);padding:28px 24px;font-family:var(--font,system-ui)}'+
+  '.auth-logo{font-size:11px;letter-spacing:1.2px;color:#1f242a;font-weight:850;text-align:center;text-transform:uppercase}'+
   '.auth-title{font-size:22px;font-weight:850;color:#16201b;text-align:center;margin:5px 0 2px}'+
   '.auth-sub{font-size:12px;color:#6c7770;text-align:center;margin-bottom:18px}'+
   '.auth-l{display:block;font-size:10px;letter-spacing:.8px;color:#59665f;font-weight:800;margin:13px 0 5px;text-transform:uppercase}'+
   '.auth-i{width:100%;box-sizing:border-box;background:#fff;border:1px solid #d8ded8;border-radius:10px;color:#18211d;padding:12px;font-size:15px;outline:none}'+
-  '.auth-i:focus{border-color:rgba(33,168,107,.65);box-shadow:0 0 0 3px rgba(33,168,107,.12)}'+
-  '.auth-btn{width:100%;margin-top:18px;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#1f9a5d,#178048);color:#eafff2}'+
+  '.auth-i:focus{border-color:rgba(31,36,42,.55);box-shadow:0 0 0 3px rgba(31,36,42,.10)}'+
+  '.auth-btn{width:100%;margin-top:18px;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#2c323a,#1d2229);color:#fff}'+
   '.auth-btn:disabled{opacity:.6;cursor:default}'+
   '.auth-err{display:none;margin-top:12px;background:rgba(255,107,107,.12);border:1px solid #7a2b22;color:#ffb3a8;font-size:12px;padding:9px 11px;border-radius:9px;text-align:center}'+
   '.auth-foot{margin-top:16px;font-size:11px;color:var(--text-3,#6d7f73);text-align:center;line-height:1.5}';
@@ -3422,7 +3446,8 @@ function openNoteModal(lat, lng){
   _currentNoteCoords={lat:lat, lng:lng};
   var qid=findQuadraContaining(lat, lng);
   
-  var h='<div class="edit-title">NÚCLEO REGISTRADOR</div>'+
+  var h='<button class="panel-x-tr" onclick="closeNoteModal()" aria-label="Fechar" title="Fechar">✕</button>'+
+        '<div class="edit-title">NÚCLEO REGISTRADOR</div>'+
         '<div class="edit-id">Nova Observação</div>'+
         '<div class="edit-subtitle">'+lat.toFixed(6)+', '+lng.toFixed(6)+(qid?' &middot; Talhão: '+quadraNome(qid):'')+'</div>';
         
@@ -3475,7 +3500,7 @@ function openNoteModal(lat, lng){
      '</div>'+
      '</form>';
      
-  document.getElementById("notePnl").innerHTML=h;
+  var _np=document.getElementById("notePnl"); _np.style.position="relative"; _np.innerHTML=h;
   document.getElementById("noteOvl").style.display="flex";
 }
 
@@ -4364,14 +4389,14 @@ function showD(id){
   var t=FEN[d.cultura]||FEN._,prog=0;
   if(dap!==null&&dap>=0){var tot=(t.length>=2)?t[t.length-2].m:120;prog=Math.min(100,(dap/tot)*100)}
 
-  var h='<div class="panel-header" style="border-bottom:1px solid '+ac+'22"><div><div class="panel-qlbl" style="color:'+ac+'">QUADRA</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div><div class="panel-sbox" style="background:'+st.c+'15;border:1px solid '+st.c+'55"><div class="panel-scode" style="color:'+st.c+'">'+esc(st.s)+'</div><div class="panel-slbl" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
+  var h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+ac+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">✕</button><div><div class="panel-qlbl" style="color:'+ac+'">QUADRA</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div><div class="panel-sbox" style="background:'+st.c+'15;border:1px solid '+st.c+'55;margin-right:36px"><div class="panel-scode" style="color:'+st.c+'">'+esc(st.s)+'</div><div class="panel-slbl" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
 
   h+='<div class="panel-body"><div class="info-grid"><div><div class="info-l">CULTURA</div><div class="info-v" style="color:'+ac+'">'+esc(d.cultura||"\u2014")+'</div></div><div><div class="info-l">CULTIVAR</div><div class="info-v">'+esc(d.cultivar||"\u2014")+'</div></div><div><div class="info-l">PLANTIO</div><div class="info-v">'+(pd?pd.toLocaleDateString("pt-BR"):"\u2014")+'</div></div><div><div class="info-l">DAP</div><div class="info-v" style="color:'+st.c+'">'+(dap!==null?(dap>=0?dap+" dias":"em "+Math.abs(dap)+"d"):"\u2014")+'</div></div><div><div class="info-l">\u00c1REA</div><div class="info-v">'+(aHa!=null?aHa.toFixed(2)+" ha":d.area?d.area+" ha":"\u2014")+'</div></div><div><div class="info-l">EST\u00c1GIO</div><div class="info-v" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
 
-  h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#789;border-top:1px solid #1a2a1a;padding-top:10px">'+
-     '<span title="Área calculada do polígono">&#128208; <b style="color:#9ac49a">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:#566">medida</span></span>'+
-     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">&#128207; <b style="color:#9ac49a">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:#566">C&times;L</span></span>':'')+
-     (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:#9ac49a">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
+  h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#5b616a;border-top:1px solid #e2e5e8;padding-top:10px">'+
+     '<span title="Área calculada do polígono">&#128208; <b style="color:#15171a">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:#5b616a">medida</span></span>'+
+     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">&#128207; <b style="color:#15171a">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:#5b616a">C&times;L</span></span>':'')+
+     (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:#15171a">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
      '</div>';
   var _cs=getCulturas(d);
   if(_cs.length>=2){
@@ -6091,20 +6116,36 @@ function _stationMacForQuadra(qid){
   for(i=0;i<_climaStations.length;i++){ var s2=_climaNorm(_climaStations[i].name); for(k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[i].mac; } }
   return null;
 }
-function _carimboClima(qid, cb){
+function _carimboClima(qid, dateStr, cb){
+  /* dateStr = data DO REGISTRO (YYYY-MM-DD). Se for dia passado, busca o clima DAQUELE
+     dia (histórico da estação Ecowitt; fallback Open-Meteo Archive). Hoje = tempo real. */
+  if(typeof dateStr==='function'){ cb=dateStr; dateStr=null; } /* compat: chamada antiga sem data */
   var ctr=quadraCenter(qid);
+  var hoje=(typeof todayISO==='function')?todayISO():null;
+  var isPast = !!(dateStr && hoje && dateStr < hoje);
+  function _p(a){ return (a&&a.length)?a[0]:null; }
   function openMeteo(){
     if(!ctr){ cb(null); return; }
+    if(isPast){
+      var au='https://archive-api.open-meteo.com/v1/archive?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+
+        '&start_date='+dateStr+'&end_date='+dateStr+
+        '&daily=temperature_2m_mean,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,precipitation_sum,wind_speed_10m_max,shortwave_radiation_sum&timezone=America%2FSao_Paulo';
+      fetch(au).then(function(r){return r.json();}).then(function(j){ var dd=j&&j.daily; if(!dd||!dd.time||!dd.time.length){cb(null);return;}
+        cb({fonte:'openmeteo-hist',data:dateStr,histor:true,temp:_p(dd.temperature_2m_mean),temp_min:_p(dd.temperature_2m_min),temp_max:_p(dd.temperature_2m_max),umidade:_p(dd.relative_humidity_2m_mean),vento:_p(dd.wind_speed_10m_max),chuva:_p(dd.precipitation_sum),solar:_p(dd.shortwave_radiation_sum)}); }).catch(function(){ cb(null); });
+      return;
+    }
     var url='https://api.open-meteo.com/v1/forecast?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+'&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,vapour_pressure_deficit,shortwave_radiation&timezone=America%2FSao_Paulo';
     fetch(url).then(function(r){return r.json();}).then(function(j){ var c=j&&j.current; if(!c){cb(null);return;}
-      cb({fonte:'openmeteo',hora:c.time,temp:c.temperature_2m,umidade:c.relative_humidity_2m,orvalho:c.dew_point_2m,vpd:c.vapour_pressure_deficit,pressao:c.surface_pressure,vento:c.wind_speed_10m,rajada:c.wind_gusts_10m,vento_dir:c.wind_direction_10m,chuva:c.precipitation,solar:c.shortwave_radiation}); }).catch(function(){ cb(null); });
+      cb({fonte:'openmeteo',data:dateStr||hoje,hora:c.time,temp:c.temperature_2m,umidade:c.relative_humidity_2m,orvalho:c.dew_point_2m,vpd:c.vapour_pressure_deficit,pressao:c.surface_pressure,vento:c.wind_speed_10m,rajada:c.wind_gusts_10m,vento_dir:c.wind_direction_10m,chuva:c.precipitation,solar:c.shortwave_radiation}); }).catch(function(){ cb(null); });
   }
   function station(){
     var mac=_stationMacForQuadra(qid); if(!mac){ openMeteo(); return; }
-    fetch(NDVI_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){return r.json();}).then(function(d){
+    var ep = isPast ? (NDVI_PROXY+'/clima/historico?mac='+encodeURIComponent(mac)+'&date='+encodeURIComponent(dateStr))
+                    : (NDVI_PROXY+'/clima?mac='+encodeURIComponent(mac));
+    fetch(ep).then(function(r){return r.json();}).then(function(d){
       if(!d||d.error){ openMeteo(); return; }
       function v(n){ return (n&&n.value!=null)?n.value:null; }
-      cb({fonte:'estacao',mac:mac,hora:d.time,temp:v(d.temp),umidade:v(d.humidity),orvalho:v(d.dew_point),vpd:v(d.vpd),pressao:v(d.pressure),vento:v(d.wind_speed),rajada:v(d.wind_gust),vento_dir:v(d.wind_dir),chuva:v(d.rain_day),solar:v(d.solar)});
+      cb({fonte:(isPast?'estacao-hist':'estacao'),data:(d.date||dateStr||hoje),histor:!!isPast,mac:mac,hora:d.time,temp:v(d.temp),temp_min:v(d.temp_min),temp_max:v(d.temp_max),umidade:v(d.humidity),orvalho:v(d.dew_point),vpd:v(d.vpd),pressao:v(d.pressure),vento:v(d.wind_speed),rajada:v(d.wind_gust),vento_dir:v(d.wind_dir),chuva:v(d.rain_day),solar:v(d.solar)});
     }).catch(function(){ openMeteo(); });
   }
   if(_climaStations){ station(); }
@@ -6117,13 +6158,16 @@ function _carimboNdvi(qid, cb){
     cb({fonte:'sentinel2',ndvi:d.ndvi,ndre:d.ndre,gndvi:d.gndvi,data:d.date});
   }).catch(function(){ cb(null); });
 }
-function carimbar(qid,sid,recId,kind){
+function carimbar(qid,sid,recId,kind,recDate){
   var rec=_carimboFind(qid,sid,recId,kind); if(!rec) return;
   var now=new Date();
-  rec.carimbo={ ts:now.getTime(), data:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
+  /* recDate = data DO EVENTO (YYYY-MM-DD, do campo data da aplicação/avaliação).
+     'data' do carimbo = quando foi REGISTRADO (rastreabilidade BPL/ISO27001 — imutável).
+     'dataEvento' = o dia do ensaio que o usuário informou; é dele que vem o clima. */
+  rec.carimbo={ ts:now.getTime(), data:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}), dataEvento:(recDate||null), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
   try{ save(); }catch(e){}
   _carimboLoc(function(loc){ if(loc) _carimboSet(qid,sid,recId,kind,'gps',loc); });
-  _carimboClima(qid,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
+  _carimboClima(qid,recDate,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
   _carimboNdvi(qid,function(nd){ if(nd) _carimboSet(qid,sid,recId,kind,'ndvi',nd); });
 }
 function _carimboTSV(c){
@@ -6152,7 +6196,11 @@ function carimboHtml(c){
       ? (tempOk && rhOk && windOk ? ' <span style="color:#37d684;font-weight:700">🟢 Janela Ideal BPL</span>' : ' <span style="color:#ff6b6b;font-weight:700">🔴 Fora da Janela</span>')
       : '';
       
-    p.push(s+' ('+(cl.fonte==='estacao'?'estação':'previsão')+')' + bplBadge); }
+    var _src=(cl.fonte&&cl.fonte.indexOf('estacao')===0)?'estação':'previsão';
+    /* BPL/ISO27001: deixa explícito quando o clima é o RESUMO HISTÓRICO do dia do evento
+       (data passada) e não uma leitura ao vivo — evidência honesta, sem induzir a erro. */
+    var _diaTxt=cl.histor?(' · histórico do dia'+(cl.data?' '+esc((typeof isoToBR==='function'?isoToBR(cl.data):cl.data)):'')):'';
+    p.push(s+' ('+_src+')'+_diaTxt+bplBadge); }
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push(ic('sat',12)+' NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
   if(c.gps) p.push(ic('pin',12)+' '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
   else if(c.centro&&c.centro.length===2) p.push(ic('pin',12)+' '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5)+' (centro)');
@@ -6191,7 +6239,7 @@ function saveAplicacao(){
     study.aplicacoes.push(ap);
     draftAp=null;
   }
-  if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl');
+  if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data);
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
@@ -6792,7 +6840,7 @@ function saveAvaliacao(){
     study.avaliacoes.push(av);
     draftAv=null;
   }
-  if(!av.carimbo) carimbar(curV,curSid,av.id,'aval');
+  if(!av.carimbo) carimbar(curV,curSid,av.id,'aval',av.data);
   av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
@@ -7152,7 +7200,7 @@ renderStudyCard=function(qid,study){
   }
   var code=study.codigo||study.nome||'(sem código)';
   var h='<div class="study-card-v2" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
-  h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do estudo + NDVI p/ planilha" aria-label="Copiar estudo '+esc(code)+'" style="float:right;background:rgba(127,170,127,.14);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">📄</button>';
+  h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do estudo + NDVI p/ planilha" aria-label="Copiar estudo '+esc(code)+'" style="float:right;background:rgba(31,36,42,.05);border:1px solid #d7dbe0;color:#3a4149;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">📄</button>';
   h+='<div class="study-card-v2-codigo">'+esc(code)+'</div>';
   if(study.descricao)h+='<div class="study-card-v2-desc">'+esc(study.descricao.slice(0,100))+(study.descricao.length>100?'…':'')+'</div>';
   h+='<div class="study-card-v2-meta">';
@@ -7239,8 +7287,8 @@ function renderToday(){
   var events=collectTodayEvents(1);
   var tomorrowEvs=collectTodayEvents(3).filter(function(e){return e.diff>1});
 
-  var h='<div class="today-head">';
-  h+='<button class="today-back" onclick="closeToday()">‹ Voltar</button>';
+  var h='<div class="today-head" style="position:relative">';
+  h+='<button class="panel-x-tr" onclick="closeToday()" aria-label="Fechar" title="Fechar">✕</button>';
   h+='<div class="today-title">HOJE</div>';
   h+='<div class="today-date">'+new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})+'</div>';
   h+='</div>';
@@ -7596,10 +7644,17 @@ function confirmAdminAuth(){
   var hashed = sha256(pass);
   var isCleartext = data.__config.adminPassword && data.__config.adminPassword.length !== 64;
   if(hashed === '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f' || hashed === data.__config.adminPassword || (isCleartext && pass === data.__config.adminPassword)){
+    /* A SENHA do painel é a autoridade do admin: libera gerir o roster e sincronizar,
+       independente de qual e-mail está logado (corrige o caso de logar com outro e-mail
+       que não o adminEmail fixo). */
+    window._adminUnlocked = true;
     if(data.__config.adminPassword !== hashed) {
       data.__config.adminPassword = hashed;
-      save();
     }
+    /* "Reivindica" o admin para a conta logada de verdade -> isAdmin()/menu passam a
+       reconhecer este e-mail (e o merge aceita, pois _adminUnlocked = admin). */
+    try{ if(_authUser && _authUser.email){ var _ae=_authUser.email.toLowerCase().trim(); if(_ae && data.__config.adminEmail !== _ae){ data.__config.adminEmail = _ae; } } }catch(e){}
+    save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
     document.getElementById('adminAuthModal').style.display='none';
     showAdminDashboard();
   } else {
@@ -7669,6 +7724,7 @@ function renderAdminDashboard(){
     
     '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
       '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Autorizar Novo Técnico</div>'+
+      '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px;background:#0c140d;border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">O <b>login</b> (e-mail + senha) é criado no <b>Supabase</b> &rarr; Authentication. Aqui você mantém a <b>lista de autorizados</b> (registro BPL) com o mesmo e-mail. Esta lista sincroniza e <b>não some</b>.</div>'+
       '<div style="display:flex;gap:6px">'+
         '<input id="addUsrEmail" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="email" placeholder="E-mail">'+
         '<input id="addUsrNome" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Nome do Técnico">'+
@@ -7681,7 +7737,7 @@ function renderAdminDashboard(){
 }
 
 function saveAdminSettings(){
-  if(!isAdmin()){ alert('Para mudar as configurações de admin, entre na CONTA de administrador atual. Só ela sincroniza.'); return; }
+  if(!isAdmin() && !window._adminUnlocked){ alert('Para mudar as configurações de admin, destrave o Painel com a senha de administrador.'); return; }
   var email = (document.getElementById('admEmail')||{}).value.trim();
   var pass = (document.getElementById('admPass')||{}).value;
   if(!email || !pass){ alert('Preencha o e-mail e a senha.'); return; }
@@ -7699,7 +7755,7 @@ function saveAdminSettings(){
 }
 
 function addAllowedUser(){
-  if(!isAdmin()){ alert('Para autorizar técnicos, entre na CONTA de administrador ('+((data.__config&&data.__config.adminEmail)||'admin')+') — não basta a senha do painel. Só a conta admin sincroniza a lista pra nuvem.'); return; }
+  if(!isAdmin() && !window._adminUnlocked){ alert('Para autorizar técnicos, destrave o Painel com a senha de administrador.'); return; }
   var email = (document.getElementById('addUsrEmail')||{}).value.trim();
   var nome = (document.getElementById('addUsrNome')||{}).value.trim();
   if(!email || !nome){ alert('Preencha o e-mail e o nome do técnico.'); return; }
@@ -7718,7 +7774,7 @@ function addAllowedUser(){
 }
 
 function removeAllowedUser(idx){
-  if(!isAdmin()){ alert('Para remover técnicos, entre na CONTA de administrador. Só ela sincroniza a lista.'); return; }
+  if(!isAdmin() && !window._adminUnlocked){ alert('Para remover técnicos, destrave o Painel com a senha de administrador.'); return; }
   ensureConfig();
   var users = data.__config.allowedUsers;
   if(idx >= 0 && idx < users.length) {
