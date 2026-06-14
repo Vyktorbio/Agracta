@@ -5405,30 +5405,55 @@ function normalizeStudy(s){
   return s;
 }
 
-function logStudyAuditInObject(study, action, details) {
-  if(!study) return;
-  if(!Array.isArray(study.audit)) study.audit = [];
+/* Nome legível do usuário logado (perfis/roster/admin) — p/ auditoria e assinatura */
+function _currentUserName(){
   var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
-  var userName = 'Local/Offline';
-  if(email) {
+  if(!email) return 'Local/Offline';
+  try{
     ensureConfig();
     var allowed = (data && data.__config && data.__config.allowedUsers || []);
-    var user = allowed.find(function(u){
-      return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim();
-    });
-    if(user) userName = user.nome;
-    else {
-      var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
-      if(admEmail && email.toLowerCase().trim() === admEmail) userName = 'Administrador';
-      else userName = email;
-    }
-  }
-  study.audit.push({
+    var user = allowed.find(function(u){ return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim(); });
+    if(user && user.nome) return user.nome;
+    var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
+    if(admEmail && email.toLowerCase().trim() === admEmail) return 'Administrador';
+  }catch(e){}
+  return email;
+}
+/* Trilha BPL: além de quem/quando/ação, aceita extra (mudancas de→para, motivo). Append-only. */
+function logStudyAuditInObject(study, action, details, extra) {
+  if(!study) return;
+  if(!Array.isArray(study.audit)) study.audit = [];
+  var entry = {
     ts: Date.now(),
-    user: userName,
+    user: _currentUserName(),
+    por: (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null,
     action: action,
     details: details
+  };
+  if(extra && typeof extra==='object'){ for(var k in extra){ if(extra[k]!=null) entry[k]=extra[k]; } }
+  study.audit.push(entry);
+}
+/* Diferenças célula a célula (de→para) entre duas grades de notas — p/ a trilha */
+function _avDiffCells(oldN, newN){
+  oldN=oldN||{}; newN=newN||{}; var out=[], rows={};
+  Object.keys(oldN).forEach(function(r){rows[r]=1;}); Object.keys(newN).forEach(function(r){rows[r]=1;});
+  Object.keys(rows).forEach(function(r){
+    var o=oldN[r]||{}, n=newN[r]||{}, cols={};
+    Object.keys(o).forEach(function(c){cols[c]=1;}); Object.keys(n).forEach(function(c){cols[c]=1;});
+    Object.keys(cols).forEach(function(c){
+      var ov=(o[c]==null?'':String(o[c])), nv=(n[c]==null?'':String(n[c]));
+      if(ov!==nv) out.push({parcela:r, variavel:c, de:ov, para:nv});
+    });
   });
+  return out;
+}
+/* Reabrir avaliação ASSINADA p/ editar (BPL: exige motivo, fica na trilha) */
+var _avReopen=null;
+function reabrirAvaliacao(aid){
+  var motivo=(window.prompt('Esta avaliação está ASSINADA.\nPara editar (exigência BPL), descreva o MOTIVO da alteração:')||'').trim();
+  if(!motivo){ if(typeof _stxToast==='function')_stxToast('Reabertura cancelada — o motivo é obrigatório.'); return; }
+  _avReopen={ avid:aid, motivo:motivo, by:((typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''), byNome:_currentUserName(), ts:Date.now() };
+  openStudyEditAvaliacao(aid, null, true);
 }
 
 function studyAuditHtml(study){
@@ -5453,7 +5478,9 @@ function studyAuditHtml(study){
         '<span style="color:var(--text-3,#7c8a80);font-size:10px">' + dateStr + '</span>' +
       '</div>' +
       '<div style="color:var(--text,#e8efe9);word-break:break-word">' + esc(entry.details) + '</div>' +
-      '<div style="color:var(--text-2,#9fb1a5);font-size:9px;margin-top:1px;font-style:italic">Por: ' + esc(entry.user) + '</div>' +
+      (entry.motivo ? '<div style="color:#d8b6e6;font-size:10px;margin-top:2px">Motivo: <b>'+esc(entry.motivo)+'</b></div>' : '') +
+      ((Array.isArray(entry.mudancas) && entry.mudancas.length) ? '<div style="margin-top:3px;font-size:10px;color:var(--text-2,#9fb1a5);border-left:2px solid var(--border,#26322b);padding-left:6px">'+entry.mudancas.slice(0,12).map(function(m){return esc(m.parcela)+'·'+esc(m.variavel)+': <span style="color:#ff9a8a">'+esc(m.de||'∅')+'</span> → <span style="color:#9fe0b6">'+esc(m.para||'∅')+'</span>';}).join('<br>')+((entry.total_mudancas&&entry.total_mudancas>12)?('<br>… +'+(entry.total_mudancas-12)+' alterações'):'')+'</div>' : '') +
+      '<div style="color:var(--text-2,#9fb1a5);font-size:9px;margin-top:2px;font-style:italic">Por: ' + esc(entry.user) + (entry.por?(' ('+esc(entry.por)+')'):'') + '</div>' +
       '</div>';
   });
   
@@ -6936,7 +6963,7 @@ function studyChartsHtml(study){
   return '<div class="sd-section"><div class="sd-section-title">Gráficos</div>'+H+'</div>';
 }
 
-function openStudyEditAvaliacao(aid,tipoSugerido){
+function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   editingAvId=aid;editingAplId=null;draftAp=null;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study){draftAv=null;return;}
@@ -6959,7 +6986,16 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
   _avAuto={on:!!study.randomizado,pos:0};
   var bbchList=getBBCHList(q.cultura);
 
+  var signed=!!(av.carimbo && av.carimbo.rubrica);
+  var reopened=!!(_avReopen && _avReopen.avid===av.id);
+  var locked=signed && !forceUnlock && !reopened;
+  var assinEm=''; try{ if(av.carimbo&&av.carimbo.rubricaEm){ var _dd=new Date(av.carimbo.rubricaEm); assinEm=isNaN(_dd)?'':_dd.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } }catch(e){}
+  var assinPor=(av.carimbo&&(av.carimbo.rubricaNome||av.carimbo.rubricaPor))||'';
+
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
+  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+'</div>'; }
+  if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
+  h+='<fieldset id="avFs"'+(locked?' disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">';
   h+='<div class="se-field"><label>Data</label><input type="date" id="vData" value="'+esc(av.data)+'"></div>';
   h+='<div class="se-field"><label>Tipo de avaliação</label><select id="vTipo"><option value="">—</option>';
   TIPOS_AVALIACAO.forEach(function(t){
@@ -6975,7 +7011,9 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
   }
   h+='<div class="se-field"><label>Notas por tratamento</label><div id="avGridWrap"></div></div>';
   h+='<div class="se-field"><label>Observações / Resultados</label><textarea id="vObs" rows="4" placeholder="Dados coletados, notas de campo...">'+esc(av.obs||"")+'</textarea></div>';
-  h+='<div class="se-actions"><button class="btn-save" onclick="saveAvaliacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
+  h+='</fieldset>';
+  if(locked){ h+='<div class="se-actions"><button class="btn-save" onclick="reabrirAvaliacao(\''+av.id+'\')">🔓 Reabrir para editar</button><button class="btn-cancel" onclick="closeEventEdit()">Fechar</button></div>'; }
+  else { h+='<div class="se-actions"><button class="btn-save" onclick="saveAvaliacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>'; }
 
   document.getElementById("eePnl").innerHTML=h;
   renderAvGrid();
@@ -7147,12 +7185,19 @@ function saveAvaliacao(){
   }
   if(!av.carimbo) carimbar(curV,curSid,av.id,'aval',av.data);
   av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
-  logStudyAuditInObject(study, action, details);
+  /* Trilha BPL: de→por célula + motivo (quando reabertura de avaliação assinada) */
+  var _mud = isNew ? null : _avDiffCells(oldNotas, av.notas);
+  var _reab = (_avReopen && _avReopen.avid===av.id) ? _avReopen : null;
+  var _motivo = _reab ? _reab.motivo : null;
+  /* editar avaliação ASSINADA invalida a assinatura → exige NOVA (exigência BPL) */
+  if(_reab && av.carimbo && av.carimbo.rubrica){ av.carimbo.rubrica=null; av.carimbo.rubricaEm=null; av.carimbo.rubricaPor=null; av.carimbo.rubricaNome=null; av.carimbo.rubricaSignificado=null; }
+  logStudyAuditInObject(study, action, details, { mudancas:(_mud&&_mud.length?_mud.slice(0,80):null), total_mudancas:(_mud?_mud.length:null), motivo:_motivo });
   save();
   /* rede de segurança no aparelho: registra a avaliação no diário (IndexedDB). Best-effort, nunca quebra o salvar. */
-  try{ journalAval({ ts:Date.now(), who:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', qid:curV, quadra:(typeof quadraNome==='function'?quadraNome(curV):curV), sid:curSid, avid:av.id, data:av.data, tipo:av.tipo, bbch:av.bbch, variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), notasMeta:JSON.parse(JSON.stringify(av.notasMeta||{})) }); }catch(e){}
+  try{ journalAval({ ts:Date.now(), who:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', qid:curV, quadra:(typeof quadraNome==='function'?quadraNome(curV):curV), sid:curSid, avid:av.id, data:av.data, tipo:av.tipo, bbch:av.bbch, variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), notasMeta:JSON.parse(JSON.stringify(av.notasMeta||{})), motivo:_motivo, mudancas:(_mud&&_mud.length?_mud:null) }); }catch(e){}
   /* Etapa 3 Fase B: escrita dupla nas tabelas por-linha (só com flag _dualWrite; nunca quebra o save do blob) */
   try{ if(typeof dbUpsertAvaliacao==='function') dbUpsertAvaliacao(curV,curSid,av); }catch(e){}
+  _avReopen=null;
   if(typeof updateTodayBadge==='function') updateTodayBadge();
   if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   closeEventEdit();
@@ -7165,6 +7210,7 @@ function saveAvaliacao(){
         var _q=data[_rqid], _st=_q&&(_q.estudos||[]).find(function(s){return s.id===_rsid;});
         var _a=_st&&(_st.avaliacoes||[]).find(function(x){return x.id===_raid;});
         if(_a){ if(!_a.carimbo)_a.carimbo={}; _a.carimbo.rubrica=url; _a.carimbo.rubricaEm=new Date().toISOString();
+          _a.carimbo.rubricaPor=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; _a.carimbo.rubricaNome=_currentUserName(); _a.carimbo.rubricaSignificado='Conferido e assinado';
           save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSave==='function')cloudSave();
           if(typeof openStudyDetail==='function')openStudyDetail(_rqid,_rsid); }
       }catch(e){} }, 'Avaliação '+(isoToBR(_rdata)||_rdata||''));
