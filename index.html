@@ -2297,6 +2297,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
     '<button onclick="closeMainMenu();openAvalRecovery()">'+ic('save')+' Recuperação de avaliações</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
+    (adm?'<button onclick="closeMainMenu();openComplianceISMS()">'+ic('archive')+' Conformidade &amp; ISMS</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
@@ -8003,6 +8004,75 @@ try{load();}catch(e){
   document.body.appendChild(b);
 }
 /* ===================== PAINEL DO ADMINISTRADOR (CONFIGURAÇÕES & ACL) ===================== */
+/* ===================== CONFORMIDADE BPL/GLP + ISO/IEC 27001 + ISMS =====================
+   Tela onde o laboratório vê o mapa de controles (técnicos do app) e PREENCHE o ISMS
+   (SGSI ISO 27001 cláusulas 4–10 + SoA). Alinhado a OECD Nº 17/22 (ALCOA+) e ISO 27001:2022.
+   Os campos do ISMS ficam em data.__isms (sincroniza no blob + entra no backup). */
+function ensureISMS(){ if(!data.__isms || typeof data.__isms!=='object') data.__isms={}; return data.__isms; }
+var _ISMS_FIELDS=[
+  {k:'escopo', l:'Escopo do SGSI (ISO 27001 §4.3)', ph:'ex.: registros eletrônicos de estudos de campo no Agracta + infraestrutura (Supabase, aparelhos).'},
+  {k:'owner', l:'Responsável pelo SGSI / System Owner (§5.3)', ph:'nome e cargo'},
+  {k:'de_gq', l:'Diretor de Estudo / Garantia da Qualidade / Arquivista (papéis BPL)', ph:'quem ocupa cada papel'},
+  {k:'politica', l:'Política de Segurança da Informação (§5.2)', ph:'resumo ou referência ao documento aprovado'},
+  {k:'riscos', l:'Registro de riscos (§6.1)', ph:'ativo · ameaça · prob. · impacto · tratamento · responsável (1 por linha)'},
+  {k:'treinamento', l:'Competência e treinamento (§7.2)', ph:'registro de treinamento da equipe (BPL + segurança)'},
+  {k:'backup', l:'Política de backup e retenção (A.8.13 / NIT-Dicla-072)', ph:'frequência, período de guarda (5–20 anos), mídia, migração de formato'},
+  {k:'incidentes', l:'Incidentes e ações corretivas — CAPA (§10.1)', ph:'data · não-conformidade · causa · ação · responsável · status'},
+  {k:'soa', l:'Declaração de Aplicabilidade (SoA) — observações (Anexo A)', ph:'controles aplicáveis/justificativas além dos já cobertos pelo app'}
+];
+var _ISMS_MAPA=[
+  ['ALCOA+ · Atribuível','Login individual + autor por registro','ok'],
+  ['ALCOA+ · Contemporâneo','Carimbo no salvar (clima/GPS/NDVI)','parcial'],
+  ['ALCOA+ · Original','Histórico de versões (servidor) + diário no aparelho','ok'],
+  ['ALCOA+ · Exato','Edição assinada exige motivo + de→para + re-assinatura','ok'],
+  ['NIT-038 · Trilha de auditoria','Quem/quando/valor anterior/motivo','ok'],
+  ['NIT-038 · Assinatura eletrônica','Nome + significado + data','ok'],
+  ['ISO A.5.15/8.2 · Controle de acesso','Papéis admin/técnico + RLS','ok'],
+  ['ISO A.8.15 · Logs','Trilha por estudo + updated_by/at','ok'],
+  ['ISO A.8.13 · Backup','Histórico + export (formalizar política)','parcial'],
+  ['ISO A.8.24 · Criptografia','TLS + repouso (Supabase)','ok'],
+  ['NIT-038 · Validação IQ/OQ/PQ','docs/VALIDACAO-SISTEMA.md (manter)','doc'],
+  ['ALCOA+ · Trilha imutável server-side','app_state_history (melhoria: tabela append-only)','parcial']
+];
+function openComplianceISMS(){
+  ensureISMS(); var m=data.__isms;
+  var ovl=document.getElementById('ismsOvl');
+  if(!ovl){ ovl=document.createElement('div'); ovl.id='ismsOvl'; ovl.style.cssText='position:fixed;inset:0;z-index:3500;background:rgba(0,0,0,.66);display:flex;align-items:flex-start;justify-content:center;padding:16px 10px;overflow-y:auto;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)'; ovl.onclick=function(e){ if(e.target===ovl) ovl.style.display='none'; }; document.body.appendChild(ovl); }
+  ovl.style.display='flex';
+  function chip(s){ var c=s==='ok'?'#0f2a1a;color:#37d684;border-color:#245a36':(s==='parcial'?'#2a210c;color:#ffce5a;border-color:#6b531b':'#10202a;color:#7fc0e6;border-color:#274a5a'); var t=s==='ok'?'✓':(s==='parcial'?'parcial':'doc'); return '<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;border:1px solid;background:'+c+'">'+t+'</span>'; }
+  var mapa=_ISMS_MAPA.map(function(r){ return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #1f2c22"><div style="min-width:0"><div style="font-size:11px;color:#cfe0d4;font-weight:700">'+esc(r[0])+'</div><div style="font-size:10px;color:#8aa88a">'+esc(r[1])+'</div></div>'+chip(r[2])+'</div>'; }).join('');
+  var campos=_ISMS_FIELDS.map(function(f){ var big=(['riscos','incidentes','politica','soa','treinamento'].indexOf(f.k)>=0); var v=esc(m[f.k]||'');
+    return '<label style="display:block;margin-top:10px"><span style="font-size:11px;font-weight:700;color:#37d684">'+esc(f.l)+'</span>'+
+      (big? '<textarea id="isms_'+f.k+'" rows="3" class="delpwd-inp" style="width:100%;box-sizing:border-box;margin-top:4px;font-size:12px;resize:vertical" placeholder="'+esc(f.ph)+'">'+v+'</textarea>'
+          : '<input id="isms_'+f.k+'" class="delpwd-inp" style="width:100%;box-sizing:border-box;margin-top:4px;font-size:12px" placeholder="'+esc(f.ph)+'" value="'+v+'">')+
+    '</label>'; }).join('');
+  ovl.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:600px;width:100%;padding:18px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:10px auto;box-shadow:0 20px 60px rgba(0,0,0,.7)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Conformidade BPL/GLP &amp; ISO/IEC 27001 — ISMS</b><button onclick="document.getElementById(\'ismsOvl\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:10px;color:#8aa88a;margin-top:3px;line-height:1.5">Alinhado a OECD Nº 17/22 (ALCOA+) e ISO 27001:2022. Detalhes em <b>docs/</b> (CONFORMIDADE, VALIDACAO, ISMS-modelo).</div>'+
+    '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#090f0a"><div style="font-weight:800;color:#37d684;margin-bottom:4px;font-size:12px">Mapa de controles (técnicos — no app)</div>'+mapa+'</div>'+
+    '<div style="margin-top:14px;font-weight:800;color:#37d684;font-size:12px">ISMS do laboratório — preencha (sincroniza + entra no backup)</div>'+
+    campos+
+    '<div style="display:flex;gap:8px;margin-top:14px"><button onclick="saveISMS()" style="flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">Salvar ISMS</button>'+
+      '<button onclick="exportISMS()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer">Exportar (.md)</button></div>'+
+  '</div>';
+}
+function saveISMS(){
+  ensureISMS();
+  _ISMS_FIELDS.forEach(function(f){ var el=document.getElementById('isms_'+f.k); if(el) data.__isms[f.k]=el.value; });
+  data.__isms._updatedAt=new Date().toISOString(); data.__isms._updatedBy=(typeof _currentUserName==='function'?_currentUserName():'');
+  save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
+  if(typeof _stxToast==='function') _stxToast('ISMS salvo — aguarde "salvo na nuvem".');
+}
+function exportISMS(){
+  try{ ensureISMS(); var m=data.__isms;
+    var md='# ISMS do Laboratório — Agracta\n\nExportado: '+new Date().toLocaleString('pt-BR')+'  ·  por: '+esc(m._updatedBy||'')+'\n';
+    _ISMS_FIELDS.forEach(function(f){ md+='\n## '+f.l+'\n\n'+(m[f.k]||'_[não preenchido]_')+'\n'; });
+    md+='\n---\n## Mapa de controles técnicos (app)\n\n| Controle | No app | Status |\n|---|---|---|\n';
+    _ISMS_MAPA.forEach(function(r){ md+='| '+r[0]+' | '+r[1]+' | '+(r[2]==='ok'?'✓':r[2])+' |\n'; });
+    var blob=new Blob([md],{type:'text/markdown'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agracta-ISMS-'+new Date().toISOString().slice(0,10)+'.md'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){try{URL.revokeObjectURL(a.href);}catch(_){}} ,2000);
+    if(typeof _stxToast==='function')_stxToast('ISMS exportado (.md)');
+  }catch(e){ if(typeof _stxToast==='function')_stxToast('Falha ao exportar: '+e.message); }
+}
 function openAdminPanel(){
   ensureConfig();
   var modal=document.getElementById('adminAuthModal');
