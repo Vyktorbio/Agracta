@@ -3200,14 +3200,55 @@ function cloudReadRows(){
   }, function(){ cloudBadge('offline'); return false; });
 }
 function cloudReadRowsApplyPending(){ if(_rrPending && !window._qEditing && !window._avEditing){ var s=_rrPending; _rrPending=null; _applyRowsState(s); } }
-function _rrSoon(){ clearTimeout(_rrTimer); _rrTimer=setTimeout(function(){ if(window._qEditing||window._avEditing){ _rrSoon(); return; } cloudReadRows(); }, 800); }
+function _rrSoon(){ clearTimeout(_rrTimer); _rrTimer=setTimeout(function(){ if(window._qEditing||window._avEditing){ _rrSoon(); return; } cloudReadRows(); }, 400); }
+/* re-render debounced (sem reler a nuvem) após aplicar um delta */
+function _rrRenderSoon(){ clearTimeout(window._rrRenderT); window._rrRenderT=setTimeout(function(){ try{ render(); if(typeof updateAgendaBadge==='function')updateAgendaBadge(); if(typeof updateTodayBadge==='function')updateTodayBadge(); }catch(e){} }, 120); }
+/* acha uma avaliação em memória pelo id da TABELA (lida com namespace de auto_) */
+function _rrFindAvByTableId(tid){
+  if(!tid) return null; var out=null;
+  Object.keys(data||{}).some(function(qid){ if(qid==='__config')return false; return (data[qid].estudos||[]).some(function(s){ return (s.avaliacoes||[]).some(function(a){ if(_avTableId(s.id,a)===tid){ out={qid:qid,sid:s.id,av:a}; return true; } return false; }); }); });
+  return out;
+}
+/* APLICA o delta de UM evento de realtime direto na memória (instantâneo, sem reler tudo).
+   Cobre o caso comum (lancamentos = células, e avaliacoes); estrutural cai no _rrSoon. */
+function _rrEvent(table, p){
+  try{
+    if(!_rrOn()) return;
+    if(window._qEditing || window._avEditing){ _rrSoon(); return; } /* não atropela edição em curso */
+    var nw=(p&&p.new)||{}, od=(p&&p.old)||{}, ev=(p&&p.eventType)||'';
+    if(table==='lancamentos'){
+      var avid=nw.avaliacao_id||od.avaliacao_id, parc=nw.parcela||od.parcela, vari=nw.variavel||od.variavel;
+      var loc=_rrFindAvByTableId(avid);
+      if(!loc||!parc||!vari){ _rrSoon(); return; } /* avaliação não em memória → re-lê */
+      var a=loc.av; a.notas=a.notas||{}; a.notasMeta=a.notasMeta||{};
+      if(ev==='DELETE'){ if(a.notas[parc]) delete a.notas[parc][vari]; }
+      else { var val=nw.valor; (a.notas[parc]=a.notas[parc]||{})[vari]=(val==null?'':val); (a.notasMeta[parc]=a.notasMeta[parc]||{})[vari]={ts:(nw.client_ts!=null?Number(nw.client_ts):Date.now())}; }
+      try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){}
+      _rrRenderSoon(); return;
+    }
+    if(table==='avaliacoes'){
+      var estId=nw.estudo_id||od.estudo_id, tid=nw.id||od.id; if(!estId||!tid){ _rrSoon(); return; }
+      var est=null; Object.keys(data||{}).some(function(k){ if(k==='__config')return false; var s=(data[k].estudos||[]).find(function(x){return x.id===estId;}); if(s){est=s;return true;} return false; });
+      if(!est){ _rrSoon(); return; } /* estudo não em memória → re-lê */
+      var realId=(tid.indexOf(estId+':auto_')===0)?tid.slice(estId.length+1):tid;
+      est.avaliacoes=est.avaliacoes||[];
+      var a=est.avaliacoes.find(function(x){return x.id===realId;});
+      if(ev==='DELETE' || nw.deleted_at){ if(a) est.avaliacoes=est.avaliacoes.filter(function(x){return x.id!==realId;}); _rrRenderSoon(); return; }
+      if(!a){ a={id:realId,notas:{},notasMeta:{}}; est.avaliacoes.push(a); }
+      a.data=nw.data; a.tipo=nw.tipo; a.bbch=nw.bbch; a.obs=nw.obs; a.auto=nw.auto; if(nw.variaveis)a.variaveis=nw.variaveis; if(nw.tipos)a.tipos=nw.tipos; if(nw.carimbo)a.carimbo=nw.carimbo;
+      try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){}
+      _rrRenderSoon(); return;
+    }
+    _rrSoon(); /* quadras/estudos/locais/notas/randomizações/config: re-leitura leve (raras) */
+  }catch(e){ _rrSoon(); }
+}
 function cloudSubscribeRows(){
   if(!SB) return;
   try{
     if(_rrCh){ try{ SB.removeChannel(_rrCh); }catch(e){} _rrCh=null; }
     _rrCh=SB.channel('agracta_rows_rt');
     ['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','config'].forEach(function(t){
-      _rrCh.on('postgres_changes',{event:'*',schema:'public',table:t}, function(){ _rrSoon(); });
+      _rrCh.on('postgres_changes',{event:'*',schema:'public',table:t}, function(p){ _rrEvent(t, p); });
     });
     _rrCh.subscribe(function(status){ if(status==='SUBSCRIBED'){ _cloudReady=true; cloudBadge('saved'); } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){ _cloudReady=false; clearTimeout(window._rrReTimer); window._rrReTimer=setTimeout(cloudSubscribeRows, 4000); } });
   }catch(e){}
