@@ -3159,10 +3159,11 @@ if(!window.__obNet){ window.__obNet=true; try{ window.addEventListener('online',
    o app carrega o estado das TABELAS (não do blob) e reage ao realtime POR LINHA. As escritas
    seguem duplas (tabelas + blob), então o blob fica como BACKUP QUENTE → rollback instantâneo
    com setReadRows(false). Validar ao vivo (shadow 100%) ANTES de ligar pra equipe. */
-/* RE-CORTE (Etapa 3 completa): leitura por-linha LIGADA por padrão p/ todos.
-   Cobertura da escrita-dupla completa + soft-delete + merge + retry. Realtime por linha
-   entrega na hora (≠ blob de 634KB). Kill-switch/rollback: setReadRows(false) grava '0'. */
-function _rrOn(){ try{ if(window._readRows===true) return true; if(window._readRows===false) return false; return localStorage.getItem('agracta-readrows')!=='0'; }catch(e){ return window._readRows!==false; } }
+/* ROLLBACK (a pedido): leitura volta ao BLOB por padrão. O motor por-linha está COMPLETO
+   e dormente (setReadRows(true) re-liga). O que falta p/ o realtime ENTREGAR de verdade
+   é ENABLE Realtime nas tabelas no painel do Supabase (Database > Replication) — config
+   de servidor, independente de blob-vs-linha. */
+function _rrOn(){ try{ if(window._readRows===true) return true; if(window._readRows===false) return false; return localStorage.getItem('agracta-readrows')==='1'; }catch(e){ return window._readRows===true; } }
 function setReadRows(on){ window._readRows=!!on; try{ localStorage.setItem('agracta-readrows', on?'1':'0'); }catch(e){} if(on){ cloudReadRows().then(function(ok){ if(ok) cloudSubscribeRows(); }); } return _rrOn(); }
 function _applyRowsState(S){
   _cloudApplying=true;
