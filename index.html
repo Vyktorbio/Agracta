@@ -4659,6 +4659,66 @@ function studyFetchNdvi(qid,from,to,cb){
    .then(function(r){return r.json();}).then(function(arr){ if(arr&&arr.error){cb(null,arr.error);return;} cb(arr||[]); })
    .catch(function(){ cb(null,'Servidor NDVI fora do ar (pode estar acordando ~50s).'); });
 }
+/* ===== EXPORT NO LAYOUT DA PLANILHA DO USUÁRIO (modelo.xls) — colável em A1 ===== */
+function buildStudyModelo(qid, s){
+  s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
+  var q=data[qid]||{};
+  var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
+  var lx=loc.extras||loc||{};
+  var ctr=(typeof quadraCenter==='function')?quadraCenter(qid):null;
+  var dim=(typeof quadraDims==='function')?quadraDims(qid):null;
+  var reps=Math.max(1,parseInt(s.numRepeticoes)||1);
+  var trats=s.tratamentos||[];
+  var test=(typeof studyTestemunha==='function')?studyTestemunha(s):null;
+  var BR=function(d){ return d?((typeof isoToBR==='function'?isoToBR(d):d)||d):''; };
+  var cells={}, maxR=28, maxC=10;
+  function put(r,c,v){ if(v==null||v==='')return; cells[r+'_'+c]=String(v).replace(/[\t\n\r]/g,' '); if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
+  function lbl(r,c,v){ cells[r+'_'+c]=v; if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
+  /* CABEÇALHO (rótulos cols 0/2/4/6 ; valores 1/3/5/7) */
+  lbl(1,0,'STATUS DO ESTUDO'); put(1,1,(s.aplicacoes&&s.aplicacoes.length)?'INSTALADO':'AGUARDANDO APLICAÇÃO');
+  lbl(2,0,'OBJETIVO DO ESTUDO:'); put(2,1,s.objetivo||s.descricao||'');
+  lbl(3,0,'Proposta Comercial:'); lbl(3,2,'RET ou Dispensa:'); lbl(3,4,'Cultivar:'); put(3,5,q.cultivar||''); lbl(3,6,'Equipamento:');
+  lbl(4,0,'Número de Estudo:'); put(4,1,s.codigo||s.nome||''); lbl(4,2,'Diretor de Estudo:'); lbl(4,4,'Data de Plantio:'); put(4,5,BR(q.plantio)); lbl(4,6,'Pressão de trabalho:');
+  lbl(5,0,'Município:'); put(5,1,lx.municipio||''); lbl(5,2,'Técnico de Campo:'); put(5,3,(typeof _currentUserName==='function'?_currentUserName():'')); lbl(5,4,'Data de Emergência:'); lbl(5,6,'Volume de calda:');
+  lbl(6,0,'UF:'); put(6,1,lx.uf||''); lbl(6,2,'Cultura:'); put(6,3,q.cultura||''); lbl(6,4,'Espaçamento de plantio:'); put(6,5,q.espacamento||''); lbl(6,6,'Ponta de pulverização:');
+  lbl(7,0,'Latitude (S):'); put(7,1,ctr?ctr[0].toFixed(6):''); lbl(7,2,'Alvo:'); put(7,3,s.alvo||q.alvo||''); lbl(7,4,'Tamanho da Parcela'); put(7,5,dim?(Math.round(dim.comprimento)+'x'+Math.round(dim.largura)+' m'):''); lbl(7,6,'N° de Bicos:');
+  lbl(8,0,'Longitude (O):'); put(8,1,ctr?ctr[1].toFixed(6):''); lbl(8,2,'Data de Início (1ª aplicação):'); put(8,3,BR(s.dataInicio)); lbl(8,4,'População:'); lbl(8,6,'Distância bico-cultura:');
+  lbl(9,0,'Altitude:'); lbl(9,2,'Data de Término:'); lbl(9,4,'Quadra:'); put(9,5,(typeof quadraNome==='function'?quadraNome(qid):qid)); lbl(9,6,'Delineamento estatístico'); put(9,7,s.delineamento||'DBC');
+  lbl(10,0,'Estação Experimental:'); put(10,1,loc.nome||''); lbl(10,2,'Número de Tratamentos:'); put(10,3,trats.length); lbl(10,4,'Adjuvante Utilizado:');
+  lbl(11,0,'Endereço:'); put(11,1,lx.endereco||''); lbl(11,2,'Número de Repetições:'); put(11,3,reps); lbl(11,4,'Classe de Solo:');
+  /* TRATAMENTOS (rótulos linha 16 ; dados linhas 17+) */
+  lbl(15,0,'DESCRIÇÃO DOS TRATAMENTOS');
+  ['N°','Tratamentos','Ingrediente Ativo','Concentração (g/kg) (g/l)','Dose (g/ha) (ml/ha)','Concentração de g i.a./ha','Nº de Aplicações','Intervalo de Aplicação (Dias)','Volume de Calda','Adjuvante'].forEach(function(h,c){ lbl(16,c,h); });
+  trats.slice(0,6).forEach(function(t,i){ var r=17+i; put(r,0,i+1); put(r,1,(t.produto||'')+(test===t.id?' (testemunha)':'')); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
+  /* CLIMA (rótulos col 11 ; aplicações cols 12+) */
+  lbl(1,11,'Dados climáticos relativos à aplicação');
+  [[2,'Aplicação'],[3,'Data da aplicação'],[4,'Horário inicial'],[5,'Horário final'],[6,'T °C inicial'],[7,'T °C final'],[8,'UR (%) inicial'],[9,'UR (%) final'],[10,'Vento (km/h) inicial'],[11,'Vento (km/h) final'],[12,'Nebulosidade (%)'],[13,'Estádio fenológico']].forEach(function(p){ lbl(p[0],11,p[1]); });
+  (s.aplicacoes||[]).slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).slice(0,8).forEach(function(a,i){ var c=12+i, cl=(a.carimbo&&a.carimbo.clima)||{}; put(2,c,i+1); put(3,c,BR(a.data)); put(4,c,cl.hora||''); put(6,c,cl.temp!=null?cl.temp:''); put(8,c,cl.umidade!=null?cl.umidade:''); put(10,c,cl.vento!=null?cl.vento:''); put(13,c,a.bbch||''); });
+  /* GRADE DE AVALIAÇÕES (blocos de 8 colunas a partir da col 11) — Trat | a b c d | média | E% */
+  var avs=(s.avaliacoes||[]).slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
+  var blk=0;
+  avs.forEach(function(a){ (a.variaveis||[]).forEach(function(v){
+    if(blk>=20) return; var c0=11+8*blk; blk++;
+    lbl(15,c0,'AVALIAÇÃO — '+v+' · '+BR(a.data));
+    lbl(16,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(16,c0+1+ri,rl); }); lbl(16,c0+5,'média'); lbl(16,c0+6,'E%');
+    function med(tid){ var vs=[]; for(var rp=1;rp<=reps;rp++){ var raw=_avNota(a,{key:_avRowKey(tid,rp),tratId:tid,rep:rp},v); if(raw!=null&&raw!==''){ var n=parseFloat(String(raw).replace(',','.')); if(!isNaN(n))vs.push(n);} } return vs.length?vs.reduce(function(x,y){return x+y;},0)/vs.length:null; }
+    var tMed=test?med(test):null;
+    trats.slice(0,7).forEach(function(t,ti){ var r=17+ti; put(r,c0,ti+1);
+      for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
+      var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
+      if(test && t.id!==test && tMed!=null && tMed>0 && m!=null) put(r,c0+6, Math.round((tMed-m)/tMed*1000)/10);
+    });
+  }); });
+  /* serializa em grade TSV (colar em A1) */
+  var out=[]; for(var r=0;r<=maxR;r++){ var row=[]; for(var c=0;c<=maxC;c++){ row.push(cells[r+'_'+c]||''); } out.push(row.join('\t')); }
+  return out.join('\n');
+}
+function copyStudyModelo(qid,sid){
+  try{ var q=data[qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s){ _stxToast('Estudo não encontrado'); return; }
+    var tsv=buildStudyModelo(qid,s);
+    _stxCopy(tsv).then(function(ok){ _stxToast(ok?'✓ Copiado no formato da sua planilha — cole em A1 (planilha nova)':'Selecione e copie'); });
+  }catch(e){ _stxToast('Erro: '+e.message); }
+}
 function studyExport(qid,sid){
   var q=data[qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s) return;
   s=normalizeStudy(s);
@@ -4684,10 +4744,10 @@ function showStudyExportModal(qid,s,from,to){
   var title=esc((s.codigo||'(sem codigo)')+' — '+quadraNome(qid));
   m.innerHTML='<div class="ndvi-modal-box" style="max-width:560px">'+
     '<div class="ndvi-modal-top"><b>📄 '+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
-    '<div class="ndvi-status">Registro já copiado. Cole na planilha — os campos vêm separados por TAB (cada valor numa coluna).</div>'+
+    '<div class="ndvi-status"><b>Para a SUA planilha (modelo.xls):</b> toque em “Copiar p/ MINHA planilha” e cole em <b>A1</b> de uma aba nova — vem no mesmo layout (cabeçalho, tratamentos, clima, grade a/b/c/d/média/E%). O quadro abaixo é o formato livre (registro + NDVI).</div>'+
     '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:#0a110a;color:#cfe0cf;border:1px solid #2a3a2a;border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
     '<div id="stxNdvi" style="margin-top:8px"></div>'+
-    '<div class="gr-btns" style="margin-top:10px"><button class="ndvi-ix" style="flex:1" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo</button><button class="gr-cancel" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
+    '<div class="gr-btns" style="margin-top:10px"><button class="ndvi-ix" style="flex:1;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar p/ MINHA planilha</button><button class="ndvi-ix" style="flex:1" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo</button><button class="gr-cancel" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
   '</div>';
   m.style.display='flex';
 }
