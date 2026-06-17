@@ -4693,7 +4693,15 @@ function buildStudyModelo(qid, s){
   /* CLIMA (rótulos col 11 ; aplicações cols 12+) */
   lbl(1,11,'Dados climáticos relativos à aplicação');
   [[2,'Aplicação'],[3,'Data da aplicação'],[4,'Horário inicial'],[5,'Horário final'],[6,'T °C inicial'],[7,'T °C final'],[8,'UR (%) inicial'],[9,'UR (%) final'],[10,'Vento (km/h) inicial'],[11,'Vento (km/h) final'],[12,'Nebulosidade (%)'],[13,'Estádio fenológico']].forEach(function(p){ lbl(p[0],11,p[1]); });
-  (s.aplicacoes||[]).slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).slice(0,8).forEach(function(a,i){ var c=12+i, cl=(a.carimbo&&a.carimbo.clima)||{}; put(2,c,i+1); put(3,c,BR(a.data)); put(4,c,cl.hora||''); put(6,c,cl.temp!=null?cl.temp:''); put(8,c,cl.umidade!=null?cl.umidade:''); put(10,c,cl.vento!=null?cl.vento:''); put(13,c,a.bbch||''); });
+  (s.aplicacoes||[]).slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).slice(0,8).forEach(function(a,i){ var c=12+i;
+    var ini=(a.inicio&&a.inicio.clima)||(a.carimbo&&a.carimbo.clima)||{}, fim=(a.fim&&a.fim.clima)||{};
+    var hIni=(a.inicio&&a.inicio.hora)||((a.carimbo&&a.carimbo.clima&&a.carimbo.clima.hora)||''), hFim=(a.fim&&a.fim.hora)||'';
+    put(2,c,i+1); put(3,c,BR(a.data));
+    put(4,c,hIni); put(5,c,hFim);
+    put(6,c, ini.temp!=null?ini.temp:''); put(7,c, fim.temp!=null?fim.temp:'');
+    put(8,c, ini.umidade!=null?ini.umidade:''); put(9,c, fim.umidade!=null?fim.umidade:'');
+    put(10,c, ini.vento!=null?ini.vento:''); put(11,c, fim.vento!=null?fim.vento:'');
+    put(13,c,a.bbch||''); });
   /* GRADE DE AVALIAÇÕES (blocos de 8 colunas a partir da col 11) — Trat | a b c d | média | E% */
   var avs=(s.avaliacoes||[]).slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
   var blk=0;
@@ -6411,6 +6419,35 @@ function _nextAplData(study){ /* data padrão da nova aplicação = próxima apl
   }catch(e){}
   return todayISO();
 }
+/* ===== Janela da aplicação: clima inicial/final + tempo (BPL / modelo) ===== */
+function _aplAtual(){
+  try{ var q=data[curV], st=(q&&q.estudos||[]).find(function(s){return s.id===curSid;}); if(!st) return null;
+    if(editingAplId==='__new__') return draftAp;
+    return (st.aplicacoes||[]).find(function(a){return a.id===editingAplId;})||null;
+  }catch(e){ return null; }
+}
+function _aplDur(ap){ try{ if(ap&&ap.inicio&&ap.fim&&ap.inicio.ts&&ap.fim.ts){ var ms=ap.fim.ts-ap.inicio.ts; if(ms>=0){ var min=Math.round(ms/60000); return min>=60?(Math.floor(min/60)+'h'+(min%60?(' '+(min%60)+'min'):'')):(min+'min'); } } }catch(e){} return ''; }
+function _aplRenderClimaBox(){
+  var box=document.getElementById('aplClimaBox'); if(!box) return; var ap=_aplAtual();
+  function ln(rot,o){ if(!o) return '<div style="color:var(--text-3,#8aa88a)">'+rot+': — <span style="font-size:11px">(toque no botão na hora)</span></div>'; var cl=o.clima||{}; return '<div><b style="color:var(--accent,#37d684)">'+rot+'</b> '+esc(o.hora||'')+(cl.temp!=null?' · '+cl.temp+'°C':'')+(cl.umidade!=null?' · '+Math.round(cl.umidade)+'%UR':'')+(cl.vento!=null?' · vento '+cl.vento+'km/h':'')+(cl.clima_falhou?' <span style="color:#dccd8c;font-size:11px">(sem clima — só horário)</span>':'')+'</div>'; }
+  var dur=_aplDur(ap);
+  box.innerHTML=ln('Início',ap&&ap.inicio)+ln('Fim',ap&&ap.fim)+(dur?('<div style="margin-top:4px;color:var(--accent,#37d684)">⏱ Tempo de aplicação: <b>'+dur+'</b></div>'):'');
+}
+function aplMarcarClima(qual){
+  var ap=_aplAtual(); if(!ap){ if(typeof _stxToast==='function')_stxToast('Abra a aplicação primeiro'); return; }
+  if(qual==='fim' && !ap.inicio){ if(typeof _stxToast==='function')_stxToast('Marque o Início primeiro'); return; }
+  var now=new Date(), hora=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  var btn=document.getElementById(qual==='inicio'?'aplIniBtn':'aplFimBtn'); if(btn){ btn.disabled=true; var _t=btn.textContent; btn.textContent='Clima…'; btn._txt=_t; }
+  function done(cl){
+    ap[qual]={ ts:now.getTime(), hora:hora, clima: cl?{fonte:cl.fonte, temp:cl.temp, umidade:cl.umidade, vento:cl.vento, vpd:cl.vpd, chuva:cl.chuva}:{clima_falhou:true} };
+    if(btn){ btn.disabled=false; if(btn._txt)btn.textContent=btn._txt; }
+    _aplRenderClimaBox();
+    /* salva já (o horário/clima é dado de campo no momento — não pode depender de lembrar de Salvar) */
+    try{ if(typeof save==='function') save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSaveSoon==='function')cloudSaveSoon(); if(typeof dbUpsertAplicacao==='function'&&editingAplId!=='__new__')dbUpsertAplicacao(curV,curSid,ap); }catch(e){}
+    if(typeof _stxToast==='function')_stxToast((qual==='inicio'?'Início':'Fim')+' registrado · '+hora+(cl&&cl.temp!=null?(' · '+cl.temp+'°C'):''));
+  }
+  try{ _carimboClima(curV, function(cl){ done(cl); }); }catch(e){ done(null); }
+}
 function openStudyEditAplicacao(aid){
   editingAplId=aid;editingAvId=null;draftAv=null;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
@@ -6439,10 +6476,15 @@ function openStudyEditAplicacao(aid){
     'Obtendo condições meteorológicas atuais para janela BPL…' +
     '</div>';
   h+=weatherHtml;
+  /* Janela da aplicação: clima INICIAL e FINAL (BPL / preenche o modelo) + tempo de aplicação */
+  h+='<div class="se-field"><label>Janela da aplicação — clima INICIAL e FINAL</label>'+
+    '<div style="display:flex;gap:8px;margin-bottom:7px"><button type="button" id="aplIniBtn" class="btn-sm" style="flex:1" onclick="aplMarcarClima(\'inicio\')">▶ Iniciar</button><button type="button" id="aplFimBtn" class="btn-sm" style="flex:1" onclick="aplMarcarClima(\'fim\')">⏹ Terminar</button></div>'+
+    '<div id="aplClimaBox" style="font-size:12px;line-height:1.7;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;padding:8px 10px"></div></div>';
   h+='<div class="se-field"><label>Observações</label><textarea id="aeObs" rows="4" placeholder="Condições climáticas, produtos, ocorrências...">'+esc(ap.obs||"")+'</textarea></div>';
   h+='<div class="se-actions"><button class="btn-save" onclick="saveAplicacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
 
   document.getElementById("eePnl").innerHTML=h;
+  _aplRenderClimaBox();
   window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
   
   _carimboClima(curV, function(cl){
