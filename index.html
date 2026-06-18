@@ -4671,7 +4671,7 @@ function buildStudyModelo(qid, s){
   var trats=s.tratamentos||[];
   var test=(typeof studyTestemunha==='function')?studyTestemunha(s):null;
   var BR=function(d){ return d?((typeof isoToBR==='function'?isoToBR(d):d)||d):''; };
-  var cells={}, maxR=28, maxC=10;
+  var cells={}, maxR=0, maxC=10;
   function put(r,c,v){ if(v==null||v==='')return; cells[r+'_'+c]=String(v).replace(/[\t\n\r]/g,' '); if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
   function lbl(r,c,v){ cells[r+'_'+c]=v; if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
   /* CABEÇALHO (rótulos cols 0/2/4/6 ; valores 1/3/5/7) */
@@ -4689,7 +4689,7 @@ function buildStudyModelo(qid, s){
   /* TRATAMENTOS (rótulos linha 16 ; dados linhas 17+) */
   lbl(15,0,'DESCRIÇÃO DOS TRATAMENTOS');
   ['N°','Tratamentos','Ingrediente Ativo','Concentração (g/kg) (g/l)','Dose (g/ha) (ml/ha)','Concentração de g i.a./ha','Nº de Aplicações','Intervalo de Aplicação (Dias)','Volume de Calda','Adjuvante'].forEach(function(h,c){ lbl(16,c,h); });
-  trats.slice(0,6).forEach(function(t,i){ var r=17+i; put(r,0,i+1); put(r,1,(t.produto||'')+(test===t.id?' (testemunha)':'')); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
+  trats.slice(0,6).forEach(function(t,i){ var r=17+i; var nm=(t.produto||'').trim(); if(test===t.id) nm=nm?(nm+' (testemunha)'):'Testemunha'; put(r,0,i+1); put(r,1,nm); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
   /* CLIMA (rótulos col 11 ; aplicações cols 12+) */
   lbl(1,11,'Dados climáticos relativos à aplicação');
   [[2,'Aplicação'],[3,'Data da aplicação'],[4,'Horário inicial'],[5,'Horário final'],[6,'T °C inicial'],[7,'T °C final'],[8,'UR (%) inicial'],[9,'UR (%) final'],[10,'Vento (km/h) inicial'],[11,'Vento (km/h) final'],[12,'Nebulosidade (%)'],[13,'Estádio fenológico']].forEach(function(p){ lbl(p[0],11,p[1]); });
@@ -4719,6 +4719,7 @@ function buildStudyModelo(qid, s){
   }); });
   /* serializa em grade TSV (colar em A1) */
   var out=[]; for(var r=0;r<=maxR;r++){ var row=[]; for(var c=0;c<=maxC;c++){ row.push(cells[r+'_'+c]||''); } out.push(row.join('\t')); }
+  while(out.length && !out[out.length-1].replace(/\t/g,'').length) out.pop(); /* tira linhas em branco do fim */
   return out.join('\n');
 }
 function copyStudyModelo(qid,sid){
