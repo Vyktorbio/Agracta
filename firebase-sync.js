@@ -199,21 +199,9 @@
     var foot=box.querySelector('.auth-foot');
     box.insertBefore(b,foot||null);
   }
-  function addGoogleButton(){
-    var box=document.querySelector('.auth-box');
-    if(!box||document.getElementById('authGoogleBtn'))return;
-    var b=document.createElement('button');
-    b.id='authGoogleBtn';b.type='button';b.className='auth-btn';
-    b.style.cssText='margin-top:9px;background:#fff;color:#26322a;border:1px solid #cfd8d1';
-    b.textContent='Entrar com Google';
-    b.onclick=function(){doGoogleLogin();};
-    var foot=box.querySelector('.auth-foot');
-    box.insertBefore(b,foot||null);
-  }
   var originalBuildAuthGate=window.buildAuthGate;
   window.buildAuthGate=function(){
     if(typeof originalBuildAuthGate==='function')originalBuildAuthGate();
-    addGoogleButton();
     addOfflineButton();
   };
   var originalShowAuthGate=window.showAuthGate;
@@ -265,16 +253,6 @@
       var msg=(err&&err.code==='auth/invalid-credential')?'E-mail ou senha incorretos.':
         ((err&&err.code==='auth/too-many-requests')?'Muitas tentativas. Aguarde alguns minutos.':'Não foi possível entrar: '+(err.message||err));
       authErr(msg);
-    });
-  };
-  window.doGoogleLogin=function(){
-    if(!firebaseInit()){authErr('Firebase ainda não configurado.');return;}
-    authErr('');authBusy(true);
-    var provider=new window.firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({prompt:'select_account'});
-    FB.auth.signInWithRedirect(provider).catch(function(err){
-      authBusy(false);
-      authErr('Não foi possível entrar com Google: '+((err&&err.message)||err));
     });
   };
   window.doLogout=function(){
