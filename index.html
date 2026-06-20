@@ -2888,7 +2888,9 @@ function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return;
   document.head.appendChild(s); }
 function requireDeletePassword(label, cb, opts){
   opts=opts||{}; window._delPwdOkText=opts.ok||'Excluir';
-  if(!cloudInit()||!SB||!SB.auth||!_authUser||!_authUser.email){ alert('Para confirmar, entre com sua conta e digite a senha.'); return; }
+  /* Firebase: o gate de confirmação depende só da identidade logada (_authUser),
+     não mais do cliente Supabase (SB fica null após a migração). */
+  if(!cloudInit()||!_authUser||!_authUser.email){ alert('Para confirmar, entre com sua conta e digite a senha.'); return; }
   deletePasswordCss(); _deletePwdCb=cb;
   var m=document.getElementById('deletePwdModal');
   if(!m){ m=document.createElement('div'); m.id='deletePwdModal'; m.className='delpwd-ovl'; m.onclick=function(e){ if(e.target===m) deletePasswordClose(); }; document.body.appendChild(m); }
