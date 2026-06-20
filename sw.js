@@ -2,13 +2,15 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v50';
+var CACHE = 'agracta-app-v55';
 var ASSETS = [
   './', './index.html',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js', './vendor/supabase.js', './vendor/xlsx.full.min.js',
+  './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 self.addEventListener('install', function(e){
@@ -24,6 +26,7 @@ self.addEventListener('fetch', function(e){
   var u = new URL(e.request.url);
   /* Online sempre (sem cache): proxy NDVI, tiles do satélite e Copernicus */
   if(u.port === '8799' || u.hostname.indexOf('onrender.com') >= 0 || u.hostname.indexOf('supabase.co') >= 0 ||
+     u.hostname.indexOf('googleapis.com') >= 0 || u.hostname.indexOf('firebaseio.com') >= 0 ||
      u.hostname.indexOf('arcgisonline') >= 0 || u.hostname.indexOf('google.com') >= 0 || u.hostname.indexOf('dataspace') >= 0) return;
   var isHTML = e.request.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('index.html');
   if(isHTML){

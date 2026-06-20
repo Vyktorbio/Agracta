@@ -24,4 +24,34 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
 ## Publicar
 - **App** → GitHub Pages (estático, https).
 - **Proxy NDVI** → servidor (ex.: Render) — GitHub Pages não roda Python.
-- **Multiusuário** (futuro) → Supabase (banco + login).
+- **Multiusuário** → Firebase Authentication + Cloud Firestore.
+
+## Persistência local-first
+
+O Agracta salva primeiro no aparelho e usa a nuvem como sincronização:
+
+1. o estado ativo permanece no armazenamento local;
+2. um checkpoint completo adicional é mantido no IndexedDB;
+3. o Firestore recebe documentos separados por local, quadra, estudo,
+   aplicação, avaliação e lançamento;
+4. alterações feitas sem internet entram na fila persistente do SDK;
+5. quando a conexão volta, o aplicativo reconcilia e envia as pendências.
+
+Se Firebase ou internet estiverem indisponíveis, o trabalho de campo continua.
+O selo mostra `salvo neste aparelho` até a sincronização voltar.
+
+### Configurar o Firebase
+
+1. Crie um projeto Firebase e um aplicativo Web.
+2. Ative Authentication por e-mail/senha e Cloud Firestore.
+3. Copie a configuração Web para `firebase-config.js`.
+4. Faça login no CLI e publique as regras:
+
+   ```bash
+   npx firebase-tools login
+   npx firebase-tools use SEU_PROJECT_ID
+   npx firebase-tools deploy --only firestore
+   ```
+
+As fotos são fragmentadas em documentos do Firestore durante esta primeira
+fase. Assim a migração não exige ativar o plano Blaze apenas para Storage.

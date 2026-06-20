@@ -8547,5 +8547,10 @@ if(document.readyState==='loading'){
 window.addEventListener('load',function(){setTimeout(init,100)});
 setInterval(function(){try{if(editMode||drawMode||_grOn)return;render();updateAgendaBadge();if(typeof updateTodayBadge==='function')updateTodayBadge();if(agO)renderAgenda();}catch(e){}},60000);
 </script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
 </body>
 </html>

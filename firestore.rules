@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email == 'machadovictorchaves@gmail.com';
+    }
+
+    function isActiveMember() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/workspaces/agracta/members/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/workspaces/agracta/members/$(request.auth.token.email)).data.active == true;
+    }
+
+    function canUseAgracta() {
+      return isAdmin() || isActiveMember();
+    }
+
+    match /workspaces/agracta {
+      allow read, write: if canUseAgracta();
+
+      match /members/{email} {
+        allow read: if canUseAgracta();
+        allow write: if isAdmin();
+      }
+
+      match /{collection}/{document} {
+        allow read, write: if collection != 'members' && canUseAgracta();
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
