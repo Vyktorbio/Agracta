@@ -490,6 +490,19 @@
     return commitState(st);
   };
   window.cloudSyncNow=function(){return cloudSave();};
+  function _agractaAcessoBanner(email){
+    try{
+      if(document.getElementById('acessoBanner')) return;
+      var d=document.createElement('div'); d.id='acessoBanner';
+      d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:5000;background:#3a2a12;color:#ffe7c4;border-top:2px solid #c79a4a;padding:12px 14px;box-shadow:0 -6px 24px rgba(0,0,0,.45);font:13px/1.45 -apple-system,system-ui,sans-serif';
+      d.innerHTML='<div style="max-width:560px;margin:0 auto;display:flex;gap:10px;align-items:flex-start">'+
+        '<div style="flex:1"><b>Seu acesso ainda não foi liberado.</b><br>Peça ao administrador para adicionar o e-mail <b>'+String(email||'(seu e-mail)').replace(/[<>&]/g,'')+'</b> no <b>Painel Admin</b>. Até lá, os dados da equipe não aparecem neste aparelho.</div>'+
+        '<button id="acessoBannerOk" style="background:#5a4520;color:#ffe7c4;border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer;white-space:nowrap">OK</button>'+
+      '</div>';
+      document.body.appendChild(d);
+      var b=document.getElementById('acessoBannerOk'); if(b) b.onclick=function(){ var x=document.getElementById('acessoBanner'); if(x) x.remove(); };
+    }catch(e){}
+  }
   window.cloudPull=function(){
     if(!FB.user){showAuthGate();return Promise.resolve(false);}
     cloudBadge('saving');
@@ -507,6 +520,9 @@
     }).catch(function(e){
       cloudBadge('offline','— usando dados do aparelho');
       console.error('[Agracta Firebase] leitura:',e);
+      if(e && (e.code==='permission-denied' || /permission|insufficient/i.test(String((e&&e.message)||e)))){
+        try{ _agractaAcessoBanner((FB.user&&FB.user.email)||''); }catch(_e){}
+      }
       return false;
     });
   };

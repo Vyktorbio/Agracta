@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=47').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=48').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2269,6 +2269,24 @@ function installApp(){
   if(isiOS()){ alert('📲 Instalar no iPhone:\n\n1) Abra este site no SAFARI (não dentro do WhatsApp/Instagram)\n2) Toque em Compartilhar (o quadrado com a seta ↑, na barra de baixo)\n3) Role e toque em "Adicionar à Tela de Início"\n4) Toque em "Adicionar"\n\nPronto: vira um ícone na sua tela.'); return; }
   alert('📲 Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
 }
+/* Forçar atualização: limpa service worker + caches (preserva o Pyodide) e recarrega na versão nova.
+   Resolve o PWA preso numa versão velha sem precisar desinstalar. Os dados ficam salvos (localStorage/Firestore). */
+function forcarAtualizacao(){
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  if(!confirm('Atualizar o app para a versão mais nova?\n\nSeus dados continuam salvos. O app vai recarregar.')) return;
+  var done=false, go=function(){ if(done) return; done=true; try{ location.reload(true); }catch(e){ location.reload(); } };
+  try{
+    var ps=[];
+    if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
+      ps.push(navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all((rs||[]).map(function(r){ return r.unregister(); })); }).catch(function(){}));
+    }
+    if(window.caches && caches.keys){
+      ps.push(caches.keys().then(function(ks){ return Promise.all((ks||[]).map(function(k){ if(k==='agracta-pyodide-v1') return Promise.resolve(); /* não re-baixar 115MB */ return caches.delete(k); })); }).catch(function(){}));
+    }
+    Promise.all(ps).then(go).catch(go);
+    setTimeout(go, 4000); /* fallback se algo travar */
+  }catch(e){ go(); }
+}
 /* Tela cheia: esconde o "casco" e mostra só o mapa */
 function toggleFullscreenMap(){
   if(typeof closeMainMenu==='function') closeMainMenu();
@@ -2288,6 +2306,8 @@ function toggleMainMenu(){
   var adm=isAdmin();
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
+    '<button onclick="forcarAtualizacao()">🔄 Forçar atualização</button>'+
+    '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
     (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
     '<div class="mm-sep"></div>'+
