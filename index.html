@@ -4774,7 +4774,7 @@ function buildStudyModelo(qid, s){
   }); });
   /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento.
      Usa o "Tamanho da Parcela" do próprio modelo (dim. da quadra) e nº de repetições como nº de parcelas. */
-  var parc=dim||_parseParcelaDim((s.protocolo||{}).tamanhoParcela);
+  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||dim; /* parcela do protocolo tem prioridade sobre a quadra inteira */
   if(window.BioCalculoCampo && parc){
     var crow=maxR+2;
     lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat)');
@@ -6124,8 +6124,8 @@ function _calcRenderShell(){
   var ov=document.getElementById('calcOvl'); if(!ov) return;
   var all=_calcAllStudies();
   var study=_calcStudy();
-  var dims=_calcSel?quadraDims(_calcSel.qid):null;
-  if(!dims && study && study.protocolo) dims=_parseParcelaDim(study.protocolo.tamanhoParcela); /* sem geometria: usa o tamanho da parcela do protocolo */
+  /* tamanho da PARCELA do protocolo tem prioridade (a quadra é a área inteira, com todas as parcelas) */
+  var dims=(study&&study.protocolo&&_parseParcelaDim(study.protocolo.tamanhoParcela))||(_calcSel?quadraDims(_calcSel.qid):null);
   var defLen=dims?Math.round(dims.comprimento):'';
   var defWid=dims?Math.round(dims.largura):'';
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
@@ -6595,6 +6595,7 @@ function _impCriar(){
     termino:_pi(f.dataTermino), quadra:f.quadra||'', delineamento:f.delineamento||'', estacao:f.estacao||'',
     adjuvante:f.adjuvante||'', endereco:f.endereco||'', classeSolo:f.classeSolo||'' };
   try{ s.protocoloOrigem={ arquivo:'modelo-protocolo', importadoEm:new Date().toISOString(), campos:JSON.parse(JSON.stringify(f)) }; }catch(e){}
+  try{ if(typeof logStudyAuditInObject==='function') logStudyAuditInObject(s, 'Protocolo importado da planilha', (s.codigo||'(sem código)')+' · '+s.tratamentos.length+' tratamento(s)', {origem:'planilha-modelo'}); }catch(e){}
   s._ts=Date.now();
   data[qid].estudos.push(s);
   /* cultura na quadra, se vazia */
