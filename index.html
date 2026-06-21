@@ -1058,6 +1058,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <script src="vendor/Leaflet.ImageOverlay.Rotated.js"></script>
 <script src="vendor/quadras-default.js"></script>
 <script src="vendor/biocalc-campo-core.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script>
@@ -4535,6 +4536,13 @@ function quadraCenter(id){
 /* Comprimento × largura reais (m) da quadra: retângulo de MENOR ÁREA que a encaixa
    (rotating-calipers sobre o fecho convexo). Independe da orientação em relação ao norte —
    mede ao longo dos eixos da própria quadra, então serve pra planejar parcelas. */
+/* "5x4 m" / "5 x 4" / "5,5x4" -> {comprimento, largura} em m (fallback p/ parcela quando a quadra não tem geometria) */
+function _parseParcelaDim(str){
+  var m=String(str||'').replace(',','.').match(/(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)/);
+  if(!m) return null;
+  var a=parseFloat(m[1]), b=parseFloat(m[2]); if(!(a>0&&b>0)) return null;
+  return { comprimento:Math.max(a,b), largura:Math.min(a,b) };
+}
 function quadraDims(id){
   ensureQGEO();
   var pts=QGEO&&QGEO[id]; if(!pts||pts.length<3) return null;
@@ -4766,9 +4774,10 @@ function buildStudyModelo(qid, s){
   }); });
   /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento.
      Usa o "Tamanho da Parcela" do próprio modelo (dim. da quadra) e nº de repetições como nº de parcelas. */
-  if(window.BioCalculoCampo && dim){
+  var parc=dim||_parseParcelaDim((s.protocolo||{}).tamanhoParcela);
+  if(window.BioCalculoCampo && parc){
     var crow=maxR+2;
-    lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(dim.comprimento)+'×'+Math.round(dim.largura)+' m · '+reps+' parcela(s)/trat)');
+    lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat)');
     var ch=crow+1;
     ['N°','Tratamento','Dose','V.Calda (L/ha)','Concentração','Calda/parcela','Calda total','Produto/parcela','Produto total'].forEach(function(h,c){ lbl(ch,c,h); });
     var _cf=function(x,p){ return BioCalculoCampo.formatBR(x,p==null?2:p); };
@@ -4779,7 +4788,7 @@ function buildStudyModelo(qid, s){
       var vol=(typeof _calcNum==='function')?_calcNum(t.volume):parseFloat(String(t.volume||'').replace(',','.'));
       var dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
       if(dval>0 && vol>0){
-        try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:dim.comprimento,plotWidth:dim.largura,numPlots:reps,numBottles:1,deadVolumeMl:0,bottleCapacity:0});
+        try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:parc.comprimento,plotWidth:parc.largura,numPlots:reps,numBottles:1,deadVolumeMl:0,bottleCapacity:0});
           put(rr,4,_cf(res.concentration)+' '+res.concentrationUnit);
           put(rr,5,_cf(res.sprayPerPlotMl/1000)+' L');
           put(rr,6,_cf(res.sprayTotalMl/1000)+' L');
@@ -4819,8 +4828,10 @@ async function downloadStudyWorkbook(qid,sid){
     if((s.tratamentos||[]).length>7)throw new Error('Este modelo possui espaço para até 7 tratamentos. Use “Copiar” para protocolos maiores.');
     _stxToast('Preparando planilha e resultados…');
     _bioestatEnsureStudy(qid,sid);
+    /* só precisamos das LETRAS da análise (não do forense) — não espera os jobs de triagem forense */
+    var _aJobs=_bioestatJobs(qid,s), _analiseOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey]; }); };
     var cache=_bioAutoCache[qid+'|'+sid], limite=Date.now()+90000;
-    while(cache&&cache.status==='loading'&&Date.now()<limite){await new Promise(function(ok){setTimeout(ok,500);});cache=_bioAutoCache[qid+'|'+sid];}
+    while(cache&&cache.status==='loading'&&!_analiseOk(cache)&&Date.now()<limite){await new Promise(function(ok){setTimeout(ok,500);});cache=_bioAutoCache[qid+'|'+sid];}
     var resp=await fetch('modelos/modelo-protocolo.xls'); if(!resp.ok)throw new Error('Modelo de planilha não encontrado.');
     var wb=XLSX.read(await resp.arrayBuffer(),{type:'array',cellFormula:true,cellStyles:true,cellDates:true}), ws=wb.Sheets[wb.SheetNames[0]];
     var p=s.protocolo||{}, loc=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]])||{}, lx=loc.extras||loc||{}, ctr=quadraCenter(qid), dim=quadraDims(qid);
@@ -6114,6 +6125,7 @@ function _calcRenderShell(){
   var all=_calcAllStudies();
   var study=_calcStudy();
   var dims=_calcSel?quadraDims(_calcSel.qid):null;
+  if(!dims && study && study.protocolo) dims=_parseParcelaDim(study.protocolo.tamanhoParcela); /* sem geometria: usa o tamanho da parcela do protocolo */
   var defLen=dims?Math.round(dims.comprimento):'';
   var defWid=dims?Math.round(dims.largura):'';
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
