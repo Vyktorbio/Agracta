@@ -4647,6 +4647,24 @@ function buildStudyRecord(qid,s){
       });
     });
   }
+  /* ESTATÍSTICA — ANOVA-DBC + Tukey 5% por avaliação/variável (médias + letras + F/p/CV) */
+  if(_avsM.length){
+    L.push(''); L.push('ESTATISTICA (ANOVA-DBC + Tukey 5%) — medias seguidas de mesma letra nao diferem (p<0,05)');
+    _vars.forEach(function(v){
+      _avsM.forEach(function(a){
+        if((a.variaveis||[]).indexOf(v)<0) return;
+        var st=(typeof statDBC==='function')?statDBC(s,a,v):null;
+        L.push('');
+        if(!st){ L.push(v+' — '+(isoToBR(a.data)||'')+'\t(insuficiente ou desbalanceado p/ ANOVA)'); return; }
+        L.push(v+' — '+(isoToBR(a.data)||'')+'\tF='+_r1(st.F)+'\tp='+(st.p<0.001?'<0,001':_r1(st.p))+'\tCV='+_r1(st.cv)+'%\t'+(st.sig?'significativo':'ns'));
+        L.push('Trat\tProduto\tMedia\tLetra');
+        (st.order||(s.tratamentos||[]).map(function(t){return t.id;})).forEach(function(tid){
+          var t=(s.tratamentos||[]).find(function(x){return x.id===tid;})||{};
+          L.push(tid+(isTestemunha(s,tid)?' (test.)':'')+'\t'+(t.produto||'')+'\t'+_r1(st.tMean[tid])+'\t'+(st.letras[tid]||''));
+        });
+      });
+    });
+  }
   var ds=[]; if(s.dataInicio)ds.push(s.dataInicio);
   (s.aplicacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
   (s.avaliacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
@@ -6213,7 +6231,7 @@ function _openBioestatFrame(modo){
   ov.style.display='flex';
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
-var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false;
+var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false, _bioAutoWd=null;
 function _bioestatJobAoa(qid,study,av,v){
   var q=data[qid]||{}, loc=(typeof LOCAIS!=='undefined'&&typeof QLOCAL!=='undefined'&&LOCAIS[QLOCAL[qid]])||{};
   var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'], rows=[header];
@@ -6255,15 +6273,21 @@ function _bioestatEnsureStudy(qid,sid){
   study=normalizeStudy(study);
   var key=qid+'|'+sid, sig=_bioestatSignature(study), jobs=_bioestatJobs(qid,study), c=_bioAutoCache[key];
   if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'))return;
-  c=_bioAutoCache[key]={sig:sig,status:jobs.length?'loading':'empty',done:0,total:jobs.length,results:{},qid:qid,sid:sid};
+  var total=jobs.length*2; /* por avaliação/variável: análise + triagem forense */
+  c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
   if(!jobs.length)return;
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
+  function _ftipo(j){ var t=String(j.tipo||j.variavel||'').toLowerCase(); return /sever|incid|fitotox|efic|propor|%|altura|produ|peso|di[âa]m|massa|cont[íi]nu/.test(t)?'cont':'count'; }
+  var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
-    var req=key+'|'+sig+'|'+i+'|'+Date.now();
-    var item={requestId:req,key:key,job:j,payload:{requestId:req,aoa:j.aoa,modo:'analise',titulo:study.codigo||study.id,
-      responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,local:((LOCAIS[QLOCAL[qid]]||{}).nome||''),quadra:quadraNome(qid)}};
-    _bioAutoQueue.push(item);_bioAutoPending[req]=item;
+    [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
+      var fjob={jobKey:m[1],avId:j.avId,date:j.date,variavel:j.variavel,tipo:j.tipo};
+      var req=key+'|'+sig+'|'+i+'-'+mi+'|'+Date.now();
+      var item={requestId:req,key:key,job:fjob,payload:{requestId:req,aoa:j.aoa,modo:m[0],titulo:tit,
+        responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn}};
+      _bioAutoQueue.push(item);_bioAutoPending[req]=item;
+    });
   });
   _bioestatEnsureFrame(); _bioestatPump();
 }
@@ -6271,6 +6295,12 @@ function _bioestatPump(){
   if(!_bioEngineReady||_bioAutoBusy||!_bioAutoQueue.length)return;
   var f=document.getElementById('bioEngineFrame'), item=_bioAutoQueue.shift(); if(!f||!f.contentWindow)return;
   _bioAutoBusy=item.requestId;
+  clearTimeout(_bioAutoWd);
+  _bioAutoWd=setTimeout(function(){ /* job travou: marca erro e segue (não trava a fila) */
+    if(_bioAutoBusy!==item.requestId)return;
+    var c=_bioAutoCache[item.key]; if(c&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total)c.status='ready'; }
+    delete _bioAutoPending[item.requestId]; _bioAutoBusy=null; _bioestatPump();
+  },70000);
   f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin);
 }
 function _bioestatP(rel){
@@ -6291,22 +6321,39 @@ function _bioestatResumoCard(job,rel){
     (a.transformacao?'<div style="font-size:10px;color:#718078;margin-top:3px">Transformação: '+esc(a.transformacao)+'</div>':'')+
     '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>Valor</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
+function _bioestatForenseCard(job,rel){
+  if(!rel||!rel.ok) return '';
+  var v=rel.veredito||{}, flags=v.flags||0, watches=v.watches||0;
+  var achados=(rel.achados||[]).filter(function(a){ return a.severidade && a.severidade!=='clear' && a.severidade!=='ok'; });
+  var cor=flags?'#a33':(watches?'#8a6d12':'#1f6f43'), bd=flags?'#edc8c8':(watches?'#ece2b8':'#d9e5dc'), bg=flags?'#fff7f7':(watches?'#fffdf3':'#f7fbf8'), chipbg=flags?'#f3dede':(watches?'#f1ead0':'#e1f3e8');
+  var rot=flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
+  var lis=achados.slice(0,5).map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
+  return '<div style="padding:9px 11px;border:1px solid '+bd+';background:'+bg+';border-radius:9px;margin-top:7px">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
+    '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+chipbg+';color:'+cor+';white-space:nowrap">'+esc(rot)+'</span></div>'+
+    (v.resumo?'<div style="font-size:11px;color:#6a766f;margin-top:3px">'+esc(v.resumo)+'</div>':'')+
+    (lis?'<ul style="margin:6px 0 0;padding-left:18px;font-size:11px;color:#5a655e">'+lis+'</ul>':'')+
+  '</div>';
+}
 function _bioestatIntegratedHtml(qid,sid,study){
   var jobs=_bioestatJobs(qid,study); if(!jobs.length)return '';
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
-  var body='';
-  if(!c||c.sig!==sig||c.status==='loading')body='<div id="bioAutoStatus" style="padding:11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px">Calculando automaticamente no aparelho… '+((c&&c.done)||0)+' de '+jobs.length+'</div>';
-  else if(c.status==='ready')jobs.forEach(function(j){body+=_bioestatResumoCard(j,c.results[j.jobKey]);});
+  var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
+  if(!c||c.sig!==sig||c.status==='loading')body='<div id="bioAutoStatus" style="padding:11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px">Calculando automaticamente no aparelho… '+((c&&c.done)||0)+' de '+tot+'</div>';
+  else if(c.status==='ready'){ jobs.forEach(function(j){ body+=_bioestatResumoCard(j,c.results[j.jobKey]); fbody+=_bioestatForenseCard(j,c.results[j.jobKey+'|F']); }); }
   else body='<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>';
-  return '<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
+  var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+body+'</div>';
+  if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
+    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
+  return sec;
 }
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
   var c=_bioAutoCache[item.key]; if(c){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total)c.status='ready';}
-  delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null;
+  delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
   var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
   _bioestatPump();
   if(c&&c.status==='ready'&&curV===c.qid&&curSid===c.sid&&document.getElementById('sdOvl').classList.contains('open'))setTimeout(function(){openStudyDetail(c.qid,c.sid);},30);
@@ -6365,8 +6412,9 @@ function _impTratamentos(aoa){
     if(!/^\d+$/.test(ns)){ if(out.length) break; else continue; }
     function g(c){ return c!=null?String(row2[c]==null?'':row2[c]).trim():''; }
     var prod=g(cols.produto), dose=g(cols.dose), vol=g(cols.volume);
-    var extras=[]; if(g(cols.ia))extras.push('IA: '+g(cols.ia)); if(g(cols.conc))extras.push('Conc: '+g(cols.conc)); if(g(cols.adj))extras.push('Adj: '+g(cols.adj));
-    out.push({ id:'T'+ns, produto:prod, dose:dose, volume:vol, obs:extras.join(' · '), _numApl:g(cols.numApl), _intervalo:g(cols.intervalo) });
+    out.push({ id:'T'+ns, produto:prod, dose:dose, volume:vol,
+      ia:g(cols.ia), conc:g(cols.conc), concIa:g(cols.concIa), adj:g(cols.adj),
+      _numApl:g(cols.numApl), _intervalo:g(cols.intervalo) });
   }
   return {rows:out, header:true};
 }
@@ -6396,7 +6444,17 @@ function _importParse(aoa){
     estacao:_impFindVal(aoa,['estacao experimental']),
     equipamento:_impFindVal(aoa,['equipamento']),
     pressao:_impFindVal(aoa,['pressao de trabalho']),
-    ponta:_impFindVal(aoa,['ponta de pulverizacao'])
+    ponta:_impFindVal(aoa,['ponta de pulverizacao']),
+    proposta:_impFindVal(aoa,['proposta comercial']),
+    ret:_impFindVal(aoa,['ret ou dispensa','ret']),
+    emergencia:_impFindVal(aoa,['data de emergencia']),
+    distancia:_impFindVal(aoa,['distancia entre o bico','distancia bico']),
+    classeSolo:_impFindVal(aoa,['classe de solo']),
+    endereco:_impFindVal(aoa,['endereco']),
+    bicos:_impFindVal(aoa,['n de bicos','no de bicos','numero de bicos','bicos']),
+    altitude:_impFindVal(aoa,['altitude']),
+    latitude:_impFindVal(aoa,['latitude']),
+    longitude:_impFindVal(aoa,['longitude'])
   };
   var tr=_impTratamentos(aoa);
   var trats=tr.rows.filter(function(t){ return t.produto || t.dose; });
@@ -6490,9 +6548,21 @@ function _impCriar(){
   var nr=parseInt(f.numRepeticoes); if(nr>0) s.numRepeticoes=nr;
   s.delineamento=f.delineamento||'DBC';
   if(f.alvo) s.alvo=f.alvo;
-  s.tratamentos=tr.map(function(t,i){ return { id:'T'+(i+1), produto:t.produto||'', dose:t.dose||'', volume:t.volume||f.volume||'', obs:t.obs||'', testemunha:/test/i.test(t.produto||'') }; });
+  s.tratamentos=tr.map(function(t,i){ return { id:'T'+(i+1), produto:t.produto||'', dose:t.dose||'', volume:t.volume||f.volume||'',
+    ingredienteAtivo:t.ia||'', concentracao:t.conc||'', concentracaoAtivo:t.concIa||'', adjuvante:t.adj||'',
+    obs:'', testemunha:/test/i.test(t.produto||'') }; });
   var na=tr.map(function(t){return parseInt(t._numApl);}).filter(function(x){return x>0;}); if(na.length) s.numAplicacoes=Math.max.apply(null,na);
   var iv=tr.map(function(t){return parseInt(t._intervalo);}).filter(function(x){return x>0;}); if(iv.length) s.intervaloDias=iv[0];
+  /* PROTOCOLO COMPLETO (round-trip: a planilha é o início e o fim) — nomes que o downloadStudyWorkbook lê */
+  var _pi=function(v){ return _impDateISO(v)||v||''; };
+  s.protocolo={ proposta:f.proposta||'', ret:f.ret||'', cultivar:f.cultivar||'', equipamento:f.equipamento||'',
+    diretor:f.diretor||'', plantio:_pi(f.plantio), pressao:f.pressao||'', municipio:f.municipio||'', tecnico:f.tecnico||'',
+    emergencia:_pi(f.emergencia), volumeCalda:f.volume||'', uf:f.uf||'', cultura:f.cultura||'', espacamento:f.espacamento||'',
+    ponta:f.ponta||'', latitude:f.latitude||'', alvo:f.alvo||'', tamanhoParcela:f.parcela||'', bicos:f.bicos||'',
+    longitude:f.longitude||'', populacao:f.populacao||'', distanciaBico:f.distancia||'', altitude:f.altitude||'',
+    termino:_pi(f.dataTermino), quadra:f.quadra||'', delineamento:f.delineamento||'', estacao:f.estacao||'',
+    adjuvante:f.adjuvante||'', endereco:f.endereco||'', classeSolo:f.classeSolo||'' };
+  try{ s.protocoloOrigem={ arquivo:'modelo-protocolo', importadoEm:new Date().toISOString(), campos:JSON.parse(JSON.stringify(f)) }; }catch(e){}
   s._ts=Date.now();
   data[qid].estudos.push(s);
   /* cultura na quadra, se vazia */

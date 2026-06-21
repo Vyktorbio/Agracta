@@ -2876,6 +2876,7 @@ function renderRelatorioForense(rel){
   $("#card-resultados").classList.remove("oculto");
   setNavTravado("resultados", false);
   setNavAtivo("resultados");
+  _agractaEmitirResultado(rel); /* devolve o forense p/ o runner headless do Agracta */
   if(!rel.ok){
     out.appendChild(renderErroRelatorio(rel));
     anexarTrilhaAuditoria(out, rel);
@@ -3337,6 +3338,7 @@ function __agractaHandoff(payload){
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
         /* tipo de resposta: deixa o MOTOR detectar pelos dados (mais confiável que o rótulo da avaliação) */
         _set('opt-unidade', payload.doseUnit);
+        if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
         if(typeof atualizarPipeline==='function') atualizarPipeline();
         /* auto-roda a análise quando nada bloqueia (autoteste é só aviso no embed) */
         setTimeout(function(){ var b=document.getElementById('btn-analisar'); if(b && !b.disabled) b.click(); }, 400);
