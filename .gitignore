@@ -11,6 +11,8 @@ ecowitt-credenciais.json
 
 # Backups e exports com dados reais de quadras/estudos (nunca versionar)
 *.zip
+!estatistica/pyodide/python_stdlib.zip
+!estatistica/pyodide/openblas-0.3.26.zip
 *.xlsx
 backups/
 exports/
