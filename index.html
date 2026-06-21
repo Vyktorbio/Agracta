@@ -1057,6 +1057,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <script src="vendor/leaflet-rotate.js"></script>
 <script src="vendor/Leaflet.ImageOverlay.Rotated.js"></script>
 <script src="vendor/quadras-default.js"></script>
+<script src="vendor/biocalc-campo-core.js"></script>
 <script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script>
@@ -2289,6 +2290,8 @@ function toggleMainMenu(){
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
     (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
+    '<div class="mm-sep"></div>'+
+    '<button onclick="closeMainMenu();openCalcAplicacao()">🧪 Calculadora de aplicação</button>'+
     '<div class="mm-sep"></div>'+
     (adm?'<button onclick="closeMainMenu();exportXlsx(false)">'+ic('sheet')+' Exportar planilha (Excel/Sheets)</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();exportData()">'+ic('save')+' Backup (arquivo)</button>'+
@@ -4691,7 +4694,7 @@ function buildStudyModelo(qid, s){
   /* TRATAMENTOS (rótulos linha 16 ; dados linhas 17+) */
   lbl(15,0,'DESCRIÇÃO DOS TRATAMENTOS');
   ['N°','Tratamentos','Ingrediente Ativo','Concentração (g/kg) (g/l)','Dose (g/ha) (ml/ha)','Concentração de g i.a./ha','Nº de Aplicações','Intervalo de Aplicação (Dias)','Volume de Calda','Adjuvante'].forEach(function(h,c){ lbl(16,c,h); });
-  trats.slice(0,6).forEach(function(t,i){ var r=17+i; var nm=(t.produto||'').trim(); if(test===t.id) nm=nm?(nm+' (testemunha)'):'Testemunha'; put(r,0,i+1); put(r,1,nm); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
+  trats.forEach(function(t,i){ var r=17+i; var nm=(t.produto||'').trim(); if(test===t.id) nm=nm?(nm+' (testemunha)'):'Testemunha'; put(r,0,i+1); put(r,1,nm); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
   /* CLIMA (rótulos col 11 ; aplicações cols 12+) */
   lbl(1,11,'Dados climáticos relativos à aplicação');
   [[2,'Aplicação'],[3,'Data da aplicação'],[4,'Horário inicial'],[5,'Horário final'],[6,'T °C inicial'],[7,'T °C final'],[8,'UR (%) inicial'],[9,'UR (%) final'],[10,'Vento (km/h) inicial'],[11,'Vento (km/h) final'],[12,'Nebulosidade (%)'],[13,'Estádio fenológico']].forEach(function(p){ lbl(p[0],11,p[1]); });
@@ -4709,16 +4712,44 @@ function buildStudyModelo(qid, s){
   var blk=0;
   avs.forEach(function(a){ (a.variaveis||[]).forEach(function(v){
     if(blk>=20) return; var c0=11+8*blk; blk++;
+    var st=(typeof statDBC==='function')?statDBC(s,a,v):null; /* ANOVA-DBC + Tukey (letras/p/CV) */
     lbl(15,c0,'AVALIAÇÃO — '+v+' · '+BR(a.data));
-    lbl(16,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(16,c0+1+ri,rl); }); lbl(16,c0+5,'média'); lbl(16,c0+6,'E%');
+    lbl(16,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(16,c0+1+ri,rl); }); lbl(16,c0+5,'média'); lbl(16,c0+6,'E%'); lbl(16,c0+7,'letra');
     function med(tid){ var vs=[]; for(var rp=1;rp<=reps;rp++){ var raw=_avNota(a,{key:_avRowKey(tid,rp),tratId:tid,rep:rp},v); if(raw!=null&&raw!==''){ var n=parseFloat(String(raw).replace(',','.')); if(!isNaN(n))vs.push(n);} } return vs.length?vs.reduce(function(x,y){return x+y;},0)/vs.length:null; }
     var tMed=test?med(test):null;
-    trats.slice(0,7).forEach(function(t,ti){ var r=17+ti; put(r,c0,ti+1);
+    trats.forEach(function(t,ti){ var r=17+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
       if(test && t.id!==test && tMed!=null && tMed>0 && m!=null) put(r,c0+6, Math.round((tMed-m)/tMed*1000)/10);
+      if(st && st.letras) put(r,c0+7, st.letras[t.id]||'');
     });
+    if(st){ var rf=17+trats.length; lbl(rf,c0,'F='+_r1(st.F)+'  p='+(st.p<0.001?'<0,001':_r1(st.p))+'  CV='+_r1(st.cv)+'%'+(st.sig?'  *':'  ns')); }
   }); });
+  /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento.
+     Usa o "Tamanho da Parcela" do próprio modelo (dim. da quadra) e nº de repetições como nº de parcelas. */
+  if(window.BioCalculoCampo && dim){
+    var crow=maxR+2;
+    lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(dim.comprimento)+'×'+Math.round(dim.largura)+' m · '+reps+' parcela(s)/trat)');
+    var ch=crow+1;
+    ['N°','Tratamento','Dose','V.Calda (L/ha)','Concentração','Calda/parcela','Calda total','Produto/parcela','Produto total'].forEach(function(h,c){ lbl(ch,c,h); });
+    var _cf=function(x,p){ return BioCalculoCampo.formatBR(x,p==null?2:p); };
+    trats.forEach(function(t,i){
+      var rr=ch+1+i;
+      put(rr,0,i+1); put(rr,1,(t.produto||t.id)+(test===t.id?' (test.)':'')); put(rr,2,t.dose||''); put(rr,3,t.volume||'');
+      var dval=(typeof _calcNum==='function')?_calcNum(t.dose):parseFloat(String(t.dose||'').replace(',','.'));
+      var vol=(typeof _calcNum==='function')?_calcNum(t.volume):parseFloat(String(t.volume||'').replace(',','.'));
+      var dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
+      if(dval>0 && vol>0){
+        try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:dim.comprimento,plotWidth:dim.largura,numPlots:reps,numBottles:1,deadVolumeMl:0,bottleCapacity:0});
+          put(rr,4,_cf(res.concentration)+' '+res.concentrationUnit);
+          put(rr,5,_cf(res.sprayPerPlotMl/1000)+' L');
+          put(rr,6,_cf(res.sprayTotalMl/1000)+' L');
+          put(rr,7,_cf(res.productPerPlot)+' '+res.productUnit);
+          put(rr,8,_cf(res.productTotal)+' '+res.productUnit);
+        }catch(e){}
+      }
+    });
+  }
   /* serializa em grade TSV (colar em A1) */
   var out=[]; for(var r=0;r<=maxR;r++){ var row=[]; for(var c=0;c<=maxC;c++){ row.push(cells[r+'_'+c]||''); } out.push(row.join('\t')); }
   while(out.length && !out[out.length-1].replace(/\t/g,'').length) out.pop(); /* tira linhas em branco do fim */
@@ -5915,6 +5946,212 @@ function nextEventV2(study){
 
 /* ============ RENDER DO PAINEL DE ESTUDO (tela cheia) ============ */
 
+/* ===================== CALCULADORA DE APLICAÇÃO (motor BioCalculo campo, embutida) =====================
+   Reusa vendor/biocalc-campo-core.js (window.BioCalculoCampo). Pré-preenche dose/volume dos tratamentos
+   do estudo; o usuário ajusta tamanho da parcela / frascos. Sem identidade externa — tela nativa do Agracta. */
+var _calcSel=null; /* {qid,sid} estudo selecionado na calculadora */
+function _calcNum(v){ var BC=window.BioCalculoCampo; return BC?BC.parseNum(v):(parseFloat(String(v==null?'':v).replace(',','.'))||0); }
+function _calcVal(id){ var el=document.getElementById(id); return el?el.value:''; }
+function _calcDoseUnit(raw){
+  var u=String(raw||'').toLowerCase();
+  if(/m\s*l/.test(u)) return 'mL/ha';            /* mL antes de L */
+  if(/k\s*g/.test(u)) return 'kg/ha';            /* kg antes de g */
+  if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
+  return 'L/ha';
+}
+function _calcAllStudies(){
+  var out=[]; try{ ensureLocais(); }catch(e){}
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config') return;
+    ((data[qid]&&data[qid].estudos)||[]).forEach(function(s){
+      out.push({qid:qid, sid:s.id, label:quadraNome(qid)+' · '+(s.codigo||s.nome||s.id)+' ('+(((s.tratamentos)||[]).length)+'t)'});
+    });
+  });
+  return out;
+}
+function _calcCss(){
+  if(document.getElementById('calcCss')) return;
+  var s=document.createElement('style'); s.id='calcCss';
+  s.textContent='.calc-ovl{position:fixed;inset:0;z-index:3500;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;padding:20px 12px;overflow:auto;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}'+
+  '.calc-box{width:100%;max-width:560px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.55);padding:16px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}'+
+  '.calc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.calc-title{font-size:16px;font-weight:900}.calc-x{background:none;border:none;color:#9fb1a5;font-size:24px;cursor:pointer;line-height:1}'+
+  '.calc-sub{font-size:11px;color:var(--text-2,#9fb1a5);margin:-4px 0 10px}'+
+  '.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.calc-f{display:flex;flex-direction:column;gap:3px}.calc-f.full{grid-column:1 / -1}'+
+  '.calc-lab{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3,#7c8a80);font-weight:800}'+
+  '.calc-inp,.calc-sel{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;color:var(--text,#e8efe9);padding:9px;font-size:14px;outline:none;width:100%;box-sizing:border-box}'+
+  '.calc-inp:focus{border-color:#2e7d3e}'+
+  '.calc-t{font-size:11px;border-collapse:collapse;width:100%;margin-top:4px}.calc-t th,.calc-t td{padding:6px 5px;border-bottom:1px solid var(--border,#26322b);text-align:right}.calc-t th:first-child,.calc-t td:first-child{text-align:left}.calc-t th{color:var(--text-3,#7c8a80);font-size:10px;text-transform:uppercase;letter-spacing:.4px}'+
+  '.calc-tname{color:#9fe0b6;font-weight:700}.calc-terr{color:#ff9a8a;font-size:10px}.calc-empty{color:#8aa88a;font-size:12px;padding:10px 0;text-align:center}'+
+  '.calc-card{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:11px;padding:9px 11px;margin-bottom:8px}.calc-cardh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}.calc-kv{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:11px}.calc-kv span{color:var(--text-2,#9fb1a5)}.calc-kv b{color:var(--text,#e8efe9);font-weight:700}'+
+  '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
+  '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
+  document.head.appendChild(s);
+}
+function openCalcAplicacao(qid,sid){
+  if(!window.BioCalculoCampo){ alert('O motor de cálculo (BioCalculo) não carregou. Recarregue o app.'); return; }
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  if(qid&&sid) _calcSel={qid:qid,sid:sid};
+  else if(typeof curV!=='undefined'&&curV&&typeof curSid!=='undefined'&&curSid) _calcSel={qid:curV,sid:curSid};
+  else { var all=_calcAllStudies(); _calcSel=all.length?{qid:all[0].qid,sid:all[0].sid}:null; }
+  _calcCss();
+  var ov=document.getElementById('calcOvl');
+  if(!ov){ ov=document.createElement('div'); ov.id='calcOvl'; ov.className='calc-ovl'; ov.onclick=function(e){ if(e.target===ov) closeCalc(); }; document.body.appendChild(ov); }
+  ov.style.display='flex';
+  _calcRenderShell();
+}
+function closeCalc(){ var ov=document.getElementById('calcOvl'); if(ov) ov.style.display='none'; }
+function _calcStudy(){
+  var sel=_calcSel; if(!sel) return null;
+  var q=data[sel.qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sel.sid;});
+  return s?normalizeStudy(s):null;
+}
+function _calcRenderShell(){
+  var ov=document.getElementById('calcOvl'); if(!ov) return;
+  var all=_calcAllStudies();
+  var study=_calcStudy();
+  var dims=_calcSel?quadraDims(_calcSel.qid):null;
+  var defLen=dims?Math.round(dims.comprimento):'';
+  var defWid=dims?Math.round(dims.largura):'';
+  var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
+  var defVol=''; if(study){ var tv=(study.tratamentos||[]).map(function(t){return t.volume;}).find(function(v){return v;}); if(tv) defVol=_calcNum(tv); }
+  var selHtml='';
+  if(all.length>1){
+    selHtml='<div class="calc-f full"><span class="calc-lab">Estudo</span><select id="calcStudy" class="calc-sel" onchange="_calcPick(this.value)">'+
+      all.map(function(o){ return '<option value="'+esc(o.qid+'|'+o.sid)+'"'+((_calcSel&&_calcSel.qid===o.qid&&_calcSel.sid===o.sid)?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+'</select></div>';
+  }
+  var refTxt = dims? ('Quadra ~'+Math.round(dims.comprimento)+'×'+Math.round(dims.largura)+' m — ajuste para o tamanho da PARCELA') : 'Informe o tamanho da parcela';
+  ov.innerHTML='<div class="calc-box">'+
+    '<div class="calc-top"><div class="calc-title">🧪 Calculadora de aplicação</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
+    '<div class="calc-grid">'+
+      selHtml+
+      '<div class="calc-f"><span class="calc-lab">Comprimento da parcela (m)</span><input id="calcLen" class="calc-inp" type="number" step="0.1" value="'+defLen+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Largura da parcela (m)</span><input id="calcWid" class="calc-inp" type="number" step="0.1" value="'+defWid+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Nº de parcelas / tratamento</span><input id="calcPlots" class="calc-inp" type="number" step="1" value="'+defReps+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume de calda padrão (L/ha)</span><input id="calcVol" class="calc-inp" type="number" step="1" value="'+defVol+'" placeholder="se o trat. não tiver" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume morto (mL)</span><input id="calcDead" class="calc-inp" type="number" step="1" value="0" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Nº de frascos / preparo</span><input id="calcBottles" class="calc-inp" type="number" step="1" value="1" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Capacidade do frasco (L)</span><input id="calcCap" class="calc-inp" type="number" step="0.1" value="0" placeholder="0 = ignorar" oninput="_calcCompute()"></div>'+
+    '</div>'+
+    '<div class="calc-sub">'+esc(refTxt)+'</div>'+
+    '<div id="calcResults"></div>'+
+    '<div class="calc-actions"><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
+  '</div>';
+  _calcCompute();
+}
+function _calcPick(v){ var p=String(v||'').split('|'); if(p.length===2){ _calcSel={qid:p[0],sid:p[1]}; _calcRenderShell(); } }
+function _calcCompute(){
+  var box=document.getElementById('calcResults'); if(!box) return;
+  var study=_calcStudy();
+  if(!study||!(study.tratamentos||[]).length){ box.innerHTML='<div class="calc-empty">Estudo sem tratamentos cadastrados.</div>'; return; }
+  var BC=window.BioCalculoCampo;
+  var len=_calcNum(_calcVal('calcLen')), wid=_calcNum(_calcVal('calcWid'));
+  var plots=Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1);
+  var volDef=_calcNum(_calcVal('calcVol'));
+  var dead=_calcNum(_calcVal('calcDead'));
+  var bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1);
+  var cap=_calcNum(_calcVal('calcCap'));
+  function f(v,p){ return BC.formatBR(v,p==null?2:p); }
+  var html='';
+  (study.tratamentos||[]).forEach(function(t){
+    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
+    var vol=t.volume?_calcNum(t.volume):volDef;
+    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(t.testemunha?' <span style="color:#dccd8c">(test.)</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
+    var res=null, err='';
+    try{ res=BC.calculateTreatment({doseHa:dval, doseUnit:dunit, sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap}); }
+    catch(e){ err=e.message||String(e); }
+    html+='<div class="calc-card">'+head;
+    if(err){ html+='<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
+    html+='<div class="calc-kv">'+
+      '<span>Produto / parcela</span><b>'+f(res.productPerPlot)+' '+res.productUnit+'</b>'+
+      '<span>Calda / parcela</span><b>'+f(res.sprayPerPlotMl/1000)+' L</b>'+
+      '<span>Produto total</span><b>'+f(res.productTotal)+' '+res.productUnit+'</b>'+
+      '<span>Calda total</span><b>'+f(res.sprayTotalMl/1000)+' L</b>'+
+      '<span>Concentração</span><b>'+f(res.concentration)+' '+res.concentrationUnit+'</b>'+
+      '<span>Produto / frasco</span><b>'+f(res.productPerBottle)+' '+res.productUnit+'</b>'+
+    '</div>';
+    if(cap>0 && !res.bottleCapacityOk) html+='<div class="calc-warn">⚠ Calda total não cabe em '+bottles+' frasco(s) de '+f(cap,1)+' L — mínimo '+res.minBottles+'.</div>';
+    html+='</div>';
+  });
+  box.innerHTML=html||'<div class="calc-empty">—</div>';
+}
+function _calcCopy(){
+  var study=_calcStudy(); if(!study) return;
+  var BC=window.BioCalculoCampo;
+  var len=_calcNum(_calcVal('calcLen')), wid=_calcNum(_calcVal('calcWid')), plots=Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1);
+  var volDef=_calcNum(_calcVal('calcVol')), dead=_calcNum(_calcVal('calcDead')), bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1), cap=_calcNum(_calcVal('calcCap'));
+  function f(v,p){ return BC.formatBR(v,p==null?2:p); }
+  var L=['CALCULADORA DE APLICAÇÃO — '+(study.codigo||study.nome||study.id),
+    'Parcela '+f(len,1)+'×'+f(wid,1)+' m · '+plots+' parcela(s)/trat · vol. morto '+f(dead,0)+' mL'+(cap>0?(' · frasco '+f(cap,1)+' L'):''),
+    'Trat\tProduto\tDose\tProd/parc\tCalda/parc(L)\tProd total\tCalda total(L)'];
+  (study.tratamentos||[]).forEach(function(t){
+    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose), vol=t.volume?_calcNum(t.volume):volDef, r;
+    try{ r=BC.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:len,plotWidth:wid,numPlots:plots,numBottles:bottles,deadVolumeMl:dead,bottleCapacity:cap}); }catch(e){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
+    L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+f(r.productPerPlot)+' '+r.productUnit+'\t'+f(r.sprayPerPlotMl/1000)+'\t'+f(r.productTotal)+' '+r.productUnit+'\t'+f(r.sprayTotalMl/1000));
+  });
+  var txt=L.join('\n');
+  if(typeof _stxCopy==='function'){ _stxCopy(txt).then(function(ok){ if(typeof _stxToast==='function') _stxToast(ok?'✓ Copiado':'Não consegui copiar'); }); }
+  else { try{ navigator.clipboard.writeText(txt); alert('Copiado.'); }catch(e){ alert(txt); } }
+}
+
+/* ===================== ANÁLISE ESTATÍSTICA (BioEstat embutido em estatistica/) =====================
+   Monta a matriz longa (Tratamento/Repeticao/Variavel/Valor + contexto) da avaliação do estudo,
+   passa via localStorage e abre o BioEstat num iframe. Modo 'analise' (Geral) ou 'forense'. */
+function _bioestatAoa(qid, study){
+  var q=data[qid]||{};
+  var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
+  var locNome=loc.nome||'';
+  var qn=(typeof quadraNome==='function')?quadraNome(qid):qid;
+  var reps=Math.max(1,parseInt(study.numRepeticoes)||1);
+  var trats=study.tratamentos||[];
+  var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'];
+  var rows=[header];
+  (study.avaliacoes||[]).forEach(function(a){
+    (a.variaveis||[]).forEach(function(v){
+      trats.forEach(function(t){
+        for(var r=1;r<=reps;r++){
+          var val=_avNota(a,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v);
+          if(val==null||String(val).trim()==='') continue;
+          rows.push([locNome, qn, (q.cultura||''), (study.codigo||study.nome||study.id), (isoToBR(a.data)||a.data||''), (a.tipo||''), (a.bbch||''), t.id, r, (t.produto||''), v, val]);
+        }
+      });
+    });
+  });
+  return rows;
+}
+function openBioestat(qid, sid, modo){
+  var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){return x.id===sid;});
+  if(!s){ alert('Estudo não encontrado.'); return; }
+  s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
+  var aoa=_bioestatAoa(qid, s);
+  if(aoa.length<2){ alert('Esta avaliação ainda não tem valores preenchidos para analisar.'); return; }
+  try{ localStorage.setItem('agracta-bioestat-handoff', JSON.stringify({aoa:aoa, modo:(modo||'analise'), titulo:(s.codigo||s.nome||s.id)})); }
+  catch(e){ alert('Não consegui preparar os dados para a análise.'); return; }
+  _openBioestatFrame(modo);
+}
+function _openBioestatFrame(modo){
+  var ov=document.getElementById('bioOvl');
+  if(!ov){ ov=document.createElement('div'); ov.id='bioOvl'; ov.style.cssText='position:fixed;inset:0;z-index:4000;background:#0a110a;display:flex;flex-direction:column'; document.body.appendChild(ov); }
+  ov.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#101613;border-bottom:1px solid #26322b;color:#e8efe9;font:700 13px system-ui;flex:0 0 auto">'+
+    '<span>'+(modo==='forense'?'🔎 Triagem forense':'📊 Análise estatística')+'</span>'+
+    '<button onclick="closeBioestat()" style="background:#222;color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer">Fechar</button>'+
+  '</div>'+
+  '<iframe id="bioFrame" title="Estatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
+  ov.style.display='flex';
+}
+function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
+function _bioestatButtonsHtml(qid,sid,study){
+  var hasVals=(study.avaliacoes||[]).some(function(a){ return (a.variaveis||[]).length && a.notas && Object.keys(a.notas).length; });
+  if(!hasVals) return '';
+  return '<div class="sd-section"><div class="sd-section-title">Bioestatística</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button style="flex:1;min-width:150px;background:#1f5a2a;color:#eafaea;border:1px solid #2e7d3e;border-radius:9px;padding:11px;font-weight:800;cursor:pointer" onclick="openBioestat(\''+qid+'\',\''+sid+'\',\'analise\')">📊 Análise estatística</button>'+
+      '<button style="flex:1;min-width:150px;background:#18251b;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:11px;font-weight:800;cursor:pointer" onclick="openBioestat(\''+qid+'\',\''+sid+'\',\'forense\')">🔎 Forense</button>'+
+    '</div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:6px">Análise completa (ANOVA/GLM, Tukey/Scott-Knott, dose-resposta) e triagem forense de integridade — roda no próprio aparelho.</div>'+
+  '</div>';
+}
+
 function openStudyDetail(qid,sid){
   curV=qid;curSid=sid;
   var q=data[qid]||{};
@@ -5931,6 +6168,7 @@ function openStudyDetail(qid,sid){
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">'+ic('copy',15)+' Copiar</button>';
+  h+='<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">🧪 Calc</button>';
   h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
   h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
   if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
@@ -6038,6 +6276,7 @@ function openStudyDetail(qid,sid){
   h+='</div>';
   h+=studyAudpcHtml(study);
   h+=studyChartsHtml(study);
+  h+=_bioestatButtonsHtml(qid,sid,study);
   h+=studyAuditHtml(study);
 
   /* Botão excluir estudo */

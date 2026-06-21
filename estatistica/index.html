@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<title>Estatística — Agracta</title>
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-3" />
+<style id="agracta-embed">
+  /* Embutido no Agracta — sem identidade própria e sem fontes de dados manuais
+     (os dados chegam do Agracta via handoff). Mantém o botão Autoteste (gate BPL do motor). */
+  .appbar .brand-mark, .appbar .brand-copy, #btn-instalar, .brand-footer { display:none !important; }
+  .appbar { justify-content:flex-end !important; }
+  #card-dados .tabs { display:none !important; }
+  #card-dados [data-painel="colar"], #card-dados [data-painel="arquivo"],
+  #card-dados [data-painel="digitar"], #card-dados [data-painel="exemplo"] { display:none !important; }
+  #card-dados [data-painel="matriz"] { display:block !important; }
+  #card-dados [data-painel="matriz"] > .dica,
+  #card-dados [data-painel="matriz"] #entrada-matriz { display:none !important; }
+  #card-dados .registro-grid, #card-dados .custodia-panel { display:none !important; }
+  main { padding-top:12px; }
+</style>
+</head>
+<body>
+<header class="appbar" aria-label="BioEnsaio">
+  <div class="brand-mark">BE</div>
+  <div class="brand-copy">
+    <strong>BioEnsaio</strong>
+    <span>Estatística para bioensaios</span>
+  </div>
+  <div class="appbar-actions">
+    <button class="install-btn selftest-btn" id="btn-autoteste" type="button">Autoteste</button>
+    <button class="install-btn" id="btn-instalar" type="button">Instalar</button>
+  </div>
+</header>
+
+<nav class="appnav" aria-label="Menu principal">
+  <a class="appnav-item ativo" href="#card-dados" data-nav="dados">Dados</a>
+  <a class="appnav-item travado" href="#card-papeis" data-nav="papeis" aria-disabled="true">Papéis</a>
+  <a class="appnav-item" href="#card-opcoes" data-nav="geral">Geral</a>
+  <a class="appnav-item" href="#card-opcoes-tempo" data-nav="tempo">Tempo</a>
+  <a class="appnav-item" href="#card-opcoes-validacao" data-nav="validacao">Validação</a>
+  <a class="appnav-item" href="#card-opcoes-forense" data-nav="forense">Forense</a>
+  <a class="appnav-item travado" href="#card-resultados" data-nav="resultados" aria-disabled="true">Resultados</a>
+</nav>
+
+<main>
+  <!-- 1. DADOS -->
+  <section class="card" id="card-dados">
+    <h2><span class="num">1</span> Dados</h2>
+    <div class="registro-grid">
+      <label>ID do estudo
+        <input type="text" id="audit-estudo" autocomplete="off" maxlength="80" required placeholder="ex.: GLP-2026-001" />
+      </label>
+      <label>Responsável
+        <input type="text" id="audit-responsavel" autocomplete="off" maxlength="80" required placeholder="nome ou iniciais" />
+      </label>
+    </div>
+    <details class="custodia-panel">
+      <summary>Cadeia de custódia</summary>
+      <div class="custodia-grid">
+        <label>Origem primária
+          <select id="audit-origem-bruta">
+            <option value="">Não informado</option>
+            <option value="planilha">Planilha original</option>
+            <option value="caderno">Caderno de laboratório</option>
+            <option value="equipamento">Equipamento/instrumento</option>
+            <option value="matriz">Matriz</option>
+            <option value="outro">Outro</option>
+          </select>
+        </label>
+        <label>Registro bruto
+          <input type="text" id="audit-registro-bruto" autocomplete="off" maxlength="120" placeholder="arquivo, página, lote ou código" />
+        </label>
+        <label>Coletor/origem
+          <input type="text" id="audit-coletor" autocomplete="off" maxlength="80" placeholder="quem gerou/coletou" />
+        </label>
+        <label>Data/hora da coleta
+          <input type="text" id="audit-data-coleta" autocomplete="off" maxlength="40" placeholder="AAAA-MM-DD HH:MM" />
+        </label>
+        <label>Local/equipamento
+          <input type="text" id="audit-local-equipamento" autocomplete="off" maxlength="120" placeholder="campo, sala, instrumento" />
+        </label>
+        <label>Observação/anexo
+          <input type="text" id="audit-observacao-custodia" autocomplete="off" maxlength="160" placeholder="protocolo, foto, anexo, OS" />
+        </label>
+      </div>
+    </details>
+    <div class="tabs" role="tablist">
+      <button class="tab ativo" data-modo="colar">Colar</button>
+      <button class="tab" data-modo="arquivo">Arquivo</button>
+      <button class="tab" data-modo="matriz">Matriz</button>
+      <button class="tab" data-modo="digitar">Digitar</button>
+      <button class="tab" data-modo="exemplo">Exemplos</button>
+    </div>
+
+    <div class="painel" data-painel="colar">
+      <p class="dica">Cole sua tabela ou o bloco de avaliação do modelo (Trat., a, b, c, d, média, E%).</p>
+      <textarea id="entrada-colar" rows="7" placeholder="Trat.&#9;a&#9;b&#9;c&#9;d&#9;média&#9;E%&#10;1&#9;0&#9;0&#9;0&#9;0&#9;0&#9;-&#10;2&#9;7&#9;6&#9;8&#9;7&#9;7&#9;70"></textarea>
+      <button class="btn" id="btn-colar">Carregar dados</button>
+      <p class="dica" id="colar-status" aria-live="polite"></p>
+    </div>
+
+    <div class="painel oculto" data-painel="arquivo">
+      <p class="dica">Selecione um arquivo <b>.xlsx</b>, <b>.xls</b> ou <b>.csv</b>.</p>
+      <input type="file" id="entrada-arquivo" accept=".xlsx,.xls,.csv" />
+    </div>
+
+    <div class="painel oculto" data-painel="matriz">
+      <p class="dica">Importe a planilha exportada pelo Matriz. O BioEnsaio vai separar estudo, data e variável antes de analisar.</p>
+      <input type="file" id="entrada-matriz" accept=".xlsx,.xls,.csv" />
+      <div id="matriz-importador" class="matriz-importador oculto"></div>
+    </div>
+
+    <div class="painel oculto" data-painel="digitar">
+      <p class="dica">Monte a tabela. Use + para linhas/colunas.</p>
+      <div class="grade-acoes">
+        <button class="btn-mini" id="add-col">+ coluna</button>
+        <button class="btn-mini" id="add-lin">+ linha</button>
+      </div>
+      <div id="grade-wrap" class="grade-wrap"></div>
+      <button class="btn" id="btn-digitar">Usar esta tabela</button>
+    </div>
+
+    <div class="painel oculto" data-painel="exemplo">
+      <p class="dica">Conjuntos de exemplo para testar o app.</p>
+      <select id="sel-exemplo" class="select-full"></select>
+      <button class="btn" id="btn-exemplo">Carregar exemplo</button>
+    </div>
+
+    <div id="preview" class="preview oculto"></div>
+  </section>
+
+  <!-- 2. PAPÉIS -->
+  <div id="analise-area"></div>
+  <section class="card oculto" id="card-papeis">
+    <h2><span class="num">2</span> Papéis das colunas</h2>
+    <p class="dica">O app já tentou adivinhar. Ajuste se precisar.</p>
+    <div id="papeis-lista" class="papeis-lista"></div>
+  </section>
+
+  <!-- 3. CONFERÊNCIA -->
+  <section class="card oculto" id="card-pipeline">
+    <h2><span class="num">3</span> Conferência</h2>
+    <div id="pipeline-status"></div>
+  </section>
+
+  <!-- 4. OPÇÕES -->
+  <section class="card oculto" id="card-opcoes">
+    <h2><span class="num">4</span> Análise</h2>
+    <div class="analysis-switch" role="tablist" aria-label="Tipo de análise">
+      <button class="analysis-mode ativo" type="button" data-modo="analise">Geral</button>
+      <button class="analysis-mode" type="button" data-modo="tempo">Tempo</button>
+      <button class="analysis-mode" type="button" data-modo="validacao">Validação</button>
+      <button class="analysis-mode" type="button" data-modo="forense">Forense</button>
+    </div>
+    <div class="opcoes-grid">
+      <label>Nível de significância (α)
+        <select id="opt-alfa">
+          <option value="0.05" selected>0,05 (5%)</option>
+          <option value="0.01">0,01 (1%)</option>
+          <option value="0.10">0,10 (10%)</option>
+        </select>
+      </label>
+      <label>Tipo de resposta
+        <select id="opt-tipo">
+          <option value="">Detectar automaticamente</option>
+          <option value="continua">Contínua (diâmetro, peso…)</option>
+          <option value="contagem">Contagem (nº de colônias/insetos)</option>
+          <option value="proporcao">Proporção/severidade (%)</option>
+          <option value="binario">Binária (vivo/morto)</option>
+          <option value="binomial">Binomial (x de n)</option>
+        </select>
+      </label>
+      <label>Unidade da dose
+        <input type="text" id="opt-unidade" list="unidades-dose" placeholder="ex.: ppm, L/ha, g/ha" />
+        <datalist id="unidades-dose">
+          <option value="ppm"></option><option value="%"></option>
+          <option value="L/ha"></option><option value="mL/ha"></option>
+          <option value="kg/ha"></option><option value="g/ha"></option>
+          <option value="mg/ha"></option><option value="g/L"></option>
+          <option value="mg/L"></option><option value="µg/mL"></option>
+          <option value="g p.c./ha"></option><option value="g i.a./ha"></option>
+          <option value="mL/100L"></option><option value="g/100L"></option>
+        </datalist>
+      </label>
+      <label>Níveis de CL/DL (%) <span class="op-tag">dose-resposta</span>
+        <input type="text" id="opt-niveis" placeholder="ex.: 50; 90; 95; 99" />
+      </label>
+      <label>Mortalidade do controle (%) <span class="op-tag">Abbott</span>
+        <input type="text" id="opt-controle" inputmode="decimal" placeholder="ex.: 8 (se não há dose 0)" />
+      </label>
+      <label class="linha-toda">
+        <input type="checkbox" id="opt-logdose" checked />
+        Ajustar dose-resposta em log₁₀ da dose (recomendado)
+      </label>
+    </div>
+  </section>
+
+  <!-- 4T. OPÇÕES — MORTALIDADE NO TEMPO -->
+  <section class="card oculto" id="card-opcoes-tempo">
+    <h2><span class="num">4</span> Análise</h2>
+    <div class="analysis-switch" role="tablist" aria-label="Tipo de análise">
+      <button class="analysis-mode" type="button" data-modo="analise">Geral</button>
+      <button class="analysis-mode ativo" type="button" data-modo="tempo">Tempo</button>
+      <button class="analysis-mode" type="button" data-modo="validacao">Validação</button>
+      <button class="analysis-mode" type="button" data-modo="forense">Forense</button>
+    </div>
+    <div class="opcoes-grid">
+      <label>Controle negativo
+        <select id="opt-controle-neg"><option value="">(1º tratamento)</option></select>
+      </label>
+      <label>Scott-Knott a partir de
+        <select id="opt-sk">
+          <option value="6" selected>&gt; 6 tratamentos</option>
+          <option value="0">sempre Scott-Knott</option>
+          <option value="999">sempre Tukey</option>
+        </select>
+      </label>
+      <label>Nível de significância (α)
+        <select id="opt-alfa-tempo">
+          <option value="0.05" selected>0,05 (5%)</option>
+          <option value="0.01">0,01 (1%)</option>
+          <option value="0.10">0,10 (10%)</option>
+        </select>
+      </label>
+      <label>Mort. máx. do controle (%)
+        <input type="text" id="opt-ctrlmax" inputmode="decimal" value="20" />
+      </label>
+    </div>
+  </section>
+
+  <!-- 4V. OPÇÕES — VALIDAÇÃO DE MÉTODO -->
+  <section class="card oculto" id="card-opcoes-validacao">
+    <h2><span class="num">4</span> Validação</h2>
+    <div class="analysis-switch" role="tablist" aria-label="Tipo de análise">
+      <button class="analysis-mode" type="button" data-modo="analise">Geral</button>
+      <button class="analysis-mode" type="button" data-modo="tempo">Tempo</button>
+      <button class="analysis-mode ativo" type="button" data-modo="validacao">Validação</button>
+      <button class="analysis-mode" type="button" data-modo="forense">Forense</button>
+    </div>
+    <div class="opcoes-grid">
+      <label>Nível de significância (α)
+        <select id="opt-alfa-valid">
+          <option value="0.05" selected>0,05 (5%)</option>
+          <option value="0.01">0,01 (1%)</option>
+          <option value="0.10">0,10 (10%)</option>
+        </select>
+      </label>
+      <label>Concentração C para Horwitz
+        <input type="text" id="opt-horwitz-c" inputmode="decimal" placeholder="fração mássica, ex.: 1e-6" />
+      </label>
+      <label class="linha-toda">
+        <input type="checkbox" id="opt-robustez" checked />
+        Incluir avaliação de robustez quando houver grupo/condição variada
+      </label>
+      <label class="linha-toda">
+        <input type="checkbox" id="opt-valid-branco" checked />
+        Usar coluna de branco para LD/LQ quando informada
+      </label>
+      <label>R² mínimo da curva
+        <input type="text" id="opt-crit-r2" inputmode="decimal" value="0,99" />
+      </label>
+      <label>Recuperação mínima (%)
+        <input type="text" id="opt-crit-rec-min" inputmode="decimal" value="80" />
+      </label>
+      <label>Recuperação máxima (%)
+        <input type="text" id="opt-crit-rec-max" inputmode="decimal" value="120" />
+      </label>
+      <label>CV/DPR máximo (%)
+        <input type="text" id="opt-crit-cv-max" inputmode="decimal" value="20" />
+      </label>
+      <label>HorRat mínimo
+        <input type="text" id="opt-crit-horrat-min" inputmode="decimal" value="0,5" />
+      </label>
+      <label>HorRat máximo
+        <input type="text" id="opt-crit-horrat-max" inputmode="decimal" value="2,0" />
+      </label>
+    </div>
+  </section>
+
+  <!-- 4F. OPÇÕES — TRIAGEM FORENSE -->
+  <section class="card oculto" id="card-opcoes-forense">
+    <h2><span class="num">4</span> Forense</h2>
+    <div class="analysis-switch" role="tablist" aria-label="Tipo de análise">
+      <button class="analysis-mode" type="button" data-modo="analise">Geral</button>
+      <button class="analysis-mode" type="button" data-modo="tempo">Tempo</button>
+      <button class="analysis-mode" type="button" data-modo="validacao">Validação</button>
+      <button class="analysis-mode ativo" type="button" data-modo="forense">Forense</button>
+    </div>
+    <p class="dica">Triagem estatística de anomalias: sinaliza padrões atípicos para verificação humana. <b>Não é prova de fraude</b> — toda anomalia tem explicações legítimas.</p>
+    <div class="opcoes-grid">
+      <label>Tipo de dado
+        <select id="opt-forense-tipo">
+          <option value="count" selected>Contagem (nº de colônias/insetos/lesões)</option>
+          <option value="cont">Contínuo (diâmetro, peso, %)</option>
+        </select>
+      </label>
+      <label>Régua de severidade
+        <select id="opt-forense-modo">
+          <option value="conservador" selected>Conservador (exige convergência)</option>
+          <option value="sensivel">Sensível (1 sinal forte já escala)</option>
+        </select>
+      </label>
+      <label>Média do controle <span class="op-tag">opcional</span>
+        <input type="text" id="opt-forense-controle" inputmode="decimal" placeholder="ex.: 25 (reconcilia %eficácia)" />
+      </label>
+    </div>
+  </section>
+
+  <div class="acao-fixa oculto">
+    <button class="btn-principal" id="btn-analisar" disabled>Analisar</button>
+  </div>
+
+  <!-- 5. RESULTADOS -->
+  <section class="card oculto" id="card-resultados">
+    <h2><span class="num">5</span> Resultados</h2>
+    <div id="resultados"></div>
+    <div class="export-acoes">
+      <button class="btn-sec" id="btn-imprimir">Imprimir / PDF</button>
+      <button class="btn-sec" id="btn-copiar">Copiar relatório</button>
+      <button class="btn-sec" id="btn-audit-json">Baixar pacote de auditoria</button>
+      <button class="btn-sec" id="btn-audit-verificar">Verificar pacote JSON</button>
+      <input class="oculto" type="file" id="entrada-audit-json" accept="application/json,.json" />
+    </div>
+  </section>
+</main>
+
+<footer class="brand-footer">BioEnsaio</footer>
+
+<div id="toast" class="toast oculto" role="status" aria-live="polite"></div>
+
+<!-- Overlay de carregamento do motor -->
+<div id="overlay" class="overlay oculto">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p id="overlay-msg">Carregando motor estatístico…</p>
+    <p class="overlay-sub" id="overlay-sub">Primeira vez pode levar alguns segundos.</p>
+  </div>
+</div>
+
+<script src="lib/xlsx.full.min.js"></script>
+<script src="pyodide/pyodide.js"></script>
+<script src="exemplos.js?v=bioensaio-auditoria-3"></script>
+<script src="app.js?v=bioensaio-auditoria-3"></script>
+</body>
+</html>
