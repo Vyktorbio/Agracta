@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v60';
+var CACHE = 'agracta-app-v61';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './', './index.html',
@@ -15,7 +15,8 @@ var ASSETS = [
   './manifest.webmanifest', './icon-192.png', './icon-512.png',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
   './estatistica/index.html', './estatistica/app.js', './estatistica/styles.css',
-  './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js'
+  './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js',
+  './modelos/modelo-protocolo.xls'
 ];
 self.addEventListener('install', function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }).then(function(){ return self.skipWaiting(); }));

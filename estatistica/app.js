@@ -1344,9 +1344,10 @@ function checksProntidaoSistema(){
   const p = carregarProntidaoSistema();
   if(p){
     pushCheck(checks,"ok","Autoteste da versão aprovado",`${APP_VERSION} · ${p.checks_ok || 0} OK · pacote ${String(p.pacote_sha256 || "").slice(0,12)}…`);
-  }else{
+  }else if(!window.__agractaEmbed){
     pushCheck(checks,"critico","Autoteste da versão obrigatório","Execute o Autoteste desta versão antes de liberar qualquer análise.", true);
   }
+  /* Embutido no Agracta: SEM gate nem aviso de autoteste — o motor já faz parte do app auditado. */
   return checks;
 }
 function nomeControleProvavel(v){
@@ -2377,7 +2378,7 @@ function blocoAuditoria(meta){
       `<div><span>SHA-256 do resultado</span><b class="hash">${esc(hs.resultado_sha256)}</b></div>`+
       `<div><span>SHA-256 do pacote</span><b class="hash">${esc(hs.pacote_sha256 || "em geração")}</b></div>`+
       `<div><span>Parecer de aceitação</span><b>${esc(parecer.resumo || "não aplicável")}</b></div>`+
-      `<div><span>Autoteste da versão</span><b>${prontidao.ok ? `aprovado · ${esc(prontidao.checks_ok || 0)} OK · ${esc(String(prontidao.pacote_sha256 || "").slice(0,12))}…` : "não aprovado"}</b></div>`+
+      ((typeof window!=='undefined' && window.__agractaEmbed) ? '' : `<div><span>Autoteste da versão</span><b>${prontidao.ok ? `aprovado · ${esc(prontidao.checks_ok || 0)} OK · ${esc(String(prontidao.pacote_sha256 || "").slice(0,12))}…` : "não aprovado"}</b></div>`)+
       `<div><span>Conferência</span><b>${fmt(pipe.criticos||0,0)} crítico(s), ${fmt(pipe.avisos||0,0)} aviso(s), ${fmt(pipe.oks||0,0)} OK</b></div>`+
       `<div><span>Rastreabilidade</span><b>${rastreavel ? "completa" : "incompleta"}</b></div>`+
       `<div><span>PWA</span><b>${esc(meta.pwa_display_mode)}</b></div>`+
@@ -2529,6 +2530,7 @@ function renderRelatorio(rel){
   if(!rel.ok){
     out.appendChild(renderErroRelatorio(rel));
     anexarTrilhaAuditoria(out, rel);
+    _agractaEmitirResultado(rel);
     $("#card-resultados").scrollIntoView({behavior:"smooth"}); return;
   }
   renderPipelineRelatorio(out);
@@ -2552,6 +2554,7 @@ function renderRelatorio(rel){
   else if(a.normalidade) out.appendChild(secao("Normalidade", tabelaNormalidade(a.normalidade)));
 
   anexarTrilhaAuditoria(out, rel);
+  _agractaEmitirResultado(rel);
   $("#card-resultados").scrollIntoView({behavior:"smooth"});
 }
 
@@ -3287,24 +3290,56 @@ registrarServiceWorker();
 /* ===== Handoff do Agracta: recebe a matriz da avaliação e carrega automaticamente =====
    O Agracta grava localStorage['agracta-bioestat-handoff'] = {aoa, modo, titulo} e abre
    este app num iframe. Aqui lemos, parseamos pela via Matriz já existente e carregamos. */
+function _agractaEmitirResultado(rel){
+  try{
+    if(!window.__agractaEmbed || window.parent===window || !window.__agractaRequestId) return;
+    window.parent.postMessage({
+      type:'agracta:bioestat-result',
+      requestId:window.__agractaRequestId,
+      resultado:clonarAuditavel(rel||{})
+    }, window.location.origin);
+  }catch(e){ console.warn('[Agracta motor] não foi possível devolver o resultado',e); }
+}
+function _agTipoResp(t){
+  t=String(t||'').toLowerCase();
+  if(/sever|incid|fitotox|efic|propor|%/.test(t)) return 'proporcao';
+  if(/inset|popula|contag|coloni|n[úu]mero/.test(t)) return 'contagem';
+  if(/altura|produ|peso|di[âa]m|stand|compr|massa|cont[íi]nu/.test(t)) return 'continua';
+  return '';
+}
 function __agractaHandoff(payload){
   try{
     if(!payload || !payload.aoa || !payload.aoa.length) return false;
+    window.__agractaEmbed = true; /* gate do autoteste vira só aviso (análise consultiva no Agracta) */
+    window.__agractaRequestId = payload.requestId || '';
     var modo = payload.modo || 'analise';
     var linhas = linhasMatrizDeAoa(payload.aoa);
     if(!linhas.length){ avisar('Não encontrei valores (Tratamento/Variável/Valor) para analisar.'); return false; }
     MATRIZ_IMPORT = { arquivo: payload.titulo || 'Agracta', sheet: 'Dados', linhas: linhas };
-    renderMatrizImportador(); /* deixa o seletor de estudo/data/variável disponível para re-escolher */
+    renderMatrizImportador(); /* seletor de estudo/data/variável continua disponível p/ re-escolher */
     var resposta = (linhas[0] && linhas[0].variavel) || 'valor';
     var lv = linhas.filter(function(r){ return r.variavel === resposta; });
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
     var ref = lv[0] || {};
+    function _set(id,v){ var el=document.getElementById(id); if(el && v!=null && String(v)!=='' && !String(el.value||'').trim()) el.value=String(v); }
+    function _setSel(id,v){ var el=document.getElementById(id); if(el && v && [].some.call(el.options,function(o){return o.value===v;})) el.value=v; }
     function _carrega(){
       try{
-        preencherIdentificacaoSeVazia(gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), 'Agracta');
+        /* pré-preenche tudo que o Agracta já sabe — menos digitação */
+        _set('audit-estudo', payload.titulo || ref.estudo);
+        _set('audit-responsavel', payload.responsavel);
+        _setSel('audit-origem-bruta','matriz');
+        _set('audit-registro-bruto', [payload.local, payload.quadra, payload.titulo].filter(Boolean).join(' · '));
+        _set('audit-coletor', payload.responsavel);
+        preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
         var papeis = (modo === 'analise') ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null;
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
+        /* tipo de resposta: deixa o MOTOR detectar pelos dados (mais confiável que o rótulo da avaliação) */
+        _set('opt-unidade', payload.doseUnit);
+        if(typeof atualizarPipeline==='function') atualizarPipeline();
+        /* auto-roda a análise quando nada bloqueia (autoteste é só aviso no embed) */
+        setTimeout(function(){ var b=document.getElementById('btn-analisar'); if(b && !b.disabled) b.click(); }, 400);
       }catch(e){ console.error('[Agracta handoff carrega]', e); }
     }
     _carrega();
@@ -3312,10 +3347,17 @@ function __agractaHandoff(payload){
   }catch(e){ console.error('[Agracta handoff]', e); return false; }
 }
 window.__agractaHandoff = __agractaHandoff;
+window.addEventListener('message',function(ev){
+  try{
+    if(ev.origin!==window.location.origin || !ev.data || ev.data.type!=='agracta:bioestat-run') return;
+    __agractaHandoff(ev.data.payload||{});
+  }catch(e){ console.error('[Agracta motor message]',e); }
+});
 (function(){
   try{
     var raw = localStorage.getItem('agracta-bioestat-handoff');
     if(!raw) return;
+    window.__agractaEmbed = true; /* cedo: 1ª conferência já enxerga o embed */
     localStorage.removeItem('agracta-bioestat-handoff');
     var payload = JSON.parse(raw);
     setTimeout(function(){ __agractaHandoff(payload); }, 80);

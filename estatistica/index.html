@@ -11,18 +11,16 @@
 <link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-3" />
 <link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-3" />
 <style id="agracta-embed">
-  /* Embutido no Agracta — sem identidade própria e sem fontes de dados manuais
-     (os dados chegam do Agracta via handoff). Mantém o botão Autoteste (gate BPL do motor). */
-  .appbar .brand-mark, .appbar .brand-copy, #btn-instalar, .brand-footer { display:none !important; }
-  .appbar { justify-content:flex-end !important; }
-  #card-dados .tabs { display:none !important; }
-  #card-dados [data-painel="colar"], #card-dados [data-painel="arquivo"],
-  #card-dados [data-painel="digitar"], #card-dados [data-painel="exemplo"] { display:none !important; }
-  #card-dados [data-painel="matriz"] { display:block !important; }
-  #card-dados [data-painel="matriz"] > .dica,
-  #card-dados [data-painel="matriz"] #entrada-matriz { display:none !important; }
-  #card-dados .registro-grid, #card-dados .custodia-panel { display:none !important; }
-  main { padding-top:12px; }
+  /* MODO MOTOR — o BioEstat roda escondido e mostra SÓ o resultado (sem virar um app à parte).
+     Os dados, o modo (Geral/Forense) e o disparo vêm do Agracta. */
+  .appbar, .brand-footer, .appnav, .acao-fixa,
+  #card-dados, #card-papeis, #card-pipeline,
+  #card-opcoes, #card-opcoes-tempo, #card-opcoes-validacao, #card-opcoes-forense { display:none !important; }
+  /* só o painel de resultados aparece (o app remove o .oculto quando termina) */
+  #card-resultados .export-acoes #btn-audit-json,
+  #card-resultados .export-acoes #btn-audit-verificar { display:none !important; }
+  #card-resultados > h2 .num { display:none !important; } /* tira o badge "5" do passo */
+  main { padding:10px !important; }
 </style>
 </head>
 <body>
@@ -346,6 +344,6 @@
 <script src="lib/xlsx.full.min.js"></script>
 <script src="pyodide/pyodide.js"></script>
 <script src="exemplos.js?v=bioensaio-auditoria-3"></script>
-<script src="app.js?v=bioensaio-auditoria-3"></script>
+<script src="app.js?v=agracta-3"></script>
 </body>
 </html>
