@@ -15,11 +15,18 @@
     lastRev:0,timer:null,checkpointTimer:null,pendingWrites:0
   };
   var ROOT='workspaces/agracta';
+  var ADMIN_EMAILS={
+    'machadovictorchaves@gmail.com':true,
+    'vyktorbio@gmail.com':true
+  };
   var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','config','media'];
   var CHECKPOINT_DB='agracta-local-first',CHECKPOINT_STORE='snapshots',CHECKPOINT_KEY='active';
 
   function configured(){
     return !!(CFG.apiKey&&CFG.authDomain&&CFG.projectId&&CFG.appId&&window.firebase);
+  }
+  function isFirebaseAdminEmail(email){
+    return !!ADMIN_EMAILS[String(email||'').trim().toLowerCase()];
   }
   function clone(v){
     if(v==null)return v;
@@ -223,20 +230,13 @@
   window.authInit=function(){
     if(!firebaseInit()){startLocal('— Firebase ainda não configurado');return;}
     buildAuthGate();
-    FB.auth.getRedirectResult().then(function(result){
-      if(result&&result.user)onFirebaseUser(result.user);
-    }).catch(function(err){
-      authBusy(false);
-      authErr('Não foi possível concluir o login com Google: '+((err&&err.message)||err));
-    });
     FB.auth.onAuthStateChanged(function(user){
       if(user)onFirebaseUser(user);
       else{
         FB.user=null;window._authUser=null;
-        var trusted=false;
-        try{trusted=localStorage.getItem('agracta-trusted-device')==='1';}catch(e){}
-        if(trusted&&hasLocalRecords())startLocal('— toque para entrar e sincronizar');
-        else showAuthGate();
+        /* O modo local continua disponível no botão, mas a tela de login precisa
+           aparecer para que o usuário consiga retomar a sincronização. */
+        showAuthGate();
       }
     });
   };
@@ -250,7 +250,7 @@
       authBusy(false);
     }).catch(function(err){
       authBusy(false);
-      var msg=(err&&err.code==='auth/invalid-credential')?'E-mail ou senha incorretos.':
+      var msg=(err&&(/invalid-credential|wrong-password|user-not-found/.test(err.code||'')))?'E-mail ou senha incorretos.':
         ((err&&err.code==='auth/too-many-requests')?'Muitas tentativas. Aguarde alguns minutos.':'Não foi possível entrar: '+(err.message||err));
       authErr(msg);
     });
@@ -502,6 +502,7 @@
         else cloudBadge('saved');
       }else if(meaningful(localState()))commitState(localState());
       else cloudBadge('saved');
+      try{syncAllowedUsersToMembers();}catch(e){}
       return true;
     }).catch(function(e){
       cloudBadge('offline','— usando dados do aparelho');
@@ -562,17 +563,244 @@
     if(typeof _stxToast==='function')_stxToast('Durante a migração, use Backups locais ou exporte um arquivo.');
     openBackups();
   };
-  function authConsoleMessage(){
-    var id=CFG.projectId||'o projeto';
-    alert('As contas agora são gerenciadas no Firebase Authentication ('+id+'). Os dados locais e a lista de técnicos não foram apagados.');
+
+  var esc = window.esc || function(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var originalIsAdmin=window.isAdmin;
+  window.isAdmin=function(){
+    if(FB.user&&isFirebaseAdminEmail(FB.user.email))return true;
+    return typeof originalIsAdmin==='function' ? originalIsAdmin() : false;
+  };
+  var originalOpenAdminPanel=window.openAdminPanel;
+  window.openAdminPanel=function(){
+    if(FB.user&&isFirebaseAdminEmail(FB.user.email)){
+      window._adminUnlocked=true;
+      if(typeof showAdminDashboard==='function')showAdminDashboard();
+      return;
+    }
+    if(typeof originalOpenAdminPanel==='function')originalOpenAdminPanel();
+  };
+
+  function syncAllowedUsersToMembers(){
+    if(!FB.db || !FB.user) return;
+    if(!isFirebaseAdminEmail(FB.user.email)) return;
+    var users = [];
+    try {
+      users = data.__config.allowedUsers || [];
+    } catch(e){}
+    if(!users.length) return;
+    FB.db.doc(ROOT).collection('members').get().then(function(snap){
+      var existing = {};
+      snap.forEach(function(d){ existing[d.id.toLowerCase()] = true; });
+      users.forEach(function(u){
+        if(!u || !u.email) return;
+        var email = u.email.trim().toLowerCase();
+        if(!existing[email]){
+          console.log('[Agracta Firebase] Sincronizando técnico legado para o Firestore:', email);
+          FB.db.doc(ROOT).collection('members').doc(email).set({
+            email: email,
+            nome: u.nome || '',
+            active: true,
+            updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
+          }, {merge: true}).catch(function(e){
+            console.error('[Agracta Firebase] Falha ao sincronizar técnico legado:', email, e);
+          });
+        }
+      });
+    }).catch(function(err){
+      console.error('[Agracta Firebase] Erro ao listar membros para sincronização:', err);
+    });
   }
-  window._invocarCriarTecnico=authConsoleMessage;
-  window.alternarAcessoTecnico=authConsoleMessage;
-  window.redefinirSenhaTecnico=authConsoleMessage;
-  window.salvarNomePerfil=authConsoleMessage;
-  window._carregarPerfis=function(){
-    var box=document.getElementById('admPerfisList');
-    if(box)box.innerHTML='<div style="color:#8aa88a;font-size:12px;padding:8px 0">Contas e senhas são gerenciadas no Firebase Authentication. A lista nominal do Agracta permanece neste painel.</div>';
+
+  window._invocarCriarTecnico = function(email, nome, senha, isReset){
+    if(!firebaseInit() || !FB.db || !FB.auth || !FB.user){
+      if(typeof _adminMsg === 'function') _adminMsg('Sem conexão com o Firebase.', true);
+      return;
+    }
+    if(!isFirebaseAdminEmail(FB.user.email)){
+      if(typeof _adminMsg === 'function') _adminMsg('Somente o administrador pode criar acessos.', true);
+      return;
+    }
+    email = (email || '').trim().toLowerCase();
+    nome = (nome || '').trim();
+
+    var btn = document.getElementById('addUsrBtn');
+    if(btn && !isReset){
+      btn.disabled = true;
+      btn.textContent = 'Processando…';
+    }
+    if(!isReset && typeof _adminMsg === 'function') _adminMsg('Processando acesso…', false);
+
+    if(isReset){
+      FB.auth.sendPasswordResetEmail(email).then(function(){
+        if(typeof _stxToast === 'function') _stxToast('E-mail de redefinição enviado para ' + email);
+        if(typeof _adminMsg === 'function') _adminMsg('E-mail de redefinição enviado.', false);
+      }).catch(function(err){
+        var msg = 'Erro ao enviar e-mail de redefinição: ' + (err.message || err);
+        if(typeof _adminMsg === 'function') _adminMsg(msg, true);
+        if(typeof _stxToast === 'function') _stxToast(msg);
+      });
+      return;
+    }
+
+    var pass = senha || (typeof _genSenhaTec === 'function' ? _genSenhaTec() : Math.random().toString(36).slice(-10));
+    var secAppName = 'TempRegister_' + Date.now();
+    var secApp = window.firebase.initializeApp(CFG, secAppName);
+    var secAuth = secApp.auth();
+    function closeSecondary(){
+      try{secAuth.signOut().catch(function(){});}catch(e){}
+      try{secApp.delete();}catch(e){}
+    }
+    function finishAccount(created){
+      return FB.db.doc(ROOT).collection('members').doc(email).set({
+        email: email,
+        nome: nome,
+        active: true,
+        updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
+      }, {merge: true}).then(function(){
+        try {
+          if(typeof ensureConfig === 'function') ensureConfig();
+          var arr = data.__config.allowedUsers || (data.__config.allowedUsers = []);
+          var f = arr.find(function(u){ return u && u.email && u.email.toLowerCase().trim() === email; });
+          if(f){ if(nome) f.nome = nome; } else { arr.push({email: email, nome: nome, addedAt: Date.now()}); }
+          if(data.__config.delUsers) delete data.__config.delUsers[email];
+          if(typeof save === 'function') save();
+          if(typeof cloudSave === 'function') cloudSave();
+        } catch(e){}
+        window._ultimoAcessoCriado = {
+          email: email,
+          senha: created ? pass : '(conta já existente — use “redefinir senha”)',
+          criado: created
+        };
+        if(typeof _adminMsg === 'function'){
+          _adminMsg(created ? 'Conta criada com sucesso no Firebase.' : 'Conta existente reativada no Agracta.', false);
+        }
+        if(typeof renderAdminDashboard === 'function') renderAdminDashboard();
+      });
+    }
+    try{secAuth.setPersistence(window.firebase.auth.Auth.Persistence.NONE);}catch(e){}
+    secAuth.createUserWithEmailAndPassword(email, pass).then(function(userCreds){
+      var user = userCreds.user;
+      if(user && typeof user.updateProfile === 'function'){
+        return user.updateProfile({displayName:nome}).then(function(){return true;});
+      }
+      return true;
+    }).then(function(){
+      closeSecondary();
+      return finishAccount(true);
+    }).catch(function(err){
+      closeSecondary();
+      if(err && err.code === 'auth/email-already-in-use'){
+        return finishAccount(false);
+      }
+      throw err;
+    }).catch(function(err){
+      if(btn && !isReset){
+        btn.disabled = false;
+        btn.textContent = 'Criar acesso do técnico';
+      }
+      if(typeof _adminMsg === 'function') _adminMsg('Erro ao criar acesso: ' + (err.message || err), true);
+    });
+  };
+
+  window.redefinirSenhaTecnico=function(i){
+    var p=(window._perfisCache||[])[i];
+    if(!p)return;
+    if(!confirm('Enviar um link de redefinição de senha para '+p.email+'?'))return;
+    window._invocarCriarTecnico(p.email,p.nome||'','',true);
+  };
+
+  window.alternarAcessoTecnico = function(i, isOff){
+    var p = (window._perfisCache || [])[i];
+    if(!p) return;
+    var shouldBeActive = !!isOff;
+    if(!confirm((shouldBeActive ? 'REATIVAR' : 'DESATIVAR') + ' o acesso de ' + (p.nome || p.email) + '?\n\n' + (shouldBeActive ? 'Ele volta a conseguir entrar no app.' : 'Ele NÃO consegue mais entrar (a conta e todo o histórico são mantidos).'))) return;
+    if(!firebaseInit() || !FB.db){
+      if(typeof _stxToast === 'function') _stxToast('Sem conexão.');
+      return;
+    }
+    if(typeof _stxToast === 'function') _stxToast(shouldBeActive ? 'Reativando…' : 'Desativando…');
+    FB.db.doc(ROOT).collection('members').doc(p.email.toLowerCase()).set({
+      active: shouldBeActive,
+      updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge: true}).then(function(){
+      if(typeof _stxToast === 'function') _stxToast(shouldBeActive ? 'Acesso reativado' : 'Acesso desativado');
+      _carregarPerfis();
+    }).catch(function(err){
+      if(typeof _stxToast === 'function') _stxToast('Erro: ' + (err.message || err));
+    });
+  };
+
+  window.salvarNomePerfil = function(i){
+    var p = (window._perfisCache || [])[i];
+    if(!p || !firebaseInit() || !FB.db) return;
+    var inp = document.getElementById('pf_' + i);
+    var nome = inp ? inp.value.trim() : '';
+    if(inp) inp.disabled = true;
+    FB.db.doc(ROOT).collection('members').doc(p.email.toLowerCase()).set({
+      nome: nome,
+      updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge: true}).then(function(){
+      if(inp) inp.disabled = false;
+      p.nome = nome;
+      try {
+        if(typeof ensureConfig === 'function') ensureConfig();
+        var arr = window.data.__config.allowedUsers || (window.data.__config.allowedUsers = []);
+        var f = arr.find(function(u){ return u && u.email && u.email.toLowerCase().trim() === p.email.toLowerCase().trim(); });
+        if(f){ f.nome = nome; } else { arr.push({email: p.email, nome: nome, addedAt: Date.now()}); }
+        if(typeof save === 'function') save();
+        if(typeof cloudSave === 'function') cloudSave();
+      } catch(e){}
+      if(typeof _stxToast === 'function') _stxToast('Nome salvo: ' + (nome || '(vazio)'));
+    }).catch(function(err){
+      if(inp) inp.disabled = false;
+      if(typeof _stxToast === 'function') _stxToast('Erro ao salvar nome: ' + (err.message || err));
+    });
+  };
+
+  window._carregarPerfis = function(){
+    var box = document.getElementById('admPerfisList');
+    if(!box) return;
+    if(!firebaseInit() || !FB.db){
+      box.innerHTML = '<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Sem conexão.</div>';
+      return;
+    }
+    FB.db.doc(ROOT).collection('members').get().then(function(snap){
+      var arr = [];
+      snap.forEach(function(d){
+        var mData = d.data();
+        arr.push({
+          email: mData.email || d.id,
+          nome: mData.nome || '',
+          active: mData.active !== false
+        });
+      });
+      Object.keys(ADMIN_EMAILS).forEach(function(adminEmail){
+        var found=arr.find(function(x){return x.email.toLowerCase()===adminEmail;});
+        if(found)found.papel='admin';
+        else arr.push({
+          email:adminEmail,
+          nome:adminEmail==='machadovictorchaves@gmail.com'?'Administrador Principal':'Administrador',
+          active:true,
+          papel:'admin'
+        });
+      });
+      arr.sort(function(a, b){
+        if(a.papel !== b.papel) return a.papel === 'admin' ? -1 : 1;
+        return (a.email || '').localeCompare(b.email || '');
+      });
+      window._perfisCache = arr;
+      if(!arr.length){
+        box.innerHTML = '<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Nenhuma conta ainda. Crie a primeira abaixo.</div>';
+        return;
+      }
+      var disabledSet = {};
+      arr.forEach(function(x){
+        if(!x.active) disabledSet[x.email.toLowerCase()] = 1;
+      });
+      if(typeof _renderPerfisList === 'function') _renderPerfisList(arr, disabledSet);
+    }).catch(function(err){
+      box.innerHTML = '<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Erro ao ler contas: '+esc(err.message || err)+'</div>';
+    });
   };
 
   var originalAddAllowedUser=window.addAllowedUser;

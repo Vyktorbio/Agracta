@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=45').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=47').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -8331,7 +8331,7 @@ function renderAdminDashboard(){
     '</div>'+
     
     '<div style="margin-top:14px;text-align:left">'+
-      '<b style="color:#37d684">Técnicos (contas Supabase)</b>'+
+      '<b style="color:#37d684">Técnicos (contas Firebase)</b>'+
       '<div style="font-size:10px;color:#8aa88a;margin-top:2px">Nome vinculado ao e-mail para a auditoria BPL (quem avaliou/aplicou). Editável.</div>'+
       '<div id="admPerfisList" style="max-height:230px;overflow-y:auto;margin-top:6px;border:1px solid #2a3a2a;border-radius:10px;padding:8px;background:#090f0a">'+
         '<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Carregando contas…</div>'+
@@ -8340,7 +8340,7 @@ function renderAdminDashboard(){
     
     '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
       '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Autorizar Novo Técnico</div>'+
-      '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px;background:#0c140d;border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">Cria o <b>login</b> (e-mail + senha) do técnico <b>na hora</b>. Passe as credenciais a ele &mdash; entra em <b>www.agracta.com.br</b>. Se o e-mail já existir, isto <b>redefine a senha</b>.</div>'+
+      '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px;background:#0c140d;border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">Cria o <b>login</b> no Firebase e libera o técnico no Agracta. Se o e-mail já existir, o acesso é reativado; use <b>redefinir senha</b> para enviar um link ao técnico.</div>'+
       '<div style="display:flex;gap:6px">'+
         '<input id="addUsrEmail" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="email" placeholder="E-mail" autocomplete="off" autocapitalize="none">'+
         '<input id="addUsrNome" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Nome do Técnico" autocomplete="off">'+
@@ -8378,7 +8378,7 @@ function saveAdminSettings(){
   renderAdminDashboard();
 }
 
-/* ===== Contas de técnico (Supabase Auth + perfis): criar login, nome p/ auditoria, redefinir senha ===== */
+/* ===== Contas de técnico: Firebase Auth + roster de membros ===== */
 function _genSenhaTec(){ var cs='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789',s=''; for(var i=0;i<10;i++)s+=cs.charAt(Math.floor(Math.random()*cs.length)); return s; }
 function adminGenSenha(){ var i=document.getElementById('addUsrSenha'); if(i){ i.value=_genSenhaTec(); i.focus(); } }
 function _adminMsg(t,erro){ var e=document.getElementById('addUsrMsg'); if(e){ e.textContent=t||''; e.style.color=erro?'#ff8a8a':'#37d684'; } }
