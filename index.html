@@ -4774,7 +4774,7 @@ function buildStudyModelo(qid, s){
   }); });
   /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento.
      Usa o "Tamanho da Parcela" do próprio modelo (dim. da quadra) e nº de repetições como nº de parcelas. */
-  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||dim; /* parcela do protocolo tem prioridade sobre a quadra inteira */
+  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||_calcParcelaDefault(); /* protocolo do estudo, senão o padrão salvo da calculadora (10×5) — nunca a quadra inteira */
   if(window.BioCalculoCampo && parc){
     var crow=maxR+2;
     lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat)');
@@ -6120,14 +6120,21 @@ function _calcStudy(){
   var q=data[sel.qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sel.sid;});
   return s?normalizeStudy(s):null;
 }
+/* Tamanho de parcela da calculadora: preferência salva pelo usuário (padrão 10×5 m). */
+function _calcParcelaDefault(){
+  var p=null; try{ p=_parseParcelaDim(localStorage.getItem('iracema-calc-parcela')); }catch(e){}
+  return p || {comprimento:10, largura:5};
+}
+function _calcSalvarParcela(){
+  try{ var l=_calcNum(_calcVal('calcLen')), w=_calcNum(_calcVal('calcWid')); if(l>0&&w>0) localStorage.setItem('iracema-calc-parcela', l+'x'+w); }catch(e){}
+}
 function _calcRenderShell(){
   var ov=document.getElementById('calcOvl'); if(!ov) return;
   var all=_calcAllStudies();
   var study=_calcStudy();
-  /* tamanho da PARCELA do protocolo tem prioridade (a quadra é a área inteira, com todas as parcelas) */
-  var dims=(study&&study.protocolo&&_parseParcelaDim(study.protocolo.tamanhoParcela))||(_calcSel?quadraDims(_calcSel.qid):null);
-  var defLen=dims?Math.round(dims.comprimento):'';
-  var defWid=dims?Math.round(dims.largura):'';
+  /* parcela: usa o tamanho salvo pelo usuário (padrão 10×5); edite na tela e fica salvo p/ a próxima */
+  var dims=_calcParcelaDefault();
+  var defLen=dims.comprimento, defWid=dims.largura;
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
   var defVol=''; if(study){ var tv=(study.tratamentos||[]).map(function(t){return t.volume;}).find(function(v){return v;}); if(tv) defVol=_calcNum(tv); }
   var selHtml='';
@@ -6162,6 +6169,7 @@ function _calcCompute(){
   if(!study||!(study.tratamentos||[]).length){ box.innerHTML='<div class="calc-empty">Estudo sem tratamentos cadastrados.</div>'; return; }
   var BC=window.BioCalculoCampo;
   var len=_calcNum(_calcVal('calcLen')), wid=_calcNum(_calcVal('calcWid'));
+  _calcSalvarParcela(); /* persiste o tamanho de parcela que o usuário deixar */
   var plots=Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1);
   var volDef=_calcNum(_calcVal('calcVol'));
   var dead=_calcNum(_calcVal('calcDead'));
