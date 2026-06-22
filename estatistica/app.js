@@ -2572,7 +2572,7 @@ function tabelaDescritiva(desc){
   h += temProp ? `<th>Eventos</th><th>Proporção</th>` : `<th>Média</th><th>DP</th><th>EP</th><th>CV%</th><th>Mín</th><th>Máx</th>`;
   h += `</tr></thead><tbody>`;
   desc.forEach(d=>{
-    h += `<tr><td>${d.tratamento}</td><td>${d.n}</td>`;
+    h += `<tr><td>${esc(d.tratamento)}</td><td>${d.n}</td>`;
     h += temProp ? `<td>${d.eventos}</td><td>${fmt(d.proporcao,3)}</td>`
                  : `<td>${fmt(d.media)}</td><td>${fmt(d.dp)}</td><td>${fmt(d.ep)}</td><td>${fmt(d.cv,1)}</td><td>${fmt(d.min)}</td><td>${fmt(d.max)}</td>`;
     h += `</tr>`;
@@ -2602,7 +2602,7 @@ function renderDose(out, a){
       (c.abbott_aplicado?`<dt>Abbott</dt><dd>${chip("corrigido (controle "+fmt(c.controle_mortalidade*100,1)+"%)","chip-info")}</dd>`:"")+
       `</div>`;
     const colDose = "Dose" + (uni ? ` (${uni})` : "");
-    h += `<div class="tab-rolavel"><table><thead><tr><th>Letal</th><th>${colDose}</th><th>IC95% inf.</th><th>IC95% sup.</th></tr></thead><tbody>`;
+    h += `<div class="tab-rolavel"><table><thead><tr><th>Letal</th><th>${esc(colDose)}</th><th>IC95% inf.</th><th>IC95% sup.</th></tr></thead><tbody>`;
     c.doses_letais.forEach(dl=>{
       h += `<tr><td>CL/DL${Math.round(dl.p*100)}</td><td><b>${fmt(dl.dose,3)}${sufUni}</b></td><td>${fmt(dl.ic_inf,3)}</td><td>${fmt(dl.ic_sup,3)}</td></tr>`;
     });
@@ -2640,7 +2640,7 @@ function renderComparacaoCurvas(out, comp, uni){
   (comp.razoes||[]).forEach(r=>{
     const sig = r.significativo && !r.referencia ? " significativo" : "";
     const tag = r.referencia ? ` <span class="op-tag">ref</span>` : "";
-    h += `<tr><td>${r.grupo}${tag}</td><td>${fmt(r.lc50,3)}${sufUni}</td>`+
+    h += `<tr><td>${esc(r.grupo)}${tag}</td><td>${fmt(r.lc50,3)}${sufUni}</td>`+
          `<td><b>${fmt(r.rr,2)}×</b>${sig}</td>`+
          `<td>${r.referencia?"—":fmt(r.ic_inf,2)+" – "+fmt(r.ic_sup,2)}</td></tr>`;
   });
@@ -2679,8 +2679,8 @@ function renderGlm(out, a){
   if(a.nota_modelo) head += `<p class="dica">${a.nota_modelo}</p>`;
   out.appendChild(secao(a.tipo_analise, head));
 
-  let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotulo}</th><th>Grupo</th></tr></thead><tbody>`;
-  a.ordem.forEach(t=> h+=`<tr><td>${t}</td><td>${fmt(medias[t],3)}</td><td><span class="letra">${a.letras[t]||""}</span></td></tr>`);
+  let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${esc(rotulo)}</th><th>Grupo</th></tr></thead><tbody>`;
+  a.ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(medias[t],3)}</td><td><span class="letra">${esc(a.letras[t]||"")}</span></td></tr>`);
   h+=`</tbody></table></div><p class="dica">Tratamentos com a mesma letra não diferem (α=${a.alfa}).</p>`;
   const b=secao("Comparação de tratamentos", h);
   const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);
@@ -2697,7 +2697,7 @@ function renderComparacoes(out, cm, descritiva){
     const valores = r.medias_exibicao || r.medias || r.medianas || medias;
     const rotuloValor = r.medianas ? "Mediana" : (r.escala_teste && r.escala_teste !== "original" ? "Média (escala original)" : "Média");
     let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotuloValor}</th>${r.medianas?"":"<th>± EP</th>"}<th>Grupo</th></tr></thead><tbody>`;
-    ordem.forEach(t=> h+=`<tr><td>${t}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${erros[t]!=null?"± "+fmt(erros[t],2):"—"}</td>`}<td><span class="letra">${r.letras[t]||""}</span></td></tr>`);
+    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${erros[t]!=null?"± "+fmt(erros[t],2):"—"}</td>`}<td><span class="letra">${esc(r.letras[t]||"")}</span></td></tr>`);
     h+=`</tbody></table></div><p class="dica">Mesma letra = não diferem (α=${r.alfa}).${r.medianas?"":" Barras = média ± erro-padrão."}`+
       (r.escala_teste && r.escala_teste !== "original" ? ` Agrupamento calculado na escala ${esc(r.escala_teste)}; valores exibidos na escala original.` : "")+
       `</p>`;
@@ -2715,7 +2715,7 @@ function chipBool(v, okTxt="OK", alertaTxt="verificar"){
 }
 function tabelaStatsLista(lista, titulo="Grupo"){
   if(!lista || !lista.length) return `<p class="dica">Sem grupos suficientes.</p>`;
-  let h=`<div class="tab-rolavel"><table><thead><tr><th>${titulo}</th><th>n</th><th>Média</th><th>DP</th><th>CV/DPR %</th><th>Mediana</th><th>Mín</th><th>Máx</th></tr></thead><tbody>`;
+  let h=`<div class="tab-rolavel"><table><thead><tr><th>${esc(titulo)}</th><th>n</th><th>Média</th><th>DP</th><th>CV/DPR %</th><th>Mediana</th><th>Mín</th><th>Máx</th></tr></thead><tbody>`;
   lista.forEach(d=>{
     h+=`<tr><td>${esc(d.grupo||"geral")}</td><td>${fmt(d.n,0)}</td><td>${fmt(d.media,4)}</td><td>${fmt(d.dp,4)}</td><td>${fmt(d.cv,2)}</td><td>${fmt(d.mediana,4)}</td><td>${fmt(d.min,4)}</td><td>${fmt(d.max,4)}</td></tr>`;
   });
@@ -2990,7 +2990,7 @@ function renderRelatorioTempo(rel){
   const km=rel.kaplan_meier;
   if(km && (km.curvas||[]).length){
     let kh=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>LT50</th><th>LT90</th><th>n</th><th>mortes</th></tr></thead><tbody>`;
-    km.curvas.forEach(c=> kh+=`<tr><td>${c.tratamento}</td><td>${c.LT50!=null?fmt(c.LT50,2):"—"}</td><td>${c.LT90!=null?fmt(c.LT90,2):"—"}</td><td>${c.n}</td><td>${c.mortes}</td></tr>`);
+    km.curvas.forEach(c=> kh+=`<tr><td>${esc(c.tratamento)}</td><td>${c.LT50!=null?fmt(c.LT50,2):"—"}</td><td>${c.LT90!=null?fmt(c.LT90,2):"—"}</td><td>${c.n}</td><td>${c.mortes}</td></tr>`);
     kh+=`</tbody></table></div>`;
     if(km.logrank) kh+=`<p class="dica">Log-rank: χ²=${fmt(km.logrank.qui2,2)} (gl=${km.logrank.gl}), `+
       `${km.logrank.significativo?chip("p="+fmt(km.logrank.p,4)+" — diferem","chip-ok"):chip("p="+fmt(km.logrank.p,4)+" — não diferem","chip-info")}</p>`;
@@ -3024,7 +3024,7 @@ function tabelaLetrasTempo(linhas, tratamentos){
   linhas.forEach(l=> h+=`<th>t=${fmt(l.tempo,0)}</th>`);
   h+=`</tr></thead><tbody>`;
   tratamentos.forEach(tr=>{
-    h+=`<tr><td>${tr}</td>`;
+    h+=`<tr><td>${esc(tr)}</td>`;
     linhas.forEach(l=>{
       const m=(l.medias||{})[tr], ltr=(l.letras||{})[tr]||"";
       h+= m!=null ? `<td>${fmt(m,1)} <span class="letra">${ltr}</span></td>` : `<td>—</td>`;
