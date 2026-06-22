@@ -4677,14 +4677,21 @@ function buildStudyRecord(qid,s){
   }
   /* ESTATÍSTICA — ANOVA-DBC + Tukey 5% por avaliação/variável (médias + letras + F/p/CV) */
   if(_avsM.length){
-    L.push(''); L.push('ESTATISTICA (ANOVA-DBC + Tukey 5%) — medias seguidas de mesma letra nao diferem (p<0,05)');
+    L.push(''); L.push('ESTATISTICA — comparacao de medias (motor BioEstat; ANOVA-DBC rapida como reserva). Mesma letra = nao difere.');
     _vars.forEach(function(v){
       _avsM.forEach(function(a){
         if((a.variaveis||[]).indexOf(v)<0) return;
-        var st=(typeof statDBC==='function')?statDBC(s,a,v):null;
+        var be=(typeof _bioestatResumo==='function')?_bioestatResumo(qid,s,a,v):null;
         L.push('');
+        if(be){
+          L.push(v+' — '+(isoToBR(a.data)||'')+'\t'+(be.metodo||'comparação')+(be.p!=null?'\tp='+(be.p<0.001?'<0,001':_r1(be.p)):'')+(be.tipo?'\t'+be.tipo:'')+(be.transform?'\ttransf: '+be.transform:'')+'\t(motor BioEstat)');
+          L.push('Trat\tProduto\tMedia\tGrupo');
+          (be.order||[]).forEach(function(tid){ var t=(s.tratamentos||[]).find(function(x){return x.id===tid;})||{}; var mv=be.vals&&be.vals[tid]; L.push(tid+(isTestemunha(s,tid)?' (test.)':'')+'\t'+(t.produto||'')+'\t'+(mv!=null?_r1(mv):'')+'\t'+(be.letras[tid]||'')); });
+          return;
+        }
+        var st=(typeof statDBC==='function')?statDBC(s,a,v):null;
         if(!st){ L.push(v+' — '+(isoToBR(a.data)||'')+'\t(insuficiente ou desbalanceado p/ ANOVA)'); return; }
-        L.push(v+' — '+(isoToBR(a.data)||'')+'\tF='+_r1(st.F)+'\tp='+(st.p<0.001?'<0,001':_r1(st.p))+'\tCV='+_r1(st.cv)+'%\t'+(st.sig?'significativo':'ns'));
+        L.push(v+' — '+(isoToBR(a.data)||'')+'\tF='+_r1(st.F)+'\tp='+(st.p<0.001?'<0,001':_r1(st.p))+'\tCV='+_r1(st.cv)+'%\t'+(st.sig?'significativo':'ns')+'\t(ANOVA-DBC rapida — motor nao rodou)');
         L.push('Trat\tProduto\tMedia\tLetra');
         (st.order||(s.tratamentos||[]).map(function(t){return t.id;})).forEach(function(tid){
           var t=(s.tratamentos||[]).find(function(x){return x.id===tid;})||{};
@@ -4759,18 +4766,22 @@ function buildStudyModelo(qid, s){
   var blk=0;
   avs.forEach(function(a){ (a.variaveis||[]).forEach(function(v){
     if(blk>=20) return; var c0=11+8*blk; blk++;
-    var st=(typeof statDBC==='function')?statDBC(s,a,v):null; /* ANOVA-DBC + Tukey (letras/p/CV) */
+    var be=(typeof _bioestatResumo==='function')?_bioestatResumo(qid,s,a,v):null; /* motor BioEstat: fonte preferida das letras */
+    var st=(typeof statDBC==='function')?statDBC(s,a,v):null; /* reserva: ANOVA-DBC + Tukey */
     lbl(13,c0,'AVALIAÇÃO — '+v+' · '+BR(a.data));
-    lbl(14,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(14,c0+1+ri,rl); }); lbl(14,c0+5,'média'); lbl(14,c0+6,'E%'); lbl(14,c0+7,'letra');
+    lbl(14,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(14,c0+1+ri,rl); }); lbl(14,c0+5,'média'); lbl(14,c0+6,'E%'); lbl(14,c0+7,'grupo');
     function med(tid){ var vs=[]; for(var rp=1;rp<=reps;rp++){ var raw=_avNota(a,{key:_avRowKey(tid,rp),tratId:tid,rep:rp},v); if(raw!=null&&raw!==''){ var n=parseFloat(String(raw).replace(',','.')); if(!isNaN(n))vs.push(n);} } return vs.length?vs.reduce(function(x,y){return x+y;},0)/vs.length:null; }
     var tMed=test?med(test):null;
     trats.forEach(function(t,ti){ var r=15+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
       if(test && t.id!==test && tMed!=null && tMed>0 && m!=null) put(r,c0+6, Math.round((tMed-m)/tMed*1000)/10);
-      if(st && st.letras) put(r,c0+7, st.letras[t.id]||'');
+      var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
+      if(letra) put(r,c0+7, letra);
     });
-    if(st){ var rf=15+trats.length; lbl(rf,c0,'F='+_r1(st.F)+'  p='+(st.p<0.001?'<0,001':_r1(st.p))+'  CV='+_r1(st.cv)+'%'+(st.sig?'  *':'  ns')); }
+    var rf=15+trats.length;
+    if(be){ lbl(rf,c0,(be.metodo||'comparação')+(be.p!=null?('  p='+(be.p<0.001?'<0,001':_r1(be.p))+(be.p<0.05?'  *':'  ns')):'')+'  · motor BioEstat'); }
+    else if(st){ lbl(rf,c0,'F='+_r1(st.F)+'  p='+(st.p<0.001?'<0,001':_r1(st.p))+'  CV='+_r1(st.cv)+'%'+(st.sig?'  *':'  ns')+'  · ANOVA-DBC rápida'); }
   }); });
   /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento.
      Usa o "Tamanho da Parcela" do próprio modelo (dim. da quadra) e nº de repetições como nº de parcelas. */
@@ -4819,6 +4830,20 @@ function _bioestatLetters(qid,s,av,v){
   var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v]; if(!rel||!rel.ok)return {};
   var cm=rel.comparacao_medias||{}, cmp=cm.tukey||cm.scott_knott||cm.dunn;
   return (cmp&&cmp.letras)||(rel.analise&&rel.analise.letras)||{};
+}
+/* Resumo completo do resultado do motor BioEstat (cache) p/ as saídas rápidas usarem o MESMO motor do xls.
+   Retorna {order, vals(médias), letras, p, metodo, tipo, transform} ou null se o motor ainda não rodou. */
+function _bioestatResumo(qid,s,av,v){
+  var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v];
+  if(!rel||!rel.ok) return null;
+  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.tukey||cm.scott_knott||cm.dunn||null;
+  var desc={}; (rel.descritiva||[]).forEach(function(d){ desc[d.tratamento]=(d.media!=null?d.media:d.proporcao); });
+  var order=(cmp&&cmp.ordem)||a.ordem||Object.keys(desc);
+  var vals=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||desc;
+  var letras=(cmp&&cmp.letras)||a.letras||{};
+  var metodo=cm.tukey?'Tukey':(cm.scott_knott?'Scott-Knott':(cm.dunn?'Dunn (Kruskal-Wallis)':(a.tabela_anova?'ANOVA':'GLM')));
+  var p=(typeof _bioestatP==='function')?_bioestatP(rel):null;
+  return { order:order, vals:vals, letras:letras, p:p, metodo:metodo, tipo:(rel.deteccao&&rel.deteccao.tipo_resposta)||'', transform:a.transformacao||'' };
 }
 async function downloadStudyWorkbook(qid,sid){
   try{
