@@ -2934,13 +2934,22 @@ function deletePasswordConfirm(){
   var pass=(document.getElementById('deletePwdInput')||{}).value||'', err=document.getElementById('deletePwdErr');
   if(!pass){ if(err)err.textContent='Digite a senha.'; return; }
   deletePasswordBusy(true); if(err)err.textContent='';
-  SB.auth.signInWithPassword({email:_authUser.email,password:pass}).then(function(res){
-    deletePasswordBusy(false);
-    if(res&&res.error){ if(err)err.textContent=traduzAuthErro(res.error.message); return; }
-    var u=res&&res.data&&res.data.user;
-    if(u&&_authUser&&u.id&&_authUser.id&&u.id!==_authUser.id){ if(err)err.textContent='Essa senha não pertence ao usuário logado.'; return; }
-    var cb=_deletePwdCb; deletePasswordClose(); if(typeof cb==='function') cb();
-  }, function(){ deletePasswordBusy(false); if(err)err.textContent='Falha de conexão ao validar a senha.'; });
+  /* Reautentica no FIREBASE (o app migrou de Supabase). reauthenticateWithCredential confirma a
+     senha sem derrubar a sessão; só então libera o callback de exclusão. */
+  var ok=function(){ deletePasswordBusy(false); var cb=_deletePwdCb; deletePasswordClose(); if(typeof cb==='function') cb(); };
+  var fail=function(e){ deletePasswordBusy(false);
+    var code=(e&&(e.code||e.message))||'';
+    if(/wrong-password|invalid-credential|invalid-login|INVALID_LOGIN_CREDENTIALS/i.test(code)) { if(err)err.textContent='Senha incorreta.'; }
+    else if(/too-many-requests/i.test(code)) { if(err)err.textContent='Muitas tentativas. Aguarde um momento.'; }
+    else if(/network/i.test(code)) { if(err)err.textContent='Falha de conexão ao validar a senha.'; }
+    else { if(err)err.textContent=(typeof traduzAuthErro==='function'?traduzAuthErro(code):'Não foi possível validar a senha.'); }
+  };
+  try{
+    var u=firebase.auth().currentUser;
+    if(!u){ fail({code:'no-user'}); return; }
+    var cred=firebase.auth.EmailAuthProvider.credential(_authUser.email||u.email, pass);
+    u.reauthenticateWithCredential(cred).then(ok, fail);
+  }catch(e){ fail(e); }
 }
 function cloudStart(){
   if(!cloudInit()){ return; }
@@ -6090,7 +6099,14 @@ function nextEventV2(study){
    Reusa vendor/biocalc-campo-core.js (window.BioCalculoCampo). Pré-preenche dose/volume dos tratamentos
    do estudo; o usuário ajusta tamanho da parcela / frascos. Sem identidade externa — tela nativa do Agracta. */
 var _calcSel=null; /* {qid,sid} estudo selecionado na calculadora */
-function _calcNum(v){ var BC=window.BioCalculoCampo; return BC?BC.parseNum(v):(parseFloat(String(v==null?'':v).replace(',','.'))||0); }
+function _calcNum(v){
+  if(typeof v==='number') return isFinite(v)?v:0;
+  /* normaliza separador de milhar PT-BR (ponto antes de 3 dígitos seguido de não-dígito/fim) ANTES
+     de parsear — senão "1.500 g/ha" virava 1,5 (dose 1000× menor). Mesma regra do import (_protoNum). */
+  var s=String(v==null?'':v).replace(/\s/g,'').replace(/\.(?=\d{3}(?:\D|$))/g,'');
+  var BC=window.BioCalculoCampo;
+  return BC?BC.parseNum(s):(parseFloat(s.replace(',','.'))||0);
+}
 function _calcVal(id){ var el=document.getElementById(id); return el?el.value:''; }
 function _calcDoseUnit(raw){
   var u=String(raw||'').toLowerCase();
