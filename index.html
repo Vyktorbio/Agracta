@@ -6179,17 +6179,26 @@ function _calcRenderShell(){
   var ov=document.getElementById('calcOvl'); if(!ov) return;
   var all=_calcAllStudies();
   var study=_calcStudy();
-  /* parcela: usa o tamanho salvo pelo usuário (padrão 10×5); edite na tela e fica salvo p/ a próxima */
-  var dims=_calcParcelaDefault();
+  /* parcela: PREFERE o tamanho do protocolo do estudo (modelo.xls); senão o salvo pelo usuário
+     (padrão 10×5). O campo continua editável e o que ficar é salvo p/ a próxima. */
+  var protoParc=study?_parseParcelaDim((study.protocolo||{}).tamanhoParcela):null;
+  var dims=protoParc||_calcParcelaDefault();
+  var fromProto=!!protoParc;
   var defLen=dims.comprimento, defWid=dims.largura;
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
-  var defVol=''; if(study){ var tv=(study.tratamentos||[]).map(function(t){return t.volume;}).find(function(v){return v;}); if(tv) defVol=_calcNum(tv); }
+  /* volume padrão: 1º do tratamento; senão do volume de calda do protocolo */
+  var defVol=''; if(study){
+    var tv=(study.tratamentos||[]).map(function(t){return t.volume;}).find(function(v){return v;});
+    if(tv) defVol=_calcNum(tv);
+    else { var pv=_calcNum((study.protocolo||{}).volumeCalda); if(pv>0) defVol=pv; }
+  }
   var selHtml='';
   if(all.length>1){
     selHtml='<div class="calc-f full"><span class="calc-lab">Estudo</span><select id="calcStudy" class="calc-sel" onchange="_calcPick(this.value)">'+
       all.map(function(o){ return '<option value="'+esc(o.qid+'|'+o.sid)+'"'+((_calcSel&&_calcSel.qid===o.qid&&_calcSel.sid===o.sid)?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+'</select></div>';
   }
-  var refTxt = dims? ('Quadra ~'+Math.round(dims.comprimento)+'×'+Math.round(dims.largura)+' m — ajuste para o tamanho da PARCELA') : 'Informe o tamanho da parcela';
+  var refTxt = fromProto ? ('✓ Parcela do protocolo: '+dims.comprimento+'×'+dims.largura+' m'+(defVol?(' · volume '+defVol+' L/ha'):'')+' — confira e ajuste se preciso')
+    : (dims? ('Parcela salva ~'+Math.round(dims.comprimento)+'×'+Math.round(dims.largura)+' m — ajuste para o tamanho da PARCELA') : 'Informe o tamanho da parcela');
   ov.innerHTML='<div class="calc-box">'+
     '<div class="calc-top"><div class="calc-title">🧪 Calculadora de aplicação</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
