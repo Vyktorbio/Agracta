@@ -2440,8 +2440,14 @@ function buildEditPanel(){
 }
 
 /* ===== Nuvem (Supabase): dados compartilhados + tempo real ===== */
-var SUPABASE_URL='https://atgmvbdcknslpmnjvnia.supabase.co';
-var SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Z212YmRja25zbHBtbmp2bmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY3ODUsImV4cCI6MjA5NTgwMjc4NX0.KK_G_ulSGXk770gTJWkEQ2R4JY0Ua1--0iOMNGRzQWg';
+/* Supabase DESATIVADO — o app migrou para Firebase/Firestore. O firebase-sync.js sobrescreve
+   cloudInit/doLogin/save/sync/admin, e _dwOn() (dual-write) é forçado false. As credenciais foram
+   ZERADAS de propósito: a camada Supabase do index.html é código morto, e zerar a URL impede que,
+   se o firebase-sync.js falhar ao carregar, o cloudInit caia silenciosamente no banco Supabase
+   ANTIGO (split-brain — sincronizaria os dados para o lugar errado). Limpeza completa do código
+   morto SB.* fica para uma refatoração dedicada. */
+var SUPABASE_URL='';
+var SUPABASE_ANON='';
 var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=false, _cloudPending=null;
 /* _cloudRev: revisão monotônica do documento (evita aplicar/empurrar estado mais antigo).
    _cloudInitDone: só permite ESCREVER na nuvem DEPOIS de ter LIDO ela uma vez
