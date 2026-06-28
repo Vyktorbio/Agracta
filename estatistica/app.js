@@ -4,7 +4,7 @@
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
                     "posthoc.py","anova.py","glmcount.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-3";
+const APP_VERSION = "bioensaio-auditoria-4";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v37-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";

@@ -75,24 +75,34 @@ def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
     pressupostos_ok = bool(norm.get("normal")) and bool(homog.get("homogenea"))
 
     if not pressupostos_ok and transformar_auto:
-        nome_t, ft, inv = diag.sugerir_transformacao(grupos, tipo_resposta)
-        if ft is not None:
+        # tenta VÁRIAS transformações e adota a que melhor atende os pressupostos
+        # (antes de cair para o não-paramétrico). Score = (nº de pressupostos
+        # atendidos, p da normalidade) — só adota se MELHORAR vs. a escala original.
+        def _score(nrm, hmg):
+            return (int(bool(nrm.get("normal"))) + int(bool(hmg.get("homogenea"))),
+                    float(nrm.get("p") or 0.0))
+        base = _score(norm, homog)
+        melhor = None  # (score, nome, modelo, aov, formula, norm, homog, df, inv)
+        for nome_t, ft, inv in diag.candidatos_transformacao(grupos, tipo_resposta):
             try:
                 df2 = df.copy()
                 df2["y"] = ft(df2["y"].values)
-                if np.all(np.isfinite(df2["y"].values)):
-                    modelo_t, aov_t, formula_t = _ajustar(df2, nomes_fatores, tem_bloco)
-                    norm_t = diag.normalidade(modelo_t.resid.values)
-                    grupos_t = [g["y"].values for _, g in df2.groupby("_grp")]
-                    homog_t = diag.homogeneidade(grupos_t)
-                    if bool(norm_t.get("normal")) or bool(homog_t.get("homogenea")):
-                        modelo, aov, formula = modelo_t, aov_t, formula_t
-                        norm, homog = norm_t, homog_t
-                        transformacao, inversa, usada = nome_t, inv, nome_t
-                        df = df2
-                        pressupostos_ok = bool(norm_t.get("normal")) and bool(homog_t.get("homogenea"))
+                if not np.all(np.isfinite(df2["y"].values)):
+                    continue
+                modelo_t, aov_t, formula_t = _ajustar(df2, nomes_fatores, tem_bloco)
+                norm_t = diag.normalidade(modelo_t.resid.values)
+                grupos_t = [g["y"].values for _, g in df2.groupby("_grp")]
+                homog_t = diag.homogeneidade(grupos_t)
+                sc = _score(norm_t, homog_t)
+                if sc > base and (melhor is None or sc > melhor[0]):
+                    melhor = (sc, nome_t, modelo_t, aov_t, formula_t,
+                              norm_t, homog_t, df2, inv)
             except Exception:
-                pass
+                continue
+        if melhor is not None:
+            (_, nome_t, modelo, aov, formula, norm, homog, df, inversa) = melhor
+            transformacao, usada = nome_t, nome_t
+            pressupostos_ok = bool(norm.get("normal")) and bool(homog.get("homogenea"))
 
     # extrai QME e g.l. do erro
     mse = float(modelo.mse_resid)

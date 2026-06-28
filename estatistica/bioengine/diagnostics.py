@@ -99,6 +99,63 @@ def sobredispersao_binomial(y, n, mu_prop, n_par):
             "sobredisperso": bool(phi > 1.5)}
 
 
+def candidatos_transformacao(grupos, tipo):
+    """
+    Lista de transformações candidatas (nome, funcao, inversa) a tentar quando
+    os pressupostos falham. A ANOVA testa todas e adota a que MELHOR atende
+    normalidade/homogeneidade (antes de cair para o não-paramétrico).
+    """
+    todos = np.concatenate([np.asarray(g, float) for g in grupos])
+    todos = todos[~np.isnan(todos)]
+    if todos.size == 0:
+        return []
+    minimo = float(np.min(todos))
+    maximo = float(np.max(todos))
+    cands = []
+
+    if tipo == "proporcao" and minimo >= 0 and maximo <= 100:
+        escala = 100.0 if maximo > 1 else 1.0
+
+        def _asin(x, e=escala):
+            x = np.clip(np.asarray(x, float) / e, 0, 1)
+            return np.arcsin(np.sqrt(x))
+
+        cands.append((("arcsen√ (proporção 0–100)" if escala == 100.0
+                       else "arcsen√ (proporção 0–1)"),
+                      _asin, (lambda z, e=escala: (np.sin(z) ** 2) * e)))
+
+        def _logit(x, e=escala):
+            p = np.clip(np.asarray(x, float) / e, 1e-4, 1 - 1e-4)
+            return np.log(p / (1 - p))
+
+        cands.append(("logit (proporção)", _logit,
+                      (lambda z, e=escala: e / (1 + np.exp(-z)))))
+        cands.append(("√(x) (proporção)",
+                      lambda x: np.sqrt(np.asarray(x, float)), lambda z: z ** 2))
+
+    elif tipo == "contagem":
+        cands.append(("√(x+3/8) (contagem)",
+                      lambda x: np.sqrt(np.asarray(x, float) + 0.375),
+                      lambda z: z ** 2 - 0.375))
+        if minimo > -1:
+            cands.append(("log(x+1) (contagem)",
+                          lambda x: np.log1p(np.asarray(x, float)),
+                          lambda z: np.expm1(z)))
+
+    else:  # contínua
+        if minimo > 0:
+            cands.append(("log(x)", lambda x: np.log(np.asarray(x, float)), np.exp))
+            cands.append(("√(x)", lambda x: np.sqrt(np.asarray(x, float)),
+                          lambda z: z ** 2))
+        elif minimo > -1:
+            cands.append(("log(x+1)", lambda x: np.log1p(np.asarray(x, float)),
+                          lambda z: np.expm1(z)))
+            if minimo >= 0:
+                cands.append(("√(x)", lambda x: np.sqrt(np.asarray(x, float)),
+                              lambda z: z ** 2))
+    return cands
+
+
 def sugerir_transformacao(grupos, tipo):
     """
     Sugere transformação quando a normalidade/homogeneidade falham.
