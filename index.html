@@ -4749,8 +4749,12 @@ function buildStudyModelo(qid, s, opts){
   var test=(typeof studyTestemunha==='function')?studyTestemunha(s):null;
   var BR=function(d){ return d?((typeof isoToBR==='function'?isoToBR(d):d)||d):''; };
   var cells={}, maxR=0, maxC=10;
-  function put(r,c,v){ if(v==null||v==='')return; cells[r+'_'+c]=String(v).replace(/[\t\n\r]/g,' '); if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
-  function lbl(r,c,v){ if(soDados)return; cells[r+'_'+c]=v; if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
+  /* O modelo.xls REAL tem 2 linhas em branco físicas: linha 0 (topo) e linha 14 (entre PROTOCOLO
+     e DESCRIÇÃO). O conteúdo é indexado de forma compactada; _mr() mapeia p/ a linha FÍSICA do
+     modelo (≤12 → +1; ≥13 → +2) pra colar exatamente nas células certas. */
+  function _mr(r){ return r + (r<=12?1:2); }
+  function put(r,c,v){ if(v==null||v==='')return; r=_mr(r); cells[r+'_'+c]=String(v).replace(/[\t\n\r]/g,' '); if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
+  function lbl(r,c,v){ if(soDados)return; r=_mr(r); cells[r+'_'+c]=v; if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
   /* CABEÇALHO (rótulos cols 0/2/4/6 ; valores 1/3/5/7) — linhas 0–10, igual ao modelo.xls */
   lbl(0,0,'STATUS DO ESTUDO'); put(0,1,(s.aplicacoes&&s.aplicacoes.length)?'INSTALADO':'AGUARDANDO APLICAÇÃO');
   lbl(1,0,'OBJETIVO DO ESTUDO:'); put(1,1,s.objetivo||s.descricao||'');
