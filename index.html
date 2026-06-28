@@ -6349,7 +6349,7 @@ function _bioestatEnsureStudy(qid,sid){
     [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
       var fjob={jobKey:m[1],avId:j.avId,date:j.date,variavel:j.variavel,tipo:j.tipo};
       var req=key+'|'+sig+'|'+i+'-'+mi+'|'+Date.now();
-      var item={requestId:req,key:key,job:fjob,payload:{requestId:req,aoa:j.aoa,modo:m[0],titulo:tit,
+      var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:j.aoa,modo:m[0],titulo:tit,
         responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
@@ -6363,8 +6363,8 @@ function _bioestatPump(){
   clearTimeout(_bioAutoWd);
   _bioAutoWd=setTimeout(function(){ /* job travou: marca erro e segue (não trava a fila) */
     if(_bioAutoBusy!==item.requestId)return;
-    var c=_bioAutoCache[item.key]; if(c&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total)c.status='ready'; }
-    delete _bioAutoPending[item.requestId]; _bioAutoBusy=null; _bioestatPump();
+    var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total)c.status='ready'; }
+    delete _bioAutoPending[item.requestId]; _bioAutoBusy=null; _bioestatPump(); _bioestatRefreshOpen(c);
   },70000);
   f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin);
 }
@@ -6376,15 +6376,30 @@ function _bioestatP(rel){
 function _bioestatResumoCard(job,rel){
   if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
   var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.tukey||cm.scott_knott||cm.dunn||null;
-  var desc={}; (rel.descritiva||[]).forEach(function(d){desc[d.tratamento]=d.media!=null?d.media:d.proporcao;});
-  var order=(cmp&&cmp.ordem)||a.ordem||Object.keys(desc), vals=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||desc;
-  var letras=(cmp&&cmp.letras)||a.letras||{}, p=_bioestatP(rel), rows='';
-  order.forEach(function(t){rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+(vals&&vals[t]!=null?_r1(vals[t]):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td></tr>';});
-  var stat=p==null?'modelo calculado':('p='+p.toLocaleString('pt-BR',{maximumFractionDigits:4})+(p<.05?' · diferença significativa':' · sem diferença detectada'));
+  var nf=function(x,d){ return (x==null||isNaN(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(d==null?1:d)}); };
+  var pf=function(x){ return x==null?'—':(x<0.001?'<0,001':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3})); };
+  var ok=function(b){ return b?'<span style="color:#1f6f43">✓</span>':'<span style="color:#b07d18">✗</span>'; };
+  var metodoCmp=cm.tukey?'Tukey':(cm.scott_knott?'Scott-Knott':(cm.dunn?'Dunn · Kruskal-Wallis':'—'));
+  var descArr=rel.descritiva||[], desc={}; descArr.forEach(function(d){desc[d.tratamento]=d;});
+  var letras=(cmp&&cmp.letras)||a.letras||{};
+  var valsObj=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||null;
+  var order=(cmp&&cmp.ordem)||a.ordem||descArr.map(function(d){return d.tratamento;});
+  var labelMedia=cm.dunn?'Mediana':'Média', p=_bioestatP(rel);
+  /* CV% do ensaio = raiz(QM resíduo) / média geral × 100 */
+  var mg=null, cv=null, sm=0, nn=0; descArr.forEach(function(d){ if(d.media!=null){sm+=d.media;nn++;} }); if(nn){ mg=sm/nn; if(a.mse!=null&&mg) cv=Math.sqrt(a.mse)/Math.abs(mg)*100; }
+  var rows=''; order.forEach(function(t){ var d=desc[t]||{}, val=(valsObj&&valsObj[t]!=null)?valsObj[t]:d.media;
+    rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+nf(val,1)+'</td><td style="color:#7a877f">'+(d.dp!=null?('±'+nf(d.dp,1)):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td></tr>'; });
+  var nr=a.normalidade||{}, hm=a.homogeneidade||{}, kr=a.kruskal||{};
+  var anova=(a.tabela_anova||[]).map(function(r){ return '<tr><td class="av-tname">'+esc(r.fonte)+'</td><td>'+(r.gl!=null?r.gl:'—')+'</td><td>'+nf(r.sq,2)+'</td><td>'+nf(r.qm,3)+'</td><td>'+(r.F!=null?nf(r.F,1):'—')+'</td><td>'+pf(r.p)+'</td></tr>'; }).join('');
+  var statTxt=p==null?'modelo calculado':('p='+pf(p)+(p<.05?' · significativo':' · ns'));
+  var transf=a.transformacao? (typeof a.transformacao==='string'?a.transformacao:(a.transformacao.nome||a.transformacao.tipo||'aplicada')) : null;
   return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(stat)+'</span></div>'+
-    (a.transformacao?'<div style="font-size:10px;color:#718078;margin-top:3px">Transformação: '+esc(a.transformacao)+'</div>':'')+
-    '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>Valor</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV '+nf(cv,1)+'%':'')+' · comparação <b>'+esc(metodoCmp)+'</b>'+(transf?' · transf. '+esc(transf):'')+'</div>'+
+    '<div style="font-size:10px;color:#728078;margin-top:1px">Pressupostos: normalidade '+ok(nr.normal)+' <span style="color:#9aa69e">('+esc(nr.teste||'?')+' p'+pf(nr.p)+')</span> · homogeneidade '+ok(hm.homogenea)+' <span style="color:#9aa69e">('+esc(hm.teste||'?')+' p'+pf(hm.p)+')</span>'+(a.pressupostos_ok===false?' <span style="color:#b07d18">→ não-paramétrico</span>':'')+'</div>'+
+    '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>±DP</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
+  '</div>';
 }
 function _bioestatForenseCard(job,rel){
   if(!rel||!rel.ok) return '';
@@ -6414,21 +6429,31 @@ function _bioestatIntegratedHtml(qid,sid,study){
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;
 }
+/* Re-renderiza o detalhe do estudo quando a análise fica pronta — usado tanto pelo handler de
+   mensagem quanto pelo watchdog (antes só o handler atualizava, então um job que estourava o
+   tempo deixava o spinner preso na tela mesmo com o cache 'ready'). Tolerante: dispara também se
+   o spinner ainda estiver na tela, mesmo que a checagem do overlay falhe. */
+function _bioestatRefreshOpen(c){
+  if(!c||c.status!=='ready'||curV!==c.qid||curSid!==c.sid)return;
+  var ov=document.getElementById('sdOvl');
+  var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
+  if(open) setTimeout(function(){ if(curV===c.qid&&curSid===c.sid) openStudyDetail(c.qid,c.sid); },30);
+}
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
-  var c=_bioAutoCache[item.key]; if(c){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total)c.status='ready';}
+  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total)c.status='ready';} /* ignora job órfão de cálculo substituído */
   delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
   var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
   _bioestatPump();
-  if(c&&c.status==='ready'&&curV===c.qid&&curSid===c.sid&&document.getElementById('sdOvl').classList.contains('open'))setTimeout(function(){openStudyDetail(c.qid,c.sid);},30);
+  _bioestatRefreshOpen(c);
 });
 
 /* ===================== IMPORTAR PROTOCOLO DA PLANILHA (modelo.xls) → ESTUDO =====================
    A planilha é a FONTE do protocolo. Lê por RÓTULO (robusto a deslocamento de linhas) — colar (TSV)
    ou arquivo (.xls/.xlsx via XLSX). Cria um estudo novo na quadra escolhida; o resto vai manual. */
 function _impNorm(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').replace(/[:：]\s*$/,'').trim(); }
-function _impAoaFromText(txt){ return String(txt||'').replace(/\r/g,'').split('\n').map(function(l){ return l.split('\t'); }); }
+function _impAoaFromText(txt){ return (typeof _clipToAoa==='function')?_clipToAoa(txt):String(txt||'').replace(/\r/g,'').split('\n').map(function(l){ return l.split('\t'); }); }
 function _impFindVal(aoa, labels){
   for(var r=0;r<aoa.length;r++){ var row=aoa[r]||[];
     for(var c=0;c<row.length;c++){ var cell=_impNorm(row[c]); if(!cell) continue;
@@ -6568,7 +6593,9 @@ function _impAnalyze(){
   if(!txt.trim()){ alert('Cole as células da planilha ou escolha um arquivo.'); return; }
   _impRun(_impAoaFromText(txt));
 }
+var _impRawAoa=null;
 function _impRun(aoa){
+  _impRawAoa=aoa;
   _impParsed=_importParse(aoa);
   var box=document.getElementById('impPreview'); if(!box) return;
   var f=_impParsed.fields, tr=_impParsed.tratamentos;
@@ -6618,6 +6645,19 @@ function _impCriar(){
     obs:'', testemunha:/test/i.test(t.produto||'') }; });
   var na=tr.map(function(t){return parseInt(t._numApl);}).filter(function(x){return x>0;}); if(na.length) s.numAplicacoes=Math.max.apply(null,na);
   var iv=tr.map(function(t){return parseInt(t._intervalo);}).filter(function(x){return x>0;}); if(iv.length) s.intervaloDias=iv[0];
+  /* GRADE DE AVALIAÇÕES (a/b/c/d) + PROGRAMAÇÃO + CLIMA: reaproveita o conteúdo colado/arquivo
+     com o parser canônico, pra o estudo novo já nascer com a planilha inteira (não só cabeçalho+tratamentos). */
+  try{
+    if(_impRawAoa){
+      var rich=parseStudyProtocolRows(_impRawAoa, (f.codigo?('protocolo '+f.codigo):'planilha modelo'));
+      if(rich){
+        if(rich.avaliacoes&&rich.avaliacoes.length) s.avaliacoes=_mergeProtocolAvaliacoes(s.avaliacoes||[],rich.avaliacoes);
+        if(rich.clima&&rich.clima.length) s.aplicacoes=_mergeProtocolClima(s.aplicacoes||[],rich.clima);
+        if(rich.numAplicacoes && !(s.numAplicacoes>0)) s.numAplicacoes=rich.numAplicacoes;
+        if(rich.intervaloDias!=null && !(s.intervaloDias>0)) s.intervaloDias=rich.intervaloDias;
+      }
+    }
+  }catch(e){ console.warn('Enriquecimento do protocolo (grade/clima) falhou:', e); }
   /* PROTOCOLO COMPLETO (round-trip: a planilha é o início e o fim) — nomes que o downloadStudyWorkbook lê */
   var _pi=function(v){ return _impDateISO(v)||v||''; };
   s.protocolo={ proposta:f.proposta||'', ret:f.ret||'', cultivar:f.cultivar||'', equipamento:f.equipamento||'',
@@ -6988,9 +7028,28 @@ function _protoIso(v){
   return '';
 }
 function _protoAddDays(iso,n){ if(!iso)return ''; var d=new Date(iso+'T12:00:00'); if(isNaN(d))return ''; d.setDate(d.getDate()+(parseInt(n)||0)); return d.toISOString().slice(0,10); }
-function _protoRowsText(text){
-  return String(text||'').replace(/\r/g,'').split('\n').map(function(line){ return line.split('\t'); });
+/* Parser de área-de-transferência (Excel/Sheets): respeita campos entre aspas com TAB e
+   QUEBRA DE LINHA internos (cabeçalhos multilinha tipo "Concentração\n(g/kg)"). Um split('\n')
+   ingênuo quebrava esses campos em duas linhas e desalinhava a tabela inteira. */
+function _clipToAoa(text){
+  text=String(text==null?'':text).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  var rows=[], row=[], field='', inQ=false, started=false, i=0, n=text.length;
+  function endField(){ row.push(field); field=''; started=false; }
+  function endRow(){ endField(); rows.push(row); row=[]; }
+  while(i<n){ var ch=text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){ field+='"'; i+=2; continue; } inQ=false; i++; continue; }
+      field+=ch; i++; continue;
+    }
+    if(ch==='"' && !started){ inQ=true; started=true; i++; continue; }
+    if(ch==='\t'){ endField(); i++; continue; }
+    if(ch==='\n'){ endRow(); i++; continue; }
+    field+=ch; started=true; i++;
+  }
+  if(started||field!==''||row.length){ endRow(); }
+  return rows;
 }
+function _protoRowsText(text){ return _clipToAoa(text); }
 function _protoValue(rows,labels){
   labels=labels.map(_protoNorm);
   for(var r=0;r<rows.length;r++) for(var c=0;c<(rows[r]||[]).length;c++){
@@ -7016,7 +7075,7 @@ function _protoSchedule(rows,start,intervalo){
   return out.sort();
 }
 function _protoVariableTitle(title,idx){
-  var s=String(title||'').replace(/AVALIA[CÇ][AÃ]O/ig,'').replace(/[—–]/g,'-').replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/g,'').replace(/\b\d+\s*DA[A-Z]\b/ig,'').replace(/m[eé]todo de avalia[cç][aã]o/ig,'').replace(/[\/·:]+/g,' ').replace(/\s*-\s*X?\s*$/i,'').replace(/\s+/g,' ').trim();
+  var s=String(title||'').replace(/AVALIA[CÇ][AÃ]O/ig,'').replace(/[—–]/g,'-').replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/g,'').replace(/\b\d+\s*DA[A-Z](?:\s*-\s*[A-Za-z0-9]+)?\b/ig,'').replace(/m[eé]todo de avalia[cç][aã]o/ig,'').replace(/[\/·:]+/g,' ').replace(/\s*-\s*-\s*/g,' ').replace(/\s+/g,' ').trim().replace(/^[-\s]+|[-\s]+$/g,'');
   if(!s || /^x$/i.test(s) || /-\s*x/i.test(s)) return 'Avaliação '+(idx+1);
   return s.replace(/^[-\s]+|[-\s]+$/g,'') || ('Avaliação '+(idx+1));
 }
@@ -7026,6 +7085,41 @@ function _protoDateTitle(title,start,intervalo,fallback){
   var m=s.match(/\b(\d+)\s*DA([A-Z])\b/i);
   if(m) return _protoAddDays(start,(m[2].toUpperCase().charCodeAt(0)-65)*(parseInt(intervalo)||0)+parseInt(m[1]));
   return fallback||'';
+}
+function _protoClima(rows){
+  /* Bloco "Dados climáticos relativos à aplicação": rótulos numa coluna (onde está "Aplicação"),
+     uma coluna por aplicação (1..8) à direita. Devolve registros na MESMA forma da aplicação
+     do estudo (inicio/fim.clima.temp/umidade/vento, hora, bbch) — fecha o round-trip com o export. */
+  var hr=-1, labCol=-1;
+  for(var r=0;r<Math.min(rows.length,40)&&hr<0;r++){ var row=rows[r]||[];
+    for(var c=10;c<row.length;c++){ if(_protoNorm(row[c])==='aplicacao'){ hr=r; labCol=c; break; } } }
+  if(hr<0) return [];
+  var appCols=[], hrow=rows[hr]||[];
+  for(var c2=labCol+1;c2<hrow.length;c2++){ var n=_protoNum(hrow[c2]); if(n!=null&&n>0&&n<=20) appCols.push({n:Math.round(n),c:c2}); }
+  if(!appCols.length) return [];
+  function lus(v){ return _protoNorm(v).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+  function findRow(labels){
+    var L=labels.map(lus);
+    for(var rr=hr;rr<Math.min(rows.length,hr+40);rr++){ var v=lus((rows[rr]||[])[labCol]);
+      if(!v)continue; for(var i=0;i<L.length;i++) if(v===L[i]||v.indexOf(L[i])===0) return rr; }
+    return -1;
+  }
+  var R={ data:findRow(['data da aplicacao','data de aplicacao']), hIni:findRow(['horario inicial']), hFim:findRow(['horario final']),
+    tIni:findRow(['t c inicial','temperatura inicial']), tFim:findRow(['t c final','temperatura final']),
+    urIni:findRow(['ur inicial','umidade inicial']), urFim:findRow(['ur final','umidade final']),
+    vIni:findRow(['vento km h inicial','vento inicial']), vFim:findRow(['vento km h final','vento final']),
+    neb:findRow(['nebulosidade']), bbch:findRow(['estadio fenologico','estadio']) };
+  function cell(ri,col){ if(ri<0)return ''; var v=(rows[ri]||[])[col]; return _protoEmpty(v)?'':v; }
+  var out=[];
+  appCols.forEach(function(ac){
+    var rec={ aplicacao:ac.n, data:_protoIso(cell(R.data,ac.c))||'', bbch:String(cell(R.bbch,ac.c)||'').trim(),
+      inicio:{ hora:String(cell(R.hIni,ac.c)||'').trim(), clima:{ temp:_protoNum(cell(R.tIni,ac.c)), umidade:_protoNum(cell(R.urIni,ac.c)), vento:_protoNum(cell(R.vIni,ac.c)) } },
+      fim:{ hora:String(cell(R.hFim,ac.c)||'').trim(), clima:{ temp:_protoNum(cell(R.tFim,ac.c)), umidade:_protoNum(cell(R.urFim,ac.c)), vento:_protoNum(cell(R.vFim,ac.c)) } },
+      nebulosidade:_protoNum(cell(R.neb,ac.c)) };
+    var temNum=[rec.inicio.clima.temp,rec.inicio.clima.umidade,rec.inicio.clima.vento,rec.fim.clima.temp,rec.fim.clima.umidade,rec.fim.clima.vento,rec.nebulosidade].some(function(x){return x!=null;});
+    if(rec.data||rec.bbch||rec.inicio.hora||rec.fim.hora||temNum) out.push(rec);
+  });
+  return out;
 }
 function parseStudyProtocolRows(rows,nomeArquivo){
   rows=(rows||[]).map(function(r){return Array.isArray(r)?r:[];});
@@ -7065,7 +7159,8 @@ function parseStudyProtocolRows(rows,nomeArquivo){
         ingredienteAtivo:String(row[2]||'').trim(),concentracao:String(row[3]||'').trim(),dose:String(row[4]||'').trim(),
         concentracaoAtivo:String(row[5]||'').trim(),volume:String(row[8]||'').trim(),adjuvante:String(row[9]||'').trim(),
         testemunha:testemunha,obs:''});
-      if(numAp==null)numAp=_protoNum(row[6]); if(intAp==null)intAp=_protoNum(row[7]);
+      var _na=_protoNum(row[6]); if(_na!=null&&_na>0&&(numAp==null||_na>numAp))numAp=_na; /* máx. de aplicações entre tratamentos: testemunha (0) não define o estudo */
+      var _ia=_protoNum(row[7]); if(_ia!=null&&_ia>0&&intAp==null)intAp=_ia;
     }
   }
   if(!trats.length && maxTrat) for(var ti=1;ti<=maxTrat;ti++)trats.push(newTratamento(ti));
@@ -7098,12 +7193,33 @@ function parseStudyProtocolRows(rows,nomeArquivo){
   }
   avals.sort(function(a,b){return (a.data||'').localeCompare(b.data||'');});
   return {meta:meta,tratamentos:trats,numAplicacoes:numAplicacoes,intervaloDias:intervalo,
-    numRepeticoes:Math.max(1,parseInt(meta.repeticoes)||4),avaliacoes:avals,
+    numRepeticoes:Math.max(1,parseInt(meta.repeticoes)||4),avaliacoes:avals,clima:_protoClima(rows),
     origem:{nome:nomeArquivo||'conteúdo colado',importadoEm:new Date().toISOString(),formato:'modelo.xls Agracta'}};
 }
 function _mergeProtocolAvaliacoes(existing,incoming){
   var out=(existing||[]).map(function(a){return JSON.parse(JSON.stringify(a));}), by={}; out.forEach(function(a){if(a.data)by[a.data]=a;});
   (incoming||[]).forEach(function(a){ if(a.data&&by[a.data])_fundeAval(by[a.data],a); else{out.push(a);if(a.data)by[a.data]=a;} });
+  return out.sort(function(a,b){return (a.data||'').localeCompare(b.data||'');});
+}
+function _mergeProtocolClima(existing,clima){
+  /* Mescla clima do protocolo nas aplicações do estudo sem clobberar dados já registrados em campo:
+     casa por data; se não houver, casa por nº de aplicação importada antes; senão cria registro novo. */
+  var out=(existing||[]).map(function(a){return JSON.parse(JSON.stringify(a));});
+  function fillClima(dst,src){ dst.clima=dst.clima||{}; ['temp','umidade','vento'].forEach(function(k){ if((dst.clima[k]==null||dst.clima[k]==='')&&src.clima&&src.clima[k]!=null)dst.clima[k]=src.clima[k]; }); if(!dst.hora&&src.hora)dst.hora=src.hora; }
+  (clima||[]).forEach(function(c){
+    var m=null;
+    if(c.data) m=out.find(function(a){return a.data===c.data;});
+    if(!m) m=out.find(function(a){return a._fromProtocolo&&a.aplicacao===c.aplicacao;});
+    if(m){
+      if(!m.data&&c.data)m.data=c.data; if(!m.bbch&&c.bbch)m.bbch=c.bbch;
+      m.inicio=m.inicio||{}; fillClima(m.inicio,c.inicio);
+      m.fim=m.fim||{}; fillClima(m.fim,c.fim);
+      if(m.nebulosidade==null&&c.nebulosidade!=null)m.nebulosidade=c.nebulosidade;
+    } else {
+      out.push({ id:(typeof uid==='function'?uid():'apl_'+c.aplicacao+'_'+Date.now()), data:c.data||'', bbch:c.bbch||'',
+        aplicacao:c.aplicacao, inicio:c.inicio, fim:c.fim, nebulosidade:c.nebulosidade, _fromProtocolo:true });
+    }
+  });
   return out.sort(function(a,b){return (a.data||'').localeCompare(b.data||'');});
 }
 function applyStudyProtocol(parsed){
@@ -7117,6 +7233,7 @@ function applyStudyProtocol(parsed){
   workingStudy.numRepeticoes=parsed.numRepeticoes||workingStudy.numRepeticoes||4;
   if(parsed.tratamentos&&parsed.tratamentos.length)workingStudy.tratamentos=parsed.tratamentos;
   if(parsed.avaliacoes&&parsed.avaliacoes.length)workingStudy.avaliacoes=_mergeProtocolAvaliacoes(workingStudy.avaliacoes,parsed.avaliacoes);
+  if(parsed.clima&&parsed.clima.length)workingStudy.aplicacoes=_mergeProtocolClima(workingStudy.aplicacoes,parsed.clima);
   workingStudy.objetivo=m.objetivo||workingStudy.objetivo||'';
   workingStudy.alvo=m.alvo||workingStudy.alvo||'';
   workingStudy.delineamento=m.delineamento||workingStudy.delineamento||'';
