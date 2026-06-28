@@ -6188,8 +6188,8 @@ function _calcRenderShell(){
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
   /* volume padrão: 1º do tratamento; senão do volume de calda do protocolo */
   var defVol=''; if(study){
-    var tv=(study.tratamentos||[]).map(function(t){return t.volume;}).find(function(v){return v;});
-    if(tv) defVol=_calcNum(tv);
+    var tvs=(study.tratamentos||[]).map(function(t){return _calcNum(t.volume);}).filter(function(n){return n>0;});
+    if(tvs.length) defVol=tvs[0];
     else { var pv=_calcNum((study.protocolo||{}).volumeCalda); if(pv>0) defVol=pv; }
   }
   var selHtml='';
