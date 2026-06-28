@@ -4733,7 +4733,11 @@ function studyFetchNdvi(qid,from,to,cb){
    .catch(function(){ cb(null,'Servidor NDVI fora do ar (pode estar acordando ~50s).'); });
 }
 /* ===== EXPORT NO LAYOUT DA PLANILHA DO USUÁRIO (modelo.xls) — colável em A1 ===== */
-function buildStudyModelo(qid, s){
+function buildStudyModelo(qid, s, opts){
+  opts=opts||{}; var soDados=!!opts.soDados, paraColar=soDados||!!opts.paraColar;
+  /* soDados: só VALORES (sem rótulos) p/ colar com "pular vazios" no Excel.
+     paraColar: sem as seções extras (Cálculo de aplicação, rodapé estatístico) que não
+     existem no modelo.xls — evita despejar lixo na planilha do usuário. */
   s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
   var q=data[qid]||{};
   var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
@@ -4746,7 +4750,7 @@ function buildStudyModelo(qid, s){
   var BR=function(d){ return d?((typeof isoToBR==='function'?isoToBR(d):d)||d):''; };
   var cells={}, maxR=0, maxC=10;
   function put(r,c,v){ if(v==null||v==='')return; cells[r+'_'+c]=String(v).replace(/[\t\n\r]/g,' '); if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
-  function lbl(r,c,v){ cells[r+'_'+c]=v; if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
+  function lbl(r,c,v){ if(soDados)return; cells[r+'_'+c]=v; if(r>maxR)maxR=r; if(c>maxC)maxC=c; }
   /* CABEÇALHO (rótulos cols 0/2/4/6 ; valores 1/3/5/7) — linhas 0–10, igual ao modelo.xls */
   lbl(0,0,'STATUS DO ESTUDO'); put(0,1,(s.aplicacoes&&s.aplicacoes.length)?'INSTALADO':'AGUARDANDO APLICAÇÃO');
   lbl(1,0,'OBJETIVO DO ESTUDO:'); put(1,1,s.objetivo||s.descricao||'');
@@ -4794,14 +4798,15 @@ function buildStudyModelo(qid, s){
       var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
       if(letra) put(r,c0+7, letra);
     });
-    var rf=15+trats.length;
-    if(be){ lbl(rf,c0,(be.metodo||'comparação')+(be.p!=null?('  p='+(be.p<0.001?'<0,001':_r1(be.p))+(be.p<0.05?'  *':'  ns')):'')+'  · motor BioEstat'); }
-    else if(st){ lbl(rf,c0,'F='+_r1(st.F)+'  p='+(st.p<0.001?'<0,001':_r1(st.p))+'  CV='+_r1(st.cv)+'%'+(st.sig?'  *':'  ns')+'  · ANOVA-DBC rápida'); }
+    if(!paraColar){ var rf=15+trats.length;
+      if(be){ lbl(rf,c0,(be.metodo||'comparação')+(be.p!=null?('  p='+(be.p<0.001?'<0,001':_r1(be.p))+(be.p<0.05?'  *':'  ns')):'')+'  · motor BioEstat'); }
+      else if(st){ lbl(rf,c0,'F='+_r1(st.F)+'  p='+(st.p<0.001?'<0,001':_r1(st.p))+'  CV='+_r1(st.cv)+'%'+(st.sig?'  *':'  ns')+'  · ANOVA-DBC rápida'); }
+    }
   }); });
-  /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento.
-     Usa o "Tamanho da Parcela" do próprio modelo (dim. da quadra) e nº de repetições como nº de parcelas. */
-  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||_calcParcelaDefault(); /* protocolo do estudo, senão o padrão salvo da calculadora (10×5) — nunca a quadra inteira */
-  if(window.BioCalculoCampo && parc){
+  /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento. Só no download/cópia
+     completa; OMITIDO em paraColar (não faz parte do modelo.xls do usuário). */
+  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||_calcParcelaDefault(); /* protocolo do estudo, senão o padrão salvo da calculadora (3×5) — nunca a quadra inteira */
+  if(!paraColar && window.BioCalculoCampo && parc){
     var crow=maxR+2;
     lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat)');
     var ch=crow+1;
@@ -4830,9 +4835,20 @@ function buildStudyModelo(qid, s){
   return out.join('\n');
 }
 function copyStudyModelo(qid,sid){
+  /* MODELO LIMPO: rótulos + dados, SEM as seções extras. Colar em A1 de uma cópia em branco
+     do modelo (Excel ou Sheets). */
   try{ var q=data[qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s){ _stxToast('Estudo não encontrado'); return; }
-    var tsv=buildStudyModelo(qid,s);
-    _stxCopy(tsv).then(function(ok){ _stxToast(ok?'✓ Copiado no formato da sua planilha — cole em A1 (planilha nova)':'Selecione e copie'); });
+    var tsv=buildStudyModelo(qid,s,{paraColar:true});
+    _stxCopy(tsv).then(function(ok){ _stxToast(ok?'✓ Modelo limpo copiado — cole em A1 de uma cópia EM BRANCO do modelo':'Selecione e copie'); });
+  }catch(e){ _stxToast('Erro: '+e.message); }
+}
+function copyStudyDados(qid,sid){
+  /* SÓ OS DADOS (valores nas células certas, sem rótulos). No Excel, use Colar Especial →
+     "Pular células em branco" sobre o seu modelo já preenchido: preenche só os dados, sem apagar
+     rótulos nem suas anotações. */
+  try{ var q=data[qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s){ _stxToast('Estudo não encontrado'); return; }
+    var tsv=buildStudyModelo(qid,s,{soDados:true});
+    _stxCopy(tsv).then(function(ok){ _stxToast(ok?'✓ Só os dados copiados — no Excel: Colar Especial → Pular vazios, em A1 do seu modelo':'Selecione e copie'); });
   }catch(e){ _stxToast('Erro: '+e.message); }
 }
 function _xlsPut(ws,r,c,v){
@@ -4933,10 +4949,10 @@ function showStudyExportModal(qid,s,from,to){
   var title=esc((s.codigo||'(sem codigo)')+' — '+quadraNome(qid));
   m.innerHTML='<div class="ndvi-modal-box" style="max-width:560px">'+
     '<div class="ndvi-modal-top"><b>📄 '+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
-    '<div class="ndvi-status"><b>Para a SUA planilha (modelo.xls):</b> toque em “Copiar p/ MINHA planilha” e cole em <b>A1</b> de uma aba nova — vem no mesmo layout (cabeçalho, tratamentos, clima, grade a/b/c/d/média/E%). O quadro abaixo é o formato livre (registro + NDVI).</div>'+
+    '<div class="ndvi-status"><b>Para a SUA planilha (modelo.xls):</b> cabeçalho, tratamentos, clima e grade (a/b/c/d/média/E%/grupo) nas células certas — <b>sem despejar rótulos nem seções extras</b>.<br>• <b>Modelo limpo</b>: cole em <b>A1</b> de uma cópia <b>em branco</b> do modelo (Excel ou Sheets).<br>• <b>Só dados</b>: no <b>Excel</b>, sobre o seu arquivo já preenchido — <b>Colar Especial → Pular células em branco</b> em A1 (preenche só os dados, não apaga nada).</div>'+
     '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:#0a110a;color:#cfe0cf;border:1px solid #2a3a2a;border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
     '<div id="stxNdvi" style="margin-top:8px"></div>'+
-    '<div class="gr-btns" style="margin-top:10px"><button class="ndvi-ix" style="flex:1;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="downloadStudyWorkbook(\''+qid+'\',\''+s.id+'\')">⬇ Baixar planilha completa</button><button class="ndvi-ix" style="flex:1" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar grade</button><button class="ndvi-ix" style="flex:1" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo</button><button class="gr-cancel" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
+    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar modelo limpo</button><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">📋 Copiar só dados (Excel)</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="downloadStudyWorkbook(\''+qid+'\',\''+s.id+'\')">⬇ Baixar planilha completa</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo (livre)</button><button class="gr-cancel" style="flex:1 1 100%" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
   '</div>';
   m.style.display='flex';
 }
@@ -6170,7 +6186,7 @@ function _calcStudy(){
 /* Tamanho de parcela da calculadora: preferência salva pelo usuário (padrão 10×5 m). */
 function _calcParcelaDefault(){
   var p=null; try{ p=_parseParcelaDim(localStorage.getItem('iracema-calc-parcela')); }catch(e){}
-  return p || {comprimento:10, largura:5};
+  return p || {comprimento:5, largura:3}; /* padrão 3×5 m (15 m²) — o mais usado; protocolo e valor salvo sobrepõem */
 }
 function _calcSalvarParcela(){
   try{ var l=_calcNum(_calcVal('calcLen')), w=_calcNum(_calcVal('calcWid')); if(l>0&&w>0) localStorage.setItem('iracema-calc-parcela', l+'x'+w); }catch(e){}
@@ -6187,10 +6203,15 @@ function _calcRenderShell(){
   var defLen=dims.comprimento, defWid=dims.largura;
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
   /* volume padrão: 1º do tratamento; senão do volume de calda do protocolo */
-  var defVol=''; if(study){
+  var defVol='', volsVariam=false; if(study){
+    /* volume PADRÃO (fallback): nível do protocolo; senão, só se TODOS os tratamentos tiverem o
+       mesmo volume. Se variam (ex.: 10/50/150 no mesmo protocolo), deixa em branco — cada
+       tratamento já usa o SEU próprio volume no cálculo (_calcCompute lê t.volume). */
+    var pv=_calcNum((study.protocolo||{}).volumeCalda);
     var tvs=(study.tratamentos||[]).map(function(t){return _calcNum(t.volume);}).filter(function(n){return n>0;});
-    if(tvs.length) defVol=tvs[0];
-    else { var pv=_calcNum((study.protocolo||{}).volumeCalda); if(pv>0) defVol=pv; }
+    var uniforme=tvs.length>0 && tvs.every(function(n){return n===tvs[0];});
+    volsVariam = tvs.length>1 && !uniforme;
+    defVol = (pv>0)?pv : (uniforme?tvs[0]:'');
   }
   var selHtml='';
   if(all.length>1){
@@ -6199,6 +6220,7 @@ function _calcRenderShell(){
   }
   var refTxt = fromProto ? ('✓ Parcela do protocolo: '+dims.comprimento+'×'+dims.largura+' m'+(defVol?(' · volume '+defVol+' L/ha'):'')+' — confira e ajuste se preciso')
     : (dims? ('Parcela salva ~'+Math.round(dims.comprimento)+'×'+Math.round(dims.largura)+' m — ajuste para o tamanho da PARCELA') : 'Informe o tamanho da parcela');
+  if(volsVariam) refTxt += ' · ⚠ volumes diferentes por tratamento — cada um usa o SEU (o campo padrão é só p/ quem não tiver)';
   ov.innerHTML='<div class="calc-box">'+
     '<div class="calc-top"><div class="calc-title">🧪 Calculadora de aplicação</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
