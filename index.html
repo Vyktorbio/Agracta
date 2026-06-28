@@ -255,7 +255,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .today-head{position:sticky;top:0;background:#080e08;padding:8px 0 14px;border-bottom:1px solid #1a2a1a;margin-bottom:14px;z-index:2}
 .today-back{background:none;border:1px solid #2a3a2a;color:#8c8;padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;margin-bottom:10px}
 .today-title{font-size:24px;font-weight:800;color:#afa;letter-spacing:2px}
-.today-date{font-size:13px;color:#789;text-transform:capitalize;margin-top:2px}
+.today-date{font-size:13px;color:#789;margin-top:2px}.today-date::first-letter{text-transform:uppercase}
 .today-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
 .today-sum-item{background:rgba(20,30,20,0.5);border:1px solid #1a2a1a;border-radius:10px;padding:12px 8px;text-align:center}
 .today-sum-item.urgent{background:rgba(255,82,82,0.15);border-color:#ff5252}
@@ -4674,7 +4674,7 @@ function buildStudyRecord(qid,s){
         _avsR.forEach(function(a){
           var mm=_means[a.data], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
           var cell=(mv!=null?String(_r1(mv)):'');
-          if(!isT && tm!=null && tm>0 && mv!=null) cell+=' ('+_r1((tm-mv)/tm*100)+'%)';
+          if(!isT){ var _c=_pctCtrl(tm,mv); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
           line+='\t'+cell;
         });
         var au=_audpc(v,t.id), tau=_audpc(v,_test), ac=(au!=null?String(Math.round(au)):'');
@@ -4784,7 +4784,7 @@ function buildStudyModelo(qid, s){
     trats.forEach(function(t,ti){ var r=15+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
-      if(test && t.id!==test && tMed!=null && tMed>0 && m!=null) put(r,c0+6, Math.round((tMed-m)/tMed*1000)/10);
+      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
       var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
       if(letra) put(r,c0+7, letra);
     });
@@ -8129,6 +8129,16 @@ function _avMeans(study, av){
   var m={}; Object.keys(sum).forEach(function(k){ m[k]={}; vars.forEach(function(v){ if(cnt[k]&&cnt[k][v]) m[k][v]=sum[k][v]/cnt[k][v]; }); }); return m;
 }
 function _r1(x){ return Math.round(x*10)/10; }
+function _pctCtrl(ref, val){
+  /* % de controle (Abbott) vs testemunha. Devolve null (→ "—") fora da faixa válida:
+     testemunha ≤ 0 (divisão instável) ou resultado < -100% — o que cobre testemunha ≈ 0 e
+     variáveis de EFICÁCIA (em que a testemunha é a MENOR, não a maior), evitando valores
+     absurdos tipo -10000%. Em variável de dano/severidade normal, fica na faixa 0–100%. */
+  if(ref==null || val==null || !(ref>0)) return null;
+  var e=(ref-val)/ref*100;
+  if(!isFinite(e) || e < -100) return null;
+  return e;
+}
 function avResultHtml(study, av){
   var vars=(av.variaveis||[]); if(!vars.length) return '';
   var means=_avMeans(study,av); if(!Object.keys(means).length) return '';
@@ -8138,8 +8148,7 @@ function avResultHtml(study, av){
     h+='<div class="res-title">'+esc(v)+' · média &amp; % controle</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>% ctrl</th></tr></thead><tbody>';
     ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
       if(t.id===test) ctrl='<b>test.</b>';
-      else if(tm!=null&&tm>0&&mv!=null) ctrl=_r1((tm-mv)/tm*100)+'%';
-      else ctrl='—';
+      else { var _c=_pctCtrl(tm,mv); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(mv!=null?_r1(mv):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
   });
@@ -8156,7 +8165,7 @@ function studyAudpcHtml(study){
     function audpc(tr){ var s=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null) return null; if(prev!=null) s+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return s; }
     var ta=audpc(test);
     h+='<div class="res-title">'+esc(v)+' · '+pts.length+' datas, '+days[days.length-1]+'d</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>AUDPC</th><th>% ctrl</th></tr></thead><tbody>';
-    ts.forEach(function(t){ var a=audpc(t.id), ctrl; if(t.id===test)ctrl='<b>test.</b>'; else if(ta!=null&&ta>0&&a!=null)ctrl=_r1((ta-a)/ta*100)+'%'; else ctrl='—';
+    ts.forEach(function(t){ var a=audpc(t.id), ctrl; if(t.id===test)ctrl='<b>test.</b>'; else { var _c=_pctCtrl(ta,a); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(a!=null?Math.round(a):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
   });
@@ -8200,7 +8209,7 @@ function studyChartsHtml(study){
   Object.keys(vars).forEach(function(v){
     var lastAv=null,i; for(i=avsR.length-1;i>=0;i--){ if((avsR[i].variaveis||[]).indexOf(v)>=0){ lastAv=avsR[i]; break; } }
     if(lastAv){ var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
-      ts.forEach(function(t){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v]; bars.push({label:t.id, val:(tm!=null&&tm>0&&mv!=null)?(tm-mv)/tm*100:null}); });
+      ts.forEach(function(t){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v]; bars.push({label:t.id, val:_pctCtrl(tm,mv)}); });
       if(bars.length) H+='<div class="res-title">'+esc(v)+' · % de controle ('+esc(isoToBR(lastAv.data))+')</div>'+_barsSvg(bars);
     }
     var pts=avsR.filter(function(a){return (a.variaveis||[]).indexOf(v)>=0;});
@@ -8721,9 +8730,9 @@ function _buildXlsx(soDoLocal){
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
-        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var ctrl=(t.id===_t)?'':((tm!=null&&tm>0&&mv!=null)?Math.round((tm-mv)/tm*1000)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
+        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
         var bv={}; _av.forEach(function(a){ if(!a.data)return; var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ (bv[v]=bv[v]||[]).push({date:a.data,m:m}); }); });
-        Object.keys(bv).forEach(function(v){ var pts=bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), dys=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); function af(tr){ var sm=0,pv=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(pv!=null)sm+=(pv+y)/2*(dys[i]-pt); pv=y; pt=dys[i]; } return sm; } var ta=af(_t); s.tratamentos.forEach(function(t){ var a=af(t.id); var ctrl=(t.id===_t)?'':((ta!=null&&ta>0&&a!=null)?Math.round((ta-a)/ta*1000)/10:''); aud.push([locNome,qn,s.codigo||'',v,t.id,prod[t.id]||'',(t.id===_t?'sim':''),pts.length,dys[dys.length-1],(a!=null?Math.round(a):''),ctrl]); }); });
+        Object.keys(bv).forEach(function(v){ var pts=bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), dys=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); function af(tr){ var sm=0,pv=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(pv!=null)sm+=(pv+y)/2*(dys[i]-pt); pv=y; pt=dys[i]; } return sm; } var ta=af(_t); s.tratamentos.forEach(function(t){ var a=af(t.id); var _ca=(t.id===_t)?null:_pctCtrl(ta,a); var ctrl=(t.id===_t)?'':(_ca!=null?Math.round(_ca*10)/10:''); aud.push([locNome,qn,s.codigo||'',v,t.id,prod[t.id]||'',(t.id===_t?'sim':''),pts.length,dys[dys.length-1],(a!=null?Math.round(a):''),ctrl]); }); });
       })();
     });
   });
