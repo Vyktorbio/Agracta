@@ -4771,7 +4771,7 @@ function buildStudyModelo(qid, s, opts){
   /* TRATAMENTOS — DESCRIÇÃO linha 13, cabeçalho 14, dados 15+ (igual ao modelo.xls) */
   lbl(13,0,'DESCRIÇÃO DOS TRATAMENTOS');
   ['N°','Tratamentos','Ingrediente Ativo','Concentração (g/kg) (g/l)','Dose (g/ha) (ml/ha)','Concentração de g i.a./ha','Nº de Aplicações','Intervalo de Aplicação (Dias)','Volume de Calda','Adjuvante'].forEach(function(h,c){ lbl(14,c,h); });
-  trats.forEach(function(t,i){ var r=15+i; var nm=(t.produto||'').trim(); if(test===t.id) nm=nm?(nm+' (testemunha)'):'Testemunha'; put(r,0,i+1); put(r,1,nm); put(r,2,t.ia||''); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
+  trats.forEach(function(t,i){ var r=15+i; var nm=(t.produto||'').trim(); if(test===t.id) nm=nm?(/test|untreat|controle|check/i.test(nm)?nm:(nm+' (testemunha)')):'Testemunha'; put(r,0,i+1); put(r,1,nm); put(r,2,t.ia||''); put(r,4,t.dose||''); put(r,6,s.numAplicacoes||''); put(r,7,s.intervaloDias||''); put(r,8,t.volume||''); });
   /* CLIMA (rótulos col 11 ; aplicações cols 12+) — linhas 0–12, igual ao modelo.xls */
   lbl(0,11,'Dados climáticos relativos à aplicação');
   [[1,'Aplicação'],[2,'Data da aplicação'],[3,'Horário inicial'],[4,'Horário final'],[5,'T °C inicial'],[6,'T °C final'],[7,'UR (%) inicial'],[8,'UR (%) final'],[9,'Vento (km/h) inicial'],[10,'Vento (km/h) final'],[11,'Nebulosidade (%)'],[12,'Estádio fenológico']].forEach(function(p){ lbl(p[0],11,p[1]); });
@@ -4818,7 +4818,7 @@ function buildStudyModelo(qid, s, opts){
     var _cf=function(x,p){ return BioCalculoCampo.formatBR(x,p==null?2:p); };
     trats.forEach(function(t,i){
       var rr=ch+1+i;
-      put(rr,0,i+1); put(rr,1,(t.produto||t.id)+(test===t.id?' (test.)':'')); put(rr,2,t.dose||''); put(rr,3,t.volume||'');
+      put(rr,0,i+1); put(rr,1,(t.produto||t.id)+(test===t.id&&!/test|untreat|controle|check/i.test(t.produto||'')?' (test.)':'')); put(rr,2,t.dose||''); put(rr,3,t.volume||'');
       var dval=(typeof _calcNum==='function')?_calcNum(t.dose):parseFloat(String(t.dose||'').replace(',','.'));
       var vol=(typeof _calcNum==='function')?_calcNum(t.volume):parseFloat(String(t.volume||'').replace(',','.'));
       var dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
