@@ -4863,7 +4863,7 @@ function _xlsPut(ws,r,c,v){
 }
 function _bioestatLetters(qid,s,av,v){
   var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v]; if(!rel||!rel.ok)return {};
-  var cm=rel.comparacao_medias||{}, cmp=cm.tukey||cm.scott_knott||cm.dunn;
+  var cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn;
   return (cmp&&cmp.letras)||(rel.analise&&rel.analise.letras)||{};
 }
 /* Resumo completo do resultado do motor BioEstat (cache) p/ as saídas rápidas usarem o MESMO motor do xls.
@@ -4871,12 +4871,12 @@ function _bioestatLetters(qid,s,av,v){
 function _bioestatResumo(qid,s,av,v){
   var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v];
   if(!rel||!rel.ok) return null;
-  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.tukey||cm.scott_knott||cm.dunn||null;
+  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn||null;
   var desc={}; (rel.descritiva||[]).forEach(function(d){ desc[d.tratamento]=(d.media!=null?d.media:d.proporcao); });
   var order=(cmp&&cmp.ordem)||a.ordem||Object.keys(desc);
   var vals=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||desc;
   var letras=(cmp&&cmp.letras)||a.letras||{};
-  var metodo=cm.tukey?'Tukey':(cm.scott_knott?'Scott-Knott':(cm.dunn?'Dunn (Kruskal-Wallis)':(a.tabela_anova?'ANOVA':'GLM')));
+  var metodo=cm.scott_knott?'Scott-Knott':(cm.tukey?'Tukey':(cm.dunn?'Dunn (Kruskal-Wallis)':(a.tabela_anova?'ANOVA':'GLM')));
   var p=(typeof _bioestatP==='function')?_bioestatP(rel):null;
   return { order:order, vals:vals, letras:letras, p:p, metodo:metodo, tipo:(rel.deteccao&&rel.deteccao.tipo_resposta)||'', transform:a.transformacao||'' };
 }
@@ -6432,11 +6432,11 @@ function _bioestatP(rel){
 }
 function _bioestatResumoCard(job,rel){
   if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
-  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.tukey||cm.scott_knott||cm.dunn||null;
+  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn||null;
   var nf=function(x,d){ return (x==null||isNaN(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(d==null?1:d)}); };
   var pf=function(x){ return x==null?'—':(x<0.001?'<0,001':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3})); };
   var ok=function(b){ return b?'<span style="color:#1f6f43">✓</span>':'<span style="color:#b07d18">✗</span>'; };
-  var metodoCmp=cm.tukey?'Tukey':(cm.scott_knott?'Scott-Knott':(cm.dunn?'Dunn · Kruskal-Wallis':'—'));
+  var metodoCmp=cm.scott_knott?'Scott-Knott':(cm.tukey?'Tukey':(cm.dunn?'Dunn · Kruskal-Wallis':'—'));
   var descArr=rel.descritiva||[], desc={}; descArr.forEach(function(d){desc[d.tratamento]=d;});
   var letras=(cmp&&cmp.letras)||a.letras||{};
   var valsObj=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||null;
@@ -6444,6 +6444,8 @@ function _bioestatResumoCard(job,rel){
   var labelMedia=cm.dunn?'Mediana':'Média', p=_bioestatP(rel);
   /* CV% do ensaio = raiz(QM resíduo) / média geral × 100 */
   var mg=null, cv=null, sm=0, nn=0; descArr.forEach(function(d){ if(d.media!=null){sm+=d.media;nn++;} }); if(nn){ mg=sm/nn; if(a.mse!=null&&mg) cv=Math.sqrt(a.mse)/Math.abs(mg)*100; }
+  /* classificação do CV p/ experimentos de campo (Pimentel-Gomes) */
+  var cvCls = cv==null?'' : (cv<=10?'baixo · ótima precisão':(cv<=20?'médio · boa':(cv<=30?'alto · regular':'muito alto · baixa precisão')));
   var rows=''; order.forEach(function(t){ var d=desc[t]||{}, val=(valsObj&&valsObj[t]!=null)?valsObj[t]:d.media;
     rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+nf(val,1)+'</td><td style="color:#7a877f">'+(d.dp!=null?('±'+nf(d.dp,1)):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td></tr>'; });
   var nr=a.normalidade||{}, hm=a.homogeneidade||{}, kr=a.kruskal||{};
@@ -6452,7 +6454,7 @@ function _bioestatResumoCard(job,rel){
   var transf=a.transformacao? (typeof a.transformacao==='string'?a.transformacao:(a.transformacao.nome||a.transformacao.tipo||'aplicada')) : null;
   return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
-    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV '+nf(cv,1)+'%':'')+' · comparação <b>'+esc(metodoCmp)+'</b>'+(transf?' · transf. '+esc(transf):'')+'</div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV '+nf(cv,1)+'% <span style="color:#8a948e">('+cvCls+')</span>':'')+' · comparação <b>'+esc(metodoCmp)+'</b>'+(transf?' · transf. '+esc(transf):'')+'</div>'+
     '<div style="font-size:10px;color:#728078;margin-top:1px">Pressupostos: normalidade '+ok(nr.normal)+' <span style="color:#9aa69e">('+esc(nr.teste||'?')+' p'+pf(nr.p)+')</span> · homogeneidade '+ok(hm.homogenea)+' <span style="color:#9aa69e">('+esc(hm.teste||'?')+' p'+pf(hm.p)+')</span>'+(a.pressupostos_ok===false?' <span style="color:#b07d18">→ não-paramétrico</span>':'')+'</div>'+
     '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>±DP</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
