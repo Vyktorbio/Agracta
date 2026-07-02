@@ -937,6 +937,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .av-auto-input{background:#fff!important;color:#15171a!important;border:1px solid #6b7682!important}
 .av-auto-count button{background:#2c323a!important;color:#f3f5f7!important;border-color:#3f454d!important}
 .av-auto-nav button{background:#22262c!important;color:#d2d6db!important;border:1px solid #343943!important}
+.av-auto-prog{background:#e2e5e8!important}
+.av-auto-preset{background:#f0f1f3!important;color:#1b2a1b!important;border:1px solid #b9d6b9!important}
+.av-auto-preset.on{background:#1f5a2a!important;color:#eafaea!important;border-color:#1f5a2a!important}
 
 /* ===== Banner "PRÓXIMO" (próxima aplicação): herdava cores do tema escuro -> ilegível no painel claro ===== */
 .sd-next{margin:10px 0!important;border-radius:10px!important}
@@ -7861,7 +7864,11 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-auto-sub{font-size:12px;color:#9a8;margin-top:4px}'+
   '.av-auto-input{width:112px;background:#050805;border:1px solid #37d684;color:#fff;border-radius:10px;padding:10px;font-size:28px;font-weight:900;text-align:center}'+
   '.av-auto-count{display:flex;gap:6px;align-items:center}.av-auto-count button{width:46px;height:48px;border-radius:10px;border:1px solid #2a4a2a;background:#1f5a2a;color:#eafaea;font-size:26px;font-weight:900}'+
-  '.av-auto-nav{display:flex;gap:8px;margin-top:10px}.av-auto-nav button{flex:1;background:#18251b;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:9px;font-weight:800;cursor:pointer}'+
+  '.av-auto-nav{display:flex;gap:8px;margin-top:10px}.av-auto-nav button{flex:1;background:#18251b;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}'+
+  '.av-auto-prog{height:7px;background:#18251b;border-radius:6px;overflow:hidden;margin-bottom:3px}.av-auto-prog-fill{height:100%;background:#37d684;transition:width .15s}'+
+  '.av-auto-progtxt{font-size:10px;color:#9a8;text-align:right;margin-bottom:8px}'+
+  '.av-auto-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}'+
+  '.av-auto-preset{flex:1 1 18%;min-width:56px;background:#22262c;color:#eafaea;border:1px solid rgba(55,214,132,.35);border-radius:10px;padding:13px 4px;font-size:19px;font-weight:800;cursor:pointer}.av-auto-preset.on{background:#1f5a2a;border-color:#37d684}.av-auto-preset:active{transform:scale(.96)}'+
   '.avcol-ovl{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3200;display:none;align-items:center;justify-content:center;padding:16px}'+
   '.avcol-box{background:var(--surface,#0e150e);border:1px solid var(--border,#2a3a2a);border-radius:14px;max-width:380px;width:100%;padding:16px;box-sizing:border-box;font:13px system-ui,sans-serif;color:var(--text,#eaf3ed);box-shadow:0 12px 40px rgba(0,0,0,.5)}'+
   '.avcol-title{font-size:15px;font-weight:700;color:var(--accent,#37d684);margin-bottom:6px}'+
@@ -8074,13 +8081,23 @@ function renderAvAutoBox(){
   var prod=a.row.produto?(' · '+a.row.produto):'';
   var locLabel=(a.row.parcela?('Parcela '+a.row.parcela):(a.row.campo||a.row.label||a.row.tratId+_repDisplay(a.row.rep)));
   var rowInfo=a.row.tratId+' · rep '+(a.row.repDisplay||_repDisplay(a.row.rep));
+  var enterK='onkeydown="if(event.key===\'Enter\'){event.preventDefault();avAutoStep(1);}"';
   var input=a.tipo==='contagem'
-    ? '<div class="av-auto-count"><button type="button" onclick="avAutoBump(-1)">−</button><input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="numeric" oninput="avAutoWrite(this.value)" onblur="avValidateCell(this)"><button type="button" onclick="avAutoBump(1)">+</button></div>'
-    : '<input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="decimal" oninput="avAutoWrite(this.value)" onblur="avValidateCell(this)" placeholder="%">';
+    ? '<div class="av-auto-count"><button type="button" onclick="avAutoBump(-1)">−</button><input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="numeric" oninput="avAutoWrite(this.value)" '+enterK+' onblur="avValidateCell(this)"><button type="button" onclick="avAutoBump(1)">+</button></div>'
+    : '<input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="decimal" oninput="avAutoWrite(this.value)" '+enterK+' onblur="avValidateCell(this)" placeholder="%">';
+  /* progresso: quantas células (parcela × variável) já preenchidas */
+  var filled=0; rows.forEach(function(rw){ vars.forEach(function(vv){ var n=_avGrid.notas[rw.key]; if(n&&n[vv]!=null&&String(n[vv]).trim()!=='') filled++; }); });
+  var pctDone=a.total?Math.round(filled/a.total*100):0;
+  /* atalhos de valor comum: tocar SALVA e já avança (um toque por parcela) */
+  var presets=(a.tipo==='contagem')?['0','1','2','5','10']:['0','1','5','10','20','40','60','80','100'];
+  var presetHtml=presets.map(function(pv){ return '<button type="button" class="av-auto-preset'+(String(val)===pv?' on':'')+'" onclick="avAutoPreset(\''+pv+'\')">'+pv+'</button>'; }).join('');
   return '<div class="av-auto-box">'+
     '<div class="av-auto-top"><span>'+esc(locLabel)+'</span><span>parc '+(a.ri+1)+'/'+rows.length+' · var '+(a.vi+1)+'/'+vars.length+'</span></div>'+
+    '<div class="av-auto-prog"><div class="av-auto-prog-fill" style="width:'+pctDone+'%"></div></div>'+
+    '<div class="av-auto-progtxt">'+filled+' de '+a.total+' preenchidas'+(filled>=a.total?' ✓':'')+'</div>'+
     '<div class="av-auto-card"><div><div class="av-auto-main">'+esc(a.v)+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div></div>'+input+'</div>'+
-    '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo</button></div>'+
+    '<div class="av-auto-presets">'+presetHtml+'</div>'+
+    '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">‹ Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo ›</button></div>'+
   '</div>';
 }
 function avAutoToggle(){
@@ -8110,6 +8127,14 @@ function avAutoBump(delta){
   var val=(n%1===0)?String(n):n.toFixed(1);
   if(cur)cur.value=val;
   _avSetCell(a.row.key,a.v,val);
+}
+function avAutoPreset(val){
+  /* atalho de campo: toca no valor comum → SALVA e já avança pra próxima parcela (1 toque) */
+  var a=_avAutoState(); if(!a)return;
+  _avSetCell(a.row.key,a.v,val);
+  if(_avAuto.pos<a.total-1) _avAuto.pos+=1; /* fica na última quando termina */
+  renderAvGrid();
+  setTimeout(function(){ var i=document.getElementById('avAutoInput'); if(i){ i.focus(); i.select&&i.select(); } },60);
 }
 function avAutoStep(delta){
   var cur=document.getElementById('avAutoInput'); if(cur) avAutoWrite(cur.value);
