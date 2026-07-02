@@ -6479,9 +6479,19 @@ function _bioestatIntegratedHtml(qid,sid,study){
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
   var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
-  if(!c||c.sig!==sig||c.status==='loading')body='<div id="bioAutoStatus" style="padding:11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px">Calculando automaticamente no aparelho… '+((c&&c.done)||0)+' de '+tot+'</div>';
-  else if(c.status==='ready'){ jobs.forEach(function(j){ body+=_bioestatResumoCard(j,c.results[j.jobKey]); fbody+=_bioestatForenseCard(j,c.results[j.jobKey+'|F']); }); }
-  else body='<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>';
+  if(!c||c.sig!==sig){ body='<div id="bioAutoStatus" style="padding:11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px">Calculando automaticamente no aparelho… '+((c&&c.done)||0)+' de '+tot+'</div>'; }
+  else if(c.status==='empty'){ body='<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>'; }
+  else {
+    /* Renderização PROGRESSIVA: mostra a análise de cada avaliação assim que o job dela termina,
+       sem esperar a triagem forense (que no Pyodide frio pode demorar ~1 min). */
+    var res=(c&&c.results)||{}, faltamAnalise=0, faltamForense=0;
+    jobs.forEach(function(j){
+      if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey]); else faltamAnalise++;
+      if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
+    });
+    if(faltamAnalise>0) body+='<div id="bioAutoStatus" style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(body?'7px':'0')+'">Calculando análise… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'</div>';
+    if(faltamForense>0) fbody+='<div style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(fbody?'7px':'0')+'">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
+  }
   var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+body+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
@@ -6492,11 +6502,16 @@ function _bioestatIntegratedHtml(qid,sid,study){
    mensagem quanto pelo watchdog (antes só o handler atualizava, então um job que estourava o
    tempo deixava o spinner preso na tela mesmo com o cache 'ready'). Tolerante: dispara também se
    o spinner ainda estiver na tela, mesmo que a checagem do overlay falhe. */
+var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
-  if(!c||c.status!=='ready'||curV!==c.qid||curSid!==c.sid)return;
+  /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
+     aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
+  if(!c||curV!==c.qid||curSid!==c.sid)return;
   var ov=document.getElementById('sdOvl');
   var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
-  if(open) setTimeout(function(){ if(curV===c.qid&&curSid===c.sid) openStudyDetail(c.qid,c.sid); },30);
+  if(!open)return;
+  clearTimeout(_bioRefreshT);
+  _bioRefreshT=setTimeout(function(){ if(curV===c.qid&&curSid===c.sid) openStudyDetail(c.qid,c.sid); },120);
 }
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
@@ -6505,7 +6520,8 @@ window.addEventListener('message',function(ev){
   delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
   var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
   _bioestatPump();
-  _bioestatRefreshOpen(c);
+  /* re-renderiza quando termina uma ANÁLISE (não a cada forense) ou quando tudo fica pronto */
+  if(c && (c.status==='ready' || !/\|F$/.test((item.job&&item.job.jobKey)||''))) _bioestatRefreshOpen(c);
 });
 
 /* ===================== IMPORTAR PROTOCOLO DA PLANILHA (modelo.xls) → ESTUDO =====================
