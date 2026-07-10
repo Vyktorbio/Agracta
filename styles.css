@@ -974,177 +974,431 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 }
 
 /* ============================================================================
-   LIQUID GLASS — passe visual moderno (estilo Apple Liquid Glass / One UI)
-   Camada final: vence a cascata dos temas acima. Só aparência; zero lógica.
+   GRAFITE PRO — painel de instrumentos escuro (camada final; vence a cascata)
+   Superfícies grafite, vidro escuro sobre o mapa, hairlines finas, verde só
+   como sinal. Sem pílulas. Só aparência; zero lógica.
    ============================================================================ */
 :root{
-  --lgx-blur:blur(24px) saturate(1.7);
-  --lgx-glass:rgba(255,255,255,.66);
-  --lgx-glass-strong:rgba(255,255,255,.84);
-  --lgx-hairline:rgba(255,255,255,.60);
-  --lgx-line:rgba(22,32,26,.10);
-  --lgx-shadow:0 10px 36px rgba(16,24,20,.13),0 2px 8px rgba(16,24,20,.05);
-  --lgx-shadow-lg:0 28px 90px rgba(16,24,20,.24),0 4px 16px rgba(16,24,20,.08);
-  --lgx-green:#1f8a4c; --lgx-green-2:#17693a; --lgx-ink:#141a17;
+  color-scheme:dark;
+  --gp-bg:#0c0e0d; --gp-s1:#141816; --gp-s2:#1a1f1c; --gp-s3:#232926;
+  --gp-line:rgba(255,255,255,.09); --gp-line-2:rgba(255,255,255,.16);
+  --gp-text:#e9ede9; --gp-text-2:#a7b0aa; --gp-text-3:#727c75;
+  --gp-green:#34d178; --gp-green-deep:#1d7a44; --gp-green-hover:#229150;
+  --gp-red:#ff7a66; --gp-amber:#d9a13b; --gp-blue:#6fa8dc;
+  --gp-glass:rgba(17,21,19,.78); --gp-glass-strong:rgba(15,18,17,.92);
+  --gp-blur:blur(20px) saturate(1.4);
+  --gp-shadow:0 16px 48px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.30);
 }
 
-/* ---- Barra superior: vidro flutuante + marca ---- */
+/* ---- Barra superior: vidro grafite + marca instrumental ---- */
 .top-bar{
-  background:rgba(255,255,255,.58)!important;
-  backdrop-filter:var(--lgx-blur)!important;-webkit-backdrop-filter:var(--lgx-blur)!important;
-  border-bottom:1px solid rgba(255,255,255,.40)!important;
-  box-shadow:0 1px 18px rgba(16,24,20,.08)!important;
+  background:rgba(12,15,13,.74)!important;
+  backdrop-filter:var(--gp-blur)!important;-webkit-backdrop-filter:var(--gp-blur)!important;
+  border-bottom:1px solid var(--gp-line)!important;
+  box-shadow:0 1px 20px rgba(0,0,0,.35)!important;
 }
 .tb-brand::before{
   content:'AGRACTA';
-  font-weight:900;font-size:13px;letter-spacing:.22em;
-  color:var(--lgx-green-2);
-  padding-right:10px;
+  font-weight:850;font-size:12px;letter-spacing:.24em;
+  color:var(--gp-text);
+  border-left:3px solid var(--gp-green);
+  padding-left:10px;margin-right:8px;
 }
 @media (max-width:480px){ .tb-brand::before{content:'A';letter-spacing:0} }
+.top-bar-info{color:var(--gp-text-3)!important;font-variant-numeric:tabular-nums}
 .top-bar .btn-sm{
-  background:rgba(255,255,255,.78)!important;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:1px solid var(--lgx-line)!important;
-  border-radius:999px!important;
-  padding:6px 14px!important;
-  font-weight:700!important;
-  box-shadow:0 1px 6px rgba(16,24,20,.07)!important;
+  background:rgba(255,255,255,.06)!important;
+  border:1px solid var(--gp-line)!important;
+  color:var(--gp-text-2)!important;
+  border-radius:10px!important;
+  padding:6px 12px!important;
+  font-weight:700!important;letter-spacing:.06em!important;
 }
-.loc-chip{border-radius:999px!important;box-shadow:0 1px 8px rgba(16,24,20,.08)!important}
+.top-bar .btn-sm:hover{background:rgba(255,255,255,.10)!important;color:var(--gp-text)!important}
+.today-badge{background:var(--gp-green)!important;color:#08110c!important;border-radius:7px!important;font-variant-numeric:tabular-nums}
+.btn-today.has-urgent .today-badge{background:#e5484d!important;color:#fff!important}
+.loc-chip{
+  background:rgba(255,255,255,.06)!important;border:1px solid var(--gp-line)!important;
+  border-radius:10px!important;box-shadow:none!important;
+}
+.loc-chip b{color:var(--gp-text)!important} .loc-chip .sub{color:var(--gp-text-3)!important}
 
-/* ---- Overlays: véu com blur ---- */
+/* ---- Controles do mapa (cantos): discos de vidro escuro ---- */
+.rot-ctl button{
+  background:var(--gp-glass)!important;color:var(--gp-text-2)!important;
+  border:1px solid var(--gp-line)!important;
+  backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur);
+  box-shadow:0 4px 16px rgba(0,0,0,.35)!important;
+}
+.rot-ctl button:hover{color:var(--gp-text)!important;border-color:var(--gp-line-2)!important}
+#menuBtn{color:var(--gp-text-2)!important}
+.toolbar-extra .tool-item,.toolbar-extra .tool-fab{
+  background:var(--gp-glass)!important;color:var(--gp-text-2)!important;
+  border:1px solid var(--gp-line)!important;
+  backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur);
+}
+.toolbar-extra .tool-item:hover,.toolbar-extra .tool-fab:hover{color:var(--gp-green)!important}
+
+/* ---- Menu principal (☰): vidro grafite ---- */
+.main-menu{
+  background:var(--gp-glass-strong)!important;
+  backdrop-filter:var(--gp-blur)!important;-webkit-backdrop-filter:var(--gp-blur)!important;
+  border:1px solid var(--gp-line)!important;border-radius:14px!important;
+  box-shadow:var(--gp-shadow)!important;
+}
+.main-menu button{color:var(--gp-text-2)!important}
+.main-menu button:hover{background:rgba(255,255,255,.06)!important;color:var(--gp-text)!important}
+.mm-sep{background:var(--gp-line)!important}
+
+/* ---- Overlays: véu escuro ---- */
 .overlay,.search-overlay,.se-overlay,.loc-modal,.ndvi-modal{
-  background:rgba(12,20,15,.34)!important;
-  backdrop-filter:blur(14px) saturate(1.3)!important;-webkit-backdrop-filter:blur(14px) saturate(1.3)!important;
+  background:rgba(5,7,6,.55)!important;
+  backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important;
 }
 
-/* ---- Painéis flutuantes: vidro, raio grande, sombra em camadas ---- */
+/* ---- Painéis: grafite elevado, raio contido ---- */
+.panel,.edit-panel,.se-panel,.ndvi-panel,.agenda-panel,.main-menu{
+  color:var(--gp-text-2);
+}
 .panel,.edit-panel,.se-panel,.ndvi-panel,.agenda-panel{
-  background:var(--lgx-glass-strong)!important;
-  backdrop-filter:var(--lgx-blur)!important;-webkit-backdrop-filter:var(--lgx-blur)!important;
-  border:1px solid var(--lgx-hairline)!important;
-  border-radius:26px!important;
-  box-shadow:var(--lgx-shadow-lg)!important;
-}
-.panel-header{border-radius:26px 26px 0 0!important;background:transparent!important}
-
-/* ---- Telas cheias (HOJE / detalhe do estudo): base One UI clara ---- */
-.today-overlay,.sd-overlay{background:#f1f3f0!important}
-.today-head,.sd-header{
-  background:rgba(241,243,240,.72)!important;
-  backdrop-filter:var(--lgx-blur)!important;-webkit-backdrop-filter:var(--lgx-blur)!important;
-  border-bottom:1px solid var(--lgx-line)!important;
-}
-.today-title{font-size:30px!important;font-weight:850!important;letter-spacing:-.02em!important}
-.sd-codigo{font-weight:850!important;letter-spacing:-.01em!important}
-
-/* ---- Cartões: raio grande, hover com leve elevação ---- */
-.study-card,.study-card-v2,.sd-meta,.today-card,.trat-table,.evento-item,.se-trat,.ag-item,.fen-item,.search-item,.clima-card,.sd-descricao,.sd-empty,.today-empty,.se-empty{
+  background:var(--gp-glass-strong)!important;
+  backdrop-filter:var(--gp-blur)!important;-webkit-backdrop-filter:var(--gp-blur)!important;
+  border:1px solid var(--gp-line)!important;
   border-radius:18px!important;
-  border:1px solid var(--lgx-line)!important;
-  box-shadow:0 1px 4px rgba(16,24,20,.045)!important;
+  box-shadow:var(--gp-shadow)!important;
 }
-.study-card-v2,.today-card,.search-item,.ag-item{transition:transform .16s ease,box-shadow .2s ease,border-color .2s ease}
-.study-card-v2:hover,.today-card:hover,.search-item:hover,.ag-item:hover{
-  transform:translateY(-1px);
-  box-shadow:var(--lgx-shadow)!important;
+.panel-header{background:transparent!important;border-bottom:1px solid var(--gp-line)!important;border-radius:18px 18px 0 0!important}
+.panel-qid,.edit-id,.sd-codigo,.today-title,.se-head h3,.gr-title,.res-title{color:var(--gp-text)!important}
+.panel-qlbl,.edit-title,.studies-title,.sd-section-title,.se-section-title,.ag-title,.ag-group-title{color:var(--gp-text-3)!important;letter-spacing:.14em!important}
+.info-l,.prog-t,.prog-p,.fen-title,.sd-meta-lbl,.se-field label{color:var(--gp-text-3)!important}
+.info-v,.study-name,.evento-data,.evento-subtipo,.evento-obs{color:var(--gp-text)!important;font-variant-numeric:tabular-nums}
+.se-x{color:var(--gp-text-3)!important}
+
+/* ---- Telas cheias (HOJE / estudo): grafite sólido ---- */
+.today-overlay,.sd-overlay{background:var(--gp-bg)!important;color:var(--gp-text-2)!important}
+.today-head,.sd-header{
+  background:rgba(12,14,13,.80)!important;
+  backdrop-filter:var(--gp-blur)!important;-webkit-backdrop-filter:var(--gp-blur)!important;
+  border-bottom:1px solid var(--gp-line)!important;
 }
-.fen-item{border-radius:14px!important}
-.today-card-head{background:rgba(22,32,26,.035)!important}
+.today-title{font-size:26px!important;font-weight:850!important;letter-spacing:-.01em!important}
+.today-date{color:var(--gp-text-3)!important}
+.sd-codigo{font-weight:820!important;letter-spacing:-.01em!important}
 
-/* ---- Tiles do resumo HOJE ---- */
-.today-sum-item{border-radius:20px!important;padding:16px 8px!important;background:#fff!important;border:1px solid var(--lgx-line)!important}
-.today-sum-n{font-size:34px!important;font-weight:850!important;letter-spacing:-.02em!important}
-.today-sum-item.urgent{background:#fdf0ef!important;border-color:#ecb7b1!important}
-.today-sum-item.today{background:#fdf6e8!important;border-color:#eacf96!important}
-.today-sum-item.soon{background:#edf4fc!important;border-color:#bcd6ef!important}
-
-/* ---- Botões primários: pílula verde (identidade) ---- */
-.studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
-  background:linear-gradient(180deg,#23975a,var(--lgx-green-2))!important;
-  color:#fff!important;
-  border:1px solid rgba(255,255,255,.18)!important;
-  border-radius:999px!important;
-  font-weight:800!important;
-  letter-spacing:.01em!important;
-  box-shadow:0 6px 18px rgba(23,105,58,.30),inset 0 1px 0 rgba(255,255,255,.22)!important;
-  transition:transform .12s ease,filter .15s ease,box-shadow .2s ease;
-}
-.studies-add:hover,.sd-add:hover,.se-add-trat:hover,.eval-add-btn:hover,.btn-save:hover,.today-card-quick:hover,.gr-ok:hover,.e-save:hover,.p-btn-edit:hover{filter:brightness(1.07)!important;background:linear-gradient(180deg,#23975a,var(--lgx-green-2))!important}
-.studies-add:active,.sd-add:active,.se-add-trat:active,.eval-add-btn:active,.btn-save:active,.today-card-quick:active,.gr-ok:active,.e-save:active,.p-btn-edit:active{transform:scale(.97)}
-.btn-save,.today-card-quick{padding:12px!important;font-size:14px!important}
-
-/* ---- Botões secundários: pílula de vidro ---- */
-.btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back,.ndvi-ix,.sd-actions .btn-sm{
-  background:rgba(255,255,255,.85)!important;
-  border:1px solid var(--lgx-line)!important;
-  border-radius:999px!important;
-  transition:transform .12s ease,background .15s ease;
-}
-.btn-cancel:active,.e-cancel:active,.today-back:active,.sd-back:active{transform:scale(.97)}
-.ndvi-ix.on,.sd-actions .btn-sm.active{background:var(--lgx-ink)!important;color:#fff!important;border-color:var(--lgx-ink)!important}
-.btn-danger,.e-btn-del,.measure-actions button.danger{border-radius:999px!important}
-
-/* ---- Formulários: campos arredondados + anel de foco verde ---- */
-.search-box input,.se-field input,.se-field select,.se-field textarea,.e-inp,.loc-box input{
+/* ---- Cartões: superfície s2, hairline, raio 14 ---- */
+.study-card,.study-card-v2,.sd-meta,.today-card,.today-sum-item,.trat-table,.evento-item,.se-trat,.ag-item,.search-item,.clima-card,.sd-descricao,.sd-empty,.today-empty,.se-empty,.q-noest{
+  background:var(--gp-s2)!important;
+  border:1px solid var(--gp-line)!important;
   border-radius:14px!important;
-  padding:11px 14px!important;
-  transition:border-color .15s ease,box-shadow .15s ease;
+  box-shadow:none!important;
+  color:var(--gp-text-2)!important;
 }
+.study-card-v2:hover,.search-item:hover,.ag-item:hover{background:var(--gp-s3)!important;border-color:var(--gp-line-2)!important}
+.study-card-v2-codigo,.trat-id,.today-card-estudo,.search-item-id{color:var(--gp-text)!important;font-weight:800!important}
+.study-card-v2-desc,.study-card-v2-meta,.study-meta,.search-item-sub,.search-item-meta,.today-card-quadra,.today-card-evt{color:var(--gp-text-3)!important}
+.sd-meta-item{border-bottom:1px dashed var(--gp-line)!important}
+.trat-head{background:var(--gp-s1)!important;color:var(--gp-text-3)!important}
+.trat-row{border-top-color:var(--gp-line)!important}
+.today-card-head{background:rgba(255,255,255,.03)!important;border-bottom:1px solid var(--gp-line)!important}
+.today-card-actions{background:transparent!important;border-top:1px solid var(--gp-line)!important}
+.fen-item{border:1px solid var(--gp-line)!important;border-radius:10px!important;background:var(--gp-s1);color:var(--gp-text-2)}
+.fen-code{color:var(--gp-text-2)!important} .fen-dap{color:var(--gp-text-3)!important}
+.fen-item.on,.fen-item.atual{border-color:var(--gp-green)!important}
+
+/* ---- Tiles HOJE: números de instrumento ---- */
+.today-sum-item{border-radius:16px!important;padding:14px 8px!important}
+.today-sum-n{font-size:32px!important;font-weight:850!important;color:var(--gp-text)!important;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.today-sum-l{color:var(--gp-text-3)!important}
+.today-sum-item.urgent{background:rgba(229,72,77,.10)!important;border-color:rgba(229,72,77,.38)!important}
+.today-sum-item.urgent .today-sum-n{color:var(--gp-red)!important}
+.today-sum-item.today{background:rgba(217,161,59,.10)!important;border-color:rgba(217,161,59,.38)!important}
+.today-sum-item.today .today-sum-n{color:var(--gp-amber)!important}
+.today-sum-item.soon{background:rgba(111,168,220,.08)!important;border-color:rgba(111,168,220,.30)!important}
+.today-card.urgent{border-color:rgba(229,72,77,.45)!important}
+.today-card.today{border-color:rgba(217,161,59,.45)!important}
+.today-card.soon{border-color:rgba(111,168,220,.35)!important}
+.today-card.urgent .today-card-lbl{color:var(--gp-red)!important}
+.today-card.today .today-card-lbl{color:var(--gp-amber)!important}
+.today-card.soon .today-card-lbl{color:var(--gp-blue)!important}
+.today-card-badge.apl{background:rgba(52,209,120,.14)!important;color:var(--gp-green)!important}
+.today-card-badge.eval{background:rgba(111,168,220,.14)!important;color:var(--gp-blue)!important}
+
+/* ---- Banner PRÓXIMO e mini-banners: tintas escuras ---- */
+.sd-next{border-radius:12px!important}
+.sd-next.urgent{background:rgba(229,72,77,.10)!important;border:1px solid rgba(229,72,77,.38)!important}
+.sd-next.soon{background:rgba(217,161,59,.10)!important;border:1px solid rgba(217,161,59,.38)!important}
+.sd-next.normal{background:rgba(111,168,220,.08)!important;border:1px solid rgba(111,168,220,.30)!important}
+.sd-next-lbl{color:var(--gp-text-3)!important}
+.sd-next-evt{color:var(--gp-text)!important}
+.sd-next-date{color:var(--gp-text-2)!important}
+.sd-next.urgent .sd-next-lbl{color:var(--gp-red)!important}
+.sd-next.soon .sd-next-lbl{color:var(--gp-amber)!important}
+.sd-next.normal .sd-next-lbl{color:var(--gp-blue)!important}
+.study-card-v2-next.urgent{background:rgba(229,72,77,.12)!important;color:var(--gp-red)!important}
+.study-card-v2-next.soon{background:rgba(217,161,59,.12)!important;color:var(--gp-amber)!important}
+.study-card-v2-next.normal{background:rgba(111,168,220,.10)!important;color:var(--gp-blue)!important}
+
+/* ---- Janela BPL: sinais sobre grafite ---- */
+.bpl-ok{color:var(--gp-green)!important}
+.bpl-bad{color:var(--gp-red)!important}
+.bpl-warn{color:var(--gp-amber)!important}
+.bpl-vals{color:var(--gp-text-3)!important}
+.bpl-vals strong{color:var(--gp-text)!important}
+.bpl-vals strong.bpl-bad{color:var(--gp-red)!important}
+
+/* ---- Botões: retangulares, precisos ---- */
+.studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
+  background:var(--gp-green-deep)!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  border-radius:10px!important;
+  font-weight:750!important;letter-spacing:.02em!important;
+  box-shadow:0 2px 10px rgba(0,0,0,.35)!important;
+  transition:background .13s ease,transform .1s ease;
+}
+.studies-add:hover,.sd-add:hover,.se-add-trat:hover,.eval-add-btn:hover,.btn-save:hover,.today-card-quick:hover,.gr-ok:hover,.e-save:hover,.p-btn-edit:hover{background:var(--gp-green-hover)!important;filter:none!important}
+.studies-add:active,.btn-save:active,.today-card-quick:active,.e-save:active{transform:scale(.98)}
+.btn-save,.today-card-quick{padding:11px!important;font-size:13px!important}
+.btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back,.ndvi-ix,.sd-actions .btn-sm,.search-close{
+  background:var(--gp-s2)!important;
+  color:var(--gp-text-2)!important;
+  border:1px solid var(--gp-line)!important;
+  border-radius:10px!important;
+}
+.btn-cancel:hover,.e-cancel:hover,.today-back:hover,.sd-back:hover,.sd-actions .btn-sm:hover{background:var(--gp-s3)!important;color:var(--gp-text)!important;border-color:var(--gp-line-2)!important}
+.ndvi-ix.on,.sd-actions .btn-sm.active{background:var(--gp-text)!important;color:#0d100e!important;border-color:var(--gp-text)!important}
+.btn-danger,.e-btn-del,.measure-actions button.danger{background:rgba(229,72,77,.12)!important;color:var(--gp-red)!important;border:1px solid rgba(229,72,77,.40)!important;border-radius:10px!important}
+
+/* ---- Formulários: campos grafite, anel verde ---- */
+.search-box input,.se-field input,.se-field select,.se-field textarea,.e-inp,.loc-box input,.gr-ctl select{
+  background:var(--gp-s1)!important;
+  color:var(--gp-text)!important;
+  border:1px solid var(--gp-line-2)!important;
+  border-radius:11px!important;
+  padding:10px 12px!important;
+  transition:border-color .13s ease,box-shadow .13s ease;
+}
+.search-box input::placeholder,.se-field input::placeholder,.se-field textarea::placeholder,.e-inp::placeholder{color:var(--gp-text-3)!important}
 .search-box input:focus,.se-field input:focus,.se-field select:focus,.se-field textarea:focus,.e-inp:focus,.loc-box input:focus{
-  border-color:#23975a!important;
-  box-shadow:0 0 0 4px rgba(35,151,90,.16)!important;
+  border-color:var(--gp-green-deep)!important;
+  box-shadow:0 0 0 3px rgba(52,209,120,.18)!important;
 }
+.se-field .req{color:var(--gp-red)!important}
 
-/* ---- Toast: cápsula de vidro verde ---- */
+/* ---- NDVI / Clima ---- */
+.ndvi-panel .gr-ctl,.ndvi-panel .gr-ctl span{color:var(--gp-text-2)!important}
+.ndvi-status,.ndvi-ticks,.ndvi-rank-title{color:var(--gp-text-3)!important}
+.ndvi-rank-row{color:var(--gp-text-2)!important}
+.ndvi-rank-row b{color:var(--gp-text)!important}
+.ndvi-rank-row:hover{background:var(--gp-s3)!important;border-color:var(--gp-line-2)!important}
+.clima-card .lab{color:var(--gp-text-3)!important}
+.clima-card .val,.clima-temp .t{color:var(--gp-text)!important;font-variant-numeric:tabular-nums}
+.clima-card .val small,.clima-foot{color:var(--gp-text-3)!important}
+
+/* ---- Toast: cápsula grafite com sinal verde ---- */
 #stxToast{
-  background:linear-gradient(180deg,rgba(30,124,70,.94),rgba(20,88,49,.94))!important;
-  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border:1px solid rgba(255,255,255,.28)!important;
-  padding:11px 20px!important;
-  box-shadow:0 10px 32px rgba(16,60,35,.35)!important;
+  background:var(--gp-glass-strong)!important;
+  color:var(--gp-green)!important;
+  border:1px solid rgba(52,209,120,.35)!important;
+  backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur);
+  border-radius:11px!important;
+  padding:11px 18px!important;
+  box-shadow:var(--gp-shadow)!important;
 }
 
-/* ---- Login: cartão de vidro com marca verde ---- */
+/* ---- Login: hangar escuro ---- */
+.auth-gate{background:radial-gradient(120% 90% at 50% 0%,#161a18,#0d100e 55%,#080a09)!important}
 .auth-box{
-  border-radius:28px!important;
-  background:rgba(255,255,255,.92)!important;
-  backdrop-filter:var(--lgx-blur)!important;-webkit-backdrop-filter:var(--lgx-blur)!important;
-  border:1px solid var(--lgx-hairline)!important;
-  box-shadow:var(--lgx-shadow-lg)!important;
+  background:var(--gp-glass-strong)!important;
+  backdrop-filter:var(--gp-blur)!important;-webkit-backdrop-filter:var(--gp-blur)!important;
+  border:1px solid var(--gp-line)!important;
+  border-radius:20px!important;
+  box-shadow:var(--gp-shadow)!important;
 }
-.auth-logo{color:var(--lgx-green-2)!important;letter-spacing:.26em!important;font-size:12px!important}
-.auth-i{border-radius:14px!important;padding:13px 14px!important}
-.auth-i:focus{border-color:#23975a!important;box-shadow:0 0 0 4px rgba(35,151,90,.16)!important}
-.auth-btn{
-  background:linear-gradient(180deg,#23975a,var(--lgx-green-2))!important;
-  border-radius:999px!important;
-  box-shadow:0 8px 22px rgba(23,105,58,.35),inset 0 1px 0 rgba(255,255,255,.22)!important;
-}
+.auth-logo{color:var(--gp-text)!important;letter-spacing:.26em!important;border-left:3px solid var(--gp-green);padding-left:10px;display:inline-block}
+.auth-title{color:var(--gp-text)!important}
+.auth-sub,.auth-foot{color:var(--gp-text-3)!important}
+.auth-l{color:var(--gp-text-3)!important}
+.auth-i{background:var(--gp-s1)!important;color:var(--gp-text)!important;border:1px solid var(--gp-line-2)!important;border-radius:11px!important}
+.auth-i:focus{border-color:var(--gp-green-deep)!important;box-shadow:0 0 0 3px rgba(52,209,120,.18)!important}
+.auth-btn{background:var(--gp-green-deep)!important;border-radius:11px!important;color:#fff!important;box-shadow:0 2px 10px rgba(0,0,0,.35)!important}
+.auth-btn:hover{background:var(--gp-green-hover)!important}
+#authOfflineBtn{background:transparent!important;color:var(--gp-text-2)!important;border:1px solid var(--gp-line-2)!important;box-shadow:none!important}
 
-/* ---- Entradas de painel: animação sutil ---- */
-@keyframes lgxPop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
-@keyframes lgxFade{from{opacity:0}to{opacity:1}}
-.overlay.open .panel,.se-overlay.open .se-panel,.overlay.open .edit-panel{animation:lgxPop .22s cubic-bezier(.2,.9,.3,1)}
-.today-overlay.open,.sd-overlay.open{animation:lgxFade .16s ease-out}
-
-/* ---- Barra de rolagem discreta ---- */
-.panel::-webkit-scrollbar,.se-panel::-webkit-scrollbar,.edit-panel::-webkit-scrollbar,.agenda-panel::-webkit-scrollbar{width:8px}
-.panel::-webkit-scrollbar-thumb,.se-panel::-webkit-scrollbar-thumb,.edit-panel::-webkit-scrollbar-thumb,.agenda-panel::-webkit-scrollbar-thumb{background:rgba(22,32,26,.18);border-radius:99px}
-.panel::-webkit-scrollbar-track,.se-panel::-webkit-scrollbar-track{background:transparent}
-
-/* ---- Acessibilidade: respeita quem prefere menos movimento ---- */
+/* ---- Movimento contido ---- */
+@keyframes gpPop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes gpFade{from{opacity:0}to{opacity:1}}
+.overlay.open .panel,.se-overlay.open .se-panel,.overlay.open .edit-panel{animation:gpPop .16s ease-out}
+.today-overlay.open,.sd-overlay.open{animation:gpFade .14s ease-out}
 @media (prefers-reduced-motion:reduce){
   .overlay.open .panel,.se-overlay.open .se-panel,.overlay.open .edit-panel,.today-overlay.open,.sd-overlay.open{animation:none!important}
-  .study-card-v2,.today-card,.search-item,.ag-item{transition:none}
 }
 
-/* ---- Fallback: sem suporte a backdrop-filter, superfícies sólidas ---- */
+/* ---- Rolagem discreta ---- */
+.panel::-webkit-scrollbar,.se-panel::-webkit-scrollbar,.edit-panel::-webkit-scrollbar,.agenda-panel::-webkit-scrollbar{width:8px}
+.panel::-webkit-scrollbar-thumb,.se-panel::-webkit-scrollbar-thumb,.edit-panel::-webkit-scrollbar-thumb,.agenda-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+
+/* ---- Fallback sem blur: superfícies sólidas ---- */
 @supports not (backdrop-filter:blur(1px)){
-  .top-bar{background:rgba(255,255,255,.96)!important}
-  .panel,.edit-panel,.se-panel,.ndvi-panel,.agenda-panel{background:#fff!important}
-  .auth-box{background:#fff!important}
+  .top-bar{background:#101312!important}
+  .panel,.edit-panel,.se-panel,.ndvi-panel,.agenda-panel,.main-menu,.auth-box{background:#131615!important}
 }
-/* Botão "continuar offline" do login é secundário (o inline dele perdia p/ .auth-btn!important) */
-#authOfflineBtn{background:#f0f3f0!important;color:#35443b!important;border:1px solid rgba(22,32,26,.14)!important;box-shadow:none!important}
+/* Botões do rodapé do painel da quadra (NDVI / Ir até): estilo inline claro perdia p/ o grafite */
+.p-btn{background:var(--gp-s2)!important;color:var(--gp-text-2)!important;border:1px solid var(--gp-line)!important;border-radius:10px!important}
+.p-btn:hover{background:var(--gp-s3)!important;color:var(--gp-text)!important}
+.p-btn.p-btn-edit{background:var(--gp-green-deep)!important;color:#fff!important;border:1px solid rgba(255,255,255,.10)!important}
+.p-btn.p-btn-edit:hover{background:var(--gp-green-hover)!important}
+
+/* ============================================================================
+   IDENTIDADE AGRACTA — marca, tipografia e motivos (refina o Grafite Pro)
+   Símbolo: as quadras da estação abstraídas — 4 talhões, 1 verde.
+   Tipos: Archivo (títulos) · IBM Plex Mono (dados/códigos) · Inter (texto).
+   ============================================================================ */
+:root{
+  --gp-display:'Archivo',Inter,-apple-system,sans-serif;
+  --gp-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+/* ---- Marca: símbolo + logotipo ---- */
+.tb-brand{display:flex;align-items:center;gap:9px}
+.tb-brand::before{
+  content:'';border-left:0;padding:0;margin:0;
+  width:21px;height:21px;flex:0 0 auto;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cpath d='M2 3.5Q2 2 3.5 2L10.6 2 9.8 8.8 2 9.8Z' fill='%2334d178'/%3E%3Cpath d='M12.6 2 18.5 2Q20 2 20 3.5L20 8.4 11.8 8.7Z' fill='none' stroke='%236b746f' stroke-width='1.3' stroke-linejoin='round'/%3E%3Cpath d='M2 11.8 9.6 10.9 10.4 20 3.5 20Q2 20 2 18.5Z' fill='none' stroke='%236b746f' stroke-width='1.3' stroke-linejoin='round'/%3E%3Cpath d='M11.9 10.7 20 10.4 20 18.5Q20 20 18.5 20L12.5 20Z' fill='none' stroke='%236b746f' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center/contain;
+}
+.tb-brand::after{
+  content:'AGRACTA';
+  font:800 13px/1 var(--gp-display);
+  letter-spacing:.30em;color:var(--gp-text);
+}
+@media (max-width:480px){ .tb-brand::after{content:''} .tb-brand::before{width:22px;height:22px} }
+
+/* ---- Tipografia de título (Archivo) ---- */
+.today-title,.panel-qid,.edit-id,.auth-title,.se-head h3,.gr-title{
+  font-family:var(--gp-display)!important;font-weight:750!important;letter-spacing:-.01em!important;
+}
+
+/* ---- Dados em mono: códigos, números, datas, coordenadas ---- */
+.sd-codigo,.study-card-v2-codigo,.today-card-estudo,.search-item-id,.trat-id{
+  font-family:var(--gp-mono)!important;font-weight:650!important;letter-spacing:-.02em!important;
+}
+.today-sum-n{font-family:var(--gp-mono)!important;font-weight:600!important}
+.top-bar-info,.today-date,.info-v,.study-card-v2-meta,.search-item-meta,.fen-code,.fen-dap,.clima-card .val,.clima-temp .t,.sd-next-date{
+  font-family:var(--gp-mono)!important;font-weight:500!important;
+}
+.info-v{font-size:13px!important}
+.today-badge,#agendaBadge{font-family:var(--gp-mono)!important;font-weight:600!important}
+
+/* ---- Rótulos de seção: etiqueta de instrumento com o traço verde da marca ---- */
+.studies-title,.sd-section-title,.se-section-title,.ag-title{
+  font-family:var(--gp-mono)!important;font-size:10px!important;font-weight:600!important;
+  letter-spacing:.14em!important;color:var(--gp-text-3)!important;
+}
+.studies-title::before,.sd-section-title::before,.se-section-title::before{
+  content:'';display:inline-block;width:9px;height:2px;
+  background:var(--gp-green);margin-right:8px;vertical-align:3px;
+}
+.info-l,.sd-meta-lbl,.se-field label,.today-sum-l,.fen-title,.ag-group-title{
+  font-family:var(--gp-mono)!important;font-size:9.5px!important;letter-spacing:.10em!important;
+}
+
+/* ---- Chips da barra: etiqueta técnica ---- */
+.top-bar .btn-sm{font-family:var(--gp-mono)!important;font-size:11px!important;letter-spacing:.10em!important;font-weight:600!important}
+.loc-chip b{font-family:var(--gp-display)!important;letter-spacing:.02em!important}
+
+/* ---- Raio mais preciso (menos bolha) ---- */
+.panel,.edit-panel,.se-panel,.ndvi-panel,.agenda-panel{border-radius:16px!important}
+.panel-header{border-radius:16px 16px 0 0!important}
+.study-card,.study-card-v2,.sd-meta,.today-card,.trat-table,.evento-item,.se-trat,.ag-item,.search-item,.clima-card,.sd-descricao,.sd-empty,.today-empty,.se-empty,.q-noest{border-radius:12px!important}
+.today-sum-item{border-radius:14px!important}
+.fen-item{border-radius:9px!important}
+.auth-box{border-radius:18px!important}
+
+/* ---- Login: papel milimetrado do campo + marca ---- */
+.auth-gate{background:
+  radial-gradient(90% 55% at 50% 0%,rgba(52,209,120,.055),transparent 62%),
+  repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 30px),
+  repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 1px,transparent 1px 30px),
+  radial-gradient(120% 90% at 50% 0%,#151918,#0c0f0e 55%,#080a09)!important}
+.auth-logo{
+  border-left:0!important;padding-left:0!important;
+  font-family:var(--gp-display)!important;font-weight:800!important;
+  letter-spacing:.30em!important;color:var(--gp-text)!important;
+}
+.auth-logo::before{
+  content:'';display:block;width:34px;height:34px;margin:0 auto 10px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cpath d='M2 3.5Q2 2 3.5 2L10.6 2 9.8 8.8 2 9.8Z' fill='%2334d178'/%3E%3Cpath d='M12.6 2 18.5 2Q20 2 20 3.5L20 8.4 11.8 8.7Z' fill='none' stroke='%236b746f' stroke-width='1.3' stroke-linejoin='round'/%3E%3Cpath d='M2 11.8 9.6 10.9 10.4 20 3.5 20Q2 20 2 18.5Z' fill='none' stroke='%236b746f' stroke-width='1.3' stroke-linejoin='round'/%3E%3Cpath d='M11.9 10.7 20 10.4 20 18.5Q20 20 18.5 20L12.5 20Z' fill='none' stroke='%236b746f' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center/contain;
+}
+.auth-i{font-family:var(--gp-mono)!important;font-size:14px!important}
+.auth-l{font-family:var(--gp-mono)!important;letter-spacing:.12em!important}
+
+/* ---- Toast em mono (voz do instrumento) ---- */
+#stxToast{font-family:var(--gp-mono)!important;font-size:12px!important;font-weight:600!important;letter-spacing:.02em!important}
+.auth-logo{display:block!important;text-align:center!important}
+/* Marca como unidade única (o chip de local é injetado dentro da .tb-brand pelo JS) */
+.tb-brand::before{
+  content:'AGRACTA';
+  width:auto;height:auto;
+  font:800 13px/1 var(--gp-display);
+  letter-spacing:.30em;color:var(--gp-text);
+  padding:2px 0 2px 30px;margin-right:4px;
+  background-position:left center;background-size:21px 21px;
+}
+.tb-brand::after{content:none}
+@media (max-width:480px){ .tb-brand::before{content:'';width:22px;height:22px;padding:0} }
+/* Dropdown de locais no grafite */
+.loc-menu{background:var(--gp-glass-strong)!important;border:1px solid var(--gp-line)!important;border-radius:12px!important;box-shadow:var(--gp-shadow)!important;backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur)}
+.loc-menu .loc-mi{color:var(--gp-text-2)!important}
+.loc-menu .loc-mi:hover{background:rgba(255,255,255,.06)!important;color:var(--gp-text)!important}
+
+/* ============================================================================
+   DETALHES — acabamento fino (micro-refinamentos, sem elementos novos)
+   ============================================================================ */
+/* Texto nítido em fundo escuro */
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+/* Seleção de texto e realce de toque com a cor da casa */
+::selection{background:rgba(52,209,120,.28);color:#fff}
+*{-webkit-tap-highlight-color:transparent}
+/* Checkbox/radio nativos na cor da marca */
+input[type=checkbox],input[type=radio]{accent-color:#1d7a44}
+/* Estado desabilitado honesto */
+button:disabled{opacity:.55;cursor:default}
+/* Foco por teclado visível (acessibilidade) sem sujar o clique de mouse */
+button:focus-visible,a:focus-visible{outline:2px solid rgba(52,209,120,.55);outline-offset:2px;border-radius:6px}
+/* Barra de progresso: trilha discreta (a branca estourava no escuro) */
+.prog-bar{background:rgba(255,255,255,.10)!important}
+/* Pill de status da nuvem (offline/erro): vidro grafite em vez do bege */
+.cloud-badge{
+  background:var(--gp-glass-strong)!important;
+  border:1px solid var(--gp-line)!important;
+  color:var(--gp-text-2)!important;
+  backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur);
+  border-radius:10px!important;
+  font-family:var(--gp-mono)!important;font-size:11px!important;
+  box-shadow:var(--gp-shadow)!important;
+}
+.cloud-badge.cb-offline{color:var(--gp-amber)!important;border-color:rgba(217,161,59,.35)!important}
+.cloud-badge.cb-error{color:var(--gp-red)!important;border-color:rgba(229,72,77,.40)!important}
+/* Botão de fechar dos painéis: fantasma consistente */
+.panel-x-tr{background:rgba(255,255,255,.05)!important;border:1px solid var(--gp-line)!important;color:var(--gp-text-3)!important}
+.panel-x-tr:hover{background:rgba(255,255,255,.10)!important;color:var(--gp-text)!important;border-color:var(--gp-line-2)!important}
+.se-x:hover{color:var(--gp-text)!important}
+/* Controles do Leaflet (escala e créditos) integrados ao grafite */
+.leaflet-control-scale-line{
+  background:rgba(15,18,17,.72)!important;color:#a7b0aa!important;
+  border-color:rgba(255,255,255,.30)!important;
+  font-family:var(--gp-mono)!important;font-size:10px!important;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.leaflet-control-attribution{background:rgba(15,18,17,.55)!important;color:#5a635d!important}
+.leaflet-control-attribution a{color:#8a938d!important}
+/* Rolagem fina também nas telas cheias (Firefox incluso) */
+html{scrollbar-color:rgba(255,255,255,.16) transparent}
+.today-overlay::-webkit-scrollbar,.sd-overlay::-webkit-scrollbar{width:8px}
+.today-overlay::-webkit-scrollbar-thumb,.sd-overlay::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+/* Chips BBCH: grafite; o estágio ATUAL (único com style inline do JS) destaca em verde.
+   Obs.: a camada clara antiga já matava a cor inline com #fff!important — isto restaura o destaque. */
+.fen-item{background:var(--gp-s1)!important;border:1px solid var(--gp-line)!important;color:var(--gp-text-2)!important}
+.fen-item[style]{background:var(--gp-green-deep)!important;border-color:rgba(52,209,120,.55)!important}
+.fen-item[style] .fen-code,.fen-item[style] .fen-dap,.fen-item[style]{color:#fff!important}
+.fen-item[style] .fen-code{font-weight:700!important}
