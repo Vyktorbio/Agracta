@@ -1402,3 +1402,16 @@ html{scrollbar-color:rgba(255,255,255,.16) transparent}
 .fen-item[style]{background:var(--gp-green-deep)!important;border-color:rgba(52,209,120,.55)!important}
 .fen-item[style] .fen-code,.fen-item[style] .fen-dap,.fen-item[style]{color:#fff!important}
 .fen-item[style] .fen-code{font-weight:700!important}
+/* Dock de ferramentas (canto inferior direito): o quadrado branco era o span .tool-ico */
+.tool-ico{
+  background:var(--gp-glass)!important;color:var(--gp-text-2)!important;
+  border:1px solid var(--gp-line)!important;
+  backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur);
+  box-shadow:0 4px 14px rgba(0,0,0,.32)!important;
+  height:36px;width:36px;min-width:36px;
+}
+.toolbar-extra button:hover .tool-ico{filter:none!important;background:var(--gp-s3)!important;color:var(--gp-green)!important;border-color:var(--gp-line-2)!important}
+/* Modo observação ativo continua sinalizado */
+.tool-note.on .tool-ico{background:var(--gp-green-deep)!important;color:#fff!important;border-color:rgba(52,209,120,.55)!important}
+/* No celular mantém 42px: alvo de toque no campo */
+@media (max-width:700px){ .tool-ico{height:42px!important;width:42px!important;min-width:42px!important} }
