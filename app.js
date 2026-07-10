@@ -1244,6 +1244,7 @@ function toggleMainMenu(){
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="forcarAtualizacao()">🔄 Forçar atualização</button>'+
+    '<button onclick="toggleTheme()">'+(document.documentElement.classList.contains('light')?'◑ Tema escuro':'◐ Tema claro')+'</button>'+
     '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
     (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
@@ -3908,10 +3909,10 @@ function showD(id){
 
   h+='<div class="panel-body"><div class="info-grid"><div><div class="info-l">CULTURA</div><div class="info-v" style="color:'+ac+'">'+esc(d.cultura||"\u2014")+'</div></div><div><div class="info-l">CULTIVAR</div><div class="info-v">'+esc(d.cultivar||"\u2014")+'</div></div><div><div class="info-l">PLANTIO</div><div class="info-v">'+(pd?pd.toLocaleDateString("pt-BR"):"\u2014")+'</div></div><div><div class="info-l">DAP</div><div class="info-v" style="color:'+st.c+'">'+(dap!==null?(dap>=0?dap+" dias":"em "+Math.abs(dap)+"d"):"\u2014")+'</div></div><div><div class="info-l">\u00c1REA</div><div class="info-v">'+(aHa!=null?aHa.toFixed(2)+" ha":d.area?d.area+" ha":"\u2014")+'</div></div><div><div class="info-l">EST\u00c1GIO</div><div class="info-v" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
 
-  h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#727c75;border-top:1px solid rgba(255,255,255,.09);padding-top:10px">'+
-     '<span title="Área calculada do polígono">&#128208; <b style="color:#e9ede9">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:#727c75">medida</span></span>'+
-     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">&#128207; <b style="color:#e9ede9">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:#727c75">C&times;L</span></span>':'')+
-     (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:#e9ede9">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
+  h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--gp-text-3,#727c75);border-top:1px solid var(--gp-line,rgba(255,255,255,.09));padding-top:10px">'+
+     '<span title="Área calculada do polígono">&#128208; <b style="color:var(--gp-text,#e9ede9)">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:var(--gp-text-3,#727c75)">medida</span></span>'+
+     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">&#128207; <b style="color:var(--gp-text,#e9ede9)">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:var(--gp-text-3,#727c75)">C&times;L</span></span>':'')+
+     (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:var(--gp-text,#e9ede9)">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
      '</div>';
   var _cs=getCulturas(d);
   if(_cs.length>=2){
@@ -6283,14 +6284,14 @@ function renderStudyEditModal(){
   var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()">×</button></div>';
 
   var po=s.protocoloOrigem||{}, pm=s.protocolo||{};
-  h+='<div style="margin:0 0 14px;padding:14px;border:1px solid rgba(52,209,120,.22);border-radius:14px;background:#141816">'+
-    '<div style="font-size:13px;font-weight:850;color:#34d178">Protocolo da planilha</div>'+
-    '<div style="font-size:10px;color:#727c75;line-height:1.45;margin:3px 0 9px">Abra uma cópia do modelo ou copie a planilha inteira e cole abaixo. O Agracta preenche o que reconhecer; o restante continua manual.</div>'+
-    '<div style="display:flex;gap:7px;flex-wrap:wrap"><button type="button" onclick="document.getElementById(\'protoFile\').click()" style="background:#1d7a44;color:#fff;border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:9px 14px;font-weight:750;cursor:pointer">Abrir .xls/.xlsx</button>'+
+  h+='<div style="margin:0 0 14px;padding:14px;border:1px solid rgba(52,209,120,.25);border-radius:14px;background:var(--gp-s1,#141816)">'+
+    '<div style="font-size:13px;font-weight:850;color:var(--gp-green,#34d178)">Protocolo da planilha</div>'+
+    '<div style="font-size:10px;color:var(--gp-text-3,#727c75);line-height:1.45;margin:3px 0 9px">Abra uma cópia do modelo ou copie a planilha inteira e cole abaixo. O Agracta preenche o que reconhecer; o restante continua manual.</div>'+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap"><button type="button" onclick="document.getElementById(\'protoFile\').click()" style="background:var(--gp-green-deep,#1d7a44);color:#fff;border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:9px 14px;font-weight:750;cursor:pointer">Abrir .xls/.xlsx</button>'+
     '<input id="protoFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="importStudyProtocolFile(this)" style="display:none">'+
-    '<button type="button" onclick="var x=document.getElementById(\'protoPasteBox\');x.style.display=x.style.display===\'none\'?\'block\':\'none\'" style="background:#1a1f1c;color:#a7b0aa;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:9px 14px;font-weight:750;cursor:pointer">Copiar e colar</button></div>'+
-    '<div id="protoPasteBox" style="display:none;margin-top:9px"><textarea id="protoPaste" rows="5" placeholder="No Excel/Sheets: selecione tudo a partir de A1, copie e cole aqui." style="width:100%;box-sizing:border-box;background:#0f1211;color:#e9ede9;border:1px solid rgba(255,255,255,.16);border-radius:11px;padding:8px;font:11px/1.4 ui-monospace,Menlo,monospace"></textarea><button type="button" onclick="importStudyProtocolPaste()" style="width:100%;margin-top:6px;background:#1d7a44;color:#fff;border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px;font-weight:800;cursor:pointer">Ler e preencher o estudo</button></div>'+
-    (po.nome?'<div style="margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.09);font-size:10px;color:#727c75"><b style="color:#e9ede9">'+esc(po.nome)+'</b> · '+(pm.cultura?esc(pm.cultura):'cultura não informada')+(pm.cultivar?' · '+esc(pm.cultivar):'')+' · '+s.tratamentos.length+' tratamentos · '+s.avaliacoes.length+' avaliações<br><span style="color:#727c75">A quadra e o mapa não são alterados pela importação.</span></div>':'')+
+    '<button type="button" onclick="var x=document.getElementById(\'protoPasteBox\');x.style.display=x.style.display===\'none\'?\'block\':\'none\'" style="background:var(--gp-s2,#1a1f1c);color:var(--gp-text-2,#a7b0aa);border:1px solid var(--gp-line-2,rgba(255,255,255,.16));border-radius:10px;padding:9px 14px;font-weight:750;cursor:pointer">Copiar e colar</button></div>'+
+    '<div id="protoPasteBox" style="display:none;margin-top:9px"><textarea id="protoPaste" rows="5" placeholder="No Excel/Sheets: selecione tudo a partir de A1, copie e cole aqui." style="width:100%;box-sizing:border-box;background:var(--gp-s2,#0f1211);color:var(--gp-text,#e9ede9);border:1px solid var(--gp-line-2,rgba(255,255,255,.16));border-radius:11px;padding:8px;font:11px/1.4 ui-monospace,Menlo,monospace"></textarea><button type="button" onclick="importStudyProtocolPaste()" style="width:100%;margin-top:6px;background:var(--gp-green-deep,#1d7a44);color:#fff;border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px;font-weight:800;cursor:pointer">Ler e preencher o estudo</button></div>'+
+    (po.nome?'<div style="margin-top:9px;padding-top:8px;border-top:1px solid var(--gp-line,rgba(255,255,255,.09));font-size:10px;color:var(--gp-text-3,#727c75)"><b style="color:var(--gp-text,#e9ede9)">'+esc(po.nome)+'</b> · '+(pm.cultura?esc(pm.cultura):'cultura não informada')+(pm.cultivar?' · '+esc(pm.cultivar):'')+' · '+s.tratamentos.length+' tratamentos · '+s.avaliacoes.length+' avaliações<br><span style="color:var(--gp-text-3,#727c75)">A quadra e o mapa não são alterados pela importação.</span></div>':'')+
     '</div>';
 
   h+='<div class="se-field"><label>Código do estudo <span class="req">*</span></label>';
@@ -8626,6 +8627,16 @@ function removeAllowedUser(idx){
 if(window.location.search.indexOf('admin')>=0 || window.location.hash.indexOf('admin')>=0){
   history.replaceState(null, "", window.location.pathname);
   setTimeout(function(){ openAdminPanel(); }, 800);
+}
+
+/* ===== Tema claro/escuro: classe .light no <html>, persistida em localStorage ===== */
+function toggleTheme(){
+  var r=document.documentElement, light=!r.classList.contains('light');
+  r.classList.toggle('light', light);
+  try{ localStorage.setItem('agracta-theme', light?'light':'dark'); }catch(e){}
+  try{ var m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#f2f3f1':'#101513'; }catch(e){}
+  try{ closeMainMenu(); }catch(e){}
+  if(typeof _stxToast==='function') _stxToast(light?'◐ Tema claro ativado':'◑ Tema escuro ativado');
 }
 
 /* ===== Inputs numéricos: seleciona o valor ao focar — digitar substitui em vez de concatenar (ex.: "1" + tecla "2" virava "12") ===== */

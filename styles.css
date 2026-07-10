@@ -1415,3 +1415,47 @@ html{scrollbar-color:rgba(255,255,255,.16) transparent}
 .tool-note.on .tool-ico{background:var(--gp-green-deep)!important;color:#fff!important;border-color:rgba(52,209,120,.55)!important}
 /* No celular mantém 42px: alvo de toque no campo */
 @media (max-width:700px){ .tool-ico{height:42px!important;width:42px!important;min-width:42px!important} }
+
+/* ============================================================================
+   TEMA CLARO — mesma identidade em papel (html.light retokeniza o Grafite Pro)
+   Ativado pelo menu ☰ (toggleTheme), persistido em localStorage.
+   ============================================================================ */
+html.light{
+  color-scheme:light;
+  --gp-bg:#f2f3f1; --gp-s1:#fbfcfb; --gp-s2:#ffffff; --gp-s3:#eef0ee;
+  --gp-line:rgba(15,25,19,.12); --gp-line-2:rgba(15,25,19,.22);
+  --gp-text:#16201b; --gp-text-2:#4c5751; --gp-text-3:#7d8781;
+  --gp-green:#178a48; --gp-green-deep:#1d7a44; --gp-green-hover:#229150;
+  --gp-red:#b5453a; --gp-amber:#9a6a17; --gp-blue:#3a6ea3;
+  --gp-glass:rgba(255,255,255,.72); --gp-glass-strong:rgba(252,253,252,.94);
+  --gp-shadow:0 16px 48px rgba(20,30,24,.16),0 2px 8px rgba(20,30,24,.08);
+}
+/* Pontos com branco/preto fixo no grafite */
+html.light .top-bar{background:rgba(250,251,250,.78)!important;box-shadow:0 1px 18px rgba(20,30,24,.10)!important}
+html.light .top-bar .btn-sm{background:rgba(15,25,19,.05)!important}
+html.light .top-bar .btn-sm:hover{background:rgba(15,25,19,.09)!important}
+html.light .loc-chip{background:rgba(15,25,19,.05)!important}
+html.light .main-menu button:hover{background:rgba(15,25,19,.05)!important}
+html.light .today-card-head{background:rgba(15,25,19,.03)!important}
+html.light .panel-x-tr{background:rgba(15,25,19,.04)!important}
+html.light .panel-x-tr:hover{background:rgba(15,25,19,.08)!important}
+html.light .overlay,html.light .search-overlay,html.light .se-overlay,html.light .loc-modal,html.light .ndvi-modal{background:rgba(30,40,34,.30)!important}
+html.light .today-head,html.light .sd-header{background:rgba(242,243,241,.82)!important}
+html.light .prog-bar{background:rgba(15,25,19,.10)!important}
+html.light .rot-ctl button,html.light .tool-ico{box-shadow:0 4px 14px rgba(20,30,24,.16)!important}
+html.light .studies-add,html.light .sd-add,html.light .se-add-trat,html.light .eval-add-btn,html.light .btn-save,html.light .today-card-quick,html.light .gr-ok,html.light .e-save,html.light .p-btn-edit{box-shadow:0 2px 10px rgba(29,122,68,.25)!important}
+html.light ::selection{background:rgba(23,138,72,.22);color:#0b130e}
+html.light .today-badge{background:var(--gp-green-deep)!important;color:#fff!important}
+html.light .auth-gate{background:
+  radial-gradient(90% 55% at 50% 0%,rgba(29,122,68,.06),transparent 62%),
+  repeating-linear-gradient(0deg,rgba(15,25,19,.030) 0 1px,transparent 1px 30px),
+  repeating-linear-gradient(90deg,rgba(15,25,19,.030) 0 1px,transparent 1px 30px),
+  radial-gradient(120% 90% at 50% 0%,#f6f7f5,#eef0ec 55%,#e7eae6)!important}
+html.light .auth-err{background:rgba(181,69,58,.10)!important;border-color:rgba(181,69,58,.40)!important;color:#b5453a!important}
+html.light #stxToast{color:var(--gp-green-deep)!important;border-color:rgba(29,122,68,.35)!important}
+html.light .leaflet-control-scale-line{background:rgba(252,253,252,.80)!important;color:#4c5751!important;border-color:rgba(15,25,19,.35)!important}
+html.light .leaflet-control-attribution{background:rgba(252,253,252,.65)!important;color:#7d8781!important}
+html.light .leaflet-control-attribution a{color:#4c5751!important}
+html{scrollbar-color:rgba(255,255,255,.16) transparent}
+html.light{scrollbar-color:rgba(15,25,19,.25) transparent}
+html.light .panel::-webkit-scrollbar-thumb,html.light .se-panel::-webkit-scrollbar-thumb,html.light .edit-panel::-webkit-scrollbar-thumb,html.light .agenda-panel::-webkit-scrollbar-thumb,html.light .today-overlay::-webkit-scrollbar-thumb,html.light .sd-overlay::-webkit-scrollbar-thumb{background:rgba(15,25,19,.22)}
