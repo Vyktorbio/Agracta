@@ -8632,6 +8632,7 @@ if(window.location.search.indexOf('admin')>=0 || window.location.hash.indexOf('a
 /* ===== Tema claro/escuro: classe .light no <html>, persistida em localStorage ===== */
 function toggleTheme(){
   var r=document.documentElement, light=!r.classList.contains('light');
+  r.classList.add('theming'); clearTimeout(window._thT); window._thT=setTimeout(function(){r.classList.remove('theming');},420);
   r.classList.toggle('light', light);
   try{ localStorage.setItem('agracta-theme', light?'light':'dark'); }catch(e){}
   try{ var m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#f2f3f1':'#101513'; }catch(e){}
