@@ -1495,3 +1495,19 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
 .q-label .q-id{font-family:var(--gp-display)!important;font-weight:800!important;letter-spacing:.02em!important}
 .q-label .q-st,.q-label .q-dap,.q-label .q-ndvi,.q-badge{font-family:var(--gp-mono)!important}
 .q-label .q-dap{color:rgba(255,255,255,.75)!important}
+
+/* ============================================================================
+   REFINO — títulos de seção como divisor editorial (tracinho + rótulo + régua)
+   Corrige o "space-between" que largava o tracinho longe do rótulo.
+   ============================================================================ */
+.sd-section-title,.se-section-title{
+  justify-content:flex-start!important;align-items:center!important;gap:10px!important;
+}
+.sd-section-title::before,.se-section-title::before{
+  margin-right:0!important;vertical-align:baseline!important;flex:0 0 auto;
+}
+.sd-section-title::after,.se-section-title::after{
+  content:'';flex:1 1 auto;height:1px;
+  background:var(--gp-line);
+  margin-left:2px;
+}
