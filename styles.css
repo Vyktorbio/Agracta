@@ -1335,17 +1335,15 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 /* ---- Toast em mono (voz do instrumento) ---- */
 #stxToast{font-family:var(--gp-mono)!important;font-size:12px!important;font-weight:600!important;letter-spacing:.02em!important}
 .auth-logo{display:block!important;text-align:center!important}
-/* Marca como unidade única (o chip de local é injetado dentro da .tb-brand pelo JS) */
+/* Dentro do app a marca é só o símbolo — o nome "AGRACTA" fica no login.
+   (o chip de local é injetado ao lado pelo JS) */
 .tb-brand::before{
-  content:'AGRACTA';
-  width:auto;height:auto;
-  font:800 13px/1 var(--gp-display);
-  letter-spacing:.30em;color:var(--gp-text);
-  padding:2px 0 2px 30px;margin-right:4px;
-  background-position:left center;background-size:21px 21px;
+  content:'';
+  width:22px;height:22px;
+  padding:0;margin:0;
+  background-position:center;background-size:contain;
 }
-.tb-brand::after{content:none}
-@media (max-width:480px){ .tb-brand::before{content:'';width:22px;height:22px;padding:0} }
+.tb-brand::after{content:none!important}
 /* Dropdown de locais no grafite */
 .loc-menu{background:var(--gp-glass-strong)!important;border:1px solid var(--gp-line)!important;border-radius:12px!important;box-shadow:var(--gp-shadow)!important;backdrop-filter:var(--gp-blur);-webkit-backdrop-filter:var(--gp-blur)}
 .loc-menu .loc-mi{color:var(--gp-text-2)!important}
