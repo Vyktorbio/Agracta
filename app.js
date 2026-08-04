@@ -1487,11 +1487,19 @@ var _delLocais=(function(){try{return JSON.parse(localStorage.getItem(DELL_KEY)|
 function saveDelTombs(){ try{ localStorage.setItem(DELQ_KEY,JSON.stringify(_delQuadras)); localStorage.setItem(DELL_KEY,JSON.stringify(_delLocais)); }catch(e){} }
 /* ===== Merge por entidade: une quadras/estudos/aplicações/avaliações por id, p/ NÃO perder
    o que outro aparelho adicionou quando dois salvam quase ao mesmo tempo. ===== */
+/* Item RECRIADO depois da exclusão sobrevive à lápide — mesma regra que qViva() usa para quadras.
+   Sem isso, ids determinísticos (avaliação auto_<data>) nascem já condenados: basta a data ter
+   sido excluída uma vez para toda avaliação futura daquela data sumir no primeiro merge. */
+function _vivoTomb(x,deleted){
+  var t=deleted[x.id];
+  if(!t) return true;
+  return (x._ts||0) > t;
+}
 function _mergeById(la,ca,mergeFn,deleted){
   deleted=deleted||{};
   la=la||[]; ca=ca||[]; var byId={}, order=[];
-  ca.forEach(function(x){ if(x&&x.id&&!deleted[x.id]){ if(!byId[x.id])order.push(x.id); byId[x.id]=x; } });
-  la.forEach(function(x){ if(!x||!x.id||deleted[x.id])return; if(byId[x.id]){ byId[x.id]=mergeFn?mergeFn(x,byId[x.id]):x; } else { order.push(x.id); byId[x.id]=x; } });
+  ca.forEach(function(x){ if(x&&x.id&&_vivoTomb(x,deleted)){ if(!byId[x.id])order.push(x.id); byId[x.id]=x; } });
+  la.forEach(function(x){ if(!x||!x.id||!_vivoTomb(x,deleted))return; if(byId[x.id]){ byId[x.id]=mergeFn?mergeFn(x,byId[x.id]):x; } else { order.push(x.id); byId[x.id]=x; } });
   return order.map(function(id){ return byId[id]; });
 }
 function _mergeObj(a,b){ var o={},k; if(b)for(k in b)o[k]=b[k]; if(a)for(k in a)o[k]=a[k]; return o; }
@@ -6179,7 +6187,7 @@ function parseStudyProtocolRows(rows,nomeArquivo){
   if(!trats.length && maxTrat) for(var ti=1;ti<=maxTrat;ti++)trats.push(newTratamento(ti));
   var numAplicacoes=Math.max(1,parseInt(numAp)||1), intervalo=Math.max(0,parseInt(intAp)||0);
   var schedule=_protoSchedule(rows,meta.inicio,intervalo), avals=[], byDate={};
-  schedule.forEach(function(d){ var a={id:'auto_'+d,data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true}; avals.push(a);byDate[d]=a; });
+  schedule.forEach(function(d){ var a={id:'auto_'+d,data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true,_ts:Date.now()}; avals.push(a);byDate[d]=a; }); /* _ts: lápide de exclusão antiga não engole a avaliação importada agora */
   var erow=-1;
   for(var er=0;er<Math.min(rows.length,80);er++){
     var hits=0; for(var ec=11;ec<(rows[er]||[]).length;ec++)if(_protoNorm(rows[er][ec]).indexOf('avaliacao')===0)hits++;
@@ -6406,7 +6414,11 @@ function gerarAvaliacoesAuto(s){
   for(var i=0;i<n;i++){
     var d=(iv>0)?_isoShift(start,i*iv):start;
     if(temData[d]) continue;
-    s.avaliacoes.push({id:'auto_'+d,data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true}); /* id determinístico por data: 2 aparelhos geram o MESMO id -> o merge não duplica */
+    var _avid='auto_'+d;
+    /* o id é determinístico por data, então ele SEMPRE colide com uma exclusão anterior da
+       mesma data. Limpa a lápide local e carimba _ts para o merge saber que esta é nova. */
+    if(s._deletedAvaliacoes) delete s._deletedAvaliacoes[_avid];
+    s.avaliacoes.push({id:_avid,data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true,_ts:Date.now()}); /* id determinístico por data: 2 aparelhos geram o MESMO id -> o merge não duplica */
     temData[d]=true; add++;
   }
   return add;

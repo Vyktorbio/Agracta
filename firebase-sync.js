@@ -77,6 +77,13 @@
     }
     return v;
   }
+  /* Nome de campo aceito pelo Firestore: não pode ser vazio nem reservado ('__...').
+     Ponto e espaço são válidos aqui porque gravamos com set() de documento inteiro,
+     que trata as chaves literalmente (não como field path). */
+  function campoSeguro(k){
+    k=String(k==null?'':k);
+    return k!==''&&k.indexOf('__')!==0;
+  }
   function docId(raw){
     var s=unescape(encodeURIComponent(String(raw)));
     return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -301,16 +308,31 @@
           var av=clone(a),notas=av.notas||{},metas=av.notasMeta||{};
           delete av.notas;delete av.notasMeta;
           var avKey=s.id+'|'+a.id;
-          flat.avaliacoes[docId(avKey)]=clean({key:avKey,id:a.id,estudoId:s.id,order:vi,data:av});
+          /* notas/notasMeta vão DENTRO do doc da avaliação: 1 documento por avaliação em vez de
+             1 por célula. readRemote() lê a coleção inteira a cada pull, então cada célula solta
+             custava uma leitura por sincronização — era o que estourava a cota diária.
+             Os docs antigos de 'lancamentos' ficam órfãos e o próprio queueOps os apaga.
+             Parcela/variável agora são NOMES DE CAMPO; as que o Firestore recusa (vazias ou
+             começando com '__') continuam indo como doc solto, senão o batch inteiro falharia. */
+          var notasOk={},metasOk={};
           Object.keys(notas).forEach(function(parcela){
             Object.keys(notas[parcela]||{}).forEach(function(variavel){
+              var meta=(metas[parcela]&&metas[parcela][variavel])||null;
+              if(campoSeguro(parcela)&&campoSeguro(variavel)){
+                (notasOk[parcela]=notasOk[parcela]||{})[variavel]=notas[parcela][variavel];
+                if(meta)(metasOk[parcela]=metasOk[parcela]||{})[variavel]=meta;
+                return;
+              }
               var key=avKey+'|'+parcela+'|'+variavel;
               flat.lancamentos[docId(key)]=clean({
                 key:key,avaliacaoKey:avKey,parcela:parcela,variavel:variavel,
-                valor:notas[parcela][variavel],
-                meta:(metas[parcela]&&metas[parcela][variavel])||null
+                valor:notas[parcela][variavel],meta:meta
               });
             });
+          });
+          flat.avaliacoes[docId(avKey)]=clean({
+            key:avKey,id:a.id,estudoId:s.id,order:vi,data:av,
+            notas:notasOk,notasMeta:metasOk
           });
         });
       });
@@ -376,7 +398,7 @@
     Object.keys(flat.avaliacoes).forEach(function(k){
       var r=flat.avaliacoes[k],s=studies[r.estudoId];
       if(!s)return;
-      var a=clone(r.data||{});a.id=r.id;a.notas={};a.notasMeta={};avs[r.key]=a;
+      var a=clone(r.data||{});a.id=r.id;a.notas=clone(r.notas||{});a.notasMeta=clone(r.notasMeta||{});avs[r.key]=a;
       s.value.avaliacoes.push({order:r.order||0,value:a});
     });
     Object.keys(studies).forEach(function(id){
@@ -386,11 +408,17 @@
       s.avaliacoes.sort(function(a,b){return a.order-b.order;});
       s.avaliacoes=s.avaliacoes.map(function(x){return x.value;});
     });
+    /* compat: células no formato antigo (1 doc por lançamento). Só preenchem o que o doc da
+       avaliação ainda não trouxe — o formato novo tem prioridade durante a transição. */
     Object.keys(flat.lancamentos).forEach(function(k){
       var r=flat.lancamentos[k],a=avs[r.avaliacaoKey];
       if(!a)return;
-      (a.notas[r.parcela]=a.notas[r.parcela]||{})[r.variavel]=r.valor;
-      if(r.meta)(a.notasMeta[r.parcela]=a.notasMeta[r.parcela]||{})[r.variavel]=clone(r.meta);
+      var row=(a.notas[r.parcela]=a.notas[r.parcela]||{});
+      if(!Object.prototype.hasOwnProperty.call(row,r.variavel))row[r.variavel]=r.valor;
+      if(r.meta){
+        var mrow=(a.notasMeta[r.parcela]=a.notasMeta[r.parcela]||{});
+        if(!mrow[r.variavel])mrow[r.variavel]=clone(r.meta);
+      }
     });
     Object.keys(flat.media).forEach(function(k){
       var r=flat.media[k];(media[r.noteId]=media[r.noteId]||[])[r.part||0]=r.data||'';
@@ -526,9 +554,22 @@
       return false;
     });
   };
+  /* Resync barato: 1 leitura (o doc raiz) para conferir o 'rev' e só então decidir.
+     Antes isto chamava cloudPull() direto, e cloudPull relê as 10 coleções INTEIRAS.
+     Como ele dispara a cada foco na aba e a cada volta de rede, o banco inteiro era
+     relido dezenas de vezes por dia por aparelho — foi o que estourou a cota. */
   window.cloudResync=function(){
     if(!FB.user){showAuthGate();return;}
-    if(window._unsavedChanges)cloudSave();else cloudPull();
+    if(window._unsavedChanges){cloudSave();return;}
+    if(!FB.db){return;}
+    FB.db.doc(ROOT).get().then(function(snap){
+      var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
+      if(rev>FB.lastRev)cloudPull();
+      else cloudBadge('saved');
+    }).catch(function(e){
+      cloudBadge('offline','— usando dados do aparelho');
+      console.error('[Agracta Firebase] resync:',e);
+    });
   };
   window.cloudSubscribe=function(){
     if(!FB.user||!FB.db)return;
