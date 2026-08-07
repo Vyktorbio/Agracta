@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agracta — modo limpo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#f2f3f1;      /* fundo do app — o theme-color do Agracta */
+  --folha:#ffffff;      /* papel da prancha */
+  --tinta:#15181a;
+  --grafite:#646c6b;
+  --linha:#d8dad5;
+  --linha-forte:#b9bdb6;
+  --realce:#1f4e5f;     /* único acento de interface */
+  --ui: "IBM Plex Sans", system-ui, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "Arial Narrow", Helvetica, sans-serif;
+  --serif: "IBM Plex Serif", Georgia, serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--papel);
+  color:var(--tinta);
+  font-family:var(--ui);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- barra superior ---------- */
+.topo{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;border-bottom:1px solid var(--linha);
+  background:var(--papel);position:sticky;top:0;z-index:20;
+}
+.marca{font-family:var(--cond);font-weight:600;font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.modo{font-family:var(--cond);font-size:12px;color:var(--grafite);letter-spacing:.09em;text-transform:uppercase}
+@media (max-width:520px){ .modo{display:none} }
+.topo .espaco{flex:1}
+.segmentado.compacto{border-radius:3px}
+.segmentado.compacto .seg{
+  padding:5px 11px;font-family:var(--cond);font-size:12px;
+  letter-spacing:.09em;font-weight:600;
+}
+
+/* ---------- estrutura ---------- */
+.palco{display:grid;grid-template-columns:1fr;gap:0}
+@media (min-width:900px){
+  .palco{grid-template-columns:264px 1fr;min-height:calc(100vh - 53px)}
+}
+
+/* ---------- painel ---------- */
+.painel{
+  padding:18px;border-bottom:1px solid var(--linha);
+  order:2;
+}
+@media (min-width:900px){
+  .painel{order:1;border-bottom:none;border-right:1px solid var(--linha);overflow-y:auto}
+}
+.grupo{margin-bottom:22px}
+.grupo > h2{
+  font-family:var(--cond);font-size:11px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--grafite);
+  margin:0 0 9px;
+}
+.opcoes{display:flex;flex-direction:column;gap:5px}
+.opt{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 10px;border:1px solid var(--linha);border-radius:4px;
+  background:var(--folha);cursor:pointer;font-size:13px;
+  transition:border-color .12s, background .12s;
+}
+.opt:hover{border-color:var(--linha-forte)}
+.opt input{position:absolute;opacity:0;width:0;height:0}
+.opt .marcador{
+  width:13px;height:13px;flex:none;border:1px solid var(--linha-forte);
+  background:var(--folha);
+}
+.opt[data-tipo="radio"] .marcador{border-radius:50%}
+.opt.ativo{border-color:var(--realce);background:#eef3f4}
+.opt.ativo .marcador{background:var(--realce);border-color:var(--realce);box-shadow:inset 0 0 0 2px var(--folha)}
+.opt:focus-within{outline:2px solid var(--realce);outline-offset:2px}
+.dica{font-size:12px;color:var(--grafite);margin:8px 0 0}
+
+.segmentado{display:flex;border:1px solid var(--linha-forte);border-radius:4px;overflow:hidden;background:var(--folha)}
+.seg{
+  flex:1;text-align:center;padding:9px 6px;font-size:13px;cursor:pointer;
+  border-right:1px solid var(--linha-forte);transition:background .12s,color .12s;
+}
+.seg:last-child{border-right:none}
+.seg input{position:absolute;opacity:0;width:0;height:0}
+.seg.ativo{background:var(--realce);color:#fff;font-weight:500}
+.seg:focus-within{outline:2px solid var(--realce);outline-offset:2px}
+
+.botoes{display:flex;flex-direction:column;gap:6px}
+.btn{
+  font-family:var(--ui);font-size:13px;font-weight:500;
+  padding:10px 12px;border-radius:4px;cursor:pointer;text-align:left;
+  border:1px solid var(--realce);background:var(--realce);color:#fff;
+  transition:opacity .12s;
+}
+.btn:hover{opacity:.88}
+.btn.secundario{background:var(--folha);color:var(--tinta);border-color:var(--linha-forte)}
+.btn:focus-visible{outline:2px solid var(--realce);outline-offset:2px}
+
+/* ---------- palco da prancha ---------- */
+.mesa{
+  order:1;padding:22px 16px 40px;display:flex;flex-direction:column;
+  align-items:center;gap:14px;
+}
+@media (min-width:900px){.mesa{order:2;padding:34px 34px 48px;justify-content:flex-start}}
+
+.folha{
+  width:100%;max-width:1000px;background:var(--folha);
+  box-shadow:0 1px 2px rgba(21,24,26,.06), 0 10px 28px rgba(21,24,26,.09);
+}
+.folha svg{display:block;width:100%;height:auto}
+
+.legenda-fig{
+  max-width:1000px;font-family:var(--serif);font-size:13.5px;
+  line-height:1.6;color:var(--tinta);
+}
+.legenda-fig b{font-weight:400;font-style:italic}
+.acoes-legenda{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.mini{
+  font-family:var(--cond);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  padding:6px 10px;border:1px solid var(--linha-forte);border-radius:3px;
+  background:transparent;cursor:pointer;color:var(--grafite);
+}
+.mini:hover{color:var(--tinta);border-color:var(--tinta)}
+
+/* ---------- tela limpa ---------- */
+body.limpa .topo,
+body.limpa .painel,
+body.limpa .legenda-fig{display:none}
+body.limpa .mesa{padding:0;min-height:100vh;justify-content:center;background:#26292b}
+body.limpa .folha{max-width:min(1000px, 100vw)}
+.sair-limpa{
+  display:none;position:fixed;right:14px;bottom:14px;z-index:40;
+  font-family:var(--cond);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  padding:9px 13px;border-radius:3px;border:1px solid rgba(255,255,255,.35);
+  background:rgba(0,0,0,.55);color:#fff;cursor:pointer;backdrop-filter:blur(4px);
+}
+body.limpa .sair-limpa{display:block}
+
+.aviso{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:60;
+  background:var(--tinta);color:#fff;font-size:13px;padding:9px 15px;border-radius:4px;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.aviso.ver{opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+.sel-acoes{display:flex;gap:6px;margin-bottom:7px}
+.mini{font-family:var(--cond);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;
+  padding:5px 9px;border:1px solid var(--linha-forte);border-radius:3px;background:var(--folha);
+  color:var(--tinta);cursor:pointer}
+.mini:hover{border-color:var(--realce);color:var(--realce)}
+.opcoes-rolagem{max-height:232px;overflow-y:auto;padding-right:3px}
+.opt-area{margin-left:auto;font-family:var(--cond);font-size:11px;color:var(--grafite);letter-spacing:.03em}
+.sem-quadra{padding:64px 24px;text-align:center;font-family:var(--cond);font-size:13px;
+  letter-spacing:.06em;color:var(--grafite)}
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <span class="marca">Agracta</span>
+  <span class="modo">modo limpo</span>
+  <span class="espaco"></span>
+  <div class="segmentado compacto" id="g-idioma" title="Idioma da prancha">
+    <label class="seg ativo"><input type="radio" name="idioma" value="pt" checked>PT</label>
+    <label class="seg"><input type="radio" name="idioma" value="en">EN</label>
+  </div>
+  <button class="mini" id="btn-limpa">Tela limpa</button>
+</header>
+
+<div class="palco">
+
+  <aside class="painel">
+    <div class="grupo">
+      <h2>Fundo</h2>
+      <div class="opcoes" id="g-fundo">
+        <label class="opt ativo" data-tipo="radio"><input type="radio" name="fundo" value="croqui" checked><span class="marcador"></span>Croqui (branco)</label>
+        <label class="opt" data-tipo="radio"><input type="radio" name="fundo" value="satelite"><span class="marcador"></span>Satélite</label>
+      </div>
+      <p class="dica">Croqui imprime bem em P&amp;B. Satélite é para tela.</p>
+    </div>
+
+    <div class="grupo">
+      <h2>Pintura das quadras</h2>
+      <div class="opcoes" id="g-pintura">
+        <label class="opt" data-tipo="radio"><input type="radio" name="pintura" value="vazio"><span class="marcador"></span>Só contorno</label>
+        <label class="opt ativo" data-tipo="radio"><input type="radio" name="pintura" value="tratamento" checked><span class="marcador"></span>Por tratamento</label>
+        <label class="opt" data-tipo="radio"><input type="radio" name="pintura" value="ndvi"><span class="marcador"></span>Por NDVI médio</label>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <h2>Quadras no croqui</h2>
+      <div class="sel-acoes">
+        <button class="mini" id="sel-todas">Todas</button>
+        <button class="mini" id="sel-nenhuma">Nenhuma</button>
+      </div>
+      <div class="opcoes opcoes-rolagem" id="g-quadras"></div>
+      <p class="dica">O enquadramento e a escala acompanham a escolha.</p>
+    </div>
+
+    <div class="grupo">
+      <h2>Elementos da prancha</h2>
+      <div class="opcoes" id="g-elementos">
+        <label class="opt ativo"><input type="checkbox" data-el="cabecalho" checked><span class="marcador"></span>Cabeçalho do estudo</label>
+        <label class="opt ativo"><input type="checkbox" data-el="rotulos" checked><span class="marcador"></span>Nome da quadra</label>
+        <label class="opt ativo"><input type="checkbox" data-el="areas" checked><span class="marcador"></span>Área em hectares</label>
+        <label class="opt ativo"><input type="checkbox" data-el="norte" checked><span class="marcador"></span>Seta de norte</label>
+        <label class="opt ativo"><input type="checkbox" data-el="escala" checked><span class="marcador"></span>Barra de escala</label>
+        <label class="opt ativo"><input type="checkbox" data-el="legenda" checked><span class="marcador"></span>Legenda</label>
+        <label class="opt ativo"><input type="checkbox" data-el="carreador" checked><span class="marcador"></span>Carreador</label>
+        <label class="opt ativo"><input type="checkbox" data-el="rodape" checked><span class="marcador"></span>Rodapé de rastreio</label>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <h2>Exportar</h2>
+      <div class="botoes">
+        <button class="btn" id="btn-svg">Baixar SVG (vetorial)</button>
+        <button class="btn secundario" id="btn-png">Baixar PNG (3×)</button>
+      </div>
+      <p class="dica">SVG entra no Word sem pixelar e o texto continua texto.</p>
+    </div>
+  </aside>
+
+  <main class="mesa">
+    <div class="folha" id="folha"></div>
+
+    <p class="legenda-fig" id="legenda-fig"></p>
+    <div class="acoes-legenda">
+      <button class="mini" id="btn-legenda">Copiar legenda</button>
+    </div>
+  </main>
+</div>
+
+<button class="sair-limpa" id="btn-sair">Sair da tela limpa</button>
+<div class="aviso" id="aviso"></div>
+
+<script src="vendor/quadras-default.js"></script>
+<script>
+/* Rótulos da prancha. A interface continua em português — quem muda de
+   idioma é o entregável, não a ferramenta de campo. */
+const L = {
+  pt:{
+    tratamentos:"TRATAMENTOS", ndvi:"NDVI MÉDIO", fonteNdvi:"Sentinel-2",
+    quadras:"quadras", totais:"ha totais", geradoPor:"Gerado por", em:"em",
+    figura:"Figura 1", croqui:"Croqui", aerea:"Imagem aérea",
+    ref:"Sistema de referência",
+    frase:(n,a,p)=>`das ${n} quadras do estudo ${ESTUDO.codigo}, totalizando ${a} ha, ${p}.`,
+    pTrat:"com identificação dos tratamentos por cor",
+    pNdvi:"com as quadras coloridas pelo NDVI médio obtido de imagem Sentinel-2",
+    pVazio:"sem preenchimento"
+  },
+  en:{
+    tratamentos:"TREATMENTS", ndvi:"MEAN NDVI", fonteNdvi:"Sentinel-2",
+    quadras:"field blocks", totais:"ha total", geradoPor:"Generated by", em:"on",
+    figura:"Figure 1", croqui:"Sketch map", aerea:"Aerial imagery",
+    ref:"Spatial reference",
+    frase:(n,a,p)=>`of the ${n} field blocks in study ${ESTUDO.codigo}, totalling ${a} ha, ${p}.`,
+    pTrat:"with treatments identified by colour",
+    pNdvi:"with blocks shaded by mean NDVI derived from Sentinel-2 imagery",
+    pVazio:"outline only"
+  }
+};
+
+/* =========================================================
+   DADOS — geometria em metros (x leste, y norte).
+
+   Três fontes, nesta ordem:
+     1. handoff do app          — localStorage 'agracta-croqui-handoff'
+     2. vendor/quadras-default.js — geometria real da estação (página avulsa)
+     3. demonstração embutida   — só quando não há nem uma nem outra
+
+   A geometria real é lat/lng. Aqui vira metro local por projeção
+   equirretangular em torno do centro do conjunto: na escala de uma estação
+   experimental o erro fica bem abaixo da espessura da linha do desenho.
+   ========================================================= */
+const PALETA = ["#1f4e5f","#4e8b6b","#9dbf6a","#e0c86a","#b5713a","#7a5a86",
+                "#3d7ea6","#6b8f3a","#c9884e","#8c5b7a","#4a7c6f","#a8603f"];
+
+function _paraMetros(qgeo){
+  const todos = [];
+  Object.keys(qgeo).forEach(k => (qgeo[k]||[]).forEach(p => todos.push(p)));
+  if(!todos.length) return {};
+  const lat0 = todos.reduce((a,p)=>a+p[0],0)/todos.length;
+  const lng0 = todos.reduce((a,p)=>a+p[1],0)/todos.length;
+  const mLat = 110540, mLng = 111320*Math.cos(lat0*Math.PI/180);
+  const out = {};
+  Object.keys(qgeo).forEach(k=>{
+    const anel = qgeo[k]||[];
+    if(anel.length >= 3) out[k] = anel.map(p => [ (p[1]-lng0)*mLng, (p[0]-lat0)*mLat ]);
+  });
+  return out;
+}
+
+const DEMO = {
+  estudo:{
+    codigo:"PL-2026-0184", autor:"Machado, V. C. — CRBio-01", datum:"SIRGAS 2000 / UTM 23S",
+    data:{ pt:"06/08/2026", en:"2026-08-06" }, dataNdvi:{ pt:"02/08/2026", en:"2026-08-02" },
+    pt:{ titulo:"Eficácia de fungicidas no controle de ferrugem-asiática em soja",
+         local:"Estação Experimental Plantec — Iracemápolis, SP",
+         cultura:"Soja — BMX Potência RR", safra:"Safra 2025/26" },
+    en:{ titulo:"Efficacy of fungicides against Asian soybean rust",
+         local:"Plantec Experimental Station — Iracemápolis, SP, Brazil",
+         cultura:"Soybean — BMX Potência RR", safra:"2025/26 season" }
+  },
+  quadras:[
+    { id:"Q-01", trat:"T1", ndvi:0.72, pts:[[20,298],[128,304],[132,170],[24,166]] },
+    { id:"Q-02", trat:"T2", ndvi:0.66, pts:[[128,304],[240,300],[242,167],[132,170]] },
+    { id:"Q-03", trat:"T3", ndvi:0.81, pts:[[240,300],[350,306],[351,171],[242,167]] },
+    { id:"Q-04", trat:"T4", ndvi:0.58, pts:[[350,306],[444,296],[441,174],[351,171]] },
+    { id:"Q-05", trat:"T5", ndvi:0.49, pts:[[24,166],[132,170],[136,30],[28,22]] },
+    { id:"Q-06", trat:"T6", ndvi:0.43, pts:[[132,170],[242,167],[244,34],[136,30]] },
+    { id:"Q-07", trat:"T1", ndvi:0.75, pts:[[242,167],[351,171],[349,40],[244,34]] },
+    { id:"Q-08", trat:"T3", ndvi:0.69, pts:[[351,171],[441,174],[436,44],[349,40]] }
+  ],
+  carreador:[[16,168],[450,175]],
+  tratamentos:{
+    T1:{cor:"#1f4e5f", pt:"Testemunha",                       en:"Untreated check"},
+    T2:{cor:"#4e8b6b", pt:"Azoxistrobina + ciproconazol",     en:"Azoxystrobin + cyproconazole"},
+    T3:{cor:"#9dbf6a", pt:"Trifloxistrobina + protioconazol", en:"Trifloxystrobin + prothioconazole"},
+    T4:{cor:"#e0c86a", pt:"Mancozebe",                        en:"Mancozeb"},
+    T5:{cor:"#b5713a", pt:"Picoxistrobina + benzovindiflupir",en:"Picoxystrobin + benzovindiflupyr"},
+    T6:{cor:"#7a5a86", pt:"Fluxapiroxade + piraclostrobina",  en:"Fluxapyroxad + pyraclostrobin"}
+  }
+};
+
+function _carregar(){
+  /* 1. handoff do app */
+  let hs = null;
+  try{ hs = JSON.parse(localStorage.getItem("agracta-croqui-handoff")||"null"); }catch(e){}
+  if(hs && Array.isArray(hs.quadras) && hs.quadras.length){
+    const geo = {};
+    hs.quadras.forEach(q => { if(q && q.id && Array.isArray(q.latlng)) geo[q.id] = q.latlng; });
+    const m = Object.keys(geo).length ? _paraMetros(geo) : null;
+    const quadras = hs.quadras
+      .filter(q => q && q.id && (!m || m[q.id] || Array.isArray(q.pts)))
+      .map(q => ({ id:q.id, trat:q.trat||null, ndvi:(typeof q.ndvi==="number"?q.ndvi:null),
+                   pts:(m && m[q.id]) ? m[q.id] : q.pts }));
+    return { estudo: Object.assign({}, DEMO.estudo, hs.estudo||{}),
+             quadras, carreador: hs.carreador||null,
+             tratamentos: hs.tratamentos || _paletaAuto(quadras) };
+  }
+  /* 2. geometria real da estação */
+  if(typeof window!=="undefined" && window.DEFAULT_QGEO && Object.keys(window.DEFAULT_QGEO).length){
+    const m = _paraMetros(window.DEFAULT_QGEO);
+    const quadras = Object.keys(m).sort().map(id => ({ id, trat:null, ndvi:null, pts:m[id] }));
+    return { estudo: DEMO.estudo, quadras, carreador:null, tratamentos:_paletaAuto(quadras) };
+  }
+  /* 3. demonstração */
+  return { estudo:DEMO.estudo, quadras:DEMO.quadras, carreador:DEMO.carreador, tratamentos:DEMO.tratamentos };
+}
+
+/* Sem tratamento informado, cada quadra vira a própria categoria — assim a
+   pintura "por tratamento" continua legível como mapa de identificação. */
+function _paletaAuto(quadras){
+  const chaves = [];
+  quadras.forEach(q => { const k = q.trat || q.id; if(chaves.indexOf(k)<0) chaves.push(k); });
+  const out = {};
+  chaves.forEach((k,i)=>{ out[k] = { cor:PALETA[i%PALETA.length], pt:k, en:k }; });
+  return out;
+}
+
+const _D = _carregar();
+const ESTUDO     = _D.estudo;
+let   TODAS      = _D.quadras;          /* o conjunto inteiro */
+const CARREADOR  = _D.carreador;
+const TRATAMENTOS= _D.tratamentos;
+
+const RAMPA_NDVI = [
+  {v:0.30, cor:"#f2eccd"},{v:0.45, cor:"#cfe0a0"},
+  {v:0.60, cor:"#94c47d"},{v:0.72, cor:"#4f9a5f"},{v:0.85, cor:"#1f6b43"}
+];
+
+/* =========================================================
+   ESTADO
+   ========================================================= */
+const estado = {
+  idioma:"pt",
+  fundo:"croqui",
+  pintura:"tratamento",
+  el:{cabecalho:1,rotulos:1,areas:1,norte:1,escala:1,legenda:1,carreador:1,rodape:1},
+  sel:{}   /* id da quadra -> false quando fora do croqui */
+};
+TODAS.forEach(q => { estado.sel[q.id] = true; });
+/* As quadras escolhidas. O enquadramento de desenhar() já se refaz sozinho
+   a partir dos limites do conjunto, então selecionar menos quadras dá zoom
+   na área escolhida — sem sobra branca. */
+const QS = () => TODAS.filter(q => estado.sel[q.id]);
+
+const t = () => L[estado.idioma];                 /* rótulos */
+const E = () => ESTUDO[estado.idioma];            /* metadados do estudo */
+/* separador decimal segue o idioma: vírgula em pt, ponto em en */
+const num = (v,c=2) => {
+  const s = v.toFixed(c);
+  return estado.idioma === "pt" ? s.replace(".", ",") : s;
+};
+
+/* =========================================================
+   GEOMETRIA
+   ========================================================= */
+const areaM2 = pts => {
+  let s = 0;
+  for(let i=0;i<pts.length;i++){
+    const [x1,y1] = pts[i], [x2,y2] = pts[(i+1)%pts.length];
+    s += x1*y2 - x2*y1;
+  }
+  return Math.abs(s)/2;
+};
+const centroide = pts => {
+  let a=0,cx=0,cy=0;
+  for(let i=0;i<pts.length;i++){
+    const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];
+    const f = x1*y2 - x2*y1;
+    a += f; cx += (x1+x2)*f; cy += (y1+y2)*f;
+  }
+  a/=2;
+  return [cx/(6*a), cy/(6*a)];
+};
+const corNdvi = v => {
+  if(v <= RAMPA_NDVI[0].v) return RAMPA_NDVI[0].cor;
+  for(let i=0;i<RAMPA_NDVI.length-1;i++){
+    const a=RAMPA_NDVI[i], b=RAMPA_NDVI[i+1];
+    if(v<=b.v){
+      const t=(v-a.v)/(b.v-a.v);
+      const hx=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
+      const [r1,g1,b1]=hx(a.cor),[r2,g2,b2]=hx(b.cor);
+      const m=(u,w)=>Math.round(u+(w-u)*t).toString(16).padStart(2,"0");
+      return `#${m(r1,r2)}${m(g1,g2)}${m(b1,b2)}`;
+    }
+  }
+  return RAMPA_NDVI[RAMPA_NDVI.length-1].cor;
+};
+const claro = hex => {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return (0.299*r + 0.587*g + 0.114*b) > 150;
+};
+/* Sem tratamento atribuído (geometria crua da estação), a própria quadra é a
+   categoria — a chave precisa bater com a que o _paletaAuto usou. */
+const chaveTrat = q => q.trat || q.id;
+const preenche = q => {
+  if(estado.pintura==="vazio") return "none";
+  if(estado.pintura==="ndvi") return q.ndvi==null ? "#e6e8e3" : corNdvi(q.ndvi);
+  const tr = TRATAMENTOS[chaveTrat(q)];
+  return tr ? tr.cor : "#c9ccc6";
+};
+
+/* =========================================================
+   PRANCHA — tudo dentro de um único SVG
+   ========================================================= */
+const W = 1000, H = 720, M = 42;
+const F_COND = "'IBM Plex Sans Condensed','Arial Narrow',Helvetica,sans-serif";
+const F_SERIF = "'IBM Plex Serif',Georgia,serif";
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+function desenhar(){
+  const QUADRAS = QS();   /* sombreia o conjunto todo: daqui pra baixo, só o selecionado */
+  const e = estado.el;
+  const temLegenda = e.legenda && estado.pintura !== "vazio";
+
+  const topoMapa = e.cabecalho ? 132 : M;
+  const baseMapa = e.rodape ? 604 : H - M;
+  const dirMapa  = temLegenda ? 742 : W - M;
+  const larg = dirMapa - M, alt = baseMapa - topoMapa;
+
+  /* projeção metros → unidades da prancha */
+  const xs = QUADRAS.flatMap(q=>q.pts.map(p=>p[0]));
+  const ys = QUADRAS.flatMap(q=>q.pts.map(p=>p[1]));
+  const minX=Math.min(...xs), maxX=Math.max(...xs);
+  const minY=Math.min(...ys), maxY=Math.max(...ys);
+  const pad = 26;
+  const k = Math.min((larg-2*pad)/(maxX-minX), (alt-2*pad)/(maxY-minY));
+  const offX = M + (larg-(maxX-minX)*k)/2;
+  const offY = topoMapa + (alt-(maxY-minY)*k)/2;
+  const px = x => offX + (x-minX)*k;
+  const py = y => offY + (maxY-y)*k;      /* y invertido: norte pra cima */
+
+  let s = "";
+
+  /* --- fundo --- */
+  s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+  if(estado.fundo==="satelite"){
+    s += `<g clip-path="url(#recorte)">
+      <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" fill="#6d7a4e"/>
+      <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" filter="url(#aereo)" opacity="0.95"/>
+    </g>`;
+  }
+
+  /* --- cabeçalho --- */
+  if(e.cabecalho){
+    s += `<text x="${M}" y="${M+16}" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.6" fill="#646c6b">${esc(ESTUDO.codigo)}</text>`;
+    s += `<text x="${M}" y="${M+44}" font-family="${F_COND}" font-size="22" font-weight="600" fill="#15181a">${esc(E().titulo)}</text>`;
+    s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc(E().local)} · ${esc(E().cultura)} · ${esc(E().safra)}</text>`;
+    s += `<line x1="${M}" y1="${topoMapa-16}" x2="${W-M}" y2="${topoMapa-16}" stroke="#15181a" stroke-width="1.1"/>`;
+  }
+
+  /* --- carreador --- (a geometria real ainda não traz traçado de carreador) */
+  if(e.carreador && CARREADOR && CARREADOR.length === 2){
+    s += `<line x1="${px(CARREADOR[0][0])}" y1="${py(CARREADOR[0][1])}" x2="${px(CARREADOR[1][0])}" y2="${py(CARREADOR[1][1])}"
+      stroke="${estado.fundo==="satelite"?"#f0ede4":"#9aa09a"}" stroke-width="7" stroke-dasharray="1 11" stroke-linecap="round" opacity="0.85"/>`;
+  }
+
+  /* --- quadras --- */
+  QUADRAS.forEach(q=>{
+    const d = q.pts.map(p=>`${px(p[0]).toFixed(1)},${py(p[1]).toFixed(1)}`).join(" ");
+    const f = preenche(q);
+    s += `<polygon points="${d}" fill="${f}" fill-opacity="${f==="none"?0:.86}"
+      stroke="${estado.fundo==="satelite"?"#ffffff":"#15181a"}" stroke-width="1.4" stroke-linejoin="round"/>`;
+  });
+
+  /* --- rótulos --- */
+  QUADRAS.forEach(q=>{
+    const [cx,cy] = centroide(q.pts);
+    const f = preenche(q);
+    const escuro = f!=="none" && !claro(f);
+    const cor = estado.fundo==="satelite" ? "#ffffff" : (escuro ? "#ffffff" : "#15181a");
+    const cor2 = estado.fundo==="satelite" ? "#e6e9e0" : (escuro ? "#e9ece8" : "#646c6b");
+    const desloca = (e.rotulos && e.areas) ? -5 : 5;
+    if(e.rotulos){
+      s += `<text x="${px(cx).toFixed(1)}" y="${(py(cy)+desloca).toFixed(1)}" text-anchor="middle"
+        font-family="${F_COND}" font-size="16" font-weight="600" fill="${cor}">${esc(q.id)}</text>`;
+    }
+    if(e.areas){
+      const y = py(cy) + (e.rotulos ? 14 : 5);
+      s += `<text x="${px(cx).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle"
+        font-family="${F_COND}" font-size="12" fill="${cor2}">${num(areaM2(q.pts)/10000)} ha</text>`;
+    }
+  });
+
+  /* --- seta de norte --- */
+  if(e.norte){
+    const nx = dirMapa - 34, ny = topoMapa + 30;
+    s += `<g>
+      <path d="M ${nx} ${ny-20} L ${nx+8} ${ny+13} L ${nx} ${ny+6} Z" fill="#15181a"/>
+      <path d="M ${nx} ${ny-20} L ${nx-8} ${ny+13} L ${nx} ${ny+6} Z" fill="#ffffff" stroke="#15181a" stroke-width="1.1"/>
+      <text x="${nx}" y="${ny+31}" text-anchor="middle" font-family="${F_COND}" font-size="13" font-weight="600" fill="#15181a">N</text>
+    </g>`;
+  }
+
+  /* --- barra de escala quadriculada --- */
+  if(e.escala){
+    const metros = 100, larguraBarra = metros*k, seg = larguraBarra/4;
+    const bx = M + 14, by = baseMapa - 30;
+    s += `<rect x="${bx-8}" y="${by-16}" width="${larguraBarra+16}" height="${38}" fill="#ffffff" fill-opacity="${estado.fundo==="satelite"?0.88:0}"/>`;
+    for(let i=0;i<4;i++){
+      s += `<rect x="${bx+i*seg}" y="${by}" width="${seg}" height="7"
+        fill="${i%2 ? "#ffffff" : "#15181a"}" stroke="#15181a" stroke-width="0.9"/>`;
+    }
+    [0,50,100].forEach(v=>{
+      s += `<text x="${bx + (v/metros)*larguraBarra}" y="${by-5}" text-anchor="middle"
+        font-family="${F_COND}" font-size="11" fill="#15181a">${v}</text>`;
+    });
+    s += `<text x="${bx+larguraBarra+12}" y="${by+7}" font-family="${F_COND}" font-size="11" fill="#646c6b">m</text>`;
+  }
+
+  /* --- legenda --- */
+  if(temLegenda){
+    const lx = dirMapa + 26;
+    let ly = topoMapa + 4;
+    s += `<line x1="${lx-14}" y1="${topoMapa-4}" x2="${lx-14}" y2="${baseMapa}" stroke="#d8dad5" stroke-width="1"/>`;
+
+    if(estado.pintura==="tratamento"){
+      s += `<text x="${lx}" y="${ly+8}" font-family="${F_COND}" font-size="11" font-weight="600" letter-spacing="1.3" fill="#646c6b">${t().tratamentos}</text>`;
+      ly += 26;
+      /* Só as categorias que aparecem no croqui, e só as que cabem na folha —
+         com a estação inteira selecionada seriam 32 entradas de 44 px. */
+      const usados = [];
+      QUADRAS.forEach(q => { const c = chaveTrat(q); if(usados.indexOf(c) < 0) usados.push(c); });
+      const cabem  = Math.max(1, Math.floor((baseMapa - ly - 18) / 44));
+      const mostra = usados.slice(0, cabem);
+      mostra.forEach(cod=>{
+        const tr = TRATAMENTOS[cod]; if(!tr) return;
+        s += `<rect x="${lx}" y="${ly}" width="13" height="13" fill="${tr.cor}" stroke="#15181a" stroke-width="0.8"/>`;
+        s += `<text x="${lx+20}" y="${ly+11}" font-family="${F_COND}" font-size="13" font-weight="600" fill="#15181a">${esc(cod)}</text>`;
+        const bruto = tr[estado.idioma];
+        if(bruto && bruto !== cod){
+          const nome = bruto.length>26 ? bruto.slice(0,25)+"…" : bruto;
+          s += `<text x="${lx}" y="${ly+27}" font-family="${F_COND}" font-size="11.5" fill="#646c6b">${esc(nome)}</text>`;
+          ly += 44;
+        } else ly += 22;
+      });
+      if(usados.length > mostra.length){
+        s += `<text x="${lx}" y="${ly+10}" font-family="${F_COND}" font-size="11.5" font-style="italic" fill="#646c6b">+${usados.length-mostra.length} ${esc(t().quadras)}</text>`;
+      }
+    } else {
+      s += `<text x="${lx}" y="${ly+8}" font-family="${F_COND}" font-size="11" font-weight="600" letter-spacing="1.3" fill="#646c6b">${t().ndvi}</text>`;
+      ly += 24;
+      const hBarra = 210;
+      s += `<rect x="${lx}" y="${ly}" width="18" height="${hBarra}" fill="url(#rampa)" stroke="#15181a" stroke-width="0.8"/>`;
+      [0.85,0.70,0.55,0.40,0.30].forEach((v,i)=>{
+        const y = ly + (i/4)*hBarra;
+        s += `<line x1="${lx+18}" y1="${y}" x2="${lx+24}" y2="${y}" stroke="#15181a" stroke-width="0.8"/>`;
+        s += `<text x="${lx+29}" y="${y+4}" font-family="${F_COND}" font-size="11.5" fill="#15181a">${num(v)}</text>`;
+      });
+      s += `<text x="${lx}" y="${ly+hBarra+26}" font-family="${F_COND}" font-size="11.5" fill="#646c6b">${t().fonteNdvi} · ${ESTUDO.dataNdvi[estado.idioma]}</text>`;
+    }
+  }
+
+  /* --- rodapé de rastreio --- */
+  if(e.rodape){
+    const total = QUADRAS.reduce((a,q)=>a+areaM2(q.pts),0)/10000;
+    s += `<line x1="${M}" y1="${baseMapa+26}" x2="${W-M}" y2="${baseMapa+26}" stroke="#15181a" stroke-width="1.1"/>`;
+    const linhas = [
+      `${QUADRAS.length} ${t().quadras} · ${num(total)} ${t().totais} · ${esc(ESTUDO.datum)}`,
+      `${t().geradoPor} ${esc(ESTUDO.autor)} ${t().em} ${ESTUDO.data[estado.idioma]} · Agracta`
+    ];
+    linhas.forEach((t,i)=>{
+      s += `<text x="${M}" y="${baseMapa+48+i*17}" font-family="${F_COND}" font-size="12" fill="#646c6b">${t}</text>`;
+    });
+    s += `<text x="${W-M}" y="${baseMapa+48}" text-anchor="end" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.4" fill="#15181a">${esc(ESTUDO.codigo)}</text>`;
+  }
+
+  /* --- marcas de corte: a prancha é para impressão --- */
+  const corte = 14, r = 8;
+  [[corte,corte,1,1],[W-corte,corte,-1,1],[corte,H-corte,1,-1],[W-corte,H-corte,-1,-1]].forEach(([x,y,dx,dy])=>{
+    s += `<path d="M ${x} ${y+dy*r} L ${x} ${y} L ${x+dx*r} ${y}" stroke="#b9bdb6" stroke-width="1" fill="none"/>`;
+  });
+
+  const defs = `<defs>
+    <clipPath id="recorte"><rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}"/></clipPath>
+    <filter id="aereo" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.022 0.05" numOctaves="4" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="
+        0.32 0.16 0 0 0.24
+        0.40 0.22 0 0 0.28
+        0.16 0.10 0 0 0.13
+        0    0    0 0 1"/>
+    </filter>
+    <linearGradient id="rampa" x1="0" y1="0" x2="0" y2="1">
+      ${RAMPA_NDVI.slice().reverse().map((p,i,a)=>`<stop offset="${(i/(a.length-1)*100).toFixed(0)}%" stop-color="${p.cor}"/>`).join("")}
+    </linearGradient>
+  </defs>`;
+
+  return `<svg id="prancha" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="Croqui das quadras do estudo ${esc(ESTUDO.codigo)}">${defs}${s}</svg>`;
+}
+
+/* =========================================================
+   LEGENDA DE FIGURA
+   ========================================================= */
+function textoLegenda(){
+  const QUADRAS = QS();
+  const d = t();
+  const total = num(QUADRAS.reduce((a,q)=>a+areaM2(q.pts),0)/10000);
+  const pintura = estado.pintura==="tratamento" ? d.pTrat
+                : estado.pintura==="ndvi" ? d.pNdvi : d.pVazio;
+  const fundo = estado.fundo==="croqui" ? d.croqui : d.aerea;
+  return `${fundo} ${d.frase(QUADRAS.length, total, pintura)} `
+       + `${E().local}, ${E().safra}. ${d.ref}: ${ESTUDO.datum}.`;
+}
+
+/* =========================================================
+   RENDER + EVENTOS
+   ========================================================= */
+const folha = document.getElementById("folha");
+const legendaFig = document.getElementById("legenda-fig");
+
+function render(){
+  if(!QS().length){
+    folha.innerHTML = '<div class="sem-quadra">Selecione ao menos uma quadra para montar o croqui.</div>';
+    legendaFig.textContent = "";
+    return;
+  }
+  folha.innerHTML = desenhar();
+  legendaFig.innerHTML = `<b>${t().figura}</b> — ${esc(textoLegenda())}`;
+}
+
+/* lista de quadras — montada a partir dos dados, não do HTML */
+const gQuadras = document.getElementById("g-quadras");
+function montaSeletor(){
+  gQuadras.innerHTML = TODAS.map(q =>
+    `<label class="opt${estado.sel[q.id] ? " ativo" : ""}">`
+    + `<input type="checkbox" data-q="${esc(q.id)}"${estado.sel[q.id] ? " checked" : ""}>`
+    + `<span class="marcador"></span>${esc(q.id)}`
+    + `<span class="opt-area">${num(areaM2(q.pts)/10000)} ha</span>`
+    + `</label>`).join("");
+}
+gQuadras.addEventListener("change", ev => {
+  const id = ev.target.dataset.q;
+  if(!id) return;
+  estado.sel[id] = ev.target.checked;
+  ev.target.closest(".opt").classList.toggle("ativo", ev.target.checked);
+  render();
+});
+document.getElementById("sel-todas").addEventListener("click", ()=>{
+  TODAS.forEach(q => estado.sel[q.id] = true); montaSeletor(); render();
+});
+document.getElementById("sel-nenhuma").addEventListener("click", ()=>{
+  TODAS.forEach(q => estado.sel[q.id] = false); montaSeletor(); render();
+});
+montaSeletor();
+
+function sincronizaClasses(grupo){
+  grupo.querySelectorAll(".opt").forEach(o=>{
+    o.classList.toggle("ativo", o.querySelector("input").checked);
+  });
+}
+
+document.getElementById("g-idioma").addEventListener("change", ev=>{
+  estado.idioma = ev.target.value;
+  ev.currentTarget.querySelectorAll(".seg").forEach(o=>{
+    o.classList.toggle("ativo", o.querySelector("input").checked);
+  });
+  render();
+});
+document.getElementById("g-fundo").addEventListener("change", ev=>{
+  estado.fundo = ev.target.value;
+  sincronizaClasses(ev.currentTarget); render();
+});
+document.getElementById("g-pintura").addEventListener("change", ev=>{
+  estado.pintura = ev.target.value;
+  sincronizaClasses(ev.currentTarget); render();
+});
+document.getElementById("g-elementos").addEventListener("change", ev=>{
+  estado.el[ev.target.dataset.el] = ev.target.checked ? 1 : 0;
+  sincronizaClasses(ev.currentTarget); render();
+});
+
+/* tela limpa */
+const btnLimpa = document.getElementById("btn-limpa");
+const btnSair = document.getElementById("btn-sair");
+btnLimpa.addEventListener("click", ()=>document.body.classList.add("limpa"));
+btnSair.addEventListener("click", ()=>document.body.classList.remove("limpa"));
+document.addEventListener("keydown", ev=>{
+  if(ev.key==="Escape") document.body.classList.remove("limpa");
+});
+
+/* aviso */
+let tAviso;
+function avisar(msg){
+  const a = document.getElementById("aviso");
+  a.textContent = msg; a.classList.add("ver");
+  clearTimeout(tAviso);
+  tAviso = setTimeout(()=>a.classList.remove("ver"), 2400);
+}
+
+/* exportação */
+function svgTexto(){
+  const el = document.getElementById("prancha").cloneNode(true);
+  el.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  el.setAttribute("width", W); el.setAttribute("height", H);
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(el);
+}
+function baixar(blob, nome){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nome; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+}
+const nomeArquivo = ext =>
+  `${ESTUDO.codigo}_${estado.idioma==="pt"?"croqui":"map"}_${estado.pintura}_${ESTUDO.data.en}.${ext}`;
+
+document.getElementById("btn-svg").addEventListener("click", ()=>{
+  baixar(new Blob([svgTexto()],{type:"image/svg+xml;charset=utf-8"}), nomeArquivo("svg"));
+  avisar("SVG baixado");
+});
+
+document.getElementById("btn-png").addEventListener("click", ()=>{
+  const escala = 3;
+  const blob = new Blob([svgTexto()],{type:"image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = ()=>{
+    const c = document.createElement("canvas");
+    c.width = W*escala; c.height = H*escala;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,c.width,c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    c.toBlob(b => { baixar(b, nomeArquivo("png")); avisar("PNG baixado — 3000 × 2160 px"); }, "image/png");
+  };
+  img.onerror = ()=>{ URL.revokeObjectURL(url); avisar("Não deu para gerar o PNG. O SVG funciona."); };
+  img.src = url;
+});
+
+document.getElementById("btn-legenda").addEventListener("click", async ()=>{
+  const txt = `${t().figura} — ${textoLegenda()}`;
+  try { await navigator.clipboard.writeText(txt); avisar("Legenda copiada"); }
+  catch { avisar("Copie manualmente: o navegador bloqueou a área de transferência."); }
+});
+
+render();
+</script>
+</body>
+</html>

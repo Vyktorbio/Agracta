@@ -2,11 +2,11 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v75';
+var CACHE = 'agracta-app-v76';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './', './index.html',
-  './styles.css?v=10', './app.js?v=5', './mapa-base.jpg',
+  './styles.css?v=11', './app.js?v=6', './mapa-base.jpg',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
@@ -14,6 +14,8 @@ var ASSETS = [
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=2',
   './manifest.webmanifest', './icon-192.png', './icon-512.png',
+  /* Núcleo estatístico auditado + as pranchas de figura do relatório */
+  './estatistica.js', './croqui.html', './prancha.html',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
   './estatistica/index.html', './estatistica/app.js', './estatistica/styles.css',
   './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js',

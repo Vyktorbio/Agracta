@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agracta — prancha de resultados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#f2f3f1; --folha:#ffffff; --tinta:#15181a; --grafite:#646c6b;
+  --linha:#d8dad5; --linha-forte:#b9bdb6; --realce:#1f4e5f;
+  --ui:"IBM Plex Sans",system-ui,sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",Helvetica,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+.topo{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--linha);background:var(--papel);position:sticky;top:0;z-index:20}
+.marca{font-family:var(--cond);font-weight:600;font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.modo{font-family:var(--cond);font-size:12px;color:var(--grafite);letter-spacing:.09em;text-transform:uppercase}
+@media (max-width:560px){.modo{display:none}}
+.topo .espaco{flex:1}
+
+.segmentado{display:flex;border:1px solid var(--linha-forte);border-radius:3px;overflow:hidden;background:var(--folha)}
+.seg{padding:5px 11px;font-family:var(--cond);font-size:12px;letter-spacing:.09em;font-weight:600;cursor:pointer;border-right:1px solid var(--linha-forte);transition:background .12s,color .12s}
+.seg:last-child{border-right:none}
+.seg input{position:absolute;opacity:0;width:0;height:0}
+.seg.ativo{background:var(--realce);color:#fff}
+.seg:focus-within{outline:2px solid var(--realce);outline-offset:2px}
+
+.palco{display:grid;grid-template-columns:1fr}
+@media (min-width:900px){.palco{grid-template-columns:250px 1fr;min-height:calc(100vh - 45px)}}
+.painel{padding:18px;border-bottom:1px solid var(--linha);order:2}
+@media (min-width:900px){.painel{order:1;border-bottom:none;border-right:1px solid var(--linha);overflow-y:auto}}
+.grupo{margin-bottom:22px}
+.grupo>h2{font-family:var(--cond);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--grafite);margin:0 0 9px}
+.opcoes{display:flex;flex-direction:column;gap:5px}
+.opt{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--linha);border-radius:4px;background:var(--folha);cursor:pointer;font-size:13px;transition:border-color .12s,background .12s}
+.opt:hover{border-color:var(--linha-forte)}
+.opt input{position:absolute;opacity:0;width:0;height:0}
+.opt .marcador{width:13px;height:13px;flex:none;border:1px solid var(--linha-forte);border-radius:50%;background:var(--folha)}
+.opt.ativo{border-color:var(--realce);background:#eef3f4}
+.opt.ativo .marcador{background:var(--realce);border-color:var(--realce);box-shadow:inset 0 0 0 2px var(--folha)}
+.opt:focus-within{outline:2px solid var(--realce);outline-offset:2px}
+.dica{font-size:12px;color:var(--grafite);margin:8px 0 0}
+.botoes{display:flex;flex-direction:column;gap:6px}
+.btn{font-family:var(--ui);font-size:13px;font-weight:500;padding:10px 12px;border-radius:4px;cursor:pointer;text-align:left;border:1px solid var(--realce);background:var(--realce);color:#fff;transition:opacity .12s}
+.btn:hover{opacity:.88}
+.btn.secundario{background:var(--folha);color:var(--tinta);border-color:var(--linha-forte)}
+.btn:focus-visible{outline:2px solid var(--realce);outline-offset:2px}
+
+.mesa{order:1;padding:22px 14px 40px;display:flex;flex-direction:column;align-items:center;gap:14px}
+@media (min-width:900px){.mesa{order:2;padding:32px 32px 48px}}
+.folha{width:100%;max-width:1040px;background:var(--folha);box-shadow:0 1px 2px rgba(21,24,26,.06),0 10px 28px rgba(21,24,26,.09)}
+.folha svg{display:block;width:100%;height:auto}
+.legenda-fig{max-width:1040px;font-family:var(--serif);font-size:13.5px;line-height:1.6}
+.legenda-fig b{font-weight:400;font-style:italic}
+.mini{font-family:var(--cond);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:transparent;cursor:pointer;color:var(--grafite)}
+.mini:hover{color:var(--tinta);border-color:var(--tinta)}
+
+body.limpa .topo,body.limpa .painel,body.limpa .legenda-fig,body.limpa .acoes{display:none}
+body.limpa .mesa{padding:0;min-height:100vh;justify-content:center;background:#26292b}
+.sair-limpa{display:none;position:fixed;right:14px;bottom:14px;z-index:40;font-family:var(--cond);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:9px 13px;border-radius:3px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);color:#fff;cursor:pointer}
+body.limpa .sair-limpa{display:block}
+.aviso{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:60;background:var(--tinta);color:#fff;font-size:13px;padding:9px 15px;border-radius:4px;opacity:0;pointer-events:none;transition:opacity .2s}
+.aviso.ver{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <span class="marca">Agracta</span>
+  <span class="modo">prancha de resultados</span>
+  <span class="espaco"></span>
+  <div class="segmentado" id="g-idioma">
+    <label class="seg ativo"><input type="radio" name="idioma" value="pt" checked>PT</label>
+    <label class="seg"><input type="radio" name="idioma" value="en">EN</label>
+  </div>
+  <button class="mini" id="btn-limpa">Tela limpa</button>
+</header>
+
+<div class="palco">
+  <aside class="painel">
+    <div class="grupo">
+      <h2>Vista</h2>
+      <div class="opcoes" id="g-vista">
+        <label class="opt ativo"><input type="radio" name="vista" value="eficacia" checked><span class="marcador"></span>Eficácia</label>
+        <label class="opt"><input type="radio" name="vista" value="sev-barras"><span class="marcador"></span>Severidade — barras</label>
+        <label class="opt"><input type="radio" name="vista" value="sev-abbott"><span class="marcador"></span>Severidade + Abbott</label>
+        <label class="opt"><input type="radio" name="vista" value="sev-avaliacao"><span class="marcador"></span>Severidade por avaliação — barras</label>
+        <label class="opt"><input type="radio" name="vista" value="sev-curva"><span class="marcador"></span>Severidade — curva de progresso</label>
+        <label class="opt"><input type="radio" name="vista" value="sev-paineis"><span class="marcador"></span>Severidade — um painel por tratamento</label>
+        <label class="opt"><input type="radio" name="vista" value="tabela"><span class="marcador"></span>Tabela de resultados</label>
+        <label class="opt"><input type="radio" name="vista" value="completa"><span class="marcador"></span>Página completa (A4)</label>
+      </div>
+      <p class="dica">As duas primeiras são as que o cliente resolve em cinco segundos. A A4 é a que vai pro relatório. A curva e os painéis mostram a AACPD como área sombreada.</p>
+    </div>
+
+    <div class="grupo">
+      <h2>Patamar de decisão</h2>
+      <div class="opcoes" id="g-patamar">
+        <label class="opt"><input type="radio" name="patamar" value="0"><span class="marcador"></span>Sem linha</label>
+        <label class="opt"><input type="radio" name="patamar" value="70"><span class="marcador"></span>70% de controle</label>
+        <label class="opt ativo"><input type="radio" name="patamar" value="80" checked><span class="marcador"></span>80% de controle</label>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <h2>Exportar</h2>
+      <div class="botoes">
+        <button class="btn" id="btn-svg">Baixar SVG (vetorial)</button>
+        <button class="btn secundario" id="btn-png">Baixar PNG (3×)</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="mesa">
+    <div class="folha" id="folha"></div>
+    <p class="legenda-fig" id="legenda-fig"></p>
+    <div class="acoes"><button class="mini" id="btn-legenda">Copiar legenda</button></div>
+  </main>
+</div>
+
+<button class="sair-limpa" id="btn-sair">Sair da tela limpa</button>
+<div class="aviso" id="aviso"></div>
+
+<script src="estatistica.js"></script>
+<script>
+/* =====================================================================
+   1. DELINEAMENTO E DADOS
+   Dados simulados com semente fixa — a estatística abaixo é real,
+   calculada a partir deles. Trocar por dados do Firestore no app.
+   ===================================================================== */
+let ESTUDO = {
+  codigo:"PL-2026-0184", autor:"Machado, V. C. — CRBio-01",
+  data:{pt:"06/08/2026",en:"2026-08-06"},
+  delineamento:{blocos:4, parcelaM2:30, parcela:"5,0 × 6,0 m", caldaLha:150},
+  pt:{titulo:"Eficácia de fungicidas no controle de ferrugem-asiática em soja",
+      local:"Estação Experimental Plantec — Iracemápolis, SP",
+      cultura:"Soja — BMX Potência RR", safra:"Safra 2025/26",
+      escala:"Escala diagramática de Godoy et al. (2006)"},
+  en:{titulo:"Efficacy of fungicides against Asian soybean rust",
+      local:"Plantec Experimental Station — Iracemápolis, SP, Brazil",
+      cultura:"Soybean — BMX Potência RR", safra:"2025/26 season",
+      escala:"Diagrammatic scale of Godoy et al. (2006)"}
+};
+
+let TRAT = [
+  {id:"T1", cor:"#1f4e5f", pt:"Testemunha", en:"Untreated check",
+   ia:"—", dose:0, gia:0, base:[8.4,29.0,55.0], testemunha:true},
+  {id:"T2", cor:"#4e8b6b", pt:"Azoxistrobina + ciproconazol", en:"Azoxystrobin + cyproconazole",
+   ia:"200 + 80 g/L", dose:0.30, gia:"60 + 24", base:[2.8,7.2,12.8]},
+  {id:"T3", cor:"#9dbf6a", pt:"Trifloxistrobina + protioconazol", en:"Trifloxystrobin + prothioconazole",
+   ia:"150 + 175 g/L", dose:0.40, gia:"60 + 70", base:[1.2,3.0,5.4]},
+  {id:"T4", cor:"#e0c86a", pt:"Mancozebe", en:"Mancozeb",
+   ia:"750 g/kg", dose:2.00, gia:"1500", base:[6.0,20.0,39.7]},
+  {id:"T5", cor:"#b5713a", pt:"Picoxistrobina + benzovindiflupir", en:"Picoxystrobin + benzovindiflupyr",
+   ia:"200 + 100 g/L", dose:0.30, gia:"60 + 30", base:[1.5,3.8,6.6]},
+  {id:"T6", cor:"#7a5a86", pt:"Fluxapiroxade + piraclostrobina", en:"Fluxapyroxad + pyraclostrobin",
+   ia:"167 + 333 g/L", dose:0.35, gia:"58 + 117", base:[1.4,3.4,6.1]}
+];
+
+let DAA = [7,14,21];
+let APLICACOES = [
+  {n:1, data:{pt:"12/01/2026",en:"2026-01-12"}, estadio:"R1", vol:150, temp:24.0, ur:72, vento:4.2, bico:"AXI 110-02"},
+  {n:2, data:{pt:"26/01/2026",en:"2026-01-26"}, estadio:"R3", vol:150, temp:26.5, ur:65, vento:5.8, bico:"AXI 110-02"}
+];
+let AVALIACOES = [
+  {daa:7,  data:{pt:"02/02/2026",en:"2026-02-02"}},
+  {daa:14, data:{pt:"09/02/2026",en:"2026-02-09"}},
+  {daa:21, data:{pt:"16/02/2026",en:"2026-02-16"}}
+];
+
+const PALETA_TRAT = ["#1f4e5f","#4e8b6b","#9dbf6a","#e0c86a","#b5713a","#7a5a86",
+                     "#3d7ea6","#6b8f3a","#c9884e","#8c5b7a","#4a7c6f","#a8603f"];
+
+/* gerador determinístico — mesmos números a cada abertura */
+let _s = 20260806;
+const rnd = () => (_s = (_s*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+const normal = () => {
+  const u = Math.max(rnd(), 1e-9), v = rnd();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+};
+const FATOR_BLOCO = [0.95, 0.88, 1.12, 1.05];
+
+/* severidade por parcela: trat × bloco × data */
+let SEV = TRAT.map(t => FATOR_BLOCO.map(fb =>
+  t.base.map(m => Math.max(0.1, m * fb * (1 + 0.07*normal())))
+));
+let BLOCOS = FATOR_BLOCO.map((_,i)=> i+1);
+
+/* ------------------------------------------------------ dados reais ------
+   Quando o Agracta abre a prancha, ele deixa o estudo no localStorage. Sem
+   handoff a página segue com a demonstração acima — assim ela continua
+   abrindo sozinha, para desenhar o layout sem depender do app. */
+(function(){
+  let h = null;
+  try{ h = JSON.parse(localStorage.getItem("agracta-prancha-handoff")||"null"); }catch(e){}
+  if(!h || !Array.isArray(h.tratamentos) || !h.tratamentos.length) return;
+  if(!Array.isArray(h.sev) || !Array.isArray(h.daa) || h.daa.length < 2) return;
+  ESTUDO = Object.assign({}, ESTUDO, h.estudo||{});
+  TRAT   = h.tratamentos.map((t,i)=> Object.assign(
+             { cor: PALETA_TRAT[i % PALETA_TRAT.length], ia:"—", dose:0, gia:0 },
+             t, { pt: t.pt||t.nome||t.id, en: t.en||t.nome||t.id }));
+  DAA    = h.daa;
+  BLOCOS = h.blocos && h.blocos.length ? h.blocos : (h.sev[0]||[]).map((_,i)=> i+1);
+  SEV    = h.sev;
+  if(Array.isArray(h.aplicacoes) && h.aplicacoes.length) APLICACOES = h.aplicacoes;
+  if(Array.isArray(h.avaliacoes) && h.avaliacoes.length) AVALIACOES = h.avaliacoes;
+  if(!TRAT.some(t=>t.testemunha) && TRAT.length) TRAT[0].testemunha = true;
+})();
+
+/* AACPD por parcela — trapézios sobre os DAA */
+const aacpd = serie => {
+  let a = 0;
+  for(let i=0;i<serie.length-1;i++) a += (serie[i]+serie[i+1])/2 * (DAA[i+1]-DAA[i]);
+  return a;
+};
+/* AACPD agora vem do Est.analisar() lá embaixo, junto com o resto. */
+
+/* =====================================================================
+   2. ESTATÍSTICA — DBC, ANOVA sobre √(AACPD), Tukey
+   ===================================================================== */
+const media = v => v.reduce((a,b)=>a+b,0)/v.length;
+
+function anovaDBC(Y){                       /* Y[trat][bloco] */
+  const k = Y.length, r = Y[0].length, N = k*r;
+  const todos = Y.flat();
+  const G = media(todos);
+  const mT = Y.map(media);
+  const mB = Array.from({length:r}, (_,j)=> media(Y.map(l=>l[j])));
+  const SQT = todos.reduce((a,y)=>a+(y-G)**2, 0);
+  const SQtrat = r * mT.reduce((a,m)=>a+(m-G)**2, 0);
+  const SQbloco = k * mB.reduce((a,m)=>a+(m-G)**2, 0);
+  const SQerro = SQT - SQtrat - SQbloco;
+  const glT = k-1, glB = r-1, glE = (k-1)*(r-1);
+  const QMtrat = SQtrat/glT, QMbloco = SQbloco/glB, QMerro = SQerro/glE;
+  return {k,r,N,G,mT,SQtrat,SQbloco,SQerro,SQT,glT,glB,glE,
+          QMtrat,QMbloco,QMerro,
+          F:QMtrat/QMerro, Fb:QMbloco/QMerro,
+          CV:100*Math.sqrt(QMerro)/G};
+}
+
+/* p-valor da F via beta incompleta regularizada (Numerical Recipes) */
+function lgamma(x){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,
+           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=x, tmp=x+5.5; tmp-=(x+0.5)*Math.log(tmp);
+  let ser=1.000000000190015;
+  for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return -tmp+Math.log(2.5066282746310005*ser/x);
+}
+function betacf(a,b,x){
+  const MAX=200, EPS=3e-14, FPMIN=1e-300;
+  let qab=a+b, qap=a+1, qam=a-1, c=1, d=1-qab*x/qap;
+  if(Math.abs(d)<FPMIN) d=FPMIN;
+  d=1/d; let h=d;
+  for(let m=1;m<=MAX;m++){
+    const m2=2*m;
+    let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<FPMIN) d=FPMIN;
+    c=1+aa/c; if(Math.abs(c)<FPMIN) c=FPMIN;
+    d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<FPMIN) d=FPMIN;
+    c=1+aa/c; if(Math.abs(c)<FPMIN) c=FPMIN;
+    d=1/d; const del=d*c; h*=del;
+    if(Math.abs(del-1)<EPS) break;
+  }
+  return h;
+}
+function betai(a,b,x){
+  if(x<=0) return 0; if(x>=1) return 1;
+  const bt = Math.exp(lgamma(a+b)-lgamma(a)-lgamma(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x < (a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+const pF = (F,d1,d2) => betai(d2/2, d1/2, d2/(d2+d1*F));
+
+/* amplitude studentizada q(0,05; k; gl) — tabela + interpolação em 1/gl */
+const QTAB = {
+  10:[3.151,3.877,4.327,4.654,4.912,5.124,5.305,5.461,5.598],
+  12:[3.081,3.773,4.199,4.508,4.751,4.950,5.119,5.265,5.395],
+  15:[3.014,3.674,4.076,4.367,4.595,4.782,4.940,5.077,5.198],
+  20:[2.950,3.578,3.958,4.232,4.445,4.620,4.768,4.895,5.008],
+  24:[2.919,3.532,3.901,4.166,4.373,4.541,4.684,4.807,4.915],
+  30:[2.888,3.486,3.845,4.102,4.302,4.464,4.602,4.720,4.824],
+  60:[2.829,3.399,3.737,3.977,4.163,4.314,4.441,4.550,4.646]
+};
+function qTukey(k, gl){
+  const idx = Math.min(Math.max(k,2),10) - 2;
+  const gls = Object.keys(QTAB).map(Number).sort((a,b)=>a-b);
+  if(gl<=gls[0]) return QTAB[gls[0]][idx];
+  if(gl>=gls[gls.length-1]) return QTAB[gls[gls.length-1]][idx];
+  for(let i=0;i<gls.length-1;i++){
+    if(gl>=gls[i] && gl<=gls[i+1]){
+      const t=(1/gl-1/gls[i])/(1/gls[i+1]-1/gls[i]);
+      return QTAB[gls[i]][idx] + t*(QTAB[gls[i+1]][idx]-QTAB[gls[i]][idx]);
+    }
+  }
+  return QTAB[15][idx];
+}
+
+/* letras de Tukey — menor média recebe "a" (menos doença é melhor) */
+function letrasTukey(medias, dms){
+  const n = medias.length;
+  const ordem = medias.map((m,i)=>({m,i})).sort((a,b)=>a.m-b.m);
+  const grupos = [];
+  ordem.forEach((el,pos)=>{
+    if(grupos.some(g => g.includes(pos))) return;
+    const g = [pos];
+    for(let j=pos+1;j<n;j++){
+      if(ordem[j].m - ordem[pos].m <= dms && g.every(p => ordem[j].m - ordem[p].m <= dms)) g.push(j);
+      else break;
+    }
+    grupos.push(g);
+  });
+  const letras = Array(n).fill("");
+  grupos.forEach((g,gi)=>{
+    const L = String.fromCharCode(97+gi);
+    g.forEach(pos => { letras[ordem[pos].i] += L; });
+  });
+  /* garante que médias não diferentes compartilhem letra */
+  for(let a=0;a<n;a++) for(let b=0;b<n;b++){
+    if(a!==b && Math.abs(medias[a]-medias[b])<=dms && !letras[a].split("").some(c=>letras[b].includes(c))){
+      letras[b] += letras[a][0];
+    }
+  }
+  return letras.map(s => [...new Set(s)].sort().join(""));
+}
+
+/* --- roda a análise ---
+   A matemática sai de estatistica.js (window.Est), o mesmo núcleo com testes
+   de oráculo em test_estatistica.js. As funções locais de ANOVA/Tukey acima
+   ficaram só como referência do protótipo — não alimentam mais a prancha. */
+const _lanc = [];
+TRAT.forEach((t,i)=> BLOCOS.forEach((b,j)=> DAA.forEach((d,k)=>
+  _lanc.push({ trat:t.id, bloco:b, tempo:d, valor:SEV[i][j][k] }))));
+const R = Est.analisar({
+  tratamentos: TRAT.map(t=>t.id),
+  blocos: BLOCOS,
+  tempos: DAA,
+  lancamentos: _lanc,
+  testemunha: (TRAT.find(t=>t.testemunha)||TRAT[0]).id,
+  transformacao: "sqrt",
+  menosEhMelhor: true          /* severidade: menos é melhor, "a" vai pro menor */
+});
+const AACPD = R.aacpdParcela;
+const AN = { k:R.anova.k, r:R.anova.r, N:R.anova.N, G:R.anova.G, mT:R.anova.mediasTrat,
+             SQtrat:R.anova.SQtrat, SQbloco:R.anova.SQbloco, SQerro:R.anova.SQerro, SQT:R.anova.SQtotal,
+             glT:R.anova.glTrat, glB:R.anova.glBloco, glE:R.anova.glErro,
+             QMtrat:R.anova.QMtrat, QMbloco:R.anova.QMbloco, QMerro:R.anova.QMerro,
+             F:R.anova.F, Fb:R.anova.Fbloco, CV:R.anova.CV };
+const P = R.anova.p;
+const Q = R.q;
+const DMS = R.dms;
+const LETRAS = R.letras;
+
+const mAACPD = R.mediaAACPD;
+const mSEV = R.mediaSeveridade;
+const iTest = TRAT.findIndex(t=>t.testemunha);
+const EFIC = R.eficacia.map((e,i)=> i===iTest ? 0 : e);   /* Abbott sobre a AACPD */
+
+/* Abbott sobre a severidade final — caminho independente da AACPD */
+const ULT = DAA.length - 1;
+const EFIC_SEV = TRAT.map((_,i) => i === iTest ? null
+  : 100*(mSEV[iTest][ULT] - mSEV[i][ULT]) / mSEV[iTest][ULT]);
+
+/* =====================================================================
+   3. IDIOMA
+   ===================================================================== */
+const L = {
+ pt:{efic:"Eficácia de controle (%)", trat:"Tratamento", produto:"Produto comercial",
+     dose:"Dose (L ou kg/ha)", gia:"g i.a./ha", caldaP:"Calda/parcela (mL)", prodP:"Produto/parcela (mL)",
+     apl:"Aplicações", avaliacoes:"Avaliações — severidade média (%)",
+     nApl:"#", dataL:"Data", estadio:"Estádio", vol:"Volume (L/ha)", temp:"T (°C)", ur:"UR (%)", vento:"Vento (km/h)", bico:"Ponta",
+     aacpd:"AACPD", eficC:"Efic. (%)", grupo:"Tukey",
+     anova:"Análise de variância — √(AACPD)", fv:"Fonte de variação", gl:"GL", sq:"SQ", qm:"QM", f:"F", p:"p",
+     blocos:"Blocos", residuo:"Resíduo", total:"Total",
+     rodapeStat:(cv,dms)=>`Tukey (α = 0,05) sobre √(AACPD); médias na escala original. CV = ${cv}% · DMS = ${dms} · 4 blocos ao acaso`,
+     patamar:"patamar comercial", testemNota:m=>`Testemunha: AACPD ${m} · severidade final ${fmt(mSEV[iTest][2],1)}%`,
+     medias:"Médias seguidas da mesma letra não diferem entre si.",
+     tituloEfic:"Eficácia de controle sobre a AACPD", tituloTab:"Resultados por tratamento",
+     tituloSev:"Curva de progresso da doença",
+     eixoSev:"Severidade (%)", eixoDAA:"Dias após a 2ª aplicação",
+     notaSev:"Média de 4 blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.",
+     notaSevSimples:"Severidade média de 4 blocos por tratamento.",
+     tituloSevB:"Severidade por tratamento",
+     tituloSevA:"Severidade e eficácia de controle",
+     tituloSevAv:"Severidade por avaliação",
+     eixoAval:"Avaliação",
+     notaSevAv:"Severidade média de 4 blocos em cada avaliação.",
+     legSevAval:()=>`Severidade média de ferrugem-asiática por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de 4 blocos. ${ESTUDO.pt.escala}.`,
+     colEficA:"Eficácia", severidadeL:"Severidade",
+     notaSevA:daa=>`Severidade média aos ${daa} DAA · eficácia de Abbott calculada sobre a severidade · média de 4 blocos`,
+     legSevAbbott:()=>`Severidade média de ferrugem-asiática e eficácia de controle por tratamento aos ${DAA[DAA.length-1]} dias após a segunda aplicação, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a severidade média de 4 blocos, em relação à testemunha. ${ESTUDO.pt.escala}.`,
+     notaSevB:daa=>`Severidade média aos ${daa} DAA · média de 4 blocos`,
+     legSevSimples:()=>`Severidade média de ferrugem-asiática por tratamento aos ${DAA[DAA.length-1]} dias após a segunda aplicação, estudo ${ESTUDO.codigo}. Cada barra é a média de 4 blocos. ${ESTUDO.pt.escala}.`,
+     aplic:"2ª aplicação",
+     legSev:()=>`Curva de progresso da severidade de ferrugem-asiática por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de 4 blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
+     figura:"Figura", tabela:"Tabela",
+     legEfic:()=>`Eficácia de controle (Abbott) calculada sobre a área abaixo da curva de progresso da doença, estudo ${ESTUDO.codigo}. Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`,
+     legTab:()=>`Severidade média, AACPD, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`,
+     legComp:()=>`Ficha de resultados do estudo ${ESTUDO.codigo}: delineamento, tratamentos e doses, condições de aplicação, avaliações de severidade, AACPD, eficácia e análise de variância.`,
+     geradoPor:"Gerado por", em:"em", ref:"Delineamento", dbc:"blocos ao acaso", parc:"parcela"},
+ en:{efic:"Control efficacy (%)", trat:"Treatment", produto:"Commercial product",
+     dose:"Rate (L or kg/ha)", gia:"g a.i./ha", caldaP:"Spray mix/plot (mL)", prodP:"Product/plot (mL)",
+     apl:"Applications", avaliacoes:"Assessments — mean severity (%)",
+     nApl:"#", dataL:"Date", estadio:"Growth stage", vol:"Volume (L/ha)", temp:"T (°C)", ur:"RH (%)", vento:"Wind (km/h)", bico:"Nozzle",
+     aacpd:"AUDPC", eficC:"Efficacy (%)", grupo:"Tukey",
+     anova:"Analysis of variance — √(AUDPC)", fv:"Source of variation", gl:"df", sq:"SS", qm:"MS", f:"F", p:"p",
+     blocos:"Blocks", residuo:"Residual", total:"Total",
+     rodapeStat:(cv,dms)=>`Tukey (α = 0.05) on √(AUDPC); means on the original scale. CV = ${cv}% · HSD = ${dms} · randomised complete block, 4 blocks`,
+     patamar:"commercial threshold", testemNota:m=>`Untreated check: AUDPC ${m} · final severity ${fmt(mSEV[iTest][2],1)}%`,
+     medias:"Means followed by the same letter do not differ.",
+     tituloEfic:"Control efficacy based on AUDPC", tituloTab:"Results by treatment",
+     tituloSev:"Disease progress curve",
+     eixoSev:"Severity (%)", eixoDAA:"Days after second application",
+     notaSev:"Mean of 4 blocks ± standard error. The shaded area under each curve is the AUDPC.",
+     notaSevSimples:"Mean severity of 4 blocks per treatment.",
+     tituloSevB:"Severity by treatment",
+     tituloSevA:"Severity and control efficacy",
+     tituloSevAv:"Severity by assessment",
+     eixoAval:"Assessment",
+     notaSevAv:"Mean severity of 4 blocks at each assessment.",
+     legSevAval:()=>`Mean Asian soybean rust severity by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of 4 blocks. ${ESTUDO.en.escala}.`,
+     colEficA:"Efficacy", severidadeL:"Severity",
+     notaSevA:daa=>`Mean severity at ${daa} DAA · Abbott efficacy calculated on severity · mean of 4 blocks`,
+     legSevAbbott:()=>`Mean Asian soybean rust severity and control efficacy by treatment at ${DAA[DAA.length-1]} days after the second application, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean severity of 4 blocks, relative to the untreated check. ${ESTUDO.en.escala}.`,
+     notaSevB:daa=>`Mean severity at ${daa} DAA · mean of 4 blocks`,
+     legSevSimples:()=>`Mean Asian soybean rust severity by treatment at ${DAA[DAA.length-1]} days after the second application, study ${ESTUDO.codigo}. Each bar is the mean of 4 blocks. ${ESTUDO.en.escala}.`,
+     aplic:"2nd application",
+     legSev:()=>`Disease progress curves for Asian soybean rust severity by treatment, study ${ESTUDO.codigo}. Points are means of 4 blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
+     figura:"Figure", tabela:"Table",
+     legEfic:()=>`Control efficacy (Abbott) calculated on the area under the disease progress curve, study ${ESTUDO.codigo}. Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`,
+     legTab:()=>`Mean severity, AUDPC, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`,
+     legComp:()=>`Results sheet for study ${ESTUDO.codigo}: design, treatments and rates, application conditions, severity assessments, AUDPC, efficacy and analysis of variance.`,
+     geradoPor:"Generated by", em:"on", ref:"Design", dbc:"randomised complete blocks", parc:"plot"}
+};
+
+const estado = {idioma:"pt", vista:"eficacia", patamar:80};
+/* modo de severidade derivado da vista: barras | abbott | curva | paineis | null */
+const modoSev = () => estado.vista.startsWith("sev-") ? estado.vista.slice(4) : null;
+const t = () => L[estado.idioma];
+const E = () => ESTUDO[estado.idioma];
+function fmt(v,c=2){
+  const s = Number(v).toFixed(c);
+  return estado.idioma==="pt" ? s.replace(".", ",") : s;
+}
+const pTexto = () => P < 0.001 ? (estado.idioma==="pt"?"< 0,001":"< 0.001") : fmt(P,3);
+const nome = tr => tr[estado.idioma];
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+/* =====================================================================
+   4. DESENHO
+   ===================================================================== */
+const FC = "'IBM Plex Sans Condensed','Arial Narrow',Helvetica,sans-serif";
+const FM = "'IBM Plex Mono',ui-monospace,Menlo,monospace";
+const TINTA="#15181a", GRAF="#646c6b", LINHA="#d8dad5";
+
+const txt = (x,y,s,o={}) =>
+  `<text x="${x}" y="${y}" font-family="${o.f||FC}" font-size="${o.t||12}"`
+  + (o.w?` font-weight="${o.w}"`:"") + (o.a?` text-anchor="${o.a}"`:"")
+  + (o.ls?` letter-spacing="${o.ls}"`:"")
+  + ` fill="${o.c||TINTA}">${o.raw?s:esc(s)}</text>`;
+const rule = (x,y,w,sw=1) => `<line x1="${x}" y1="${y}" x2="${x+w}" y2="${y}" stroke="${TINTA}" stroke-width="${sw}"/>`;
+const ruleL = (x,y,w) => `<line x1="${x}" y1="${y}" x2="${x+w}" y2="${y}" stroke="${LINHA}" stroke-width="1"/>`;
+
+/* rótulo de seção */
+function secTitulo(x,y,w,titulo){
+  return txt(x,y,titulo,{t:12,w:600,ls:1.4,c:GRAF}) + rule(x,y+9,w,1.1);
+}
+
+/* tabela estilo booktabs */
+function tabela(x, y, cols, linhas, o={}){
+  const th = o.th||22, rh = o.rh||21, fs = o.fs||12.5;
+  const larg = cols.reduce((a,c)=>a+c.w,0);
+  let s = "", cy = y;
+  s += rule(x, cy, larg, 1.1); cy += th - 6;
+  let cx = x;
+  cols.forEach(c=>{
+    const ax = c.a==="right" ? cx+c.w-6 : c.a==="middle" ? cx+c.w/2 : cx;
+    s += txt(ax, cy, c.t, {t:fs-0.5, w:600, a:c.a==="right"?"end":c.a==="middle"?"middle":null, c:GRAF});
+    cx += c.w;
+  });
+  cy += 8; s += rule(x, cy, larg, 0.8); cy += 4;
+  linhas.forEach((ln,i)=>{
+    cy += rh;
+    if(o.zebra && i%2===1) s = `<rect x="${x}" y="${cy-rh+5}" width="${larg}" height="${rh}" fill="#f7f8f6"/>` + s;
+    let cx2 = x;
+    cols.forEach((c,j)=>{
+      const cel = ln[j];
+      const v = (cel && cel.v !== undefined) ? cel.v : cel;
+      const cor = (cel && cel.c) || TINTA;
+      const peso = (cel && cel.w) || null;
+      const font = (cel && cel.f) || FC;
+      const ax = c.a==="right" ? cx2+c.w-6 : c.a==="middle" ? cx2+c.w/2 : cx2;
+      if(cel && cel.swatch) s += `<rect x="${cx2}" y="${cy-10}" width="11" height="11" fill="${cel.swatch}" stroke="${TINTA}" stroke-width="0.7"/>`;
+      s += txt(ax + (cel&&cel.swatch?17:0), cy, v, {t:fs, f:font, w:peso, a:c.a==="right"?"end":c.a==="middle"?"middle":null, c:cor});
+      cx2 += c.w;
+    });
+    if(i < linhas.length-1) s += ruleL(x, cy+6, larg);
+  });
+  cy += 12; s += rule(x, cy, larg, 1.1);
+  return {svg:s, h:cy-y, larg};
+}
+
+/* --- cabeçalho da prancha --- */
+function secCabecalho(x,y,w){
+  let s = txt(x, y+12, ESTUDO.codigo, {t:12,w:600,ls:1.6,c:GRAF});
+  s += txt(x, y+40, E().titulo, {t:21,w:600});
+  s += txt(x, y+62, `${E().local} · ${E().cultura} · ${E().safra}`, {t:13.5,c:GRAF});
+  s += rule(x, y+80, w, 1.1);
+  return {svg:s, h:88};
+}
+
+/* --- gráfico de eficácia --- */
+/* Geometria das barras horizontais em função de quantos tratamentos existem.
+   Um ensaio de 30 tratamentos gera uma prancha mais alta — o que está certo:
+   é figura de relatório, não tela. O que não pode é espremer texto. */
+function geoBarras(n){
+  if(n <= 8)  return {h:44, gap:20, fId:18, fNome:13,   fVal:19, linhas:3};
+  if(n <= 14) return {h:32, gap:13, fId:15, fNome:11.5, fVal:16, linhas:2};
+  if(n <= 22) return {h:25, gap:9,  fId:13, fNome:10.5, fVal:13.5, linhas:1};
+  return             {h:21, gap:7,  fId:12, fNome:10,   fVal:12, linhas:1};
+}
+
+function secEficacia(x, y, w){
+  const d = t();
+  const dados = TRAT.map((tr,i)=>({tr, ef:EFIC[i], letra:LETRAS[i]}))
+                    .filter(o=>!o.tr.testemunha)
+                    .sort((a,b)=>b.ef-a.ef);
+  const G = geoBarras(dados.length);
+  const rotW = Math.min(300, w*0.30);
+  const x0 = x + rotW, larg = w - rotW - 66;
+  const gap = G.gap;
+  const hBarra = G.h;
+  const px = v => x0 + (v/100)*larg;
+  let s = "", cy = y + 26;
+
+  /* eixo */
+  s += ruleL(x0, cy-14, larg);
+  for(let v=0; v<=100; v+=20){
+    s += txt(px(v), cy-20, fmt(v,0), {t:11, a:"middle", c:GRAF});
+    s += `<line x1="${px(v)}" y1="${cy-14}" x2="${px(v)}" y2="${cy-10}" stroke="${LINHA}" stroke-width="1"/>`;
+  }
+  s += txt(x0+larg+10, cy-20, "%", {t:11, c:GRAF});
+
+  const yFim = cy + dados.length*(hBarra+gap);
+
+  /* linha de patamar, atrás das barras */
+  if(estado.patamar > 0){
+    s += `<line x1="${px(estado.patamar)}" y1="${cy-14}" x2="${px(estado.patamar)}" y2="${yFim-gap+6}"
+            stroke="${TINTA}" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    s += txt(px(estado.patamar)+6, yFim-gap+20, `${fmt(estado.patamar,0)}% — ${d.patamar}`, {t:11, c:GRAF});
+  }
+
+  dados.forEach((o,i)=>{
+    const by = cy + i*(hBarra+gap);
+    const bw = Math.max(2, px(o.ef)-x0);
+    const linhaBase = by + hBarra*(G.linhas > 2 ? 0.44 : 0.66);
+    s += txt(x, linhaBase, o.tr.id, {t:G.fId, w:600});
+    const nm = nome(o.tr);
+    const corte = Math.floor((rotW-36)/(G.fNome*0.50));
+    s += txt(x+G.fId*1.9, linhaBase, nm.length>corte ? nm.slice(0,corte-1)+"…" : nm, {t:G.fNome, c:GRAF});
+    if(G.linhas > 2)
+      s += txt(x+G.fId*1.9, linhaBase+G.fNome*1.3, `${fmt(o.tr.dose,2)} L/ha · ${o.tr.gia} ${d.gia}`, {t:G.fNome*0.85, c:GRAF});
+    s += `<rect x="${x0}" y="${by}" width="${bw}" height="${hBarra}" fill="${o.tr.cor}" fill-opacity="0.88" stroke="${TINTA}" stroke-width="1"/>`;
+    s += txt(x0+bw+9, by+hBarra*0.72, fmt(o.ef,1), {t:G.fVal, w:600});
+    s += txt(x0+bw+9+fmt(o.ef,1).length*G.fVal*0.60+7, by+hBarra*0.72, o.letra, {t:G.fVal*0.9, w:600, c:GRAF});
+  });
+
+  let cy2 = yFim + 6;
+  s += rule(x, cy2, w, 1.1); cy2 += 18;
+  s += txt(x, cy2, d.rodapeStat(fmt(AN.CV,1), fmt(DMS,2)), {t:11.5, c:GRAF});
+  cy2 += 16;
+  s += txt(x, cy2, `F(${AN.glT}, ${AN.glE}) = ${fmt(AN.F,1)}; p ${pTexto()} · ${d.testemNota(fmt(mAACPD[iTest],0))}`, {t:11.5, c:GRAF});
+  return {svg:s, h:cy2-y+8};
+}
+
+/* --- erro padrão da média por tratamento e por avaliação --- */
+const SEM = TRAT.map((_,ti)=> DAA.map((_,di)=>{
+  const v = SEV[ti].map(b=>b[di]);
+  const m = media(v);
+  const s2 = v.reduce((a,x)=>a+(x-m)**2, 0)/(v.length-1);
+  return Math.sqrt(s2/v.length);
+}));
+
+/* --- curva de progresso da doença ---
+ * A área sob a curva é sombreada porque ela É a AACPD: o número da tabela
+ * e a mancha na figura são a mesma coisa.
+ */
+function secSeveridade(x, y, w, h){
+  const d = t();
+  const yMax = Math.ceil(Math.max(...mSEV.flat())/10)*10 + 10;
+  const modo = modoSev();
+  const painel = modo === "paineis";
+
+  /* desenha um sistema de eixos com as curvas pedidas */
+  function grafico(gx, gy, gw, gh, quais, o={}){
+    const px = daa => gx + ((daa - DAA[0])/(DAA[DAA.length-1] - DAA[0])) * gw;
+    const py = v   => gy + gh - (v/yMax)*gh;
+    let s = "";
+
+    /* grade e eixo Y */
+    const passo = yMax > 40 ? 20 : 10;
+    for(let v=0; v<=yMax; v+=passo){
+      s += `<line x1="${gx}" y1="${py(v).toFixed(1)}" x2="${gx+gw}" y2="${py(v).toFixed(1)}" stroke="${LINHA}" stroke-width="${v===0?1.1:0.7}"/>`;
+      s += txt(gx-8, py(v)+4, fmt(v,0), {t:o.fs||11.5, a:"end", c:GRAF});
+    }
+    /* eixo X */
+    DAA.forEach(dd=>{
+      s += `<line x1="${px(dd)}" y1="${gy+gh}" x2="${px(dd)}" y2="${gy+gh+5}" stroke="${TINTA}" stroke-width="1"/>`;
+      s += txt(px(dd), gy+gh+20, fmt(dd,0), {t:o.fs||11.5, a:"middle", c:GRAF});
+    });
+
+    /* curvas: da maior severidade para a menor, para as menores ficarem por cima */
+    const ordem = quais.slice().sort((a,b)=> mAACPD[b]-mAACPD[a]);
+    ordem.forEach(ti=>{
+      const tr = TRAT[ti];
+      const pts = DAA.map((dd,di)=>`${px(dd).toFixed(1)},${py(mSEV[ti][di]).toFixed(1)}`);
+      const fantasma = o.fantasma === ti;
+      const cor = fantasma ? "#b9bdb6" : tr.cor;
+
+      /* área = AACPD */
+      if(o.area !== false){
+        s += `<polygon points="${px(DAA[0]).toFixed(1)},${py(0).toFixed(1)} ${pts.join(" ")} ${px(DAA[DAA.length-1]).toFixed(1)},${py(0).toFixed(1)}"
+                fill="${cor}" fill-opacity="${fantasma?0.10:0.16}"/>`;
+      }
+      s += `<polyline points="${pts.join(" ")}" fill="none" stroke="${cor}"
+              stroke-width="${fantasma?1.6:2.4}" stroke-linejoin="round" stroke-linecap="round"
+              ${fantasma?'stroke-dasharray="5 4"':""}/>`;
+
+      if(!fantasma){
+        DAA.forEach((dd,di)=>{
+          const cy = py(mSEV[ti][di]);
+          if(o.erro !== false){
+            const e = (SEM[ti][di]/yMax)*gh;
+            s += `<line x1="${px(dd)}" y1="${(cy-e).toFixed(1)}" x2="${px(dd)}" y2="${(cy+e).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
+            s += `<line x1="${px(dd)-4}" y1="${(cy-e).toFixed(1)}" x2="${px(dd)+4}" y2="${(cy-e).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
+            s += `<line x1="${px(dd)-4}" y1="${(cy+e).toFixed(1)}" x2="${px(dd)+4}" y2="${(cy+e).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
+          }
+          s += `<circle cx="${px(dd)}" cy="${cy.toFixed(1)}" r="${o.r||4.6}" fill="${cor}" stroke="#fff" stroke-width="1.4"/>`;
+        });
+      }
+    });
+
+    /* rótulo direto na ponta da curva, em vez de caixa de legenda */
+    if(o.rotulos){
+      const usados = [];
+      ordem.forEach(ti=>{
+        if(o.fantasma === ti) return;
+        const espaco = Math.min(15, Math.max(9, gh/(quais.length+1)));
+        let ry = py(mSEV[ti][DAA.length-1]) + 4;
+        while(usados.some(u => Math.abs(u-ry) < espaco)) ry += espaco;   /* evita sobreposição */
+        if(ry > gy + gh + 2) ry = gy + gh + 2;
+        usados.push(ry);
+        s += txt(px(DAA[DAA.length-1])+12, ry, TRAT[ti].id, {t:14, w:600, c:TRAT[ti].cor});
+        s += txt(px(DAA[DAA.length-1])+38, ry, `${fmt(mSEV[ti][DAA.length-1],1)}%`, {t:12, c:GRAF});
+      });
+    }
+    return s;
+  }
+
+  let s = "";
+  const painelSimples = modo === "barras" || modo === "abbott";
+  if(painelSimples){
+    const comAbbott = modo === "abbott";
+    /* o mais simples possível: uma barra por tratamento, severidade final */
+    const ultimo = DAA.length - 1;
+    const vals = TRAT.map((_,i)=> mSEV[i][ultimo]);
+    const teto = Math.ceil(Math.max(...vals)/10)*10 + 10;
+    const colEf = comAbbott ? 130 : 0;
+    const rotW = Math.min(300, w*0.30);
+    const x0 = x + rotW, larg = w - rotW - 76 - colEf;
+    const G = geoBarras(TRAT.length);
+    const hB = G.h, gap = G.gap;
+    const px = v => x0 + (v/teto)*larg;
+    let cy = y + 30;
+
+    /* eixo */
+    for(let v=0; v<=teto; v+=10){
+      s += `<line x1="${px(v)}" y1="${cy-12}" x2="${px(v)}" y2="${cy + TRAT.length*(hB+gap) - gap + 4}"
+              stroke="${LINHA}" stroke-width="${v===0?1.1:0.7}"/>`;
+      s += txt(px(v), cy-18, fmt(v,0), {t:11.5, a:"middle", c:GRAF});
+    }
+    s += txt(x0+larg+12, cy-18, "%", {t:11.5, c:GRAF});
+    if(comAbbott){
+      s += txt(x0 + larg/2, cy-38, d.severidadeL, {t:11, w:600, ls:1.3, a:"middle", c:GRAF});
+      s += txt(x+w, cy-38, d.colEficA, {t:11, w:600, ls:1.3, a:"end", c:GRAF});
+      s += `<line x1="${x+w-colEf+16}" y1="${cy-30}" x2="${x+w-colEf+16}" y2="${cy + TRAT.length*(hB+gap) - gap + 4}" stroke="${LINHA}" stroke-width="1"/>`;
+    }
+
+    TRAT.forEach((tr,i)=>{
+      const by = cy + i*(hB+gap);
+      const bw = Math.max(2, px(vals[i]) - x0);
+      s += txt(x, by+hB*0.70, tr.id, {t:G.fId, w:600});
+      const nm = nome(tr);
+      const corte = Math.floor((rotW-G.fId*2.2)/(G.fNome*0.50));
+      s += txt(x+G.fId*2.2, by+hB*0.70, nm.length>corte ? nm.slice(0,corte-1)+"…" : nm, {t:G.fNome, c:GRAF});
+      s += `<rect x="${x0}" y="${by}" width="${bw.toFixed(1)}" height="${hB}"
+              fill="${tr.cor}" fill-opacity="0.88" stroke="${TINTA}" stroke-width="1"/>`;
+      s += txt(x0+bw+10, by+hB*0.72, `${fmt(vals[i],1)}%`, {t:G.fVal, w:600});
+      if(comAbbott){
+        s += txt(x+w, by+hB*0.72, EFIC_SEV[i] === null ? "—" : `${fmt(EFIC_SEV[i],1)}%`,
+                 {t:G.fVal*1.1, w:600, a:"end", c: EFIC_SEV[i] === null ? GRAF : TINTA});
+      }
+    });
+
+    const base = cy + TRAT.length*(hB+gap) - gap + 18;
+    s += rule(x, base, w, 1.1);
+    s += txt(x, base+20, comAbbott ? d.notaSevA(DAA[ultimo]) : d.notaSevB(DAA[ultimo]), {t:12, c:GRAF});
+    return {svg:s, h: base - y + 30};
+  }
+  if(!painel){
+    const muitos = TRAT.length > 12;
+    const gx = x + 46, gy = y + 12, gw = w - 46 - (muitos ? 30 : 96), gh = h - 74;
+    s += grafico(gx, gy, gw, gh, TRAT.map((_,i)=>i), {rotulos: !muitos});
+    /* marca da aplicação sobre o eixo do tempo */
+    s += `<path d="M ${gx} ${gy+gh+30} l 0 -8 l -4 0 l 4 -6 l 4 6 l -4 0" fill="${TINTA}"/>`;
+    s += txt(gx+10, gy+gh+30, d.aplic, {t:11, c:GRAF});
+    s += txt(x+14, gy+gh/2, d.eixoSev, {t:12, a:"middle", c:GRAF,
+             raw:true, f:FC}).replace("<text", `<text transform="rotate(-90 ${x+14} ${gy+gh/2})"`);
+    s += txt(gx+gw/2, gy+gh+46, d.eixoDAA, {t:12, a:"middle", c:GRAF});
+    let base = y + h - 16;
+    if(muitos){
+      const lg = faixaLegenda(x, y + h + 6, w);
+      s += lg.svg; base = y + h + 6 + lg.h;
+    }
+    s += rule(x, base, w, 1.1);
+    s += txt(x, base+18, d.notaSev, {t:11.5, c:GRAF});
+    return {svg:s, h: base - y + 28};
+  } else {
+    /* pequenos múltiplos: cada tratamento contra a testemunha fantasma */
+    const cols = TRAT.length <= 6 ? 3 : TRAT.length <= 12 ? 4 : TRAT.length <= 24 ? 5 : 6;
+    const linhas = Math.ceil(TRAT.length/cols);
+    const pw = (w - (cols-1)*30)/cols;
+    const ph = Math.max(90, Math.min(150, 460/Math.min(linhas,3)));
+    TRAT.forEach((tr,ti)=>{
+      const ci = ti%cols, li = Math.floor(ti/cols);
+      const gx = x + ci*(pw+30) + 34, gy = y + li*(ph+34+30) + 26, gw = pw-40, gh = ph;
+      s += txt(gx-34, gy-10, tr.id, {t:14, w:600, c:tr.cor});
+      const nm = nome(tr);
+      s += txt(gx-10, gy-10, nm.length>24 ? nm.slice(0,23)+"…" : nm, {t:11.5, c:GRAF});
+      const quais = tr.testemunha ? [ti] : [iTest, ti];
+      s += grafico(gx, gy, gw, gh, quais, {fantasma: tr.testemunha?null:iTest, fs:10.5, r:3.6});
+      const info = tr.testemunha
+        ? `AACPD ${fmt(mAACPD[ti],0)}`
+        : `AACPD ${fmt(mAACPD[ti],0)} · ${fmt(EFIC[ti],1)}% · ${LETRAS[ti]}`;
+      s += txt(gx, gy+gh+38, info, {t:11.5, w:600, c:TINTA});
+    });
+    const fim = y + linhas*(ph+64) + 6;
+    s += rule(x, fim, w, 1.1);
+    s += txt(x, fim+18, d.notaSev, {t:11.5, c:GRAF});
+    return {svg:s, h: fim - y + 28};
+  }
+  return {svg:s, h: h + 22};
+}
+
+/* --- legenda em faixa, quebrando em linhas quando não cabe --- */
+function faixaLegenda(x, y, w){
+  const porLinha = Math.max(3, Math.min(TRAT.length, Math.floor(w/175)));
+  const alturaItem = 30, passo = w/porLinha;
+  let s = "";
+  TRAT.forEach((tr, ti)=>{
+    const lx = x + (ti % porLinha)*passo;
+    const ly = y + Math.floor(ti/porLinha)*alturaItem + 11;
+    s += `<rect x="${lx}" y="${ly-11}" width="12" height="12" fill="${tr.cor}" stroke="${TINTA}" stroke-width="0.8"/>`;
+    s += txt(lx+18, ly, tr.id, {t:13, w:600});
+    const nm = nome(tr), corte = Math.floor((passo-8)/5.4);
+    s += txt(lx, ly+15, nm.length>corte ? nm.slice(0,corte-1)+"…" : nm, {t:10.5, c:GRAF});
+  });
+  return {svg:s, h: Math.ceil(TRAT.length/porLinha)*alturaItem + 6};
+}
+
+/* --- barras verticais agrupadas por avaliação: severidade pura, sem AACPD --- */
+function secSevAvaliacao(x, y, w, h){
+  const d = t();
+  const gx = x + 54, gw = w - 54 - 16;
+  const gy = y + 16, gh = h - 108;
+  const teto = Math.ceil(Math.max(...mSEV.flat())/10)*10 + 10;
+  const py = v => gy + gh - (v/teto)*gh;
+  const grupoW = gw/DAA.length;
+  const barrasW = grupoW*0.76;
+  const barW = barrasW/TRAT.length;
+  let s = "";
+
+  /* grade e eixo Y */
+  for(let v=0; v<=teto; v+=10){
+    s += `<line x1="${gx}" y1="${py(v).toFixed(1)}" x2="${gx+gw}" y2="${py(v).toFixed(1)}"
+            stroke="${LINHA}" stroke-width="${v===0?1.1:0.7}"/>`;
+    s += txt(gx-10, py(v)+4, fmt(v,0), {t:11.5, a:"end", c:GRAF});
+  }
+  s += txt(x+16, gy+gh/2, d.eixoSev, {t:12, a:"middle", c:GRAF})
+         .replace("<text", `<text transform="rotate(-90 ${x+16} ${gy+gh/2})"`);
+
+  /* um grupo por avaliação */
+  DAA.forEach((dd, di)=>{
+    const g0 = gx + di*grupoW + (grupoW-barrasW)/2;
+    if(di > 0) s += `<line x1="${gx+di*grupoW}" y1="${gy}" x2="${gx+di*grupoW}" y2="${gy+gh+8}" stroke="${LINHA}" stroke-width="1"/>`;
+    TRAT.forEach((tr, ti)=>{
+      const bx = g0 + ti*barW, v = mSEV[ti][di];
+      const topo = py(v), alt = gy + gh - topo;
+      const folga = barW > 6 ? 1 : 0.2;
+      s += `<rect x="${(bx+folga).toFixed(1)}" y="${topo.toFixed(1)}" width="${Math.max(0.8,barW-2*folga).toFixed(1)}" height="${Math.max(1,alt).toFixed(1)}"
+              fill="${tr.cor}" fill-opacity="0.88"${barW > 7 ? ` stroke="${TINTA}" stroke-width="0.9"` : ""}/>`;
+      /* só rotula se o número couber em cima da barra */
+      if(barW >= 24) s += txt(bx+barW/2, topo-6, fmt(v,1), {t:10.5, a:"middle", c:GRAF});
+    });
+    s += txt(gx + di*grupoW + grupoW/2, gy+gh+26, `${fmt(dd,0)} DAA`, {t:14, w:600, a:"middle"});
+    s += txt(gx + di*grupoW + grupoW/2, gy+gh+44, AVALIACOES[di].data[estado.idioma], {t:11.5, a:"middle", c:GRAF});
+  });
+
+  /* legenda em faixa */
+  const ly = gy + gh + 63;
+  const lg = faixaLegenda(x, ly, w); s += lg.svg;
+  const fim = ly + lg.h + 6;
+  s += rule(x, fim, w, 1.1);
+  s += txt(x, fim+20, d.notaSevAv, {t:12, c:GRAF});
+  return {svg:s, h: fim + 30 - y};
+}
+
+/* --- tabela de tratamentos e doses (calculadora de calda) --- */
+function secTratamentos(x,y,w){
+  const d = t(), dl = ESTUDO.delineamento;
+  const areaHa = dl.parcelaM2/10000;
+  const cols = [
+    {t:d.trat, w:w*0.06}, {t:d.produto, w:w*0.30},
+    {t:d.dose, w:w*0.13, a:"right"}, {t:d.gia, w:w*0.15, a:"right"},
+    {t:d.prodP, w:w*0.18, a:"right"}, {t:d.caldaP, w:w*0.18, a:"right"}
+  ];
+  const linhas = TRAT.map(tr=>[
+    {v:tr.id, w:600, swatch:tr.cor},
+    nome(tr),
+    tr.dose ? fmt(tr.dose,2) : "—",
+    tr.gia || "—",
+    tr.dose ? fmt(tr.dose*1000*areaHa,1) : "—",
+    fmt(dl.caldaLha*1000*areaHa, 0)
+  ]);
+  const tb = tabela(x, y, cols, linhas, {zebra:true});
+  const nota = estado.idioma==="pt"
+    ? `Parcela de ${dl.parcela} (${dl.parcelaM2} m²) · volume de calda ${dl.caldaLha} L/ha · valores por parcela calculados pela Calculadora de Calda`
+    : `Plot of ${dl.parcela} (${dl.parcelaM2} m²) · spray volume ${dl.caldaLha} L/ha · per-plot values from the spray-mix calculator`;
+  return {svg: tb.svg + txt(x, y+tb.h+17, nota, {t:11, c:GRAF}), h: tb.h+26};
+}
+
+/* --- tabela de aplicações --- */
+function secAplicacoes(x,y,w){
+  const d = t();
+  const cols = [
+    {t:d.nApl, w:w*0.05}, {t:d.dataL, w:w*0.16}, {t:d.estadio, w:w*0.12},
+    {t:d.vol, w:w*0.15, a:"right"}, {t:d.temp, w:w*0.12, a:"right"},
+    {t:d.ur, w:w*0.12, a:"right"}, {t:d.vento, w:w*0.14, a:"right"}, {t:d.bico, w:w*0.14}
+  ];
+  const linhas = APLICACOES.map(a=>[
+    {v:a.n, w:600}, a.data[estado.idioma], a.estadio,
+    fmt(a.vol,0), fmt(a.temp,1), fmt(a.ur,0), fmt(a.vento,1), a.bico
+  ]);
+  const tb = tabela(x,y,cols,linhas);
+  return {svg: tb.svg, h: tb.h+8};
+}
+
+/* --- tabela de resultados --- */
+function secResultados(x,y,w){
+  const d = t();
+  const wAv = w*0.30/AVALIACOES.length;
+  const cols = [
+    {t:d.trat, w:w*0.06}, {t:d.produto, w:w*0.26},
+    ...AVALIACOES.map(a=>({t:`${a.daa} DAA`, w:wAv, a:"right"})),
+    {t:d.aacpd, w:w*0.13, a:"right"},
+    {t:d.eficC, w:w*0.13, a:"right"},
+    {t:d.grupo, w:w*0.12, a:"middle"}
+  ];
+  const linhas = TRAT.map((tr,i)=>[
+    {v:tr.id, w:600, swatch:tr.cor},
+    nome(tr),
+    ...mSEV[i].map(v=>fmt(v,1)),
+    fmt(mAACPD[i],1),
+    tr.testemunha ? "—" : fmt(EFIC[i],1),
+    {v:LETRAS[i], w:600}
+  ]);
+  const tb = tabela(x,y,cols,linhas,{zebra:true});
+  let s = tb.svg;
+  s += txt(x, y+tb.h+17, `${d.medias} ${d.rodapeStat(fmt(AN.CV,1), fmt(DMS,2))}`, {t:11, c:GRAF});
+  s += txt(x, y+tb.h+32, `${E().escala} · ${AVALIACOES.map(a=>a.data[estado.idioma]).join(" · ")}`, {t:11, c:GRAF});
+  return {svg:s, h:tb.h+42};
+}
+
+/* --- quadro de ANOVA, em monoespaçada: é a saída do console --- */
+function secAnova(x,y,w){
+  const d = t();
+  const cols = [
+    {t:d.fv, w:w*0.30}, {t:d.gl, w:w*0.10, a:"right"},
+    {t:d.sq, w:w*0.16, a:"right"}, {t:d.qm, w:w*0.16, a:"right"},
+    {t:d.f, w:w*0.14, a:"right"}, {t:d.p, w:w*0.14, a:"right"}
+  ];
+  const M = {f:FM};
+  const linhas = [
+    [d.trat, {v:AN.glT,...M}, {v:fmt(AN.SQtrat,2),...M}, {v:fmt(AN.QMtrat,2),...M}, {v:fmt(AN.F,2),...M,w:500}, {v:pTexto(),...M,w:500}],
+    [d.blocos, {v:AN.glB,...M}, {v:fmt(AN.SQbloco,2),...M}, {v:fmt(AN.QMbloco,2),...M}, {v:fmt(AN.Fb,2),...M}, {v:fmt(pF(AN.Fb,AN.glB,AN.glE),3),...M}],
+    [d.residuo, {v:AN.glE,...M}, {v:fmt(AN.SQerro,2),...M}, {v:fmt(AN.QMerro,2),...M}, {v:"",...M}, {v:"",...M}],
+    [d.total, {v:AN.glT+AN.glB+AN.glE,...M}, {v:fmt(AN.SQT,2),...M}, {v:"",...M}, {v:"",...M}, {v:"",...M}]
+  ];
+  const tb = tabela(x,y,cols,linhas,{fs:12});
+  return {svg:tb.svg, h:tb.h+8};
+}
+
+/* --- rodapé --- */
+function secRodape(x,y,w){
+  const d = t(), dl = ESTUDO.delineamento;
+  let s = rule(x,y,w,1.1);
+  s += txt(x, y+20, `${d.ref}: ${dl.blocos} ${d.dbc} · ${d.parc} ${dl.parcela} · n = ${AN.N}`, {t:12, c:GRAF});
+  s += txt(x, y+37, `${d.geradoPor} ${ESTUDO.autor} ${d.em} ${ESTUDO.data[estado.idioma]} · Agracta`, {t:12, c:GRAF});
+  s += txt(x+w, y+20, ESTUDO.codigo, {t:12, w:600, ls:1.4, a:"end"});
+  return {svg:s, h:48};
+}
+
+/* --- composição das vistas --- */
+function prancha(){
+  const d = t();
+  let W, H, s = "", M = 44, cy = M, w;
+
+  /* A altura sai do conteúdo, nunca de um número fixo: é o que impede o
+     último tratamento de subir em cima do rodapé quando a lista cresce. */
+  if(estado.vista === "eficacia"){
+    W = 1040; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+    s += secTitulo(M, cy, w, d.tituloEfic.toUpperCase()); cy += 24;
+    const g = secEficacia(M, cy, w); s += g.svg; cy += g.h;
+    H = cy + 34;
+  }
+  else if(modoSev() === "avaliacao"){
+    W = 1040; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+    s += secTitulo(M, cy, w, d.tituloSevAv.toUpperCase()); cy += 30;
+    const g = secSevAvaliacao(M, cy, w, 380); s += g.svg; cy += g.h + 16;
+    const rod = secRodape(M, cy, w); s += rod.svg;
+    H = cy + rod.h + 20;
+  }
+  else if(modoSev()){
+    const modo = modoSev();
+    const barras = modo === "barras", abb = modo === "abbott";
+    W = 1040; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+    const tit = abb ? d.tituloSevA : barras ? d.tituloSevB : d.tituloSev;
+    s += secTitulo(M, cy, w, tit.toUpperCase()); cy += abb ? 48 : 30;
+    const g = secSeveridade(M, cy, w, modo === "paineis" ? 500 : 400); s += g.svg; cy += g.h + 16;
+    const rod = secRodape(M, cy, w); s += rod.svg;
+    H = cy + rod.h + 20;
+  }
+  else if(estado.vista === "tabela"){
+    W = 1040; H = 560; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+    s += secTitulo(M, cy, w, d.tituloTab.toUpperCase()); cy += 26;
+    const r = secResultados(M, cy, w); s += r.svg; cy += r.h + 22;
+    s += secTitulo(M, cy, w, d.anova.toUpperCase()); cy += 26;
+    const a = secAnova(M, cy, w); s += a.svg; cy += a.h + 16;
+    H = cy + 70;
+    const rod = secRodape(M, H-58, w); s += rod.svg;
+  }
+  else {
+    W = 1240; H = 1754; M = 60; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 16;
+    s += secTitulo(M, cy, w, d.tituloEfic.toUpperCase()); cy += 24;
+    const g = secEficacia(M, cy, w, 40); s += g.svg; cy += g.h + 26;
+    s += secTitulo(M, cy, w, `${d.trat.toUpperCase()}`); cy += 26;
+    const tt = secTratamentos(M, cy, w); s += tt.svg; cy += tt.h + 24;
+    s += secTitulo(M, cy, w, d.apl.toUpperCase()); cy += 26;
+    const ap = secAplicacoes(M, cy, w); s += ap.svg; cy += ap.h + 24;
+    s += secTitulo(M, cy, w, d.avaliacoes.toUpperCase()); cy += 26;
+    const r = secResultados(M, cy, w); s += r.svg; cy += r.h + 22;
+    s += secTitulo(M, cy, w, d.anova.toUpperCase()); cy += 26;
+    const an = secAnova(M, cy, w); s += an.svg; cy += an.h;
+    H = Math.max(1754, cy + 120);              /* A4, ou mais alta se transbordar */
+    const rod = secRodape(M, H-96, w); s += rod.svg;
+  }
+
+  /* marcas de corte */
+  const c = 14, r = 8;
+  [[c,c,1,1],[W-c,c,-1,1],[c,H-c,1,-1],[W-c,H-c,-1,-1]].forEach(([px,py,dx,dy])=>{
+    s += `<path d="M ${px} ${py+dy*r} L ${px} ${py} L ${px+dx*r} ${py}" stroke="#b9bdb6" stroke-width="1" fill="none"/>`;
+  });
+
+  return {svg:`<svg id="prancha" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="${esc(d.tituloEfic)} — ${ESTUDO.codigo}"><rect width="${W}" height="${H}" fill="#ffffff"/>${s}</svg>`, W, H};
+}
+
+/* =====================================================================
+   5. INTERFACE
+   ===================================================================== */
+const folha = document.getElementById("folha");
+const legendaFig = document.getElementById("legenda-fig");
+let DIM = {W:1040,H:660};
+
+function legendaTexto(){
+  const d = t();
+  if(estado.vista==="eficacia") return {rot:`${d.figura} 1`, txt:d.legEfic()};
+  const ms = modoSev();
+  if(ms) return {rot:`${d.figura} 1`, txt:
+    ms==="avaliacao" ? d.legSevAval() :
+    ms==="abbott" ? d.legSevAbbott() :
+    ms==="barras" ? d.legSevSimples() : d.legSev()};
+  if(estado.vista==="tabela")   return {rot:`${d.tabela} 1`, txt:d.legTab()};
+  return {rot:`${d.figura} 1`, txt:d.legComp()};
+}
+function render(){
+  const p = prancha();
+  DIM = {W:p.W, H:p.H};
+  folha.innerHTML = p.svg;
+  const lg = legendaTexto();
+  legendaFig.innerHTML = `<b>${lg.rot}</b> — ${esc(lg.txt)}`;
+}
+function sinc(g, cls){
+  g.querySelectorAll("."+cls).forEach(o=>o.classList.toggle("ativo", o.querySelector("input").checked));
+}
+document.getElementById("g-idioma").addEventListener("change", ev=>{
+  estado.idioma = ev.target.value; sinc(ev.currentTarget,"seg"); render();
+});
+document.getElementById("g-vista").addEventListener("change", ev=>{
+  estado.vista = ev.target.value; sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("g-patamar").addEventListener("change", ev=>{
+  estado.patamar = Number(ev.target.value); sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("btn-limpa").addEventListener("click", ()=>document.body.classList.add("limpa"));
+document.getElementById("btn-sair").addEventListener("click", ()=>document.body.classList.remove("limpa"));
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") document.body.classList.remove("limpa"); });
+
+let tA; const avisar = m => {
+  const a = document.getElementById("aviso");
+  a.textContent = m; a.classList.add("ver");
+  clearTimeout(tA); tA = setTimeout(()=>a.classList.remove("ver"), 2400);
+};
+function svgTexto(){
+  const el = document.getElementById("prancha").cloneNode(true);
+  el.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  el.setAttribute("width", DIM.W); el.setAttribute("height", DIM.H);
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(el);
+}
+function baixar(blob, n){
+  const u = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = u; a.download = n; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+}
+const arq = ext => `${ESTUDO.codigo}_${estado.vista}_${estado.idioma}_${ESTUDO.data.en}.${ext}`;
+
+document.getElementById("btn-svg").addEventListener("click", ()=>{
+  baixar(new Blob([svgTexto()],{type:"image/svg+xml;charset=utf-8"}), arq("svg"));
+  avisar("SVG baixado");
+});
+document.getElementById("btn-png").addEventListener("click", ()=>{
+  const k = 3, blob = new Blob([svgTexto()],{type:"image/svg+xml;charset=utf-8"}), u = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = ()=>{
+    const c = document.createElement("canvas");
+    c.width = DIM.W*k; c.height = DIM.H*k;
+    const x = c.getContext("2d");
+    x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height);
+    x.drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(u);
+    c.toBlob(b=>{ baixar(b, arq("png")); avisar(`PNG baixado — ${DIM.W*k} × ${DIM.H*k} px`); }, "image/png");
+  };
+  img.onerror = ()=>{ URL.revokeObjectURL(u); avisar("Não deu para gerar o PNG. O SVG funciona."); };
+  img.src = u;
+});
+document.getElementById("btn-legenda").addEventListener("click", async ()=>{
+  const lg = legendaTexto();
+  try{ await navigator.clipboard.writeText(`${lg.rot} — ${lg.txt}`); avisar("Legenda copiada"); }
+  catch{ avisar("O navegador bloqueou a área de transferência."); }
+});
+
+render();
+</script>
+</body>
+</html>
