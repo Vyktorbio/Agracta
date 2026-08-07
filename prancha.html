@@ -202,7 +202,7 @@ let BLOCOS = FATOR_BLOCO.map((_,i)=> i+1);
   let h = null;
   try{ h = JSON.parse(localStorage.getItem("agracta-prancha-handoff")||"null"); }catch(e){}
   if(!h || !Array.isArray(h.tratamentos) || !h.tratamentos.length) return;
-  if(!Array.isArray(h.sev) || !Array.isArray(h.daa) || h.daa.length < 2) return;
+  if(!Array.isArray(h.sev) || !Array.isArray(h.daa) || h.daa.length < 1) return;
   ESTUDO = Object.assign({}, ESTUDO, h.estudo||{});
   TRAT   = h.tratamentos.map((t,i)=> Object.assign(
              { cor: PALETA_TRAT[i % PALETA_TRAT.length], ia:"—", dose:0, gia:0 },
@@ -340,15 +340,33 @@ function letrasTukey(medias, dms){
 const _lanc = [];
 TRAT.forEach((t,i)=> BLOCOS.forEach((b,j)=> DAA.forEach((d,k)=>
   _lanc.push({ trat:t.id, bloco:b, tempo:d, valor:SEV[i][j][k] }))));
-const R = Est.analisar({
-  tratamentos: TRAT.map(t=>t.id),
-  blocos: BLOCOS,
-  tempos: DAA,
-  lancamentos: _lanc,
-  testemunha: (TRAT.find(t=>t.testemunha)||TRAT[0]).id,
-  transformacao: "sqrt",
-  menosEhMelhor: true          /* severidade: menos é melhor, "a" vai pro menor */
-});
+/* Com uma avaliação só não existe área sob a curva. A análise então recai sobre
+   a severidade daquela data — mesma ANOVA, mesmo Tukey, mesmo Abbott — e mais
+   abaixo os rótulos deixam de falar em AACPD. */
+const UMA  = DAA.length < 2;
+const _iT0 = Math.max(0, TRAT.findIndex(t=>t.testemunha));
+let R;
+if(UMA){
+  const Y  = TRAT.map((_,i)=> BLOCOS.map((_,j)=> SEV[i][j][0]));
+  const md = v => v.reduce((a,b)=>a+b,0)/v.length;
+  const A  = Est.anovaDBC(Y.map(l=>l.map(x=>Math.sqrt(x+0.5))));
+  const dm = Est.dmsTukey(A.QMerro, A.r, A.k, A.glErro);
+  const mY = Y.map(md);
+  R = { aacpdParcela:Y, mediaAACPD:mY, mediaSeveridade:mY.map(m=>[m]),
+        anova:A, dms:dm, letras:Est.letrasTukey(A.mediasTrat, dm, true),
+        q:Est.qTukey(A.k, A.glErro),
+        eficacia: mY.map((m,i)=> i===_iT0 ? null : Est.abbott(m, mY[_iT0])) };
+} else {
+  R = Est.analisar({
+    tratamentos: TRAT.map(t=>t.id),
+    blocos: BLOCOS,
+    tempos: DAA,
+    lancamentos: _lanc,
+    testemunha: (TRAT.find(t=>t.testemunha)||TRAT[0]).id,
+    transformacao: "sqrt",
+    menosEhMelhor: true        /* severidade: menos é melhor, "a" vai pro menor */
+  });
+}
 const AACPD = R.aacpdParcela;
 const AN = { k:R.anova.k, r:R.anova.r, N:R.anova.N, G:R.anova.G, mT:R.anova.mediasTrat,
              SQtrat:R.anova.SQtrat, SQbloco:R.anova.SQbloco, SQerro:R.anova.SQerro, SQT:R.anova.SQtotal,
@@ -370,6 +388,11 @@ const ULT = DAA.length - 1;
 const EFIC_SEV = TRAT.map((_,i) => i === iTest ? null
   : 100*(mSEV[iTest][ULT] - mSEV[i][ULT]) / mSEV[iTest][ULT]);
 
+/* Estes vinham cravados no protótipo ("4 blocos", "mSEV[iTest][2]"), o que só
+   valia para o estudo de demonstração. Agora seguem o delineamento real. */
+const NB = BLOCOS.length;
+const ULTAV = DAA.length - 1;
+
 /* =====================================================================
    3. IDIOMA
    ===================================================================== */
@@ -381,13 +404,13 @@ const L = {
      aacpd:"AACPD", eficC:"Efic. (%)", grupo:"Tukey",
      anova:"Análise de variância — √(AACPD)", fv:"Fonte de variação", gl:"GL", sq:"SQ", qm:"QM", f:"F", p:"p",
      blocos:"Blocos", residuo:"Resíduo", total:"Total",
-     rodapeStat:(cv,dms)=>`Tukey (α = 0,05) sobre √(AACPD); médias na escala original. CV = ${cv}% · DMS = ${dms} · 4 blocos ao acaso`,
-     patamar:"patamar comercial", testemNota:m=>`Testemunha: AACPD ${m} · severidade final ${fmt(mSEV[iTest][2],1)}%`,
+     rodapeStat:(cv,dms)=>`Tukey (α = 0,05) sobre √(AACPD); médias na escala original. CV = ${cv}% · DMS = ${dms} · ${NB} blocos ao acaso`,
+     patamar:"patamar comercial", testemNota:m=>`Testemunha: AACPD ${m} · severidade final ${fmt(mSEV[iTest][ULTAV],1)}%`,
      medias:"Médias seguidas da mesma letra não diferem entre si.",
      tituloEfic:"Eficácia de controle sobre a AACPD", tituloTab:"Resultados por tratamento",
      tituloSev:"Curva de progresso da doença",
      eixoSev:"Severidade (%)", eixoDAA:"Dias após a 2ª aplicação",
-     notaSev:"Média de 4 blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.",
+     notaSev:"Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.",
      notaSevSimples:"Severidade média de 4 blocos por tratamento.",
      tituloSevB:"Severidade por tratamento",
      tituloSevA:"Severidade e eficácia de controle",
@@ -401,7 +424,7 @@ const L = {
      notaSevB:daa=>`Severidade média aos ${daa} DAA · média de 4 blocos`,
      legSevSimples:()=>`Severidade média de ferrugem-asiática por tratamento aos ${DAA[DAA.length-1]} dias após a segunda aplicação, estudo ${ESTUDO.codigo}. Cada barra é a média de 4 blocos. ${ESTUDO.pt.escala}.`,
      aplic:"2ª aplicação",
-     legSev:()=>`Curva de progresso da severidade de ferrugem-asiática por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de 4 blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
+     legSev:()=>`Curva de progresso da severidade de ferrugem-asiática por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
      figura:"Figura", tabela:"Tabela",
      legEfic:()=>`Eficácia de controle (Abbott) calculada sobre a área abaixo da curva de progresso da doença, estudo ${ESTUDO.codigo}. Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`,
      legTab:()=>`Severidade média, AACPD, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`,
@@ -414,13 +437,13 @@ const L = {
      aacpd:"AUDPC", eficC:"Efficacy (%)", grupo:"Tukey",
      anova:"Analysis of variance — √(AUDPC)", fv:"Source of variation", gl:"df", sq:"SS", qm:"MS", f:"F", p:"p",
      blocos:"Blocks", residuo:"Residual", total:"Total",
-     rodapeStat:(cv,dms)=>`Tukey (α = 0.05) on √(AUDPC); means on the original scale. CV = ${cv}% · HSD = ${dms} · randomised complete block, 4 blocks`,
-     patamar:"commercial threshold", testemNota:m=>`Untreated check: AUDPC ${m} · final severity ${fmt(mSEV[iTest][2],1)}%`,
+     rodapeStat:(cv,dms)=>`Tukey (α = 0.05) on √(AUDPC); means on the original scale. CV = ${cv}% · HSD = ${dms} · randomised complete block, ${NB} blocks`,
+     patamar:"commercial threshold", testemNota:m=>`Untreated check: AUDPC ${m} · final severity ${fmt(mSEV[iTest][ULTAV],1)}%`,
      medias:"Means followed by the same letter do not differ.",
      tituloEfic:"Control efficacy based on AUDPC", tituloTab:"Results by treatment",
      tituloSev:"Disease progress curve",
      eixoSev:"Severity (%)", eixoDAA:"Days after second application",
-     notaSev:"Mean of 4 blocks ± standard error. The shaded area under each curve is the AUDPC.",
+     notaSev:"Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.",
      notaSevSimples:"Mean severity of 4 blocks per treatment.",
      tituloSevB:"Severity by treatment",
      tituloSevA:"Severity and control efficacy",
@@ -434,7 +457,7 @@ const L = {
      notaSevB:daa=>`Mean severity at ${daa} DAA · mean of 4 blocks`,
      legSevSimples:()=>`Mean Asian soybean rust severity by treatment at ${DAA[DAA.length-1]} days after the second application, study ${ESTUDO.codigo}. Each bar is the mean of 4 blocks. ${ESTUDO.en.escala}.`,
      aplic:"2nd application",
-     legSev:()=>`Disease progress curves for Asian soybean rust severity by treatment, study ${ESTUDO.codigo}. Points are means of 4 blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
+     legSev:()=>`Disease progress curves for Asian soybean rust severity by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
      figura:"Figure", tabela:"Table",
      legEfic:()=>`Control efficacy (Abbott) calculated on the area under the disease progress curve, study ${ESTUDO.codigo}. Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`,
      legTab:()=>`Mean severity, AUDPC, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`,
@@ -992,6 +1015,40 @@ function prancha(){
 /* =====================================================================
    5. INTERFACE
    ===================================================================== */
+/* Uma avaliação só: o que a folha analisa é severidade, não AACPD. Os rótulos
+   acompanham, senão a figura diz uma coisa e mostra outra. */
+if(UMA){
+  const rot   = { pt:`severidade a ${DAA[0]} DAA`, en:`severity at ${DAA[0]} DAA` };
+  const sigla = { pt:"AACPD", en:"AUDPC" };
+  /* As legendas são funções, não texto — sem envolvê-las a folha sairia dizendo
+     "área abaixo da curva" numa figura de uma data só. */
+  const frases = {
+    pt: [["área abaixo da curva de progresso da doença", `severidade a ${DAA[0]} DAA`],
+         ["a área abaixo da curva", `a severidade a ${DAA[0]} DAA`],
+         ["AACPD", rot.pt]],
+    en: [["area under the disease progress curve", `severity at ${DAA[0]} DAA`],
+         ["AUDPC", rot.en]]
+  };
+  const aplica = (txt, id) => frases[id].reduce((t,[de,para]) => t.split(de).join(para), String(txt));
+  ["pt","en"].forEach(id=>{
+    Object.keys(L[id]).forEach(k=>{
+      const v = L[id][k];
+      if(typeof v === "string") L[id][k] = aplica(v, id);
+      else if(typeof v === "function") L[id][k] = function(){ return aplica(v.apply(null, arguments), id); };
+    });
+  });
+  L.pt.aacpd = "Severidade (%)";  L.en.aacpd = "Severity (%)";
+  L.pt.anova = "Análise de variância — √(severidade + 0,5)";
+  L.en.anova = "Analysis of variance — √(severity + 0.5)";
+  L.pt.tituloEfic = `Eficácia de controle a ${DAA[0]} DAA`;
+  L.en.tituloEfic = `Control efficacy at ${DAA[0]} DAA`;
+  /* a curva de progresso precisa de dois pontos — sai de cena */
+  document.querySelectorAll('#g-vista input[value="sev-curva"]').forEach(i=>{
+    const o = i.closest(".opt"); if(o) o.style.display = "none";
+  });
+  if(estado.vista === "sev-curva") estado.vista = "eficacia";
+}
+
 const folha = document.getElementById("folha");
 const legendaFig = document.getElementById("legenda-fig");
 let DIM = {W:1040,H:660};

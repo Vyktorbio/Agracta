@@ -396,6 +396,8 @@ function _agSalvar(){
   try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
   try{ renderAgenda(); }catch(e){}
   try{ updateAgendaBadge(); }catch(e){}
+  try{ if(document.getElementById('todayPnl')) renderToday(); }catch(e){}
+  try{ updateTodayBadge(); }catch(e){}
   try{ if(typeof render==='function') render(); }catch(e){}
 }
 function agDispensar(qid, sid, key, rotulo){
@@ -414,6 +416,26 @@ function agRestaurar(qid, sid, key){
   if(typeof logStudyAuditInObject==='function')
     logStudyAuditInObject(s,'agenda.restaurar','Lembrete trazido de volta ('+key+').');
   _agSalvar();
+}
+function agLimparHoje(){
+  var lista=collectTodayEvents(3).filter(function(e){ return !e.dispensado; });
+  if(!lista.length){ if(typeof _stxToast==='function') _stxToast('Nada para limpar.'); return; }
+  if(!confirm('Dispensar '+lista.length+' lembrete'+(lista.length>1?'s':'')+'?\n\nOs eventos continuam pendentes — só o aviso some. Dá para trazer de volta depois.')) return;
+  var tocados={};
+  lista.forEach(function(e){
+    var s=_agAcharEstudo(e.qid, e.study.id); if(!s) return;
+    var k=_agEvKey(e.ev), d=_agDisp(s);
+    if(!d.some(function(x){ return x && x.k===k; })){
+      d.push({k:k, ts:Date.now(), quem:(typeof _currentUserName==='function'?_currentUserName():null)});
+      tocados[e.qid+'|'+e.study.id]=s;
+    }
+  });
+  Object.keys(tocados).forEach(function(kk){
+    if(typeof logStudyAuditInObject==='function')
+      logStudyAuditInObject(tocados[kk],'agenda.dispensar','Lembretes dispensados em lote pelo painel HOJE. Os eventos seguem pendentes.');
+  });
+  _agSalvar();
+  if(typeof _stxToast==='function') _stxToast(lista.length+' lembrete'+(lista.length>1?'s dispensados':' dispensado'));
 }
 function agToggleDispensados(){ agVerDispensados=!agVerDispensados; try{ renderAgenda(); }catch(e){} }
 /* Dispensa de uma vez tudo que está na lista agora (sem tocar no que já foi dispensado). */
@@ -5414,7 +5436,7 @@ function _pranchaPayload(qid, sid, variavel){
   var vistos={}, unicas=[];
   avs.forEach(function(x){ if(!vistos[x.daa]){ vistos[x.daa]=1; unicas.push(x); } });
   avs=unicas;
-  if(avs.length<2) return { erro:'A AACPD precisa de ao menos 2 avaliações em dias diferentes após a aplicação. Este estudo tem '+avs.length+' para "'+variavel+'".' };
+  if(avs.length<1) return { erro:'Nenhuma avaliação com data posterior à aplicação para a variável "'+variavel+'".' };
 
   /* cubo [trat][bloco][avaliação] */
   var sev=[], faltam=[];
@@ -8175,7 +8197,7 @@ function closeToday(){
   document.getElementById("todayOvl").classList.remove("open");
 }
 
-function collectTodayEvents(windowDays){
+function collectTodayEvents(windowDays, incluirDispensados){
   /* Retorna todos os eventos que estão hoje, atrasados ou dentro da janela */
   var out=[];
   var now=today0();
@@ -8188,9 +8210,11 @@ function collectTodayEvents(windowDays){
       var evs=studyEventsV2(study);
       evs.forEach(function(ev){
         if(ev.realizada)return;
+        var _disp=_agEstaDispensado(study,ev);
+        if(_disp && !incluirDispensados) return;
         var diff=daysBetween(now,ev.date);
         if(diff<=limit){
-          out.push({qid:qid,study:study,ev:ev,diff:diff});
+          out.push({qid:qid,study:study,ev:ev,diff:diff,dispensado:_disp});
         }
       });
     });
@@ -8201,8 +8225,8 @@ function collectTodayEvents(windowDays){
 }
 
 function renderToday(){
-  var events=collectTodayEvents(1);
-  var tomorrowEvs=collectTodayEvents(3).filter(function(e){return e.diff>1});
+  var events=collectTodayEvents(1, agVerDispensados);
+  var tomorrowEvs=collectTodayEvents(3, agVerDispensados).filter(function(e){return e.diff>1});
 
   var h='<div class="today-head" style="position:relative">';
   h+='<button class="panel-x-tr" onclick="closeToday()" aria-label="Fechar" title="Fechar">✕</button>';
@@ -8221,8 +8245,14 @@ function renderToday(){
   h+='<div class="today-sum-item '+(amanha>0?"soon":"")+'"><div class="today-sum-n">'+amanha+'</div><div class="today-sum-l">amanhã</div></div>';
   h+='</div>';
 
+  var _nD=_agTotalDispensados();
+  h+='<div class="ag-acoes" style="margin:2px 0 12px">';
+  h+='<button class="ag-acao" onclick="agLimparHoje()">Limpar lembretes</button>';
+  if(_nD) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nD+')</button>';
+  h+='</div>';
+
   if(events.length===0){
-    h+='<div class="today-empty"><div style="font-size:48px;margin-bottom:10px">✓</div><div>Nada para hoje.</div><div class="today-empty-sub">Bom dia de trabalho.</div></div>';
+    h+='<div class="today-empty"><div style="font-size:48px;margin-bottom:10px">✓</div><div>'+(_nD&&!agVerDispensados?'Nenhum lembrete ativo.':'Nada para hoje.')+'</div><div class="today-empty-sub">'+(_nD&&!agVerDispensados?'Há '+_nD+' dispensado'+(_nD>1?'s':'')+' — use o botão acima para ver.':'Bom dia de trabalho.')+'</div></div>';
   }else{
     h+='<div class="today-list">';
     events.forEach(function(e){
@@ -8258,10 +8288,15 @@ function renderTodayCard(e){
     ('Avaliação'+(e.ev.tipo?' — '+esc(e.ev.tipo):''));
   var iconCls=e.ev.type==='apl'?'apl':'eval';
 
-  var h='<div class="today-card '+cls+'">';
+  var _k=_agEvKey(e.ev), _sid=e.study.id;
+  var _btn = e.dispensado
+    ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
+    : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\',\''+esc(typeName)+'\')">&times;</button>';
+  var h='<div class="today-card '+cls+(e.dispensado?' ag-dispensado':'')+'">';
   h+='<div class="today-card-head">';
   h+='<span class="today-card-badge '+iconCls+'">'+(e.ev.type==='apl'?'APL':'AV')+'</span>';
   h+='<span class="today-card-lbl">'+esc(lbl)+'</span>';
+  h+=_btn;
   h+='</div>';
   h+='<div class="today-card-body" onclick="goToStudy(\''+e.qid+'\',\''+e.study.id+'\')">';
   h+='<div class="today-card-quadra">'+esc(quadraNome(e.qid))+' · '+esc(q.cultura||"—")+'</div>';
