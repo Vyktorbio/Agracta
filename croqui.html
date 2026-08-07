@@ -171,6 +171,8 @@ body.limpa .sair-limpa{display:block}
   text-transform:uppercase;color:var(--grafite);margin:9px 0 4px;padding-bottom:3px;
   border-bottom:1px solid var(--linha)}
 .grupo-lugar:first-child{margin-top:0}
+.aviso-dup{font-size:12px;line-height:1.45;color:#7a4a1e;background:#fdf3e3;
+  border:1px solid #e6cfa8;border-radius:4px;padding:8px 10px;margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -216,6 +218,7 @@ body.limpa .sair-limpa{display:block}
       </div>
       <div class="opcoes opcoes-rolagem" id="g-quadras"></div>
       <p class="dica">O enquadramento e a escala acompanham a escolha.</p>
+      <p class="aviso-dup" id="aviso-sobrepostas" style="display:none"></p>
     </div>
 
     <div class="grupo">
@@ -297,6 +300,8 @@ const L = {
 const PALETA = ["#1f4e5f","#4e8b6b","#9dbf6a","#e0c86a","#b5713a","#7a5a86",
                 "#3d7ea6","#6b8f3a","#c9884e","#8c5b7a","#4a7c6f","#a8603f"];
 
+let PROJ = null;   /* origem comum: quadras e imagens precisam do mesmo referencial */
+const projeta = (lat,lng) => PROJ ? [ (lng-PROJ.lng0)*PROJ.mLng, (lat-PROJ.lat0)*PROJ.mLat ] : null;
 function _paraMetros(qgeo){
   const todos = [];
   Object.keys(qgeo).forEach(k => (qgeo[k]||[]).forEach(p => todos.push(p)));
@@ -304,6 +309,7 @@ function _paraMetros(qgeo){
   const lat0 = todos.reduce((a,p)=>a+p[0],0)/todos.length;
   const lng0 = todos.reduce((a,p)=>a+p[1],0)/todos.length;
   const mLat = 110540, mLng = 111320*Math.cos(lat0*Math.PI/180);
+  PROJ = { lat0, lng0, mLat, mLng };
   const out = {};
   Object.keys(qgeo).forEach(k=>{
     const anel = qgeo[k]||[];
@@ -359,7 +365,8 @@ function _carregar(){
                    pts:(m && m[q.id]) ? m[q.id] : q.pts }));
     return { estudo: Object.assign({}, DEMO.estudo, hs.estudo||{}),
              quadras, carreador: hs.carreador||null,
-             tratamentos: hs.tratamentos || _paletaAuto(quadras) };
+             tratamentos: hs.tratamentos || _paletaAuto(quadras),
+             camadaNdvi: hs.camadaNdvi||null, camadaBase: hs.camadaBase||null };
   }
   /* 2. geometria real da estação */
   if(typeof window!=="undefined" && window.DEFAULT_QGEO && Object.keys(window.DEFAULT_QGEO).length){
@@ -386,6 +393,8 @@ const ESTUDO     = _D.estudo;
 let   TODAS      = _D.quadras;          /* o conjunto inteiro */
 const CARREADOR  = _D.carreador;
 const TRATAMENTOS= _D.tratamentos;
+const CAMADA_NDVI= _D.camadaNdvi || null;   /* imagem do índice, com caixa lat/lng */
+const CAMADA_BASE= _D.camadaBase || null;   /* mapa-base.jpg + 4 cantos alinhados */
 
 const RAMPA_NDVI = [
   {v:0.30, cor:"#f2eccd"},{v:0.45, cor:"#cfe0a0"},
@@ -447,7 +456,17 @@ const centroide = pts => {
   a/=2;
   return [cx/(6*a), cy/(6*a)];
 };
+/* A rampa fixa 0,30–0,85 era do exemplo. Com dado real, esticá-la sobre o
+   intervalo observado é o que faz as diferenças aparecerem. */
+const _vsNdvi = () => TODAS.map(q=>q.ndvi).filter(v=>typeof v==="number");
+function rampaAjustada(){
+  const vs=_vsNdvi(); if(vs.length<2) return RAMPA_NDVI;
+  const lo=Math.min(...vs), hi=Math.max(...vs);
+  if(!(hi>lo)) return RAMPA_NDVI;
+  return RAMPA_NDVI.map((r,i)=>({ v: lo + (hi-lo)*i/(RAMPA_NDVI.length-1), cor:r.cor }));
+}
 const corNdvi = v => {
+  const RAMPA_NDVI = rampaAjustada();
   if(v <= RAMPA_NDVI[0].v) return RAMPA_NDVI[0].cor;
   for(let i=0;i<RAMPA_NDVI.length-1;i++){
     const a=RAMPA_NDVI[i], b=RAMPA_NDVI[i+1];
@@ -510,10 +529,34 @@ function desenhar(){
   /* --- fundo --- */
   s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
   if(estado.fundo==="satelite"){
-    s += `<g clip-path="url(#recorte)">
-      <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" fill="#6d7a4e"/>
-      <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" filter="url(#aereo)" opacity="0.95"/>
-    </g>`;
+    if(CAMADA_BASE && PROJ){
+      /* A aérea alinhada do app: 4 cantos georreferenciados. Projetados em metro
+         viram um quadrilátero quase retangular, então uma afim por 3 cantos
+         (topo-esq, topo-dir, base-esq) posiciona a imagem com erro bem abaixo da
+         espessura da linha. SVG não faz perspectiva — e aqui não precisa. */
+      const c = CAMADA_BASE.cantos.map(p => projeta(p[0], p[1]));
+      const [tl, tr, , bl] = c;
+      const a = (px(tr[0]) - px(tl[0])), b = (py(tr[1]) - py(tl[1]));
+      const cc = (px(bl[0]) - px(tl[0])), dd = (py(bl[1]) - py(tl[1]));
+      s += `<g clip-path="url(#recorte)"><image href="${esc(CAMADA_BASE.url)}" x="0" y="0" width="1" height="1"
+        preserveAspectRatio="none" transform="matrix(${a} ${b} ${cc} ${dd} ${px(tl[0])} ${py(tl[1])})"/></g>`;
+    } else {
+      s += `<g clip-path="url(#recorte)">
+        <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" fill="#6d7a4e"/>
+        <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" filter="url(#aereo)" opacity="0.95"/>
+      </g>`;
+    }
+  }
+  /* Índice (NDVI/NDRE/GNDVI): imageOverlay com caixa lat/lng — em metro a caixa
+     continua alinhada aos eixos, então basta um <image> retangular. */
+  if(estado.pintura==="ndvi" && CAMADA_NDVI && PROJ){
+    const so = projeta(CAMADA_NDVI.sul,  CAMADA_NDVI.oeste);
+    const nl = projeta(CAMADA_NDVI.norte, CAMADA_NDVI.leste);
+    const x0 = px(so[0]), x1 = px(nl[0]), y0 = py(nl[1]), y1 = py(so[1]);
+    s += `<g clip-path="url(#recorte)"><image href="${esc(CAMADA_NDVI.url)}"
+      x="${Math.min(x0,x1)}" y="${Math.min(y0,y1)}"
+      width="${Math.abs(x1-x0)}" height="${Math.abs(y1-y0)}"
+      preserveAspectRatio="none" opacity="0.92"/></g>`;
   }
 
   /* --- cabeçalho --- */
@@ -686,6 +729,7 @@ const folha = document.getElementById("folha");
 const legendaFig = document.getElementById("legenda-fig");
 
 function render(){
+  try{ avisaSobrepostas(); }catch(e){}
   if(!QS().length){
     folha.innerHTML = '<div class="sem-quadra">Selecione ao menos uma quadra para montar o croqui.</div>';
     legendaFig.textContent = "";
@@ -698,6 +742,30 @@ function render(){
 /* lista de quadras — montada a partir dos dados, não do HTML */
 const gQuadras = document.getElementById("g-quadras");
 /* Um botão por lugar: escolhe o conjunto inteiro daquele lugar de uma vez. */
+/* Duas quadras praticamente no mesmo lugar quase sempre são duplicata de merge
+   entre aparelhos, não desenho. No croqui isso aparece como contorno dobrado —
+   melhor apontar o par do que deixar o usuário caçar no olho. */
+function paresSobrepostos(){
+  const qs = QS().map(q => ({ id:q.id, c:centroide(q.pts), a:areaM2(q.pts) }));
+  const out = [];
+  for(let i=0;i<qs.length;i++) for(let j=i+1;j<qs.length;j++){
+    const d = Math.hypot(qs[i].c[0]-qs[j].c[0], qs[i].c[1]-qs[j].c[1]);
+    /* "no mesmo lugar" = centróides mais perto que 1/4 do lado equivalente */
+    const lado = Math.sqrt(Math.max(qs[i].a, qs[j].a));
+    if(d < lado/4) out.push([qs[i].id, qs[j].id]);
+  }
+  return out;
+}
+function avisaSobrepostas(){
+  const box = document.getElementById("aviso-sobrepostas");
+  const ps = paresSobrepostos();
+  if(!ps.length){ box.style.display = "none"; return; }
+  box.style.display = "block";
+  box.innerHTML = `<b>${ps.length} par${ps.length>1?"es":""} de quadras no mesmo lugar:</b> `
+    + ps.map(p => esc(p[0]) + " ↔ " + esc(p[1])).join(", ")
+    + ` — provável duplicata; o contorno sai dobrado.`;
+}
+
 const gLugares = document.getElementById("sel-lugares");
 function montaLugares(){
   if(LUGARES.length < 2){ gLugares.style.display = "none"; return; }

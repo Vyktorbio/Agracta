@@ -5546,7 +5546,30 @@ function _croquiPayload(){
   var cultura = q0.cultura||'';
   var localNome = loc.nome||'';
 
+  /* Camadas que existem no app e podem entrar na folha:
+     - NDVI: é um imageOverlay com caixa lat/lng, então embute direto
+     - base aérea: mapa-base.jpg com 4 cantos georreferenciados (o alinhamento
+       que o usuário fez). Os tiles do Google NÃO entram: são externos e
+       licenciados, assar isso num SVG que vai pro relatório não se faz. */
+  var camadaNdvi=null;
+  try{
+    if(typeof ndviOverlay!=='undefined' && ndviOverlay && ndviOverlay._url){
+      var b=ndviOverlay.getBounds();
+      camadaNdvi={ url:ndviOverlay._url,
+                   sul:b.getSouth(), oeste:b.getWest(), norte:b.getNorth(), leste:b.getEast(),
+                   indice:(typeof ndviIndex!=='undefined'?ndviIndex:null),
+                   data:(typeof ndviDate!=='undefined'?ndviDate:null) };
+    }
+  }catch(e){ camadaNdvi=null; }
+  var camadaBase=null;
+  try{
+    if(typeof _geo!=='undefined' && _geo && _geo.corners && _geo.corners.length===4)
+      camadaBase={ url:'mapa-base.jpg', cantos:_geo.corners };
+  }catch(e){ camadaBase=null; }
+
   return {
+    camadaNdvi: camadaNdvi,
+    camadaBase: camadaBase,
     estudo: {
       codigo: estudo ? (estudo.codigo||estudo.nome||'') : (localNome||'AGRACTA'),
       autor: autor, datum: 'SIRGAS 2000 (WGS 84)',
