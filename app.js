@@ -5372,6 +5372,187 @@ function openBioestat(qid, sid, modo){
   catch(e){ alert('Não consegui preparar os dados para a análise.'); return; }
   _openBioestatFrame(modo);
 }
+/* =================== GRÁFICOS DO ESTUDO — prancha de resultados ===================
+   Monta a folha de figuras a partir das avaliações reais. A AACPD é área sob a
+   curva, então a prancha exige ao menos duas avaliações em DAA distintos e a
+   grade completa (todo tratamento x bloco x avaliação preenchido). Quando falta
+   algo, diz o que falta em vez de desenhar um gráfico pela metade. */
+function _pranchaVariaveis(s){
+  var c={};
+  (s.avaliacoes||[]).forEach(function(a){ (a.variaveis||[]).forEach(function(v){ c[v]=(c[v]||0)+1; }); });
+  return Object.keys(c).sort(function(x,y){ return c[y]-c[x]; });
+}
+function _pranchaPayload(qid, sid, variavel){
+  var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
+  if(!s) return { erro:'Estudo não encontrado.' };
+  s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
+
+  var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
+  var reps=Math.max(1, parseInt(s.numRepeticoes)||1);
+  if(trats.length<2) return { erro:'A prancha precisa de ao menos 2 tratamentos.' };
+  if(reps<2) return { erro:'A prancha precisa de ao menos 2 repetições.' };
+
+  if(!variavel){ var vs=_pranchaVariaveis(s); if(!vs.length) return { erro:'Nenhuma variável avaliada neste estudo.' }; variavel=vs[0]; }
+
+  /* data-base: primeira aplicação realizada, senão o início programado */
+  var base=null;
+  (s.aplicacoes||[]).forEach(function(a){ var d=pD(isoToBR(a.data))||pD(a.data); if(d && (!base || d<base)) base=d; });
+  if(!base) base=pD(isoToBR(s.dataInicio))||pD(s.dataInicio);
+  if(!base) return { erro:'Sem data de aplicação nem de início — não dá para calcular o DAA.' };
+
+  /* avaliações com DAA > 0 e que tenham a variável */
+  var avs=[];
+  (s.avaliacoes||[]).forEach(function(a){
+    var d=pD(isoToBR(a.data))||pD(a.data); if(!d || isNaN(d)) return;
+    if((a.variaveis||[]).indexOf(variavel)<0) return;
+    var daa=daysBetween(base,d);
+    if(daa<=0) return;
+    avs.push({ av:a, daa:daa, data:d });
+  });
+  avs.sort(function(x,y){ return x.daa-y.daa; });
+  /* DAA repetido quebra a AACPD — fica a primeira de cada */
+  var vistos={}, unicas=[];
+  avs.forEach(function(x){ if(!vistos[x.daa]){ vistos[x.daa]=1; unicas.push(x); } });
+  avs=unicas;
+  if(avs.length<2) return { erro:'A AACPD precisa de ao menos 2 avaliações em dias diferentes após a aplicação. Este estudo tem '+avs.length+' para "'+variavel+'".' };
+
+  /* cubo [trat][bloco][avaliação] */
+  var sev=[], faltam=[];
+  trats.forEach(function(t){
+    var porBloco=[];
+    for(var r=1;r<=reps;r++){
+      var serie=[];
+      avs.forEach(function(x){
+        var raw=_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel);
+        var val=parseFloat(String(raw==null?'':raw).replace(',','.'));
+        if(isNaN(val)){ if(faltam.length<6) faltam.push(t.id+' rep'+r+' · '+x.daa+' DAA'); serie.push(null); }
+        else serie.push(val);
+      });
+      porBloco.push(serie);
+    }
+    sev.push(porBloco);
+  });
+  if(faltam.length) return { erro:'Faltam notas para fechar a análise (variável "'+variavel+'"):\n\n• '+faltam.join('\n• ')+(faltam.length>=6?'\n• …':'') };
+
+  var iTest=trats.findIndex(function(t){ return !!t.testemunha; });
+  if(iTest<0) iTest=0;
+
+  var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
+  var dd=function(n){ return (n<10?'0':'')+n; };
+  var hoje=new Date();
+  var autor=''; try{ autor=(typeof _currentUserName==='function'?_currentUserName():'')||''; }catch(e){}
+  var titulo=s.nome||s.codigo||s.id;
+
+  return {
+    estudo:{
+      codigo:(s.codigo||s.nome||s.id), autor:autor,
+      data:{ pt:dd(hoje.getDate())+'/'+dd(hoje.getMonth()+1)+'/'+hoje.getFullYear(),
+             en:hoje.getFullYear()+'-'+dd(hoje.getMonth()+1)+'-'+dd(hoje.getDate()) },
+      delineamento:{ blocos:reps, parcelaM2:null, parcela:'', caldaLha:null },
+      pt:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:variavel },
+      en:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:variavel }
+    },
+    tratamentos: trats.map(function(t,i){
+      return { id:t.id, pt:(t.produto||t.id), en:(t.produto||t.id),
+               ia:(t.ia||'—'), dose:(parseFloat(String(t.dose||'').replace(',','.'))||0),
+               gia:(t.gia||''), testemunha:(i===iTest) };
+    }),
+    daa: avs.map(function(x){ return x.daa; }),
+    blocos: Array.from({length:reps},function(_,i){ return i+1; }),
+    sev: sev,
+    avaliacoes: avs.map(function(x){
+      return { daa:x.daa, data:{ pt:(isoToBR(x.av.data)||''), en:(x.av.data||'') } };
+    }),
+    aplicacoes: (s.aplicacoes||[]).map(function(a,i){
+      return { n:i+1, data:{ pt:(isoToBR(a.data)||''), en:(a.data||'') },
+               estadio:(a.bbch||''), vol:(a.volume||null), temp:(a.tempIni||null),
+               ur:(a.urIni||null), vento:(a.ventoIni||null), bico:(a.bico||'') };
+    }),
+    variavel: variavel
+  };
+}
+function openPranchaEstudo(qid, sid, variavel){
+  var p;
+  try{ p=_pranchaPayload(qid, sid, variavel); }
+  catch(e){ alert('Não consegui montar a prancha: '+e.message); return; }
+  if(p && p.erro){ alert(p.erro); return; }
+  try{ localStorage.setItem('agracta-prancha-handoff', JSON.stringify(p)); }
+  catch(e){ alert('Não consegui preparar os dados da prancha.'); return; }
+  _openPranchaFrame('prancha.html', 'Gráficos — '+(p.estudo.codigo||''));
+}
+
+/* ======================= CROQUI — prancha de figura do mapa =======================
+   Monta a folha vetorial das quadras para o relatório. A geometria sai do QGEO
+   (lat/lng); a projeção para metro acontece dentro do croqui.html. Cada quadra
+   é pintada pelo estudo que abriga — ou pela cultura, quando não há estudo. */
+function _croquiPayload(){
+  var geo = (typeof QGEO!=='undefined' && QGEO) ? QGEO : (window.DEFAULT_QGEO||{});
+  var ids = Object.keys(geo).filter(function(id){
+    return Array.isArray(geo[id]) && geo[id].length>=3 && !(typeof _delQuadras!=='undefined' && _delQuadras && _delQuadras[id]);
+  }).sort();
+  if(!ids.length) return null;
+
+  var quadras = ids.map(function(id){
+    var q = data[id]||{};
+    var est = (q.estudos||[]).find(function(s){ return s && (s.codigo||s.nome); });
+    var rot = est ? (est.codigo||est.nome) : (q.cultura||'');
+    return { id: quadraNome(id) || id,
+             latlng: geo[id],
+             trat: rot || null,
+             ndvi: (typeof ndviMeans!=='undefined' && ndviMeans && ndviMeans[id]!=null) ? ndviMeans[id] : null };
+  });
+
+  /* metadados do cabeçalho: o primeiro estudo encontrado dá o tom da folha */
+  var estudo=null, qEst=null;
+  ids.some(function(id){
+    var e=((data[id]||{}).estudos||[]).find(function(s){ return s && (s.codigo||s.nome); });
+    if(e){ estudo=e; qEst=id; return true; } return false;
+  });
+  var q0 = data[qEst||ids[0]]||{};
+  var loc = (typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qEst||ids[0]]]) || {};
+  var hoje = new Date();
+  var dd = function(n){ return (n<10?'0':'')+n; };
+  var iso = hoje.getFullYear()+'-'+dd(hoje.getMonth()+1)+'-'+dd(hoje.getDate());
+  var br  = dd(hoje.getDate())+'/'+dd(hoje.getMonth()+1)+'/'+hoje.getFullYear();
+  var autor=''; try{ autor=(typeof _currentUserName==='function'?_currentUserName():'')||''; }catch(e){}
+  var titulo = estudo ? (estudo.nome||estudo.codigo||'') : 'Croqui das quadras';
+  var cultura = q0.cultura||'';
+  var localNome = loc.nome||'';
+
+  return {
+    estudo: {
+      codigo: estudo ? (estudo.codigo||estudo.nome||'') : (localNome||'AGRACTA'),
+      autor: autor, datum: 'SIRGAS 2000 (WGS 84)',
+      data: { pt: br, en: iso },
+      dataNdvi: { pt: (typeof ndviDate!=='undefined'&&ndviDate)?(isoToBR(ndviDate)||ndviDate):br,
+                  en: (typeof ndviDate!=='undefined'&&ndviDate)?ndviDate:iso },
+      pt: { titulo: titulo, local: localNome, cultura: cultura, safra: '' },
+      en: { titulo: titulo, local: localNome, cultura: cultura, safra: '' }
+    },
+    quadras: quadras
+  };
+}
+function openCroqui(){
+  var p=null;
+  try{ p=_croquiPayload(); }catch(e){ p=null; }
+  if(!p){ alert('Não há quadras desenhadas para montar o croqui.'); return; }
+  try{ localStorage.setItem('agracta-croqui-handoff', JSON.stringify(p)); }
+  catch(e){ alert('Não consegui preparar os dados do croqui.'); return; }
+  _openPranchaFrame('croqui.html', 'Croqui das quadras');
+}
+/* Overlay das pranchas — mesmo padrão do BioEstat, folha própria. */
+function _openPranchaFrame(src, titulo){
+  var ov=document.getElementById('prOvl');
+  if(!ov){ ov=document.createElement('div'); ov.id='prOvl'; ov.style.cssText='position:fixed;inset:0;z-index:4000;background:#f2f3f1;display:flex;flex-direction:column'; document.body.appendChild(ov); }
+  ov.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#101613;border-bottom:1px solid #26322b;color:#e8efe9;font:700 13px system-ui;flex:0 0 auto">'+
+    '<span>'+esc(titulo)+'</span>'+
+    '<button onclick="closePrancha()" style="background:#222;color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer">Fechar</button>'+
+  '</div>'+
+  '<iframe id="prFrame" title="'+esc(titulo)+'" src="'+src+'?t='+Date.now()+'" style="flex:1 1 auto;width:100%;border:0;background:#f2f3f1"></iframe>';
+  ov.style.display='flex';
+}
+function closePrancha(){ var ov=document.getElementById('prOvl'); if(ov){ var f=document.getElementById('prFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
+
 function _openBioestatFrame(modo){
   var ov=document.getElementById('bioOvl');
   if(!ov){ ov=document.createElement('div'); ov.id='bioOvl'; ov.style.cssText='position:fixed;inset:0;z-index:4000;background:#0a110a;display:flex;flex-direction:column'; document.body.appendChild(ov); }
@@ -5522,8 +5703,14 @@ function _bioestatIntegratedHtml(qid,sid,study){
     if(faltamAnalise>0) body+='<div id="bioAutoStatus" style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(body?'7px':'0')+'">Calculando análise… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'</div>';
     if(faltamForense>0) fbody+='<div style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(fbody?'7px':'0')+'">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
   }
+  var _vs=_pranchaVariaveis(study||{});
+  var _btnPrancha='<div style="margin:8px 0 2px"><button onclick="openPranchaEstudo(\''+qid+'\',\''+sid+'\')" '+
+    'style="width:100%;padding:10px 12px;border:1px solid #bfd3c6;background:#f4f9f6;color:#1f5136;border-radius:9px;font:700 12px system-ui;cursor:pointer">'+
+    '&#128200; Gráficos do estudo — folha para o relatório</button>'+
+    '<div style="font-size:10.5px;color:#8a948e;margin-top:4px">Curva de severidade, AACPD, eficácia e tabela. Baixa em SVG ou PNG.'+
+    (_vs.length?(' Variável: <b>'+esc(_vs[0])+'</b>.'):'')+'</div></div>';
   var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
-    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+body+'</div>';
+    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+body+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;
