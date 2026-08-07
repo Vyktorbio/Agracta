@@ -563,7 +563,7 @@ function desenhar(){
   if(e.cabecalho){
     s += `<text x="${M}" y="${M+16}" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.6" fill="#646c6b">${esc(ESTUDO.codigo)}</text>`;
     s += `<text x="${M}" y="${M+44}" font-family="${F_COND}" font-size="22" font-weight="600" fill="#15181a">${esc(E().titulo)}</text>`;
-    s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc(localDaSelecao() || E().local)} · ${esc(E().cultura)} · ${esc(E().safra)}</text>`;
+    s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc([localDaSelecao() || E().local, E().cultura, E().safra].filter(Boolean).join(" · "))}</text>`;
     s += `<line x1="${M}" y1="${topoMapa-16}" x2="${W-M}" y2="${topoMapa-16}" stroke="#15181a" stroke-width="1.1"/>`;
   }
 
@@ -719,7 +719,7 @@ function textoLegenda(){
                 : estado.pintura==="ndvi" ? d.pNdvi : d.pVazio;
   const fundo = estado.fundo==="croqui" ? d.croqui : d.aerea;
   return `${fundo} ${d.frase(QUADRAS.length, total, pintura)} `
-       + `${localDaSelecao() || E().local}, ${E().safra}. ${d.ref}: ${ESTUDO.datum}.`;
+       + `${[localDaSelecao() || E().local, E().safra].filter(Boolean).join(", ")}. ${d.ref}: ${ESTUDO.datum}.`;
 }
 
 /* =========================================================

@@ -546,7 +546,7 @@ function tabela(x, y, cols, linhas, o={}){
 function secCabecalho(x,y,w){
   let s = txt(x, y+12, ESTUDO.codigo, {t:12,w:600,ls:1.6,c:GRAF});
   s += txt(x, y+40, E().titulo, {t:21,w:600});
-  s += txt(x, y+62, `${E().local} · ${E().cultura} · ${E().safra}`, {t:13.5,c:GRAF});
+  s += txt(x, y+62, [E().local, E().cultura, E().safra].filter(Boolean).join(" · "), {t:13.5,c:GRAF});
   s += rule(x, y+80, w, 1.1);
   return {svg:s, h:88};
 }
