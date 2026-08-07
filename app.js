@@ -365,7 +365,80 @@ function nextEvent(study){
 }
 
 // All studies across all quadras, sorted by next event
-function allUpcomingEvents(windowDays){
+/* ---------------------------------------------- Agenda: dispensar lembrete ---
+   Dispensar NÃO marca o evento como realizado: a aplicação/avaliação continua
+   pendente no estudo e no relatório. O que se apaga é só o lembrete. A dispensa
+   fica gravada no próprio estudo (portanto acompanha o dado entre aparelhos) e
+   entra na trilha BPL, com quem e quando. Dá pra trazer de volta. */
+var agVerDispensados=false;
+function _agEvKey(ev){ return ev.type+':'+ev.idx; }
+function _agDisp(study){ if(!Array.isArray(study.dispensados)) study.dispensados=[]; return study.dispensados; }
+function _agEstaDispensado(study, ev){
+  if(!study || !Array.isArray(study.dispensados) || !study.dispensados.length) return false;
+  var k=_agEvKey(ev);
+  return study.dispensados.some(function(d){ return d && d.k===k; });
+}
+function _agAcharEstudo(qid, sid){
+  var q=data[qid]; if(!q || !Array.isArray(q.estudos)) return null;
+  for(var i=0;i<q.estudos.length;i++){ if(q.estudos[i] && q.estudos[i].id===sid) return q.estudos[i]; }
+  return null;
+}
+function _agTotalDispensados(){
+  var n=0;
+  Object.keys(data).forEach(function(qid){
+    var q=data[qid]; if(!q || !Array.isArray(q.estudos)) return;
+    q.estudos.forEach(function(st){ if(st && Array.isArray(st.dispensados)) n+=st.dispensados.length; });
+  });
+  return n;
+}
+function _agSalvar(){
+  try{ save(); }catch(e){}
+  try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
+  try{ renderAgenda(); }catch(e){}
+  try{ updateAgendaBadge(); }catch(e){}
+  try{ if(typeof render==='function') render(); }catch(e){}
+}
+function agDispensar(qid, sid, key, rotulo){
+  var s=_agAcharEstudo(qid,sid); if(!s) return;
+  var d=_agDisp(s);
+  if(!d.some(function(x){ return x && x.k===key; })){
+    d.push({k:key, ts:Date.now(), quem:(typeof _currentUserName==='function'?_currentUserName():null)});
+    if(typeof logStudyAuditInObject==='function')
+      logStudyAuditInObject(s,'agenda.dispensar','Lembrete dispensado ('+(rotulo||key)+'). O evento segue pendente.');
+  }
+  _agSalvar();
+}
+function agRestaurar(qid, sid, key){
+  var s=_agAcharEstudo(qid,sid); if(!s || !Array.isArray(s.dispensados)) return;
+  s.dispensados=s.dispensados.filter(function(x){ return !(x && x.k===key); });
+  if(typeof logStudyAuditInObject==='function')
+    logStudyAuditInObject(s,'agenda.restaurar','Lembrete trazido de volta ('+key+').');
+  _agSalvar();
+}
+function agToggleDispensados(){ agVerDispensados=!agVerDispensados; try{ renderAgenda(); }catch(e){} }
+/* Dispensa de uma vez tudo que está na lista agora (sem tocar no que já foi dispensado). */
+function agLimparTudo(){
+  var lista=allUpcomingEvents(30).filter(function(e){ return !e.dispensado; });
+  if(!lista.length){ if(typeof _stxToast==='function') _stxToast('Nada para limpar.'); return; }
+  if(!confirm('Dispensar '+lista.length+' lembrete'+(lista.length>1?'s':'')+'?\n\nOs eventos continuam pendentes — só o aviso some. Dá para trazer de volta depois.')) return;
+  var tocados={};
+  lista.forEach(function(e){
+    var s=_agAcharEstudo(e.qid, e.study.id); if(!s) return;
+    var k=_agEvKey(e.event), d=_agDisp(s);
+    if(!d.some(function(x){ return x && x.k===k; })){
+      d.push({k:k, ts:Date.now(), quem:(typeof _currentUserName==='function'?_currentUserName():null)});
+      tocados[e.qid+'|'+e.study.id]=s;
+    }
+  });
+  Object.keys(tocados).forEach(function(kk){
+    if(typeof logStudyAuditInObject==='function')
+      logStudyAuditInObject(tocados[kk],'agenda.dispensar','Lembretes dispensados em lote pela agenda. Os eventos seguem pendentes.');
+  });
+  _agSalvar();
+  if(typeof _stxToast==='function') _stxToast(lista.length+' lembrete'+(lista.length>1?'s dispensados':' dispensado'));
+}
+
+function allUpcomingEvents(windowDays, incluirDispensados){
   windowDays = windowDays || 30;
   var t=today0();
   var limit=addDays(t,windowDays);
@@ -377,9 +450,11 @@ function allUpcomingEvents(windowDays){
       st=(typeof normalizeStudy==='function')?normalizeStudy(st):st;
       (typeof studyEventsV2==='function'?studyEventsV2(st):studyEvents(st)).forEach(function(ev){
         if(ev.realizada)return;
+        var _disp=_agEstaDispensado(st,ev);
+        if(_disp && !incluirDispensados) return;
         var diff=daysBetween(t,ev.date);
         if(diff>=-3 && ev.date<=limit){
-          all.push({qid:qid,study:st,event:ev,diff:diff});
+          all.push({qid:qid,study:st,event:ev,diff:diff,dispensado:_disp});
         }
       });
     });
@@ -2313,7 +2388,7 @@ function toggleAgenda(){
   if(agO)renderAgenda();
 }
 function renderAgenda(){
-  var events=allUpcomingEvents(30);
+  var events=allUpcomingEvents(30, agVerDispensados);
   var today=today0();
 
   var groups={overdue:[],today:[],soon:[],week:[],month:[]};
@@ -2325,7 +2400,12 @@ function renderAgenda(){
     else groups.month.push(e);
   });
 
+  var _nDisp=_agTotalDispensados();
   var h='<div class="ag-title">AGENDA (30 DIAS)<button class="ag-close" onclick="toggleAgenda()">×</button></div>';
+  h+='<div class="ag-acoes">';
+  h+='<button class="ag-acao" onclick="agLimparTudo()">Limpar lembretes</button>';
+  if(_nDisp) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nDisp+')</button>';
+  h+='</div>';
 
   function renderGroup(title,arr,cls){
     if(!arr.length)return "";
@@ -2339,8 +2419,12 @@ function renderAgenda(){
       else if(e.diff<0)dateLabel='há '+Math.abs(e.diff)+'d';
       else dateLabel='em '+e.diff+'d';
       var color = e.diff<=0?'#ff5252':(e.diff<=3?'#ffb74d':'#64b5f6');
-      gh+='<div class="ag-item '+cls+'" onclick="closeAgendaAndOpen(\''+e.qid+'\')">';
-      gh+='<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(e.qid))+'</span><span class="ag-item-date" style="color:'+color+'">'+dateLabel+'</span></div>';
+      var _k=_agEvKey(e.event), _sid=e.study.id;
+      var _btn = e.dispensado
+        ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
+        : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\',\''+typeLabel+'\')">&times;</button>';
+      gh+='<div class="ag-item '+cls+(e.dispensado?' ag-dispensado':'')+'" onclick="closeAgendaAndOpen(\''+e.qid+'\')">';
+      gh+='<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(e.qid))+'</span><span class="ag-item-date" style="color:'+color+'">'+dateLabel+'</span>'+_btn+'</div>';
       gh+='<div class="ag-item-name">'+esc(e.study.nome)+'</div>';
       gh+='<div class="ag-item-type" style="color:'+color+'">'+typeLabel+' • '+fD(e.event.date)+'</div>';
       gh+='</div>';
@@ -2355,7 +2439,7 @@ function renderAgenda(){
   h+=renderGroup('📅 ESTA SEMANA',groups.week,'');
   h+=renderGroup('📆 PRÓXIMOS 30 DIAS',groups.month,'');
 
-  if(!events.length)h+='<div class="ag-empty">Nenhum evento programado.<br>Adicione estudos nas quadras para visualizar aqui.</div>';
+  if(!events.length)h+='<div class="ag-empty">'+(_nDisp&&!agVerDispensados?'Nenhum lembrete ativo.<br>Há '+_nDisp+' dispensado'+(_nDisp>1?'s':'')+' — use o botão acima para ver.':'Nenhum evento programado.<br>Adicione estudos nas quadras para visualizar aqui.')+'</div>';
 
   document.getElementById("agendaPanel").innerHTML=h;
 }
