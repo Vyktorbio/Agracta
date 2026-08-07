@@ -5508,6 +5508,7 @@ function openPranchaEstudo(qid, sid, variavel){
    (lat/lng); a projeção para metro acontece dentro do croqui.html. Cada quadra
    é pintada pelo estudo que abriga — ou pela cultura, quando não há estudo. */
 function _croquiPayload(){
+  try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
   var geo = (typeof QGEO!=='undefined' && QGEO) ? QGEO : (window.DEFAULT_QGEO||{});
   var ids = Object.keys(geo).filter(function(id){
     return Array.isArray(geo[id]) && geo[id].length>=3 && !(typeof _delQuadras!=='undefined' && _delQuadras && _delQuadras[id]);
@@ -5518,9 +5519,13 @@ function _croquiPayload(){
     var q = data[id]||{};
     var est = (q.estudos||[]).find(function(s){ return s && (s.codigo||s.nome); });
     var rot = est ? (est.codigo||est.nome) : (q.cultura||'');
+    var locId = (typeof QLOCAL!=='undefined' && QLOCAL && QLOCAL[id]) || null;
+    var locNome = (locId && typeof LOCAIS!=='undefined' && LOCAIS && LOCAIS[locId] && LOCAIS[locId].nome) || 'Sem lugar';
     return { id: quadraNome(id) || id,
              latlng: geo[id],
              trat: rot || null,
+             local: locNome,
+             localAtivo: (locId === localAtivo),
              ndvi: (typeof ndviMeans!=='undefined' && ndviMeans && ndviMeans[id]!=null) ? ndviMeans[id] : null };
   });
 

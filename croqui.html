@@ -166,6 +166,11 @@ body.limpa .sair-limpa{display:block}
 .opt-area{margin-left:auto;font-family:var(--cond);font-size:11px;color:var(--grafite);letter-spacing:.03em}
 .sem-quadra{padding:64px 24px;text-align:center;font-family:var(--cond);font-size:13px;
   letter-spacing:.06em;color:var(--grafite)}
+.mini-on{background:var(--realce);color:#fff;border-color:var(--realce)}
+.grupo-lugar{font-family:var(--cond);font-size:10px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--grafite);margin:9px 0 4px;padding-bottom:3px;
+  border-bottom:1px solid var(--linha)}
+.grupo-lugar:first-child{margin-top:0}
 </style>
 </head>
 <body>
@@ -204,6 +209,7 @@ body.limpa .sair-limpa{display:block}
 
     <div class="grupo">
       <h2>Quadras no croqui</h2>
+      <div class="sel-acoes" id="sel-lugares"></div>
       <div class="sel-acoes">
         <button class="mini" id="sel-todas">Todas</button>
         <button class="mini" id="sel-nenhuma">Nenhuma</button>
@@ -349,6 +355,7 @@ function _carregar(){
     const quadras = hs.quadras
       .filter(q => q && q.id && (!m || m[q.id] || Array.isArray(q.pts)))
       .map(q => ({ id:q.id, trat:q.trat||null, ndvi:(typeof q.ndvi==="number"?q.ndvi:null),
+                   local:q.local||null, localAtivo:!!q.localAtivo,
                    pts:(m && m[q.id]) ? m[q.id] : q.pts }));
     return { estudo: Object.assign({}, DEMO.estudo, hs.estudo||{}),
              quadras, carreador: hs.carreador||null,
@@ -395,11 +402,21 @@ const estado = {
   el:{cabecalho:1,rotulos:1,areas:1,norte:1,escala:1,legenda:1,carreador:1,rodape:1},
   sel:{}   /* id da quadra -> false quando fora do croqui */
 };
-TODAS.forEach(q => { estado.sel[q.id] = true; });
+/* Abre já filtrado pelo lugar em que o app está — era isso que fazia a folha
+   nascer com a estação inteira dentro. Sem lugar informado, tudo entra. */
+const LUGARES = [...new Set(TODAS.map(q => q.local).filter(Boolean))];
+const _temAtivo = TODAS.some(q => q.localAtivo);
+TODAS.forEach(q => { estado.sel[q.id] = _temAtivo ? !!q.localAtivo : true; });
 /* As quadras escolhidas. O enquadramento de desenhar() já se refaz sozinho
    a partir dos limites do conjunto, então selecionar menos quadras dá zoom
    na área escolhida — sem sobra branca. */
 const QS = () => TODAS.filter(q => estado.sel[q.id]);
+/* O cabeçalho não pode nomear um lugar diferente do que está desenhado. Quando
+   a seleção é toda de um lugar só, é esse o nome; misturando, fica o do estudo. */
+function localDaSelecao(){
+  const ls = [...new Set(QS().map(q => q.local).filter(Boolean))];
+  return ls.length === 1 ? ls[0] : null;
+}
 
 const t = () => L[estado.idioma];                 /* rótulos */
 const E = () => ESTUDO[estado.idioma];            /* metadados do estudo */
@@ -503,7 +520,7 @@ function desenhar(){
   if(e.cabecalho){
     s += `<text x="${M}" y="${M+16}" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.6" fill="#646c6b">${esc(ESTUDO.codigo)}</text>`;
     s += `<text x="${M}" y="${M+44}" font-family="${F_COND}" font-size="22" font-weight="600" fill="#15181a">${esc(E().titulo)}</text>`;
-    s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc(E().local)} · ${esc(E().cultura)} · ${esc(E().safra)}</text>`;
+    s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc(localDaSelecao() || E().local)} · ${esc(E().cultura)} · ${esc(E().safra)}</text>`;
     s += `<line x1="${M}" y1="${topoMapa-16}" x2="${W-M}" y2="${topoMapa-16}" stroke="#15181a" stroke-width="1.1"/>`;
   }
 
@@ -659,7 +676,7 @@ function textoLegenda(){
                 : estado.pintura==="ndvi" ? d.pNdvi : d.pVazio;
   const fundo = estado.fundo==="croqui" ? d.croqui : d.aerea;
   return `${fundo} ${d.frase(QUADRAS.length, total, pintura)} `
-       + `${E().local}, ${E().safra}. ${d.ref}: ${ESTUDO.datum}.`;
+       + `${localDaSelecao() || E().local}, ${E().safra}. ${d.ref}: ${ESTUDO.datum}.`;
 }
 
 /* =========================================================
@@ -680,13 +697,46 @@ function render(){
 
 /* lista de quadras — montada a partir dos dados, não do HTML */
 const gQuadras = document.getElementById("g-quadras");
+/* Um botão por lugar: escolhe o conjunto inteiro daquele lugar de uma vez. */
+const gLugares = document.getElementById("sel-lugares");
+function montaLugares(){
+  if(LUGARES.length < 2){ gLugares.style.display = "none"; return; }
+  gLugares.innerHTML = LUGARES.map(l => {
+    const desse = TODAS.filter(q => q.local === l);
+    const todos = desse.every(q => estado.sel[q.id]);
+    return `<button class="mini${todos ? " mini-on" : ""}" data-lugar="${esc(l)}">${esc(l)} (${desse.length})</button>`;
+  }).join("");
+}
+gLugares.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-lugar]"); if(!b) return;
+  const l = b.dataset.lugar;
+  const desse = TODAS.filter(q => q.local === l);
+  const ligar = !desse.every(q => estado.sel[q.id]);
+  /* clique num lugar isola aquele lugar; segurando Shift, soma ao que já está */
+  if(!ev.shiftKey) TODAS.forEach(q => estado.sel[q.id] = false);
+  desse.forEach(q => estado.sel[q.id] = ev.shiftKey ? ligar : true);
+  montaLugares(); montaSeletor(); render();
+});
+
 function montaSeletor(){
+  montaLugares();
+  if(LUGARES.length > 1){
+    /* agrupa por lugar, senão 32 caixinhas soltas não dizem de onde são */
+    gQuadras.innerHTML = LUGARES.map(l =>
+      `<div class="grupo-lugar">${esc(l)}</div>` +
+      TODAS.filter(q => q.local === l).map(_optQuadra).join("")
+    ).join("");
+    return;
+  }
   gQuadras.innerHTML = TODAS.map(q =>
-    `<label class="opt${estado.sel[q.id] ? " ativo" : ""}">`
+    _optQuadra(q)).join("");
+}
+function _optQuadra(q){
+  return `<label class="opt${estado.sel[q.id] ? " ativo" : ""}">`
     + `<input type="checkbox" data-q="${esc(q.id)}"${estado.sel[q.id] ? " checked" : ""}>`
     + `<span class="marcador"></span>${esc(q.id)}`
     + `<span class="opt-area">${num(areaM2(q.pts)/10000)} ha</span>`
-    + `</label>`).join("");
+    + `</label>`;
 }
 gQuadras.addEventListener("change", ev => {
   const id = ev.target.dataset.q;

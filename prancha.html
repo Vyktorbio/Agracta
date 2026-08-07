@@ -392,6 +392,16 @@ const EFIC_SEV = TRAT.map((_,i) => i === iTest ? null
    valia para o estudo de demonstração. Agora seguem o delineamento real. */
 const NB = BLOCOS.length;
 const ULTAV = DAA.length - 1;
+/* "ferrugem-asiática" e "segunda aplicação" vinham cravados do protótipo. Uma
+   folha de relatório não pode nomear a doença errada nem contar aplicação que
+   não houve — sem informação, o rótulo cala. */
+const ALVO = { pt: (ESTUDO.alvo ? ` de ${ESTUDO.alvo}` : ""),
+               en: (ESTUDO.alvo ? ` ${ESTUDO.alvo}` : "") };
+const NAPL = Array.isArray(APLICACOES) ? APLICACOES.length : 0;
+const APLREF = {
+  pt: NAPL > 1 ? "da primeira aplicação" : "da aplicação",
+  en: NAPL > 1 ? "the first application"  : "application"
+};
 
 /* =====================================================================
    3. IDIOMA
@@ -417,14 +427,14 @@ const L = {
      tituloSevAv:"Severidade por avaliação",
      eixoAval:"Avaliação",
      notaSevAv:"Severidade média de 4 blocos em cada avaliação.",
-     legSevAval:()=>`Severidade média de ferrugem-asiática por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de 4 blocos. ${ESTUDO.pt.escala}.`,
+     legSevAval:()=>`Severidade média${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
      colEficA:"Eficácia", severidadeL:"Severidade",
      notaSevA:daa=>`Severidade média aos ${daa} DAA · eficácia de Abbott calculada sobre a severidade · média de 4 blocos`,
-     legSevAbbott:()=>`Severidade média de ferrugem-asiática e eficácia de controle por tratamento aos ${DAA[DAA.length-1]} dias após a segunda aplicação, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a severidade média de 4 blocos, em relação à testemunha. ${ESTUDO.pt.escala}.`,
+     legSevAbbott:()=>`Severidade média${ALVO.pt} e eficácia de controle por tratamento aos ${DAA[DAA.length-1]} dias depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a severidade média de 4 blocos, em relação à testemunha. ${ESTUDO.pt.escala}.`,
      notaSevB:daa=>`Severidade média aos ${daa} DAA · média de 4 blocos`,
-     legSevSimples:()=>`Severidade média de ferrugem-asiática por tratamento aos ${DAA[DAA.length-1]} dias após a segunda aplicação, estudo ${ESTUDO.codigo}. Cada barra é a média de 4 blocos. ${ESTUDO.pt.escala}.`,
+     legSevSimples:()=>`Severidade média${ALVO.pt} por tratamento aos ${DAA[DAA.length-1]} dias depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
      aplic:"2ª aplicação",
-     legSev:()=>`Curva de progresso da severidade de ferrugem-asiática por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
+     legSev:()=>`Curva de progresso da severidade${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
      figura:"Figura", tabela:"Tabela",
      legEfic:()=>`Eficácia de controle (Abbott) calculada sobre a área abaixo da curva de progresso da doença, estudo ${ESTUDO.codigo}. Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`,
      legTab:()=>`Severidade média, AACPD, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`,
@@ -442,7 +452,7 @@ const L = {
      medias:"Means followed by the same letter do not differ.",
      tituloEfic:"Control efficacy based on AUDPC", tituloTab:"Results by treatment",
      tituloSev:"Disease progress curve",
-     eixoSev:"Severity (%)", eixoDAA:"Days after second application",
+     eixoSev:"Severity (%)", eixoDAA:`Days after ${APLREF.en}`,
      notaSev:"Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.",
      notaSevSimples:"Mean severity of 4 blocks per treatment.",
      tituloSevB:"Severity by treatment",
@@ -450,14 +460,14 @@ const L = {
      tituloSevAv:"Severity by assessment",
      eixoAval:"Assessment",
      notaSevAv:"Mean severity of 4 blocks at each assessment.",
-     legSevAval:()=>`Mean Asian soybean rust severity by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of 4 blocks. ${ESTUDO.en.escala}.`,
+     legSevAval:()=>`Mean${ALVO.en} severity by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
      colEficA:"Efficacy", severidadeL:"Severity",
      notaSevA:daa=>`Mean severity at ${daa} DAA · Abbott efficacy calculated on severity · mean of 4 blocks`,
-     legSevAbbott:()=>`Mean Asian soybean rust severity and control efficacy by treatment at ${DAA[DAA.length-1]} days after the second application, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean severity of 4 blocks, relative to the untreated check. ${ESTUDO.en.escala}.`,
+     legSevAbbott:()=>`Mean${ALVO.en} severity and control efficacy by treatment at ${DAA[DAA.length-1]} days after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean severity of 4 blocks, relative to the untreated check. ${ESTUDO.en.escala}.`,
      notaSevB:daa=>`Mean severity at ${daa} DAA · mean of 4 blocks`,
-     legSevSimples:()=>`Mean Asian soybean rust severity by treatment at ${DAA[DAA.length-1]} days after the second application, study ${ESTUDO.codigo}. Each bar is the mean of 4 blocks. ${ESTUDO.en.escala}.`,
+     legSevSimples:()=>`Mean${ALVO.en} severity by treatment at ${DAA[DAA.length-1]} days after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
      aplic:"2nd application",
-     legSev:()=>`Disease progress curves for Asian soybean rust severity by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
+     legSev:()=>`Disease progress curves for${ALVO.en} severity by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
      figura:"Figure", tabela:"Table",
      legEfic:()=>`Control efficacy (Abbott) calculated on the area under the disease progress curve, study ${ESTUDO.codigo}. Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`,
      legTab:()=>`Mean severity, AUDPC, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`,
@@ -866,8 +876,12 @@ function secTratamentos(x,y,w){
   ]);
   const tb = tabela(x, y, cols, linhas, {zebra:true});
   const nota = estado.idioma==="pt"
-    ? `Parcela de ${dl.parcela} (${dl.parcelaM2} m²) · volume de calda ${dl.caldaLha} L/ha · valores por parcela calculados pela Calculadora de Calda`
-    : `Plot of ${dl.parcela} (${dl.parcelaM2} m²) · spray volume ${dl.caldaLha} L/ha · per-plot values from the spray-mix calculator`;
+    ? [dl.parcela ? `Parcela de ${dl.parcela}` : null,
+       dl.parcelaM2 ? `${dl.parcelaM2} m²` : null,
+       dl.caldaLha ? `volume de calda ${dl.caldaLha} L/ha` : null].filter(Boolean).join(" · ")
+    : [dl.parcela ? `Plot of ${dl.parcela}` : null,
+       dl.parcelaM2 ? `${dl.parcelaM2} m²` : null,
+       dl.caldaLha ? `spray volume ${dl.caldaLha} L/ha` : null].filter(Boolean).join(" · ");
   return {svg: tb.svg + txt(x, y+tb.h+17, nota, {t:11, c:GRAF}), h: tb.h+26};
 }
 
@@ -936,7 +950,10 @@ function secAnova(x,y,w){
 function secRodape(x,y,w){
   const d = t(), dl = ESTUDO.delineamento;
   let s = rule(x,y,w,1.1);
-  s += txt(x, y+20, `${d.ref}: ${dl.blocos} ${d.dbc} · ${d.parc} ${dl.parcela} · n = ${AN.N}`, {t:12, c:GRAF});
+  /* o tamanho da parcela é opcional — sem ele o rodapé simplesmente não fala nisso */
+  s += txt(x, y+20, [`${d.ref}: ${dl.blocos} ${d.dbc}`,
+                     dl.parcela ? `${d.parc} ${dl.parcela}` : null,
+                     `n = ${AN.N}`].filter(Boolean).join(" · "), {t:12, c:GRAF});
   s += txt(x, y+37, `${d.geradoPor} ${ESTUDO.autor} ${d.em} ${ESTUDO.data[estado.idioma]} · Agracta`, {t:12, c:GRAF});
   s += txt(x+w, y+20, ESTUDO.codigo, {t:12, w:600, ls:1.4, a:"end"});
   return {svg:s, h:48};
@@ -1046,7 +1063,13 @@ if(UMA){
   document.querySelectorAll('#g-vista input[value="sev-curva"]').forEach(i=>{
     const o = i.closest(".opt"); if(o) o.style.display = "none";
   });
-  if(estado.vista === "sev-curva") estado.vista = "eficacia";
+  /* Sem série temporal, severidade é o resultado bruto do dia — é nela que a
+     folha abre. A eficácia continua a um clique. */
+  if(estado.vista === "sev-curva" || estado.vista === "eficacia") estado.vista = "sev-barras";
+  document.querySelectorAll('#g-vista input').forEach(i=>{
+    i.checked = (i.value === estado.vista);
+    const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
+  });
 }
 
 const folha = document.getElementById("folha");
