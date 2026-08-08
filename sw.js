@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v81';
+var CACHE = 'agracta-app-v82';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './', './index.html',
@@ -50,6 +50,21 @@ self.addEventListener('fetch', function(e){
     e.respondWith(caches.match(e.request).then(function(r){
       return r || fetch(e.request).then(function(resp){ if(resp && resp.ok){ var copy=resp.clone(); caches.open(CACHE).then(function(c){ c.put(e.request, copy); }); } return resp; });
     }));
+    return;
+  }
+  /* Folhas de figura: são documento próprio, NÃO o shell do app. Abertas em
+     iframe elas chegam com mode==='navigate' e caíam no ramo do index abaixo,
+     que grava a resposta na chave './index.html' — ou seja, abrir a prancha
+     sobrescrevia o app no cache. Rede primeiro, cache só como reserva offline,
+     cada uma na sua própria chave. */
+  if(/\/(prancha|croqui)\.html$/.test(u.pathname)){
+    var chave = u.origin + u.pathname;
+    e.respondWith(
+      fetch(e.request).then(function(resp){
+        if(resp && resp.ok){ var cp=resp.clone(); caches.open(CACHE).then(function(c){ c.put(chave, cp); }); }
+        return resp;
+      }).catch(function(){ return caches.match(chave); })
+    );
     return;
   }
   var isHTML = e.request.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('index.html');

@@ -5395,9 +5395,10 @@ function openBioestat(qid, sid, modo){
   _openBioestatFrame(modo);
 }
 /* =================== GRÁFICOS DO ESTUDO — prancha de resultados ===================
-   Monta a folha de figuras a partir das avaliações reais. A AACPD é área sob a
-   curva, então a prancha exige ao menos duas avaliações em DAA distintos e a
-   grade completa (todo tratamento x bloco x avaliação preenchido). Quando falta
+   Monta a folha de figuras a partir das avaliações reais. Com duas ou mais
+   avaliações a análise sai sobre a AACPD; com uma só não há área sob a curva e
+   ela recai sobre a severidade daquela data. Exige a grade completa (todo
+   tratamento x bloco x avaliação preenchido). Quando falta
    algo, diz o que falta em vez de desenhar um gráfico pela metade. */
 function _pranchaVariaveis(s){
   var c={};
