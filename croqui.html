@@ -356,13 +356,17 @@ function _carregar(){
   try{ hs = JSON.parse(localStorage.getItem("agracta-croqui-handoff")||"null"); }catch(e){}
   if(hs && Array.isArray(hs.quadras) && hs.quadras.length){
     const geo = {};
-    hs.quadras.forEach(q => { if(q && q.id && Array.isArray(q.latlng)) geo[q.id] = q.latlng; });
+    /* Indexado pela chave BRUTA: dois lugares podem ter quadras de mesmo nome
+       (A1 em Iracemápolis e A1 em Anápolis), e antes uma apagava a geometria da
+       outra aqui — e depois as duas colidiam na mesma chave de seleção. */
+    hs.quadras.forEach(q => { const k=q.key||q.id; if(q && k && Array.isArray(q.latlng)) geo[k] = q.latlng; });
     const m = Object.keys(geo).length ? _paraMetros(geo) : null;
     const quadras = hs.quadras
-      .filter(q => q && q.id && (!m || m[q.id] || Array.isArray(q.pts)))
-      .map(q => ({ id:q.id, trat:q.trat||null, ndvi:(typeof q.ndvi==="number"?q.ndvi:null),
+      .filter(q => q && q.id && (!m || m[q.key||q.id] || Array.isArray(q.pts)))
+      .map(q => ({ key:q.key||q.id, id:q.id, trat:q.trat||null,
+                   ndvi:(typeof q.ndvi==="number"?q.ndvi:null),
                    local:q.local||null, localAtivo:!!q.localAtivo,
-                   pts:(m && m[q.id]) ? m[q.id] : q.pts }));
+                   pts:(m && m[q.key||q.id]) ? m[q.key||q.id] : q.pts }));
     return { estudo: Object.assign({}, DEMO.estudo, hs.estudo||{}),
              quadras, carreador: hs.carreador||null,
              tratamentos: hs.tratamentos || _paletaAuto(quadras),
@@ -382,7 +386,7 @@ function _carregar(){
    pintura "por tratamento" continua legível como mapa de identificação. */
 function _paletaAuto(quadras){
   const chaves = [];
-  quadras.forEach(q => { const k = q.trat || q.id; if(chaves.indexOf(k)<0) chaves.push(k); });
+  quadras.forEach(q => { const k = q.trat || q.key || q.id; if(chaves.indexOf(k)<0) chaves.push(k); });
   const out = {};
   chaves.forEach((k,i)=>{ out[k] = { cor:PALETA[i%PALETA.length], pt:k, en:k }; });
   return out;
@@ -415,11 +419,11 @@ const estado = {
    nascer com a estação inteira dentro. Sem lugar informado, tudo entra. */
 const LUGARES = [...new Set(TODAS.map(q => q.local).filter(Boolean))];
 const _temAtivo = TODAS.some(q => q.localAtivo);
-TODAS.forEach(q => { estado.sel[q.id] = _temAtivo ? !!q.localAtivo : true; });
+TODAS.forEach(q => { estado.sel[q.key] = _temAtivo ? !!q.localAtivo : true; });
 /* As quadras escolhidas. O enquadramento de desenhar() já se refaz sozinho
    a partir dos limites do conjunto, então selecionar menos quadras dá zoom
    na área escolhida — sem sobra branca. */
-const QS = () => TODAS.filter(q => estado.sel[q.id]);
+const QS = () => TODAS.filter(q => estado.sel[q.key]);
 /* O cabeçalho não pode nomear um lugar diferente do que está desenhado. Quando
    a seleção é toda de um lugar só, é esse o nome; misturando, fica o do estudo. */
 function localDaSelecao(){
@@ -486,7 +490,7 @@ const claro = hex => {
 };
 /* Sem tratamento atribuído (geometria crua da estação), a própria quadra é a
    categoria — a chave precisa bater com a que o _paletaAuto usou. */
-const chaveTrat = q => q.trat || q.id;
+const chaveTrat = q => q.trat || q.key || q.id;
 const preenche = q => {
   if(estado.pintura==="vazio") return "none";
   if(estado.pintura==="ndvi") return q.ndvi==null ? "#e6e8e3" : corNdvi(q.ndvi);
@@ -784,7 +788,7 @@ function montaLugares(){
   if(LUGARES.length < 2){ gLugares.style.display = "none"; return; }
   gLugares.innerHTML = LUGARES.map(l => {
     const desse = TODAS.filter(q => q.local === l);
-    const todos = desse.every(q => estado.sel[q.id]);
+    const todos = desse.every(q => estado.sel[q.key]);
     return `<button class="mini${todos ? " mini-on" : ""}" data-lugar="${esc(l)}">${esc(l)} (${desse.length})</button>`;
   }).join("");
 }
@@ -792,10 +796,10 @@ gLugares.addEventListener("click", ev => {
   const b = ev.target.closest("[data-lugar]"); if(!b) return;
   const l = b.dataset.lugar;
   const desse = TODAS.filter(q => q.local === l);
-  const ligar = !desse.every(q => estado.sel[q.id]);
+  const ligar = !desse.every(q => estado.sel[q.key]);
   /* clique num lugar isola aquele lugar; segurando Shift, soma ao que já está */
-  if(!ev.shiftKey) TODAS.forEach(q => estado.sel[q.id] = false);
-  desse.forEach(q => estado.sel[q.id] = ev.shiftKey ? ligar : true);
+  if(!ev.shiftKey) TODAS.forEach(q => estado.sel[q.key] = false);
+  desse.forEach(q => estado.sel[q.key] = ev.shiftKey ? ligar : true);
   montaLugares(); montaSeletor(); render();
 });
 
@@ -813,8 +817,8 @@ function montaSeletor(){
     _optQuadra(q)).join("");
 }
 function _optQuadra(q){
-  return `<label class="opt${estado.sel[q.id] ? " ativo" : ""}">`
-    + `<input type="checkbox" data-q="${esc(q.id)}"${estado.sel[q.id] ? " checked" : ""}>`
+  return `<label class="opt${estado.sel[q.key] ? " ativo" : ""}">`
+    + `<input type="checkbox" data-q="${esc(q.key)}"${estado.sel[q.key] ? " checked" : ""}>`
     + `<span class="marcador"></span>${esc(q.id)}`
     + `<span class="opt-area">${num(areaM2(q.pts)/10000)} ha</span>`
     + `</label>`;
@@ -827,10 +831,10 @@ gQuadras.addEventListener("change", ev => {
   render();
 });
 document.getElementById("sel-todas").addEventListener("click", ()=>{
-  TODAS.forEach(q => estado.sel[q.id] = true); montaSeletor(); render();
+  TODAS.forEach(q => estado.sel[q.key] = true); montaSeletor(); render();
 });
 document.getElementById("sel-nenhuma").addEventListener("click", ()=>{
-  TODAS.forEach(q => estado.sel[q.id] = false); montaSeletor(); render();
+  TODAS.forEach(q => estado.sel[q.key] = false); montaSeletor(); render();
 });
 montaSeletor();
 

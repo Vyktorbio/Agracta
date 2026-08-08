@@ -5595,7 +5595,8 @@ function _croquiPayload(){
     var _umSo = (typeof LOCAIS!=='undefined' && LOCAIS && Object.keys(LOCAIS).length <= 1);
     if(_umSo) locId = localAtivo;
     var locNome = (typeof LOCAIS!=='undefined' && LOCAIS && LOCAIS[locId] && LOCAIS[locId].nome) || '';
-    return { id: quadraNome(id) || id,
+    return { key: id,                       /* id bruto: único. É a chave. */
+             id: quadraNome(id) || id,       /* nome de exibição: PODE repetir entre lugares */
              latlng: geo[id],
              trat: rot || null,
              local: locNome,
