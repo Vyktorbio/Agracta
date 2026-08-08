@@ -604,9 +604,14 @@ function desenhar(){
   /* --- cabeçalho --- */
   if(e.cabecalho){
     const _tf = tituloFolha();
-    s += `<text x="${M}" y="${M+16}" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.6" fill="#646c6b">${esc(_tf.codigo)}</text>`;
+    /* O título já nomeia o escopo. Repetir na linha de cima e no subtítulo
+       fazia "Iracemápolis" aparecer três vezes no mesmo cabeçalho. */
+    const _repete = _tf.titulo.indexOf(_tf.codigo) >= 0;
+    if(!_repete)
+      s += `<text x="${M}" y="${M+16}" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.6" fill="#646c6b">${esc(_tf.codigo)}</text>`;
     s += `<text x="${M}" y="${M+44}" font-family="${F_COND}" font-size="22" font-weight="600" fill="#15181a">${esc(_tf.titulo)}</text>`;
-    s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc([lugaresDaSelecao().length===1 ? lugaresDaSelecao()[0] : (lugaresDaSelecao().length>1 ? "" : E().local), E().cultura, E().safra].filter(Boolean).join(" · "))}</text>`;
+    const _sub = [_repete ? "" : (lugaresDaSelecao().length===1 ? lugaresDaSelecao()[0] : (lugaresDaSelecao().length>1 ? "" : E().local)), E().cultura, E().safra].filter(Boolean).join(" · ");
+    if(_sub) s += `<text x="${M}" y="${M+66}" font-family="${F_COND}" font-size="14" fill="#646c6b">${esc(_sub)}</text>`;
     s += `<line x1="${M}" y1="${topoMapa-16}" x2="${W-M}" y2="${topoMapa-16}" stroke="#15181a" stroke-width="1.1"/>`;
   }
 
@@ -730,7 +735,7 @@ function desenhar(){
     linhas.forEach((t,i)=>{
       s += `<text x="${M}" y="${baseMapa+48+i*17}" font-family="${F_COND}" font-size="12" fill="#646c6b">${t}</text>`;
     });
-    s += `<text x="${W-M}" y="${baseMapa+48}" text-anchor="end" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.4" fill="#15181a">${esc(ESTUDO.codigo)}</text>`;
+    s += `<text x="${W-M}" y="${baseMapa+48}" text-anchor="end" font-family="${F_COND}" font-size="12" font-weight="600" letter-spacing="1.4" fill="#15181a">${esc(tituloFolha().codigo)}</text>`;
   }
 
   /* --- marcas de corte: a prancha é para impressão --- */
