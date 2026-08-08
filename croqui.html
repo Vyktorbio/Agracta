@@ -758,12 +758,25 @@ function paresSobrepostos(){
 }
 function avisaSobrepostas(){
   const box = document.getElementById("aviso-sobrepostas");
+  const avisos = [];
   const ps = paresSobrepostos();
-  if(!ps.length){ box.style.display = "none"; return; }
-  box.style.display = "block";
-  box.innerHTML = `<b>${ps.length} par${ps.length>1?"es":""} de quadras no mesmo lugar:</b> `
+  if(ps.length) avisos.push(`<b>${ps.length} par${ps.length>1?"es":""} de quadras no mesmo lugar:</b> `
     + ps.map(p => esc(p[0]) + " ↔ " + esc(p[1])).join(", ")
-    + ` — provável duplicata; o contorno sai dobrado.`;
+    + ` — provável duplicata; o contorno sai dobrado.`);
+  /* Se aparece mais de uma localidade, diz QUAIS quadras estão em cada uma — foi
+     assim que uma segunda localidade fantasma passou despercebida. */
+  if(LUGARES.length > 1){
+    const det = LUGARES.map(l => {
+      const q = TODAS.filter(x => x.local === l);
+      const amostra = q.slice(0,6).map(x=>esc(x.id)).join(", ");
+      return `<b>${esc(l)}</b>: ${q.length} — ${amostra}${q.length>6?"…":""}`;
+    }).join("<br>");
+    avisos.push(`<b>${LUGARES.length} localidades neste conjunto.</b><br>${det}`
+      + `<br>Se deveria haver só uma, o vínculo quadra→lugar está errado no app.`);
+  }
+  if(!avisos.length){ box.style.display = "none"; return; }
+  box.style.display = "block";
+  box.innerHTML = avisos.join("<hr style='border:0;border-top:1px solid #e6cfa8;margin:7px 0'>");
 }
 
 const gLugares = document.getElementById("sel-lugares");

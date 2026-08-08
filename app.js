@@ -5520,8 +5520,14 @@ function _croquiPayload(){
     var q = data[id]||{};
     var est = (q.estudos||[]).find(function(s){ return s && (s.codigo||s.nome); });
     var rot = est ? (est.codigo||est.nome) : (q.cultura||'');
+    /* Quadra sem lugar resolvido pertence a onde se está trabalhando — inventar
+       um "Sem lugar" fazia a folha exibir uma segunda localidade que não existe.
+       Com um único lugar cadastrado, nunca há o que separar. */
     var locId = (typeof QLOCAL!=='undefined' && QLOCAL && QLOCAL[id]) || null;
-    var locNome = (locId && typeof LOCAIS!=='undefined' && LOCAIS && LOCAIS[locId] && LOCAIS[locId].nome) || 'Sem lugar';
+    if(!locId || !(typeof LOCAIS!=='undefined' && LOCAIS && LOCAIS[locId])) locId = localAtivo;
+    var _umSo = (typeof LOCAIS!=='undefined' && LOCAIS && Object.keys(LOCAIS).length <= 1);
+    if(_umSo) locId = localAtivo;
+    var locNome = (typeof LOCAIS!=='undefined' && LOCAIS && LOCAIS[locId] && LOCAIS[locId].nome) || '';
     return { id: quadraNome(id) || id,
              latlng: geo[id],
              trat: rot || null,
