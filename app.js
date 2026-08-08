@@ -1157,6 +1157,57 @@ function buildLocalChip(){
 }
 function closeLocalMenu(){ var m=document.getElementById('localMenu'); if(m) m.remove(); document.removeEventListener('click', _locMenuOutside, true); }
 function _locMenuOutside(e){ var m=document.getElementById('localMenu'), c=document.getElementById('localChip'); if(m && !m.contains(e.target) && c && !c.contains(e.target)) closeLocalMenu(); }
+/* ---------------------------------------- lugares duplicados ---------------
+   O merge entre aparelhos pode criar duas entradas em LOCAIS para a MESMA
+   estação (ids diferentes, mesmo nome) — foi o que fez Iracemápolis aparecer
+   como duas localidades. Vínculo órfão o ensureLocais já resolve; isto aqui é
+   o outro caso, que ele não vê porque as duas entradas são válidas. */
+function _locNorm(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+         .toLowerCase().replace(/\s+/g,' ').trim();
+}
+function diagnosticarLugares(){
+  ensureLocais();
+  var lugares=Object.keys(LOCAIS).map(function(id){
+    return { id:id, nome:LOCAIS[id].nome||'(sem nome)',
+             quadras:quadrasDoLocal(id).length, ativo:(id===localAtivo) };
+  });
+  var porNome={};
+  lugares.forEach(function(l){ var k=_locNorm(l.nome); (porNome[k]=porNome[k]||[]).push(l); });
+  var grupos=Object.keys(porNome).map(function(k){ return porNome[k]; })
+              .filter(function(g){ return g.length>1; });
+  return { lugares:lugares, duplicados:grupos };
+}
+/* Funde os de mesmo nome, mantendo o que tem mais quadras (empate: o ativo). */
+function fundirLugaresDuplicados(silencioso){
+  var d=diagnosticarLugares();
+  if(!d.duplicados.length){
+    if(!silencioso && typeof _stxToast==='function') _stxToast('Nenhum local duplicado.');
+    return 0;
+  }
+  var movidas=0, apagados=[];
+  d.duplicados.forEach(function(g){
+    var alvo=g.slice().sort(function(a,b){
+      if(b.quadras!==a.quadras) return b.quadras-a.quadras;
+      return (b.ativo?1:0)-(a.ativo?1:0);
+    })[0];
+    g.forEach(function(l){
+      if(l.id===alvo.id) return;
+      quadrasDoLocal(l.id).forEach(function(q){ QLOCAL[q]=alvo.id; movidas++; });
+      delete LOCAIS[l.id]; apagados.push(l.nome);
+      if(localAtivo===l.id) localAtivo=alvo.id;
+    });
+  });
+  saveQLocal(); saveLocais();
+  try{ localStorage.setItem(LOCAL_ATIVO_KEY, localAtivo); }catch(e){}
+  if(typeof _touchGeoref==='function') _touchGeoref();
+  if(typeof cloudSaveSoon==='function') cloudSaveSoon();
+  try{ renderLocalChip(); }catch(e){}
+  try{ render(); }catch(e){}
+  if(!silencioso && typeof _stxToast==='function')
+    _stxToast(apagados.length+' local'+(apagados.length>1?'is':'')+' duplicado'+(apagados.length>1?'s':'')+' fundido'+(apagados.length>1?'s':'')+' · '+movidas+' quadras religadas');
+  return apagados.length;
+}
 function toggleLocalMenu(){ if(document.getElementById('localMenu')){ closeLocalMenu(); } else { openLocalMenu(); } }
 function openLocalMenu(){
   _locCss(); ensureLocais(); closeLocalMenu();
@@ -1166,6 +1217,11 @@ function openLocalMenu(){
   Object.keys(LOCAIS).forEach(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length, on=(id===localAtivo);
     html+='<div class="loc-mi'+(on?' on':'')+'" data-go="'+id+'"><span>'+(on?'✓ ':'')+esc(Lc.nome)+'</span><span class="sub">'+n+'q</span></div>';
   });
+  var _dup=diagnosticarLugares().duplicados;
+  if(_dup.length){
+    html+='<div class="loc-sep"></div><div class="loc-mi" data-fundir="1" style="color:#a8571e">'+
+          '&#9888; '+_dup.length+' local'+(_dup.length>1?'is':'')+' repetido'+(_dup.length>1?'s':'')+' — juntar</div>';
+  }
   html+='<div class="loc-sep"></div><div class="loc-mi loc-new" data-new="1">'+ic('plus',15)+' Novo local…</div>'+
         '<div class="loc-mi loc-manage" data-manage="1">'+ic('gear',15)+' Gerenciar locais</div>';
   m.innerHTML=html; document.body.appendChild(m);
@@ -1173,6 +1229,17 @@ function openLocalMenu(){
   m.style.top=((r.bottom||50)+6)+'px';
   m.addEventListener('click', function(e){
     var it=e.target.closest('.loc-mi'); if(!it) return;
+    if(it.getAttribute('data-fundir')){
+      var d=diagnosticarLugares();
+      var txt=d.duplicados.map(function(g){
+        return '• ' + g[0].nome + ' (' + g.map(function(x){ return x.quadras+'q'; }).join(' + ') + ')';
+      }).join('\n');
+      if(confirm('Estes locais têm o mesmo nome e são a mesma coisa:\n\n'+txt+
+                 '\n\nJuntar num só? As quadras vão todas para o que tem mais, nenhuma é apagada.')){
+        closeLocalMenu(); fundirLugaresDuplicados();
+      }
+      return;
+    }
     if(it.getAttribute('data-new')){ closeLocalMenu(); abrirNovoLocal(); return; }
     if(it.getAttribute('data-manage')){ closeLocalMenu(); gerenciarLocais(); return; }
     var go=it.getAttribute('data-go'); if(go) setLocalAtivo(go);
