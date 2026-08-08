@@ -5545,6 +5545,7 @@ function _pranchaPayload(qid, sid, variavel){
     tratamentos: trats.map(function(t,i){
       return { id:t.id, pt:(t.produto||t.id), en:(t.produto||t.id),
                ia:(t.ia||'—'), dose:(parseFloat(String(t.dose||'').replace(',','.'))||0),
+               doseTxt:String(t.dose||''),   /* cru: preserva mistura "500 + 300" */
                gia:(t.gia||''), testemunha:(i===iTest) };
     }),
     daa: avs.map(function(x){ return x.daa; }),
