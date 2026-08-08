@@ -307,6 +307,15 @@
           if(!a||!a.id)return;
           var av=clone(a),notas=av.notas||{},metas=av.notasMeta||{};
           delete av.notas;delete av.notasMeta;
+          /* bruto (sub-amostras / razão n-N) e varcfg são indexados por NOME DE VARIÁVEL, que é
+             texto livre — e o Firestore recusa campo vazio ou com prefixo '__', derrubando o batch
+             inteiro. Vão como string JSON: nome de variável nenhum vira nome de campo. */
+          var brutoJson='',varcfgJson='';
+          try{ if(av.bruto&&Object.keys(av.bruto).length) brutoJson=JSON.stringify(av.bruto); }catch(e){}
+          try{ if(av.varcfg&&Object.keys(av.varcfg).length) varcfgJson=JSON.stringify(av.varcfg); }catch(e){}
+          delete av.bruto; delete av.varcfg;
+          if(brutoJson) av.brutoJson=brutoJson;
+          if(varcfgJson) av.varcfgJson=varcfgJson;
           var avKey=s.id+'|'+a.id;
           /* notas/notasMeta vão DENTRO do doc da avaliação: 1 documento por avaliação em vez de
              1 por célula. readRemote() lê a coleção inteira a cada pull, então cada célula solta
@@ -398,7 +407,10 @@
     Object.keys(flat.avaliacoes).forEach(function(k){
       var r=flat.avaliacoes[k],s=studies[r.estudoId];
       if(!s)return;
-      var a=clone(r.data||{});a.id=r.id;a.notas=clone(r.notas||{});a.notasMeta=clone(r.notasMeta||{});avs[r.key]=a;
+      var a=clone(r.data||{});a.id=r.id;a.notas=clone(r.notas||{});a.notasMeta=clone(r.notasMeta||{});
+      if(a.brutoJson!=null){ try{ a.bruto=JSON.parse(a.brutoJson)||{}; }catch(e){ a.bruto={}; } delete a.brutoJson; }
+      if(a.varcfgJson!=null){ try{ a.varcfg=JSON.parse(a.varcfgJson)||{}; }catch(e){ a.varcfg={}; } delete a.varcfgJson; }
+      avs[r.key]=a;
       s.value.avaliacoes.push({order:r.order||0,value:a});
     });
     Object.keys(studies).forEach(function(id){

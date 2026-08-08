@@ -1689,9 +1689,12 @@ function _mergeAval(la,ca){
   (la.variaveis||[]).forEach(function(v){ if(vars.indexOf(v)<0) vars.push(v); });
   m.variaveis=vars;
   var tipos={},t; for(t in (ca.tipos||{}))tipos[t]=ca.tipos[t]; for(t in (la.tipos||{}))tipos[t]=la.tipos[t]; m.tipos=tipos;
+  var vcfg={},vc; for(vc in (ca.varcfg||{}))vcfg[vc]=ca.varcfg[vc]; for(vc in (la.varcfg||{}))vcfg[vc]=la.varcfg[vc]; m.varcfg=vcfg;
   var cN=ca.notas||{}, lN=la.notas||{}, cM=ca.notasMeta||{}, lM=la.notasMeta||{}, trats={}, tr;
+  var cB=ca.bruto||{}, lB=la.bruto||{};
   for(tr in cN)trats[tr]=1; for(tr in lN)trats[tr]=1; for(tr in cM)trats[tr]=1; for(tr in lM)trats[tr]=1;
-  var notas={}, metas={};
+  for(tr in cB)trats[tr]=1; for(tr in lB)trats[tr]=1;
+  var notas={}, metas={}, brutos={};
   function mts(meta,row,v){ var x=meta&&meta[row]&&meta[row][v]; return parseInt(x&&x.ts)||0; }
   function newerMeta(row,v){
     var cm=cM&&cM[row]&&cM[row][v], lm=lM&&lM[row]&&lM[row][v];
@@ -1699,26 +1702,37 @@ function _mergeAval(la,ca){
     return cm||lm||null;
   }
   Object.keys(trats).forEach(function(tr){
-    var cr=cN[tr]||{}, lr=lN[tr]||{}, cols={}, row={}, metaRow={}, vv;
+    var cr=cN[tr]||{}, lr=lN[tr]||{}, cols={}, row={}, metaRow={}, brutoRow={}, vv;
     for(vv in cr)cols[vv]=1; for(vv in lr)cols[vv]=1;
     if(cM[tr])for(vv in cM[tr])cols[vv]=1; if(lM[tr])for(vv in lM[tr])cols[vv]=1;
+    if(cB[tr])for(vv in cB[tr])cols[vv]=1; if(lB[tr])for(vv in lB[tr])cols[vv]=1;
     Object.keys(cols).forEach(function(v){
       var hasC=Object.prototype.hasOwnProperty.call(cr,v), hasL=Object.prototype.hasOwnProperty.call(lr,v);
       var cv=hasC?cr[v]:undefined, lv=hasL?lr[v]:undefined, ct=mts(cM,tr,v), lt=mts(lM,tr,v);
+      var src=null;
       if(lt||ct){
-        if(lt>=ct && hasL) row[v]=lv;
-        else if(hasC) row[v]=cv;
-        else if(hasL) row[v]=lv;
-      }else if(lv!==''&&lv!=null) row[v]=lv;
-      else if(cv!==undefined) row[v]=cv;
-      else if(hasL) row[v]=lv;
+        if(lt>=ct && hasL) src='l';
+        else if(hasC) src='c';
+        else if(hasL) src='l';
+      }else if(lv!==''&&lv!=null) src='l';
+      else if(cv!==undefined) src='c';
+      else if(hasL) src='l';
+      if(src==='l') row[v]=lv; else if(src==='c') row[v]=cv;
+      /* o BRUTO acompanha o lado que venceu a célula (o carimbo de _avTouchCell cobre os dois).
+         Se o vencedor não trouxe bruto, herda o do outro — não joga fora sub-amostra de um
+         aparelho só porque o outro mexeu no derivado. */
+      var lb=(lB[tr]||{})[v], cb=(cB[tr]||{})[v];
+      var b=(src==='c')?((cb!==undefined)?cb:lb):((lb!==undefined)?lb:cb);
+      if(b!==undefined) brutoRow[v]=b;
       var mm=newerMeta(tr,v); if(mm) metaRow[v]=mm;
     });
     notas[tr]=row;
     if(Object.keys(metaRow).length) metas[tr]=metaRow;
+    if(Object.keys(brutoRow).length) brutos[tr]=brutoRow;
   });
   m.notas=notas;
   m.notasMeta=metas;
+  m.bruto=brutos;
   return m;
 }
 /* Aplicação: a edição mais NOVA vence o item inteiro (empate/sem carimbo: local, compat) */
@@ -3798,7 +3812,7 @@ function buildStudyRecord(qid,s){
         _avsR.forEach(function(a){
           var mm=_means[a.data], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
           var cell=(mv!=null?String(_r1(mv)):'');
-          if(!isT){ var _c=_pctCtrl(tm,mv); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
+          if(!isT){ var _c=_pctCtrl(tm,mv,_avSentido(a,v)); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
           line+='\t'+cell;
         });
         var au=_audpc(v,t.id), tau=_audpc(v,_test), ac=(au!=null?String(Math.round(au)):'');
@@ -3916,7 +3930,7 @@ function buildStudyModelo(qid, s, opts){
     trats.forEach(function(t,ti){ var r=15+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
-      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
+      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m,_avSentido(a,v)); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
       var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
       if(letra) put(r,c0+7, letra);
     });
@@ -4783,6 +4797,7 @@ function newStudy(){
     id:uid(),
     codigo:"",
     descricao:"",
+    tipoEstudo:"",        /* dirige o catálogo de variáveis da avaliação */
     dataInicio:"",
     intervaloDias:14,
     numAplicacoes:1,
@@ -4824,6 +4839,11 @@ function _fundeAval(keep, extra){
   if(!keep||!extra) return;
   if(extra.variaveis&&extra.variaveis.length){ var seen={}; keep.variaveis=(keep.variaveis||[]).concat(extra.variaveis).filter(function(v){ if(seen[v])return false; seen[v]=1; return true; }); }
   keep.tipos=Object.assign({}, extra.tipos||{}, keep.tipos||{});
+  keep.varcfg=Object.assign({}, extra.varcfg||{}, keep.varcfg||{});
+  /* bruto das sub-amostras/razão: célula preenchida vence célula vazia (não perde na fusão) */
+  var eb=extra.bruto||{}; if(!keep.bruto)keep.bruto={};
+  for(var kb in eb){ var er2=eb[kb]||{}, kr2=keep.bruto[kb]||(keep.bruto[kb]={});
+    for(var vb in er2){ if(kr2[vb]==null) kr2[vb]=er2[vb]; } }
   var en=extra.notas||{}; if(!keep.notas)keep.notas={};
   for(var k in en){ var er=en[k]||{}; var kr=keep.notas[k]||(keep.notas[k]={}); for(var v2 in er){ var ev=er[v2]; if(ev!=null&&String(ev).trim()!=='' && (kr[v2]==null||String(kr[v2]).trim()==='')) kr[v2]=ev; } }
   var em=extra.notasMeta||{}; if(!keep.notasMeta)keep.notasMeta={};
@@ -4862,6 +4882,7 @@ function normalizeStudy(s){
   if(!s.id)s.id=uid();
   if(typeof s.codigo!=="string")s.codigo=s.nome||"";
   if(typeof s.descricao!=="string")s.descricao="";
+  if(typeof s.tipoEstudo!=="string")s.tipoEstudo="";
   if(typeof s.dataInicio!=="string")s.dataInicio="";
   if(typeof s.intervaloDias!=="number")s.intervaloDias=parseInt(s.intervaloDias)||14;
   if(typeof s.numAplicacoes!=="number")s.numAplicacoes=parseInt(s.numAplicacoes)||1;
@@ -4895,6 +4916,8 @@ function normalizeStudy(s){
       if(!a.notas||typeof a.notas!=="object")a.notas={};
       if(!a.tipos||typeof a.tipos!=="object")a.tipos={};
       if(!a.notasMeta||typeof a.notasMeta!=="object")a.notasMeta={};
+      if(!a.varcfg||typeof a.varcfg!=="object")a.varcfg={}; /* sub-amostras / N padrão / escala por variável */
+      if(!a.bruto||typeof a.bruto!=="object")a.bruto={};    /* dado bruto: sub-amostras e n/N por parcela */
       return a;
     });
   }else s.avaliacoes=[];
@@ -6730,6 +6753,10 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Código do estudo <span class="req">*</span></label>';
   h+='<input type="text" id="seCodigo" value="'+esc(s.codigo)+'" placeholder="EST-2026-0847" class="se-codigo-input"></div>';
 
+  h+='<div class="se-field"><label>Tipo de estudo</label><select id="seTipoEstudo"><option value="">—</option>';
+  TIPOS_ESTUDO.forEach(function(t){ h+='<option value="'+esc(t)+'"'+(t===s.tipoEstudo?' selected':'')+'>'+esc(t)+'</option>'; });
+  h+='</select><div class="e-hint">Define o catálogo de variáveis sugerido ao criar as colunas da avaliação (nome, tipo, sub-amostras e N padrão já certos).</div></div>';
+
   h+='<div class="se-field"><label>Descrição / objetivo</label>';
   h+='<textarea id="seDescricao" placeholder="Ex: Avaliação de eficácia de fungicidas sistêmicos no controle de ferrugem asiática" rows="3">'+esc(s.descricao)+'</textarea></div>';
 
@@ -6804,6 +6831,7 @@ function syncStudyInputs(){
   var x;
   x=el("seCodigo"); if(x) workingStudy.codigo=x.value.trim();
   x=el("seDescricao"); if(x) workingStudy.descricao=x.value.trim();
+  x=el("seTipoEstudo"); if(x) workingStudy.tipoEstudo=x.value;
   x=el("seDataInicio"); if(x) workingStudy.dataInicio=x.value;
   workingStudy.numAplicacoes=intVal("seNumAp",workingStudy.numAplicacoes||1);
   workingStudy.intervaloDias=intVal("seIntervalo",workingStudy.intervaloDias||0);
@@ -6881,6 +6909,7 @@ function saveStudyV2(){
     var changes = [];
     if(old.codigo !== s.codigo) changes.push('Código: "' + old.codigo + '" -> "' + s.codigo + '"');
     if(old.descricao !== s.descricao) changes.push('Descrição alterada');
+    if((old.tipoEstudo||'') !== s.tipoEstudo) changes.push('Tipo de estudo: "' + (old.tipoEstudo||'—') + '" -> "' + (s.tipoEstudo||'—') + '"');
     if(old.dataInicio !== s.dataInicio) changes.push('Início: ' + old.dataInicio + ' -> ' + s.dataInicio);
     if(old.numAplicacoes !== s.numAplicacoes) changes.push('Nº Apls: ' + old.numAplicacoes + ' -> ' + s.numAplicacoes);
     if(old.intervaloDias !== s.intervaloDias) changes.push('Intervalo: ' + old.intervaloDias + ' -> ' + s.intervaloDias);
@@ -7204,8 +7233,132 @@ function saveAplicacao(){
   openStudyDetail(curV,curSid);
 }
 
+/* ===================== TIPOS DE VARIÁVEL DE AVALIAÇÃO =====================
+   pct      — % ou número digitado (severidade)                    [legado]
+   contagem — inteiro, botões − / + (insetos, plantas)             [legado]
+   razao    — n afetados / N avaliados → % derivado (mortalidade, incidência)
+   escala   — nota de classe 0..máx → índice de McKinney derivado (%)
+
+   Qualquer variável pode ter SUB-AMOSTRAS por parcela (ex.: 10 frutos). O dado
+   BRUTO fica em av.bruto[parcela][variável] ({sub:[...]} ou {n,N}) e notas[][]
+   continua guardando o número DERIVADO — que é o que a estatística, a AACPD, a
+   prancha e o % de controle já consomem. Sub-amostra NÃO é repetição: entrar com
+   10 frutos como 10 blocos é pseudorreplicação e infla o grau de liberdade, então
+   a ANOVA recebe a média da parcela. */
+var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};
+var AV_TIPO_LABEL={pct:'% / número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
+/* src = uma avaliação (av) ou o rascunho _avGrid — ambos têm .tipos e .varcfg */
+function _avTipo(src,v){ var t=(src&&src.tipos&&src.tipos[v])||'pct'; return AV_TIPOS[t]?t:'pct'; }
+function _avCfg(src,v){
+  var c=(src&&src.varcfg&&src.varcfg[v])||{};
+  return {
+    tipo:_avTipo(src,v),
+    sub:Math.max(1,Math.round(_numBR(c.sub,1))||1),
+    N:Math.max(0,Math.round(_numBR(c.N,0))),
+    escalaMax:Math.max(1,_numBR(c.escalaMax,4)),
+    escalaNome:c.escalaNome||''
+  };
+}
+/* Só as variáveis novas (razão/escala) e as com sub-amostra guardam bruto — pct e
+   contagem simples continuam exatamente como antes, direto em notas[][]. */
+function _avUsaBruto(cfg){ return cfg.tipo==='razao'||cfg.tipo==='escala'||cfg.sub>1; }
+function _avCel(src,key,v,cria){
+  if(!src) return null;
+  if(!src.bruto||typeof src.bruto!=='object'){ if(!cria) return null; src.bruto={}; }
+  if(!src.bruto[key]){ if(!cria) return null; src.bruto[key]={}; }
+  var c=src.bruto[key][v];
+  if(!c||typeof c!=='object'){ if(!cria) return null; c=src.bruto[key][v]={}; }
+  return c;
+}
+function _avSubList(cel,n){
+  var a=(cel&&Array.isArray(cel.sub))?cel.sub.slice():[];
+  while(a.length<n) a.push('');
+  return a.slice(0,Math.max(n,a.length));
+}
+function _avSubCheias(cel){
+  return ((cel&&cel.sub)||[]).filter(function(x){ return x!=null&&String(x).trim()!==''; }).length;
+}
+/* Número derivado de uma célula a partir do bruto. '' quando ainda não dá para derivar. */
+function _avDerivar(cfg,cel){
+  if(!cel||!cfg) return '';
+  if(cfg.tipo==='razao'){
+    var n=_numBR(cel.n,NaN), N=_numBR(cel.N,NaN);
+    if(!isFinite(n)||!isFinite(N)||!(N>0)) return '';
+    if(n<0) n=0; if(n>N) n=N;
+    return String(Math.round(n/N*1e4)/100);
+  }
+  var vals=((cel.sub)||[]).map(function(x){ return _numBR(x,NaN); }).filter(function(x){ return isFinite(x); });
+  if(!vals.length) return '';
+  var soma=vals.reduce(function(a,b){ return a+b; },0);
+  if(cfg.tipo==='escala'){
+    /* índice de McKinney (índice de doença): Σ(nota) / (nº avaliado × nota máxima) × 100 */
+    var mx=cfg.escalaMax;
+    if(!(mx>0)) return '';
+    return String(Math.round(soma/(vals.length*mx)*1e4)/100);
+  }
+  return String(Math.round(soma/vals.length*100)/100);
+}
+/* Recalcula notas[key][v] a partir do bruto (no rascunho _avGrid). */
+function _avRecalc(key,v){
+  var cfg=_avCfg(_avGrid,v);
+  if(!_avUsaBruto(cfg)) return null;
+  var val=_avDerivar(cfg,(_avGrid.bruto[key]||{})[v]);
+  if(!_avGrid.notas[key]) _avGrid.notas[key]={};
+  if(String(_avGrid.notas[key][v]==null?'':_avGrid.notas[key][v])!==String(val)){
+    _avGrid.notas[key][v]=val;
+    _avTouchCell(key,v);
+  }
+  return val;
+}
+/* Texto do bruto p/ leitura e export (ex.: "3/20" ou "2; 3; 1; …") */
+function _avBrutoTxt(src,key,v){
+  var cfg=_avCfg(src,v); if(!_avUsaBruto(cfg)) return '';
+  var cel=(src&&src.bruto&&src.bruto[key])?src.bruto[key][v]:null; if(!cel) return '';
+  if(cfg.tipo==='razao'){
+    var n=(cel.n==null||cel.n==='')?'':cel.n, N=(cel.N==null||cel.N==='')?'':cel.N;
+    return (n===''&&N==='')?'':(n+'/'+N);
+  }
+  return ((cel.sub)||[]).filter(function(x){ return x!=null&&String(x).trim()!==''; }).join('; ');
+}
+
+/* ===== Catálogo de variáveis por tipo de estudo =====
+   Sem isso a variável é texto livre e vira "Mortalidade" / "mortalidade" / "Mort."
+   em avaliações diferentes — e aí a série da AACPD e da prancha não fecha. */
+var TIPOS_ESTUDO=['Eficácia','Mortalidade','Seletividade/Fitotoxicidade','Produtividade','Outro'];
+var CATALOGO_AVAL={
+  'Eficácia':[
+    {nome:'Severidade',tipo:'pct',sub:10},
+    {nome:'Incidência',tipo:'razao',N:20},
+    {nome:'Nota de escala',tipo:'escala',escalaMax:4,sub:10},
+    {nome:'Nº de lesões',tipo:'contagem',sub:10}
+  ],
+  'Mortalidade':[
+    /* sentido 'maior': aqui a testemunha e a MENOR — o % de controle sai pela
+       mortalidade corrigida de Abbott, nao pela reducao */
+    {nome:'Mortalidade',tipo:'razao',N:20,sentido:'maior'},
+    {nome:'Insetos vivos',tipo:'contagem'},
+    {nome:'Insetos mortos',tipo:'contagem'}
+  ],
+  'Seletividade/Fitotoxicidade':[
+    {nome:'Fitotoxicidade',tipo:'pct'},
+    {nome:'Nota EWRC',tipo:'escala',escalaMax:9},
+    {nome:'Stand de plantas',tipo:'contagem'}
+  ],
+  'Produtividade':[
+    {nome:'Peso da parcela (g)',tipo:'contagem'},
+    {nome:'Nº de frutos',tipo:'contagem',sub:10},
+    {nome:'Peso de 100 grãos (g)',tipo:'contagem'}
+  ]
+};
+function _avCatalogo(){
+  var st=_avStudy(), t=(st&&st.tipoEstudo)||'';
+  if(CATALOGO_AVAL[t]) return {tipo:t, itens:CATALOGO_AVAL[t]};
+  var todas=[]; Object.keys(CATALOGO_AVAL).forEach(function(k){ todas=todas.concat(CATALOGO_AVAL[k]); });
+  return {tipo:'', itens:todas};
+}
+
 /* ===== Grade de avaliação: tratamentos (linhas) × variáveis avaliadas (colunas dinâmicas) ===== */
-var _avGrid={variaveis:[],notas:{},tipos:{},meta:{}};
+var _avGrid={variaveis:[],notas:{},tipos:{},meta:{},varcfg:{},bruto:{}};
 var _avAuto={on:false,pos:0};
 function _avGridUser(){
   var email = _authUser && _authUser.email;
@@ -7241,6 +7394,26 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-addcol{background:rgba(127,170,127,.15);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'+
   '.av-delcol{background:none;border:none;color:#a77;cursor:pointer;font-size:13px;margin-left:5px;padding:0}.av-delcol:hover{color:#ff8a80}'+
   '.av-hint{font-size:11px;color:#9a8;font-style:italic;margin:4px 0}.av-gridbtns{margin-top:6px}'+
+  /* razão n/N, escala e sub-amostras */
+  '.av-cell-sm{width:38px}.av-sep{color:#7c8a80;font-weight:800;padding:0 1px}'+
+  '.av-der{font-size:10px;color:#9fe0b6;font-weight:700;margin-top:2px;letter-spacing:.2px}'+
+  '.av-der.vazio{color:#7c8a80;font-weight:400}'+
+  '.av-subbtn{min-width:62px;background:var(--surface,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:7px;padding:5px 6px;font-size:13px;font-weight:700;cursor:pointer;line-height:1.15}'+
+  '.av-subbtn small{display:block;font-size:9px;font-weight:600;color:#9a8;letter-spacing:.3px}'+
+  '.av-subbtn.cheia{border-color:rgba(55,214,132,.55)}.av-subbtn.cheia small{color:#9fe0b6}'+
+  '.av-sub-ovl{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3400;display:none;align-items:center;justify-content:center;padding:16px}'+
+  '.av-sub-box{background:var(--surface,#0e150e);border:1px solid var(--border,#2a3a2a);border-radius:14px;max-width:400px;width:100%;padding:15px;box-sizing:border-box;color:var(--text,#eaf3ed);box-shadow:0 12px 40px rgba(0,0,0,.5)}'+
+  '.av-sub-title{font-size:15px;font-weight:800;color:var(--accent,#37d684)}'+
+  '.av-sub-sub{font-size:11px;color:#9a8;margin:2px 0 10px}'+
+  '.av-sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:7px}'+
+  '.av-sub-f{display:flex;flex-direction:column;gap:2px}.av-sub-f label{font-size:9px;color:#7c8a80;font-weight:700;text-transform:uppercase;letter-spacing:.4px}'+
+  '.av-sub-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:8px;padding:9px 4px;font-size:16px;text-align:center;font-weight:700}'+
+  '.av-sub-inp:focus{border-color:#37d684;outline:none}'+
+  '.av-sub-res{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px;padding-top:9px;border-top:1px solid var(--border,#2a3a2a);font-size:12px;color:#9a8}'+
+  '.av-sub-res b{font-size:18px;color:var(--text,#eafaea)}'+ /* var(--text): a caixa segue o tema, texto fixo claro sumia no tema claro */
+  '.av-sub-warn{font-size:10px;color:#dccd8c;margin-top:5px}'+
+  '.av-sub-btns{display:flex;gap:8px;margin-top:12px}.av-sub-btns button{flex:1;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer}'+
+  '.av-sub-ok{background:#1f5a2a;color:#eafaea}.av-sub-clr{flex:none!important;background:#222;color:#bbb;padding:11px 13px!important}'+
   '.av-auto-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px}'+
   '.av-auto-toggle{background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer}'+
   '.av-auto-toggle.off{background:#18251b;color:#9ac49a;border:1px solid #2a3a2a}'+
@@ -7262,7 +7435,12 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.avcol-title{font-size:15px;font-weight:700;color:var(--accent,#37d684);margin-bottom:6px}'+
   '.avcol-lab{display:block;font-size:11px;color:var(--text-3,#8aa88a);font-weight:600;letter-spacing:.3px;margin:10px 0 4px}'+
   '.avcol-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:8px;padding:10px;font-size:15px}'+
-  '.avcol-types{display:flex;gap:8px;margin-top:2px}'+
+  '.avcol-types{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}'+
+  '.avcol-chips{display:flex;flex-wrap:wrap;gap:6px}'+
+  '.avcol-chip{background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text-2,#9ab39a);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer}'+
+  '.avcol-chip:active,.avcol-chip:hover{border-color:var(--accent,#37d684);color:var(--accent,#37d684)}'+
+  '.avcol-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}'+
+  '.avcol-note{font-size:10px;color:var(--text-3,#8aa88a);line-height:1.4;margin-top:7px}'+
   '.avcol-type{flex:1;display:flex;flex-direction:column;gap:2px;background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:9px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;text-align:center}'+
   '.avcol-type small{font-weight:400;font-size:10px;color:var(--text-3,#8aa88a)}'+
   '.avcol-type.on{border-color:var(--accent,#37d684);background:rgba(55,214,132,.12);color:var(--accent,#37d684)}'+
@@ -7273,13 +7451,60 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
 }
 function _avTrats(){ var q=data[curV]||{}, st=(q.estudos||[]).find(function(s){return s.id===curSid;}); return (st&&st.tratamentos)||[]; }
 
+/* Grava um campo do BRUTO (n, N ou sub-amostra sN) e recalcula o derivado da célula.
+   Devolve o valor já normalizado para devolver ao input. */
+function _avWriteBruto(key,v,campo,val){
+  var cfg=_avCfg(_avGrid,v), cel=_avCel(_avGrid,key,v,true);
+  var s=String(val==null?'':val).trim().replace(',','.');
+  var num=(s==='')?'':parseFloat(s);
+  if(s!=='' && isNaN(num)) num='';
+  if(num!==''){
+    if(num<0) num=0;
+    if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
+    if(cfg.tipo==='pct' && num>100) num=100;
+    if(cfg.tipo==='contagem'||cfg.tipo==='razao') num=Math.floor(num);
+  }
+  var out=(num==='')?'':String(num);
+  if(campo==='n'||campo==='N') cel[campo]=out;
+  else {
+    var i=parseInt(String(campo).slice(1))||0;
+    if(!Array.isArray(cel.sub)) cel.sub=[];
+    while(cel.sub.length<=i) cel.sub.push('');
+    cel.sub[i]=out;
+  }
+  _avRecalc(key,v);
+  return out;
+}
+/* Atualiza só os rótulos derivados da grade (sem re-renderizar: não rouba o foco). */
+function _avRefreshDer(){
+  var w=document.getElementById('avGridWrap'); if(!w) return;
+  Array.prototype.forEach.call(w.querySelectorAll('.av-der'), function(el){
+    var k=el.getAttribute('data-dt'), v=el.getAttribute('data-dv'); if(!k||!v) return;
+    var val=(_avGrid.notas[k]&&_avGrid.notas[k][v]!=null)?String(_avGrid.notas[k][v]):'';
+    el.textContent=(val===''?'—':val+'%');
+    el.classList.toggle('vazio', val==='');
+  });
+  Array.prototype.forEach.call(w.querySelectorAll('.av-subbtn'), function(el){
+    var k=el.getAttribute('data-dt'), v=el.getAttribute('data-dv'); if(!k||!v) return;
+    var cfg=_avCfg(_avGrid,v), val=(_avGrid.notas[k]&&_avGrid.notas[k][v]!=null)?String(_avGrid.notas[k][v]):'';
+    var ch=_avSubCheias((_avGrid.bruto[k]||{})[v]);
+    el.innerHTML=(val===''?'—':esc(val))+'<small>'+ch+'/'+cfg.sub+'</small>';
+    el.classList.toggle('cheia', ch>=cfg.sub);
+  });
+}
 function avValidateCell(inp){
-  var v=inp.getAttribute('data-v');
+  var v=inp.getAttribute('data-v'), t=inp.getAttribute('data-t'), b=inp.getAttribute('data-b');
   if(!v) {
     var a= (typeof _avAutoState === 'function') ? _avAutoState() : null;
-    v = a ? a.v : null;
+    if(a){ v=a.v; t=a.row.key; if(!b && a.campo) b=a.campo; }
   }
   if(!v) return;
+  if(b && t){ /* célula com dado bruto (razão n/N, escala, sub-amostra) */
+    inp.value=_avWriteBruto(t,v,b,inp.value);
+    _avRefreshDer();
+    _avPersistNow();
+    return;
+  }
   var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
   var val=inp.value.trim();
   if(val==='') return;
@@ -7326,18 +7551,41 @@ function renderAvGrid(){
     }
   }
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
-  vs.forEach(function(v){ var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; html+='<th>'+esc(v)+(tp==='pct'?' <small style="opacity:.6">%</small>':'')+'<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">×</button></th>'; });
+  vs.forEach(function(v){
+    var cfg=_avCfg(_avGrid,v), suf='';
+    if(cfg.tipo==='pct') suf=' <small style="opacity:.6">%</small>';
+    else if(cfg.tipo==='razao') suf=' <small style="opacity:.6">n/N</small>';
+    else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">0–'+cfg.escalaMax+'</small>';
+    if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
+    html+='<th>'+esc(v)+suf+'<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">×</button></th>';
+  });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
   rows.forEach(function(rw){
     var row=_avGrid.notas[rw.key]||{}, old=(rw.rep===1&&_avGrid.notas[rw.tratId])?_avGrid.notas[rw.tratId]:{};
     html+='<tr><td class="av-tname" title="'+esc((rw.produto||'')+(rw.parcela?' · parcela '+rw.parcela:''))+'">'+esc(rw.label)+'</td>';
     vs.forEach(function(v){
       var val=(row[v]!=null&&row[v]!=='')?row[v]:((old&&old[v]!=null)?old[v]:'');
-      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
-      if(tp==='contagem'){
-        html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+esc(rw.key)+'" data-v="'+esc(v)+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>';
+      var cfg=_avCfg(_avGrid,v), k=esc(rw.key), ev=esc(v);
+      if(cfg.tipo==='razao'){
+        var cel=(_avGrid.bruto[rw.key]||{})[v]||{};
+        var nv=(cel.n==null?'':cel.n), Nv=(cel.N==null||cel.N===''?(cfg.N||''):cel.N);
+        html+='<td><div class="av-cellwrap">'+
+          '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="n" value="'+esc(nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
+          '<span class="av-sep">/</span>'+
+          '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="N" value="'+esc(Nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
+          '</div><div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div></td>';
+      } else if(cfg.sub>1){
+        var celS=(_avGrid.bruto[rw.key]||{})[v]||{}, ch=_avSubCheias(celS);
+        html+='<td><button type="button" class="av-subbtn'+(ch>=cfg.sub?' cheia':'')+'" data-dt="'+k+'" data-dv="'+ev+'" onclick="avOpenSub(\''+k+'\',\''+ev.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">'+
+          (val===''?'—':esc(val))+'<small>'+ch+'/'+cfg.sub+'</small></button></td>';
+      } else if(cfg.tipo==='escala'){
+        var celE=(_avGrid.bruto[rw.key]||{})[v]||{}, e0=((celE.sub||[])[0]);
+        html+='<td><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="0–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
+          '<div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div></td>';
+      } else if(cfg.tipo==='contagem'){
+        html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>';
       } else {
-        html+='<td><input class="av-cell av-cell-num" data-t="'+esc(rw.key)+'" data-v="'+esc(v)+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)"></td>';
+        html+='<td><input class="av-cell av-cell-num" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)"></td>';
       }
     });
     html+='<td></td></tr>';
@@ -7350,9 +7598,10 @@ function renderAvGrid(){
 function _avSyncInputs(){
   var w=document.getElementById('avGridWrap'); if(!w) return;
   Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(inp){
-    var t=inp.getAttribute('data-t'), v=inp.getAttribute('data-v');
+    var t=inp.getAttribute('data-t'), v=inp.getAttribute('data-v'), b=inp.getAttribute('data-b');
+    if(b && t && v){ inp.value=_avWriteBruto(t,v,b,inp.value); return; } /* razão / escala / sub-amostra */
     if(!_avGrid.notas[t]) _avGrid.notas[t]={};
-    
+
     var val = inp.value.trim();
     if(val !== '') {
       var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
@@ -7390,13 +7639,118 @@ function avBump(el,delta){
 
 function _avAutoRows(){ return _avRowsForStudy(_avStudy(),true); }
 
+/* ===== Sub-amostras de uma parcela (ex.: 10 frutos) ===== */
+var _avSubCtx=null;
+function _avSubOutlier(vals){
+  /* pega erro de digitação AINDA no campo: um fruto muito fora da mão dos outros */
+  var xs=[], idx=[];
+  (vals||[]).forEach(function(x,i){ var n=_numBR(x,NaN); if(isFinite(n)){ xs.push(n); idx.push(i); } });
+  if(xs.length<4) return '';
+  var m=xs.reduce(function(a,b){return a+b;},0)/xs.length;
+  var sd=Math.sqrt(xs.reduce(function(a,b){return a+(b-m)*(b-m);},0)/(xs.length-1));
+  if(!(sd>0)) return '';
+  for(var i=0;i<xs.length;i++){
+    if(Math.abs(xs[i]-m)>2.5*sd) return '⚠ amostra '+(idx[i]+1)+' ('+xs[i]+') destoa das outras (média '+(Math.round(m*100)/100)+') — confira antes de sair da parcela.';
+  }
+  return '';
+}
+function avOpenSub(key,v){
+  _avSyncInputs(); _avCss();
+  var cfg=_avCfg(_avGrid,v); if(!_avUsaBruto(cfg)) return;
+  _avSubCtx={key:key,v:v};
+  var m=document.getElementById('avSubModal');
+  if(!m){ m=document.createElement('div'); m.id='avSubModal'; m.className='av-sub-ovl';
+    m.onclick=function(e){ if(e.target===m) avCloseSub(); }; document.body.appendChild(m); }
+  m.style.display='flex';
+  _avSubRender();
+  setTimeout(function(){ var i=m.querySelector('.av-sub-inp'); if(i){ i.focus(); if(i.select)i.select(); } },60);
+}
+function _avSubRender(){
+  var m=document.getElementById('avSubModal'); if(!m||!_avSubCtx) return;
+  var key=_avSubCtx.key, v=_avSubCtx.v, cfg=_avCfg(_avGrid,v);
+  var rows=_avRowsForStudy(_avStudy(),false), rw=null;
+  rows.forEach(function(r){ if(r.key===key) rw=r; });
+  if(!rw) rw={label:key,produto:''};
+  var cel=_avCel(_avGrid,key,v,true), vals=_avSubList(cel,cfg.sub);
+  var der=(_avGrid.notas[key]&&_avGrid.notas[key][v])||'';
+  var h='<div class="av-sub-box"><div class="av-sub-title">'+esc(v)+'</div>'+
+    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+cfg.sub+' amostras'+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
+    '<div class="av-sub-grid">';
+  vals.slice(0,cfg.sub).forEach(function(x,i){
+    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+(cfg.tipo==='pct'?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
+  });
+  h+='</div>';
+  h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':'Média da parcela')+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
+  var al=_avSubOutlier(vals); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
+  h+='<div class="av-sub-btns"><button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
+  m.innerHTML=h;
+}
+function _avSubResumo(){
+  var m=document.getElementById('avSubModal'); if(!m||!_avSubCtx) return;
+  var cfg=_avCfg(_avGrid,_avSubCtx.v);
+  var der=(_avGrid.notas[_avSubCtx.key]&&_avGrid.notas[_avSubCtx.key][_avSubCtx.v])||'';
+  var b=m.querySelector('.av-sub-res b'); if(b) b.textContent=(der===''?'—':der+(cfg.tipo==='escala'?'%':''));
+  var w=m.querySelector('.av-sub-warn');
+  if(w){ var txt=_avSubOutlier(_avSubList(_avCel(_avGrid,_avSubCtx.key,_avSubCtx.v,true),cfg.sub)); w.textContent=txt; w.style.display=txt?'':'none'; }
+}
+function avSubWrite(inp){
+  if(!_avSubCtx) return;
+  _avWriteBruto(_avSubCtx.key,_avSubCtx.v,'s'+(inp.getAttribute('data-i')||0),inp.value);
+  _avSubResumo(); _avPersistNow();
+}
+function avSubNext(inp){
+  var m=document.getElementById('avSubModal'); if(!m) return;
+  var all=Array.prototype.slice.call(m.querySelectorAll('.av-sub-inp'));
+  var i=all.indexOf(inp);
+  if(i>=0 && i<all.length-1){ all[i+1].focus(); if(all[i+1].select)all[i+1].select(); }
+  else avCloseSub();
+}
+function avSubLimpar(){
+  if(!_avSubCtx) return;
+  var cel=_avCel(_avGrid,_avSubCtx.key,_avSubCtx.v,true);
+  cel.sub=[];
+  _avRecalc(_avSubCtx.key,_avSubCtx.v);
+  _avPersistNow(); _avSubRender();
+}
+function avCloseSub(){
+  var m=document.getElementById('avSubModal'); if(m) m.style.display='none';
+  _avSubCtx=null; _avRefreshDer(); _avPersistNow();
+}
+
+/* Passos do modo automático: uma parada por parcela × variável × sub-amostra.
+   Sem sub-amostra o passo é a célula inteira (comportamento antigo). */
+function _avAutoSteps(){
+  var rows=_avAutoRows(), vars=_avGrid.variaveis||[], steps=[];
+  rows.forEach(function(rw,ri){
+    vars.forEach(function(v,vi){
+      var cfg=_avCfg(_avGrid,v);
+      if(cfg.tipo==='razao') steps.push({row:rw,ri:ri,v:v,vi:vi,cfg:cfg,si:-1,campo:'n'});
+      else if(_avUsaBruto(cfg)){ for(var i=0;i<cfg.sub;i++) steps.push({row:rw,ri:ri,v:v,vi:vi,cfg:cfg,si:i,campo:'s'+i}); }
+      else steps.push({row:rw,ri:ri,v:v,vi:vi,cfg:cfg,si:-1,campo:null});
+    });
+  });
+  return steps;
+}
+function _avStepVal(s){
+  if(s.campo){
+    var cel=(_avGrid.bruto[s.row.key]||{})[s.v]||{};
+    if(s.campo==='n') return (cel.n==null)?'':cel.n;
+    if(s.campo==='N') return (cel.N==null||cel.N==='')?'':cel.N;
+    var i=parseInt(String(s.campo).slice(1))||0;
+    var x=(cel.sub||[])[i];
+    return (x==null)?'':x;
+  }
+  var n=_avGrid.notas[s.row.key];
+  return (n&&n[s.v]!=null)?n[s.v]:'';
+}
 function _avAutoState(){
-  var rows=_avAutoRows(), vars=_avGrid.variaveis||[], total=rows.length*vars.length;
+  var steps=_avAutoSteps(), total=steps.length;
   if(total<=0) return null;
   if(_avAuto.pos<0)_avAuto.pos=0;
   if(_avAuto.pos>=total)_avAuto.pos=total-1;
-  var ri=Math.floor(_avAuto.pos/vars.length), vi=_avAuto.pos%vars.length;
-  return {rows:rows,vars:vars,total:total,vi:vi,ri:ri,row:rows[ri],v:vars[vi],tipo:((_avGrid.tipos||{})[vars[vi]]==='contagem'?'contagem':'pct')};
+  var s=steps[_avAuto.pos];
+  return {steps:steps,total:total,rows:_avAutoRows(),vars:(_avGrid.variaveis||[]),
+    ri:s.ri,vi:s.vi,row:s.row,v:s.v,cfg:s.cfg,si:s.si,campo:s.campo,tipo:s.cfg.tipo};
 }
 
 /* AUTOSAVE da avaliação: comita o rascunho (_avGrid) na avaliação real + grava JÁ no localStorage
@@ -7423,6 +7777,7 @@ function _avPersistNow(){
     var vo=document.getElementById('vObs'); if(vo) av.obs=vo.value.trim();
     if(typeof _avSyncInputs==='function') _avSyncInputs();
     av.variaveis=(_avGrid.variaveis||[]).slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+    av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
     av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
     try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
     if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
@@ -7465,25 +7820,44 @@ function renderAvAutoBox(){
   if(!vars.length) return '<div class="av-auto-box"><div class="av-hint">Adicione pelo menos uma coluna de avaliação para usar o modo automático.</div></div>';
   if(!rows.length) return '<div class="av-auto-box"><div class="av-hint">Cadastre tratamentos e repetições para usar o modo automático.</div></div>';
   var a=_avAutoState(); if(!a)return '';
-  var val=(_avGrid.notas[a.row.key]&&_avGrid.notas[a.row.key][a.v]!=null)?_avGrid.notas[a.row.key][a.v]:'';
+  var val=_avStepVal(a);
   var prod=a.row.produto?(' · '+a.row.produto):'';
   var locLabel=(a.row.parcela?('Parcela '+a.row.parcela):(a.row.campo||a.row.label||a.row.tratId+_repDisplay(a.row.rep)));
   var rowInfo=a.row.tratId+' · rep '+(a.row.repDisplay||_repDisplay(a.row.rep));
   var enterK='onkeydown="if(event.key===\'Enter\'){event.preventDefault();avAutoStep(1);}"';
-  var input=a.tipo==='contagem'
+  var conta=(a.tipo==='contagem'||a.tipo==='escala'||a.tipo==='razao');
+  var input=conta
     ? '<div class="av-auto-count"><button type="button" onclick="avAutoBump(-1)">−</button><input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="numeric" oninput="avAutoWrite(this.value)" '+enterK+' onblur="avValidateCell(this)"><button type="button" onclick="avAutoBump(1)">+</button></div>'
     : '<input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="decimal" oninput="avAutoWrite(this.value)" '+enterK+' onblur="avValidateCell(this)" placeholder="%">';
-  /* progresso: quantas células (parcela × variável) já preenchidas */
-  var filled=0; rows.forEach(function(rw){ vars.forEach(function(vv){ var n=_avGrid.notas[rw.key]; if(n&&n[vv]!=null&&String(n[vv]).trim()!=='') filled++; }); });
+  /* razão: o passo é o "n"; o N fica ao lado, já preenchido com o padrão do estudo */
+  if(a.tipo==='razao'){
+    var celR=(_avGrid.bruto[a.row.key]||{})[a.v]||{};
+    var Nv=(celR.N==null||celR.N==='')?(a.cfg.N||''):celR.N;
+    input+='<div class="av-auto-sub" style="margin-top:6px;text-align:right">de <input class="av-cell av-cell-sm" data-t="'+esc(a.row.key)+'" data-v="'+esc(a.v)+'" data-b="N" value="'+esc(Nv)+'" inputmode="numeric" onblur="avValidateCell(this)" style="width:52px"> avaliados</div>';
+  }
+  /* progresso: passos (parcela × variável × sub-amostra) já preenchidos */
+  var filled=0; a.steps.forEach(function(s){ var x=_avStepVal(s); if(x!=null&&String(x).trim()!=='') filled++; });
   var pctDone=a.total?Math.round(filled/a.total*100):0;
-  /* atalhos de valor comum: tocar SALVA e já avança (um toque por parcela) */
-  var presets=(a.tipo==='contagem')?['0','1','2','5','10']:['0','1','5','10','20','40','60','80','100'];
+  /* atalhos de valor comum: tocar SALVA e já avança (um toque por amostra) */
+  var presets;
+  if(a.tipo==='escala'){ presets=[]; for(var pi=0;pi<=a.cfg.escalaMax&&presets.length<10;pi++) presets.push(String(pi)); }
+  else if(a.tipo==='razao'||a.tipo==='contagem') presets=['0','1','2','5','10'];
+  else presets=['0','1','5','10','20','40','60','80','100'];
   var presetHtml=presets.map(function(pv){ return '<button type="button" class="av-auto-preset'+(String(val)===pv?' on':'')+'" onclick="avAutoPreset(\''+pv+'\')">'+pv+'</button>'; }).join('');
+  /* rótulo do passo: mostra a sub-amostra e o derivado parcial da parcela */
+  var passo=esc(a.v), der='';
+  if(a.si>=0 && a.cfg.sub>1) passo+=' <small style="font-size:13px;opacity:.75">· amostra '+(a.si+1)+'/'+a.cfg.sub+'</small>';
+  if(_avUsaBruto(a.cfg)){
+    var d=(_avGrid.notas[a.row.key]&&_avGrid.notas[a.row.key][a.v])||'';
+    var rot=(a.tipo==='escala')?'Índice':((a.tipo==='razao')?'Resultado':'Média da parcela');
+    var suf=(a.tipo==='escala'||a.tipo==='razao')?'%':'';
+    if(d!=='') der='<div class="av-auto-sub">'+rot+': <b style="color:#9fe0b6">'+esc(d)+suf+'</b></div>';
+  }
   return '<div class="av-auto-box">'+
     '<div class="av-auto-top"><span>'+esc(locLabel)+'</span><span>parc '+(a.ri+1)+'/'+rows.length+' · var '+(a.vi+1)+'/'+vars.length+'</span></div>'+
     '<div class="av-auto-prog"><div class="av-auto-prog-fill" style="width:'+pctDone+'%"></div></div>'+
     '<div class="av-auto-progtxt">'+filled+' de '+a.total+' preenchidas'+(filled>=a.total?' ✓':'')+'</div>'+
-    '<div class="av-auto-card"><div><div class="av-auto-main">'+esc(a.v)+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div></div>'+input+'</div>'+
+    '<div class="av-auto-card"><div><div class="av-auto-main">'+passo+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div>'+der+'</div>'+input+'</div>'+
     '<div class="av-auto-presets">'+presetHtml+'</div>'+
     '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">‹ Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo ›</button></div>'+
   '</div>';
@@ -7506,21 +7880,23 @@ function avEnableStudyRandomizado(){
 }
 function avAutoWrite(val){
   var a=_avAutoState(); if(!a)return;
-  _avSetCell(a.row.key,a.v,val);
+  if(a.campo){ _avWriteBruto(a.row.key,a.v,a.campo,val); _avPersistNow(); }
+  else _avSetCell(a.row.key,a.v,val);
 }
 function avAutoBump(delta){
   var a=_avAutoState(); if(!a)return;
   var cur=document.getElementById('avAutoInput'), n=parseFloat(cur&&cur.value); if(isNaN(n)) n=0;
   n+=delta; if(n<0)n=0;
+  if(a.tipo==='escala'&&n>a.cfg.escalaMax) n=a.cfg.escalaMax;
   var val=(n%1===0)?String(n):n.toFixed(1);
   if(cur)cur.value=val;
-  _avSetCell(a.row.key,a.v,val);
+  avAutoWrite(val);
 }
 function avAutoPreset(val){
-  /* atalho de campo: toca no valor comum → SALVA e já avança pra próxima parcela (1 toque) */
+  /* atalho de campo: toca no valor comum → SALVA e já avança pro próximo passo (1 toque) */
   var a=_avAutoState(); if(!a)return;
-  _avSetCell(a.row.key,a.v,val);
-  if(_avAuto.pos<a.total-1) _avAuto.pos+=1; /* fica na última quando termina */
+  avAutoWrite(val);
+  if(_avAuto.pos<a.total-1) _avAuto.pos+=1; /* fica no último quando termina */
   renderAvGrid();
   setTimeout(function(){ var i=document.getElementById('avAutoInput'); if(i){ i.focus(); i.select&&i.select(); } },60);
 }
@@ -7538,29 +7914,78 @@ function avAddCol(){
   var m=document.getElementById('avColModal');
   if(!m){ m=document.createElement('div'); m.id='avColModal'; m.className='avcol-ovl';
     m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  var cat=_avCatalogo(); window._avColItens=cat.itens;
+  var chips=cat.itens.map(function(it,i){ return '<button type="button" class="avcol-chip" onclick="avColPreset('+i+')">'+esc(it.nome)+'</button>'; }).join('');
   m.innerHTML='<div class="avcol-box">'+
     '<div class="avcol-title">Nova coluna de avaliação</div>'+
+    (chips?('<label class="avcol-lab">Catálogo'+(cat.tipo?(' · '+esc(cat.tipo)):' (todos os tipos de estudo)')+'</label><div class="avcol-chips">'+chips+'</div>'):'')+
     '<label class="avcol-lab">Nome da variável</label>'+
     '<input id="avColNome" class="avcol-inp" placeholder="ex.: Fitoplasma, Severidade, Stand" autocomplete="off" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
     '<label class="avcol-lab">Como você vai lançar?</label>'+
     '<div class="avcol-types">'+
       '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\')">% / número<small>digita (severidade)</small></button>'+
-      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\')">Contagem<small>botões − / + (incidência)</small></button>'+
+      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\')">Contagem<small>botões − / +</small></button>'+
+      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\')">Razão n/N<small>mortalidade, incidência</small></button>'+
+      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\')">Escala<small>nota de classe → índice</small></button>'+
     '</div>'+
+    '<div id="avColOpts"></div>'+
     '<div class="avcol-btns"><button type="button" class="avcol-ok" onclick="avColConfirm()">Adicionar</button>'+
       '<button type="button" class="avcol-cancel" onclick="document.getElementById(\'avColModal\').style.display=\'none\'">Cancelar</button></div>'+
   '</div>';
-  m.style.display='flex'; window._avColTipo='pct';
+  m.style.display='flex'; window._avColTipo='pct'; window._avColOpts={sub:1,N:20,escalaMax:4,sentido:'menor'};
+  _avColOptsRender();
   setTimeout(function(){ var i=document.getElementById('avColNome'); if(i) i.focus(); },60);
 }
-function _avColType(t){ window._avColTipo=t;
-  Array.prototype.forEach.call(document.querySelectorAll('#avColModal .avcol-type'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===t); });
+function _avColLerOpts(){
+  var o=window._avColOpts||{sub:1,N:20,escalaMax:4};
+  var s=document.getElementById('avColSub'); if(s) o.sub=Math.max(1,Math.round(_numBR(s.value,1))||1);
+  var n=document.getElementById('avColN'); if(n) o.N=Math.max(0,Math.round(_numBR(n.value,0)));
+  var e=document.getElementById('avColEsc'); if(e) o.escalaMax=Math.max(1,_numBR(e.value,4));
+  var sd=document.getElementById('avColSentido'); if(sd) o.sentido=(sd.value==='maior')?'maior':'menor';
+  window._avColOpts=o; return o;
+}
+function _avColOptsRender(){
+  var box=document.getElementById('avColOpts'); if(!box) return;
+  var t=window._avColTipo||'pct', o=window._avColOpts||{sub:1,N:20,escalaMax:4,sentido:'menor'}, h='<div class="avcol-opts">';
+  if(t==='razao') h+='<div><label class="avcol-lab">N avaliados (padrão)</label><input id="avColN" class="avcol-inp" type="number" min="0" step="1" value="'+o.N+'"></div>';
+  else h+='<div><label class="avcol-lab">Sub-amostras / parcela</label><input id="avColSub" class="avcol-inp" type="number" min="1" step="1" value="'+o.sub+'"></div>';
+  if(t==='escala') h+='<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" min="1" step="1" value="'+o.escalaMax+'"></div>';
+  h+='</div>';
+  h+='<label class="avcol-lab">No % de controle, o melhor resultado é</label>'+
+     '<select id="avColSentido" class="avcol-inp" onchange="_avColLerOpts();_avColOptsRender();">'+
+       '<option value="menor"'+(o.sentido!=='maior'?' selected':'')+'>o MENOR valor — dano, severidade, incidência</option>'+
+       '<option value="maior"'+(o.sentido==='maior'?' selected':'')+'>o MAIOR valor — mortalidade, eficácia</option>'+
+     '</select>';
+  if(o.sentido==='maior') h+='<div class="avcol-note">A testemunha é a <b>menor</b>: o % de controle sai pela <b>mortalidade corrigida de Abbott</b> — (tratado − testemunha) / (100 − testemunha).</div>';
+  if(t==='razao') h+='<div class="avcol-note">Lança <b>n</b> (mortos/afetados) e <b>N</b> (avaliados) — o % sai sozinho. O N padrão já vem preenchido em toda parcela; só mude onde tiver fugido.</div>';
+  else if(t==='escala') h+='<div class="avcol-note">Lança a <b>classe</b> (0–'+o.escalaMax+'). O derivado é o <b>índice de McKinney</b> em %, que é o que a estatística analisa.</div>';
+  else h+='<div class="avcol-note">Com 2 ou mais sub-amostras o bruto de cada uma fica guardado e a parcela entra na análise pela <b>média</b> — sub-amostra não é repetição.</div>';
+  box.innerHTML=h;
+}
+function avColPreset(i){
+  var it=(window._avColItens||[])[i]; if(!it) return;
+  var nome=document.getElementById('avColNome'); if(nome) nome.value=it.nome;
+  window._avColOpts={sub:Math.max(1,parseInt(it.sub)||1), N:(it.N!=null?it.N:20), escalaMax:(it.escalaMax!=null?it.escalaMax:4), sentido:(it.sentido==='maior'?'maior':'menor')};
+  _avColType(it.tipo||'pct');
+}
+function _avColType(t){ if(document.getElementById('avColOpts')) _avColLerOpts();
+  window._avColTipo=AV_TIPOS[t]?t:'pct';
+  Array.prototype.forEach.call(document.querySelectorAll('#avColModal .avcol-type'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===window._avColTipo); });
+  _avColOptsRender();
 }
 function avColConfirm(){
   var i=document.getElementById('avColNome'); var name=(i?i.value:'').trim();
   if(!name){ if(i){ i.focus(); i.style.borderColor='#d84b43'; } return; }
+  var t=window._avColTipo||'pct', o=_avColLerOpts();
   if(_avGrid.variaveis.indexOf(name)<0) _avGrid.variaveis.push(name);
-  _avGrid.tipos[name]=window._avColTipo||'pct';
+  _avGrid.tipos[name]=t;
+  if(!_avGrid.varcfg) _avGrid.varcfg={};
+  var cfg={};
+  if(t==='razao'){ if(o.N>0) cfg.N=o.N; }
+  else if(o.sub>1) cfg.sub=o.sub;
+  if(t==='escala') cfg.escalaMax=o.escalaMax;
+  if(o.sentido==='maior') cfg.sentido='maior';
+  _avGrid.varcfg[name]=cfg;
   var m=document.getElementById('avColModal'); if(m) m.style.display='none';
   renderAvGrid();
 }
@@ -7568,8 +7993,10 @@ function avDelCol(name){
   _avSyncInputs();
   _avGrid.variaveis=_avGrid.variaveis.filter(function(v){return v!==name;});
   if(_avGrid.tipos) delete _avGrid.tipos[name];
+  if(_avGrid.varcfg) delete _avGrid.varcfg[name];
   Object.keys(_avGrid.notas).forEach(function(t){ if(_avGrid.notas[t]) delete _avGrid.notas[t][name]; });
   Object.keys(_avGrid.meta||{}).forEach(function(t){ if(_avGrid.meta[t]) delete _avGrid.meta[t][name]; });
+  Object.keys(_avGrid.bruto||{}).forEach(function(t){ if(_avGrid.bruto[t]) delete _avGrid.bruto[t][name]; });
   renderAvGrid();
 }
 /* Grade read-only (no detalhe do estudo e no export) */
@@ -7578,10 +8005,20 @@ function avGridHtml(a){
   var st=_avStudy(), rows=_avRowsForStudy(st,false); if(!rows.length) return '';
   _avCss();
   var h='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
-  a.variaveis.forEach(function(v){ h+='<th>'+esc(v)+'</th>'; });
+  a.variaveis.forEach(function(v){
+    var cfg=_avCfg(a,v), suf='';
+    if(cfg.tipo==='razao') suf=' <small style="opacity:.6">%</small>';
+    else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">índice</small>';
+    if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
+    h+='<th>'+esc(v)+suf+'</th>';
+  });
   h+='</tr></thead><tbody>';
   rows.forEach(function(rw){ h+='<tr><td class="av-tname" title="'+esc(rw.produto||'')+'">'+esc(rw.label)+'</td>';
-    a.variaveis.forEach(function(v){ var val=_avNota(a,rw,v); h+='<td>'+esc(val||'—')+'</td>'; }); h+='</tr>'; });
+    a.variaveis.forEach(function(v){
+      var val=_avNota(a,rw,v), cfg=_avCfg(a,v), br=_avBrutoTxt(a,rw.key,v), sub='';
+      if(br){ sub=(cfg.tipo==='razao')?br:(_avSubCheias((a.bruto&&a.bruto[rw.key])?a.bruto[rw.key][v]:null)+' amostras'); }
+      h+='<td'+(br?' title="'+esc(br)+'"':'')+'>'+esc(val||'—')+(sub?'<small style="display:block;font-size:9px;color:#7c8a80;font-weight:400">'+esc(sub)+'</small>':'')+'</td>';
+    }); h+='</tr>'; });
   h+='</tbody></table></div>';
   return h;
 }
@@ -7601,15 +8038,36 @@ function _avMeans(study, av){
   var m={}; Object.keys(sum).forEach(function(k){ m[k]={}; vars.forEach(function(v){ if(cnt[k]&&cnt[k][v]) m[k][v]=sum[k][v]/cnt[k][v]; }); }); return m;
 }
 function _r1(x){ return Math.round(x*10)/10; }
-function _pctCtrl(ref, val){
-  /* % de controle (Abbott) vs testemunha. Devolve null (→ "—") fora da faixa válida:
-     testemunha ≤ 0 (divisão instável) ou resultado < -100% — o que cobre testemunha ≈ 0 e
-     variáveis de EFICÁCIA (em que a testemunha é a MENOR, não a maior), evitando valores
-     absurdos tipo -10000%. Em variável de dano/severidade normal, fica na faixa 0–100%. */
-  if(ref==null || val==null || !(ref>0)) return null;
+function _pctCtrl(ref, val, sentido){
+  /* % de controle vs testemunha, em duas famílias:
+
+     sentido 'menor' (padrão — dano, severidade, incidência: a testemunha é a MAIOR)
+       redução de Abbott: (test − tratado) / test × 100.
+       Devolve null (→ "—") fora da faixa válida: testemunha ≤ 0 (divisão instável) ou
+       resultado < -100%, o que evita valores absurdos tipo -10000%.
+
+     sentido 'maior' (mortalidade e afins: a testemunha é a MENOR)
+       mortalidade corrigida de Abbott: (tratado − test) / (100 − test) × 100.
+       Só faz sentido em variável limitada a 100% (razão n/N e escala já são). */
+  if(ref==null || val==null) return null;
+  if(sentido==='maior'){
+    if(!(ref<100) || ref<0) return null;
+    var mc=(val-ref)/(100-ref)*100;
+    if(!isFinite(mc) || mc < -100) return null;
+    return mc;
+  }
+  if(!(ref>0)) return null;
   var e=(ref-val)/ref*100;
   if(!isFinite(e) || e < -100) return null;
   return e;
+}
+/* Sentido da variável: 'maior' = quanto maior, melhor (mortalidade). Padrão 'menor'. */
+function _avSentido(src,v){ var c=(src&&src.varcfg&&src.varcfg[v])||{}; return c.sentido==='maior'?'maior':'menor'; }
+/* Última avaliação do estudo que define a variável — de onde sai a config dela nos resumos. */
+function _avCfgDoEstudo(study,v){
+  var out=null;
+  ((study&&study.avaliacoes)||[]).forEach(function(a){ if((a.variaveis||[]).indexOf(v)>=0 && a.varcfg && a.varcfg[v]) out=a; });
+  return out;
 }
 function avResultHtml(study, av){
   var vars=(av.variaveis||[]); if(!vars.length) return '';
@@ -7620,7 +8078,7 @@ function avResultHtml(study, av){
     h+='<div class="res-title">'+esc(v)+' · média &amp; % controle</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>% ctrl</th></tr></thead><tbody>';
     ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
       if(t.id===test) ctrl='<b>test.</b>';
-      else { var _c=_pctCtrl(tm,mv); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
+      else { var _c=_pctCtrl(tm,mv,_avSentido(av,v)); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(mv!=null?_r1(mv):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
   });
@@ -7681,7 +8139,7 @@ function studyChartsHtml(study){
   Object.keys(vars).forEach(function(v){
     var lastAv=null,i; for(i=avsR.length-1;i>=0;i--){ if((avsR[i].variaveis||[]).indexOf(v)>=0){ lastAv=avsR[i]; break; } }
     if(lastAv){ var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
-      ts.forEach(function(t){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v]; bars.push({label:t.id, val:_pctCtrl(tm,mv)}); });
+      ts.forEach(function(t){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v]; bars.push({label:t.id, val:_pctCtrl(tm,mv,_avSentido(lastAv,v))}); });
       if(bars.length) H+='<div class="res-title">'+esc(v)+' · % de controle ('+esc(isoToBR(lastAv.data))+')</div>'+_barsSvg(bars);
     }
     var pts=avsR.filter(function(a){return (a.variaveis||[]).indexOf(v)>=0;});
@@ -7708,7 +8166,9 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
     variaveis:(av.variaveis||[]).slice(),
     notas:JSON.parse(JSON.stringify(av.notas||{})),
     tipos:JSON.parse(JSON.stringify(av.tipos||{})),
-    meta:JSON.parse(JSON.stringify(av.notasMeta||{}))
+    meta:JSON.parse(JSON.stringify(av.notasMeta||{})),
+    varcfg:JSON.parse(JSON.stringify(av.varcfg||{})),
+    bruto:JSON.parse(JSON.stringify(av.bruto||{}))
   };
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
@@ -7875,6 +8335,7 @@ function saveAvaliacao(){
   av.obs=document.getElementById("vObs").value.trim();
   var autoInp=document.getElementById('avAutoInput'); if(autoInp) avAutoWrite(autoInp.value);
   _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+  av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
   
   var action = isNew ? 'Registro de Avaliação' : 'Edição de Avaliação';
   var details = '';
@@ -8173,7 +8634,7 @@ function _buildXlsx(soDoLocal){
   function num(x){ return (x==null||x==='')?'':x; }
   function toNum(x){ if(x==null||x==='') return ''; if(typeof x==='number') return isFinite(x)?x:''; var s=String(x).trim().replace(',','.'); if(s==='') return ''; var n=Number(s); return isFinite(n)?n:String(x); }
   function dap(pl,when){ try{ if(!pl||!when) return ''; var p=new Date(pl), w=new Date(when); if(isNaN(p)||isNaN(w)) return ''; return Math.round((w-p)/864e5); }catch(e){ return ''; } }
-  var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Tipo_variavel','Valor','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
+  var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Tipo_variavel','Valor','Sub_amostras','n_afetados','N_avaliados','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
   var aplH=['Local','Quadra','Cultura','Estudo','Data_aplicacao','BBCH','Obs','Registrado_em','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI'];
   var estH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Testemunha','N_avaliacoes','Area_ha','Comprimento_m','Largura_m','Lat','Lng'];
   var eficH=['Local','Quadra','Estudo','Variavel','Data_avaliacao','Tratamento','Produto','Testemunha','Media','%_controle'];
@@ -8196,14 +8657,19 @@ function _buildXlsx(soDoLocal){
         var ndvi=(c.ndvi&&c.ndvi.ndvi!=null)?c.ndvi.ndvi:'', ndre=(c.ndvi&&c.ndvi.ndre!=null)?c.ndvi.ndre:'', dapv=dap(plant,a.data);
         if(vars.length && s.tratamentos.length){
           _avRowsForStudy(s,false).forEach(function(rw){
-            vars.forEach(function(v){ tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'',rw.campo||'',rw.tratId,rw.repDisplay||_repDisplay(rw.rep),prod[rw.tratId]||'',dose[rw.tratId]||'',vol[rw.tratId]||'',v,(((a.tipos||{})[v]==='contagem')?'contagem':'numero/%'),toNum(_avNota(a,rw,v)),a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]); });
+            vars.forEach(function(v){
+              var _tv=_avTipo(a,v), _cf=_avCfg(a,v), _cel=(a.bruto&&a.bruto[rw.key])?a.bruto[rw.key][v]:null;
+              /* BPL: o derivado vai em Valor e o BRUTO sai junto — sub-amostras e n/N */
+              var _subs=(_cf.tipo!=='razao'&&_cel&&_cel.sub)?_cel.sub.filter(function(x){return x!=null&&String(x).trim()!=='';}).join('; '):'';
+              var _n=(_cf.tipo==='razao'&&_cel)?toNum(_cel.n):'', _N=(_cf.tipo==='razao'&&_cel)?toNum(_cel.N):'';
+              tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'',rw.campo||'',rw.tratId,rw.repDisplay||_repDisplay(rw.rep),prod[rw.tratId]||'',dose[rw.tratId]||'',vol[rw.tratId]||'',v,(_tv==='pct'?'numero/%':_tv),toNum(_avNota(a,rw,v)),_subs,_n,_N,a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]); });
           });
         } else {
-          tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'','','','','','','','','','',a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]);
+          tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'','','','','','','','','','','','','',a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]);
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
-        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
+        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv,_avSentido(a,v)); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
         var bv={}; _av.forEach(function(a){ if(!a.data)return; var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ (bv[v]=bv[v]||[]).push({date:a.data,m:m}); }); });
         Object.keys(bv).forEach(function(v){ var pts=bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), dys=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); function af(tr){ var sm=0,pv=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(pv!=null)sm+=(pv+y)/2*(dys[i]-pt); pv=y; pt=dys[i]; } return sm; } var ta=af(_t); s.tratamentos.forEach(function(t){ var a=af(t.id); var _ca=(t.id===_t)?null:_pctCtrl(ta,a); var ctrl=(t.id===_t)?'':(_ca!=null?Math.round(_ca*10)/10:''); aud.push([locNome,qn,s.codigo||'',v,t.id,prod[t.id]||'',(t.id===_t?'sim':''),pts.length,dys[dys.length-1],(a!=null?Math.round(a):''),ctrl]); }); });
       })();
