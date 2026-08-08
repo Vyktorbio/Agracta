@@ -3930,7 +3930,10 @@ function buildStudyModelo(qid, s, opts){
   var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||_calcParcelaDefault(); /* protocolo do estudo, senão o padrão salvo da calculadora (3×5) — nunca a quadra inteira */
   if(!paraColar && window.BioCalculoCampo && parc){
     var crow=maxR+2;
-    lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat)');
+    /* preparo de calda do cadastro do estudo — o export tem que bater com a calculadora */
+    var _dead=Math.max(0,_numBR(s.volumeMorto,0)), _bot=Math.max(1,Math.round(_numBR(s.numFrascos,1))||1), _cap=Math.max(0,_numBR(s.capacidadeFrasco,0));
+    var _cbr=function(n){ return String(n).replace('.',','); };
+    lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat'+(_dead>0?(' · vol. morto '+_cbr(_dead)+' mL'):'')+(_bot>1?(' · '+_bot+' frascos/preparo'):'')+(_cap>0?(' · frasco '+_cbr(_cap)+' L'):'')+')');
     var ch=crow+1;
     ['N°','Tratamento','Dose','V.Calda (L/ha)','Concentração','Calda/parcela','Calda total','Produto/parcela','Produto total'].forEach(function(h,c){ lbl(ch,c,h); });
     var _cf=function(x,p){ return BioCalculoCampo.formatBR(x,p==null?2:p); };
@@ -3941,7 +3944,7 @@ function buildStudyModelo(qid, s, opts){
       var vol=(typeof _calcNum==='function')?_calcNum(t.volume):parseFloat(String(t.volume||'').replace(',','.'));
       var dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
       if(dval>0 && vol>0){
-        try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:parc.comprimento,plotWidth:parc.largura,numPlots:reps,numBottles:1,deadVolumeMl:0,bottleCapacity:0});
+        try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:parc.comprimento,plotWidth:parc.largura,numPlots:reps,numBottles:_bot,deadVolumeMl:_dead,bottleCapacity:_cap});
           put(rr,4,_cf(res.concentration)+' '+res.concentrationUnit);
           put(rr,5,_cf(res.sprayPerPlotMl/1000)+' L');
           put(rr,6,_cf(res.sprayTotalMl/1000)+' L');
@@ -4785,6 +4788,9 @@ function newStudy(){
     numAplicacoes:1,
     tratamentos:[],
     numRepeticoes:4,
+    volumeMorto:0,        /* mL — calda que fica no pulverizador/mangueira */
+    numFrascos:1,         /* frascos por preparo de calda */
+    capacidadeFrasco:0,   /* L — 0 = não confere capacidade */
     testemunha:'',
     aplicacoes:[],
     avaliacoes:[],
@@ -4842,6 +4848,14 @@ function _dedupeAvaliacoes(s){
   });
   if(dup) s.avaliacoes=order.map(function(k){return byKey[k];});
 }
+/* Número vindo de input/legado: aceita vírgula decimal; vazio/inválido => fallback. */
+function _numBR(v,fallback){
+  if(typeof v==='number') return isFinite(v)?v:fallback;
+  var t=String(v==null?'':v).trim().replace(',','.');
+  if(t==='') return fallback;
+  var n=parseFloat(t);
+  return isFinite(n)?n:fallback;
+}
 function normalizeStudy(s){
   /* Garante que todos os campos existem mesmo em estudos antigos */
   if(!s)return newStudy();
@@ -4853,6 +4867,10 @@ function normalizeStudy(s){
   if(typeof s.numAplicacoes!=="number")s.numAplicacoes=parseInt(s.numAplicacoes)||1;
   if(!Array.isArray(s.tratamentos))s.tratamentos=[];
   if(typeof s.numRepeticoes!=="number")s.numRepeticoes=parseInt(s.numRepeticoes)||4;
+  /* preparo de calda (alimenta a calculadora de aplicação) — aceita vírgula do teclado BR */
+  if(typeof s.volumeMorto!=="number")s.volumeMorto=_numBR(s.volumeMorto,0);
+  if(typeof s.numFrascos!=="number")s.numFrascos=Math.max(1,Math.round(_numBR(s.numFrascos,1))||1);
+  if(typeof s.capacidadeFrasco!=="number")s.capacidadeFrasco=_numBR(s.capacidadeFrasco,0);
   if(typeof s.testemunha!=="string")s.testemunha="";
   /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
   s.tratamentos.forEach(function(t){ if(t) t.testemunha=!!t.testemunha; });
@@ -5336,6 +5354,10 @@ function _calcRenderShell(){
     volsVariam = tvs.length>1 && !uniforme;
     defVol = (pv>0)?pv : (uniforme?tvs[0]:'');
   }
+  /* preparo de calda: vem do cadastro do estudo (editável aqui, sem gravar de volta) */
+  var defDead=study?Math.max(0,_numBR(study.volumeMorto,0)):0;
+  var defBottles=study?Math.max(1,Math.round(_numBR(study.numFrascos,1))||1):1;
+  var defCap=study?Math.max(0,_numBR(study.capacidadeFrasco,0)):0;
   var selHtml='';
   if(all.length>1){
     selHtml='<div class="calc-f full"><span class="calc-lab">Estudo</span><select id="calcStudy" class="calc-sel" onchange="_calcPick(this.value)">'+
@@ -5344,6 +5366,7 @@ function _calcRenderShell(){
   var refTxt = fromProto ? ('✓ Parcela do protocolo: '+dims.comprimento+'×'+dims.largura+' m'+(defVol?(' · volume '+defVol+' L/ha'):'')+' — confira e ajuste se preciso')
     : (dims? ('Parcela salva ~'+Math.round(dims.comprimento)+'×'+Math.round(dims.largura)+' m — ajuste para o tamanho da PARCELA') : 'Informe o tamanho da parcela');
   if(volsVariam) refTxt += ' · ⚠ volumes diferentes por tratamento — cada um usa o SEU (o campo padrão é só p/ quem não tiver)';
+  if(defDead>0||defBottles>1||defCap>0) refTxt += ' · preparo de calda vindo do cadastro do estudo';
   ov.innerHTML='<div class="calc-box">'+
     '<div class="calc-top"><div class="calc-title">🧪 Calculadora de aplicação</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
@@ -5353,9 +5376,9 @@ function _calcRenderShell(){
       '<div class="calc-f"><span class="calc-lab">Largura da parcela (m)</span><input id="calcWid" class="calc-inp" type="number" step="0.1" value="'+defWid+'" oninput="_calcCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Nº de parcelas / tratamento</span><input id="calcPlots" class="calc-inp" type="number" step="1" value="'+defReps+'" oninput="_calcCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Volume de calda padrão (L/ha)</span><input id="calcVol" class="calc-inp" type="number" step="1" value="'+defVol+'" placeholder="se o trat. não tiver" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Volume morto (mL)</span><input id="calcDead" class="calc-inp" type="number" step="1" value="0" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Nº de frascos / preparo</span><input id="calcBottles" class="calc-inp" type="number" step="1" value="1" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Capacidade do frasco (L)</span><input id="calcCap" class="calc-inp" type="number" step="0.1" value="0" placeholder="0 = ignorar" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume morto (mL)</span><input id="calcDead" class="calc-inp" type="number" step="1" value="'+defDead+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Nº de frascos / preparo</span><input id="calcBottles" class="calc-inp" type="number" step="1" value="'+defBottles+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Capacidade do frasco (L)</span><input id="calcCap" class="calc-inp" type="number" step="0.1" value="'+defCap+'" placeholder="0 = ignorar" oninput="_calcCompute()"></div>'+
     '</div>'+
     '<div class="calc-sub">'+esc(refTxt)+'</div>'+
     '<div id="calcResults"></div>'+
@@ -6134,6 +6157,11 @@ function openStudyDetail(qid,sid){
   if(study.numAplicacoes>1){
     h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Aplicações</span><span>'+study.numAplicacoes+' (intervalo '+study.intervaloDias+'d)</span></div>';
   }
+  var _pc=[], _br=function(n){ return String(n).replace('.',','); }; /* preparo de calda: só mostra o que foi preenchido */
+  if(study.volumeMorto>0) _pc.push('vol. morto '+_br(study.volumeMorto)+' mL');
+  if(study.numFrascos>1) _pc.push(study.numFrascos+' frascos/preparo');
+  if(study.capacidadeFrasco>0) _pc.push('frasco '+_br(study.capacidadeFrasco)+' L');
+  if(_pc.length) h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo de calda</span><span>'+esc(_pc.join(' · '))+'</span></div>';
   h+='</div>';
 
   /* Descrição */
@@ -6711,6 +6739,14 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
   h+='</div>';
 
+  h+='<div class="se-section-title">Preparo de calda</div>';
+  h+='<div class="se-row">';
+  h+='<div class="se-field"><label>Volume morto (mL)</label><input type="number" id="seVolMorto" value="'+(s.volumeMorto||0)+'" min="0" step="1"></div>';
+  h+='<div class="se-field"><label>Nº de frascos / preparo</label><input type="number" id="seNumFrascos" value="'+(s.numFrascos||1)+'" min="1" step="1"></div>';
+  h+='<div class="se-field"><label>Capacidade do frasco (L)</label><input type="number" id="seCapFrasco" value="'+(s.capacidadeFrasco||0)+'" min="0" step="0.1"></div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de aplicação deste estudo. Volume morto = calda que sobra no equipamento. Capacidade 0 = não conferir se a calda cabe nos frascos.</div>';
+
   h+='<div class="se-section-title">Avaliações (programação)</div>';
   h+='<div class="se-row">';
   h+='<div class="se-field"><label>1ª avaliação</label><input type="date" id="seAvalInicio" value="'+esc(s.avalInicio||'')+'"></div>';
@@ -6772,6 +6808,9 @@ function syncStudyInputs(){
   workingStudy.numAplicacoes=intVal("seNumAp",workingStudy.numAplicacoes||1);
   workingStudy.intervaloDias=intVal("seIntervalo",workingStudy.intervaloDias||0);
   workingStudy.numRepeticoes=intVal("seReps",workingStudy.numRepeticoes||4);
+  x=el("seVolMorto"); if(x) workingStudy.volumeMorto=Math.max(0,_numBR(x.value,0));
+  x=el("seNumFrascos"); if(x) workingStudy.numFrascos=Math.max(1,Math.round(_numBR(x.value,1))||1);
+  x=el("seCapFrasco"); if(x) workingStudy.capacidadeFrasco=Math.max(0,_numBR(x.value,0));
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
   /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
@@ -6846,6 +6885,9 @@ function saveStudyV2(){
     if(old.numAplicacoes !== s.numAplicacoes) changes.push('Nº Apls: ' + old.numAplicacoes + ' -> ' + s.numAplicacoes);
     if(old.intervaloDias !== s.intervaloDias) changes.push('Intervalo: ' + old.intervaloDias + ' -> ' + s.intervaloDias);
     if(old.numRepeticoes !== s.numRepeticoes) changes.push('Repetições: ' + old.numRepeticoes + ' -> ' + s.numRepeticoes);
+    if(_numBR(old.volumeMorto,0) !== s.volumeMorto) changes.push('Volume morto (mL): ' + _numBR(old.volumeMorto,0) + ' -> ' + s.volumeMorto);
+    if(_numBR(old.numFrascos,1) !== s.numFrascos) changes.push('Frascos/preparo: ' + _numBR(old.numFrascos,1) + ' -> ' + s.numFrascos);
+    if(_numBR(old.capacidadeFrasco,0) !== s.capacidadeFrasco) changes.push('Capacidade do frasco (L): ' + _numBR(old.capacidadeFrasco,0) + ' -> ' + s.capacidadeFrasco);
     if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
     details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
   } else {
