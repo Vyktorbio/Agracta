@@ -2603,8 +2603,10 @@ function computeQuadraMeans(cb){
   function falhou(msg){ try{ ndviStatus(msg,'err'); }catch(e){} if(cb) cb(false,msg); }
   if(!ndviIndex||!ndviDate){ falhou('Carregue um índice (NDVI/NDRE…) antes de medir as quadras.'); return; }
   if(!quadrasAtivas().length){ falhou('Nenhuma quadra visível para medir.'); return; }
+  var bb=ndviBBoxMedida();
+  if(_bboxDegenerada(bb)){ falhou('Não consegui definir a área das quadras para medir (mapa sem dimensão ou quadras sem contorno).'); return; }
   try{ ndviStatus('Medindo as quadras…','wait'); }catch(e){}
-  var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
+  var w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
    .then(function(r){ if(!r.ok) throw new Error('o servidor NDVI respondeu '+r.status); return r.blob(); })
    .then(function(blob){ if(!blob) throw new Error('resposta vazia do servidor NDVI');
@@ -2679,6 +2681,27 @@ function ndviBBox(){
   }
   return stationBBox();
 }
+/* Para MEDIR as quadras a caixa tem que cobrir as quadras — não o pedaço visível do mapa.
+   Com a bbox do viewport, quadra fora da tela caía fora da imagem, o anel de pixels dava
+   vazio e ela ficava sem média (o zonamento não pintava). E se o mapa ainda não tem tamanho
+   a bbox do viewport degenera num ponto (oeste=leste), o que fazia a conta dividir por zero
+   e devolver NaN em silêncio. Medido: com a caixa das quadras, as 34 saem medidas. */
+function ndviBBoxMedida(){
+  try{ ensureQGEO(); }catch(e){}
+  var w=1e9,s=1e9,e=-1e9,n=-1e9,achou=false;
+  quadrasAtivas().forEach(function(id){
+    var pp=(typeof QGEO!=='undefined')?QGEO[id]:null; if(!pp||pp.length<3) return;
+    pp.forEach(function(pt){ achou=true; if(pt[1]<w)w=pt[1]; if(pt[1]>e)e=pt[1]; if(pt[0]<s)s=pt[0]; if(pt[0]>n)n=pt[0]; });
+  });
+  if(!achou) return ndviBBox();
+  var mw=(e-w)*0.02||0.0005, mh=(n-s)*0.02||0.0005;   /* folga p/ não cortar a borda da quadra */
+  w-=mw; e+=mw; s-=mh; n+=mh;
+  var cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25;            /* mesmo teto do ndviBBox */
+  if(e-w>maxSpan){ w=cx-maxSpan/2; e=cx+maxSpan/2; }
+  if(n-s>maxSpan){ s=cy-maxSpan/2; n=cy+maxSpan/2; }
+  return [w,s,e,n];
+}
+function _bboxDegenerada(bb){ return !bb || !(bb[2]-bb[0]>1e-9) || !(bb[3]-bb[1]>1e-9); }
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
 var ndviProbe=false, _gpsMarker=null, _gpsCircle=null;
 function quadraAt(lat,lng){ ensureQGEO(); var f=null;
@@ -5596,8 +5619,18 @@ function _pranchaDatas(s, variavel, trats, reps, base){
     x.faltam=faltam;
     (faltam?parciais:completas).push(x);
   });
+  /* Dado degenerado: doença que não ocorreu (tudo zero) ou nota igual em todo mundo. A ANOVA
+     divide por zero (QMerro=0 -> F e CV viram NaN), o Abbott divide pela testemunha zerada e
+     as barras saem sem escala — a folha abria EM BRANCO. Melhor não oferecer e dizer por quê. */
+  var vals=[];
+  completas.forEach(function(x){ trats.forEach(function(t){ for(var r=1;r<=reps;r++){
+    var vv=parseFloat(String(_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel)||'').replace(',','.'));
+    if(isFinite(vv)) vals.push(vv);
+  } }); });
+  var mx=vals.length?Math.max.apply(null,vals):0, mn=vals.length?Math.min.apply(null,vals):0;
+  var degenerado = completas.length ? (mx===mn ? (mx===0?'zero':'iguais') : '') : '';
   return {usadas:completas, parciais:parciais, candidatas:unicas.length, comData:todas.length,
-          descartadasPreAplicacao:(pos.length?todas.length-pos.length:0)};
+          descartadasPreAplicacao:(pos.length?todas.length-pos.length:0), degenerado:degenerado};
 }
 /* Situação de cada variável (alvo) do estudo: o que dá pra gerar e, quando não dá, por quê. */
 function _pranchaDiag(qid, sid){
@@ -5617,6 +5650,12 @@ function _pranchaDiag(qid, sid){
       o.motivo = dd.parciais.length
         ? ('grade incompleta em '+dd.parciais.length+' data(s) — faltam '+dd.parciais.map(function(x){return x.faltam;}).reduce(function(a,b){return a+b;},0)+' notas')
         : 'sem avaliação com data utilizável';
+      return o;
+    }
+    if(dd.degenerado){
+      o.motivo = (dd.degenerado==='zero')
+        ? 'sem ocorrência — todas as notas são zero, não há o que plotar'
+        : 'sem variação — a nota é igual em todas as parcelas';
       return o;
     }
     o.ok=true;
@@ -5644,6 +5683,9 @@ function _pranchaPayload(qid, sid, variavel){
       dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' — faltam '+x.faltam+' de '+(trats.length*reps)+' notas'; }).join('\n• ')+
       '\n\nComplete uma das datas ou remova os tratamentos que não foram avaliados.' };
   }
+  if(dts.degenerado) return { erro:(dts.degenerado==='zero')
+    ? ('Não há o que plotar para "'+variavel+'": todas as notas são zero (a ocorrência não aconteceu).')
+    : ('Não há o que plotar para "'+variavel+'": a nota é igual em todas as parcelas, então não há variação para analisar.') };
   var avs=dts.usadas;
   /* avisos: a folha sai, mas o usuário precisa saber o que ficou de fora */
   var avisos=[];
@@ -5800,10 +5842,30 @@ function _croquiPayload(){
     if(typeof _geo!=='undefined' && _geo && _geo.corners && _geo.corners.length===4)
       camadaBase={ url:'mapa-base.jpg', cantos:_geo.corners };
   }catch(e){ camadaBase=null; }
+  /* Satélite DE VERDADE: a caixa das quadras + a fonte de tiles (Esri World Imagery, que
+     serve com CORS e por isso pode ir para o canvas). O croqui monta o mosaico e embute a
+     imagem no SVG. Antes, sem a aérea alinhada, ele pintava um retângulo verde com filtro
+     fingindo ser foto aérea — numa folha de relatório isso é imagem inventada. */
+  var camadaSat=null;
+  try{
+    if(typeof ensureQGEO==='function') ensureQGEO();
+    var _w=1e9,_s=1e9,_e=-1e9,_n=-1e9,_ok=false;
+    quadrasAtivas().forEach(function(id){
+      var pp=(typeof QGEO!=='undefined')?QGEO[id]:null; if(!pp||pp.length<3) return;
+      pp.forEach(function(pt){ _ok=true; if(pt[1]<_w)_w=pt[1]; if(pt[1]>_e)_e=pt[1]; if(pt[0]<_s)_s=pt[0]; if(pt[0]>_n)_n=pt[0]; });
+    });
+    if(_ok){
+      var _mw=(_e-_w)*0.06||0.0004, _mh=(_n-_s)*0.06||0.0004;
+      camadaSat={ bbox:[_w-_mw,_s-_mh,_e+_mw,_n+_mh],
+                  url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                  atrib:'Esri, Maxar' };
+    }
+  }catch(e){ camadaSat=null; }
 
   return {
     camadaNdvi: camadaNdvi,
     camadaBase: camadaBase,
+    camadaSat: camadaSat,
     estudo: {
       codigo: estudo ? (estudo.codigo||estudo.nome||'') : (localNome||'AGRACTA'),
       autor: autor, datum: 'SIRGAS 2000 (WGS 84)',

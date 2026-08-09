@@ -180,8 +180,9 @@ body{
       <h2>Fundo</h2>
       <div class="opcoes" id="g-fundo">
         <label class="opt ativo" data-tipo="radio"><input type="radio" name="fundo" value="croqui" checked><span class="marcador"></span>Croqui (branco)</label>
+        <label class="opt" data-tipo="radio"><input type="radio" name="fundo" value="satelite"><span class="marcador"></span>Satélite</label>
       </div>
-      <p class="dica">Croqui imprime bem em P&amp;B.</p>
+      <p class="dica">Croqui imprime bem em P&amp;B. Satélite traz a imagem real (Esri/Maxar) da área das quadras.</p>
     </div>
 
     <div class="grupo">
@@ -354,7 +355,8 @@ function _carregar(){
     return { estudo: Object.assign({}, DEMO.estudo, hs.estudo||{}),
              quadras, carreador: hs.carreador||null,
              tratamentos: hs.tratamentos || _paletaAuto(quadras),
-             camadaNdvi: hs.camadaNdvi||null, camadaBase: hs.camadaBase||null };
+             camadaNdvi: hs.camadaNdvi||null, camadaBase: hs.camadaBase||null,
+             camadaSat: hs.camadaSat||null };
   }
   /* 2. geometria real da estação */
   if(typeof window!=="undefined" && window.DEFAULT_QGEO && Object.keys(window.DEFAULT_QGEO).length){
@@ -386,6 +388,50 @@ const CARREADOR  = _D.carreador;
 const TRATAMENTOS= _D.tratamentos;
 const CAMADA_NDVI= _D.camadaNdvi || null;   /* imagem do índice, com caixa lat/lng */
 const CAMADA_BASE= _D.camadaBase || null;   /* mapa-base.jpg + 4 cantos alinhados */
+const CAMADA_SAT = _D.camadaSat || null;   /* fonte de tiles de satelite + caixa das quadras */
+let SAT_IMG = null;                        /* mosaico pronto: {url dataURL, cantos[4]} */
+let SAT_ERRO = "";
+
+/* Mosaico de satelite REAL: baixa os tiles de imagem (Esri World Imagery, que responde com
+   CORS e por isso pode ir pro canvas) da caixa das quadras e devolve um PNG unico ja
+   georreferenciado pelos cantos do mosaico. Sem isso o fundo "satelite" era um retangulo
+   verde com filtro — imagem inventada, o que numa folha de relatorio nao pode existir. */
+function montaMosaicoSat(){
+  if(!CAMADA_SAT || SAT_IMG) return Promise.resolve(SAT_IMG);
+  const [w,s,e,n] = CAMADA_SAT.bbox;
+  const lon2t = (lon,z)=> (lon+180)/360*Math.pow(2,z);
+  const lat2t = (lat,z)=> (1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*Math.pow(2,z);
+  const t2lon = (x,z)=> x/Math.pow(2,z)*360-180;
+  const t2lat = (y,z)=>{ const r=Math.PI-2*Math.PI*y/Math.pow(2,z); return 180/Math.PI*Math.atan(0.5*(Math.exp(r)-Math.exp(-r))); };
+  /* maior zoom que ainda cabe em 8x8 tiles (2048 px) — detalhe sem baixar o mundo */
+  let z=19, x0,x1,y0,y1;
+  for(; z>=12; z--){
+    x0=Math.floor(lon2t(w,z)); x1=Math.floor(lon2t(e,z));
+    y0=Math.floor(lat2t(n,z)); y1=Math.floor(lat2t(s,z));
+    if((x1-x0+1)*(y1-y0+1) <= 64) break;
+  }
+  const nx=x1-x0+1, ny=y1-y0+1, T=256;
+  const cv=document.createElement("canvas"); cv.width=nx*T; cv.height=ny*T;
+  const ctx=cv.getContext("2d");
+  const um = (tx,ty)=> new Promise(res=>{
+    const im=new Image();
+    im.crossOrigin="anonymous";
+    im.onload =()=>{ try{ ctx.drawImage(im,(tx-x0)*T,(ty-y0)*T,T,T); }catch(_){} res(true); };
+    im.onerror=()=>res(false);
+    im.src=CAMADA_SAT.url.replace("{z}",z).replace("{x}",tx).replace("{y}",ty);
+  });
+  const jobs=[];
+  for(let tx=x0;tx<=x1;tx++) for(let ty=y0;ty<=y1;ty++) jobs.push(um(tx,ty));
+  return Promise.all(jobs).then(oks=>{
+    if(!oks.some(Boolean)){ SAT_ERRO="não consegui baixar a imagem de satélite"; return null; }
+    let url;
+    try{ url=cv.toDataURL("image/jpeg",0.9); }
+    catch(err){ SAT_ERRO="a imagem de satélite não pôde ser exportada"; return null; }
+    const W0=t2lon(x0,z), E0=t2lon(x1+1,z), N0=t2lat(y0,z), S0=t2lat(y1+1,z);
+    SAT_IMG={ url:url, cantos:[[N0,W0],[N0,E0],[S0,E0],[S0,W0]], atrib:(CAMADA_SAT.atrib||""), zoom:z };
+    return SAT_IMG;
+  }).catch(()=>{ SAT_ERRO="falha ao montar a imagem de satélite"; return null; });
+}
 
 const RAMPA_NDVI = [
   {v:0.30, cor:"#f2eccd"},{v:0.45, cor:"#cfe0a0"},
@@ -554,22 +600,23 @@ function desenhar(){
   /* --- fundo --- */
   s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
   if(estado.fundo==="satelite"){
-    if(CAMADA_BASE && PROJ){
+    const FOTO = SAT_IMG || CAMADA_BASE;   /* mosaico de satelite; senao a aerea alinhada do app */
+    if(FOTO && PROJ){
       /* A aérea alinhada do app: 4 cantos georreferenciados. Projetados em metro
          viram um quadrilátero quase retangular, então uma afim por 3 cantos
          (topo-esq, topo-dir, base-esq) posiciona a imagem com erro bem abaixo da
          espessura da linha. SVG não faz perspectiva — e aqui não precisa. */
-      const c = CAMADA_BASE.cantos.map(p => projeta(p[0], p[1]));
+      const c = FOTO.cantos.map(p => projeta(p[0], p[1]));
       const [tl, tr, , bl] = c;
       const a = (px(tr[0]) - px(tl[0])), b = (py(tr[1]) - py(tl[1]));
       const cc = (px(bl[0]) - px(tl[0])), dd = (py(bl[1]) - py(tl[1]));
-      s += `<g clip-path="url(#recorte)"><image href="${esc(CAMADA_BASE.url)}" x="0" y="0" width="1" height="1"
+      s += `<g clip-path="url(#recorte)"><image href="${esc(FOTO.url)}" x="0" y="0" width="1" height="1"
         preserveAspectRatio="none" transform="matrix(${a} ${b} ${cc} ${dd} ${px(tl[0])} ${py(tl[1])})"/></g>`;
     } else {
-      s += `<g clip-path="url(#recorte)">
-        <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" fill="#6d7a4e"/>
-        <rect x="${M}" y="${topoMapa}" width="${larg}" height="${alt}" filter="url(#aereo)" opacity="0.95"/>
-      </g>`;
+      /* sem foto real: fundo branco mesmo. Inventar textura de "aerea" numa folha de
+         relatorio e afirmar o que nao se mediu. */
+      s += `<text x="${M}" y="${topoMapa+16}" font-family="${F_COND}" font-size="11" fill="#a33">${
+        esc(SAT_ERRO || "imagem de satélite ainda carregando…")}</text>`;
     }
   }
   /* Índice (NDVI/NDRE/GNDVI): imageOverlay com caixa lat/lng — em metro a caixa
@@ -900,6 +947,10 @@ document.getElementById("g-idioma").addEventListener("change", ev=>{
 document.getElementById("g-fundo").addEventListener("change", ev=>{
   estado.fundo = ev.target.value;
   sincronizaClasses(ev.currentTarget); render();
+  /* baixa o mosaico de satelite sob demanda e redesenha quando ficar pronto */
+  if(estado.fundo === "satelite" && !SAT_IMG){
+    montaMosaicoSat().then(()=>render());
+  }
 });
 document.getElementById("g-pintura").addEventListener("change", ev=>{
   estado.pintura = ev.target.value;
