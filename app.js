@@ -5842,25 +5842,12 @@ function _croquiPayload(){
     if(typeof _geo!=='undefined' && _geo && _geo.corners && _geo.corners.length===4)
       camadaBase={ url:'mapa-base.jpg', cantos:_geo.corners };
   }catch(e){ camadaBase=null; }
-  /* Satélite DE VERDADE: a caixa das quadras + a fonte de tiles (Esri World Imagery, que
-     serve com CORS e por isso pode ir para o canvas). O croqui monta o mosaico e embute a
-     imagem no SVG. Antes, sem a aérea alinhada, ele pintava um retângulo verde com filtro
-     fingindo ser foto aérea — numa folha de relatório isso é imagem inventada. */
-  var camadaSat=null;
-  try{
-    if(typeof ensureQGEO==='function') ensureQGEO();
-    var _w=1e9,_s=1e9,_e=-1e9,_n=-1e9,_ok=false;
-    quadrasAtivas().forEach(function(id){
-      var pp=(typeof QGEO!=='undefined')?QGEO[id]:null; if(!pp||pp.length<3) return;
-      pp.forEach(function(pt){ _ok=true; if(pt[1]<_w)_w=pt[1]; if(pt[1]>_e)_e=pt[1]; if(pt[0]<_s)_s=pt[0]; if(pt[0]>_n)_n=pt[0]; });
-    });
-    if(_ok){
-      var _mw=(_e-_w)*0.06||0.0004, _mh=(_n-_s)*0.06||0.0004;
-      camadaSat={ bbox:[_w-_mw,_s-_mh,_e+_mw,_n+_mh],
-                  url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  /* Satélite DE VERDADE: só a FONTE dos tiles (Esri World Imagery, que serve com CORS e por
+     isso pode ir ao canvas). A caixa NÃO vem daqui: o croqui troca de local e de seleção, e
+     uma bbox cravada aqui traria a imagem de um lugar por cima das quadras de outro. Quem
+     monta o mosaico é o croqui, a partir das quadras que estiverem selecionadas lá. */
+  var camadaSat={ url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                   atrib:'Esri, Maxar' };
-    }
-  }catch(e){ camadaSat=null; }
 
   return {
     camadaNdvi: camadaNdvi,

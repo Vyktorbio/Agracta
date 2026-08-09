@@ -351,6 +351,7 @@ function _carregar(){
       .map(q => ({ key:q.key||q.id, id:q.id, trat:q.trat||null,
                    ndvi:(typeof q.ndvi==="number"?q.ndvi:null),
                    local:q.local||null, localAtivo:!!q.localAtivo,
+                   latlng:(geo[q.key||q.id]||null),
                    pts:(m && m[q.key||q.id]) ? m[q.key||q.id] : q.pts }));
     return { estudo: Object.assign({}, DEMO.estudo, hs.estudo||{}),
              quadras, carreador: hs.carreador||null,
@@ -388,7 +389,10 @@ const CARREADOR  = _D.carreador;
 const TRATAMENTOS= _D.tratamentos;
 const CAMADA_NDVI= _D.camadaNdvi || null;   /* imagem do índice, com caixa lat/lng */
 const CAMADA_BASE= _D.camadaBase || null;   /* mapa-base.jpg + 4 cantos alinhados */
-const CAMADA_SAT = _D.camadaSat || null;   /* fonte de tiles de satelite + caixa das quadras */
+const CAMADA_SAT = _D.camadaSat || null;   /* fonte de tiles de satelite (config, nao geometria) */
+const SAT_URL   = (CAMADA_SAT && CAMADA_SAT.url) ||
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SAT_ATRIB = (CAMADA_SAT && CAMADA_SAT.atrib) || "Esri, Maxar";
 let SAT_IMG = null;                        /* mosaico pronto: {url dataURL, cantos[4]} */
 let SAT_ERRO = "";
 
@@ -396,20 +400,59 @@ let SAT_ERRO = "";
    CORS e por isso pode ir pro canvas) da caixa das quadras e devolve um PNG unico ja
    georreferenciado pelos cantos do mosaico. Sem isso o fundo "satelite" era um retangulo
    verde com filtro — imagem inventada, o que numa folha de relatorio nao pode existir. */
+/* Caixa das quadras SELECIONADAS agora — o croqui troca de local e de seleção, então
+   uma caixa cravada no handoff traria a imagem de Iracemápolis por cima de Anápolis. */
+function bboxDaSelecao(){
+  let w=1e9,s=1e9,e=-1e9,n=-1e9,achou=false;
+  QS().forEach(q => (q.latlng||[]).forEach(pt => {
+    achou=true;
+    if(pt[1]<w)w=pt[1]; if(pt[1]>e)e=pt[1];
+    if(pt[0]<s)s=pt[0]; if(pt[0]>n)n=pt[0];
+  }));
+  if(!achou) return null;
+  const mw=(e-w)*0.06||0.0004, mh=(n-s)*0.06||0.0004;
+  return [w-mw, s-mh, e+mw, n+mh];
+}
+const _satCache = {};                 /* bbox -> mosaico pronto (não rebaixa ao voltar) */
+function chaveBBox(b){ return b.map(x=>x.toFixed(5)).join(","); }
 function montaMosaicoSat(){
-  if(!CAMADA_SAT || SAT_IMG) return Promise.resolve(SAT_IMG);
-  const [w,s,e,n] = CAMADA_SAT.bbox;
+  const bb = bboxDaSelecao();
+  if(!bb){ SAT_ERRO="selecione ao menos uma quadra"; SAT_IMG=null; return Promise.resolve(null); }
+  const chave = chaveBBox(bb);
+  if(_satCache[chave]){ SAT_IMG=_satCache[chave]; SAT_ERRO=""; return Promise.resolve(SAT_IMG); }
+  SAT_IMG=null; SAT_ERRO="";
+  const [w,s,e,n] = bb;
   const lon2t = (lon,z)=> (lon+180)/360*Math.pow(2,z);
   const lat2t = (lat,z)=> (1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*Math.pow(2,z);
   const t2lon = (x,z)=> x/Math.pow(2,z)*360-180;
   const t2lat = (y,z)=>{ const r=Math.PI-2*Math.PI*y/Math.pow(2,z); return 180/Math.PI*Math.atan(0.5*(Math.exp(r)-Math.exp(-r))); };
-  /* maior zoom que ainda cabe em 8x8 tiles (2048 px) — detalhe sem baixar o mundo */
-  let z=19, x0,x1,y0,y1;
-  for(; z>=12; z--){
-    x0=Math.floor(lon2t(w,z)); x1=Math.floor(lon2t(e,z));
-    y0=Math.floor(lat2t(n,z)); y1=Math.floor(lat2t(s,z));
-    if((x1-x0+1)*(y1-y0+1) <= 64) break;
+  /* Maior zoom que (a) cabe em 8x8 tiles e (b) TEM imagem ali. O acervo da Esri não cobre
+     todo lugar no zoom máximo: em Anápolis o z18 devolve tile cinza "Map data not yet
+     available" — imagem falsa com cara de bug. O endpoint tilemap diz quais tiles existem,
+     então dá pra descer o zoom até onde a foto existe de verdade. */
+  function faixa(z){
+    return { x0:Math.floor(lon2t(w,z)), x1:Math.floor(lon2t(e,z)),
+             y0:Math.floor(lat2t(n,z)), y1:Math.floor(lat2t(s,z)) };
   }
+  function temImagem(z){
+    const f=faixa(z), nx=f.x1-f.x0+1, ny=f.y1-f.y0+1;
+    const base=SAT_URL.split("/tile/")[0];
+    if(base===SAT_URL) return Promise.resolve(true);        /* fonte sem tilemap: segue o baile */
+    return fetch(`${base}/tilemap/${z}/${f.y0}/${f.x0}/${ny}/${nx}`)
+      .then(r=>r.ok?r.json():null)
+      .then(j=>!!(j && Array.isArray(j.data) && j.data.length && j.data.every(Boolean)))
+      .catch(()=>true);                                     /* sem resposta: tenta assim mesmo */
+  }
+  let z=19;
+  while(z>12){ const f=faixa(z); if((f.x1-f.x0+1)*(f.y1-f.y0+1) <= 64) break; z--; }
+  const escolheZoom = (function passo(zz){
+    if(zz<=12) return Promise.resolve(12);
+    return temImagem(zz).then(ok => ok ? zz : passo(zz-1));
+  })(z);
+  return escolheZoom.then(zf => montaNoZoom(zf));
+
+  function montaNoZoom(z){
+  const f=faixa(z), x0=f.x0, x1=f.x1, y0=f.y0, y1=f.y1;
   const nx=x1-x0+1, ny=y1-y0+1, T=256;
   const cv=document.createElement("canvas"); cv.width=nx*T; cv.height=ny*T;
   const ctx=cv.getContext("2d");
@@ -418,7 +461,7 @@ function montaMosaicoSat(){
     im.crossOrigin="anonymous";
     im.onload =()=>{ try{ ctx.drawImage(im,(tx-x0)*T,(ty-y0)*T,T,T); }catch(_){} res(true); };
     im.onerror=()=>res(false);
-    im.src=CAMADA_SAT.url.replace("{z}",z).replace("{x}",tx).replace("{y}",ty);
+    im.src=SAT_URL.replace("{z}",z).replace("{x}",tx).replace("{y}",ty);
   });
   const jobs=[];
   for(let tx=x0;tx<=x1;tx++) for(let ty=y0;ty<=y1;ty++) jobs.push(um(tx,ty));
@@ -428,9 +471,11 @@ function montaMosaicoSat(){
     try{ url=cv.toDataURL("image/jpeg",0.9); }
     catch(err){ SAT_ERRO="a imagem de satélite não pôde ser exportada"; return null; }
     const W0=t2lon(x0,z), E0=t2lon(x1+1,z), N0=t2lat(y0,z), S0=t2lat(y1+1,z);
-    SAT_IMG={ url:url, cantos:[[N0,W0],[N0,E0],[S0,E0],[S0,W0]], atrib:(CAMADA_SAT.atrib||""), zoom:z };
+    SAT_IMG={ url:url, cantos:[[N0,W0],[N0,E0],[S0,E0],[S0,W0]], atrib:SAT_ATRIB, zoom:z, chave:chave };
+    _satCache[chave]=SAT_IMG;
     return SAT_IMG;
   }).catch(()=>{ SAT_ERRO="falha ao montar a imagem de satélite"; return null; });
+  }
 }
 
 const RAMPA_NDVI = [
@@ -825,8 +870,21 @@ function carimboHora(){
 const folha = document.getElementById("folha");
 const legendaFig = document.getElementById("legenda-fig");
 
+let _satCarregando = "";
+/* O mosaico segue a seleção: trocou de local ou de quadras, a imagem tem que trocar junto.
+   Guardado por chave de bbox para não entrar em laço de render nem rebaixar o que já veio. */
+function garanteSat(){
+  if(estado.fundo !== "satelite") return;
+  const bb = bboxDaSelecao(); if(!bb) return;
+  const chave = chaveBBox(bb);
+  if(SAT_IMG && SAT_IMG.chave === chave) return;
+  if(_satCarregando === chave) return;
+  _satCarregando = chave;
+  montaMosaicoSat().then(()=>{ _satCarregando=""; render(); });
+}
 function render(){
   try{ avisaSobrepostas(); }catch(e){}
+  try{ garanteSat(); }catch(e){}
   if(!QS().length){
     folha.innerHTML = '<div class="sem-quadra">Selecione ao menos uma quadra para montar o croqui.</div>';
     legendaFig.textContent = "";
@@ -947,10 +1005,6 @@ document.getElementById("g-idioma").addEventListener("change", ev=>{
 document.getElementById("g-fundo").addEventListener("change", ev=>{
   estado.fundo = ev.target.value;
   sincronizaClasses(ev.currentTarget); render();
-  /* baixa o mosaico de satelite sob demanda e redesenha quando ficar pronto */
-  if(estado.fundo === "satelite" && !SAT_IMG){
-    montaMosaicoSat().then(()=>render());
-  }
 });
 document.getElementById("g-pintura").addEventListener("change", ev=>{
   estado.pintura = ev.target.value;
