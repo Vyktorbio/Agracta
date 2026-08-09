@@ -2566,7 +2566,21 @@ var NDVI_PROXY=(location.hostname==='localhost'||location.hostname==='127.0.0.1'
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null, ndviZonas=false;
 function _lerpColor(a,b,t){ function h(s,i){return parseInt(s.substr(i,2),16);} function c(x){x=Math.max(0,Math.min(255,Math.round(x)));return (x<16?'0':'')+x.toString(16);} return '#'+c(h(a,1)+(h(b,1)-h(a,1))*t)+c(h(a,3)+(h(b,3)-h(a,3))*t)+c(h(a,5)+(h(b,5)-h(a,5))*t); }
 function _ndviColor(v){ if(v==null||isNaN(v)) return '#9e9e9e'; var s=[[0.15,'#d73027'],[0.3,'#fc8d59'],[0.45,'#fee08b'],[0.6,'#d9ef8b'],[0.75,'#91cf60'],[0.85,'#1a9850']]; if(v<=s[0][0])return s[0][1]; if(v>=s[s.length-1][0])return s[s.length-1][1]; for(var i=1;i<s.length;i++){ if(v<=s[i][0]) return _lerpColor(s[i-1][1],s[i][1],(v-s[i-1][0])/(s[i][0]-s[i-1][0])); } return s[s.length-1][1]; }
-function ndviToggleZonas(){ if(!ndviZonas && !ndviMeans){ if(typeof _stxToast==='function')_stxToast('Carregue um índice (NDVI/NDRE…) primeiro'); return; } ndviZonas=!ndviZonas; if(ndviOverlay){ try{ ndviOverlay.setOpacity(ndviZonas?0.12:ndviOpacity); }catch(e){} } render(); if(document.getElementById('ndviPanel')&&document.getElementById('ndviPanel').style.display==='block') buildNdviPanel(); }
+function ndviToggleZonas(){
+  /* antes só recusava quando faltava a média; agora ela é calculada na hora — era isso que
+     fazia o botão "colorir quadras por valor" parecer morto depois de carregar o índice */
+  if(!ndviZonas && !ndviMeans){
+    if(!ndviIndex||!ndviDate){ if(typeof _stxToast==='function')_stxToast('Carregue um índice (NDVI/NDRE…) primeiro'); return; }
+    computeQuadraMeans(function(ok,msg){
+      if(!ok){ if(typeof _stxToast==='function')_stxToast('Não deu para colorir: '+msg); return; }
+      ndviZonas=true;
+      if(ndviOverlay){ try{ ndviOverlay.setOpacity(0.12); }catch(e){} }
+      render();
+      if(document.getElementById('ndviPanel')&&document.getElementById('ndviPanel').style.display==='block') buildNdviPanel();
+    });
+    return;
+  }
+  ndviZonas=!ndviZonas; if(ndviOverlay){ try{ ndviOverlay.setOpacity(ndviZonas?0.12:ndviOpacity); }catch(e){} } render(); if(document.getElementById('ndviPanel')&&document.getElementById('ndviPanel').style.display==='block') buildNdviPanel(); }
 /* NDVI usa sempre a área visível do mapa; o checkbox "Apenas quadras" liga/desliga o recorte. */
 var _ndviMoveT=null;
 function pointInRing(x,y,ring){ var inside=false,i,j;
@@ -2582,12 +2596,20 @@ function ndviPx(bb){
     return Math.max(1024, Math.min(2500, px||1024));
   }catch(_e){ return 1024; }
 }
-function computeQuadraMeans(){
+/* Média do índice por quadra — é o que alimenta o zonamento ("colorir quadras por valor")
+   e o ranking. TODO caminho de erro aqui era silencioso (catch vazio, blob nulo), então o
+   botão de zonamento simplesmente não fazia nada e o usuário não tinha como saber por quê. */
+function computeQuadraMeans(cb){
+  function falhou(msg){ try{ ndviStatus(msg,'err'); }catch(e){} if(cb) cb(false,msg); }
+  if(!ndviIndex||!ndviDate){ falhou('Carregue um índice (NDVI/NDRE…) antes de medir as quadras.'); return; }
+  if(!quadrasAtivas().length){ falhou('Nenhuma quadra visível para medir.'); return; }
+  try{ ndviStatus('Medindo as quadras…','wait'); }catch(e){}
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
-   .then(function(r){ return r.ok?r.blob():null; })
-   .then(function(blob){ if(!blob) return;
+   .then(function(r){ if(!r.ok) throw new Error('o servidor NDVI respondeu '+r.status); return r.blob(); })
+   .then(function(blob){ if(!blob) throw new Error('resposta vazia do servidor NDVI');
      var bu=URL.createObjectURL(blob), img=new Image();
+     img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} falhou('Não consegui ler a imagem bruta do índice.'); };
      img.onload=function(){
        try{
          var iw=img.naturalWidth, ih=img.naturalHeight;
@@ -2608,11 +2630,16 @@ function computeQuadraMeans(){
              sum+=data[o]; cnt++; } }
            if(cnt>0) means[id]=(sum/cnt/255)*2-1;
          });
+         if(!Object.keys(means).length){ URL.revokeObjectURL(bu); falhou('Não consegui medir nenhuma quadra nessa imagem (sem pixel válido — nuvem ou recorte fora da área?).'); return; }
          ndviMeans=means; renderNdviRank(); render();
-       }catch(err){} URL.revokeObjectURL(bu);
+         try{ ndviStatus(ndviIndex+' • '+ndviDate+' • '+Object.keys(means).length+' quadra(s) medida(s)','ok'); }catch(e){}
+         URL.revokeObjectURL(bu);
+         if(cb) cb(true,'');
+         return;
+       }catch(err){ URL.revokeObjectURL(bu); falhou('Falhei ao medir as quadras: '+(err&&err.message||err)); return; }
      };
      img.src=bu;
-   }).catch(function(){});
+   }).catch(function(err){ falhou('Não consegui medir as quadras: '+(err&&err.message||err)); });
 }
 function renderNdviRank(){
   var el=document.getElementById('ndviRank'); if(!el) return;
@@ -5513,10 +5540,88 @@ function openBioestat(qid, sid, modo){
    ela recai sobre a severidade daquela data. Exige a grade completa (todo
    tratamento x bloco x avaliação preenchido). Quando falta
    algo, diz o que falta em vez de desenhar um gráfico pela metade. */
+/* Variáveis (alvos) que têm ao menos UMA nota lançada — variável declarada e vazia
+   só enche o menu e sempre falhou na hora de montar a folha. */
 function _pranchaVariaveis(s){
   var c={};
-  (s.avaliacoes||[]).forEach(function(a){ (a.variaveis||[]).forEach(function(v){ c[v]=(c[v]||0)+1; }); });
+  (s.avaliacoes||[]).forEach(function(a){
+    var notas=a.notas||{};
+    (a.variaveis||[]).forEach(function(v){
+      var tem=false;
+      for(var k in notas){ var r=notas[k]; if(r&&r[v]!=null&&String(r[v]).trim()!==''){ tem=true; break; } }
+      if(tem) c[v]=(c[v]||0)+1;
+    });
+  });
   return Object.keys(c).sort(function(x,y){ return c[y]-c[x]; });
+}
+/* Data-base do DAA. Antes exigia aplicação registrada ou início programado e, sem
+   isso, a prancha inteira morria — mesmo com avaliações datadas. Agora cai para a
+   1ª avaliação e diz de onde veio, pra o rótulo não mentir "dias após a aplicação". */
+function _pranchaBase(s){
+  var base=null;
+  (s.aplicacoes||[]).forEach(function(a){ var d=pD(isoToBR(a.data))||pD(a.data); if(d && (!base || d<base)) base=d; });
+  if(base) return {data:base, fonte:'aplicacao'};
+  base=pD(isoToBR(s.dataInicio))||pD(s.dataInicio);
+  if(base) return {data:base, fonte:'inicio'};
+  (s.avaliacoes||[]).forEach(function(a){ var d=pD(isoToBR(a.data))||pD(a.data); if(d && (!base || d<base)) base=d; });
+  return base?{data:base, fonte:'avaliacao'}:{data:null, fonte:''};
+}
+/* Datas utilizáveis de uma variável.
+   Duas teimosias antigas viravam "não dá pra gerar":
+     - avaliação no dia da aplicação (DAA 0) era descartada junto com a pré-aplicação;
+     - UMA célula vazia em UMA data bloqueava a folha inteira.
+   Agora a pré-aplicação (DAA<0) continua fora (é linha de base, não resultado), o DAA 0
+   entra quando não há nada depois, e a data incompleta é DESCARTADA com aviso — só falha
+   quando não sobra nenhuma data com a grade cheia. */
+function _pranchaDatas(s, variavel, trats, reps, base){
+  var todas=[];
+  (s.avaliacoes||[]).forEach(function(a){
+    var d=pD(isoToBR(a.data))||pD(a.data); if(!d||isNaN(d)) return;
+    if((a.variaveis||[]).indexOf(variavel)<0) return;
+    todas.push({ av:a, daa:(base?daysBetween(base,d):0), data:d });
+  });
+  todas.sort(function(x,y){ return x.data-y.data; });
+  var pos=todas.filter(function(x){ return x.daa>0; });
+  var usadas = pos.length ? pos : todas.filter(function(x){ return x.daa>=0; });
+  if(!usadas.length) usadas=todas;
+  var vistos={}, unicas=[]; /* DAA repetido quebra a AACPD: fica a primeira de cada */
+  usadas.forEach(function(x){ if(!vistos[x.daa]){ vistos[x.daa]=1; unicas.push(x); } });
+  var completas=[], parciais=[];
+  unicas.forEach(function(x){
+    var faltam=0;
+    trats.forEach(function(t){ for(var r=1;r<=reps;r++){
+      var raw=_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel);
+      if(isNaN(parseFloat(String(raw==null?'':raw).replace(',','.')))) faltam++;
+    } });
+    x.faltam=faltam;
+    (faltam?parciais:completas).push(x);
+  });
+  return {usadas:completas, parciais:parciais, candidatas:unicas.length, comData:todas.length,
+          descartadasPreAplicacao:(pos.length?todas.length-pos.length:0)};
+}
+/* Situação de cada variável (alvo) do estudo: o que dá pra gerar e, quando não dá, por quê. */
+function _pranchaDiag(qid, sid){
+  var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
+  if(!s) return [];
+  s=normalizeStudy(s);
+  var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
+  var reps=Math.max(1, parseInt(s.numRepeticoes)||1);
+  var base=_pranchaBase(s);
+  return _pranchaVariaveis(s).map(function(v){
+    var o={variavel:v, datas:0, parciais:0, ok:false, motivo:''};
+    if(trats.length<2){ o.motivo='precisa de ao menos 2 tratamentos'; return o; }
+    if(reps<2){ o.motivo='precisa de ao menos 2 repetições'; return o; }
+    var dd=_pranchaDatas(s, v, trats, reps, base.data);
+    o.datas=dd.usadas.length; o.parciais=dd.parciais.length;
+    if(!dd.usadas.length){
+      o.motivo = dd.parciais.length
+        ? ('grade incompleta em '+dd.parciais.length+' data(s) — faltam '+dd.parciais.map(function(x){return x.faltam;}).reduce(function(a,b){return a+b;},0)+' notas')
+        : 'sem avaliação com data utilizável';
+      return o;
+    }
+    o.ok=true;
+    return o;
+  });
 }
 function _pranchaPayload(qid, sid, variavel){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
@@ -5528,47 +5633,40 @@ function _pranchaPayload(qid, sid, variavel){
   if(trats.length<2) return { erro:'A prancha precisa de ao menos 2 tratamentos.' };
   if(reps<2) return { erro:'A prancha precisa de ao menos 2 repetições.' };
 
-  if(!variavel){ var vs=_pranchaVariaveis(s); if(!vs.length) return { erro:'Nenhuma variável avaliada neste estudo.' }; variavel=vs[0]; }
+  if(!variavel){ var vs=_pranchaVariaveis(s); if(!vs.length) return { erro:'Nenhuma variável com nota lançada neste estudo.' }; variavel=vs[0]; }
 
-  /* data-base: primeira aplicação realizada, senão o início programado */
-  var base=null;
-  (s.aplicacoes||[]).forEach(function(a){ var d=pD(isoToBR(a.data))||pD(a.data); if(d && (!base || d<base)) base=d; });
-  if(!base) base=pD(isoToBR(s.dataInicio))||pD(s.dataInicio);
-  if(!base) return { erro:'Sem data de aplicação nem de início — não dá para calcular o DAA.' };
+  var base=_pranchaBase(s);
+  var dts=_pranchaDatas(s, variavel, trats, reps, base.data);
+  if(!dts.comData) return { erro:'Nenhuma avaliação datada com a variável "'+variavel+'".' };
+  if(!dts.usadas.length){
+    if(!dts.parciais.length) return { erro:'Nenhuma avaliação com data utilizável para "'+variavel+'".' };
+    return { erro:'Nenhuma data de "'+variavel+'" está com a grade cheia (todo tratamento × bloco), que é o mínimo para a ANOVA:\n\n• '+
+      dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' — faltam '+x.faltam+' de '+(trats.length*reps)+' notas'; }).join('\n• ')+
+      '\n\nComplete uma das datas ou remova os tratamentos que não foram avaliados.' };
+  }
+  var avs=dts.usadas;
+  /* avisos: a folha sai, mas o usuário precisa saber o que ficou de fora */
+  var avisos=[];
+  if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
+    dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
+  if(dts.descartadasPreAplicacao) avisos.push(dts.descartadasPreAplicacao+' avaliação(ões) anterior(es) à aplicação ficaram de fora (linha de base).');
+  if(base.fonte==='avaliacao') avisos.push('Sem aplicação ou início registrados: os dias são contados a partir da 1ª avaliação.');
+  else if(base.fonte==='inicio') avisos.push('Sem aplicação registrada: os dias são contados a partir do início programado do estudo.');
 
-  /* avaliações com DAA > 0 e que tenham a variável */
-  var avs=[];
-  (s.avaliacoes||[]).forEach(function(a){
-    var d=pD(isoToBR(a.data))||pD(a.data); if(!d || isNaN(d)) return;
-    if((a.variaveis||[]).indexOf(variavel)<0) return;
-    var daa=daysBetween(base,d);
-    if(daa<=0) return;
-    avs.push({ av:a, daa:daa, data:d });
-  });
-  avs.sort(function(x,y){ return x.daa-y.daa; });
-  /* DAA repetido quebra a AACPD — fica a primeira de cada */
-  var vistos={}, unicas=[];
-  avs.forEach(function(x){ if(!vistos[x.daa]){ vistos[x.daa]=1; unicas.push(x); } });
-  avs=unicas;
-  if(avs.length<1) return { erro:'Nenhuma avaliação com data posterior à aplicação para a variável "'+variavel+'".' };
-
-  /* cubo [trat][bloco][avaliação] */
-  var sev=[], faltam=[];
+  /* cubo [trat][bloco][avaliação] — só datas completas chegam aqui */
+  var sev=[];
   trats.forEach(function(t){
     var porBloco=[];
     for(var r=1;r<=reps;r++){
       var serie=[];
       avs.forEach(function(x){
         var raw=_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel);
-        var val=parseFloat(String(raw==null?'':raw).replace(',','.'));
-        if(isNaN(val)){ if(faltam.length<6) faltam.push(t.id+' rep'+r+' · '+x.daa+' DAA'); serie.push(null); }
-        else serie.push(val);
+        serie.push(parseFloat(String(raw==null?'':raw).replace(',','.')));
       });
       porBloco.push(serie);
     }
     sev.push(porBloco);
   });
-  if(faltam.length) return { erro:'Faltam notas para fechar a análise (variável "'+variavel+'"):\n\n• '+faltam.join('\n• ')+(faltam.length>=6?'\n• …':'') };
 
   var iTest=trats.findIndex(function(t){ return !!t.testemunha; });
   if(iTest<0) iTest=0;
@@ -5578,6 +5676,10 @@ function _pranchaPayload(qid, sid, variavel){
   var hoje=new Date();
   var autor=''; try{ autor=(typeof _currentUserName==='function'?_currentUserName():'')||''; }catch(e){}
   var titulo=s.nome||s.codigo||s.id;
+  /* config da variável vem da avaliação mais recente que a define */
+  var avRef=(_avCfgDoEstudo(s,variavel)||avs[avs.length-1].av);
+  var _vc=_avCfg(avRef,variavel);
+  var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas 0–'+_vc.escalaMax)):'';
 
   return {
     estudo:{
@@ -5585,8 +5687,14 @@ function _pranchaPayload(qid, sid, variavel){
       data:{ pt:dd(hoje.getDate())+'/'+dd(hoje.getMonth()+1)+'/'+hoje.getFullYear(),
              en:hoje.getFullYear()+'-'+dd(hoje.getMonth()+1)+'-'+dd(hoje.getDate()) },
       delineamento:{ blocos:reps, parcelaM2:null, parcela:'', caldaLha:null },
-      pt:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:variavel },
-      en:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:variavel }
+      /* alvo = a variável avaliada (Mancha angular, Cercospora...): a prancha já sabe
+         usar em todas as legendas, e sem isso toda folha saía sem dizer o alvo.
+         escala = a escala diagramática, quando a variável for do tipo escala. */
+      alvo:variavel, tipoEstudo:(s.tipoEstudo||''),
+      variavel:{ nome:variavel, tipo:_avTipo(avRef,variavel), sentido:_avSentido(avRef,variavel) },
+      refDAA:base.fonte,
+      pt:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:escalaTxt },
+      en:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:escalaTxt }
     },
     tratamentos: trats.map(function(t,i){
       return { id:t.id, pt:(t.produto||t.id), en:(t.produto||t.id),
@@ -5605,7 +5713,8 @@ function _pranchaPayload(qid, sid, variavel){
                estadio:(a.bbch||''), vol:(a.volume||null), temp:(a.tempIni||null),
                ur:(a.urIni||null), vento:(a.ventoIni||null), bico:(a.bico||'') };
     }),
-    variavel: variavel
+    variavel: variavel,
+    avisos: avisos
   };
 }
 function openPranchaEstudo(qid, sid, variavel){
@@ -5613,6 +5722,9 @@ function openPranchaEstudo(qid, sid, variavel){
   try{ p=_pranchaPayload(qid, sid, variavel); }
   catch(e){ alert('Não consegui montar a prancha: '+e.message); return; }
   if(p && p.erro){ alert(p.erro); return; }
+  /* a folha sai, mas o que ficou de fora precisa ser dito ANTES — senão o gráfico
+     parece completo e não é (o que vale relatório em BPL) */
+  if(p && p.avisos && p.avisos.length && typeof _stxToast==='function') _stxToast('⚠ '+p.avisos.join(' · '));
   try{ localStorage.setItem('agracta-prancha-handoff', JSON.stringify(p)); }
   catch(e){ alert('Não consegui preparar os dados da prancha.'); return; }
   _openPranchaFrame('prancha.html', 'Gráficos — '+(p.estudo.codigo||''));
@@ -5875,12 +5987,23 @@ function _bioestatIntegratedHtml(qid,sid,study){
     if(faltamAnalise>0) body+='<div id="bioAutoStatus" style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(body?'7px':'0')+'">Calculando análise… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'</div>';
     if(faltamForense>0) fbody+='<div style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(fbody?'7px':'0')+'">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
   }
-  var _vs=_pranchaVariaveis(study||{});
-  var _btnPrancha='<div style="margin:8px 0 2px"><button onclick="openPranchaEstudo(\''+qid+'\',\''+sid+'\')" '+
-    'style="width:100%;padding:10px 12px;border:1px solid #bfd3c6;background:#f4f9f6;color:#1f5136;border-radius:9px;font:700 12px system-ui;cursor:pointer">'+
-    '&#128200; Gráficos do estudo — folha para o relatório</button>'+
-    '<div style="font-size:10.5px;color:#8a948e;margin-top:4px">Curva de severidade, AACPD, eficácia e tabela. Baixa em SVG ou PNG.'+
-    (_vs.length?(' Variável: <b>'+esc(_vs[0])+'</b>.'):'')+'</div></div>';
+  /* UMA folha por ALVO. Antes era um botão só, cravado na variável mais frequente —
+     estudo com alvos diferentes (Mancha angular + Cercospora) só gerava a primeira. */
+  var _diag=[]; try{ _diag=_pranchaDiag(qid,sid); }catch(e){}
+  var _btnPrancha='';
+  if(_diag.length){
+    var _linhas=_diag.map(function(d){
+      var det=d.ok
+        ? (d.datas+' data'+(d.datas>1?'s':'')+(d.datas>1?' · curva + AACPD':' · uma data')+(d.parciais?(' · '+d.parciais+' incompleta(s) de fora'):''))
+        : d.motivo;
+      if(!d.ok) return '<div style="padding:8px 10px;border:1px dashed #d8dfd9;border-radius:8px;margin-top:5px;color:#8a948e;font-size:11px">'+
+        '<b style="color:#6d7a72">'+esc(d.variavel)+'</b> — '+esc(det)+'</div>';
+      return '<button onclick="openPranchaEstudo(\''+qid+'\',\''+sid+'\','+esc(JSON.stringify(d.variavel))+')" '+
+        'style="width:100%;text-align:left;padding:9px 11px;border:1px solid #bfd3c6;background:#f4f9f6;color:#1f5136;border-radius:9px;font:700 12px system-ui;cursor:pointer;margin-top:5px">'+
+        '&#128200; '+esc(d.variavel)+'<div style="font-weight:400;font-size:10.5px;color:#6d8579;margin-top:2px">'+esc(det)+'</div></button>';
+    }).join('');
+    _btnPrancha='<div style="margin:8px 0 2px"><div style="font-size:11px;color:#728078;margin-bottom:2px">Folha de gráficos para o relatório — uma por alvo avaliado. Baixa em SVG ou PNG.</div>'+_linhas+'</div>';
+  }
   var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+body+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+

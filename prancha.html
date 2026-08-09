@@ -374,6 +374,15 @@ TRAT.forEach((t,i)=> BLOCOS.forEach((b,j)=> DAA.forEach((d,k)=>
    a severidade daquela data — mesma ANOVA, mesmo Tukey, mesmo Abbott — e mais
    abaixo os rótulos deixam de falar em AACPD. */
 const UMA  = DAA.length < 2;
+/* Sentido da variavel: em dano/severidade a testemunha e a MAIOR (menos e melhor);
+   em mortalidade/eficacia e a MENOR. Vinha cravado em "menos e melhor", o que punha
+   a letra "a" no tratamento errado e devolvia eficacia negativa em estudo de mortalidade. */
+const SENT = ((ESTUDO.variavel||{}).sentido === 'maior') ? 'maior' : 'menor';
+const MENOS_MELHOR = (SENT !== 'maior');
+/* mortalidade corrigida de Abbott quando o melhor e o MAIOR valor */
+const _efic1 = (m, mT) => SENT === 'maior'
+  ? ((mT < 100) ? 100*(m - mT)/(100 - mT) : null)
+  : ((mT > 0) ? 100*(mT - m)/mT : null);
 const _iT0 = Math.max(0, TRAT.findIndex(t=>t.testemunha));
 let R;
 if(UMA){
@@ -385,7 +394,7 @@ if(UMA){
   R = { aacpdParcela:Y, mediaAACPD:mY, mediaSeveridade:mY.map(m=>[m]),
         anova:A, dms:dm, letras:Est.letrasTukey(A.mediasTrat, dm, true),
         q:Est.qTukey(A.k, A.glErro),
-        eficacia: mY.map((m,i)=> i===_iT0 ? null : Est.abbott(m, mY[_iT0])) };
+        eficacia: mY.map((m,i)=> i===_iT0 ? null : _efic1(m, mY[_iT0])) };
 } else {
   R = Est.analisar({
     tratamentos: TRAT.map(t=>t.id),
@@ -394,7 +403,7 @@ if(UMA){
     lancamentos: _lanc,
     testemunha: (TRAT.find(t=>t.testemunha)||TRAT[0]).id,
     transformacao: "sqrt",
-    menosEhMelhor: true        /* severidade: menos é melhor, "a" vai pro menor */
+    menosEhMelhor: MENOS_MELHOR   /* segue o sentido da variável, não mais cravado */
   });
 }
 const AACPD = R.aacpdParcela;
@@ -416,7 +425,7 @@ const EFIC = R.eficacia.map((e,i)=> i===iTest ? 0 : e);   /* Abbott sobre a AACP
 /* Abbott sobre a severidade final — caminho independente da AACPD */
 const ULT = DAA.length - 1;
 const EFIC_SEV = TRAT.map((_,i) => i === iTest ? null
-  : 100*(mSEV[iTest][ULT] - mSEV[i][ULT]) / mSEV[iTest][ULT]);
+  : _efic1(mSEV[i][ULT], mSEV[iTest][ULT]));
 
 /* Estes vinham cravados no protótipo ("4 blocos", "mSEV[iTest][2]"), o que só
    valia para o estudo de demonstração. Agora seguem o delineamento real. */
@@ -428,10 +437,13 @@ const ULTAV = DAA.length - 1;
 const ALVO = { pt: (ESTUDO.alvo ? ` de ${ESTUDO.alvo}` : ""),
                en: (ESTUDO.alvo ? ` ${ESTUDO.alvo}` : "") };
 const NAPL = Array.isArray(APLICACOES) ? APLICACOES.length : 0;
-const APLREF = {
-  pt: NAPL > 1 ? "da primeira aplicação" : "da aplicação",
-  en: NAPL > 1 ? "the first application"  : "application"
-};
+/* De onde os dias sao contados. Sem aplicacao registrada o rotulo dizia "dias depois
+   da aplicacao" mesmo assim — numa folha de relatorio isso e afirmacao falsa. */
+const REFDAA = ESTUDO.refDAA || '';
+const APLREF = REFDAA === 'avaliacao' ? { pt:"da 1ª avaliação",     en:"the first assessment" }
+             : REFDAA === 'inicio'    ? { pt:"do início do estudo", en:"the study start" }
+             : { pt: NAPL > 1 ? "da primeira aplicação" : "da aplicação",
+                 en: NAPL > 1 ? "the first application"  : "application" };
 
 /* =====================================================================
    3. IDIOMA
