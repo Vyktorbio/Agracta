@@ -62,10 +62,6 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
 .mini{font-family:var(--cond);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border:1px solid var(--linha-forte);border-radius:3px;background:transparent;cursor:pointer;color:var(--grafite)}
 .mini:hover{color:var(--tinta);border-color:var(--tinta)}
 
-body.limpa .topo,body.limpa .painel,body.limpa .legenda-fig,body.limpa .acoes{display:none}
-body.limpa .mesa{padding:0;min-height:100vh;justify-content:center;background:#26292b}
-.sair-limpa{display:none;position:fixed;right:14px;bottom:14px;z-index:40;font-family:var(--cond);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:9px 13px;border-radius:3px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);color:#fff;cursor:pointer}
-body.limpa .sair-limpa{display:block}
 .aviso{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:60;background:var(--tinta);color:#fff;font-size:13px;padding:9px 15px;border-radius:4px;opacity:0;pointer-events:none;transition:opacity .2s}
 .aviso.ver{opacity:1}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -87,7 +83,6 @@ body.limpa .sair-limpa{display:block}
     <label class="seg ativo"><input type="radio" name="idioma" value="pt" checked>PT</label>
     <label class="seg"><input type="radio" name="idioma" value="en">EN</label>
   </div>
-  <button class="mini" id="btn-limpa">Tela limpa</button>
 </header>
 
 <div class="palco">
@@ -156,7 +151,6 @@ body.limpa .sair-limpa{display:block}
   </main>
 </div>
 
-<button class="sair-limpa" id="btn-sair">Sair da tela limpa</button>
 <div class="aviso" id="aviso"></div>
 
 <script src="estatistica.js"></script>
@@ -1569,9 +1563,6 @@ document.getElementById("g-vista").addEventListener("change", ev=>{
 document.getElementById("g-patamar").addEventListener("change", ev=>{
   estado.patamar = Number(ev.target.value); sinc(ev.currentTarget,"opt"); render();
 });
-document.getElementById("btn-limpa").addEventListener("click", ()=>document.body.classList.add("limpa"));
-document.getElementById("btn-sair").addEventListener("click", ()=>document.body.classList.remove("limpa"));
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") document.body.classList.remove("limpa"); });
 
 let tA; const avisar = m => {
   const a = document.getElementById("aviso");
