@@ -4476,7 +4476,11 @@ function showD(id){
   }
   h+='</div>';
 
-  h+='</div><div class="panel-btns"><button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button><button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="navStartQuadra(\''+id+'\')">'+ic('pin',14)+' Ir até</button><button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">EDITAR QUADRA</button></div>';
+  /* NDVI é satélite sobre polígono: laboratório não tem nem um nem outro. */
+  h+='</div><div class="panel-btns">'+
+     (_lab?'':'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
+     '<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="navStartQuadra(\''+id+'\')">'+ic('pin',14)+' Ir até</button>'+
+     '<button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">'+(_lab?'EDITAR LABORAT&Oacute;RIO':'EDITAR QUADRA')+'</button></div>';
   document.getElementById("dPnl").innerHTML=h;
   document.getElementById("dOvl").classList.add("open");
 }
@@ -4575,16 +4579,24 @@ function openE(id){
   var dl='<datalist id="clOpts">'+CL.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>';
   var curLoc=(QLOCAL[id]||HOME_LOCAL);
   var locOpts=Object.keys(LOCAIS).map(function(lid){ return '<option value="'+lid+'"'+(curLoc===lid?' selected':'')+'>'+esc(LOCAIS[lid].nome)+'</option>'; }).join('');
+  /* Laborat\u00f3rio: nome, local e especialidade. Cultura, cultivar, plantio e \u00e1rea
+     n\u00e3o existem aqui \u2014 pedir isso \u00e9 o que fazia a tela parecer de outro app. */
+  var _lab=isQuadraLab(id);
   document.getElementById("ePnl").innerHTML=
-    '<div class="edit-title">EDITAR QUADRA</div>'+dl+
-    '<label class="e-lbl">NOME DA QUADRA</label><input id="eqnome" class="e-inp" value="'+esc(quadraNome(id))+'" placeholder="Ex.: A1" autocomplete="off">'+
+    '<div class="edit-title">'+(_lab?'EDITAR LABORAT\u00d3RIO':'EDITAR QUADRA')+'</div>'+dl+
+    '<label class="e-lbl">'+(_lab?'NOME DO LABORAT\u00d3RIO':'NOME DA QUADRA')+'</label><input id="eqnome" class="e-inp" value="'+esc(quadraNome(id))+'" placeholder="'+(_lab?'Ex.: Lab. Entomologia':'Ex.: A1')+'" autocomplete="off">'+
     '<label class="e-lbl">LOCAL</label><select id="eqloc" class="e-inp">'+locOpts+'</select>'+
-    '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
-    '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
-    '<label class="e-lbl">\u00c1REA (HA)'+(_medHa!=null?' <span style="color:#8aa88a;font-weight:400">\u00b7 medida do mapa: '+_medHa.toFixed(2)+'</span>':'')+'</label><input id="ea" class="e-inp" value="'+(_medHa!=null?_medHa.toFixed(2):(d.area!=null?d.area:""))+'" placeholder="'+(_medHa!=null?_medHa.toFixed(2):"1.0")+'" type="number" step="0.01">'+
+    (_lab
+      ? '<label class="e-lbl">ESPECIALIDADE</label><select id="eqlabtipo" class="e-inp">'+
+          LAB_TIPOS.map(function(t){ return '<option value="'+t+'"'+(quadraLabTipo(id)===t?' selected':'')+'>'+t+'</option>'; }).join('')+
+        '</select>'
+      : '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
+        '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
+        '<label class="e-lbl">\u00c1REA (HA)'+(_medHa!=null?' <span style="color:#8aa88a;font-weight:400">\u00b7 medida do mapa: '+_medHa.toFixed(2)+'</span>':'')+'</label><input id="ea" class="e-inp" value="'+(_medHa!=null?_medHa.toFixed(2):(d.area!=null?d.area:""))+'" placeholder="'+(_medHa!=null?_medHa.toFixed(2):"1.0")+'" type="number" step="0.01">'
+    )+
     '<div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>'+
-    '<button type="button" class="e-btn-del" onclick="deleteQuadraFromEdit()">EXCLUIR QUADRA</button>';
-  renderEcRows();
+    '<button type="button" class="e-btn-del" onclick="deleteQuadraFromEdit()">'+(_lab?'EXCLUIR LABORAT\u00d3RIO':'EXCLUIR QUADRA')+'</button>';
+  if(!_lab) renderEcRows();
   document.getElementById("eOvl").classList.add("open");
 }
 function closeEdit(){document.getElementById("eOvl").classList.remove("open");curE=null}
@@ -4607,19 +4619,31 @@ function saveE(){
     if(dupDest){ alert('No local de destino já existe uma quadra "'+nm+'". Renomeie antes de mover.'); return; }
     QLOCAL[curE]=novoLoc; _touchQLocal(curE); saveQLocal();
   }
-  ecReadRows();
-  var culturas=_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
   var prev=data[curE]||{};
+  var ehLab=(prev.tipo==='lab');
+  if(!ehLab) ecReadRows();
+  var culturas=ehLab?[]:_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
   var estudos = prev.estudos||[];
   var prim = culturas[0]||{cultura:'',cultivar:'',plantio:''};
+  var elArea=document.getElementById("ea");   /* não existe na tela de laboratório */
   data[curE]={
     cultura:prim.cultura, cultivar:prim.cultivar, plantio:prim.plantio,
     culturas:culturas,
-    area:parseFloat(document.getElementById("ea").value)||null,
+    area:(elArea?(parseFloat(elArea.value)||null):(ehLab?null:prev.area)),
     estudos:estudos,
     _deletedStudies:prev._deletedStudies, /* preserva lápides de estudos (antes, editar a quadra as apagava) */
     _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
   };
+  /* O objeto acima é montado do ZERO — sem isto, salvar a tela de edição
+     transformava o laboratório de volta em quadra de campo e perdia o ponto
+     dele no mapa. */
+  if(ehLab){
+    data[curE].tipo='lab';
+    data[curE].ponto=prev.ponto;
+    var selLT=document.getElementById('eqlabtipo');
+    var novoLT=selLT?selLT.value:prev.labTipo;
+    data[curE].labTipo=(LAB_TIPOS.indexOf(novoLT)>=0)?novoLT:prev.labTipo;
+  }
   save();
   try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(curE); }catch(e){} /* Etapa 3 Fase B */
   closeEdit();render();renderLeg();updateAgendaBadge();
@@ -7610,6 +7634,24 @@ function renderStudyEditModal(){
 
   var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()">×</button></div>';
 
+  /* NEMATOLOGIA: o registro é só o NÚMERO DO ESTUDO. Matriz (solo/raiz) e o dia
+     em DAA são da AMOSTRA, e moram na fila — não aqui. Tratamento, aplicação,
+     repetição e programação de avaliação não existem nesse fluxo, então a tela
+     não pede nada disso. */
+  var _ehNema=(quadraLabTipo(curV)==='Nematologia');
+  if(_ehNema){
+    h+='<div class="se-field"><label>Número do estudo <span class="req">*</span></label>';
+    h+='<input type="text" id="seCodigo" value="'+esc(s.codigo)+'" placeholder="NEM-2026-014" class="se-codigo-input"></div>';
+    h+='<div class="se-field"><label>Descrição / objetivo <span style="opacity:.6">opcional</span></label>';
+    h+='<textarea id="seDescricao" placeholder="Ex.: levantamento populacional em soja, Fazenda X" rows="2">'+esc(s.descricao)+'</textarea></div>';
+    h+='<div class="se-nema-nota">Só o número do estudo é obrigatório aqui.<br>'+
+       'As amostras — <b>solo ou raiz</b> e o <b>dia em DAA</b> — você registra na '+
+       '<b>fila de amostras</b>, na tela do laboratório, conforme forem chegando.</div>';
+    h+='<div class="se-actions"><button class="btn-save" onclick="saveStudyV2()">SALVAR</button><button class="btn-cancel" onclick="closeStudyEditV2()">Cancelar</button></div>';
+    document.getElementById("sePnl").innerHTML=h;
+    return;
+  }
+
   var po=s.protocoloOrigem||{}, pm=s.protocolo||{};
   h+='<div style="margin:0 0 14px;padding:14px;border:1px solid rgba(52,209,120,.25);border-radius:14px;background:var(--gp-s1,#141816)">'+
     '<div style="font-size:13px;font-weight:850;color:var(--gp-green,#34d178)">Protocolo da planilha</div>'+
@@ -7623,6 +7665,7 @@ function renderStudyEditModal(){
 
   h+='<div class="se-field"><label>Código do estudo <span class="req">*</span></label>';
   h+='<input type="text" id="seCodigo" value="'+esc(s.codigo)+'" placeholder="EST-2026-0847" class="se-codigo-input"></div>';
+
 
   h+='<div class="se-field"><label>Tipo de estudo</label><select id="seTipoEstudo"><option value="">—</option>';
   /* numa quadra de lab, oferece só os tipos daquela especialidade (mais o que já
