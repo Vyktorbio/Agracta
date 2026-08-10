@@ -1605,6 +1605,11 @@ function fecharNovaQuadraTipo(){ var o=document.getElementById('qtipoOvl'); if(o
 
 /* Quadra de laboratório: sem polígono. Fica no mapa como um marcador (o lab é
    um prédio, tem lugar), então continua alcançável pelo mesmo toque de sempre. */
+/* Criação em três passos: tipo -> nome -> ONDE FICA.
+   O centro do mapa era um palpite ruim: o marcador nascia em qualquer lugar que
+   a tela estivesse mostrando, e o usuário não via. Agora ou vem do GPS (você
+   está dentro do laboratório) ou você toca no mapa. */
+var _labPend=null, _labPick=false;
 function criarQuadraLab(labTipo){
   if(!editMode) return;
   if(LAB_TIPOS.indexOf(labTipo)<0) labTipo='';
@@ -1613,18 +1618,76 @@ function criarQuadraLab(labTipo){
   ensureLocais(); ensureQGEO();
   var dup=quadrasDoLocal(localAtivo).some(function(q){ return quadraNome(q).toLowerCase()===nome.toLowerCase(); });
   if(dup){ alert('Já existe uma quadra chamada "'+nome+'" neste local.'); return; }
-  var id=novoQuadraId(nome);
-  var c=null; try{ c=_map?_map.getCenter():null; }catch(e){}
+  _labPend={nome:nome, labTipo:labTipo};
+  labOndeFica();
+}
+function labOndeFica(){
+  if(!_labPend) return;
+  _calcCss();
+  var ov=document.getElementById('qtipoOvl');
+  if(!ov){ ov=document.createElement('div'); ov.id='qtipoOvl'; ov.className='calc-ovl';
+    ov.onclick=function(e){ if(e.target===ov) fecharNovaQuadraTipo(); }; document.body.appendChild(ov); }
+  ov.innerHTML='<div class="calc-box" style="max-width:380px">'+
+    '<div class="calc-top"><div class="calc-title">Onde fica o laboratório?</div><button class="calc-x" onclick="labCancelar()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">'+esc(_labPend.nome)+(_labPend.labTipo?' · '+esc(_labPend.labTipo):'')+'</div>'+
+    '<div class="qtipo-opts">'+
+      '<button class="qtipo-op" onclick="labPontoGps()">'+
+        '<div class="qtipo-ico">📍</div><div><div class="qtipo-t">Usar meu GPS</div>'+
+        '<div class="qtipo-d">Se você está no laboratório agora. Pega a posição mais precisa em alguns segundos.</div></div></button>'+
+      '<button class="qtipo-op" onclick="labPontoMapa()">'+
+        '<div class="qtipo-ico">👆</div><div><div class="qtipo-t">Tocar no mapa</div>'+
+        '<div class="qtipo-d">Fecha esta janela e você toca no prédio do laboratório.</div></div></button>'+
+    '</div></div>';
+  ov.style.display='flex';
+}
+function labCancelar(){ _labPend=null; _labPick=false; fecharNovaQuadraTipo(); labFimPick(); }
+function labPontoGps(){
+  if(!_labPend) return;
+  var ov=document.getElementById('qtipoOvl');
+  var box=ov&&ov.querySelector('.calc-box');
+  if(box) box.innerHTML='<div class="calc-top"><div class="calc-title">📍 Procurando o GPS…</div></div>'+
+    '<div class="calc-sub" id="labGpsMsg">Segure o aparelho parado. Isso leva alguns segundos.</div>'+
+    '<div class="calc-actions"><button class="calc-close" onclick="labCancelar()">Cancelar</button></div>';
+  gpsBest({target:12, maxWait:9000, maxAcc:120}, function(b){
+    var m=document.getElementById('labGpsMsg');
+    if(m) m.textContent='Precisão de ±'+Math.round(b.acc)+' m — afinando…';
+  }, function(b,err){
+    if(!b){
+      alert('Não consegui o GPS.'+(err?'\n('+err+')':'')+'\n\nToque no mapa para marcar o laboratório.');
+      labPontoMapa(); return;
+    }
+    labFinalizar([b.lat,b.lng], 'GPS ±'+Math.round(b.acc)+' m');
+  });
+}
+function labPontoMapa(){
+  if(!_labPend) return;
+  fecharNovaQuadraTipo();
+  _labPick=true; drawMode=false;
+  if(_map){ _map.on('click', labCliqueMapa); _map.getContainer().style.cursor='crosshair'; }
+  buildEditPanel();
+}
+function labCliqueMapa(e){ if(!_labPick) return; labFinalizar([e.latlng.lat, e.latlng.lng], 'marcado no mapa'); }
+function labFimPick(){
+  _labPick=false;
+  if(_map){ _map.off('click', labCliqueMapa); _map.getContainer().style.cursor=''; }
+}
+function labFinalizar(ponto, origem){
+  var p=_labPend; if(!p) return;
+  _labPend=null; labFimPick(); fecharNovaQuadraTipo();
+  var id=novoQuadraId(p.nome);
   QLOCAL[id]=localAtivo; _touchQLocal(id);
-  QNOME[id]=nome; _touchQNome(id);
+  QNOME[id]=p.nome; _touchQNome(id);
   data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[],
-            tipo:'lab', labTipo:labTipo, ponto:(c?[c.lat,c.lng]:_homeCentro())};
+            tipo:'lab', labTipo:p.labTipo, ponto:ponto};
   _touchQGEO(id); /* carimbo: quadra nova vence aparelho zerado no merge */
   saveQGEO(); saveQLocal(); saveQNome(); save();
   try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
   endDraw(); editId=id; render(); buildEditPanel();
-  alert('Laboratório "'+nome+'"'+(labTipo?' ('+labTipo+')':'')+' criado.\n\nAparece no mapa como 🧪 — arraste o marcador para o lugar do laboratório se quiser.');
-  if(typeof openE==='function') openE(id);
+  /* leva o mapa até ele: nasceu longe da tela, ninguém vê */
+  try{ if(_map) _map.setView(ponto, Math.max(_map.getZoom()||16, 17)); }catch(e){}
+  /* NÃO abre openE aqui: aquilo é o formulário de cultura/cultivar/plantio, que
+     não existe em laboratório — ele cobria o mapa e escondia o marcador novo. */
+  alert('Laboratório "'+p.nome+'"'+(p.labTipo?' ('+p.labTipo+')':'')+' criado ('+origem+').\n\nEstá no mapa como 🧪, no centro da tela. Em modo de edição dá para arrastar o marcador.');
 }
 
 function startDrawQuadra(){
@@ -1684,6 +1747,12 @@ function buildEditPanel(){
   var p=document.getElementById('edPanel');
   if(!p){ p=document.createElement('div'); p.id='edPanel'; p.className='gr-panel'; document.body.appendChild(p); }
   var html='<div class="gr-title">&#9999;&#65039; EDITAR QUADRAS</div>';
+  if(_labPick){
+    html+='<div class="gr-hint">Toque no <b>mapa</b>, em cima do pr&eacute;dio do laborat&oacute;rio'+
+      (_labPend?' <b>'+esc(_labPend.nome)+'</b>':'')+'. D&aacute; para arrastar o marcador depois.</div>'+
+      '<div class="gr-btns"><button class="gr-cancel" onclick="labCancelar()">Cancelar</button></div>';
+    p.innerHTML=html; p.style.display='block'; return;
+  }
   if(drawMode){
     html+='<div class="gr-hint">Clique no mapa para marcar os <b>cantos</b> da nova quadra (m&iacute;nimo 3).</div>'+
       '<div class="gr-btns"><button class="gr-ok" onclick="finishDrawQuadra()">Concluir ('+drawPts.length+' pts)</button><button class="gr-cancel" onclick="cancelDrawQuadra()">Cancelar</button></div>';
