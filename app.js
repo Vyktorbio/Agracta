@@ -1094,6 +1094,65 @@ function saveQNome(){ try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)
 function quadraNome(id){ if(!QNOME){ QNOME=loadQNome()||{}; } return (QNOME[id]!=null && QNOME[id]!=='') ? QNOME[id] : id; }
 function novoQuadraId(nome){ var b=String(nome||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'Q'; if((!QGEO || !QGEO[b]) && !(_delQuadras&&_delQuadras[b])) return b; var k; do{ k=b+'~'+Math.random().toString(36).slice(2,6); }while((QGEO&&QGEO[k])||(_delQuadras&&_delQuadras[k])); return k; }
 function _homeCentro(){ try{ if(_geo&&_geo.corners){ var c=_geo.corners; return [ (c[0][0]+c[2][0])/2, (c[0][1]+c[2][1])/2 ]; } }catch(e){} return ESTACAO_CENTER.slice(); }
+
+/* ===== TIPO DA QUADRA: 'campo' (padrão) ou 'lab' =====
+   Mora em data[qid].tipo. Não precisou de schema novo: _rowQuadra joga toda
+   chave desconhecida de data[qid] em `extras` e a leitura devolve inteira —
+   sincroniza e faz merge de graça. Ausente = 'campo', então quadra antiga
+   continua exatamente como está. Uma quadra de LAB não tem polígono; guarda
+   um ponto (data[qid].ponto) só para poder ser tocada no mapa. */
+function quadraTipo(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return d.tipo==='lab'?'lab':'campo'; }
+function isQuadraLab(id){ return quadraTipo(id)==='lab'; }
+
+/* Especialidade do laboratório. Todos são da área de Biologia; o que muda é o
+   que se registra em cada um:
+     Entomologia   — bioensaio de mortalidade (tratamento x repetição x avaliação)
+     Fitopatologia — fungos in vitro (crescimento micelial) e in vivo (severidade)
+     Nematologia   — não é ensaio: é FILA DE AMOSTRAS (entrada, extração, leitura,
+                     entrega), por número de estudo. Ver nemPainel(). */
+var LAB_TIPOS=['Entomologia','Fitopatologia','Nematologia'];
+var LAB_CORES={Entomologia:'#d99a2b', Fitopatologia:'#7a5cd6', Nematologia:'#2f9bbf'};
+function quadraLabTipo(id){
+  var d=(typeof data!=='undefined'&&data[id])||{};
+  return LAB_TIPOS.indexOf(d.labTipo)>=0?d.labTipo:'';
+}
+function labTipoCor(t){ return LAB_CORES[t]||'#21a86b'; }
+function setQuadraLabTipo(id,tipo){
+  if(!data[id]||!isQuadraLab(id)) return false;
+  if(LAB_TIPOS.indexOf(tipo)<0) return false;
+  if(data[id].labTipo===tipo) return true;
+  data[id].labTipo=tipo;
+  _touchQGEO(id); saveQGEO(); save();
+  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
+  return true;
+}
+function quadraPonto(id){
+  var d=(typeof data!=='undefined'&&data[id])||{};
+  if(d.ponto&&d.ponto.length===2&&isFinite(d.ponto[0])&&isFinite(d.ponto[1])) return [Number(d.ponto[0]),Number(d.ponto[1])];
+  return null;
+}
+/* Troca o tipo de uma quadra existente. Campo -> lab só é permitido quando não
+   há polígono desenhado: a geometria é o dado mais caro da quadra e some sem
+   volta, então em vez de apagar calado a função recusa e explica. */
+function setQuadraTipo(id,tipo){
+  if(!data[id]) return false;
+  var novo=(tipo==='lab')?'lab':'campo';
+  if(novo===quadraTipo(id)) return true;
+  ensureQGEO();
+  if(novo==='lab' && QGEO && QGEO[id] && QGEO[id].length>=3){
+    alert('A quadra "'+quadraNome(id)+'" tem polígono desenhado no mapa.\n\nApague os vértices antes de transformá-la em laboratório — assim a geometria não se perde sem querer.');
+    return false;
+  }
+  if(novo==='lab'){
+    data[id].tipo='lab';
+    if(!quadraPonto(id)){ try{ var c=_map?_map.getCenter():null; data[id].ponto=c?[c.lat,c.lng]:_homeCentro(); }catch(e){ data[id].ponto=_homeCentro(); } }
+  }else{
+    delete data[id].tipo; delete data[id].ponto;
+  }
+  _touchQGEO(id); saveQGEO(); save();
+  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
+  return true;
+}
 function ensureLocais(){
   if(!LOCAIS) LOCAIS=loadLocais()||{};
   if(!QLOCAL) QLOCAL=loadQLocal()||{};
@@ -1108,14 +1167,34 @@ function ensureLocais(){
   if(changed) saveQLocal();
   return LOCAIS;
 }
-function quadrasDoLocal(id){ ensureLocais(); var out=[]; if(QGEO){ Object.keys(QGEO).forEach(function(q){ if((QLOCAL[q]||HOME_LOCAL)===id) out.push(q); }); } return out; }
+/* Enumera as quadras do local. Percorre QGEO (quadras de campo, que existem por
+   terem geometria) E data (para alcançar as de LABORATÓRIO, que não têm polígono
+   e portanto não têm entrada em QGEO). Sem isso a quadra de lab some de tudo:
+   mapa, contagens, checagem de nome repetido e mudança de local. */
+function quadrasDoLocal(id){
+  ensureLocais(); var out=[], visto={};
+  function add(q){ if(visto[q]) return; if((QLOCAL[q]||HOME_LOCAL)!==id) return; visto[q]=1; out.push(q); }
+  if(QGEO) Object.keys(QGEO).forEach(add);
+  if(typeof data!=='undefined'&&data) Object.keys(data).forEach(function(q){
+    if(q==='__config') return;
+    if(_delQuadras&&_delQuadras[q]) return;   /* respeita a lápide de exclusão */
+    if(QGEO&&QGEO[q]) return;                 /* já entrou pelo laço de cima */
+    if(!isQuadraLab(q)) return;               /* sem geometria e sem ser lab: resto órfão, fica fora */
+    add(q);
+  });
+  return out;
+}
 function quadrasAtivas(){ return quadrasDoLocal(localAtivo); }
 function novoLocalId(){ return 'loc'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
 function flyToLocal(id){
   if(!_map) initMap(); ensureLocais(); var Lc=LOCAIS[id]; if(!Lc) return;
   var qs=quadrasDoLocal(id);
   if(qs.length){ var b=99,s=999,e=-99,n=-999;
-    qs.forEach(function(q){ (QGEO[q]||[]).forEach(function(p){ if(p[0]<b)b=p[0]; if(p[0]>n)n=p[0]; if(p[1]<s)s=p[1]; if(p[1]>e)e=p[1]; }); });
+    qs.forEach(function(q){
+      var pts=QGEO[q]||[];
+      if(!pts.length){ var pl=quadraPonto(q); if(pl) pts=[pl]; } /* lab: entra pelo ponto */
+      pts.forEach(function(p){ if(p[0]<b)b=p[0]; if(p[0]>n)n=p[0]; if(p[1]<s)s=p[1]; if(p[1]>e)e=p[1]; });
+    });
     if(b<=n&&s<=e&&(n-b)<0.25&&(e-s)<0.25){
       /* só enquadra nas quadras se elas estiverem juntas (< ~27 km). Se uma quadra
          estiver fora do lugar, o bounds fica gigante e afastaria o zoom — nesse caso
@@ -1478,6 +1557,76 @@ function drawVertexHandles(){
   }
 }
 
+/* "＋ Nova quadra" agora passa por aqui: campo segue desenhando no mapa (fluxo
+   de sempre, intocado); laboratório não desenha nada — só pede o nome. */
+function novaQuadraTipo(){
+  if(!editMode) return;
+  var ov=document.getElementById('qtipoOvl');
+  if(!ov){
+    _calcCss(); /* reusa o CSS .calc-* do app, sem folha nova */
+    ov=document.createElement('div'); ov.id='qtipoOvl'; ov.className='calc-ovl';
+    ov.onclick=function(e){ if(e.target===ov) fecharNovaQuadraTipo(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML='<div class="calc-box" style="max-width:380px">'+
+    '<div class="calc-top"><div class="calc-title">Nova quadra</div><button class="calc-x" onclick="fecharNovaQuadraTipo()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">O que você vai registrar aqui?</div>'+
+    '<div class="qtipo-opts">'+
+      '<button class="qtipo-op" onclick="fecharNovaQuadraTipo();startDrawQuadra()">'+
+        '<div class="qtipo-ico">🗺️</div><div><div class="qtipo-t">Campo</div>'+
+        '<div class="qtipo-d">Desenha o polígono no mapa. Área, NDVI e fenologia funcionam.</div></div></button>'+
+      '<button class="qtipo-op" onclick="novaQuadraLabTipo()">'+
+        '<div class="qtipo-ico">🧪</div><div><div class="qtipo-t">Laboratório</div>'+
+        '<div class="qtipo-d">Sem desenho. Entomologia, Fitopatologia ou Nematologia.</div></div></button>'+
+    '</div></div>';
+  ov.style.display='flex';
+}
+/* Passo 2: qual laboratório. Todos são de Biologia; a especialidade decide o que
+   o app vai pedir depois (variáveis da avaliação, ou a fila de amostras). */
+function novaQuadraLabTipo(){
+  var ov=document.getElementById('qtipoOvl'); if(!ov) return;
+  var desc={
+    Entomologia:'Bioensaio de mortalidade — tratamentos, repetições e a calculadora de diluição.',
+    Fitopatologia:'Fungos in vitro (crescimento micelial) e in vivo (severidade, incidência).',
+    Nematologia:'Fila de amostras: entrada, extração, leitura e entrega — por número de estudo.'
+  };
+  ov.innerHTML='<div class="calc-box" style="max-width:380px">'+
+    '<div class="calc-top"><div class="calc-title">Qual laboratório?</div><button class="calc-x" onclick="fecharNovaQuadraTipo()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">Área de Biologia</div>'+
+    '<div class="qtipo-opts">'+LAB_TIPOS.map(function(t){
+      return '<button class="qtipo-op" onclick="fecharNovaQuadraTipo();criarQuadraLab(\''+t+'\')">'+
+        '<div class="qtipo-ico" style="color:'+labTipoCor(t)+'">🧫</div><div><div class="qtipo-t">'+t+'</div>'+
+        '<div class="qtipo-d">'+desc[t]+'</div></div></button>';
+    }).join('')+'</div>'+
+    '<div class="calc-actions"><button class="calc-close" onclick="novaQuadraTipo()">Voltar</button></div>'+
+    '</div>';
+}
+function fecharNovaQuadraTipo(){ var o=document.getElementById('qtipoOvl'); if(o) o.style.display='none'; }
+
+/* Quadra de laboratório: sem polígono. Fica no mapa como um marcador (o lab é
+   um prédio, tem lugar), então continua alcançável pelo mesmo toque de sempre. */
+function criarQuadraLab(labTipo){
+  if(!editMode) return;
+  if(LAB_TIPOS.indexOf(labTipo)<0) labTipo='';
+  var nome=prompt('Nome do laboratório:', labTipo?('Lab. '+labTipo):'Laboratório');
+  if(nome===null) return; nome=String(nome).trim(); if(!nome) return;
+  ensureLocais(); ensureQGEO();
+  var dup=quadrasDoLocal(localAtivo).some(function(q){ return quadraNome(q).toLowerCase()===nome.toLowerCase(); });
+  if(dup){ alert('Já existe uma quadra chamada "'+nome+'" neste local.'); return; }
+  var id=novoQuadraId(nome);
+  var c=null; try{ c=_map?_map.getCenter():null; }catch(e){}
+  QLOCAL[id]=localAtivo; _touchQLocal(id);
+  QNOME[id]=nome; _touchQNome(id);
+  data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[],
+            tipo:'lab', labTipo:labTipo, ponto:(c?[c.lat,c.lng]:_homeCentro())};
+  _touchQGEO(id); /* carimbo: quadra nova vence aparelho zerado no merge */
+  saveQGEO(); saveQLocal(); saveQNome(); save();
+  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
+  endDraw(); editId=id; render(); buildEditPanel();
+  alert('Laboratório "'+nome+'"'+(labTipo?' ('+labTipo+')':'')+' criado.\n\nAparece no mapa como 🧪 — arraste o marcador para o lugar do laboratório se quiser.');
+  if(typeof openE==='function') openE(id);
+}
+
 function startDrawQuadra(){
   if(!editMode) return;
   drawMode=true; drawPts=[]; editId=null;
@@ -1523,6 +1672,14 @@ function deleteQuadra(){
     saveQGEO(); save(); editId=null; render(); buildEditPanel(); updateAgendaBadge();
   });
 }
+function trocarTipoQuadra(tipo){
+  if(!editId) return;
+  if(setQuadraTipo(editId,tipo)){ render(); buildEditPanel(); }
+}
+function trocarLabTipo(t){
+  if(!editId) return;
+  if(setQuadraLabTipo(editId,t)){ render(); buildEditPanel(); }
+}
 function buildEditPanel(){
   var p=document.getElementById('edPanel');
   if(!p){ p=document.createElement('div'); p.id='edPanel'; p.className='gr-panel'; document.body.appendChild(p); }
@@ -1531,11 +1688,23 @@ function buildEditPanel(){
     html+='<div class="gr-hint">Clique no mapa para marcar os <b>cantos</b> da nova quadra (m&iacute;nimo 3).</div>'+
       '<div class="gr-btns"><button class="gr-ok" onclick="finishDrawQuadra()">Concluir ('+drawPts.length+' pts)</button><button class="gr-cancel" onclick="cancelDrawQuadra()">Cancelar</button></div>';
   } else if(editId){
-    html+='<div class="gr-hint">Editando <b>'+esc(editId)+'</b>. Arraste os <b>pontos amarelos</b>; clique no <b>+</b> para inserir; <b>duplo-clique</b> remove. Clique em outra quadra para troc&aacute;-la. (Salva sozinho.)</div>'+
-      '<div class="gr-btns"><button class="gr-ok" onclick="startDrawQuadra()">&#43; Nova</button><button class="gr-reset" onclick="deleteQuadra()">&#128465; Excluir</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
+    var _lab=isQuadraLab(editId);
+    html+='<div class="gr-hint">Editando <b>'+esc(quadraNome(editId))+'</b>. '+
+      (_lab?'Quadra de <b>laborat&oacute;rio</b>: sem pol&iacute;gono. Arraste o marcador 🧪 para posicionar o lab. (Salva sozinho.)'
+           :'Arraste os <b>pontos amarelos</b>; clique no <b>+</b> para inserir; <b>duplo-clique</b> remove. Clique em outra quadra para troc&aacute;-la. (Salva sozinho.)')+'</div>'+
+      '<div class="gr-tipo"><span class="gr-tipo-lbl">Tipo</span>'+
+        '<button class="gr-tipo-op'+(_lab?'':' on')+'" onclick="trocarTipoQuadra(\'campo\')">🗺️ Campo</button>'+
+        '<button class="gr-tipo-op'+(_lab?' on':'')+'" onclick="trocarTipoQuadra(\'lab\')">🧪 Laborat&oacute;rio</button></div>'+
+      (_lab?('<div class="gr-tipo"><span class="gr-tipo-lbl">Lab</span>'+
+        LAB_TIPOS.map(function(t){
+          var on=(quadraLabTipo(editId)===t);
+          return '<button class="gr-tipo-op'+(on?' on':'')+'"'+(on?' style="background:'+labTipoCor(t)+';border-color:'+labTipoCor(t)+';color:#fff"':'')+
+                 ' onclick="trocarLabTipo(\''+t+'\')">'+t+'</button>';
+        }).join('')+'</div>'):'')+
+      '<div class="gr-btns"><button class="gr-ok" onclick="novaQuadraTipo()">&#43; Nova</button><button class="gr-reset" onclick="deleteQuadra()">&#128465; Excluir</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
   } else {
-    html+='<div class="gr-hint">Clique numa <b>quadra</b> para ajustar os v&eacute;rtices, ou crie uma <b>nova</b>. Tudo salva automaticamente.</div>'+
-      '<div class="gr-btns"><button class="gr-ok" onclick="startDrawQuadra()">&#43; Nova quadra</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
+    html+='<div class="gr-hint">Clique numa <b>quadra</b> para ajustar os v&eacute;rtices ou trocar o tipo, ou crie uma <b>nova</b>. Tudo salva automaticamente.</div>'+
+      '<div class="gr-btns"><button class="gr-ok" onclick="novaQuadraTipo()">&#43; Nova quadra</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
   }
   p.innerHTML=html; p.style.display='block';
 }
@@ -2423,6 +2592,31 @@ function cloudSubscribeRows(){
   }catch(e){}
 }
 
+/* Quadra de laboratório no mapa: marcador 🧪 em vez de polígono. Sem geometria
+   não há área nem NDVI, mas o toque é o mesmo (showD) e em modo de edição o
+   marcador é arrastável para posicionar o prédio do laboratório. */
+function renderQuadraLab(id){
+  var ll=quadraPonto(id); if(!ll) return;
+  var isEd=(editMode && id===editId);
+  var n=((data[id]&&data[id].estudos)||[]).length;
+  var m=LF.marker(ll,{
+    draggable:!!editMode, zIndexOffset:900,
+    icon:LF.divIcon({className:'lab-pin'+(isEd?' on':''),
+      html:'<div class="lab-pin-b">🧪</div><div class="lab-pin-t">'+esc(quadraNome(id))+(n?' <b>'+n+'</b>':'')+'</div>',
+      iconSize:[0,0], iconAnchor:[13,13]})
+  }).addTo(_qLayer);
+  m.on('click',function(){
+    if(scoutingModeActive) return;
+    if(_measure&&_measure.mode==='draw') return;
+    if(editMode) selectQuadra(id); else showD(id);
+  });
+  m.on('dragend',function(e){
+    var p=e.target.getLatLng();
+    if(!data[id]) return;
+    data[id].ponto=[p.lat,p.lng]; _touchQGEO(id); saveQGEO(); save();
+    try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e2){}
+  });
+}
 function render(){
   initMap();
   if(!_qLayer) return;
@@ -2433,6 +2627,7 @@ function render(){
   var ids=quadrasAtivas();
   for(var k=0;k<ids.length;k++){
     var id=ids[k], latlngs=QGEO[id], d=data[id]||{}, dap=cDAP(d.plantio), st=gS(d.cultura,dap), ac=gC(d.cultura);
+    if(isQuadraLab(id)){ renderQuadraLab(id); continue; } /* lab: marcador, não polígono */
     if(!latlngs || latlngs.length<3) continue;
     var dapStr=dap!==null?(dap>=0?dap+"d":"\u2013"+Math.abs(dap)+"d"):"";
     var hasAlert=quadraHasAlert(id);
@@ -4153,7 +4348,26 @@ function showD(id){
   var t=FEN[d.cultura]||FEN._,prog=0;
   if(dap!==null&&dap>=0){var tot=(t.length>=2)?t[t.length-2].m:120;prog=Math.min(100,(dap/tot)*100)}
 
-  var h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+ac+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">✕</button><div><div class="panel-qlbl" style="color:'+ac+'">QUADRA</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div><div class="panel-sbox" style="background:'+st.c+'15;border:1px solid '+st.c+'55;margin-right:36px"><div class="panel-scode" style="color:'+st.c+'">'+esc(st.s)+'</div><div class="panel-slbl" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
+  /* LABORATÓRIO: nada de cultura, DAP, área, progresso ou fenologia BBCH —
+     não há planta plantada aqui. No lugar entra a especialidade do lab e,
+     na Nematologia, a fila de amostras. */
+  var _lab=isQuadraLab(id), _labT=quadraLabTipo(id), _labC=labTipoCor(_labT);
+  var h;
+  if(_lab){
+    h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+_labC+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">\u2715</button>'+
+      '<div><div class="panel-qlbl" style="color:'+_labC+'">LABORAT\u00d3RIO</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div>'+
+      '<div class="panel-sbox" style="background:'+_labC+'15;border:1px solid '+_labC+'55;margin-right:36px"><div class="panel-scode" style="color:'+_labC+'">\ud83e\uddea</div><div class="panel-slbl" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div></div>';
+    h+='<div class="panel-body"><div class="info-grid">'+
+      '<div><div class="info-l">ESPECIALIDADE</div><div class="info-v" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div>'+
+      '<div><div class="info-l">\u00c1REA</div><div class="info-v">Biologia</div></div>'+
+      '<div><div class="info-l">ESTUDOS</div><div class="info-v">'+((d.estudos||[]).length)+'</div></div>'+
+      '</div>';
+    var _lp=quadraPonto(id)||ctr;
+    if(_lp) h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--gp-text-3,#727c75);border-top:1px solid var(--gp-line,rgba(255,255,255,.09));padding-top:10px">'+
+      '<span title="Onde o laborat\u00f3rio est\u00e1 marcado no mapa">&#128205; <b style="color:var(--gp-text,#e9ede9)">'+_lp[0].toFixed(5)+', '+_lp[1].toFixed(5)+'</b></span></div>';
+    if(_labT==='Nematologia') h+=nemPainel(id);
+  }else{
+  h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+ac+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">✕</button><div><div class="panel-qlbl" style="color:'+ac+'">QUADRA</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div><div class="panel-sbox" style="background:'+st.c+'15;border:1px solid '+st.c+'55;margin-right:36px"><div class="panel-scode" style="color:'+st.c+'">'+esc(st.s)+'</div><div class="panel-slbl" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
 
   h+='<div class="panel-body"><div class="info-grid"><div><div class="info-l">CULTURA</div><div class="info-v" style="color:'+ac+'">'+esc(d.cultura||"\u2014")+'</div></div><div><div class="info-l">CULTIVAR</div><div class="info-v">'+esc(d.cultivar||"\u2014")+'</div></div><div><div class="info-l">PLANTIO</div><div class="info-v">'+(pd?pd.toLocaleDateString("pt-BR"):"\u2014")+'</div></div><div><div class="info-l">DAP</div><div class="info-v" style="color:'+st.c+'">'+(dap!==null?(dap>=0?dap+" dias":"em "+Math.abs(dap)+"d"):"\u2014")+'</div></div><div><div class="info-l">\u00c1REA</div><div class="info-v">'+(aHa!=null?aHa.toFixed(2)+" ha":d.area?d.area+" ha":"\u2014")+'</div></div><div><div class="info-l">EST\u00c1GIO</div><div class="info-v" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
 
@@ -4179,6 +4393,7 @@ function showD(id){
   h+='<div class="fen-wrap"><div class="fen-title">FENOLOGIA · ESCALA BBCH</div><div class="fen-row">';
   for(var i=0;i<t.length;i++){if(t[i].m>=9999)continue;var a=st.s===t[i].s;h+='<div class="fen-item"'+(a?' style="background:'+t[i].c+'22;border-color:'+t[i].c+'"':'')+'><div class="fen-code"'+(a?' style="color:'+t[i].c+'"':'')+'>'+esc(t[i].s)+'</div><div class="fen-dap"'+(a?' style="color:'+t[i].c+'"':'')+'>\u2264'+t[i].m+'d</div></div>'}
   h+='</div></div>';
+  }
 
   // STUDIES SECTION
   h+='<div class="studies-wrap"><div class="studies-head"><div class="studies-title">ESTUDOS ('+(d.estudos||[]).length+')</div><button class="studies-add" onclick="openStudyEdit(\''+id+'\',null)">+ ADICIONAR</button></div>';
@@ -4856,6 +5071,12 @@ function newStudy(){
     volumeMorto:0,        /* mL — calda que fica no pulverizador/mangueira */
     numFrascos:1,         /* frascos por preparo de calda */
     capacidadeFrasco:0,   /* L — 0 = não confere capacidade */
+    /* preparo no laboratório (só usado quando a quadra é do tipo 'lab') */
+    labVolumeMl:50,       /* mL — volume do pote; 50 = falcon */
+    labFonteTipo:'gL',    /* gL | gkg | mae | puro */
+    labFonteValor:'',     /* valor do rótulo / ppm da solução-mãe */
+    labPureza:'',         /* % — vazio = 100 */
+    labDensidade:'',      /* g/mL — vazio = 1,00 (obrigatória para g/kg) */
     testemunha:'',
     aplicacoes:[],
     avaliacoes:[],
@@ -4942,6 +5163,14 @@ function normalizeStudy(s){
   if(typeof s.volumeMorto!=="number")s.volumeMorto=_numBR(s.volumeMorto,0);
   if(typeof s.numFrascos!=="number")s.numFrascos=Math.max(1,Math.round(_numBR(s.numFrascos,1))||1);
   if(typeof s.capacidadeFrasco!=="number")s.capacidadeFrasco=_numBR(s.capacidadeFrasco,0);
+  /* laboratório: estudo antigo não tem os campos — entra com o padrão do falcon.
+     Fonte/pureza/densidade ficam como TEXTO (vazio = "não informado", que é
+     diferente de zero: o núcleo trata vazio como 100% / 1,00 g/mL). */
+  if(typeof s.labVolumeMl!=="number")s.labVolumeMl=_numBR(s.labVolumeMl,50)||50;
+  if(['gL','gkg','mae','puro'].indexOf(s.labFonteTipo)<0)s.labFonteTipo='gL';
+  if(s.labFonteValor==null)s.labFonteValor='';
+  if(s.labPureza==null)s.labPureza='';
+  if(s.labDensidade==null)s.labDensidade='';
   if(typeof s.testemunha!=="string")s.testemunha="";
   /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
   s.tratamentos.forEach(function(t){ if(t) t.testemunha=!!t.testemunha; });
@@ -5392,6 +5621,396 @@ function openCalcAplicacao(qid,sid){
   _calcRenderShell();
 }
 function closeCalc(){ var ov=document.getElementById('calcOvl'); if(ov) ov.style.display='none'; }
+
+/* ========================= NEMATOLOGIA — FILA DE AMOSTRAS =========================
+   Aqui não há tratamento nem repetição: o registro é o caminho da amostra dentro
+   do laboratório. Um número de estudo traz várias amostras (matriz x momento:
+   "solo 15 DAA", "raiz 15 DAA", "solo 30 DAA"...), e cada uma anda por quatro
+   marcos, cada um com data:
+
+       entrada  ->  extração  ->  leitura  ->  entrega
+
+   O status NÃO é um campo — é derivado das datas preenchidas. Assim é impossível
+   uma amostra estar "entregue" sem data de entrega, que é o erro clássico de
+   planilha de fila. Mora em estudo.amostras e sincroniza de graça: _rowEstudo
+   joga toda chave desconhecida em `extras`. */
+var NEM_ETAPAS=[
+  {k:'entrada',  rot:'Entrada',  cor:'#8a948e'},
+  {k:'extracao', rot:'Extração', cor:'#2f85c9'},
+  {k:'leitura',  rot:'Leitura',  cor:'#c77f1a'},
+  {k:'entrega',  rot:'Entrega',  cor:'#1f7a44'}
+];
+var NEM_MATRIZES=['Solo','Raiz'];
+function nemAmostras(est){ if(!est) return []; if(!Array.isArray(est.amostras)) est.amostras=[]; return est.amostras; }
+/* Status derivado: a etapa mais avançada que tem data. */
+function nemStatus(a){
+  a=a||{};
+  if(a.entrega)  return {k:'entregue',   rot:'Entregue',        cor:'#1f7a44'};
+  if(a.leitura)  return {k:'lida',       rot:'Aguarda entrega', cor:'#c77f1a'};
+  if(a.extracao) return {k:'extraida',   rot:'Aguarda leitura', cor:'#2f85c9'};
+  if(a.entrada)  return {k:'fila',       rot:'Na fila',         cor:'#8a948e'};
+  return {k:'sem-entrada', rot:'Sem entrada', cor:'#d84b43'};
+}
+function nemResumo(est){
+  var c={fila:0,extraida:0,lida:0,entregue:0,'sem-entrada':0};
+  nemAmostras(est).forEach(function(a){ c[nemStatus(a).k]++; });
+  return c;
+}
+/* Painel na tela do laboratório: uma linha por estudo, com a barra de progresso
+   das amostras. É a resposta para "qual estudo já foi, qual está em andamento". */
+function nemPainel(qid){
+  var ests=(data[qid]&&data[qid].estudos)||[];
+  var h='<div class="nem-wrap"><div class="nem-head"><span class="nem-title">FILA DE AMOSTRAS</span></div>';
+  if(!ests.length){
+    return h+'<div class="nem-vazio">Nenhum estudo ainda. Crie um estudo abaixo e registre as amostras que chegaram.</div></div>';
+  }
+  ests.forEach(function(s){
+    var am=nemAmostras(s), r=nemResumo(s), tot=am.length;
+    var pronto=r.entregue, andando=tot-pronto-r['sem-entrada'];
+    var pct=tot?Math.round(100*pronto/tot):0;
+    var sit=!tot?'sem amostras':(pronto===tot?'concluído':(andando?'em andamento':'na fila'));
+    h+='<div class="nem-est" onclick="openNemAmostras(\''+qid+'\',\''+s.id+'\')">'+
+       '<div class="nem-est-top"><span class="nem-est-cod">'+esc(s.codigo||s.nome||s.id)+'</span>'+
+       '<span class="nem-est-sit nem-'+(pronto===tot&&tot?'ok':(andando?'go':'wait'))+'">'+sit+'</span></div>'+
+       '<div class="nem-bar"><div class="nem-bar-fill" style="width:'+pct+'%"></div></div>'+
+       '<div class="nem-est-sub">'+tot+' amostra'+(tot===1?'':'s')+
+         (r['sem-entrada']?' · '+r['sem-entrada']+' sem entrada':'')+
+         (r.fila?' · '+r.fila+' na fila':'')+
+         (r.extraida?' · '+r.extraida+' extraída'+(r.extraida===1?'':'s'):'')+
+         (r.lida?' · '+r.lida+' lida'+(r.lida===1?'':'s'):'')+
+         (r.entregue?' · '+r.entregue+' entregue'+(r.entregue===1?'':'s'):'')+
+       '</div></div>';
+  });
+  return h+'</div>';
+}
+
+var _nemSel=null;
+function openNemAmostras(qid,sid){
+  _nemSel={qid:qid,sid:sid};
+  _calcCss();
+  var ov=document.getElementById('nemOvl');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='nemOvl'; ov.className='calc-ovl';
+    ov.onclick=function(e){ if(e.target===ov) closeNemAmostras(); };
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  _nemRender();
+}
+function closeNemAmostras(){ var o=document.getElementById('nemOvl'); if(o) o.style.display='none'; }
+function _nemEstudo(){
+  if(!_nemSel) return null;
+  var q=data[_nemSel.qid]||{};
+  return (q.estudos||[]).find(function(x){ return x.id===_nemSel.sid; })||null;
+}
+function _nemSalvar(){
+  var est=_nemEstudo(); if(!est) return;
+  est._ts=Date.now();
+  save();
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(_nemSel.qid,est); }catch(e){}
+  if(typeof render==='function') render();
+}
+function _nemRender(){
+  var ov=document.getElementById('nemOvl'); if(!ov) return;
+  var est=_nemEstudo();
+  if(!est){ ov.innerHTML='<div class="calc-box"><div class="calc-top"><div class="calc-title">Amostras</div><button class="calc-x" onclick="closeNemAmostras()">×</button></div><div class="calc-empty">Estudo não encontrado.</div></div>'; return; }
+  var am=nemAmostras(est), r=nemResumo(est);
+  var h='<div class="calc-box" style="max-width:840px">'+
+    '<div class="calc-top"><div class="calc-title">🧫 Amostras · '+esc(est.codigo||est.nome||est.id)+'</div>'+
+    '<button class="calc-x" onclick="closeNemAmostras()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">'+am.length+' amostra'+(am.length===1?'':'s')+' · '+
+      r.entregue+' entregue'+(r.entregue===1?'':'s')+' · '+(am.length-r.entregue-r['sem-entrada'])+' em andamento</div>';
+
+  h+='<div class="nem-gerar">'+
+     '<span class="calc-lab">Registrar chegada</span>'+
+     '<div class="nem-gerar-row">'+
+       NEM_MATRIZES.map(function(m){ return '<label class="nem-chk"><input type="checkbox" id="nemM'+m+'" checked> '+m+'</label>'; }).join('')+
+       '<input id="nemDAA" class="calc-inp" style="flex:1;min-width:140px" placeholder="Momentos em DAA: 15; 30; 45">'+
+       '<input id="nemData" type="date" class="calc-inp" style="width:150px" value="'+esc(new Date().toISOString().slice(0,10))+'">'+
+       '<button class="nem-add" onclick="nemGerar()">+ Adicionar</button>'+
+     '</div>'+
+     '<div class="calclab-src">Cruza as matrizes marcadas com os momentos: Solo+Raiz e “15; 30” geram 4 amostras, todas com a data de entrada acima.</div>'+
+     '</div>';
+
+  if(!am.length){
+    h+='<div class="calc-empty">Nenhuma amostra registrada ainda.</div>';
+  }else{
+    h+='<div class="nem-tab-wrap"><table class="nem-tab"><thead><tr><th>Amostra</th>'+
+       NEM_ETAPAS.map(function(e){ return '<th>'+e.rot+'</th>'; }).join('')+
+       '<th>Situação</th><th></th></tr></thead><tbody>';
+    am.forEach(function(a,i){
+      var st=nemStatus(a);
+      h+='<tr><td class="nem-nome"><b>'+esc(a.matriz||'—')+'</b>'+(a.daa!=null&&a.daa!==''?' <span class="nem-daa">'+esc(String(a.daa))+' DAA</span>':'')+'</td>'+
+         NEM_ETAPAS.map(function(e){
+           return '<td><input type="date" class="nem-dt'+(a[e.k]?' ok':'')+'" value="'+esc(a[e.k]||'')+'" onchange="nemSetData('+i+',\''+e.k+'\',this.value)"></td>';
+         }).join('')+
+         '<td><span class="nem-chip" style="background:'+st.cor+'1a;border:1px solid '+st.cor+'66;color:'+st.cor+'">'+st.rot+'</span></td>'+
+         '<td><button class="nem-del" title="Remover esta amostra" onclick="nemRemover('+i+')">🗑</button></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='<div class="calc-actions"><button class="calc-copy" onclick="nemCopiar()">Copiar lista</button><button class="calc-close" onclick="closeNemAmostras()">Fechar</button></div></div>';
+  ov.innerHTML=h;
+}
+function nemGerar(){
+  var est=_nemEstudo(); if(!est) return;
+  var matrizes=NEM_MATRIZES.filter(function(m){ var c=document.getElementById('nemM'+m); return c&&c.checked; });
+  if(!matrizes.length){ alert('Marque ao menos uma matriz (Solo ou Raiz).'); return; }
+  var bruto=String((document.getElementById('nemDAA')||{}).value||'').trim();
+  var momentos=bruto?bruto.split(/[;,]/).map(function(x){ return x.trim(); }).filter(function(x){ return x!==''; }):[''];
+  var dataEntrada=(document.getElementById('nemData')||{}).value||'';
+  var am=nemAmostras(est), criadas=0, repetidas=0;
+  matrizes.forEach(function(m){
+    momentos.forEach(function(d){
+      /* não duplica: mesma matriz + mesmo momento já existente é ignorada */
+      var ja=am.some(function(a){ return a.matriz===m && String(a.daa||'')===String(d); });
+      if(ja){ repetidas++; return; }
+      am.push({id:'am_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+               matriz:m, daa:d, entrada:dataEntrada, extracao:'', leitura:'', entrega:''});
+      criadas++;
+    });
+  });
+  _nemSalvar(); _nemRender();
+  if(repetidas) alert(criadas+' amostra(s) adicionada(s). '+repetidas+' já existia(m) e ficaram como estavam.');
+}
+function nemSetData(i,etapa,valor){
+  var est=_nemEstudo(); if(!est) return;
+  var am=nemAmostras(est), a=am[i]; if(!a) return;
+  a[etapa]=valor||'';
+  _nemSalvar(); _nemRender();
+}
+function nemRemover(i){
+  var est=_nemEstudo(); if(!est) return;
+  var am=nemAmostras(est), a=am[i]; if(!a) return;
+  if(!confirm('Remover a amostra '+(a.matriz||'')+' '+(a.daa||'')+' DAA?')) return;
+  am.splice(i,1);
+  _nemSalvar(); _nemRender();
+}
+function nemCopiar(){
+  var est=_nemEstudo(); if(!est) return;
+  var L=[(est.codigo||est.nome||est.id)];
+  L.push(['Matriz','DAA'].concat(NEM_ETAPAS.map(function(e){return e.rot;})).concat(['Situação']).join('\t'));
+  nemAmostras(est).forEach(function(a){
+    L.push([a.matriz||'',a.daa||''].concat(NEM_ETAPAS.map(function(e){ return isoToBR(a[e.k])||''; })).concat([nemStatus(a).rot]).join('\t'));
+  });
+  try{ navigator.clipboard.writeText(L.join('\n')); }catch(e){}
+  var b=document.querySelector('#nemOvl .calc-copy'); if(b){ var o=b.textContent; b.textContent='Copiado'; setTimeout(function(){ b.textContent=o; },1400); }
+}
+
+/* ===================== CALCULADORA DE LABORATÓRIO (motor BioCalculo lab) =====================
+   Abre no lugar da calculadora de aplicação quando a quadra é do tipo 'lab'.
+   Reusa vendor/biocalc-lab-core.js e o CSS .calc-* / .calclab-* — tela nativa
+   do Agracta, sem identidade externa. As quatro abas do BioCalculo Laboratório:
+     • Do campo  — a dose de campo do tratamento vira a receita do pote (o caminho normal daqui)
+     • PPM       — concentração alvo direta, quando o ensaio é definido em ppm
+     • Ajuste    — diluir um formulado concentrado (C1V1 = C2V2)
+     • Série     — curva de doses, uma linha por concentração
+   Os padrões vêm do cadastro do estudo (Preparo no laboratório) e continuam
+   editáveis aqui, sem gravar de volta — igual à calculadora de campo. */
+var _labSel=null, _labTab='campo';
+function _labVal(id){ var el=document.getElementById(id); return el?el.value:''; }
+function _labStudy(){
+  var sel=_labSel; if(!sel) return null;
+  var q=data[sel.qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sel.sid;});
+  return s?normalizeStudy(s):null;
+}
+function _labStudies(){
+  var out=[]; try{ ensureLocais(); }catch(e){}
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config'||!isQuadraLab(qid)) return;
+    ((data[qid]&&data[qid].estudos)||[]).forEach(function(s){
+      out.push({qid:qid, sid:s.id, label:quadraNome(qid)+' · '+(s.codigo||s.nome||s.id)+' ('+(((s.tratamentos)||[]).length)+'t)'});
+    });
+  });
+  return out;
+}
+function openCalcLab(qid,sid){
+  if(!window.BioCalculoLab){ alert('O motor de cálculo do laboratório não carregou. Recarregue o app.'); return; }
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  if(qid&&sid) _labSel={qid:qid,sid:sid};
+  else if(typeof curV!=='undefined'&&curV&&typeof curSid!=='undefined'&&curSid) _labSel={qid:curV,sid:curSid};
+  else { var all=_labStudies(); _labSel=all.length?{qid:all[0].qid,sid:all[0].sid}:null; }
+  _calcCss();
+  var ov=document.getElementById('calcLabOvl');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='calcLabOvl'; ov.className='calc-ovl';
+    ov.onclick=function(e){ if(e.target===ov) closeCalcLab(); };
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  _labRenderShell();
+}
+function closeCalcLab(){ var ov=document.getElementById('calcLabOvl'); if(ov) ov.style.display='none'; }
+function _labPick(v){ var p=String(v||'').split('|'); if(p.length===2){ _labSel={qid:p[0],sid:p[1]}; _labRenderShell(); } }
+function _labSetTab(t){ _labTab=t; _labRenderShell(); }
+
+/* Padrões do cadastro do estudo (seção "Preparo no laboratório") */
+function _labDefs(){
+  var s=_labStudy();
+  return {
+    vol:   s?(_numBR(s.labVolumeMl,50)||50):50,
+    fonte: s?(s.labFonteTipo||'gL'):'gL',
+    valor: s?(s.labFonteValor||''):'',
+    pureza:s?(s.labPureza||''):'',
+    dens:  s?(s.labDensidade||''):''
+  };
+}
+function _labFonteSel(id,sel){
+  var F=window.BioCalculoLab.FONTES;
+  return '<select id="'+id+'" class="calc-sel" onchange="_labCompute()">'+
+    ['gL','gkg','mae','puro'].map(function(k){
+      return '<option value="'+k+'"'+(k===sel?' selected':'')+'>'+esc(F[k].rotulo)+'</option>';
+    }).join('')+'</select>';
+}
+function _labRenderShell(){
+  var ov=document.getElementById('calcLabOvl'); if(!ov) return;
+  var all=_labStudies(), d=_labDefs(), s=_labStudy();
+  var selHtml='';
+  if(all.length>1){
+    selHtml='<div class="calc-f full"><span class="calc-lab">Estudo</span><select id="labStudy" class="calc-sel" onchange="_labPick(this.value)">'+
+      all.map(function(o){ return '<option value="'+esc(o.qid+'|'+o.sid)+'"'+((_labSel&&_labSel.qid===o.qid&&_labSel.sid===o.sid)?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+'</select></div>';
+  }
+  var T=[['campo','Do campo'],['ppm','PPM'],['ia','Ajuste i.a.'],['serie','Série']];
+  var tabs='<div class="calclab-tabs">'+T.map(function(t){
+    return '<button class="calclab-tab'+(_labTab===t[0]?' on':'')+'" onclick="_labSetTab(\''+t[0]+'\')">'+t[1]+'</button>';
+  }).join('')+'</div>';
+
+  var campos='';
+  if(_labTab==='campo'){
+    campos='<div class="calclab-src">Cada tratamento do estudo vira a receita do pote. A dose e a vazão vêm do cadastro; ajuste aqui se precisar.</div>'+
+      '<div class="calc-grid">'+
+      '<div class="calc-f"><span class="calc-lab">Volume do pote (mL)</span><input id="labVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Vazão padrão (L/ha)</span><input id="labVazao" class="calc-inp" inputmode="decimal" value="'+esc(String(_labVazaoDefault()))+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Densidade (g/mL)</span><input id="labDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
+      '</div>';
+  } else if(_labTab==='ppm'){
+    campos='<div class="calclab-src">Concentração alvo direta — para o ensaio definido em ppm, sem passar pela dose de campo.</div>'+
+      '<div class="calc-grid">'+
+      '<div class="calc-f"><span class="calc-lab">Alvo (ppm)</span><input id="labPpmAlvo" class="calc-inp" inputmode="decimal" value="100" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume final (mL)</span><input id="labPpmVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f full"><span class="calc-lab">Fonte do produto</span>'+_labFonteSel('labPpmFonte',d.fonte)+'</div>'+
+      '<div class="calc-f"><span class="calc-lab">Valor da fonte</span><input id="labPpmValor" class="calc-inp" inputmode="decimal" placeholder="340" value="'+esc(d.valor)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labPpmPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Densidade (g/mL)</span><input id="labPpmDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
+      '</div>';
+  } else if(_labTab==='ia'){
+    campos='<div class="calclab-src">Diluir um formulado concentrado até uma concentração menor (C1·V1 = C2·V2).</div>'+
+      '<div class="calc-grid">'+
+      '<div class="calc-f"><span class="calc-lab">Conc. atual</span><input id="labIaOrig" class="calc-inp" inputmode="decimal" value="650" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Unidade</span>'+_labUnidSel('labIaOrigU','g/L')+'</div>'+
+      '<div class="calc-f"><span class="calc-lab">Conc. desejada</span><input id="labIaAlvo" class="calc-inp" inputmode="decimal" value="400" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Unidade</span>'+_labUnidSel('labIaAlvoU','g/L')+'</div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume final</span><input id="labIaVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Unidade</span><select id="labIaVolU" class="calc-sel" onchange="_labCompute()"><option>mL</option><option>L</option></select></div>'+
+      '<div class="calc-f full"><span class="calc-lab">Densidade (g/mL) — obrigatória para g/kg</span><input id="labIaDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
+      '</div>';
+  } else {
+    campos='<div class="calclab-src">Curva de doses. Série geométrica (topo ÷ fator) ou lista sua, separada por ponto-e-vírgula.</div>'+
+      '<div class="calc-grid">'+
+      '<div class="calc-f"><span class="calc-lab">Volume por dose (mL)</span><input id="labSerVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Testemunha (0 ppm)</span><select id="labSerTest" class="calc-sel" onchange="_labCompute()"><option value="1">Incluir</option><option value="0">Não incluir</option></select></div>'+
+      '<div class="calc-f full"><span class="calc-lab">Fonte do produto</span>'+_labFonteSel('labSerFonte',d.fonte)+'</div>'+
+      '<div class="calc-f"><span class="calc-lab">Valor da fonte</span><input id="labSerValor" class="calc-inp" inputmode="decimal" placeholder="340" value="'+esc(d.valor)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labSerPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Dose topo (ppm)</span><input id="labSerTopo" class="calc-inp" inputmode="decimal" value="500" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Fator ÷</span><input id="labSerFator" class="calc-inp" inputmode="decimal" value="2" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Nº de doses</span><input id="labSerN" class="calc-inp" inputmode="numeric" value="5" oninput="_labCompute()"></div>'+
+      '<div class="calc-f full"><span class="calc-lab">Ou lista própria (ppm, separada por ;)</span><input id="labSerLista" class="calc-inp" placeholder="500; 250; 125; 62,5" oninput="_labCompute()"></div>'+
+      '</div>';
+  }
+
+  ov.innerHTML='<div class="calc-box">'+
+    '<div class="calc-top"><div class="calc-title">🧪 Calculadora de laboratório</div><button class="calc-x" onclick="closeCalcLab()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">'+esc(s?((s.codigo||s.nome||s.id)+(s.tipoEstudo?' · '+s.tipoEstudo:'')):'Nenhum estudo de laboratório cadastrado')+'</div>'+
+    (selHtml?'<div class="calc-grid">'+selHtml+'</div>':'')+
+    tabs+campos+
+    '<div id="labOut" class="calclab-out">—</div>'+
+    '<div class="calc-actions"><button class="calc-copy" onclick="_labCopiar()">Copiar</button><button class="calc-close" onclick="closeCalcLab()">Fechar</button></div>'+
+    '</div>';
+  _labCompute();
+}
+function _labUnidSel(id,sel){
+  return '<select id="'+id+'" class="calc-sel" onchange="_labCompute()">'+
+    ['g/L','mg/mL','g/kg','%','ppm'].map(function(u){ return '<option'+(u===sel?' selected':'')+'>'+u+'</option>'; }).join('')+'</select>';
+}
+/* Vazão padrão: a do protocolo; senão a do 1º tratamento que tenha uma. */
+function _labVazaoDefault(){
+  var s=_labStudy(); if(!s) return 100;
+  var pv=_calcNum((s.protocolo||{}).volumeCalda); if(pv>0) return pv;
+  var t=(s.tratamentos||[]).map(function(x){return _calcNum(x.volume);}).filter(function(n){return n>0;});
+  return t.length?t[0]:100;
+}
+/* Texto do último cálculo, para o botão Copiar */
+var _labTexto='';
+function _labCopiar(){
+  if(!_labTexto) return;
+  try{ navigator.clipboard.writeText(_labTexto); }catch(e){}
+  var b=document.querySelector('#calcLabOvl .calc-copy'); if(b){ var o=b.textContent; b.textContent='Copiado'; setTimeout(function(){ b.textContent=o; },1400); }
+}
+function _labAvisosHtml(r){
+  var h='';
+  (r.avisos||[]).forEach(function(a){ h+='<div class="calclab-av '+esc(a.nivel)+'">'+esc(a.msg)+'</div>'; });
+  if(r.sugestaoMae) h+='<div class="calclab-av saida">'+esc(r.sugestaoMae.msg)+'</div>';
+  return h;
+}
+function _labCompute(){
+  var box=document.getElementById('labOut'); if(!box) return;
+  var LB=window.BioCalculoLab, s=_labStudy();
+  var F=function(v){ return LB.fmtVivo(v); };
+  _labTexto='';
+  try{
+    if(_labTab==='campo'){
+      if(!s||!(s.tratamentos||[]).length){ box.innerHTML='<span style="color:#8aa88a">Estudo sem tratamentos cadastrados.</span>'; return; }
+      var vol=_calcNum(_labVal('labVol')), vazaoDef=_calcNum(_labVal('labVazao'));
+      var pur=_labVal('labPureza'), den=_labVal('labDens');
+      var html='', txt=[];
+      (s.tratamentos||[]).forEach(function(t){
+        var unid=_calcDoseUnit(t.dose), dose=_calcNum(t.dose);
+        var vazao=_calcNum(t.volume)||vazaoDef;
+        var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(t.testemunha?' <span style="color:#dccd8c">(test.)</span>':'')+'</span>'+
+                 '<span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+' · '+F(vazao)+' L/ha')+'</span></div>';
+        if(t.testemunha||!(dose>0)){
+          html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>só solvente — '+F(vol)+' mL</b></div></div>';
+          txt.push(t.id+': só solvente, '+F(vol)+' mL'); return;
+        }
+        var r=null, err='';
+        try{ r=LB.calcCampo({dose:dose,unidade:unid,vazao:vazao,volumeMl:vol,pureza:pur,densidade:den}); }
+        catch(e){ err=e.message||String(e); }
+        if(err){ html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
+        var passo=(r.acao==='pesar')
+          ? '<div class="calc-kv"><span>Pesar</span><b>'+F(r.massaMg)+' mg</b><span>Completar até</span><b>'+F(r.volumeMl)+' mL</b></div>'
+          : '<div class="calc-kv"><span>Pipetar</span><b>'+F(r.produtoUl)+' µL</b><span>Solvente</span><b>'+F(r.solventeMl)+' mL</b></div>';
+        html+='<div class="calc-card">'+head+passo+
+          '<div class="calc-kv" style="margin-top:3px"><span>Concentração</span><b>'+F(r.concentracaoPct)+' % '+r.concentracaoBase+'</b><span>≈ ppm</span><b>'+F(r.concentracaoPpm)+'</b></div>'+
+          _labAvisosHtml(r)+'</div>';
+        txt.push(LB.formatar(r,{titulo:t.id+(t.produto?' · '+t.produto:'')}));
+      });
+      box.innerHTML=html; _labTexto=txt.join('\n\n');
+      return;
+    }
+    var r2;
+    if(_labTab==='ppm'){
+      r2=LB.calcPPM({alvoPpm:_labVal('labPpmAlvo'), volumeMl:_labVal('labPpmVol'),
+        fonteTipo:_labVal('labPpmFonte'), fonteValor:_labVal('labPpmValor'),
+        pureza:_labVal('labPpmPureza'), densidade:_labVal('labPpmDens')});
+    } else if(_labTab==='ia'){
+      r2=LB.calcAjusteIA({origemValor:_labVal('labIaOrig'), origemUnid:_labVal('labIaOrigU'),
+        alvoValor:_labVal('labIaAlvo'), alvoUnid:_labVal('labIaAlvoU'),
+        volumeFinal:_labVal('labIaVol'), volumeUnid:_labVal('labIaVolU'), densidade:_labVal('labIaDens')});
+    } else {
+      var lista=String(_labVal('labSerLista')||'').trim();
+      var doses=lista?LB.parseListaDoses(lista):LB.gerarSerieAuto(_labVal('labSerTopo'),_labVal('labSerFator'),_labVal('labSerN'));
+      r2=LB.calcSerie({doses:doses, volumeMl:_labVal('labSerVol'),
+        fonteTipo:_labVal('labSerFonte'), fonteValor:_labVal('labSerValor'),
+        pureza:_labVal('labSerPureza'), testemunha:_labVal('labSerTest')==='1'});
+    }
+    _labTexto=LB.formatar(r2,{titulo:s?(s.codigo||s.nome||s.id):''});
+    box.innerHTML='<div style="white-space:pre-wrap">'+esc(_labTexto)+'</div>'+_labAvisosHtml(r2);
+  }catch(e){
+    box.innerHTML='<span style="color:#ff9a8a">⚠ '+esc(e.message||String(e))+'</span>';
+  }
+}
 function _calcStudy(){
   var sel=_calcSel; if(!sel) return null;
   var q=data[sel.qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sel.sid;});
@@ -6334,7 +6953,9 @@ function openStudyDetail(qid,sid){
   h+='<div class="sd-actions">';
   h+='<button class="btn-sm" onclick="downloadStudyWorkbook(\''+qid+'\',\''+sid+'\')" title="Baixar o modelo.xls preenchido com protocolo, aplicações, avaliações e grupos estatísticos">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
-  h+='<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">🧪 Calc</button>';
+  h+=isQuadraLab(qid)
+    ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório (diluição, ppm, série) com os tratamentos deste estudo">🧪 Calc lab</button>'
+    : '<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">🧪 Calc</button>';
   h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
   h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
   if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
@@ -6352,11 +6973,20 @@ function openStudyDetail(qid,sid){
   if(study.numAplicacoes>1){
     h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Aplicações</span><span>'+study.numAplicacoes+' (intervalo '+study.intervaloDias+'d)</span></div>';
   }
-  var _pc=[], _br=function(n){ return String(n).replace('.',','); }; /* preparo de calda: só mostra o que foi preenchido */
-  if(study.volumeMorto>0) _pc.push('vol. morto '+_br(study.volumeMorto)+' mL');
-  if(study.numFrascos>1) _pc.push(study.numFrascos+' frascos/preparo');
-  if(study.capacidadeFrasco>0) _pc.push('frasco '+_br(study.capacidadeFrasco)+' L');
-  if(_pc.length) h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo de calda</span><span>'+esc(_pc.join(' · '))+'</span></div>';
+  var _pc=[], _br=function(n){ return String(n).replace('.',','); }; /* preparo: só mostra o que foi preenchido */
+  if(isQuadraLab(qid)){
+    var _fr={gL:'rótulo g/L',gkg:'rótulo g/kg',mae:'solução-mãe ppm',puro:'reagente puro'}[study.labFonteTipo||'gL'];
+    if(study.labVolumeMl>0) _pc.push('pote '+_br(study.labVolumeMl)+' mL');
+    _pc.push(_fr+((study.labFonteTipo!=='puro'&&study.labFonteValor)?' '+study.labFonteValor:''));
+    if(study.labPureza) _pc.push('pureza '+study.labPureza+'%');
+    if(study.labDensidade) _pc.push('d '+study.labDensidade+' g/mL');
+    h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo no laboratório</span><span>'+esc(_pc.join(' · '))+'</span></div>';
+  }else{
+    if(study.volumeMorto>0) _pc.push('vol. morto '+_br(study.volumeMorto)+' mL');
+    if(study.numFrascos>1) _pc.push(study.numFrascos+' frascos/preparo');
+    if(study.capacidadeFrasco>0) _pc.push('frasco '+_br(study.capacidadeFrasco)+' L');
+    if(_pc.length) h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo de calda</span><span>'+esc(_pc.join(' · '))+'</span></div>';
+  }
   h+='</div>';
 
   /* Descrição */
@@ -6926,7 +7556,11 @@ function renderStudyEditModal(){
   h+='<input type="text" id="seCodigo" value="'+esc(s.codigo)+'" placeholder="EST-2026-0847" class="se-codigo-input"></div>';
 
   h+='<div class="se-field"><label>Tipo de estudo</label><select id="seTipoEstudo"><option value="">—</option>';
-  TIPOS_ESTUDO.forEach(function(t){ h+='<option value="'+esc(t)+'"'+(t===s.tipoEstudo?' selected':'')+'>'+esc(t)+'</option>'; });
+  /* numa quadra de lab, oferece só os tipos daquela especialidade (mais o que já
+     estiver gravado, para não sumir com o valor de um estudo antigo) */
+  var _lt=quadraLabTipo(curV), _tipos=(_lt&&TIPOS_POR_LAB[_lt])?TIPOS_POR_LAB[_lt].slice():TIPOS_ESTUDO.slice();
+  if(s.tipoEstudo && _tipos.indexOf(s.tipoEstudo)<0) _tipos.push(s.tipoEstudo);
+  _tipos.forEach(function(t){ h+='<option value="'+esc(t)+'"'+(t===s.tipoEstudo?' selected':'')+'>'+esc(t)+'</option>'; });
   h+='</select><div class="e-hint">Define o catálogo de variáveis sugerido ao criar as colunas da avaliação (nome, tipo, sub-amostras e N padrão já certos).</div></div>';
 
   h+='<div class="se-field"><label>Descrição / objetivo</label>';
@@ -6938,13 +7572,35 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
   h+='</div>';
 
-  h+='<div class="se-section-title">Preparo de calda</div>';
-  h+='<div class="se-row">';
-  h+='<div class="se-field"><label>Volume morto (mL)</label><input type="number" id="seVolMorto" value="'+(s.volumeMorto||0)+'" min="0" step="1"></div>';
-  h+='<div class="se-field"><label>Nº de frascos / preparo</label><input type="number" id="seNumFrascos" value="'+(s.numFrascos||1)+'" min="1" step="1"></div>';
-  h+='<div class="se-field"><label>Capacidade do frasco (L)</label><input type="number" id="seCapFrasco" value="'+(s.capacidadeFrasco||0)+'" min="0" step="0.1"></div>';
-  h+='</div>';
-  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de aplicação deste estudo. Volume morto = calda que sobra no equipamento. Capacidade 0 = não conferir se a calda cabe nos frascos.</div>';
+  /* Quadra de laboratório troca "Preparo de calda" por "Preparo no laboratório":
+     os mesmos valores que a calculadora de diluição vai precisar. Em quadra de
+     campo nada muda. */
+  if(isQuadraLab(curV)){
+    var _fo=s.labFonteTipo||'gL';
+    h+='<div class="se-section-title">Preparo no laboratório</div>';
+    h+='<div class="se-row">';
+    h+='<div class="se-field"><label>Volume do pote (mL)</label><input type="number" id="seLabVol" value="'+(s.labVolumeMl||50)+'" min="0" step="1"></div>';
+    h+='<div class="se-field"><label>Fonte do produto</label><select id="seLabFonte">'+
+      ['gL','gkg','mae','puro'].map(function(k){
+        var rot={gL:'Rótulo (g/L)',gkg:'Rótulo (g/kg)',mae:'Solução-mãe (ppm)',puro:'Reagente puro (100%)'}[k];
+        return '<option value="'+k+'"'+(k===_fo?' selected':'')+'>'+rot+'</option>';
+      }).join('')+'</select></div>';
+    h+='<div class="se-field"><label>Valor da fonte</label><input type="text" id="seLabFonteValor" value="'+esc(s.labFonteValor==null?'':String(s.labFonteValor))+'" placeholder="ex.: 340" inputmode="decimal"'+(_fo==='puro'?' disabled':'')+'></div>';
+    h+='</div>';
+    h+='<div class="se-row">';
+    h+='<div class="se-field"><label>Pureza (%) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabPureza" value="'+esc(s.labPureza==null?'':String(s.labPureza))+'" placeholder="100" inputmode="decimal"></div>';
+    h+='<div class="se-field"><label>Densidade (g/mL) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabDens" value="'+esc(s.labDensidade==null?'':String(s.labDensidade))+'" placeholder="1,00" inputmode="decimal"></div>';
+    h+='</div>';
+    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de laboratório deste estudo. O volume do pote costuma ser o do falcon (50 mL). Densidade é obrigatória quando a fonte é g/kg.</div>';
+  }else{
+    h+='<div class="se-section-title">Preparo de calda</div>';
+    h+='<div class="se-row">';
+    h+='<div class="se-field"><label>Volume morto (mL)</label><input type="number" id="seVolMorto" value="'+(s.volumeMorto||0)+'" min="0" step="1"></div>';
+    h+='<div class="se-field"><label>Nº de frascos / preparo</label><input type="number" id="seNumFrascos" value="'+(s.numFrascos||1)+'" min="1" step="1"></div>';
+    h+='<div class="se-field"><label>Capacidade do frasco (L)</label><input type="number" id="seCapFrasco" value="'+(s.capacidadeFrasco||0)+'" min="0" step="0.1"></div>';
+    h+='</div>';
+    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de aplicação deste estudo. Volume morto = calda que sobra no equipamento. Capacidade 0 = não conferir se a calda cabe nos frascos.</div>';
+  }
 
   h+='<div class="se-section-title">Avaliações (programação)</div>';
   h+='<div class="se-row">';
@@ -7011,6 +7667,11 @@ function syncStudyInputs(){
   x=el("seVolMorto"); if(x) workingStudy.volumeMorto=Math.max(0,_numBR(x.value,0));
   x=el("seNumFrascos"); if(x) workingStudy.numFrascos=Math.max(1,Math.round(_numBR(x.value,1))||1);
   x=el("seCapFrasco"); if(x) workingStudy.capacidadeFrasco=Math.max(0,_numBR(x.value,0));
+  x=el("seLabVol"); if(x) workingStudy.labVolumeMl=Math.max(0,_numBR(x.value,50))||50;
+  x=el("seLabFonte"); if(x) workingStudy.labFonteTipo=x.value;
+  x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
+  x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
+  x=el("seLabDens"); if(x) workingStudy.labDensidade=x.value.trim();
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
   /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
@@ -7089,6 +7750,12 @@ function saveStudyV2(){
     if(_numBR(old.volumeMorto,0) !== s.volumeMorto) changes.push('Volume morto (mL): ' + _numBR(old.volumeMorto,0) + ' -> ' + s.volumeMorto);
     if(_numBR(old.numFrascos,1) !== s.numFrascos) changes.push('Frascos/preparo: ' + _numBR(old.numFrascos,1) + ' -> ' + s.numFrascos);
     if(_numBR(old.capacidadeFrasco,0) !== s.capacidadeFrasco) changes.push('Capacidade do frasco (L): ' + _numBR(old.capacidadeFrasco,0) + ' -> ' + s.capacidadeFrasco);
+    /* preparo no laboratório entra na mesma trilha de auditoria BPL */
+    if(_numBR(old.labVolumeMl,50) !== s.labVolumeMl) changes.push('Volume do pote (mL): ' + _numBR(old.labVolumeMl,50) + ' -> ' + s.labVolumeMl);
+    if((old.labFonteTipo||'gL') !== s.labFonteTipo) changes.push('Fonte do produto (lab): "' + (old.labFonteTipo||'gL') + '" -> "' + s.labFonteTipo + '"');
+    if(String(old.labFonteValor||'') !== String(s.labFonteValor||'')) changes.push('Valor da fonte (lab): "' + (old.labFonteValor||'—') + '" -> "' + (s.labFonteValor||'—') + '"');
+    if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
+    if(String(old.labDensidade||'') !== String(s.labDensidade||'')) changes.push('Densidade (lab): "' + (old.labDensidade||'—') + '" -> "' + (s.labDensidade||'—') + '"');
     if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
     details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
   } else {
@@ -7496,7 +8163,15 @@ function _avBrutoTxt(src,key,v){
 /* ===== Catálogo de variáveis por tipo de estudo =====
    Sem isso a variável é texto livre e vira "Mortalidade" / "mortalidade" / "Mort."
    em avaliações diferentes — e aí a série da AACPD e da prancha não fecha. */
-var TIPOS_ESTUDO=['Eficácia','Mortalidade','Seletividade/Fitotoxicidade','Produtividade','Outro'];
+var TIPOS_ESTUDO=['Eficácia','Mortalidade','Fungo in vitro','Fungo in vivo','Seletividade/Fitotoxicidade','Produtividade','Outro'];
+/* Tipos que fazem sentido em cada laboratório — o cadastro do estudo numa quadra
+   de lab oferece só esses, na ordem. Nematologia não usa: lá o registro é a fila
+   de amostras, não avaliação com tratamentos. */
+var TIPOS_POR_LAB={
+  Entomologia:['Mortalidade','Eficácia','Seletividade/Fitotoxicidade','Outro'],
+  Fitopatologia:['Fungo in vitro','Fungo in vivo','Eficácia','Outro'],
+  Nematologia:['Outro']
+};
 var CATALOGO_AVAL={
   'Eficácia':[
     {nome:'Severidade',tipo:'pct',sub:10},
@@ -7515,6 +8190,21 @@ var CATALOGO_AVAL={
     {nome:'Fitotoxicidade',tipo:'pct'},
     {nome:'Nota EWRC',tipo:'escala',escalaMax:9},
     {nome:'Stand de plantas',tipo:'contagem'}
+  ],
+  /* FITOPATOLOGIA in vitro: mede-se a colônia em dois eixos perpendiculares e a
+     média entra como diâmetro. A % de inibição do crescimento micelial sai contra
+     a testemunha (fórmula de Abbott, que o estatistica.js já traz auditado) —
+     por isso 'sentido:maior' NÃO se aplica: colônia menor = melhor controle. */
+  'Fungo in vitro':[
+    {nome:'Diâmetro da colônia (mm)',tipo:'contagem',sub:2},
+    {nome:'Crescimento micelial (mm/dia)',tipo:'contagem'},
+    {nome:'Esporulação (conídios/mL)',tipo:'contagem'}
+  ],
+  'Fungo in vivo':[
+    {nome:'Severidade',tipo:'pct',sub:10},
+    {nome:'Incidência',tipo:'razao',N:20},
+    {nome:'Nº de lesões',tipo:'contagem',sub:10},
+    {nome:'Nota de escala',tipo:'escala',escalaMax:4,sub:10}
   ],
   'Produtividade':[
     {nome:'Peso da parcela (g)',tipo:'contagem'},
@@ -8700,7 +9390,8 @@ function integridadeScan(){
     Object.keys(QLOCAL||{}).forEach(function(qid){ var l=QLOCAL[qid]; if(l && !locIds[l] && (data[qid]||(QGEO&&QGEO[qid]))) out.push({sev:'media',msg:'Quadra “'+quadraNome(qid)+'” aponta para um local que não existe mais.'}); });
     Object.keys(data||{}).forEach(function(qid){
       var q=data[qid]; if(!q) return;
-      if(QGEO && !QGEO[qid] && q.estudos && q.estudos.length) out.push({sev:'baixa',msg:'Quadra “'+quadraNome(qid)+'” tem estudo mas não tem polígono no mapa.'});
+      /* quadra de laboratório não tem polígono POR DEFINIÇÃO — o aviso só vale para campo */
+      if(QGEO && !QGEO[qid] && !isQuadraLab(qid) && q.estudos && q.estudos.length) out.push({sev:'baixa',msg:'Quadra “'+quadraNome(qid)+'” tem estudo mas não tem polígono no mapa.'});
       (q.estudos||[]).forEach(function(s){
         if(!s) return; var cod=s.codigo||'(sem código)', loc=quadraNome(qid);
         var tids={}; (s.tratamentos||[]).forEach(function(t){ if(t&&t.id) tids[t.id]=1; });
