@@ -1,0 +1,82 @@
+AGRACTA — 3a publicacao                    11/08/2026
+=====================================================
+
+Leva pequena: 4 arquivos, TODOS na raiz.
+
+Desta vez NAO tem o app.js do BioEstat, entao nao existe o risco de
+trocar um app.js pelo outro. Pasta plana, simples.
+
+
+COMO SUBIR
+----------
+1. Abra  https://github.com/Vyktorbio/Agracta
+2. "Add file" -> "Upload files"
+3. Abra ESTA pasta, selecione os 4 arquivos e arraste.
+   (Nao arraste a pasta. Nao arraste o LEIA-ME.)
+4. Commit: "Seletor de quadra agrupado por localidade"
+5. "Commit changes"
+
+
+AINDA FALTA APAGAR O test_runtime.js
+------------------------------------
+Ficou pendente da vez passada. O upload do GitHub nao apaga arquivo,
+so adiciona e substitui.
+
+Agora isso ATRAPALHA: o "Conferir antes de publicar" roda todos os
+test_*.js, esse falha (ele lia um caminho de outra maquina e de outro
+projeto), e o veredito vira NAO SUBA. Se voce clonar o repositorio em
+outro computador, vai levar o teste quebrado junto.
+
+Como apagar:
+1. No GitHub, na raiz, clique em  test_runtime.js
+2. Botao da lixeira, no canto superior direito do arquivo
+3. Commit: "Remove teste morto (lia outro projeto)"
+
+Aqui na sua pasta local ele ja esta removido.
+
+
+O QUE MUDOU
+-----------
+Voce achou: na hora de amarrar cada tratamento a uma quadra, no ensaio
+em faixas, a lista nao separava por localidade.
+
+O problema era real e sutil: nome de quadra REPETE entre locais de
+proposito — existe A1 em Iracemapolis e A1 em Anapolis. A lista mostrava
+duas linhas "A1" iguais, sem dizer qual era qual. Amarrar na errada
+significaria estudo apontando para outro municipio.
+
+Agora a lista vem agrupada por local, com o local ativo primeiro e
+marcado "(aqui)":
+
+    Bosqueiro (aqui)
+      Bosqueiro 1
+      Bosqueiro 2
+      Bosqueiro 3
+    Anapolis
+      A1 · Anapolis
+      C9
+    Iracemapolis
+      A1 · Iracemapolis
+      B2
+
+Repare que so os nomes REPETIDOS levam o local no texto. C9 e B2 sao
+unicos e ficaram curtos. Isso porque, com a lista fechada, o campo mostra
+so o texto da opcao — o cabecalho do grupo some, e "A1" sozinho voltaria
+a nao dizer de onde e.
+
+Quadra de laboratorio nao aparece: nao se aplica produto num laboratorio.
+
+
+DEPOIS DE PUBLICAR
+------------------
+FECHE E REABRA o Agracta no Mac. Cache foi de v107 para v108.
+
+O Render redeploya sozinho, mas nesta leva o ndvi-proxy.py nao mudou,
+entao nao ha nada a esperar dele.
+
+
+ANTES DA PROXIMA VEZ
+--------------------
+Duplo clique em  Conferir antes de publicar.command  na pasta do projeto
+(~/Desktop/Code/Agracta). Ele ja esta verde para esta leva: 16 suites,
+sintaxe limpa, cache v107 -> v108.

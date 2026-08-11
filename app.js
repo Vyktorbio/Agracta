@@ -5989,6 +5989,31 @@ function doseTextoDe(study, raw){
     return p+' '+u;
   }).join(' + ');
 }
+/* Quadras agrupadas por local, na ordem em que se procura: o local ativo
+   primeiro, o resto em ordem alfabética. Devolve
+   [{locId, local, quadras:[{id,nome}]}] — o `local` é o que vai no optgroup. */
+function _seQuadrasPorLocal(){
+  try{ ensureLocais(); }catch(e){}
+  var grupos={};
+  Object.keys(data||{}).forEach(function(q){
+    if(q==='__config') return;
+    if(typeof isQuadraLab==='function' && isQuadraLab(q)) return;
+    var loc=(typeof QLOCAL!=='undefined' && QLOCAL && QLOCAL[q]) || localAtivo || '_';
+    if(!grupos[loc]) grupos[loc]={ locId:loc,
+      local:((typeof LOCAIS!=='undefined' && LOCAIS && LOCAIS[loc] && LOCAIS[loc].nome) || 'Sem local'),
+      quadras:[] };
+    grupos[loc].quadras.push({id:q, nome:quadraNome(q)});
+  });
+  var out=Object.keys(grupos).map(function(k){ return grupos[k]; });
+  out.forEach(function(g){ g.quadras.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); }); });
+  out.sort(function(a,b){
+    if(a.locId===localAtivo) return -1;
+    if(b.locId===localAtivo) return 1;
+    return String(a.local).localeCompare(String(b.local));
+  });
+  return out;
+}
+
 /* ===== ENSAIO EM FAIXAS: amarrar cada tratamento a uma quadra ===============
    Redesenha a lista sempre que o desenho muda ou um tratamento entra/sai, para
    nunca sobrar faixa apontando para tratamento que não existe mais. */
@@ -5998,14 +6023,30 @@ function _seFaixasRender(){
   if(!trats.length){ wrap.innerHTML='<div style="font-size:12px;color:#9a8">Cadastre os tratamentos primeiro — cada um vai receber uma faixa.</div>'; return; }
   var porTrat={}; (s.faixas||[]).forEach(function(f){ if(f&&f.tratId) porTrat[f.tratId]=f; });
   var opts=window._seQuadraOpts||[];
+  /* O optgroup resolve a ambiguidade com a lista ABERTA, mas fechado o select
+     mostra só o texto da opção — e aí "A1" volta a não dizer de onde é. Por isso
+     o nome do local entra no texto SÓ dos nomes que realmente repetem entre
+     locais: quem é único continua curto. */
+  var _cont={};
+  opts.forEach(function(g){ g.quadras.forEach(function(o){ _cont[o.nome]=(_cont[o.nome]||0)+1; }); });
+  var _rotulo=function(g,o){ return (_cont[o.nome]>1) ? (o.nome+' · '+g.local) : o.nome; };
   var h='<div style="display:flex;flex-direction:column;gap:6px">';
   trats.forEach(function(t){
     var f=porTrat[t.id]||{};
     h+='<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">'+
        '<span style="min-width:34px;font-weight:800;font-size:12px">'+esc(t.id)+'</span>'+
        '<span style="flex:1 1 130px;font-size:11px;color:#9fb1a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(t.produto||'—')+'</span>'+
-       '<select data-faixa-q="'+esc(t.id)+'" style="flex:1 1 130px"><option value="">— quadra —</option>'+
-         opts.map(function(o){ return '<option value="'+esc(o.id)+'"'+(f.qid===o.id?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')+
+       '<select data-faixa-q="'+esc(t.id)+'" style="flex:1 1 150px"><option value="">— quadra —</option>'+
+         opts.map(function(g){
+           if(!g.quadras.length) return '';
+           /* optgroup: o navegador desenha o nome do local como cabeçalho não
+              selecionável, então "A1" de Iracemápolis e "A1" de Anápolis deixam
+              de ser duas linhas iguais. */
+           return '<optgroup label="'+esc(g.local)+(g.locId===localAtivo?' (aqui)':'')+'">'+
+             g.quadras.map(function(o){
+               return '<option value="'+esc(o.id)+'"'+(f.qid===o.id?' selected':'')+'>'+esc(_rotulo(g,o))+'</option>';
+             }).join('')+'</optgroup>';
+         }).join('')+
        '</select>'+
        '<input type="text" data-faixa-a="'+esc(t.id)+'" inputmode="decimal" placeholder="ha" value="'+esc(f.areaHa!=null?String(f.areaHa):'')+'" style="width:74px">'+
        '</div>';
@@ -8186,9 +8227,11 @@ function renderStudyEditModal(){
      '<b>Em faixas, cada tratamento aparece uma vez só.</b> Medir vinte pontos dentro da mesma faixa não cria vinte repetições — cria vinte medidas do mesmo pedaço de terra, e a diferença entre faixas carrega solo, declive e bordadura junto com o produto.<br><br>'+
      'Para haver estatística, divida as faixas em <b>treços transversais</b> e amostre os <b>mesmos treços em todas</b>. Cada treço vira um bloco e absorve o gradiente do terreno. É o campo "Treços por faixa" abaixo.<br><br>'+
      'Com 1 treço só, o app entrega médias e diferenças, mas <b>não</b> p-valor — e escreve na folha por quê.</div>';
-  var _qOpts=Object.keys(data||{}).filter(function(q){ return q!=='__config' && !isQuadraLab(q); })
-    .map(function(q){ return {id:q, nome:quadraNome(q)}; })
-    .sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+  /* Agrupado por LOCAL. Nome de quadra repete entre locais de propósito — existe
+     A1 em Iracemápolis e A1 em Anápolis —, então lista plana de nomes é ambígua:
+     duas linhas "A1" e nenhuma pista de qual é qual. O local ativo vem primeiro,
+     que é de onde sai quase todo estudo. */
+  var _qOpts=_seQuadrasPorLocal();
   h+='<div id="seFaixasLista"></div>';
   h+='<div style="font-size:11px;color:#9a8;margin:4px 0 8px">A quadra de cada tratamento é onde ele foi aplicado. A área serve para o relatório — não entra na estatística de severidade e mortalidade, que são proporções.</div>';
   h+='</div>';
