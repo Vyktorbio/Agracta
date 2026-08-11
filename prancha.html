@@ -90,17 +90,52 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
     <div class="grupo">
       <h2>Vista</h2>
       <div class="opcoes" id="g-vista">
-        <label class="opt ativo"><input type="radio" name="vista" value="eficacia" checked><span class="marcador"></span>Eficácia</label>
-        <label class="opt"><input type="radio" name="vista" value="sev-barras"><span class="marcador"></span>Severidade — barras</label>
-        <label class="opt"><input type="radio" name="vista" value="sev-abbott"><span class="marcador"></span>Severidade + Abbott</label>
-        <label class="opt"><input type="radio" name="vista" value="sev-avaliacao"><span class="marcador"></span>Severidade por avaliação — barras</label>
+        <label class="opt ativo"><input type="radio" name="vista" value="barras" checked><span class="marcador"></span>Barras verticais</label>
         <label class="opt"><input type="radio" name="vista" value="sev-curva"><span class="marcador"></span>Severidade — curva de progresso</label>
         <label class="opt"><input type="radio" name="vista" value="sev-paineis"><span class="marcador"></span>Severidade — um painel por tratamento</label>
         <label class="opt"><input type="radio" name="vista" value="plantec"><span class="marcador"></span>Severidade por data — barras verticais</label>
         <label class="opt"><input type="radio" name="vista" value="tabela"><span class="marcador"></span>Tabela de resultados</label>
         <label class="opt"><input type="radio" name="vista" value="completa"><span class="marcador"></span>Página completa (A4)</label>
       </div>
-      <p class="dica">As duas primeiras são as que o cliente resolve em cinco segundos. A A4 é a que vai pro relatório. A curva e os painéis mostram a AACPD como área sombreada.</p>
+      <p class="dica">“Barras verticais” é a folha do dia a dia — nos botões abaixo ela vira severidade, eficácia, as duas juntas ou uma barra por avaliação. A A4 é a que vai pro relatório. A curva e os painéis mostram a AACPD como área sombreada.</p>
+    </div>
+
+    <div class="grupo" id="grupo-bv">
+      <h2>O que plotar</h2>
+      <div class="opcoes" id="g-bv-serie">
+        <label class="opt ativo"><input type="radio" name="bvserie" value="sev" checked><span class="marcador"></span>Severidade</label>
+        <label class="opt"><input type="radio" name="bvserie" value="efic"><span class="marcador"></span>Eficácia (Abbott)</label>
+        <label class="opt"><input type="radio" name="bvserie" value="ambos"><span class="marcador"></span>As duas, lado a lado</label>
+      </div>
+      <div class="opcoes" id="g-bv-quando" style="margin-top:10px">
+        <label class="opt ativo"><input type="radio" name="bvquando" value="ultima" checked><span class="marcador"></span>Só a última avaliação</label>
+        <label class="opt"><input type="radio" name="bvquando" value="todas"><span class="marcador"></span>Uma barra por avaliação</label>
+      </div>
+      <h2 style="margin-top:16px">O que mostrar</h2>
+      <div class="opcoes" id="g-bv-el">
+        <label class="opt ativo"><input type="checkbox" data-bv="titulo" checked><span class="marcador"></span>Título</label>
+        <label class="opt ativo"><input type="checkbox" data-bv="subtitulo" checked><span class="marcador"></span>Subtítulo (repetições e tratamentos)</label>
+        <label class="opt ativo"><input type="checkbox" data-bv="legenda" checked><span class="marcador"></span>Legenda das séries</label>
+        <label class="opt ativo"><input type="checkbox" data-bv="eixoY" checked><span class="marcador"></span>Rótulo do eixo Y</label>
+        <label class="opt ativo"><input type="checkbox" data-bv="grade" checked><span class="marcador"></span>Linhas de grade</label>
+        <label class="opt"><input type="checkbox" data-bv="valores"><span class="marcador"></span>Valor em cima da barra</label>
+        <label class="opt ativo"><input type="checkbox" data-bv="letras" checked><span class="marcador"></span>Letras do Tukey</label>
+        <label class="opt"><input type="checkbox" data-bv="patamar"><span class="marcador"></span>Linha do patamar de decisão</label>
+        <label class="opt ativo"><input type="checkbox" data-bv="rodape" checked><span class="marcador"></span>Rodapé (delineamento e n)</label>
+      </div>
+      <p class="dica">“Uma barra por avaliação” só vale para a severidade — a eficácia de Abbott é calculada sobre a AACPD do ensaio inteiro, então tem um valor só por tratamento.</p>
+    </div>
+
+    <div class="grupo" id="grupo-sev" style="display:none">
+      <h2>O que mostrar</h2>
+      <div class="opcoes" id="g-sev-el">
+        <label class="opt ativo"><input type="checkbox" data-sv="titulo" checked><span class="marcador"></span>Título e cabeçalho</label>
+        <label class="opt ativo"><input type="checkbox" data-sv="area" checked><span class="marcador"></span>Área sombreada (AACPD)</label>
+        <label class="opt ativo"><input type="checkbox" data-sv="erro" checked><span class="marcador"></span>Barras de erro padrão</label>
+        <label class="opt ativo"><input type="checkbox" data-sv="rotulos" checked><span class="marcador"></span>Rótulo na ponta da curva</label>
+        <label class="opt ativo"><input type="checkbox" data-sv="rodape" checked><span class="marcador"></span>Rodapé (delineamento e n)</label>
+      </div>
+      <p class="dica">A área sombreada sob cada curva é a AACPD — é o que esta folha mostra e as barras não.</p>
     </div>
 
     <div class="grupo" id="grupo-plantec" style="display:none">
@@ -190,6 +225,12 @@ let TRAT = [
 ];
 
 let DAA = [7,14,21];
+/* Rótulo de cada momento. Sem HAT/DAT declarado é "7 DAA" e nada muda; com
+   HAT declarado é "2 HAT", e é o rótulo que vai para o eixo e para a legenda —
+   DAA continua sendo o número EM DIAS, que é o que a AACPD integra. */
+let MOM = null;
+const rotMom = i => (MOM && MOM[i]) ? MOM[i] : `${DAA[i]} DAA`;
+const rotUlt = () => rotMom(DAA.length-1);
 let APLICACOES = [
   {n:1, data:{pt:"12/01/2026",en:"2026-01-12"}, estadio:"R1", vol:150, temp:24.0, ur:72, vento:4.2, bico:"AXI 110-02"},
   {n:2, data:{pt:"26/01/2026",en:"2026-01-26"}, estadio:"R3", vol:150, temp:26.5, ur:65, vento:5.8, bico:"AXI 110-02"}
@@ -232,6 +273,7 @@ let BLOCOS = FATOR_BLOCO.map((_,i)=> i+1);
              { cor: PALETA_TRAT[i % PALETA_TRAT.length], ia:"—", dose:0, gia:0 },
              t, { pt: t.pt||t.nome||t.id, en: t.en||t.nome||t.id }));
   DAA    = h.daa;
+  MOM    = Array.isArray(h.momentos) && h.momentos.length===h.daa.length ? h.momentos : null;
   BLOCOS = h.blocos && h.blocos.length ? h.blocos : (h.sev[0]||[]).map((_,i)=> i+1);
   SEV    = h.sev;
   if(Array.isArray(h.aplicacoes) && h.aplicacoes.length) APLICACOES = h.aplicacoes;
@@ -444,7 +486,7 @@ const APLREF = REFDAA === 'avaliacao' ? { pt:"da 1ª avaliação",     en:"the f
    ===================================================================== */
 const L = {
  pt:{efic:"Eficácia de controle (%)", trat:"Tratamento", produto:"Produto comercial",
-     dose:"Dose (L ou kg/ha)", gia:"g i.a./ha", caldaP:"Calda/parcela (mL)", prodP:"Produto/parcela (mL)",
+     dose:"Dose (L ou kg/ha)", doseBase:"Dose", gia:"g i.a./ha", caldaP:"Calda/parcela (mL)", prodP:"Produto/parcela (mL)",
      apl:"Aplicações", avaliacoes:"Avaliações — severidade média (%)",
      nApl:"#", dataL:"Data", estadio:"Estádio", vol:"Volume (L/ha)", temp:"T (°C)", ur:"UR (%)", vento:"Vento (km/h)", bico:"Ponta",
      aacpd:"AACPD", eficC:"Efic. (%)", grupo:"Tukey",
@@ -456,7 +498,7 @@ const L = {
      tituloEfic:"Eficácia de controle sobre a AACPD", tituloTab:"Resultados por tratamento",
      tituloSev:"Curva de progresso da doença",
      eixoSev:"Severidade (%)", eixoDAA:"Dias após a 2ª aplicação",
-     notaSev:"Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.",
+     notaSev:`Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.`,
      notaSevSimples:"Severidade média de 4 blocos por tratamento.",
      tituloSevB:"Severidade por tratamento",
      tituloSevA:"Severidade e eficácia de controle",
@@ -465,10 +507,10 @@ const L = {
      notaSevAv:"Severidade média de 4 blocos em cada avaliação.",
      legSevAval:()=>`Severidade média${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
      colEficA:"Eficácia", severidadeL:"Severidade",
-     notaSevA:daa=>`Severidade média aos ${daa} DAA · eficácia de Abbott calculada sobre a severidade · média de 4 blocos`,
-     legSevAbbott:()=>`Severidade média${ALVO.pt} e eficácia de controle por tratamento aos ${DAA[DAA.length-1]} dias depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a severidade média de 4 blocos, em relação à testemunha. ${ESTUDO.pt.escala}.`,
-     notaSevB:daa=>`Severidade média aos ${daa} DAA · média de 4 blocos`,
-     legSevSimples:()=>`Severidade média${ALVO.pt} por tratamento aos ${DAA[DAA.length-1]} dias depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
+     notaSevA:m=>`Severidade média aos ${m} · eficácia de Abbott calculada sobre a severidade · média de 4 blocos`,
+     legSevAbbott:()=>`Severidade média${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a severidade média de 4 blocos, em relação à testemunha. ${ESTUDO.pt.escala}.`,
+     notaSevB:m=>`Severidade média aos ${m} · média de 4 blocos`,
+     legSevSimples:()=>`Severidade média${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
      aplic:"2ª aplicação",
      legSev:()=>`Curva de progresso da severidade${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
      figura:"Figura", tabela:"Tabela",
@@ -477,7 +519,7 @@ const L = {
      legComp:()=>`Ficha de resultados do estudo ${ESTUDO.codigo}: delineamento, tratamentos e doses, condições de aplicação, avaliações de severidade, AACPD, eficácia e análise de variância.`,
      geradoPor:"Gerado por", em:"em", ref:"Delineamento", dbc:"blocos ao acaso", parc:"parcela"},
  en:{efic:"Control efficacy (%)", trat:"Treatment", produto:"Commercial product",
-     dose:"Rate (L or kg/ha)", gia:"g a.i./ha", caldaP:"Spray mix/plot (mL)", prodP:"Product/plot (mL)",
+     dose:"Rate (L or kg/ha)", doseBase:"Rate", gia:"g a.i./ha", caldaP:"Spray mix/plot (mL)", prodP:"Product/plot (mL)",
      apl:"Applications", avaliacoes:"Assessments — mean severity (%)",
      nApl:"#", dataL:"Date", estadio:"Growth stage", vol:"Volume (L/ha)", temp:"T (°C)", ur:"RH (%)", vento:"Wind (km/h)", bico:"Nozzle",
      aacpd:"AUDPC", eficC:"Efficacy (%)", grupo:"Tukey",
@@ -489,7 +531,7 @@ const L = {
      tituloEfic:"Control efficacy based on AUDPC", tituloTab:"Results by treatment",
      tituloSev:"Disease progress curve",
      eixoSev:"Severity (%)", eixoDAA:`Days after ${APLREF.en}`,
-     notaSev:"Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.",
+     notaSev:`Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.`,
      notaSevSimples:"Mean severity of 4 blocks per treatment.",
      tituloSevB:"Severity by treatment",
      tituloSevA:"Severity and control efficacy",
@@ -498,10 +540,10 @@ const L = {
      notaSevAv:"Mean severity of 4 blocks at each assessment.",
      legSevAval:()=>`Mean${ALVO.en} severity by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
      colEficA:"Efficacy", severidadeL:"Severity",
-     notaSevA:daa=>`Mean severity at ${daa} DAA · Abbott efficacy calculated on severity · mean of 4 blocks`,
-     legSevAbbott:()=>`Mean${ALVO.en} severity and control efficacy by treatment at ${DAA[DAA.length-1]} days after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean severity of 4 blocks, relative to the untreated check. ${ESTUDO.en.escala}.`,
-     notaSevB:daa=>`Mean severity at ${daa} DAA · mean of 4 blocks`,
-     legSevSimples:()=>`Mean${ALVO.en} severity by treatment at ${DAA[DAA.length-1]} days after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
+     notaSevA:m=>`Mean severity at ${m} · Abbott efficacy calculated on severity · mean of 4 blocks`,
+     legSevAbbott:()=>`Mean${ALVO.en} severity and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean severity of 4 blocks, relative to the untreated check. ${ESTUDO.en.escala}.`,
+     notaSevB:m=>`Mean severity at ${m} · mean of 4 blocks`,
+     legSevSimples:()=>`Mean${ALVO.en} severity by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
      aplic:"2nd application",
      legSev:()=>`Disease progress curves for${ALVO.en} severity by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
      figura:"Figure", tabela:"Table",
@@ -511,9 +553,18 @@ const L = {
      geradoPor:"Generated by", em:"on", ref:"Design", dbc:"randomised complete blocks", parc:"plot"}
 };
 
-const estado = {idioma:"pt", vista:"eficacia", patamar:80,
+const estado = {idioma:"pt", vista:"barras", patamar:80,
   /* o que a folha de barras verticais mostra — tudo ligável no painel */
-  pl:{titulo:1, subtitulo:1, legenda:1, eixoY:1, grade:1, valores:0, rodape:1}};
+  pl:{titulo:1, subtitulo:1, legenda:1, eixoY:1, grade:1, valores:0, rodape:1},
+  /* A vista "barras" substituiu quatro folhas que eram a MESMA figura com o eixo
+     trocado: Eficácia, Severidade — barras, Severidade + Abbott e Severidade por
+     avaliação. Agora é uma só, em barras verticais, e o que muda vira botão:
+     `serie` escolhe o que plotar, `quando` escolhe se quebra por avaliação. */
+  bv:{serie:"sev", quando:"ultima",
+      titulo:1, subtitulo:1, legenda:1, eixoY:1, grade:1, valores:0,
+      letras:1, patamar:0, rodape:1},
+  /* a curva de progresso e o painel por tratamento ganharam os mesmos botões */
+  sv:{titulo:1, area:1, erro:1, rotulos:1, rodape:1}};
 /* modo de severidade derivado da vista: barras | abbott | curva | paineis | null */
 const modoSev = () => estado.vista.startsWith("sev-") ? estado.vista.slice(4) : null;
 const t = () => L[estado.idioma];
@@ -639,7 +690,7 @@ function secEficacia(x, y, w){
     const corte = Math.floor((rotW-36)/(G.fNome*0.50));
     s += txt(x+G.fId*1.9, linhaBase, nm.length>corte ? nm.slice(0,corte-1)+"…" : nm, {t:G.fNome, c:GRAF});
     if(G.linhas > 2)
-      s += txt(x+G.fId*1.9, linhaBase+G.fNome*1.3, `${fmt(o.tr.dose,2)} L/ha · ${o.tr.gia} ${d.gia}`, {t:G.fNome*0.85, c:GRAF});
+      s += txt(x+G.fId*1.9, linhaBase+G.fNome*1.3, `${fmt(o.tr.dose,2)} ${o.tr.doseUnid||"L/ha"} · ${o.tr.gia} ${d.gia}`, {t:G.fNome*0.85, c:GRAF});
     s += `<rect x="${x0}" y="${by}" width="${bw}" height="${hBarra}" fill="${o.tr.cor}" fill-opacity="0.88" stroke="${TINTA}" stroke-width="1"/>`;
     s += txt(x0+bw+9, by+hBarra*0.72, fmt(o.ef,1), {t:G.fVal, w:600});
     s += txt(x0+bw+9+fmt(o.ef,1).length*G.fVal*0.60+7, by+hBarra*0.72, o.letra, {t:G.fVal*0.9, w:600, c:GRAF});
@@ -684,9 +735,11 @@ function secSeveridade(x, y, w, h){
       s += txt(gx-8, py(v)+4, fmt(v,0), {t:o.fs||11.5, a:"end", c:GRAF});
     }
     /* eixo X */
-    DAA.forEach(dd=>{
+    /* O tique mostra o rótulo do momento (2 HAT, 7 DAA) — com HAT o número em
+       dias é fracionário e "0" repetido quatro vezes não diria nada. */
+    DAA.forEach((dd,di)=>{
       s += `<line x1="${px(dd)}" y1="${gy+gh}" x2="${px(dd)}" y2="${gy+gh+5}" stroke="${TINTA}" stroke-width="1"/>`;
-      s += txt(px(dd), gy+gh+20, fmt(dd,0), {t:o.fs||11.5, a:"middle", c:GRAF});
+      s += txt(px(dd), gy+gh+20, MOM ? MOM[di] : fmt(dd,0), {t:o.fs||11.5, a:"middle", c:GRAF});
     });
 
     /* curvas: da maior severidade para a menor, para as menores ficarem por cima */
@@ -784,13 +837,14 @@ function secSeveridade(x, y, w, h){
 
     const base = cy + TRAT.length*(hB+gap) - gap + 18;
     s += rule(x, base, w, 1.1);
-    s += txt(x, base+20, comAbbott ? d.notaSevA(DAA[ultimo]) : d.notaSevB(DAA[ultimo]), {t:12, c:GRAF});
+    s += txt(x, base+20, comAbbott ? d.notaSevA(rotMom(ultimo)) : d.notaSevB(rotMom(ultimo)), {t:12, c:GRAF});
     return {svg:s, h: base - y + 30};
   }
   if(!painel){
     const muitos = TRAT.length > 12;
     const gx = x + 46, gy = y + 12, gw = w - 46 - (muitos ? 30 : 96), gh = h - 74;
-    s += grafico(gx, gy, gw, gh, TRAT.map((_,i)=>i), {rotulos: !muitos});
+    s += grafico(gx, gy, gw, gh, TRAT.map((_,i)=>i),
+          {rotulos: !muitos && !!estado.sv.rotulos, area: !!estado.sv.area, erro: !!estado.sv.erro});
     /* marca da aplicação sobre o eixo do tempo */
     s += `<path d="M ${gx} ${gy+gh+30} l 0 -8 l -4 0 l 4 -6 l 4 6 l -4 0" fill="${TINTA}"/>`;
     s += txt(gx+10, gy+gh+30, d.aplic, {t:11, c:GRAF});
@@ -818,7 +872,8 @@ function secSeveridade(x, y, w, h){
       const nm = nome(tr);
       s += txt(gx-10, gy-10, nm.length>24 ? nm.slice(0,23)+"…" : nm, {t:11.5, c:GRAF});
       const quais = tr.testemunha ? [ti] : [iTest, ti];
-      s += grafico(gx, gy, gw, gh, quais, {fantasma: tr.testemunha?null:iTest, fs:10.5, r:3.6});
+      s += grafico(gx, gy, gw, gh, quais, {fantasma: tr.testemunha?null:iTest, fs:10.5, r:3.6,
+            area: !!estado.sv.area, erro: !!estado.sv.erro});
       const info = tr.testemunha
         ? `AACPD ${fmt(mAACPD[ti],0)}`
         : `AACPD ${fmt(mAACPD[ti],0)} · ${fmt(EFIC[ti],1)}% · ${LETRAS[ti]}`;
@@ -899,15 +954,21 @@ function secSevAvaliacao(x, y, w, h){
 function secTratamentos(x,y,w){
   const d = t(), dl = ESTUDO.delineamento;
   const areaHa = dl.parcelaM2/10000;
+  /* A unidade da dose vem do estudo (cadastro) ou do que foi escrito em cada
+     tratamento. Quando todos concordam ela sobe para o cabeçalho e a coluna fica
+     só com números; quando o estudo mistura unidades, cada célula leva a sua. */
+  const _un = [...new Set(TRAT.filter(tr=>!tr.testemunha && tr.dose).map(tr=>tr.doseUnid||"L/ha"))];
+  const unUnica = _un.length === 1 ? _un[0] : null;
+  const cabDose = unUnica ? `${d.doseBase} (${unUnica})` : d.doseBase;
   const cols = [
     {t:d.trat, w:w*0.06}, {t:d.produto, w:w*0.30},
-    {t:d.dose, w:w*0.13, a:"right"}, {t:d.gia, w:w*0.15, a:"right"},
+    {t:cabDose, w:w*0.13, a:"right"}, {t:d.gia, w:w*0.15, a:"right"},
     {t:d.prodP, w:w*0.18, a:"right"}, {t:d.caldaP, w:w*0.18, a:"right"}
   ];
   const linhas = TRAT.map(tr=>[
     {v:tr.id, w:600, swatch:tr.cor},
     nome(tr),
-    tr.dose ? fmt(tr.dose,2) : "—",
+    tr.dose ? (unUnica ? fmt(tr.dose,2) : `${fmt(tr.dose,2)} ${tr.doseUnid||"L/ha"}`) : "—",
     tr.gia || "—",
     tr.dose ? fmt(tr.dose*1000*areaHa,1) : "—",
     fmt(dl.caldaLha*1000*areaHa, 0)
@@ -992,9 +1053,10 @@ function secRodape(x,y,w){
   s += txt(x, y+20, [`${d.ref}: ${dl.blocos} ${d.dbc}`,
                      dl.parcela ? `${d.parc} ${dl.parcela}` : null,
                      `n = ${AN.N}`].filter(Boolean).join(" · "), {t:12, c:GRAF});
-  s += txt(x, y+37, `${d.geradoPor} ${ESTUDO.autor} ${d.em} ${ESTUDO.data[estado.idioma]} · Agracta`, {t:12, c:GRAF});
+  /* Sem "Gerado por … · Agracta": a figura vai para relatório de cliente e o
+     nome da ferramenta não tem o que fazer ali. O código do estudo fica. */
   s += txt(x+w, y+20, ESTUDO.codigo, {t:12, w:600, ls:1.4, a:"end"});
-  return {svg:s, h:48};
+  return {svg:s, h:30};
 }
 
 /* ============================ vista "Plantec" — barras verticais ============
@@ -1066,6 +1128,167 @@ function rotulosDatas(){
     vistos[f] = (vistos[f]||0) + 1;
     return n === 1 ? f : `${f} (${ord[vistos[f]]||vistos[f]})`;
   });
+}
+
+/* ===================== vista "barras" — a folha consolidada ==================
+   Uma figura no lugar de quatro. Eficácia, Severidade — barras, Severidade +
+   Abbott e Severidade por avaliação eram o MESMO gráfico com o eixo trocado (as
+   três primeiras ainda por cima em barras deitadas). Aqui é sempre barra em pé,
+   agrupada por tratamento, e a diferença entre elas virou botão:
+
+     serie  'sev'   -> só severidade        (era "Severidade — barras")
+            'efic'  -> só eficácia Abbott   (era "Eficácia")
+            'ambos' -> as duas lado a lado  (era "Severidade + Abbott")
+     quando 'ultima'-> um valor por tratamento, o da última avaliação
+            'todas' -> uma barra por avaliação (era "Severidade por avaliação")
+
+   A folha "Severidade por data — barras verticais" (secPlantec) não passou por
+   aqui: continua exatamente como estava. */
+function _bvSeries(){
+  const d = t(), B = estado.bv;
+  const ult = DAA.length - 1;
+  const rotSev = estado.idioma==="pt" ? "Severidade" : "Severity";
+  const rotEfic= estado.idioma==="pt" ? "Eficácia (Abbott)" : "Efficacy (Abbott)";
+  if(B.serie === "efic")
+    return [{ rot:rotEfic, val:g => EFIC[g], letra:false }];
+  if(B.serie === "ambos")
+    return [{ rot:`${rotSev} — ${rotMom(ult)}`, val:g => mSEV[g][ult], letra:true },
+            { rot:rotEfic,                      val:g => EFIC[g],      letra:false }];
+  /* só severidade */
+  if(B.quando === "todas")
+    return DAA.map((_,i)=> ({ rot:rotMom(i), val:g => mSEV[g][i], letra:false }));
+  return [{ rot:`${rotSev} — ${rotMom(ult)}`, val:g => mSEV[g][ult], letra:true }];
+}
+function secBarras(x, y, w, alt){
+  const B = estado.bv;
+  const series = _bvSeries();
+  const nG = TRAT.length, nS = series.length;
+  const cores = coresSeries(nS);
+
+  /* Rótulo do eixo X em pé só cabe enquanto sobrar largura por tratamento. Num
+     screening de 28 tratamentos sobram ~42 px e o nome do produto precisa de
+     ~120: os rótulos viravam um borrão ilegível. Abaixo do limite eles INCLINAM
+     45°, que é onde a largura deixa de mandar e passa a valer a altura. */
+  const passoEstimado = (w - 52) / nG;
+  const inclinado = passoEstimado < 92;
+  const rotulos = TRAT.map(rotuloTratamento);
+  const maxLinhas = Math.max(...rotulos.map(r=>r.length));
+
+  /* uma linha só quando inclinado: "T1 · Produto 300 mL/ha" */
+  const LIM = 40;
+  const rotulosInc = TRAT.map(tr=>{
+    const nome = (estado.idioma==="pt" ? tr.pt : tr.en) || tr.id;
+    const dose = String(tr.doseTxt || "").trim();
+    let txt1 = tr.testemunha ? (t().testemunha || (estado.idioma==="pt"?"Testemunha":"Untreated"))
+                             : (dose ? `${nome} ${dose}` : nome);
+    txt1 = `${tr.id} · ${txt1}`;
+    return txt1.length > LIM ? txt1.slice(0, LIM-1) + "…" : txt1;
+  });
+  const fonteInc = nG > 24 ? 8 : (nG > 16 ? 8.5 : 9);
+  const fonteX = inclinado ? fonteInc
+               : (maxLinhas <= 3 ? 10 : (maxLinhas === 4 ? 9 : 8));
+
+  /* legenda no topo — com uma série só ela não informa nada, então some */
+  let s = "", ly = y + 10;
+  const comLegenda = B.legenda && nS > 1;
+  if(comLegenda){
+    const largura = series.reduce((a,se)=> a + 13 + 6 + se.rot.length*6.2 + 26, 0) - 26;
+    let lx = x + (w - largura)/2;
+    series.forEach((se,i)=>{
+      s += `<rect x="${lx}" y="${ly-9}" width="12" height="12" fill="${cores[i]}"/>`;
+      s += txt(lx+18, ly+1, se.rot, {t:11, c:"#333333"});
+      lx += 13 + 6 + se.rot.length*6.2 + 26;
+    });
+  }
+
+  const topo0 = y + (comLegenda ? 30 : 6);
+  /* inclinado a 45°, a altura que o rótulo ocupa é sen(45°) x o comprimento do
+     texto — por isso a reserva cresce com a maior legenda, e não com o nº de linhas */
+  const maxChars = inclinado ? Math.max(...rotulosInc.map(r=>r.length)) : 0;
+  const alturaRot = inclinado
+    ? 16 + Math.min(150, Math.round(0.71 * maxChars * fonteX * 0.52))
+    : 14 + maxLinhas * (fonteX + 3);
+  const base = y + alt - alturaRot;
+  const esq = x + 52, dir = x + w;
+  const larg = dir - esq;
+
+  /* escala: 0 até o próximo múltiplo de 5 acima do maior valor plotado */
+  const vals = [];
+  series.forEach(se => TRAT.forEach((_,g)=>{ const v = se.val(g); if(Number.isFinite(v)) vals.push(v); }));
+  const maximo = vals.length ? Math.max(...vals) : 0;
+  const topoY = Math.max(5, (Math.floor(maximo/5)+1)*5);
+  const py = v => base - (v/topoY) * (base - topo0);
+
+  for(let i=0;i<=10;i++){
+    const v = topoY*i/10, yy = py(v);
+    if(B.grade) s += `<line x1="${esq}" y1="${yy.toFixed(1)}" x2="${dir}" y2="${yy.toFixed(1)}" stroke="#DDDDDD" stroke-width="0.8"/>`;
+    s += txt(esq-8, yy+4, v.toFixed(1), {t:11, a:"end", c:"#555555"});
+  }
+  s += `<line x1="${esq}" y1="${topo0}" x2="${esq}" y2="${base}" stroke="#BBBBBB" stroke-width="1"/>`;
+  s += `<line x1="${esq}" y1="${base}" x2="${dir}" y2="${base}" stroke="#BBBBBB" stroke-width="1"/>`;
+  if(B.eixoY){
+    const rot = B.serie === "efic"
+      ? (estado.idioma==="pt" ? "Eficácia de controle (%)" : "Control efficacy (%)")
+      : (t().eixoSev || (estado.idioma==="pt"?"Severidade (%)":"Severity (%)"));
+    s += `<g transform="translate(${x+14},${(topo0+base)/2}) rotate(-90)">`
+       + txt(0, 0, rot, {t:12, a:"middle", c:"#444444"}) + `</g>`;
+  }
+
+  /* Patamar de decisão: só faz sentido quando a eficácia está no gráfico.
+     A LINHA fica atrás das barras (elas leem melhor inteiras); o RÓTULO vai
+     depois delas, lá embaixo — desenhado aqui ele sumia atrás da última barra,
+     que é justamente a mais alta num gráfico de eficácia. */
+  const comPatamar = B.patamar && estado.patamar > 0 && B.serie !== "sev";
+  if(comPatamar){
+    const py0 = py(estado.patamar);
+    s += `<line x1="${esq}" y1="${ py0.toFixed(1)}" x2="${dir}" y2="${py0.toFixed(1)}"
+            stroke="${TINTA}" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+  }
+
+  const passo = larg / nG;
+  const largBarra = (0.80 * passo) / nS;
+  TRAT.forEach((tr, g)=>{
+    const centro = esq + passo*(g + 0.5);
+    series.forEach((se, i)=>{
+      const v = se.val(g);
+      if(!Number.isFinite(v)) return;
+      const desloc = (i - (nS-1)/2) * largBarra;
+      const bx = centro + desloc - (largBarra*0.9)/2;
+      const by = py(Math.max(0,v)), bh = base - by;
+      if(bh <= 0) return;
+      s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(largBarra*0.9).toFixed(1)}" height="${bh.toFixed(1)}" fill="${cores[i]}"/>`;
+      let acima = by - 4;
+      /* letra do Tukey vai só na série que a análise realmente comparou */
+      if(B.letras && se.letra && LETRAS[g]){
+        s += txt(bx + largBarra*0.45, acima, LETRAS[g], {t:10, w:600, a:"middle", c:TINTA});
+        acima -= 12;
+      }
+      if(B.valores) s += txt(bx + largBarra*0.45, acima, fmt(v,1), {t:9.5, a:"middle", c:"#333333"});
+    });
+    if(inclinado){
+      /* ancorado no fim e girado -45°: o texto "cai" para a esquerda a partir do
+         centro do grupo, que é como ele não invade o vizinho */
+      s += `<g transform="translate(${centro.toFixed(1)},${(base+13).toFixed(1)}) rotate(-45)">`
+         + txt(0, 0, rotulosInc[g], {t:fonteX, a:"end", c:"#333333"}) + `</g>`;
+    }else{
+      rotulos[g].forEach((linha, k)=>{
+        s += txt(centro, base + 16 + k*(fonteX+3), linha, {t:fonteX, a:"middle", c:"#333333"});
+      });
+    }
+  });
+
+  /* Rótulo do patamar, por último e com halo branco. Procurar um canto vazio não
+     resolve: onde sobra espaço depende do dado. Com contorno o rótulo fica legível
+     em cima da barra mais alta, e continua colado na linha que ele nomeia. */
+  if(comPatamar){
+    const py0 = py(estado.patamar);
+    s += `<text x="${dir-2}" y="${(py0-6).toFixed(1)}" font-family="${FC}" font-size="10.5"`
+       + ` text-anchor="end" fill="${TINTA}" stroke="#ffffff" stroke-width="3.2"`
+       + ` paint-order="stroke" stroke-linejoin="round">`
+       + esc(`${fmt(estado.patamar,0)}% — ${t().patamar}`) + `</text>`;
+  }
+
+  return { svg:s, h:alt };
 }
 
 function secPlantec(x, y, w, alt){
@@ -1165,31 +1388,38 @@ function prancha(){
 
   /* A altura sai do conteúdo, nunca de um número fixo: é o que impede o
      último tratamento de subir em cima do rodapé quando a lista cresce. */
-  if(estado.vista === "eficacia"){
-    W = 1040; w = W - 2*M; cy = M;
-    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
-    s += secTitulo(M, cy, w, d.tituloEfic.toUpperCase()); cy += 24;
-    const g = secEficacia(M, cy, w); s += g.svg; cy += g.h;
-    H = cy + 34;
-  }
-  else if(modoSev() === "avaliacao"){
-    W = 1040; w = W - 2*M; cy = M;
-    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
-    s += secTitulo(M, cy, w, d.tituloSevAv.toUpperCase()); cy += 30;
-    const g = secSevAvaliacao(M, cy, w, 380); s += g.svg; cy += g.h + 16;
-    const rod = secRodape(M, cy, w); s += rod.svg;
-    H = cy + rod.h + 20;
+  if(estado.vista === "barras"){
+    const B = estado.bv;
+    W = 1180; w = W - 2*M; cy = M;
+    if(B.titulo){
+      const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 10;
+      const tit = B.serie === "efic" ? d.tituloEfic
+                : B.serie === "ambos" ? d.tituloSevA
+                : (B.quando === "todas" ? d.tituloSevAv : d.tituloSevB);
+      s += secTitulo(M, cy, w, String(tit).toUpperCase()); cy += 26;
+    }
+    if(B.subtitulo){
+      s += txt(M, cy, (estado.idioma==="pt"
+            ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
+            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`), {t:13, w:600, c:"#C86A08"});
+      cy += 20;
+    }
+    const g = secBarras(M, cy, w, 430); s += g.svg; cy += g.h + 12;
+    let hr = 0;
+    if(B.rodape){ const rod = secRodape(M, cy, w); s += rod.svg; hr = rod.h; }
+    H = cy + hr + 18;
   }
   else if(modoSev()){
     const modo = modoSev();
-    const barras = modo === "barras", abb = modo === "abbott";
     W = 1040; w = W - 2*M; cy = M;
-    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
-    const tit = abb ? d.tituloSevA : barras ? d.tituloSevB : d.tituloSev;
-    s += secTitulo(M, cy, w, tit.toUpperCase()); cy += abb ? 48 : 30;
+    if(estado.sv.titulo){
+      const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+      s += secTitulo(M, cy, w, d.tituloSev.toUpperCase()); cy += 30;
+    }
     const g = secSeveridade(M, cy, w, modo === "paineis" ? 500 : 400); s += g.svg; cy += g.h + 16;
-    const rod = secRodape(M, cy, w); s += rod.svg;
-    H = cy + rod.h + 20;
+    let hr = 0;
+    if(estado.sv.rodape){ const rod = secRodape(M, cy, w); s += rod.svg; hr = rod.h; }
+    H = cy + hr + 20;
   }
   else if(estado.vista === "plantec"){
     W = 1180; w = W - 2*M; cy = M;
@@ -1280,8 +1510,10 @@ if(UMA){
     const o = i.closest(".opt"); if(o) o.style.display = "none";
   });
   /* Sem série temporal, severidade é o resultado bruto do dia — é nela que a
-     folha abre. A eficácia continua a um clique. */
-  if(estado.vista === "sev-curva" || estado.vista === "eficacia") estado.vista = "sev-barras";
+     folha abre. A eficácia continua a um clique, agora dentro da folha de barras. */
+  if(estado.vista === "sev-curva"){ estado.vista = "barras"; estado.bv.serie = "sev"; }
+  /* e "uma barra por avaliação" não existe com uma avaliação só */
+  if(UMA) estado.bv.quando = "ultima";
   document.querySelectorAll('#g-vista input').forEach(i=>{
     i.checked = (i.value === estado.vista);
     const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
@@ -1294,7 +1526,13 @@ let DIM = {W:1040,H:660};
 
 function legendaTexto(){
   const d = t();
-  if(estado.vista==="eficacia") return {rot:`${d.figura} 1`, txt:d.legEfic()};
+  if(estado.vista==="barras"){
+    const B = estado.bv;
+    return {rot:`${d.figura} 1`, txt:
+      B.serie==="efic"  ? d.legEfic() :
+      B.serie==="ambos" ? d.legSevAbbott() :
+      B.quando==="todas"? d.legSevAval() : d.legSevSimples()};
+  }
   const ms = modoSev();
   if(ms) return {rot:`${d.figura} 1`, txt:
     ms==="avaliacao" ? d.legSevAval() :
@@ -1527,9 +1765,39 @@ function partesPptx(pngBytes, larguraPng, alturaPng, meta){
 
 /* --- painel da folha de barras verticais --- */
 const grupoPl = document.getElementById("grupo-plantec");
+const grupoBv = document.getElementById("grupo-bv");
+const grupoSev = document.getElementById("grupo-sev");
 function sincronizaPainelPl(){
-  grupoPl.style.display = estado.vista === "plantec" ? "" : "none";
+  grupoPl.style.display  = estado.vista === "plantec" ? "" : "none";
+  grupoBv.style.display  = estado.vista === "barras"  ? "" : "none";
+  grupoSev.style.display = modoSev() ? "" : "none";
+  /* "uma barra por avaliação" só existe para a severidade: a eficácia de Abbott
+     sai da AACPD do ensaio inteiro, então é um número por tratamento. */
+  const soSev = estado.bv.serie === "sev";
+  const qd = document.getElementById("g-bv-quando");
+  if(qd) qd.style.display = soSev ? "" : "none";
+  /* e a linha de patamar não diz nada num gráfico só de severidade */
+  const pat = document.querySelector('#g-bv-el input[data-bv="patamar"]');
+  if(pat){ const o = pat.closest(".opt"); if(o) o.style.display = soSev ? "none" : ""; }
 }
+document.getElementById("g-bv-el").addEventListener("change", ev=>{
+  const cb = ev.target.closest("input[data-bv]"); if(!cb) return;
+  estado.bv[cb.dataset.bv] = cb.checked ? 1 : 0;
+  cb.closest(".opt").classList.toggle("ativo", cb.checked);
+  render();
+});
+document.getElementById("g-bv-serie").addEventListener("change", ev=>{
+  estado.bv.serie = ev.target.value; sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("g-bv-quando").addEventListener("change", ev=>{
+  estado.bv.quando = ev.target.value; sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("g-sev-el").addEventListener("change", ev=>{
+  const cb = ev.target.closest("input[data-sv]"); if(!cb) return;
+  estado.sv[cb.dataset.sv] = cb.checked ? 1 : 0;
+  cb.closest(".opt").classList.toggle("ativo", cb.checked);
+  render();
+});
 document.getElementById("g-pl-el").addEventListener("change", ev=>{
   const cb = ev.target.closest("input[data-pl]"); if(!cb) return;
   estado.pl[cb.dataset.pl] = cb.checked ? 1 : 0;

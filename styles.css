@@ -24,6 +24,39 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .map-inner svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 .map-inner svg polygon{pointer-events:all}
 
+/* ===== Chip do clima, sobre o mapa =====
+   Fica acima dos controles do Leaflet (z-index 400..1000) mas abaixo dos
+   overlays do app, para não competir com painel aberto. */
+/* right:56px = 10 (margem) + 36 (botão do menu) + 10 (respiro). O menu é um
+   leaflet-control ancorado no mesmo canto; com right:10px o chip caía embaixo
+   dele. Uma linha só, sem o nome do lugar: ele já está na barra de cima. */
+.clima-chip{position:absolute;top:10px;right:56px;z-index:600;display:flex;align-items:center;gap:7px;
+  background:rgba(16,26,20,.52);border:1px solid rgba(255,255,255,.10);border-radius:10px;
+  padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,.22);cursor:pointer;
+  font:600 11px/1.2 system-ui,-apple-system,sans-serif;color:var(--text,#e8efe9);
+  -webkit-backdrop-filter:saturate(1.25) blur(9px);backdrop-filter:saturate(1.25) blur(9px);
+  max-width:min(54vw,244px);text-align:left;transition:background .15s}
+.clima-chip:hover{background:rgba(16,26,20,.72)}
+.clima-chip:active{transform:scale(.97)}
+.clima-chip .cc-t{flex:none;font-size:14px;font-weight:800;letter-spacing:-.3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.clima-chip .cc-v{font-size:10.5px;color:var(--text-2,#9fb1a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* de onde veio o número: estação de verdade x previsão por satélite.
+   flex:none — sem isto o selo era espremido pelo texto e os dois se encavalavam
+   na largura de celular, que é justamente onde o app é usado. */
+.clima-chip .cc-src{flex:none;font-size:8px;font-weight:800;letter-spacing:.3px;padding:1px 4px;border-radius:4px;white-space:nowrap}
+.clima-chip .cc-src.est{background:rgba(55,214,132,.20);color:#6fe6ac;border:1px solid rgba(55,214,132,.30)}
+.clima-chip .cc-src.sat{background:rgba(120,160,220,.20);color:#9cc0ee;border:1px solid rgba(120,160,220,.28)}
+html.light .clima-chip{background:rgba(255,255,255,.58);border-color:rgba(0,0,0,.10);color:#16201b;
+  box-shadow:0 2px 8px rgba(0,0,0,.12)}
+html.light .clima-chip:hover{background:rgba(255,255,255,.80)}
+html.light .clima-chip .cc-v{color:#54635a}
+html.light .clima-chip .cc-src.est{color:#1d7f4e;border-color:rgba(29,127,78,.30)}
+html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28)}
+/* telas estreitas: o vento sai antes do resto — temperatura e fonte do dado
+   são o que não pode faltar */
+@media(max-width:420px){.clima-chip{max-width:44vw;padding:4px 7px;gap:6px}
+  .clima-chip .cc-v .cc-w{display:none}}
+
 .alert-dot{position:absolute;width:10px;height:10px;border-radius:50%;background:#ff5252;box-shadow:0 0 8px rgba(255,82,82,0.8);animation:pulse 1.5s infinite;pointer-events:none}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
 

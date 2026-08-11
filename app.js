@@ -125,6 +125,30 @@ function brToIso(br){
 }
 function today0(){var d=new Date();d.setHours(0,0,0,0);return d}
 function daysBetween(a,b){return Math.round((b-a)/864e5)}
+
+/* ===== MOMENTO DA AVALIAÇÃO — HAT/DAT explícito, OPCIONAL ====================
+   O app sempre derivou o momento da DATA (daysBetween → DAA). Isso basta para
+   ensaio de campo, mas não para bioensaio: um knockdown lê a 1, 2, 4 e 24 horas
+   DO MESMO DIA, e pela data as quatro leituras são o mesmo ponto — três eram
+   descartadas sem avisar.
+
+   Agora a avaliação PODE declarar `momento:{valor, unidade:'HAT'|'DAT'}`. Quando
+   declara, é ele que manda no eixo do tempo; quando não declara — que é o caso
+   de tudo que já existe — nada muda: continua o DAA derivado da data.
+
+   `dias` é sempre em DIAS (HAT vira fração) porque a AACPD integra por trapézio
+   sobre esse eixo; misturar hora com dia ali daria área errada. */
+function avMomento(av, daaDerivado){
+  var m=av&&av.momento, v=m?parseFloat(String(m.valor).replace(',','.')):NaN;
+  var u=m&&(m.unidade==='HAT'||m.unidade==='DAT')?m.unidade:null;
+  if(u && isFinite(v)){
+    var dias=(u==='HAT')?(v/24):v;
+    return { dias:dias, chave:u+':'+v, rotulo:_fmtMom(v)+' '+u, unidade:u, valor:v, explicito:true };
+  }
+  var d=(daaDerivado==null?0:daaDerivado);
+  return { dias:d, chave:'DAA:'+d, rotulo:d+' DAA', unidade:'DAA', valor:d, explicito:false };
+}
+function _fmtMom(v){ return (Math.round(v*100)/100).toString().replace('.',','); }
 function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x}
 
 function cDAP(p){var d=pD(p);return d&&!isNaN(d)?Math.floor((today0()-d)/864e5):null}
@@ -470,6 +494,9 @@ function allUpcomingEvents(windowDays, incluirDispensados){
     if(!q||!Array.isArray(q.estudos))return;
     q.estudos.forEach(function(st){
       st=(typeof normalizeStudy==='function')?normalizeStudy(st):st;
+      /* Estudo finalizado não gera mais lembrete: ele acabou. Um único ponto de
+         filtro aqui já limpa a AGENDA e o painel "hoje", que bebem da mesma fonte. */
+      if(typeof estudoFinalizado==='function' && estudoFinalizado(st)) return;
       (typeof studyEventsV2==='function'?studyEventsV2(st):studyEvents(st)).forEach(function(ev){
         if(ev.realizada)return;
         var _disp=_agEstaDispensado(st,ev);
@@ -1215,6 +1242,10 @@ function setLocalAtivo(id){
   ndviMeans=null; if(ndviOverlay&&_map){ try{_map.removeLayer(ndviOverlay);}catch(e){} ndviOverlay=null; }
   closeLocalMenu();
   flyToLocal(id); render(); buildLocalChip(); if(typeof renderNdviRank==='function') renderNdviRank();
+  /* o chip do clima acompanha o local: trocar de lugar troca a estação. climaMac
+     zera junto, senão o painel continuaria aberto na estação do local anterior. */
+  climaMac=null;
+  if(typeof climaChipAtualiza==='function'){ try{ climaChipAtualiza(); }catch(e){} }
   var p=document.getElementById('ndviPanel'); if(p&&p.style.display==='block'){ try{ ndviLoadDates(); }catch(e){} if(ndviIndex&&ndviDate) setTimeout(function(){ try{ndviLoadImage();}catch(e){} },350); }
 }
 /* ---- UI: chip do local + menu + modal "Novo local" (busca geocoder) ---- */
@@ -3663,7 +3694,11 @@ function climaMatch(){
     for(var j=0;j<_climaStations.length;j++){ var s2=_climaNorm(_climaStations[j].name);
       for(var k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[j].mac; } }
   }
-  return _climaStations[0].mac;
+  /* NÃO cai na primeira estação da lista. Num local sem Ecowitt (Picolini, em
+     Cordeirópolis) isso mostrava o tempo de Iracemápolis como se fosse dali —
+     dado de outro município apresentado como local, sem nada avisando. Sem
+     estação que case, quem chamou trata o null e vai para o satélite. */
+  return null;
 }
 function toggleClima(){
   var p=document.getElementById('climaPanel');
@@ -3759,6 +3794,73 @@ function climaLocalRender(j, ll, fromGps){
   b.innerHTML=h;
 }
 function climaSay(msg,cls){ var b=document.getElementById('climaBody'); if(b) b.innerHTML='<div class="ndvi-status'+(cls?' '+cls:'')+'" style="margin:8px 0;min-height:auto">'+esc(msg)+'</div>'; }
+
+/* ===== CHIP DO CLIMA SOBRE O MAPA ==========================================
+   O tempo é o dado que se olha de relance, e no dock ele estava a dois toques
+   de distância. O chip segue o LOCAL ATIVO: se o local tem estação Ecowitt, é
+   dela que vem o número (selo "estação"); se não tem — Picolini, em
+   Cordeirópolis — cai na previsão por satélite e o selo diz "satélite", para
+   ninguém confundir leitura de sensor com previsão de grade.
+   Toque abre o painel completo, que continua sendo o mesmo de antes. */
+var _climaChipTimer=null, _climaChipMac=null;
+function _climaChipEl(){ return document.getElementById('climaChip'); }
+function climaChipPinta(o){
+  var el=_climaChipEl(); if(!el) return;
+  if(!o){ el.style.display='none'; return; }
+  var n=function(v,d){ return (v==null||v==='')?null:(Math.round(v*Math.pow(10,d||0))/Math.pow(10,d||0)); };
+  var t=n(o.temp,1), ur=n(o.umidade,0), vt=n(o.vento,0);
+  if(t==null && ur==null){ el.style.display='none'; return; }
+  /* Uma linha só. O nome do lugar saiu: já está na barra de cima, e era ele que
+     fazia o chip ocupar meia tela. Fica no title, para quem quiser confirmar. */
+  /* O separador mora DENTRO do span do vento: em tela estreita o CSS esconde o
+     vento, e um " · " solto ficava pendurado no fim da linha. */
+  var linha='';
+  if(ur!=null) linha+='<span class="cc-u">'+ic('droplet',10)+' '+ur+'%</span>';
+  if(vt!=null) linha+='<span class="cc-w">'+(linha?' · ':'')+ic('wind',10)+' '+vt+' km/h</span>';
+  el.innerHTML='<span class="cc-t">'+(t!=null?(String(t).replace('.',',')+'°'):'—')+'</span>'+
+    (linha?('<span class="cc-v">'+linha+'</span>'):'')+
+    '<span class="cc-src '+(o.estacao?'est':'sat')+'">'+(o.estacao?'estação':'satélite')+'</span>';
+  el.title=(o.estacao?'Estação Ecowitt de ':'Previsão por satélite para ')+(o.lugar||'este local')+
+           ' — toque para abrir o painel completo';
+  el.style.display='flex';
+}
+function climaChipAtualiza(){
+  var el=_climaChipEl(); if(!el) return;
+  var lugar=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'';
+  function satelite(){
+    var ll=(typeof _climaLocalCoord==='function')?_climaLocalCoord():null;
+    if(!ll){ climaChipPinta(null); return; }
+    fetch('https://api.open-meteo.com/v1/forecast?latitude='+(+ll[0]).toFixed(4)+'&longitude='+(+ll[1]).toFixed(4)+
+          '&current=temperature_2m,relative_humidity_2m,wind_speed_10m&timezone=America%2FSao_Paulo')
+      .then(function(r){ return r.json(); })
+      .then(function(j){ var c=j&&j.current; if(!c){ climaChipPinta(null); return; }
+        climaChipPinta({temp:c.temperature_2m, umidade:c.relative_humidity_2m, vento:c.wind_speed_10m,
+                        lugar:lugar, estacao:false}); })
+      .catch(function(){ climaChipPinta(null); });
+  }
+  function comEstacoes(){
+    var mac=climaMatch();
+    _climaChipMac=mac;
+    if(!mac){ satelite(); return; }
+    fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ return r.json(); }).then(function(d){
+      if(!d||d.error){ satelite(); return; }
+      var v=function(x){ return (x&&x.value!=null)?x.value:null; };
+      climaChipPinta({temp:v(d.temp), umidade:v(d.humidity), vento:v(d.wind_speed), lugar:lugar, estacao:true});
+    }).catch(satelite);
+  }
+  if(_climaStations){ comEstacoes(); return; }
+  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ return r.json(); }).then(function(arr){
+    if(Array.isArray(arr)) _climaStations=arr;
+    comEstacoes();
+  }).catch(satelite);   /* proxy dormindo não pode deixar o chip vazio */
+}
+function climaChipIniciar(){
+  if(!_climaChipEl()) return;
+  climaChipAtualiza();
+  if(_climaChipTimer) clearInterval(_climaChipTimer);
+  /* 5 min: é o passo de gravação da própria Ecowitt; puxar mais rápido só gasta bateria */
+  _climaChipTimer=setInterval(function(){ if(!document.hidden) climaChipAtualiza(); }, 300000);
+}
 function climaInit(){
   if(_climaStations){ if(!climaMac) climaMac=climaMatch(); buildClimaPanel(); climaLoad(); return; }
   climaSay('Conectando à estação…');
@@ -3769,7 +3871,16 @@ function climaInit(){
 }
 function climaPick(mac){ climaMac=mac; climaLoad(); }
 function climaLoad(){
-  if(!climaMac){ climaSay('Selecione uma estação.'); return; }
+  /* Sem estação que case com o local ativo, o clima vem do satélite (Open-Meteo)
+     para a coordenada DESTE local — e o rodapé diz que é previsão, não estação.
+     Antes caía na primeira estação da lista e mostrava outro município como se
+     fosse aqui. Trocar de estação na mão continua funcionando. */
+  if(!climaMac){
+    var _nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'este local';
+    climaSay('Sem estação Ecowitt em '+_nm+' — usando a previsão por satélite.');
+    try{ climaLocalLoad(null,false); }catch(e){}
+    return;
+  }
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
   climaSay('Carregando dados ao vivo…');
   fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
@@ -4267,10 +4378,14 @@ function buildStudyModelo(qid, s, opts){
     var _cf=function(x,p){ return BioCalculoCampo.formatBR(x,p==null?2:p); };
     trats.forEach(function(t,i){
       var rr=ch+1+i;
-      put(rr,0,i+1); put(rr,1,(t.produto||t.id)+(test===t.id&&!/test|untreat|controle|check/i.test(t.produto||'')?' (test.)':'')); put(rr,2,t.dose||''); put(rr,3,t.volume||'');
+      put(rr,0,i+1); put(rr,1,(t.produto||t.id)+(test===t.id&&!/test|untreat|controle|check/i.test(t.produto||'')?' (test.)':'')); put(rr,2,(typeof doseTextoDe==='function')?doseTextoDe(s,t.dose):(t.dose||'')); put(rr,3,t.volume||'');
       var dval=(typeof _calcNum==='function')?_calcNum(t.dose):parseFloat(String(t.dose||'').replace(',','.'));
       var vol=(typeof _calcNum==='function')?_calcNum(t.volume):parseFloat(String(t.volume||'').replace(',','.'));
-      var dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
+      /* unidade declarada no estudo quando a dose veio só com o número. 'ppm' não
+         é dose por área e o motor de campo não sabe o que fazer com ela — esta
+         planilha é a de campo, então cai no padrão. */
+      var dunit=(typeof doseUnidadeDe==='function')?doseUnidadeDe(s,t.dose):'L/ha';
+      if(dunit==='ppm') dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
       if(dval>0 && vol>0){
         try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:parc.comprimento,plotWidth:parc.largura,numPlots:reps,numBottles:_bot,deadVolumeMl:_dead,bottleCapacity:_cap});
           put(rr,4,_cf(res.concentration)+' '+res.concentrationUnit);
@@ -5170,6 +5285,12 @@ function newStudy(){
     labFonteValor:'',     /* valor do rótulo / ppm da solução-mãe */
     labPureza:'',         /* % — vazio = 100 */
     labDensidade:'',      /* g/mL — vazio = 1,00 (obrigatória para g/kg) */
+    /* Como a dose dos tratamentos é definida. Declarado UMA vez no cadastro em
+       vez de adivinhado a cada leitura: é o que faz o rótulo do gráfico e da
+       tabela dizerem "500 mL/ha" em vez de chutar L/ha, e o que decide qual
+       receita a calculadora do laboratório abre. */
+    doseModo:'campo',     /* campo | ppm */
+    doseUnidade:'L/ha',   /* L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo' */
     testemunha:'',
     aplicacoes:[],
     avaliacoes:[],
@@ -5226,7 +5347,13 @@ function _dedupeAvaliacoes(s){
   if(window._avEditing) return; /* não mexe enquanto uma avaliação está aberta */
   var byKey={}, order=[], dup=false;
   s.avaliacoes.forEach(function(a){
-    var key=(a&&a.data)?('d:'+a.data):('id:'+((a&&a.id)||Math.random())); /* sem data => não funde */
+    /* A data sozinha não identifica mais a avaliação: um knockdown lê 1, 2, 4 e
+       24 HAT no mesmo dia, e fundir por data juntava as quatro numa só — perda
+       silenciosa, antes mesmo de qualquer gráfico. Quem declara HAT/DAT entra na
+       chave; quem não declara continua fundindo por data, como sempre. */
+    var _m=(a&&a.momento)?avMomento(a,null):null;
+    var _mk=(_m&&_m.explicito)?('|'+_m.chave):'';
+    var key=(a&&a.data)?('d:'+a.data+_mk):('id:'+((a&&a.id)||Math.random())); /* sem data => não funde */
     if(!byKey[key]){ byKey[key]=a; order.push(key); }
     else { dup=true; _fundeAval(byKey[key], a); }
   });
@@ -5264,10 +5391,38 @@ function normalizeStudy(s){
   if(s.labFonteValor==null)s.labFonteValor='';
   if(s.labPureza==null)s.labPureza='';
   if(s.labDensidade==null)s.labDensidade='';
+  /* Dose: estudo antigo não declarou nada. Em vez de cravar L/ha, LÊ a unidade
+     que os tratamentos já escreveram — se todos concordam, é ela. Assim um
+     estudo velho todo em mL/ha não passa a se anunciar como L/ha. A unidade do
+     estudo é só o padrão: dose que traz a própria unidade continua mandando. */
+  if(s.doseModo!=='ppm' && s.doseModo!=='campo') s.doseModo='campo';
+  if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(s.doseUnidade)<0){
+    var _un={};
+    if(typeof _calcDoseUnit==='function'){
+      (s.tratamentos||[]).forEach(function(t){
+        if(!t||t.testemunha) return;
+        var raw=String(t.dose||'');
+        if(/[a-zA-Z]/.test(raw)) _un[_calcDoseUnit(raw)]=1;   /* só conta quem escreveu unidade */
+      });
+    }
+    var _uk=Object.keys(_un);
+    s.doseUnidade=(_uk.length===1)?_uk[0]:'L/ha';
+  }
   if(typeof s.testemunha!=="string")s.testemunha="";
   /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
   s.tratamentos.forEach(function(t){ if(t) t.testemunha=!!t.testemunha; });
   if(s.testemunha && !s.tratamentos.some(function(t){return t&&t.testemunha;})){ var _pt=s.tratamentos.find(function(t){return t&&t.id===s.testemunha;}); if(_pt) _pt.testemunha=true; } /* só semeia a testemunha legada se NADA estiver marcado — antes re-marcava o T1 toda vez (bug) */
+  /* Momento explícito da avaliação: OPCIONAL. Vazio/ausente = derivar da data,
+     que é como tudo que já existe funciona. Só sobrevive se estiver completo e
+     for um número — meio preenchido vira ausente, para não inventar um eixo. */
+  (s.avaliacoes||[]).forEach(function(a){
+    if(!a) return;
+    var m=a.momento;
+    if(!m || (m.unidade!=='HAT' && m.unidade!=='DAT')){ if(m) delete a.momento; return; }
+    var v=parseFloat(String(m.valor).replace(',','.'));
+    if(!isFinite(v)){ delete a.momento; return; }
+    a.momento={valor:v, unidade:m.unidade};
+  });
   if(typeof s.avalInicio!=="string")s.avalInicio="";
   if(typeof s.avalIntervalo!=="number")s.avalIntervalo=parseInt(s.avalIntervalo)||7;
   if(typeof s.avalNum!=="number")s.avalNum=parseInt(s.avalNum)||0;
@@ -5673,6 +5828,34 @@ function _calcDoseUnit(raw){
   if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
   return 'L/ha';
 }
+/* Unidade que o RÓTULO deve mostrar para esta dose, neste estudo.
+   Ordem: o que o usuário escreveu na dose > o que o estudo declarou > L/ha.
+   Estudo em ppm não tem unidade por área — a dose É a concentração. */
+function doseUnidadeDe(study, raw){
+  if(study && study.doseModo==='ppm') return 'ppm';
+  if(/[a-zA-Z]/.test(String(raw||''))) return _calcDoseUnit(raw);   /* usuário escreveu a unidade */
+  var d=study&&study.doseUnidade;
+  return (['L/ha','mL/ha','g/ha','kg/ha'].indexOf(d)>=0)?d:'L/ha';
+}
+/* Dose pronta para impressão: "500 mL/ha". Dose que já vem com unidade sai como
+   está. Mistura ("500 + 300") recebe a unidade em CADA componente — rotuloTratamento
+   quebra o texto por " + " para casar com cada produto, e uma unidade solta no fim
+   ficaria pendurada só no último. */
+function doseTextoDe(study, raw){
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return '';
+  var u=doseUnidadeDe(study, s);
+  return s.split(/\s\+\s/).map(function(p){
+    p=p.trim();
+    if(!p || /[a-zA-Z]/.test(p)) return p;
+    return p+' '+u;
+  }).join(' + ');
+}
+/* Mostra/esconde a unidade quando o estudo é declarado em ppm. */
+function _seDoseModoSync(){
+  var m=document.getElementById('seDoseModo'), w=document.getElementById('seDoseUnidWrap');
+  if(w) w.style.display=(m && m.value==='ppm')?'none':'';
+}
 function _calcAllStudies(){
   var out=[]; try{ ensureLocais(); }catch(e){}
   Object.keys(data||{}).forEach(function(qid){
@@ -5963,7 +6146,15 @@ function _labRenderShell(){
     selHtml='<div class="calc-f full"><span class="calc-lab">Estudo</span><select id="labStudy" class="calc-sel" onchange="_labPick(this.value)">'+
       all.map(function(o){ return '<option value="'+esc(o.qid+'|'+o.sid)+'"'+((_labSel&&_labSel.qid===o.qid&&_labSel.sid===o.sid)?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+'</select></div>';
   }
-  var T=[['campo','Do campo'],['ppm','PPM'],['ia','Ajuste i.a.'],['serie','Série']];
+  /* A receita do ensaio é UMA, e quem decide qual é o cadastro do estudo (dose de
+     campo ou ppm) — não um menu que precisa ser acertado toda vez. "Série" saiu:
+     os tratamentos do estudo já SÃO a curva de doses, e a aba fazia o usuário
+     redigitar à mão o que já estava cadastrado. Sobra o ajuste de i.a., que é
+     outra coisa: preparo de tanque, não tem a ver com os tratamentos deste estudo. */
+  var _modo=(s&&s.doseModo==='ppm')?'ppm':'campo';
+  if(_labTab!=='ia') _labTab=_modo;
+  var T=[[_modo, _modo==='ppm'?'Receita do ensaio (ppm)':'Receita do ensaio (dose de campo)'],
+         ['ia','Ajuste de i.a.']];
   var tabs='<div class="calclab-tabs">'+T.map(function(t){
     return '<button class="calclab-tab'+(_labTab===t[0]?' on':'')+'" onclick="_labSetTab(\''+t[0]+'\')">'+t[1]+'</button>';
   }).join('')+'</div>';
@@ -5978,10 +6169,9 @@ function _labRenderShell(){
       '<div class="calc-f"><span class="calc-lab">Densidade (g/mL)</span><input id="labDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
       '</div>';
   } else if(_labTab==='ppm'){
-    campos='<div class="calclab-src">Concentração alvo direta — para o ensaio definido em ppm, sem passar pela dose de campo.</div>'+
+    campos='<div class="calclab-src">Cada tratamento do estudo vira a receita do pote — a dose cadastrada É a concentração alvo em ppm. Os tratamentos já são a curva de doses.</div>'+
       '<div class="calc-grid">'+
-      '<div class="calc-f"><span class="calc-lab">Alvo (ppm)</span><input id="labPpmAlvo" class="calc-inp" inputmode="decimal" value="100" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Volume final (mL)</span><input id="labPpmVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume do pote (mL)</span><input id="labPpmVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f full"><span class="calc-lab">Fonte do produto</span>'+_labFonteSel('labPpmFonte',d.fonte)+'</div>'+
       '<div class="calc-f"><span class="calc-lab">Valor da fonte</span><input id="labPpmValor" class="calc-inp" inputmode="decimal" placeholder="340" value="'+esc(d.valor)+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labPpmPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
@@ -5997,19 +6187,6 @@ function _labRenderShell(){
       '<div class="calc-f"><span class="calc-lab">Volume final</span><input id="labIaVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Unidade</span><select id="labIaVolU" class="calc-sel" onchange="_labCompute()"><option>mL</option><option>L</option></select></div>'+
       '<div class="calc-f full"><span class="calc-lab">Densidade (g/mL) — obrigatória para g/kg</span><input id="labIaDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
-      '</div>';
-  } else {
-    campos='<div class="calclab-src">Curva de doses. Série geométrica (topo ÷ fator) ou lista sua, separada por ponto-e-vírgula.</div>'+
-      '<div class="calc-grid">'+
-      '<div class="calc-f"><span class="calc-lab">Volume por dose (mL)</span><input id="labSerVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Testemunha (0 ppm)</span><select id="labSerTest" class="calc-sel" onchange="_labCompute()"><option value="1">Incluir</option><option value="0">Não incluir</option></select></div>'+
-      '<div class="calc-f full"><span class="calc-lab">Fonte do produto</span>'+_labFonteSel('labSerFonte',d.fonte)+'</div>'+
-      '<div class="calc-f"><span class="calc-lab">Valor da fonte</span><input id="labSerValor" class="calc-inp" inputmode="decimal" placeholder="340" value="'+esc(d.valor)+'" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labSerPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Dose topo (ppm)</span><input id="labSerTopo" class="calc-inp" inputmode="decimal" value="500" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Fator ÷</span><input id="labSerFator" class="calc-inp" inputmode="decimal" value="2" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Nº de doses</span><input id="labSerN" class="calc-inp" inputmode="numeric" value="5" oninput="_labCompute()"></div>'+
-      '<div class="calc-f full"><span class="calc-lab">Ou lista própria (ppm, separada por ;)</span><input id="labSerLista" class="calc-inp" placeholder="500; 250; 125; 62,5" oninput="_labCompute()"></div>'+
       '</div>';
   }
 
@@ -6053,51 +6230,52 @@ function _labCompute(){
   var F=function(v){ return LB.fmtVivo(v); };
   _labTexto='';
   try{
-    if(_labTab==='campo'){
+    /* Receita do ensaio: um cartão por tratamento, em dose de campo ou em ppm.
+       É o mesmo laço nos dois casos — só muda a função do núcleo e o que o
+       cabeçalho do cartão anuncia. */
+    if(_labTab==='campo' || _labTab==='ppm'){
       if(!s||!(s.tratamentos||[]).length){ box.innerHTML='<span style="color:#8aa88a">Estudo sem tratamentos cadastrados.</span>'; return; }
-      var vol=_calcNum(_labVal('labVol')), vazaoDef=_calcNum(_labVal('labVazao'));
-      var pur=_labVal('labPureza'), den=_labVal('labDens');
+      var _ppm=(_labTab==='ppm');
+      var vol=_calcNum(_labVal(_ppm?'labPpmVol':'labVol'));
+      var vazaoDef=_ppm?0:_calcNum(_labVal('labVazao'));
+      var pur=_labVal(_ppm?'labPpmPureza':'labPureza'), den=_labVal(_ppm?'labPpmDens':'labDens');
+      var fTipo=_ppm?_labVal('labPpmFonte'):'', fValor=_ppm?_labVal('labPpmValor'):'';
       var html='', txt=[];
       (s.tratamentos||[]).forEach(function(t){
-        var unid=_calcDoseUnit(t.dose), dose=_calcNum(t.dose);
-        var vazao=_calcNum(t.volume)||vazaoDef;
+        var dose=_calcNum(t.dose);
+        var vazao=_ppm?0:(_calcNum(t.volume)||vazaoDef);
+        var sub=_ppm ? ((t.dose||'—')+' ppm') : ((t.dose||'—')+' · '+F(vazao)+' L/ha');
         var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(t.testemunha?' <span style="color:#dccd8c">(test.)</span>':'')+'</span>'+
-                 '<span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+' · '+F(vazao)+' L/ha')+'</span></div>';
+                 '<span style="font-size:10px;color:#9fb1a5">'+esc(sub)+'</span></div>';
         if(t.testemunha||!(dose>0)){
           html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>só solvente — '+F(vol)+' mL</b></div></div>';
           txt.push(t.id+': só solvente, '+F(vol)+' mL'); return;
         }
         var r=null, err='';
-        try{ r=LB.calcCampo({dose:dose,unidade:unid,vazao:vazao,volumeMl:vol,pureza:pur,densidade:den}); }
+        try{
+          r=_ppm
+            ? LB.calcPPM({alvoPpm:dose, volumeMl:vol, fonteTipo:fTipo, fonteValor:fValor, pureza:pur, densidade:den})
+            : LB.calcCampo({dose:dose, unidade:_calcDoseUnit(t.dose), vazao:vazao, volumeMl:vol, pureza:pur, densidade:den});
+        }
         catch(e){ err=e.message||String(e); }
         if(err){ html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
         var passo=(r.acao==='pesar')
-          ? '<div class="calc-kv"><span>Pesar</span><b>'+F(r.massaMg)+' mg</b><span>Completar até</span><b>'+F(r.volumeMl)+' mL</b></div>'
+          ? '<div class="calc-kv"><span>Pesar</span><b>'+F(r.massaMg)+' mg</b><span>Completar até</span><b>'+F(r.volumeMl||vol)+' mL</b></div>'
           : '<div class="calc-kv"><span>Pipetar</span><b>'+F(r.produtoUl)+' µL</b><span>Solvente</span><b>'+F(r.solventeMl)+' mL</b></div>';
-        html+='<div class="calc-card">'+head+passo+
-          '<div class="calc-kv" style="margin-top:3px"><span>Concentração</span><b>'+F(r.concentracaoPct)+' % '+r.concentracaoBase+'</b><span>≈ ppm</span><b>'+F(r.concentracaoPpm)+'</b></div>'+
-          _labAvisosHtml(r)+'</div>';
+        var conc=_ppm
+          ? '<div class="calc-kv" style="margin-top:3px"><span>Alvo</span><b>'+F(r.alvoPpm)+' ppm</b><span>Fonte</span><b>'+esc(r.fonteRotulo||'')+'</b></div>'
+          : '<div class="calc-kv" style="margin-top:3px"><span>Concentração</span><b>'+F(r.concentracaoPct)+' % '+r.concentracaoBase+'</b><span>≈ ppm</span><b>'+F(r.concentracaoPpm)+'</b></div>';
+        html+='<div class="calc-card">'+head+passo+conc+_labAvisosHtml(r)+'</div>';
         txt.push(LB.formatar(r,{titulo:t.id+(t.produto?' · '+t.produto:'')}));
       });
       box.innerHTML=html; _labTexto=txt.join('\n\n');
       return;
     }
-    var r2;
-    if(_labTab==='ppm'){
-      r2=LB.calcPPM({alvoPpm:_labVal('labPpmAlvo'), volumeMl:_labVal('labPpmVol'),
-        fonteTipo:_labVal('labPpmFonte'), fonteValor:_labVal('labPpmValor'),
-        pureza:_labVal('labPpmPureza'), densidade:_labVal('labPpmDens')});
-    } else if(_labTab==='ia'){
-      r2=LB.calcAjusteIA({origemValor:_labVal('labIaOrig'), origemUnid:_labVal('labIaOrigU'),
-        alvoValor:_labVal('labIaAlvo'), alvoUnid:_labVal('labIaAlvoU'),
-        volumeFinal:_labVal('labIaVol'), volumeUnid:_labVal('labIaVolU'), densidade:_labVal('labIaDens')});
-    } else {
-      var lista=String(_labVal('labSerLista')||'').trim();
-      var doses=lista?LB.parseListaDoses(lista):LB.gerarSerieAuto(_labVal('labSerTopo'),_labVal('labSerFator'),_labVal('labSerN'));
-      r2=LB.calcSerie({doses:doses, volumeMl:_labVal('labSerVol'),
-        fonteTipo:_labVal('labSerFonte'), fonteValor:_labVal('labSerValor'),
-        pureza:_labVal('labSerPureza'), testemunha:_labVal('labSerTest')==='1'});
-    }
+    /* Ajuste de i.a.: ferramenta avulsa (preparo de tanque). Não olha os
+       tratamentos do estudo — por isso ficou separada da receita. */
+    var r2=LB.calcAjusteIA({origemValor:_labVal('labIaOrig'), origemUnid:_labVal('labIaOrigU'),
+      alvoValor:_labVal('labIaAlvo'), alvoUnid:_labVal('labIaAlvoU'),
+      volumeFinal:_labVal('labIaVol'), volumeUnid:_labVal('labIaVolU'), densidade:_labVal('labIaDens')});
     _labTexto=LB.formatar(r2,{titulo:s?(s.codigo||s.nome||s.id):''});
     box.innerHTML='<div style="white-space:pre-wrap">'+esc(_labTexto)+'</div>'+_labAvisosHtml(r2);
   }catch(e){
@@ -6313,14 +6491,21 @@ function _pranchaDatas(s, variavel, trats, reps, base){
   (s.avaliacoes||[]).forEach(function(a){
     var d=pD(isoToBR(a.data))||pD(a.data); if(!d||isNaN(d)) return;
     if((a.variaveis||[]).indexOf(variavel)<0) return;
-    todas.push({ av:a, daa:(base?daysBetween(base,d):0), data:d });
+    var daa=(base?daysBetween(base,d):0);
+    todas.push({ av:a, daa:daa, data:d, mom:avMomento(a, daa) });
   });
-  todas.sort(function(x,y){ return x.data-y.data; });
-  var pos=todas.filter(function(x){ return x.daa>0; });
-  var usadas = pos.length ? pos : todas.filter(function(x){ return x.daa>=0; });
+  /* Ordena pelo MOMENTO, não pela data: quatro leituras do mesmo dia (1, 2, 4 e
+     24 HAT) têm a mesma data e só o momento as separa. */
+  todas.sort(function(x,y){ return (x.mom.dias-y.mom.dias) || (x.data-y.data); });
+  var pos=todas.filter(function(x){ return x.mom.dias>0; });
+  var usadas = pos.length ? pos : todas.filter(function(x){ return x.mom.dias>=0; });
   if(!usadas.length) usadas=todas;
-  var vistos={}, unicas=[]; /* DAA repetido quebra a AACPD: fica a primeira de cada */
-  usadas.forEach(function(x){ if(!vistos[x.daa]){ vistos[x.daa]=1; unicas.push(x); } });
+  /* Deduplica pela CHAVE do momento. Antes era pelo DAA inteiro, e uma sequência
+     de knockdown 1h/2h/4h/24h caía toda em DAA 0: as três primeiras sumiam da
+     folha em silêncio. Com HAT declarado cada uma tem chave própria; sem HAT
+     declarado a chave continua sendo o DAA, exatamente como era. */
+  var vistos={}, unicas=[];
+  usadas.forEach(function(x){ if(!vistos[x.mom.chave]){ vistos[x.mom.chave]=1; unicas.push(x); } });
   var completas=[], parciais=[];
   unicas.forEach(function(x){
     var faltam=0;
@@ -6453,10 +6638,14 @@ function _pranchaPayload(qid, sid, variavel){
     tratamentos: trats.map(function(t,i){
       return { id:t.id, pt:(t.produto||t.id), en:(t.produto||t.id),
                ia:(t.ia||'—'), dose:(parseFloat(String(t.dose||'').replace(',','.'))||0),
-               doseTxt:String(t.dose||''),   /* cru: preserva mistura "500 + 300" */
+               doseTxt:doseTextoDe(s, t.dose),   /* já com unidade; preserva mistura "500 + 300" */
+               doseUnid:doseUnidadeDe(s, t.dose),
                gia:(t.gia||''), testemunha:(i===iTest) };
     }),
-    daa: avs.map(function(x){ return x.daa; }),
+    /* Eixo do tempo em DIAS (HAT vira fração) — a AACPD integra por trapézio
+       sobre ele. `momentos` é só o rótulo: "2 HAT", "7 DAA". */
+    daa: avs.map(function(x){ return x.mom?x.mom.dias:x.daa; }),
+    momentos: avs.map(function(x){ return x.mom?x.mom.rotulo:(x.daa+' DAA'); }),
     blocos: Array.from({length:reps},function(_,i){ return i+1; }),
     sev: sev,
     avaliacoes: avs.map(function(x){
@@ -6523,7 +6712,6 @@ function _croquiPayload(){
     var e=((data[id]||{}).estudos||[]).find(function(s){ return s && (s.codigo||s.nome); });
     if(e){ estudo=e; qEst=id; return true; } return false;
   });
-  var q0 = data[qEst||ids[0]]||{};
   var loc = (typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qEst||ids[0]]]) || {};
   var hoje = new Date();
   var dd = function(n){ return (n<10?'0':'')+n; };
@@ -6531,7 +6719,19 @@ function _croquiPayload(){
   var br  = dd(hoje.getDate())+'/'+dd(hoje.getMonth()+1)+'/'+hoje.getFullYear();
   var autor=''; try{ autor=(typeof _currentUserName==='function'?_currentUserName():'')||''; }catch(e){}
   var titulo = estudo ? (estudo.nome||estudo.codigo||'') : 'Croqui das quadras';
-  var cultura = q0.cultura||'';
+  /* Cultura só entra no subtítulo quando a folha INTEIRA é de uma cultura só.
+     Antes saía a cultura de q0 — a primeira quadra com estudo —, então nomear
+     a A1 com uma cultura carimbava aquela cultura por cima de uma folha com
+     trinta quadras de culturas diferentes. Quadra de laboratório não conta:
+     não tem planta plantada, e um lab no meio da seleção zerava o subtítulo. */
+  var _culturas = {};
+  ids.forEach(function(id){
+    if(typeof isQuadraLab==='function' && isQuadraLab(id)) return;
+    var c = String((data[id]||{}).cultura||'').trim();
+    if(c) _culturas[c]=1;
+  });
+  var _cKeys = Object.keys(_culturas);
+  var cultura = (_cKeys.length===1) ? _cKeys[0] : '';
   var localNome = loc.nome||'';
 
   /* Camadas que existem no app e podem entrar na folha:
@@ -7039,26 +7239,49 @@ function openStudyDetail(qid,sid){
   var bbchList=getBBCHList(q.cultura);
   var ne=nextEventV2(study);
 
+  /* Estudo finalizado é somente-leitura: o que escreve some da tela, e o que
+     sobrou de escrita ainda passa por _bloqueadoPorFinalizacao antes de gravar. */
+  var _fin=estudoFinalizado(study), _finEm='', _finQuem='', _finN=0, _finFuso='';
+  if(_fin){
+    try{ _finEm=new Date(study.finalizacao.em).toLocaleString('pt-BR'); }catch(e){ _finEm=study.finalizacao.em||''; }
+    _finQuem=study.finalizacao.nome||study.finalizacao.por||'';
+    _finN=study.finalizacao.nResultados||((study.estatisticaFinal||{}).itens||[]).length;
+    _finFuso=study.finalizacao.fuso||'';
+  }
+
   var h="";
+  if(_fin){
+    h+='<div style="margin:0 0 10px;padding:9px 12px;border-radius:10px;background:#102218;border:1px solid #245a36;color:#9fe0b6;font-size:12px;line-height:1.5">'+
+       '🔒 <b>Estudo finalizado</b> em '+esc(_finEm)+(_finQuem?(' por '+esc(_finQuem)):'')+
+       '. Somente leitura — a estatística está congelada. Para editar, use <b>Reabrir estudo</b> lá embaixo.</div>';
+  }
   h+='<div class="sd-header">';
-  h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(qid)+'</button>';
+  /* quadraNome, não o qid: o id interno carrega o sufixo anti-colisão (~a3f2) que
+     novoQuadraId() cria, e ele aparecia cru no topo da tela do estudo. */
+  h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(quadraNome(qid))+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
   h+='<button class="btn-sm" onclick="downloadStudyWorkbook(\''+qid+'\',\''+sid+'\')" title="Baixar o modelo.xls preenchido com protocolo, aplicações, avaliações e grupos estatísticos">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
   h+=isQuadraLab(qid)
-    ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório (diluição, ppm, série) com os tratamentos deste estudo">🧪 Calc lab</button>'
+    ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório: a receita de cada tratamento deste estudo, mais o ajuste de i.a.">🧪 Calc lab</button>'
     : '<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">🧪 Calc</button>';
   h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
-  h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
-  if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
-  h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">EDITAR</button>';
+  /* Finalizado: some tudo que escreve. Ler, copiar e baixar continuam valendo. */
+  if(!_fin){
+    h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
+    if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
+    h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">EDITAR</button>';
+  }
   h+='</div>';
   h+='</div>';
 
   /* Meta info */
   h+='<div class="sd-meta">';
-  h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Cultura</span><span>'+esc(q.cultura||"—")+(q.cultivar?" · "+esc(q.cultivar):"")+'</span></div>';
+  /* Laboratório não tem planta plantada: mostra a especialidade no lugar da cultura. */
+  h+= isQuadraLab(qid)
+    ? '<div class="sd-meta-item"><span class="sd-meta-lbl">Laboratório</span><span>'+esc(quadraLabTipo(qid)||"—")+'</span></div>'
+    : '<div class="sd-meta-item"><span class="sd-meta-lbl">Cultura</span><span>'+esc(q.cultura||"—")+(q.cultivar?" · "+esc(q.cultivar):"")+'</span></div>';
   if(study.dataInicio){
     h+='<div class="sd-meta-item"><span class="sd-meta-lbl">1ª aplicação</span><span>'+esc(isoToBR(study.dataInicio))+'</span></div>';
   }
@@ -7093,8 +7316,8 @@ function openStudyDetail(qid,sid){
       '<br>Os campos reconhecidos foram incorporados ao estudo; a planilha completa pode ser baixada novamente pelo botão <b>Planilha</b>.</div></div>';
   }
 
-  /* Próximo evento */
-  if(ne){
+  /* Próximo evento — estudo finalizado não tem próximo: ele acabou. */
+  if(ne && !_fin){
     var cls=ne.diff<=0?"urgent":(ne.diff<=3?"soon":"normal");
     var lbl=ne.diff===0?"HOJE":(ne.diff<0?"ATRASADO "+Math.abs(ne.diff)+"d":"em "+ne.diff+"d");
     var tipo=ne.ev.type==='apl'?("Aplicação "+ne.ev.idx+"/"+ne.ev.total):("Avaliação"+(ne.ev.tipo?" — "+ne.ev.tipo:""));
@@ -7126,7 +7349,7 @@ function openStudyDetail(qid,sid){
   h+='</div>';
 
   /* Aplicações realizadas */
-  h+='<div class="sd-section"><div class="sd-section-title">Aplicações <button class="sd-add" onclick="quickAddAplicacao()">+ Registrar</button></div>';
+  h+='<div class="sd-section"><div class="sd-section-title">Aplicações'+(_fin?'':' <button class="sd-add" onclick="quickAddAplicacao()">+ Registrar</button>')+'</div>';
   if(study.aplicacoes.length===0){
     h+='<div class="sd-empty">Nenhuma aplicação registrada ainda.</div>';
   }else{
@@ -7149,7 +7372,7 @@ function openStudyDetail(qid,sid){
   h+='</div>';
 
   /* Avaliações */
-  h+='<div class="sd-section"><div class="sd-section-title">Avaliações <button class="sd-add" onclick="quickAddAvaliacao()">+ Nova</button></div>';
+  h+='<div class="sd-section"><div class="sd-section-title">Avaliações'+(_fin?'':' <button class="sd-add" onclick="quickAddAvaliacao()">+ Nova</button>')+'</div>';
   if(study.avaliacoes.length===0){
     h+='<div class="sd-empty">Nenhuma avaliação programada ou registrada.</div>';
   }else{
@@ -7179,6 +7402,24 @@ function openStudyDetail(qid,sid){
   h+=_bioestatIntegratedHtml(qid,sid,study);
   h+=studyAuditHtml(study);
 
+  /* Finalizar / reabrir — o fecho BPL do estudo */
+  h+='<div class="sd-section" style="margin-top:14px">';
+  if(_fin){
+    h+='<div class="sd-section-title">Finalização</div>'+
+       '<div style="padding:11px 13px;border:1px solid #245a36;background:#0f2016;border-radius:10px;font-size:12px;line-height:1.6;color:#9fe0b6">'+
+       '<b>🔒 Estudo finalizado</b> em '+esc(_finEm)+(_finQuem?(' por '+esc(_finQuem)):'')+'.<br>'+
+       esc(String(_finN))+' resultado(s) de estatística congelados — o relatório usa este retrato, não um recálculo.'+
+       (_finFuso?('<br><span style="opacity:.75">Fuso do carimbo: '+esc(_finFuso)+'</span>'):'')+
+       (study.finalizacao.rubrica?('<div style="margin-top:8px"><img src="'+esc(study.finalizacao.rubrica)+'" alt="Rubrica de quem finalizou" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>'):'')+
+       '</div>'+
+       '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">🔓 Reabrir estudo</button>';
+  }else{
+    h+='<div class="sd-section-title">Finalização</div>'+
+       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin-bottom:8px">Fecha o estudo: pede senha e rubrica, carimba data e hora, e <b>congela a estatística</b> — hoje ela é recalculada no aparelho toda vez que a folha abre. Depois de finalizado o estudo fica somente-leitura e sai da agenda.</div>'+
+       '<button class="btn-sm" onclick="finalizarEstudo(\''+qid+'\',\''+sid+'\')">✅ Finalizar estudo</button>';
+  }
+  h+='</div>';
+
   /* Botão excluir estudo */
   h+='<div class="sd-danger-zone"><button class="btn-danger" onclick="confirmDeleteStudy(\''+qid+'\',\''+sid+'\')">Excluir estudo</button></div>';
 
@@ -7196,6 +7437,7 @@ function closeStudyDetail(){
   curSid=null;
 }
 function toggleStudyRandomizado(qid,sid){
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
   var q=data[qid]||{}, study=(q.estudos||[]).find(function(s){return s.id===sid});
   if(!study)return;
   study=normalizeStudy(study);
@@ -7291,6 +7533,7 @@ function resetRandomizacaoAuto(){
 
 /* ============ AÇÕES RÁPIDAS ============ */
 function quickAddAplicacao(){
+  if(_bloqueadoPorFinalizacao(curV,curSid)) return;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study)return;
   normalizeStudy(study);
@@ -7298,6 +7541,7 @@ function quickAddAplicacao(){
 }
 
 function quickAddAvaliacao(){
+  if(_bloqueadoPorFinalizacao(curV,curSid)) return;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study)return;
   normalizeStudy(study);
@@ -7306,6 +7550,7 @@ function quickAddAvaliacao(){
 
 function removeAplicacao(id){
   var qid=curV, sid=curSid;
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
   requireDeletePassword('Remover esta aplicação registrada.', function(){
     safetyBackup('antes de excluir aplicação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
@@ -7321,6 +7566,7 @@ function removeAplicacao(id){
 
 function removeAvaliacaoV2(id){
   var qid=curV, sid=curSid;
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
   requireDeletePassword('Remover esta avaliação e os resultados preenchidos nela.', function(){
     safetyBackup('antes de excluir avaliação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
@@ -7350,6 +7596,7 @@ function confirmDeleteStudy(qid,sid){
 var workingStudy=null;
 
 function openStudyEditV2(qid,sid){
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
   curV=qid;curSid=sid;
   var q=data[qid];
   var existing=(q.estudos||[]).find(function(s){return s.id===sid});
@@ -7722,6 +7969,26 @@ function renderStudyEditModal(){
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Ex.: de 7 em 7, 6 avaliações → o app cria as datas (aparecem na agenda e no estudo). Nº = 0 não gera. Cada data fica editável depois. Se em branco, usa a data da 1ª aplicação.</div>';
 
+  /* Como a dose é definida. Só o laboratório pode ser em ppm — ensaio de campo
+     é sempre dose por área. A unidade escolhida é o padrão de quem não escrever
+     a unidade na dose, e é ela que sai impressa no rótulo do gráfico e da tabela. */
+  var _dm=(s.doseModo==='ppm')?'ppm':'campo';
+  if(!isQuadraLab(curV)) _dm='campo';
+  h+='<div class="se-section-title">Dose dos tratamentos</div>';
+  h+='<div class="se-row">';
+  if(isQuadraLab(curV)){
+    h+='<div class="se-field"><label>Como a dose é definida</label><select id="seDoseModo" onchange="_seDoseModoSync()">'+
+      '<option value="campo"'+(_dm==='campo'?' selected':'')+'>Dose de campo (por área)</option>'+
+      '<option value="ppm"'+(_dm==='ppm'?' selected':'')+'>Concentração (ppm)</option>'+
+      '</select></div>';
+  }
+  h+='<div class="se-field" id="seDoseUnidWrap"'+(_dm==='ppm'?' style="display:none"':'')+'><label>Unidade da dose</label><select id="seDoseUnid">'+
+    ['L/ha','mL/ha','g/ha','kg/ha'].map(function(u){
+      return '<option value="'+u+'"'+(u===s.doseUnidade?' selected':'')+'>'+u+'</option>';
+    }).join('')+'</select></div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
+
   h+='<div class="se-section-title">Tratamentos</div>';
   h+='<div class="se-field"><label>Repetições por tratamento</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
@@ -7784,6 +8051,8 @@ function syncStudyInputs(){
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
   x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
   x=el("seLabDens"); if(x) workingStudy.labDensidade=x.value.trim();
+  x=el("seDoseModo"); if(x) workingStudy.doseModo=(x.value==='ppm')?'ppm':'campo';
+  x=el("seDoseUnid"); if(x && ['L/ha','mL/ha','g/ha','kg/ha'].indexOf(x.value)>=0) workingStudy.doseUnidade=x.value;
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
   /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
@@ -7833,6 +8102,7 @@ function gerarAvaliacoesAuto(s){
   return add;
 }
 function saveStudyV2(){
+  if(_bloqueadoPorFinalizacao(curV,curSid)) return;
   syncStudyInputs();
   var s=workingStudy;
 
@@ -7868,6 +8138,8 @@ function saveStudyV2(){
     if(String(old.labFonteValor||'') !== String(s.labFonteValor||'')) changes.push('Valor da fonte (lab): "' + (old.labFonteValor||'—') + '" -> "' + (s.labFonteValor||'—') + '"');
     if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
     if(String(old.labDensidade||'') !== String(s.labDensidade||'')) changes.push('Densidade (lab): "' + (old.labDensidade||'—') + '" -> "' + (s.labDensidade||'—') + '"');
+    if((old.doseModo||'campo') !== s.doseModo) changes.push('Definição da dose: "' + (old.doseModo||'campo') + '" -> "' + s.doseModo + '"');
+    if((old.doseUnidade||'L/ha') !== s.doseUnidade) changes.push('Unidade da dose: "' + (old.doseUnidade||'L/ha') + '" -> "' + s.doseUnidade + '"');
     if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
     details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
   } else {
@@ -7954,7 +8226,14 @@ function openStudyEditAplicacao(aid){
   var bbchList=getBBCHList(q.cultura);
 
   var h='<div class="se-head"><h3>Aplicação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
+  /* Data E hora. Sem a hora, uma aplicação de ontem só podia receber a MÉDIA do
+     dia — que mistura a madrugada com a tarde e não é a condição em que se
+     aplicou. Com a hora, o carimbo busca a leitura daquele instante na estação. */
+  h+='<div class="se-row">';
   h+='<div class="se-field"><label>Data</label><input type="date" id="aeData" value="'+esc(ap.data)+'"></div>';
+  h+='<div class="se-field"><label>Hora <span style="opacity:.6">da aplicação</span></label><input type="time" id="aeHora" value="'+esc(ap.hora||'')+'"></div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Preencha a hora quando registrar uma aplicação de outro dia: o clima carimbado passa a ser o da estação NAQUELE horário, não a média do dia.</div>';
   if(bbchList){
     h+='<div class="se-field"><label>Estádio BBCH no momento</label><select id="aeBBCH"><option value="">—</option>';
     bbchList.forEach(function(b){
@@ -8049,10 +8328,13 @@ function _stationMacForQuadra(qid){
   for(i=0;i<_climaStations.length;i++){ var s2=_climaNorm(_climaStations[i].name); for(k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[i].mac; } }
   return null;
 }
-function _carimboClima(qid, dateStr, cb){
-  /* dateStr = data DO REGISTRO (YYYY-MM-DD). Se for dia passado, busca o clima DAQUELE
-     dia (histórico da estação Ecowitt; fallback Open-Meteo Archive). Hoje = tempo real. */
-  if(typeof dateStr==='function'){ cb=dateStr; dateStr=null; } /* compat: chamada antiga sem data */
+function _carimboClima(qid, dateStr, horaStr, cb){
+  /* dateStr = data DO EVENTO (YYYY-MM-DD), horaStr = hora dele (HH:MM, opcional).
+     Dia passado busca o histórico; COM hora, a leitura daquele instante na estação
+     (fallback Open-Meteo hourly). Sem hora, o resumo do dia, como sempre foi.
+     Hoje = tempo real. */
+  if(typeof dateStr==='function'){ cb=dateStr; dateStr=null; horaStr=null; }   /* compat: só callback */
+  else if(typeof horaStr==='function'){ cb=horaStr; horaStr=null; }            /* compat: (qid,data,cb) */
   var ctr=quadraCenter(qid);
   var hoje=(typeof todayISO==='function')?todayISO():null;
   var isPast = !!(dateStr && hoje && dateStr < hoje);
@@ -8060,6 +8342,27 @@ function _carimboClima(qid, dateStr, cb){
   function openMeteo(){
     if(!ctr){ cb(null); return; }
     if(isPast){
+      /* Com hora conhecida, pega a HORA no arquivo horário — a média diária
+         misturaria a madrugada com a tarde e não descreve o momento da aplicação. */
+      if(horaStr){
+        var ah='https://archive-api.open-meteo.com/v1/archive?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+
+          '&start_date='+dateStr+'&end_date='+dateStr+
+          '&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m,shortwave_radiation&timezone=America%2FSao_Paulo';
+        fetch(ah).then(function(r){return r.json();}).then(function(j){
+          var hh=j&&j.hourly; if(!hh||!hh.time||!hh.time.length){ cb(null); return; }
+          var alvo=dateStr+'T'+String(horaStr).slice(0,5);
+          var iBest=0, dBest=Infinity;
+          for(var i=0;i<hh.time.length;i++){
+            var d=Math.abs(new Date(hh.time[i]) - new Date(alvo));
+            if(d<dBest){ dBest=d; iBest=i; }
+          }
+          var g=function(a){ return (a&&a[iBest]!=null)?a[iBest]:null; };
+          cb({fonte:'openmeteo-hora',data:dateStr,hora:(hh.time[iBest]||'').slice(11,16),histor:true,instante:true,
+              temp:g(hh.temperature_2m),umidade:g(hh.relative_humidity_2m),orvalho:g(hh.dew_point_2m),
+              vento:g(hh.wind_speed_10m),chuva:g(hh.precipitation),solar:g(hh.shortwave_radiation)});
+        }).catch(function(){ cb(null); });
+        return;
+      }
       var au='https://archive-api.open-meteo.com/v1/archive?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+
         '&start_date='+dateStr+'&end_date='+dateStr+
         '&daily=temperature_2m_mean,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,precipitation_sum,wind_speed_10m_max,shortwave_radiation_sum&timezone=America%2FSao_Paulo';
@@ -8073,12 +8376,18 @@ function _carimboClima(qid, dateStr, cb){
   }
   function station(){
     var mac=_stationMacForQuadra(qid); if(!mac){ openMeteo(); return; }
-    var ep = isPast ? (NDVI_PROXY+'/clima/historico?mac='+encodeURIComponent(mac)+'&date='+encodeURIComponent(dateStr))
+    var ep = isPast ? (NDVI_PROXY+'/clima/historico?mac='+encodeURIComponent(mac)+'&date='+encodeURIComponent(dateStr)
+                       + (horaStr?('&hora='+encodeURIComponent(String(horaStr).slice(0,5))):''))
                     : (NDVI_PROXY+'/clima?mac='+encodeURIComponent(mac));
     fetch(ep).then(function(r){return r.json();}).then(function(d){
       if(!d||d.error){ openMeteo(); return; }
       function v(n){ return (n&&n.value!=null)?n.value:null; }
-      cb({fonte:(isPast?'estacao-hist':'estacao'),data:(d.date||dateStr||hoje),histor:!!isPast,mac:mac,hora:d.time,temp:v(d.temp),temp_min:v(d.temp_min),temp_max:v(d.temp_max),umidade:v(d.humidity),orvalho:v(d.dew_point),vpd:v(d.vpd),pressao:v(d.pressure),vento:v(d.wind_speed),rajada:v(d.wind_gust),vento_dir:v(d.wind_dir),chuva:v(d.rain_day),solar:v(d.solar)});
+      /* sem_amostra = a estação não tinha leitura perto do horário pedido; melhor
+         cair no satélite do que carimbar um valor de duas horas depois. */
+      if(d.sem_amostra){ openMeteo(); return; }
+      cb({fonte:(isPast?(d.instante?'estacao-hora':'estacao-hist'):'estacao'),data:(d.date||dateStr||hoje),
+          histor:!!isPast,instante:!!d.instante,defasagem_s:(d.defasagem_s!=null?d.defasagem_s:null),
+          dia:(d.dia||null),mac:mac,hora:(d.hora||d.time),temp:v(d.temp),temp_min:v(d.temp_min),temp_max:v(d.temp_max),umidade:v(d.humidity),orvalho:v(d.dew_point),vpd:v(d.vpd),pressao:v(d.pressure),vento:v(d.wind_speed),rajada:v(d.wind_gust),vento_dir:v(d.wind_dir),chuva:v(d.rain_day),solar:v(d.solar)});
     }).catch(function(){ openMeteo(); });
   }
   if(_climaStations){ station(); }
@@ -8091,16 +8400,16 @@ function _carimboNdvi(qid, cb){
     cb({fonte:'sentinel2',ndvi:d.ndvi,ndre:d.ndre,gndvi:d.gndvi,data:d.date});
   }).catch(function(){ cb(null); });
 }
-function carimbar(qid,sid,recId,kind,recDate){
+function carimbar(qid,sid,recId,kind,recDate,recHora){
   var rec=_carimboFind(qid,sid,recId,kind); if(!rec) return;
   var now=new Date();
   /* recDate = data DO EVENTO (YYYY-MM-DD, do campo data da aplicação/avaliação).
      'data' do carimbo = quando foi REGISTRADO (rastreabilidade BPL/ISO27001 — imutável).
      'dataEvento' = o dia do ensaio que o usuário informou; é dele que vem o clima. */
-  rec.carimbo={ ts:now.getTime(), data:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}), dataEvento:(recDate||null), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
+  rec.carimbo={ ts:now.getTime(), data:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}), dataEvento:(recDate||null), horaEvento:(recHora||null), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
   try{ save(); }catch(e){}
   _carimboLoc(function(loc){ if(loc) _carimboSet(qid,sid,recId,kind,'gps',loc); });
-  _carimboClima(qid,recDate,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
+  _carimboClima(qid,recDate,recHora,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
   _carimboNdvi(qid,function(nd){ if(nd) _carimboSet(qid,sid,recId,kind,'ndvi',nd); });
 }
 function _carimboTSV(c){
@@ -8132,7 +8441,18 @@ function carimboHtml(c){
     var _src=(cl.fonte&&cl.fonte.indexOf('estacao')===0)?'estação':'previsão';
     /* BPL/ISO27001: deixa explícito quando o clima é o RESUMO HISTÓRICO do dia do evento
        (data passada) e não uma leitura ao vivo — evidência honesta, sem induzir a erro. */
-    var _diaTxt=cl.histor?(' · histórico do dia'+(cl.data?' '+esc((typeof isoToBR==='function'?isoToBR(cl.data):cl.data)):'')):'';
+    /* Diz o que o número É. "Histórico do dia" é a MÉDIA de 24 h; leitura do
+       instante é outra coisa e não pode ser apresentada como se fosse a mesma
+       evidência. Quando a amostra não caiu exatamente na hora pedida, a
+       defasagem sai escrita — é ela que um auditor vai querer ver. */
+    var _dataTxt=cl.data?(' '+esc((typeof isoToBR==='function'?isoToBR(cl.data):cl.data))):'';
+    var _diaTxt='';
+    if(cl.histor && cl.instante){
+      var _def=(cl.defasagem_s!=null && cl.defasagem_s>120)?(' ±'+Math.round(cl.defasagem_s/60)+' min'):'';
+      _diaTxt=' · leitura de'+_dataTxt+(cl.hora?(' às '+esc(cl.hora)):'')+_def;
+    }else if(cl.histor){
+      _diaTxt=' · média do dia'+_dataTxt;
+    }
     p.push(s+' ('+_src+')'+_diaTxt+bplBadge); }
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push(ic('sat',12)+' NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
   if(c.gps) p.push(ic('pin',12)+' '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
@@ -8142,6 +8462,7 @@ function carimboHtml(c){
 }
 
 function saveAplicacao(){
+  if(_bloqueadoPorFinalizacao(curV,curSid)) return;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study)return;
   study=normalizeStudy(study);
@@ -8152,6 +8473,8 @@ function saveAplicacao(){
   var oldBBCH = ap.bbch;
   var oldObs = ap.obs;
   ap.data=document.getElementById("aeData").value;
+  var _ah=document.getElementById("aeHora");
+  if(_ah && _ah.value) ap.hora=_ah.value; else delete ap.hora;
   var bbchEl=document.getElementById("aeBBCH");
   ap.bbch=bbchEl?bbchEl.value:"";
   ap.obs=document.getElementById("aeObs").value.trim();
@@ -8172,7 +8495,7 @@ function saveAplicacao(){
     study.aplicacoes.push(ap);
     draftAp=null;
   }
-  if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data);
+  if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
@@ -9159,6 +9482,21 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
   h+='<fieldset id="avFs"'+(locked?' disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">';
   h+='<div class="se-field"><label>Data</label><input type="date" id="vData" value="'+esc(av.data)+'"></div>';
+  /* Momento explícito — OPCIONAL. Em branco, o app segue derivando o DAA da data,
+     como sempre fez. Preenchido, é ele que identifica a avaliação: é o que permite
+     1, 2, 4 e 24 HAT no mesmo dia sem uma engolir a outra. */
+  var _mm=(av.momento&&(av.momento.unidade==='HAT'||av.momento.unidade==='DAT'))?av.momento:null;
+  h+='<div class="se-row">';
+  h+='<div class="se-field"><label>Momento <span style="opacity:.6">opcional</span></label>'+
+     '<input type="text" id="vMomVal" inputmode="decimal" placeholder="em branco = pela data" value="'+esc(_mm?String(_mm.valor).replace('.',','):'')+'"></div>';
+  h+='<div class="se-field"><label>Unidade</label><select id="vMomUn">'+
+     '<option value="">—</option>'+
+     '<option value="HAT"'+(_mm&&_mm.unidade==='HAT'?' selected':'')+'>HAT (horas)</option>'+
+     '<option value="DAT"'+(_mm&&_mm.unidade==='DAT'?' selected':'')+'>DAT (dias)</option>'+
+     '</select></div>';
+  h+='<div class="se-field"><label>Hora <span style="opacity:.6">opcional</span></label><input type="time" id="vHora" value="'+esc(av.hora||'')+'"></div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Deixe em branco e o momento sai da data, como sempre. Preencha quando houver mais de uma leitura no MESMO dia (ex.: knockdown a 1, 2, 4 e 24 HAT) — sem isto o app guarda só a primeira.</div>';
   h+='<div class="se-field"><label>Tipo de avaliação</label><select id="vTipo"><option value="">—</option>';
   TIPOS_AVALIACAO.forEach(function(t){
     h+='<option value="'+esc(t)+'"'+(t===av.tipo?' selected':'')+'>'+esc(t)+'</option>';
@@ -9180,6 +9518,116 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   document.getElementById("eePnl").innerHTML=h;
   renderAvGrid();
   window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
+}
+
+/* ===== FINALIZAÇÃO DO ESTUDO (BPL) =========================================
+   Fecha o estudo: senha (reautenticação de verdade no Firebase, o mesmo caminho
+   da exclusão), rubrica por toque, carimbo de quem e quando — e a ESTATÍSTICA
+   CONGELADA junto do estudo.
+
+   Congelar a estatística é o ponto: até aqui ela era recalculada no aparelho
+   toda vez que alguém abria a folha, então o número do relatório dependia da
+   versão do app que rodou por último. Em BPL o resultado é do dia em que foi
+   assinado — a partir da finalização é o retrato salvo que vale, não o recálculo.
+
+   Depois de finalizado o estudo fica somente-leitura e some da agenda. Reabrir
+   exige senha de novo, pede o motivo e fica na trilha de auditoria. */
+function estudoFinalizado(s){ return !!(s && s.finalizacao && s.finalizacao.em); }
+function _estudoDe(qid,sid){
+  var q=data[qid]||{}; return (q.estudos||[]).find(function(x){ return x && x.id===sid; });
+}
+/* Retrato da estatística: ANOVA-DBC + Tukey de cada (avaliação × variável).
+   Guarda também o que NÃO deu para calcular e por quê — silêncio aqui viraria
+   "esta avaliação não tinha estatística", que é diferente de "faltava dado". */
+function _statSnapshot(s){
+  var out={ gerado:new Date().toISOString(), motor:'statDBC/Tukey 0,05', itens:[], semAnalise:[] };
+  var base=(typeof _pranchaBase==='function')?_pranchaBase(s):null;
+  (s.avaliacoes||[]).forEach(function(av){
+    var daa=null;
+    try{ var dt=pD(isoToBR(av.data))||pD(av.data); if(base&&base.data&&dt&&!isNaN(dt)) daa=daysBetween(base.data,dt); }catch(e){}
+    var mom=avMomento(av,daa);
+    (av.variaveis||[]).forEach(function(v){
+      var r=null; try{ r=statDBC(s,av,v); }catch(e){ r=null; }
+      if(r) out.itens.push({ avId:av.id, data:av.data, momento:mom.rotulo, variavel:v, stat:r });
+      else   out.semAnalise.push({ avId:av.id, data:av.data, momento:mom.rotulo, variavel:v,
+                                   porque:'grade incompleta ou menos de 2 tratamentos/repetições' });
+    });
+  });
+  return out;
+}
+function finalizarEstudo(qid,sid){
+  var s=_estudoDe(qid,sid); if(!s) return;
+  s=normalizeStudy(s);
+  if(estudoFinalizado(s)){ alert('Este estudo já está finalizado.'); return; }
+  var nAv=(s.avaliacoes||[]).length;
+  if(!nAv && !confirm('Este estudo não tem nenhuma avaliação registrada.\n\nFinalizar assim mesmo?')) return;
+  var prev=_statSnapshot(s);
+  var resumo='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
+             (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+
+             '.\n\nDepois disso o estudo fica somente-leitura e sai da agenda.';
+  requireDeletePassword(resumo, function(){
+    openRubrica(function(url){
+      if(!url){ alert('Sem a rubrica o estudo não é finalizado.'); return; }
+      var st=_estudoDe(qid,sid); if(!st) return;
+      st.estatisticaFinal=_statSnapshot(st);   /* recalcula na hora do aceite, não a prévia */
+      st.finalizacao={
+        em:new Date().toISOString(),
+        por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
+        nome:_currentUserName(),
+        rubrica:url,
+        significado:'Estudo finalizado — dados conferidos e estatística congelada',
+        fuso:(function(){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||''; }catch(e){ return ''; } })(),
+        nAvaliacoes:(st.avaliacoes||[]).length,
+        nResultados:(st.estatisticaFinal.itens||[]).length
+      };
+      logStudyAuditInObject(st,'Finalização do Estudo',
+        'Estudo finalizado e travado. '+st.finalizacao.nResultados+' resultado(s) de estatística congelados.',
+        {rubrica:1});
+      st._ts=Date.now();
+      save();
+      try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
+      alert('Estudo finalizado.\n\n'+st.finalizacao.nResultados+' resultado(s) de estatística congelados em '+
+            new Date(st.finalizacao.em).toLocaleString('pt-BR')+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
+      try{ renderAgenda(); }catch(e){}
+      openStudyDetail(qid,sid);
+    }, 'Rubrique para finalizar o estudo '+(s.codigo||s.id));
+  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
+}
+function reabrirEstudo(qid,sid){
+  var s=_estudoDe(qid,sid); if(!s||!estudoFinalizado(s)) return;
+  var motivo=prompt('Por que este estudo está sendo reaberto?\n\nO motivo fica na trilha de auditoria.');
+  if(motivo===null) return;
+  motivo=String(motivo).trim();
+  if(!motivo){ alert('Reabrir um estudo finalizado exige um motivo registrado.'); return; }
+  requireDeletePassword('Reabrir o estudo '+(s.codigo||s.id)+' para edição.\nMotivo: '+motivo, function(){
+    var st=_estudoDe(qid,sid); if(!st) return;
+    var fin=st.finalizacao||{};
+    /* A estatística congelada NÃO é apagada: vira histórico. Um estudo reaberto
+       precisa poder mostrar o que estava assinado antes da alteração. */
+    if(!Array.isArray(st.finalizacoesAnteriores)) st.finalizacoesAnteriores=[];
+    st.finalizacoesAnteriores.push({ finalizacao:fin, estatistica:st.estatisticaFinal||null,
+                                     reabertoEm:new Date().toISOString(),
+                                     reabertoPor:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
+                                     motivo:motivo });
+    delete st.finalizacao; delete st.estatisticaFinal;
+    logStudyAuditInObject(st,'Reabertura do Estudo',
+      'Reaberto para edição. Motivo: "'+motivo+'". A finalização de '+
+      (fin.em?new Date(fin.em).toLocaleString('pt-BR'):'—')+' foi arquivada.');
+    st._ts=Date.now();
+    save();
+    try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
+    try{ renderAgenda(); }catch(e){}
+    openStudyDetail(qid,sid);
+  }, {title:'Reabrir estudo', ok:'Reabrir'});
+}
+/* Porta única de escrita: qualquer edição do estudo passa por aqui antes de gravar. */
+function _bloqueadoPorFinalizacao(qid,sid){
+  var s=_estudoDe(qid,sid);
+  if(!estudoFinalizado(s)) return false;
+  alert('Estudo finalizado em '+new Date(s.finalizacao.em).toLocaleString('pt-BR')+
+        (s.finalizacao.nome?(' por '+s.finalizacao.nome):'')+'.\n\n'+
+        'Ele está somente-leitura. Use "Reabrir estudo" — pede senha e registra o motivo na trilha.');
+  return true;
 }
 
 /* ===== RUBRICA (assinatura por toque) — módulo isolado, aditivo ===== */
@@ -9289,6 +9737,7 @@ function openAvalRecovery(){
   });
 }
 function saveAvaliacao(){
+  if(_bloqueadoPorFinalizacao(curV,curSid)) return;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study)return;
   study=normalizeStudy(study);
@@ -9301,8 +9750,18 @@ function saveAvaliacao(){
   var oldBBCH=av.bbch;
   var oldObs=av.obs;
   var oldNotas = JSON.parse(JSON.stringify(av.notas || {}));
-  
+  var oldMom=av.momento?(av.momento.valor+' '+av.momento.unidade):'';
+
   av.data=document.getElementById("vData").value;
+  /* Momento explícito: só grava se valor E unidade vierem juntos. Qualquer um dos
+     dois vazio significa "derivar da data" e o campo some do registro. */
+  var _mv=document.getElementById("vMomVal"), _mu=document.getElementById("vMomUn");
+  var _mvn=_mv?parseFloat(String(_mv.value||'').replace(',','.')):NaN;
+  var _mun=_mu?_mu.value:'';
+  if(isFinite(_mvn) && (_mun==='HAT'||_mun==='DAT')) av.momento={valor:_mvn, unidade:_mun};
+  else delete av.momento;
+  var _hr=document.getElementById("vHora");
+  if(_hr && _hr.value) av.hora=_hr.value; else delete av.hora;
   av.tipo=document.getElementById("vTipo").value;
   var bbchEl=document.getElementById("vBBCH");
   av.bbch=bbchEl?bbchEl.value:"";
@@ -9318,6 +9777,8 @@ function saveAvaliacao(){
   } else {
     var changes = [];
     if(oldData !== av.data) changes.push('Data: ' + oldData + ' -> ' + av.data);
+    var _nm=av.momento?(av.momento.valor+' '+av.momento.unidade):'';
+    if(oldMom !== _nm) changes.push('Momento: ' + (oldMom||'(pela data)') + ' -> ' + (_nm||'(pela data)'));
     if(oldTipo !== av.tipo) changes.push('Tipo: ' + oldTipo + ' -> ' + av.tipo);
     if(oldBBCH !== av.bbch) changes.push('BBCH: ' + oldBBCH + ' -> ' + av.bbch);
     if(oldObs !== av.obs) changes.push('Obs alteradas');
@@ -9346,7 +9807,7 @@ function saveAvaliacao(){
     study.avaliacoes.push(av);
     draftAv=null;
   }
-  if(!av.carimbo) carimbar(curV,curSid,av.id,'aval',av.data);
+  if(!av.carimbo) carimbar(curV,curSid,av.id,'aval',av.data,av.hora);
   av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   /* Trilha BPL: de→por célula + motivo (quando reabertura de avaliação assinada) */
   var _mud = isNew ? null : _avDiffCells(oldNotas, av.notas);
@@ -10133,6 +10594,9 @@ function init(){
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
+  /* Chip do clima sobre o mapa. Em try próprio: rede fora do ar aqui não pode
+     derrubar o resto do init — o app abre offline no talhão. */
+  try{ climaChipIniciar(); }catch(e){}
   try{ safetyBackup('ao abrir'); }catch(e){}
   if(typeof authInit==='function') authInit(); else if(typeof cloudStart==='function') cloudStart();
   /* verificação de integridade automática ao abrir: removida a pedido (a função openIntegridade segue no código) */

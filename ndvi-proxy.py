@@ -420,13 +420,51 @@ def _hist_values(node):
             pass
     return vals
 
+def _hist_serie(node):
+    """Igual a _hist_values, mas PRESERVA o instante: [(epoch, valor), ...] ordenado.
+
+    A Ecowitt entrega o histórico indexado pelo epoch de cada amostra, e até aqui
+    o proxy descartava a chave e devolvia só a média do dia. Para BPL isso não
+    serve: uma aplicação das 9:31 precisa da condição DAQUELE momento, não da
+    média que mistura a madrugada fria com a tarde quente."""
+    if not isinstance(node, dict):
+        return []
+    lst = node.get("list") or {}
+    out = []
+    for k, v in (lst.items() if isinstance(lst, dict) else []):
+        try:
+            out.append((int(k), float(v)))
+        except (TypeError, ValueError):
+            pass
+    out.sort(key=lambda p: p[0])
+    return out
+
+def _hist_perto(serie, alvo_epoch, tolerancia_s=1800):
+    """Amostra mais próxima do instante pedido. Devolve (valor, epoch, distância_s)
+    ou (None, None, None) se a mais próxima estiver além da tolerância — melhor
+    não responder do que carimbar um valor de duas horas depois como se fosse o
+    do momento da aplicação."""
+    if not serie or alvo_epoch is None:
+        return (None, None, None)
+    melhor = min(serie, key=lambda p: abs(p[0] - alvo_epoch))
+    dist = abs(melhor[0] - alvo_epoch)
+    if dist > tolerancia_s:
+        return (None, None, dist)
+    return (melhor[1], melhor[0], dist)
+
 def _hist_unit(node, default):
     return (node.get("unit") if isinstance(node, dict) else None) or default
 
-def do_clima_history(mac, date):
-    """Resumo do DIA (histórico) de uma estação p/ a data YYYY-MM-DD.
-       Devolve o MESMO formato do tempo-real (temp/humidity/rain_day/wind_*),
-       pra o app tratar igual — só que com média/extremos do dia escolhido."""
+def do_clima_history(mac, date, hora=None):
+    """Histórico de uma estação p/ a data YYYY-MM-DD.
+
+    Sem `hora`: resumo do DIA (média/extremos), como sempre foi.
+    Com `hora` (HH:MM): a leitura DAQUELE INSTANTE — é o que BPL pede de uma
+    aplicação registrada às 9:31. O resumo do dia continua vindo junto, em
+    `dia`, porque chuva acumulada e extremos só fazem sentido no dia inteiro.
+
+    Devolve o MESMO formato do tempo-real (temp/humidity/rain_day/wind_*),
+    pra o app tratar igual."""
     start = date + " 00:00:00"
     end = date + " 23:59:59"
     d = ecowitt_get("/device/history", {
@@ -449,6 +487,17 @@ def do_clima_history(mac, date):
     rain_daily = _hist_values(r.get("daily"))
     rain_rate = _hist_values(r.get("rain_rate"))
 
+    # Instante pedido (HH:MM). O epoch sai da data+hora no fuso da estação, que é
+    # o mesmo em que a Ecowitt grava o histórico — por isso o offset vem de time.
+    alvo = None
+    if hora:
+        try:
+            hh, mm = str(hora).strip().split(":")[:2]
+            tm = time.strptime("%s %02d:%02d" % (date, int(hh), int(mm)), "%Y-%m-%d %H:%M")
+            alvo = int(time.mktime(tm))
+        except (ValueError, TypeError):
+            alvo = None
+
     def avg(v):
         return round(sum(v) / len(v), 1) if v else None
     # chuva do dia: o acumulado diário (pega o maior do dia); senão soma a taxa
@@ -458,8 +507,51 @@ def do_clima_history(mac, date):
     def nd(value, unit):
         return {"value": value, "unit": unit}
 
+    # ---- leitura do INSTANTE pedido -------------------------------------
+    # Cada grandeza é buscada na sua própria série: se o sensor de vento falhou
+    # às 9:31 mas o de temperatura não, ainda se entrega a temperatura em vez de
+    # descartar o carimbo inteiro.
+    if alvo is not None:
+        st = _hist_serie(o.get("temperature"))
+        sh = _hist_serie(o.get("humidity"))
+        sd = _hist_serie(o.get("dew_point"))
+        sw = _hist_serie(w.get("wind_speed"))
+        sg = _hist_serie(w.get("wind_gust"))
+        ss = _hist_serie(s.get("solar"))
+        v_t, ep_t, dist = _hist_perto(st, alvo)
+        v_h, _, _ = _hist_perto(sh, alvo)
+        v_d, _, _ = _hist_perto(sd, alvo)
+        v_w, _, _ = _hist_perto(sw, alvo)
+        v_g, _, _ = _hist_perto(sg, alvo)
+        v_s, _, _ = _hist_perto(ss, alvo)
+        achou = any(x is not None for x in (v_t, v_h, v_d, v_w, v_g, v_s))
+        return {
+            "mac": mac, "date": date, "fonte_hist": True, "instante": True,
+            "hora_pedida": hora,
+            "hora": (time.strftime("%H:%M", time.localtime(ep_t)) if ep_t else None),
+            "defasagem_s": dist,
+            "samples": len(temps),
+            "sem_amostra": (not achou),
+            "temp": nd(v_t, _hist_unit(o.get("temperature"), "℃")),
+            "humidity": nd(v_h, "%"),
+            "dew_point": nd(v_d, _hist_unit(o.get("dew_point"), "℃")),
+            "wind_speed": nd(v_w, _hist_unit(w.get("wind_speed"), "km/h")),
+            "wind_gust": nd(v_g, _hist_unit(w.get("wind_gust"), "km/h")),
+            "solar": nd(v_s, _hist_unit(s.get("solar"), "W/m²")),
+            # chuva e extremos NÃO têm valor instantâneo: são do dia por definição
+            "rain_day": nd(rain_total, _hist_unit(r.get("daily"), "mm")),
+            "wind_dir": None, "pressure": None, "vpd": None,
+            "dia": {
+                "temp": avg(temps),
+                "temp_min": (round(min(temps), 1) if temps else None),
+                "temp_max": (round(max(temps), 1) if temps else None),
+                "humidity": avg(hums),
+                "wind_speed": avg(winds),
+            },
+        }
+
     return {
-        "mac": mac, "date": date, "fonte_hist": True, "samples": len(temps),
+        "mac": mac, "date": date, "fonte_hist": True, "instante": False, "samples": len(temps),
         "temp": nd(avg(temps), _hist_unit(o.get("temperature"), "℃")),
         "temp_min": nd(round(min(temps), 1) if temps else None, _hist_unit(o.get("temperature"), "℃")),
         "temp_max": nd(round(max(temps), 1) if temps else None, _hist_unit(o.get("temperature"), "℃")),
@@ -530,7 +622,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/clima":
                 return self._json(do_clima(q["mac"]))
             if u.path == "/clima/historico":
-                return self._json(do_clima_history(q["mac"], q["date"]))
+                return self._json(do_clima_history(q["mac"], q["date"], q.get("hora")))
             if u.path == "/dates":
                 bbox = [float(x) for x in q["bbox"].split(",")]
                 return self._json(do_dates(bbox, q["from"], q["to"]))
