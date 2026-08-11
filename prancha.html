@@ -459,9 +459,6 @@ const iTest = TRAT.findIndex(t=>t.testemunha);
 const EFIC = R.eficacia.map((e,i)=> i===iTest ? 0 : e);   /* Abbott sobre a AACPD */
 
 /* Abbott sobre a severidade final — caminho independente da AACPD */
-const ULT = DAA.length - 1;
-const EFIC_SEV = TRAT.map((_,i) => i === iTest ? null
-  : _efic1(mSEV[i][ULT], mSEV[iTest][ULT]));
 
 /* Estes vinham cravados no protótipo ("4 blocos", "mSEV[iTest][2]"), o que só
    valia para o estudo de demonstração. Agora seguem o delineamento real. */
@@ -504,12 +501,9 @@ const L = {
      tituloSevA:"Severidade e eficácia de controle",
      tituloSevAv:"Severidade por avaliação",
      eixoAval:"Avaliação",
-     notaSevAv:"Severidade média de 4 blocos em cada avaliação.",
      legSevAval:()=>`Severidade média${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
      colEficA:"Eficácia", severidadeL:"Severidade",
-     notaSevA:m=>`Severidade média aos ${m} · eficácia de Abbott calculada sobre a severidade · média de 4 blocos`,
      legSevAbbott:()=>`Severidade média${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a severidade média de 4 blocos, em relação à testemunha. ${ESTUDO.pt.escala}.`,
-     notaSevB:m=>`Severidade média aos ${m} · média de 4 blocos`,
      legSevSimples:()=>`Severidade média${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos. ${ESTUDO.pt.escala}.`,
      aplic:"2ª aplicação",
      legSev:()=>`Curva de progresso da severidade${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD. ${ESTUDO.pt.escala}.`,
@@ -537,12 +531,9 @@ const L = {
      tituloSevA:"Severity and control efficacy",
      tituloSevAv:"Severity by assessment",
      eixoAval:"Assessment",
-     notaSevAv:"Mean severity of 4 blocks at each assessment.",
      legSevAval:()=>`Mean${ALVO.en} severity by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
      colEficA:"Efficacy", severidadeL:"Severity",
-     notaSevA:m=>`Mean severity at ${m} · Abbott efficacy calculated on severity · mean of 4 blocks`,
      legSevAbbott:()=>`Mean${ALVO.en} severity and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean severity of 4 blocks, relative to the untreated check. ${ESTUDO.en.escala}.`,
-     notaSevB:m=>`Mean severity at ${m} · mean of 4 blocks`,
      legSevSimples:()=>`Mean${ALVO.en} severity by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks. ${ESTUDO.en.escala}.`,
      aplic:"2nd application",
      legSev:()=>`Disease progress curves for${ALVO.en} severity by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC. ${ESTUDO.en.escala}.`,
@@ -791,55 +782,10 @@ function secSeveridade(x, y, w, h){
   }
 
   let s = "";
-  const painelSimples = modo === "barras" || modo === "abbott";
-  if(painelSimples){
-    const comAbbott = modo === "abbott";
-    /* o mais simples possível: uma barra por tratamento, severidade final */
-    const ultimo = DAA.length - 1;
-    const vals = TRAT.map((_,i)=> mSEV[i][ultimo]);
-    const teto = Math.ceil(Math.max(...vals)/10)*10 + 10;
-    const colEf = comAbbott ? 130 : 0;
-    const rotW = Math.min(300, w*0.30);
-    const x0 = x + rotW, larg = w - rotW - 76 - colEf;
-    const G = geoBarras(TRAT.length);
-    const hB = G.h, gap = G.gap;
-    const px = v => x0 + (v/teto)*larg;
-    let cy = y + 30;
-
-    /* eixo */
-    for(let v=0; v<=teto; v+=10){
-      s += `<line x1="${px(v)}" y1="${cy-12}" x2="${px(v)}" y2="${cy + TRAT.length*(hB+gap) - gap + 4}"
-              stroke="${LINHA}" stroke-width="${v===0?1.1:0.7}"/>`;
-      s += txt(px(v), cy-18, fmt(v,0), {t:11.5, a:"middle", c:GRAF});
-    }
-    s += txt(x0+larg+12, cy-18, "%", {t:11.5, c:GRAF});
-    if(comAbbott){
-      s += txt(x0 + larg/2, cy-38, d.severidadeL, {t:11, w:600, ls:1.3, a:"middle", c:GRAF});
-      s += txt(x+w, cy-38, d.colEficA, {t:11, w:600, ls:1.3, a:"end", c:GRAF});
-      s += `<line x1="${x+w-colEf+16}" y1="${cy-30}" x2="${x+w-colEf+16}" y2="${cy + TRAT.length*(hB+gap) - gap + 4}" stroke="${LINHA}" stroke-width="1"/>`;
-    }
-
-    TRAT.forEach((tr,i)=>{
-      const by = cy + i*(hB+gap);
-      const bw = Math.max(2, px(vals[i]) - x0);
-      s += txt(x, by+hB*0.70, tr.id, {t:G.fId, w:600});
-      const nm = nome(tr);
-      const corte = Math.floor((rotW-G.fId*2.2)/(G.fNome*0.50));
-      s += txt(x+G.fId*2.2, by+hB*0.70, nm.length>corte ? nm.slice(0,corte-1)+"…" : nm, {t:G.fNome, c:GRAF});
-      s += `<rect x="${x0}" y="${by}" width="${bw.toFixed(1)}" height="${hB}"
-              fill="${tr.cor}" fill-opacity="0.88" stroke="${TINTA}" stroke-width="1"/>`;
-      s += txt(x0+bw+10, by+hB*0.72, `${fmt(vals[i],1)}%`, {t:G.fVal, w:600});
-      if(comAbbott){
-        s += txt(x+w, by+hB*0.72, EFIC_SEV[i] === null ? "—" : `${fmt(EFIC_SEV[i],1)}%`,
-                 {t:G.fVal*1.1, w:600, a:"end", c: EFIC_SEV[i] === null ? GRAF : TINTA});
-      }
-    });
-
-    const base = cy + TRAT.length*(hB+gap) - gap + 18;
-    s += rule(x, base, w, 1.1);
-    s += txt(x, base+20, comAbbott ? d.notaSevA(rotMom(ultimo)) : d.notaSevB(rotMom(ultimo)), {t:12, c:GRAF});
-    return {svg:s, h: base - y + 30};
-  }
+  /* O ramo de barras DEITADAS (vistas "sev-barras" e "sev-abbott") saiu daqui:
+     as duas viraram botão dentro da folha de barras verticais, e modoSev() hoje
+     só devolve "curva" ou "paineis". O que sobrou nesta função é a curva de
+     progresso e o painel por tratamento. */
   if(!painel){
     const muitos = TRAT.length > 12;
     const gx = x + 46, gy = y + 12, gw = w - 46 - (muitos ? 30 : 96), gh = h - 74;
@@ -904,51 +850,6 @@ function faixaLegenda(x, y, w){
 }
 
 /* --- barras verticais agrupadas por avaliação: severidade pura, sem AACPD --- */
-function secSevAvaliacao(x, y, w, h){
-  const d = t();
-  const gx = x + 54, gw = w - 54 - 16;
-  const gy = y + 16, gh = h - 108;
-  const teto = Math.ceil(Math.max(...mSEV.flat())/10)*10 + 10;
-  const py = v => gy + gh - (v/teto)*gh;
-  const grupoW = gw/DAA.length;
-  const barrasW = grupoW*0.76;
-  const barW = barrasW/TRAT.length;
-  let s = "";
-
-  /* grade e eixo Y */
-  for(let v=0; v<=teto; v+=10){
-    s += `<line x1="${gx}" y1="${py(v).toFixed(1)}" x2="${gx+gw}" y2="${py(v).toFixed(1)}"
-            stroke="${LINHA}" stroke-width="${v===0?1.1:0.7}"/>`;
-    s += txt(gx-10, py(v)+4, fmt(v,0), {t:11.5, a:"end", c:GRAF});
-  }
-  s += txt(x+16, gy+gh/2, d.eixoSev, {t:12, a:"middle", c:GRAF})
-         .replace("<text", `<text transform="rotate(-90 ${x+16} ${gy+gh/2})"`);
-
-  /* um grupo por avaliação */
-  DAA.forEach((dd, di)=>{
-    const g0 = gx + di*grupoW + (grupoW-barrasW)/2;
-    if(di > 0) s += `<line x1="${gx+di*grupoW}" y1="${gy}" x2="${gx+di*grupoW}" y2="${gy+gh+8}" stroke="${LINHA}" stroke-width="1"/>`;
-    TRAT.forEach((tr, ti)=>{
-      const bx = g0 + ti*barW, v = mSEV[ti][di];
-      const topo = py(v), alt = gy + gh - topo;
-      const folga = barW > 6 ? 1 : 0.2;
-      s += `<rect x="${(bx+folga).toFixed(1)}" y="${topo.toFixed(1)}" width="${Math.max(0.8,barW-2*folga).toFixed(1)}" height="${Math.max(1,alt).toFixed(1)}"
-              fill="${tr.cor}" fill-opacity="0.88"${barW > 7 ? ` stroke="${TINTA}" stroke-width="0.9"` : ""}/>`;
-      /* só rotula se o número couber em cima da barra */
-      if(barW >= 24) s += txt(bx+barW/2, topo-6, fmt(v,1), {t:10.5, a:"middle", c:GRAF});
-    });
-    s += txt(gx + di*grupoW + grupoW/2, gy+gh+26, `${fmt(dd,0)} DAA`, {t:14, w:600, a:"middle"});
-    s += txt(gx + di*grupoW + grupoW/2, gy+gh+44, AVALIACOES[di].data[estado.idioma], {t:11.5, a:"middle", c:GRAF});
-  });
-
-  /* legenda em faixa */
-  const ly = gy + gh + 63;
-  const lg = faixaLegenda(x, ly, w); s += lg.svg;
-  const fim = ly + lg.h + 6;
-  s += rule(x, fim, w, 1.1);
-  s += txt(x, fim+20, d.notaSevAv, {t:12, c:GRAF});
-  return {svg:s, h: fim + 30 - y};
-}
 
 /* --- tabela de tratamentos e doses (calculadora de calda) --- */
 function secTratamentos(x,y,w){

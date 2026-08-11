@@ -3719,6 +3719,18 @@ function buildClimaPanel(){
   if(_climaMode==='estacao'){
     var opts=_climaStations? _climaStations.map(function(st){ return '<option value="'+st.mac+'"'+(st.mac===climaMac?' selected':'')+'>'+esc(st.name)+'</option>'; }).join('') : '';
     ctrl=(_climaStations? '<label class="gr-ctl"><span>Estação</span><select onchange="climaPick(this.value)">'+opts+'</select></label>' : '');
+    /* A coordenada da estação é digitada por quem instala e às vezes fica no
+       padrão de fábrica. Isso não afeta a LEITURA (que vem pelo MAC), mas
+       estraga o nascer/pôr do sol — e ninguém descobre sem ser avisado. */
+    var _stSel=(_climaStations||[]).filter(function(s){ return s.mac===climaMac; })[0];
+    if(_stSel && _coordSuspeita(_stSel.lat,_stSel.lng)){
+      var _cAtivo=(LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro)||null;
+      var _dist=_cAtivo?Math.round(_kmEntre(_cAtivo[0],_cAtivo[1],_stSel.lat,_stSel.lng)):null;
+      ctrl+='<div style="margin:6px 0;padding:7px 9px;border-radius:8px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a;font-size:11px;line-height:1.5">'+
+        '⚠ A coordenada cadastrada nesta estação ('+(+_stSel.lat).toFixed(4)+', '+(+_stSel.lng).toFixed(4)+')'+
+        (_dist!=null?(' fica a '+_dist+' km daqui'):' não parece ser do Brasil')+'. '+
+        'A leitura do tempo continua correta — ela vem pelo aparelho, não pela coordenada. Só o nascer/pôr do sol a usa. Vale corrigir no app da Ecowitt.</div>';
+    }
   } else {
     var nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
     ctrl='<div class="gr-ctl"><span>Local</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis">'+esc(nm)+'</span><button class="ndvi-ix" onclick="climaGps()">'+ic('pin',14)+' GPS</button></div>';
@@ -3923,8 +3935,51 @@ function _climaSunLL(){
     for(i=0;i<ids.length;i++){ var c2=LOCAIS[ids[i]].centro, ln2=_climaNorm(LOCAIS[ids[i]].nome||'');
       if(c2&&c2.length===2){ for(k=0;k<toks.length;k++){ if(ln2.indexOf(toks[k])>=0) return c2; } } }
   }
-  if(st.lat!=null&&st.lng!=null) return [st.lat, st.lng];
+  /* Última reserva: a coordenada CADASTRADA na estação. Só que ela é digitada
+     por quem instala o aparelho e frequentemente fica no padrão de fábrica —
+     em agosto/2026, das quatro estações, a de Anápolis apontava para Cleveland
+     (EUA), 7.259 km fora, e a de Iracemápolis para a capital, 138 km fora.
+     Usar isso para calcular nascer/pôr do sol daria horário de outro fuso.
+     Só aceita se for plausível: dentro do Brasil e perto do local ativo. */
+  if(st.lat!=null && st.lng!=null && _coordPlausivel(st.lat, st.lng)) return [st.lat, st.lng];
   return null;
+}
+/* São DUAS perguntas diferentes, e misturá-las num limite só estava errado:
+
+   USAR a coordenada?  Só recusa erro grosseiro — fora do Brasil ou a mais de
+   300 km. A 138 km o erro no nascer do sol é de ~3,5 min, irrelevante em campo;
+   recusar por isso seria jogar fora um dado utilizável.
+
+   AVISAR o usuário?  Bem antes disso. Estação a mais de 50 km do local que ela
+   deveria representar é erro de cadastro, mesmo que o cálculo aguente. Ele só
+   conserta no app da Ecowitt se alguém contar. */
+function _coordDistanciaDoLocal(lat, lng){
+  try{
+    var c=(LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro)||null;
+    if(c&&c.length===2) return _kmEntre(c[0],c[1],Number(lat),Number(lng));
+  }catch(e){}
+  return null;
+}
+function _coordNoBrasil(lat, lng){
+  lat=Number(lat); lng=Number(lng);
+  return isFinite(lat)&&isFinite(lng) && lat>-34 && lat<6 && lng>-74 && lng<-34;
+}
+function _coordPlausivel(lat, lng){          /* dá para USAR no cálculo do sol? */
+  if(!_coordNoBrasil(lat,lng)) return false;
+  var d=_coordDistanciaDoLocal(lat,lng);
+  return !(d!=null && d>300);
+}
+function _coordSuspeita(lat, lng){           /* merece AVISO ao usuário? */
+  if(lat==null||lng==null) return false;
+  if(!_coordNoBrasil(lat,lng)) return true;
+  var d=_coordDistanciaDoLocal(lat,lng);
+  return (d!=null && d>50);
+}
+function _kmEntre(la1,lo1,la2,lo2){
+  var R=6371, r=Math.PI/180;
+  var dLa=(la2-la1)*r, dLo=(lo2-lo1)*r;
+  var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(a)));
 }
 function climaRender(d){
   var b=document.getElementById('climaBody'); if(!b) return;
@@ -4159,9 +4214,62 @@ function _ptukey(q,k,nu){ if(nu>2000) return _prange(q,k); var c=(nu/2)*Math.log
 function _qtukey(k,nu,alpha){ alpha=alpha||0.05; var target=1-alpha,lo=0.1,hi=30; for(var it=0;it<60;it++){ var mid=(lo+hi)/2; if(_ptukey(mid,k,nu)<target) lo=mid; else hi=mid; } return (lo+hi)/2; }
 function _tukeyLetters(order, tMean, hsd){ var n=order.length, m=order.map(function(id){return tMean[id];}); var ivs=[], lastB=-1; for(var a=0;a<n;a++){ var b=a; while(b+1<n && (m[a]-m[b+1])<=hsd+1e-9) b++; if(b>lastB){ ivs.push([a,b]); lastB=b; } } var lt=order.map(function(){return '';}); ivs.forEach(function(iv,ki){ var ch=String.fromCharCode(97+ki); for(var x=iv[0];x<=iv[1];x++) lt[x]+=ch; }); var out={}; order.forEach(function(id,i){ out[id]=lt[i]; }); return out; }
 /* ANOVA em blocos casualizados (DBC, blocos=repetições) + Tukey 5% p/ UMA avaliação+variável. null se desbalanceado/insuficiente. */
+/* ===== O ESTUDO TEM REPLICAÇÃO DE VERDADE? =================================
+   Esta função é o portão. Ela decide, olhando o dado REGISTRADO e não o que o
+   usuário gostaria, se cabe inferência (ANOVA, Tukey, p-valor) ou se a folha
+   tem de sair como demonstração descritiva.
+
+   DBC: sempre replicado — o delineamento já nasce com blocos.
+   Faixas: replicado só se houver 2+ treços preenchidos por tratamento. Com um
+   treço só, cada tratamento tem uma medida por faixa e não existe termo de erro
+   independente: qualquer p-valor ali estaria medindo variação DENTRO da faixa e
+   apresentando como se fosse efeito do produto.
+
+   Devolve {ok, motivo, blocos, desenho, rotulo} — o rotulo é o que sai impresso
+   na folha, para o leitor saber o que está olhando sem precisar perguntar. */
+function estudoTemReplicacao(s, av, v){
+  s = normalizeStudy(s);
+  var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
+  if(s.desenho!=='faixas'){
+    var r=Math.max(1, parseInt(s.numRepeticoes)||1);
+    return { ok:(r>=2 && trats.length>=2), blocos:r, desenho:'dbc',
+             rotulo:r+' blocos ao acaso',
+             motivo:(r>=2&&trats.length>=2)?'':'delineamento precisa de 2+ tratamentos e 2+ repetições' };
+  }
+  /* Em faixas, conta quantos treços de fato têm nota para CADA tratamento —
+     não o que foi planejado, o que foi medido. */
+  var reps=Math.max(1, parseInt(s.numRepeticoes)||1), minCheios=Infinity;
+  trats.forEach(function(t){
+    var n=0;
+    for(var r=1;r<=reps;r++){
+      var raw=av?_avNota(av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v):null;
+      if(raw!=null && raw!=='' && !isNaN(parseFloat(String(raw).replace(',','.')))) n++;
+    }
+    if(n<minCheios) minCheios=n;
+  });
+  if(!isFinite(minCheios)) minCheios=0;
+  if(trats.length<2)
+    return { ok:false, blocos:minCheios, desenho:'faixas', rotulo:'faixa única',
+             motivo:'só há um tratamento — não há o que comparar' };
+  if(minCheios>=2)
+    return { ok:true, blocos:minCheios, desenho:'faixas',
+             rotulo:minCheios+' treços por faixa (blocos por posição)', motivo:'' };
+  return { ok:false, blocos:minCheios, desenho:'faixas', rotulo:'faixas sem treços',
+           motivo:'cada tratamento ocupa uma faixa só e foi medido em um ponto: '+
+                  'medir mais pontos dentro da MESMA faixa não cria repetição. '+
+                  'Divida as faixas em treços transversais e amostre os mesmos treços em todas.' };
+}
 function statDBC(s, av, v){
   var ts=(s.tratamentos||[]).map(function(t){return t.id;}), r=Math.max(1,parseInt(s.numRepeticoes)||1), t=ts.length;
   if(t<2 || r<2) return null;
+  /* Ensaio em faixas sem treços: devolve NULO em vez de um p-valor bonito.
+     O motor daria conta de calcular — o problema é que o número não
+     significaria o que o leitor vai achar que significa. Quem chama já sabe
+     lidar com nulo (a folha cai no descritivo e explica). */
+  if(s.desenho==='faixas'){
+    var _rep=estudoTemReplicacao(s, av, v);
+    if(!_rep.ok) return null;
+  }
   var Y={}, all=[], ok=true;
   ts.forEach(function(tid){ Y[tid]=[]; for(var rep=1;rep<=r;rep++){ var raw=_avNota(av,{key:_avRowKey(tid,rep),tratId:tid,rep:rep},v); var x=parseFloat(String(raw==null?'':raw).replace(',','.')); if(isNaN(x)) ok=false; Y[tid].push(x); all.push(x); } });
   if(!ok) return null; /* precisa estar tudo preenchido (balanceado) */
@@ -5291,6 +5399,26 @@ function newStudy(){
        receita a calculadora do laboratório abre. */
     doseModo:'campo',     /* campo | ppm */
     doseUnidade:'L/ha',   /* L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo' */
+    /* ===== DESENHO EXPERIMENTAL ==========================================
+       'dbc'    — blocos ao acaso dentro de UMA quadra. É tudo que existia.
+       'faixas' — cada tratamento ocupa uma FAIXA/área própria, possivelmente
+                  em quadras diferentes (o caso do Bosqueiro: item de teste em
+                  1 ha, produto do produtor em 1 ha, testemunha em 6 plantas).
+
+       Em faixas o tratamento NÃO é repetido: ele aparece uma vez, num pedaço
+       contíguo de terra. Medir vinte pontos dentro da faixa não gera vinte
+       repetições — gera vinte medidas do mesmo pedaço, e a diferença entre
+       faixas carrega solo, declive e bordadura junto com o produto. Isso é
+       pseudorreplicação, e p-valor tirado dali não quer dizer o que parece.
+
+       A saída válida é BLOCAR POR POSIÇÃO: dividir as faixas em treços
+       transversais e amostrar os mesmos treços em todas elas. Aí cada treço é
+       um bloco legítimo, absorve o gradiente do terreno, e a ANOVA volta a
+       valer. `faixas[]` amarra tratamento -> quadra; o treço entra como a
+       "repetição" de sempre na grade de notas (T1R1, T1R2...), então o motor
+       estatístico não muda. Quem decide se há análise é estudoTemReplicacao(). */
+    desenho:'dbc',        /* dbc | faixas */
+    faixas:[],            /* [{tratId, qid, areaHa}] — só em desenho 'faixas' */
     testemunha:'',
     aplicacoes:[],
     avaliacoes:[],
@@ -5395,6 +5523,16 @@ function normalizeStudy(s){
      que os tratamentos já escreveram — se todos concordam, é ela. Assim um
      estudo velho todo em mL/ha não passa a se anunciar como L/ha. A unidade do
      estudo é só o padrão: dose que traz a própria unidade continua mandando. */
+  /* Desenho: estudo antigo não declarou nada e é DBC, que é o que sempre foi. */
+  if(s.desenho!=='faixas' && s.desenho!=='dbc') s.desenho='dbc';
+  if(!Array.isArray(s.faixas)) s.faixas=[];
+  /* Faixa só sobrevive se apontar para um tratamento que existe: apagar um
+     tratamento não pode deixar faixa órfã amarrando uma quadra a nada. */
+  if(s.desenho==='faixas'){
+    var _ids={}; (s.tratamentos||[]).forEach(function(t){ if(t&&t.id) _ids[t.id]=1; });
+    s.faixas=s.faixas.filter(function(f){ return f && f.tratId && _ids[f.tratId]; })
+                     .map(function(f){ return {tratId:f.tratId, qid:f.qid||'', areaHa:(f.areaHa!=null&&f.areaHa!==''?Number(f.areaHa):null)}; });
+  }else if(s.faixas.length){ s.faixas=[]; }
   if(s.doseModo!=='ppm' && s.doseModo!=='campo') s.doseModo='campo';
   if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(s.doseUnidade)<0){
     var _un={};
@@ -5850,6 +5988,52 @@ function doseTextoDe(study, raw){
     if(!p || /[a-zA-Z]/.test(p)) return p;
     return p+' '+u;
   }).join(' + ');
+}
+/* ===== ENSAIO EM FAIXAS: amarrar cada tratamento a uma quadra ===============
+   Redesenha a lista sempre que o desenho muda ou um tratamento entra/sai, para
+   nunca sobrar faixa apontando para tratamento que não existe mais. */
+function _seFaixasRender(){
+  var wrap=document.getElementById('seFaixasLista'); if(!wrap) return;
+  var s=workingStudy||{}; var trats=(s.tratamentos||[]).filter(function(t){ return t&&t.id; });
+  if(!trats.length){ wrap.innerHTML='<div style="font-size:12px;color:#9a8">Cadastre os tratamentos primeiro — cada um vai receber uma faixa.</div>'; return; }
+  var porTrat={}; (s.faixas||[]).forEach(function(f){ if(f&&f.tratId) porTrat[f.tratId]=f; });
+  var opts=window._seQuadraOpts||[];
+  var h='<div style="display:flex;flex-direction:column;gap:6px">';
+  trats.forEach(function(t){
+    var f=porTrat[t.id]||{};
+    h+='<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">'+
+       '<span style="min-width:34px;font-weight:800;font-size:12px">'+esc(t.id)+'</span>'+
+       '<span style="flex:1 1 130px;font-size:11px;color:#9fb1a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(t.produto||'—')+'</span>'+
+       '<select data-faixa-q="'+esc(t.id)+'" style="flex:1 1 130px"><option value="">— quadra —</option>'+
+         opts.map(function(o){ return '<option value="'+esc(o.id)+'"'+(f.qid===o.id?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')+
+       '</select>'+
+       '<input type="text" data-faixa-a="'+esc(t.id)+'" inputmode="decimal" placeholder="ha" value="'+esc(f.areaHa!=null?String(f.areaHa):'')+'" style="width:74px">'+
+       '</div>';
+  });
+  h+='</div>';
+  wrap.innerHTML=h;
+}
+function _seFaixasLer(){
+  if(!workingStudy) return;
+  if(workingStudy.desenho!=='faixas'){ workingStudy.faixas=[]; return; }
+  var out=[];
+  (workingStudy.tratamentos||[]).forEach(function(t){
+    if(!t||!t.id) return;
+    var sq=document.querySelector('[data-faixa-q="'+t.id+'"]');
+    var sa=document.querySelector('[data-faixa-a="'+t.id+'"]');
+    var qid=sq?sq.value:'', a=sa?String(sa.value||'').trim():'';
+    if(qid || a) out.push({tratId:t.id, qid:qid, areaHa:(a?_numBR(a,null):null)});
+  });
+  workingStudy.faixas=out;
+}
+function _seDesenhoSync(){
+  var sel=document.getElementById('seDesenho'); if(!sel) return;
+  var faixas=(sel.value==='faixas');
+  if(workingStudy) workingStudy.desenho=faixas?'faixas':'dbc';
+  var w=document.getElementById('seFaixasWrap'); if(w) w.style.display=faixas?'':'none';
+  var l=document.getElementById('seRepsLbl');
+  if(l) l.textContent=faixas?'Treços por faixa (blocos)':'Repetições por tratamento';
+  if(faixas) _seFaixasRender();
 }
 /* Mostra/esconde a unidade quando o estudo é declarado em ppm. */
 function _seDoseModoSync(){
@@ -7989,8 +8173,30 @@ function renderStudyEditModal(){
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
 
+  /* Desenho experimental. Em faixas cada tratamento ocupa uma área própria,
+     possivelmente em outra quadra — e aí a "repetição" passa a ser o treço. */
+  var _des=(s.desenho==='faixas')?'faixas':'dbc';
+  h+='<div class="se-section-title">Desenho do ensaio</div>';
+  h+='<div class="se-field"><label>Como os tratamentos estão no campo</label><select id="seDesenho" onchange="_seDesenhoSync()">'+
+     '<option value="dbc"'+(_des==='dbc'?' selected':'')+'>Blocos ao acaso, tudo nesta quadra</option>'+
+     '<option value="faixas"'+(_des==='faixas'?' selected':'')+'>Faixas — cada tratamento numa área/quadra</option>'+
+     '</select></div>';
+  h+='<div id="seFaixasWrap"'+(_des==='faixas'?'':' style="display:none"')+'>';
+  h+='<div style="font-size:11px;color:#9a8;line-height:1.55;margin:2px 0 8px;padding:8px 10px;border-radius:9px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a">'+
+     '<b>Em faixas, cada tratamento aparece uma vez só.</b> Medir vinte pontos dentro da mesma faixa não cria vinte repetições — cria vinte medidas do mesmo pedaço de terra, e a diferença entre faixas carrega solo, declive e bordadura junto com o produto.<br><br>'+
+     'Para haver estatística, divida as faixas em <b>treços transversais</b> e amostre os <b>mesmos treços em todas</b>. Cada treço vira um bloco e absorve o gradiente do terreno. É o campo "Treços por faixa" abaixo.<br><br>'+
+     'Com 1 treço só, o app entrega médias e diferenças, mas <b>não</b> p-valor — e escreve na folha por quê.</div>';
+  var _qOpts=Object.keys(data||{}).filter(function(q){ return q!=='__config' && !isQuadraLab(q); })
+    .map(function(q){ return {id:q, nome:quadraNome(q)}; })
+    .sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+  h+='<div id="seFaixasLista"></div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:4px 0 8px">A quadra de cada tratamento é onde ele foi aplicado. A área serve para o relatório — não entra na estatística de severidade e mortalidade, que são proporções.</div>';
+  h+='</div>';
+  window._seQuadraOpts=_qOpts;
+
   h+='<div class="se-section-title">Tratamentos</div>';
-  h+='<div class="se-field"><label>Repetições por tratamento</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
+  var _lblRep=(_des==='faixas')?'Treços por faixa (blocos)':'Repetições por tratamento';
+  h+='<div class="se-field"><label id="seRepsLbl">'+_lblRep+'</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
 
   h+='<div class="e-hint" style="margin:2px 0 9px">Marque <b>Testemunha</b> nos tratamentos-controle abaixo (pode mais de uma: ex. testemunha + padrão). A <b>1ª marcada</b> é a base do % de controle e da AUDPC — use a sem aplicação.</div>';
@@ -8014,6 +8220,10 @@ function renderStudyEditModal(){
   h+='<div class="se-actions"><button class="btn-save" onclick="saveStudyV2()">SALVAR</button><button class="btn-cancel" onclick="closeStudyEditV2()">Cancelar</button></div>';
 
   document.getElementById("sePnl").innerHTML=h;
+  /* A lista de faixas é montada DEPOIS do innerHTML porque depende dos
+     tratamentos já renderizados. addTrat/removeTrat redesenham o modal inteiro,
+     então ela se refaz sozinha quando um tratamento entra ou sai. */
+  try{ if((workingStudy||{}).desenho==='faixas') _seFaixasRender(); }catch(e){}
 }
 
 function addTrat(){
@@ -8051,6 +8261,8 @@ function syncStudyInputs(){
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
   x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
   x=el("seLabDens"); if(x) workingStudy.labDensidade=x.value.trim();
+  x=el("seDesenho"); if(x) workingStudy.desenho=(x.value==='faixas')?'faixas':'dbc';
+  _seFaixasLer();
   x=el("seDoseModo"); if(x) workingStudy.doseModo=(x.value==='ppm')?'ppm':'campo';
   x=el("seDoseUnid"); if(x && ['L/ha','mL/ha','g/ha','kg/ha'].indexOf(x.value)>=0) workingStudy.doseUnidade=x.value;
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
@@ -9509,6 +9721,19 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
     });
     h+='</select></div>';
   }
+  /* Ensaio em faixas: avisa AQUI, que é quando a informação serve — na hora de
+     digitar. Dizer depois, na folha, é tarde: o campo já foi embora. */
+  if(study.desenho==='faixas'){
+    var _fx=null; try{ _fx=estudoTemReplicacao(study, av, (av.variaveis||[])[0]||''); }catch(e){}
+    var _okFx=!!(_fx&&_fx.ok);
+    h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.5;'+
+       (_okFx?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+
+       (_okFx?'✓ ':'⚠ ')+'<b>Ensaio em faixas.</b> Cada linha da grade é um <b>treço</b> da faixa, não uma repetição solta. '+
+       (_okFx
+         ? ('Com '+_fx.blocos+' treços preenchidos em todos os tratamentos, esta avaliação gera estatística (blocos por posição).')
+         : ('Enquanto houver treço preenchido em apenas um ponto, a folha sai <b>sem p-valor</b>: medir mais pontos dentro da MESMA faixa não cria repetição. Preencha os mesmos treços em todas as faixas.'))+
+       '</div>';
+  }
   h+='<div class="se-field"><label>Notas por tratamento</label><div id="avGridWrap"></div></div>';
   h+='<div class="se-field"><label>Observações / Resultados</label><textarea id="vObs" rows="4" placeholder="Dados coletados, notas de campo...">'+esc(av.obs||"")+'</textarea></div>';
   h+='</fieldset>';
@@ -9548,9 +9773,16 @@ function _statSnapshot(s){
     var mom=avMomento(av,daa);
     (av.variaveis||[]).forEach(function(v){
       var r=null; try{ r=statDBC(s,av,v); }catch(e){ r=null; }
-      if(r) out.itens.push({ avId:av.id, data:av.data, momento:mom.rotulo, variavel:v, stat:r });
-      else   out.semAnalise.push({ avId:av.id, data:av.data, momento:mom.rotulo, variavel:v,
-                                   porque:'grade incompleta ou menos de 2 tratamentos/repetições' });
+      var rep=null; try{ rep=estudoTemReplicacao(s,av,v); }catch(e){}
+      if(r) out.itens.push({ avId:av.id, data:av.data, momento:mom.rotulo, variavel:v, stat:r,
+                             desenho:(rep&&rep.rotulo)||'' });
+      else {
+        /* O MOTIVO vai gravado. "Sem análise" e "sem análise porque o ensaio em
+           faixas não tem treços" são coisas diferentes para quem audita depois. */
+        out.semAnalise.push({ avId:av.id, data:av.data, momento:mom.rotulo, variavel:v,
+                              porque:(rep && rep.motivo) ? rep.motivo
+                                   : 'grade incompleta ou menos de 2 tratamentos/repetições' });
+      }
     });
   });
   return out;
