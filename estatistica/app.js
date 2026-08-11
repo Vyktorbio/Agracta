@@ -2871,6 +2871,114 @@ const FORENSE_SEV = {
   na:    { rotulo:"NÃO AVALIADO",chip:"chip-info",   item:"qa-aviso"  },
 };
 const FORENSE_CLASSE_BLOCO = { flag:"erro-box", watch:"aviso", clear:"decisao" };
+/* ===================== TABELA DE AUDITORIA DA TRIAGEM FORENSE ===============
+   Os achados já aparecem acima como cartões coloridos, que é bom para ler na
+   tela e ruim para auditar: cor não sobrevive a impressão em preto e branco,
+   nem a colar num relatório, nem a conferir linha a linha.
+
+   Esta é a mesma informação em tabela de largura fixa, no formato que o R
+   imprime um data.frame: cabeçalho, régua, uma linha por achado, sem cor
+   nenhuma. A severidade vira TEXTO na coluna, não cor — é o que faz a tabela
+   continuar dizendo a mesma coisa depois de fotocopiada. */
+function _forTruncar(s, n){
+  s = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+function _forPad(s, n){
+  s = String(s == null ? "" : s);
+  return s.length >= n ? s : s + " ".repeat(n - s.length);
+}
+/* Quebra em LARG colunas com recuo pendurado do tamanho do prefixo. Palavra
+   maior que a linha inteira não trava o laço: entra sozinha e transborda. */
+function _forQuebrar(prefixo, texto, LARG){
+  LARG = LARG || 80;
+  const t = String(texto == null ? "" : texto).replace(/\s+/g, " ").trim();
+  if(!t) return [prefixo.trimEnd()];
+  const recuo = " ".repeat(prefixo.length);
+  const out = [];
+  let linha = prefixo;
+  t.split(" ").forEach(p => {
+    if(linha.trimEnd().length && (linha + p).length > LARG){ out.push(linha.trimEnd()); linha = recuo; }
+    linha += p + " ";
+  });
+  if(linha.trim().length) out.push(linha.trimEnd());
+  return out;
+}
+function forenseTabelaTexto(rel){
+  const achados = rel.achados || [];
+  const v = rel.veredito || {};
+  const par = rel.parametros || {};
+  const SEV = { flag:"SINAL FORTE", watch:"ATENCAO", clear:"ok", na:"nao avaliado" };
+
+  /* larguras: nome e estatística cabem em 80 col. no total, que é o que
+     entra numa página A4 retrato em monoespaçada 9pt sem quebrar linha */
+  const W = { n:3, nome:26, sev:13, est:34 };
+  const linhas = [];
+  linhas.push("TRIAGEM FORENSE — TABELA DE AUDITORIA");
+  linhas.push("");
+  linhas.push("Veredito : " + (v.nivel || "—") + "   (regua: " + (v.modo || "—") + ")");
+  linhas.push("Sinais   : " + (v.flags || 0) + " forte(s), " + (v.watches || 0) + " atencao");
+  linhas.push("Cobertura: " + (v.testes_executados || 0) + "/" + (v.testes_previstos || 0) +
+              " testes executados" + (v.cobertura_suficiente ? "" : "  [INSUFICIENTE]"));
+  linhas.push("Dados    : " + (par.tipo_dado || "—") + ", " +
+              (par.n_grupos != null ? par.n_grupos : "—") + " grupos" +
+              (par.seed != null ? ", seed " + par.seed : "") +
+              (par.controle != null ? ", controle " + par.controle : ""));
+  linhas.push("");
+  const cab = _forPad("#", W.n) + " " + _forPad("achado", W.nome) + " " +
+              _forPad("severidade", W.sev) + " " + "estatistica";
+  linhas.push(cab);
+  linhas.push("-".repeat(Math.max(cab.length, W.n + W.nome + W.sev + W.est + 3)));
+  if(!achados.length){
+    linhas.push("(nenhum achado)");
+  }else{
+    achados.forEach((a, i) => {
+      linhas.push(
+        _forPad(String(i + 1), W.n) + " " +
+        _forPad(_forTruncar(a.nome, W.nome), W.nome) + " " +
+        _forPad(SEV[a.severidade] || String(a.severidade || "—"), W.sev) + " " +
+        _forTruncar(a.estatistica, W.est));
+    });
+  }
+  linhas.push("");
+  /* A leitura de cada achado não cabe na coluna e é o que explica o número —
+     vai embaixo, numerada, em vez de ser cortada com reticências. Quebrada em
+     80 colunas com recuo pendurado: é o que faz a folha imprimir em A4 sem a
+     linha correr para fora da margem. */
+  if(achados.length){
+    linhas.push("LEITURA DE CADA ACHADO");
+    achados.forEach((a, i) => {
+      _forQuebrar("[" + (i + 1) + "] ", a.leitura).forEach(l => linhas.push(l));
+      if(a.explicacao_inocente)
+        _forQuebrar("    explicacao inocente possivel: ", a.explicacao_inocente).forEach(l => linhas.push(l));
+    });
+    linhas.push("");
+  }
+  if(rel.aviso) _forQuebrar("AVISO: ", rel.aviso).forEach(l => linhas.push(l));
+  return linhas.join("\n");
+}
+function renderTabelaAuditoriaForense(out, rel){
+  const txt = forenseTabelaTexto(rel);
+  const b = el("div", "bloco");
+  b.innerHTML = `<h3>Tabela de auditoria</h3>` +
+    `<p class="dica">A mesma triagem em largura fixa, sem cor — para imprimir, colar no relatório e conferir linha a linha. A severidade está escrita na coluna, não na cor.</p>` +
+    `<pre class="for-audit" style="white-space:pre;overflow-x:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;padding:11px 12px;margin:0">${esc(txt)}</pre>` +
+    `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">` +
+    `<button type="button" class="btn-secundario" id="btn-for-copiar">Copiar tabela</button>` +
+    `<button type="button" class="btn-secundario" id="btn-for-baixar">Baixar .txt</button>` +
+    `</div>`;
+  out.appendChild(b);
+  const cop = b.querySelector("#btn-for-copiar");
+  if(cop) cop.addEventListener("click", ()=>{
+    if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>avisar("Tabela copiada.", "ok"));
+    else { baixarArquivo("triagem-forense.txt", txt, "text/plain;charset=utf-8"); avisar("Clipboard indisponivel; baixado como texto.", "ok"); }
+  });
+  const bai = b.querySelector("#btn-for-baixar");
+  if(bai) bai.addEventListener("click", ()=>{
+    baixarArquivo("triagem-forense.txt", txt, "text/plain;charset=utf-8");
+  });
+}
+
 function renderRelatorioForense(rel){
   const out=$("#resultados"); out.innerHTML="";
   $("#card-resultados").classList.remove("oculto");
@@ -2924,6 +3032,7 @@ function renderRelatorioForense(rel){
   // Disclaimer (sempre visível)
   if(rel.aviso) out.appendChild(htmlBloco(`<div class="aviso"><b>Importante:</b> ${esc(rel.aviso)}</div>`));
 
+  renderTabelaAuditoriaForense(out, rel);
   anexarTrilhaAuditoria(out, rel);
   $("#card-resultados").scrollIntoView({behavior:"smooth"});
 }
