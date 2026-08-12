@@ -673,14 +673,35 @@ const _VEN = {
    uma variável com o sentido mal cadastrado não consegue mais rebatizar a folha
    de "Severidade". No CAMPO é outra coisa: a variável se chama pelo alvo
    ("Mancha angular") e a medida é a severidade DELE — ali a regra antiga vale. */
-const MED = ((LAB || SENT === 'maior') && _VNOME)
+/* O NOME DA VARIÁVEL decide, e é isto que faltava. Ele é de duas naturezas:
+
+   MEDIDA  — "Mortalidade", "Incidência", "Fitotoxicidade", "Diâmetro da
+             colônia". Já diz o que foi medido; o rótulo é ele mesmo.
+   ALVO    — "Mancha angular", "Ferrugem asiática". Nomeia a doença, e o que se
+             mede nela é a SEVERIDADE: "Severidade de Mancha angular".
+
+   Antes isso dependia do contexto e do sentido, então uma variável chamada
+   "Mortalidade" numa quadra não marcada como laboratório, ou com o sentido mal
+   cadastrado, saía como "Severidade". O nome dela já dizia tudo. */
+const _MEDIDAS = /mortalidad|mortos|morte|sobreviv|efic[áa]cia|controle|incid[êe]ncia|infesta[çc][ãa]o|desfolha|fitotox|seletivid|germina|produtiv|stand|inibi[çc][ãa]o|crescimento|di[âa]metro|esporula|n[ºo°]?\s*de\s|n[úu]mero de|peso|nota|severidad|sever/i;
+const _EH_MEDIDA = _MEDIDAS.test(_VNOME);
+/* "Progresso da DOENÇA" só cabe quando a figura é mesmo de doença: quando a
+   variável nomeia o patógeno/alvo, ou quando a medida é de doença (severidade,
+   incidência, lesão, desfolha). Sobre "Mortalidade" a expressão está errada,
+   ainda que o ensaio esteja numa quadra de campo. */
+const _MED_DOENCA = /severidad|incid[êe]ncia|les[ãa]o|lesoes|les[õo]es|desfolha|mancha|ferrugem|m[íi]ldio|o[íi]dio|antracnose|pinta|cercospora/i.test(_VNOME);
+const _EH_DOENCA = !LAB && (!_EH_MEDIDA || _MED_DOENCA);
+const MED = (_VNOME && (_EH_MEDIDA || LAB || SENT === 'maior'))
   ? { pt:_cap1(_VNOME), en:(_VEN[_VNOME.toLowerCase()] || _cap1(_VNOME)) }
   : { pt:"Severidade", en:"Severity" };
 const MEDl = { pt: MED.pt.toLowerCase(), en: MED.en.toLowerCase() };
 /* O sufixo " de <alvo>" só entra quando alvo e medida são coisas diferentes —
    "Severidade de Mancha angular". Na bancada eles são o MESMO texto, e o
    sufixo produziria "Mortalidade média de Mortalidade". */
-const _MEDeALVO = !LAB && SENT !== 'maior';
+/* O sufixo " de <alvo>" só cabe quando a medida e o alvo são coisas diferentes.
+   Se o nome da variável já É a medida, alvo e variável são o mesmo texto e
+   sairia "Mortalidade média de Mortalidade". */
+const _MEDeALVO = !LAB && !_EH_MEDIDA && SENT !== 'maior';
 const ALVO = { pt: (ESTUDO.alvo && _MEDeALVO ? ` de ${ESTUDO.alvo}` : ""),
                en: (ESTUDO.alvo && _MEDeALVO ? ` ${ESTUDO.alvo}` : "") };
 /* A escala diagramática só existe em variável do tipo escala. Sem ela, a legenda
@@ -714,8 +735,8 @@ const L = {
      tituloEfic:`Eficácia de controle ${SENT==='maior'?'(Abbott)':'sobre a AACPD'}`, tituloTab:"Resultados por tratamento",
      /* Bancada: a curva é da própria leitura ao longo do tempo — "curva de
         mortalidade no tempo". "Progresso da doença" é figura de campo. */
-     tituloSev:(LAB ? `Curva de ${MEDl.pt} no tempo`
-                    : `Curva de progresso${SENT==='maior'?'':' da doença'}`),
+     tituloSev:(_EH_DOENCA ? `Curva de progresso da doença`
+                           : `Curva de ${MEDl.pt} no tempo`),
      eixoSev:`${MED.pt} (%)`, eixoDAA:`Dias depois ${APLREF.pt}`,
      notaSev:(LAB ? `Média de ${NB} repetições ± erro padrão.`
                   : `Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.`),
@@ -729,9 +750,9 @@ const L = {
      legSevAbbott:()=>`${MED.pt} média${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a ${MEDl.pt} média de ${NB} blocos, em relação à testemunha.${ESCALA.pt}`,
      legSevSimples:()=>`${MED.pt} média${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`,
      aplic:`${NAPL>1?'última aplicação':'aplicação'}`,
-     legSev:()=>(LAB
-       ? `${_cap1(MEDl.pt)} média por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} repetições e as barras indicam o erro padrão da média.${ESCALA.pt}`
-       : `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`),
+     legSev:()=>(_EH_DOENCA
+       ? `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`
+       : `${_cap1(MEDl.pt)} média por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} ${LAB?'repetições':'blocos'} e as barras indicam o erro padrão da média.${ESCALA.pt}`),
      figura:"Figura", tabela:"Tabela",
      legEfic:()=>(SENT==='maior'
        ? `Mortalidade corrigida de Abbott aos ${rotUlt()}, em relação à testemunha, estudo ${ESTUDO.codigo}. Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`
@@ -750,8 +771,7 @@ const L = {
      patamar:"commercial threshold", testemNota:m=>`Untreated check: AUDPC ${m} · final ${MEDl.en} ${fmt(mSEV[iTest][ULTAV],1)}%`,
      medias:"Means followed by the same letter do not differ.",
      tituloEfic:`${SENT==='maior'?"Control efficacy (Abbott's corrected mortality)":'Control efficacy based on AUDPC'}`, tituloTab:"Results by treatment",
-     tituloSev:(LAB ? `${_cap1(MEDl.en)} over time`
-                    : `${SENT==='maior'?'Progress curve':'Disease progress curve'}`),
+     tituloSev:(_EH_DOENCA ? `Disease progress curve` : `${_cap1(MEDl.en)} over time`),
      eixoSev:`${MED.en} (%)`, eixoDAA:`Days after ${APLREF.en}`,
      notaSev:(LAB ? `Mean of ${NB} replicates ± standard error.`
                   : `Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.`),
@@ -765,9 +785,9 @@ const L = {
      legSevAbbott:()=>`Mean${ALVO.en} ${MEDl.en} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean ${MEDl.en} of ${NB} blocks, relative to the untreated check.${ESCALA.en}`,
      legSevSimples:()=>`Mean${ALVO.en} ${MEDl.en} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`,
      aplic:`${NAPL>1?'last application':'application'}`,
-     legSev:()=>(LAB
-       ? `Mean ${MEDl.en} by treatment over time, study ${ESTUDO.codigo}. Points are means of ${NB} replicates and bars indicate the standard error of the mean.${ESCALA.en}`
-       : `${SENT==='maior'?'Progress':'Disease progress'} curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`),
+     legSev:()=>(_EH_DOENCA
+       ? `Disease progress curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`
+       : `Mean ${MEDl.en} by treatment over time, study ${ESTUDO.codigo}. Points are means of ${NB} ${LAB?'replicates':'blocks'} and bars indicate the standard error of the mean.${ESCALA.en}`),
      figura:"Figure", tabela:"Table",
      legEfic:()=>(SENT==='maior'
        ? `Abbott's corrected mortality at ${rotUlt()}, relative to the untreated check, study ${ESTUDO.codigo}. Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`
@@ -1731,6 +1751,12 @@ function rotulaAnalise(){
                           : `Control efficacy at ${rotMom(_jAnalise)}`;
     L[id].testemNota = m => pt ? `Testemunha: ${MEDl.pt} ${m}% a ${rotMom(_jAnalise)}`
                                : `Untreated check: ${MEDl.en} ${m}% at ${rotMom(_jAnalise)}`;
+    /* A substituição genérica transformava "AACPD" em "mortalidade a 48 HAT" e a
+       legenda saía "Mortalidade média, mortalidade a 48 HAT, eficácia…" — a
+       mesma coisa dita duas vezes. Aqui a frase é escrita, não remendada. */
+    L[id].legTab = () => pt
+      ? `${MED.pt} média a ${rotMom(_jAnalise)}, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`
+      : `Mean ${MEDl.en} at ${rotMom(_jAnalise)}, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`;
   });
 }
 if(UMA){
@@ -2196,7 +2222,18 @@ function _rotulaPainel(){
     };
     trocaTexto('#g-vista input[value="sev-curva"]',   `${MED.pt} no tempo`);
     trocaTexto('#g-vista input[value="sev-paineis"]', `${MED.pt} no tempo — um painel por tratamento`);
-    trocaTexto('#g-vista input[value="plantec"]',     `${MED.pt} por momento — barras verticais`);
+    /* "Severidade por data — barras verticais" é a folha do CAMPO, no formato do
+       gerar_grafico.py. Não se renomeia nem se adapta: numa quadra de bancada
+       ela simplesmente não é oferecida. */
+    const _pl = document.querySelector('#g-vista input[value="plantec"]');
+    if(_pl){
+      const o = _pl.closest(".opt"); if(o) o.style.display = "none";
+      if(estado.vista === "plantec"){
+        estado.vista = "barras";
+        const b = document.querySelector('#g-vista input[value="barras"]');
+        if(b){ b.checked = true; const ob = b.closest(".opt"); if(ob) ob.classList.add("ativo"); }
+      }
+    }
     /* a base do cálculo não é escolha aqui: na bancada não existe AACPD */
     const gb = document.getElementById("grupo-base");
     if(gb) gb.style.display = "none";
@@ -2227,7 +2264,7 @@ function _rotulaPainel(){
   };
   troca('#g-vista input[value="sev-curva"]',   `${MED.pt} — curva de progresso`);
   troca('#g-vista input[value="sev-paineis"]', `${MED.pt} — um painel por tratamento`);
-  troca('#g-vista input[value="plantec"]',     `${MED.pt} por data — barras verticais`);
+  /* a folha "por data — barras verticais" é do campo e não se mexe nela */
   troca('#g-bv-serie input[value="sev"]',      MED.pt);
   document.querySelectorAll(".dica").forEach(p=>{
     p.textContent = p.textContent.split("severidade").join(MEDl.pt);

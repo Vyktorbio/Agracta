@@ -123,6 +123,46 @@ var mag = ctx.txtRuns(0, 0, ctx.identRuns(), {});
 ck(mag.indexOf('|') < 0, 'sem separador solto quando só há o código');
 ck(mag.indexOf('Estudo X1') >= 0, 'o código continua lá');
 
+console.log('O NOME da variável decide: medida ou alvo');
+/* Os dois classificadores saem do próprio arquivo, não de uma cópia. */
+function pegaRegex(nome){
+  var i = html.indexOf('const ' + nome + ' = /');
+  if(i < 0) throw new Error('não achei ' + nome);
+  var ini = html.indexOf('/', html.indexOf('=', i));
+  var j = ini + 1, esc = false;
+  for(; j < html.length; j++){
+    if(esc){ esc = false; continue; }
+    if(html[j] === '\\'){ esc = true; continue; }
+    if(html[j] === '/') break;
+  }
+  var flags = html.slice(j+1).match(/^[a-z]*/)[0];
+  return new RegExp(html.slice(ini+1, j), flags);
+}
+var MEDIDAS = pegaRegex('_MEDIDAS'), MED_DOENCA = pegaRegex('_MED_DOENCA');
+var ehMedida = function(n){ return MEDIDAS.test(n); };
+var ehDoenca = function(n){ return !ehMedida(n) || MED_DOENCA.test(n); };
+
+/* MEDIDAS — o nome já diz o que foi medido, então o rótulo é ele mesmo */
+['Mortalidade','Insetos mortos','Eficácia','Incidência','Fitotoxicidade',
+ 'Inibição do crescimento micelial','Diâmetro da colônia (mm)','Produtividade',
+ 'Stand de plantas','Nº de lesões','Severidade'].forEach(function(n){
+  ck(ehMedida(n), '"'+n+'" é medida — o rótulo é o próprio nome');
+});
+/* ALVOS — nomeiam a doença; o que se mede nela é a severidade */
+['Mancha angular','Ferrugem asiática','Cercospora','Antracnose','Oídio'].forEach(function(n){
+  ck(!ehMedida(n), '"'+n+'" é alvo — vira "Severidade de '+n+'"');
+});
+
+console.log('E "progresso da DOENÇA" só cabe quando a figura é de doença');
+ck(ehDoenca('Mancha angular'),  'alvo: curva de progresso da doença');
+ck(ehDoenca('Severidade'),      'severidade: idem');
+ck(ehDoenca('Incidência'),      'incidência também é medida de doença');
+ck(ehDoenca('Nº de lesões'),    'lesão idem');
+ck(!ehDoenca('Mortalidade'),    'mortalidade NÃO: vira "curva de mortalidade no tempo"');
+ck(!ehDoenca('Eficácia'),       'eficácia NÃO');
+ck(!ehDoenca('Produtividade'),  'produtividade NÃO');
+ck(!ehDoenca('Diâmetro da colônia (mm)'), 'diâmetro de colônia NÃO');
+
 console.log('');
 console.log(p + ' ok, ' + f + ' falha(s)');
 process.exit(f ? 1 : 0);
