@@ -4303,13 +4303,13 @@ function buildStudyRecord(qid,s){
   if(s.tratamentos.length){ L.push(''); L.push('TRATAMENTOS'); L.push('#\tProduto\tDose\tV.Calda\tTestemunha\tObs');
     s.tratamentos.forEach(function(t){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.volume||'')+'\t'+(isTestemunha(s,t.id)?(studyTestemunha(s)===t.id?'sim (ref)':'sim'):'')+'\t'+(t.obs||'')); }); }
   if(s.aplicacoes.length){ L.push(''); L.push('APLICACOES'); L.push('Data\tBBCH\tObs');
-    s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); var ct=_carimboTSV(a.carimbo); if(ct)L.push(ct); }); }
+    s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); var ct=_carimboTSV(a.carimbo,a.data,a.hora); if(ct)L.push(ct); }); }
   /* AVALIAÇÕES: só as datas/metadados + carimbo (os valores por parcela vão na MATRIZ — sem duplicar) */
   var _avsM=s.avaliacoes.slice().sort(byData).filter(function(a){return a.variaveis&&a.variaveis.length;});
   if(s.avaliacoes.length){ L.push(''); L.push('AVALIACOES (datas e carimbo)'); L.push('Data\tTipo\tBBCH\tObs');
     s.avaliacoes.slice().sort(byData).forEach(function(a){
       L.push((isoToBR(a.data)||'')+'\t'+(a.tipo||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||''));
-      var ct=_carimboTSV(a.carimbo); if(ct)L.push(ct);
+      var ct=_carimboTSV(a.carimbo,a.data,a.hora); if(ct)L.push(ct);
     }); }
   /* lista de variáveis na ordem que aparecem */
   var _vars=[]; _avsM.forEach(function(a){ (a.variaveis||[]).forEach(function(v){ if(_vars.indexOf(v)<0)_vars.push(v); }); });
@@ -5425,6 +5425,10 @@ function newStudy(){
     avalInicio:"",
     avalIntervalo:7,
     avalNum:0,
+    /* bancada conta em horas: 'horas' + a lista de momentos, no lugar do "a cada X" */
+    avalUnidade:"dias",
+    avalHora0:"",
+    avalMomentos:"",
     randomizado:false,
     randomizacao:null,
     protocolo:null,
@@ -5481,6 +5485,10 @@ function _dedupeAvaliacoes(s){
        chave; quem não declara continua fundindo por data, como sempre. */
     var _m=(a&&a.momento)?avMomento(a,null):null;
     var _mk=(_m&&_m.explicito)?('|'+_m.chave):'';
+    /* Sem momento declarado, a HORA ainda separa: duas leituras no mesmo dia —
+       uma de manhã e outra à tarde — são duas avaliações, e fundi-las apagava a
+       segunda em silêncio. Sem momento e sem hora, funde por data como sempre. */
+    if(!_mk && a && a.hora) _mk='|h:'+String(a.hora).slice(0,5);
     var key=(a&&a.data)?('d:'+a.data+_mk):('id:'+((a&&a.id)||Math.random())); /* sem data => não funde */
     if(!byKey[key]){ byKey[key]=a; order.push(key); }
     else { dup=true; _fundeAval(byKey[key], a); }
@@ -5564,6 +5572,10 @@ function normalizeStudy(s){
   if(typeof s.avalInicio!=="string")s.avalInicio="";
   if(typeof s.avalIntervalo!=="number")s.avalIntervalo=parseInt(s.avalIntervalo)||7;
   if(typeof s.avalNum!=="number")s.avalNum=parseInt(s.avalNum)||0;
+  /* Programação em HORAS (bancada). Em dias tudo segue como sempre foi. */
+  if(s.avalUnidade!=='horas') s.avalUnidade='dias';
+  if(typeof s.avalMomentos!=="string") s.avalMomentos=(s.avalMomentos==null?'':String(s.avalMomentos));
+  if(typeof s.avalHora0!=="string") s.avalHora0='';
   if(!s.protocolo||typeof s.protocolo!=="object")s.protocolo=null;
   if(!s.protocoloOrigem||typeof s.protocoloOrigem!=="object")s.protocoloOrigem=null;
   s.randomizado=!!s.randomizado;
@@ -5587,10 +5599,19 @@ function normalizeStudy(s){
     });
   }else s.avaliacoes=[];
   _dedupeAvaliacoes(s); /* corrige duplicatas de avaliação acumuladas no merge entre aparelhos */
+  /* depois das avaliações já normalizadas: completa o sentido que ninguém declarou */
+  _sentidoDoTipo(s);
   if(!Array.isArray(s.audit)) s.audit=[];
   return s;
 }
 
+/* Carimba a hora deste instante no campo Hora da avaliação. */
+function _avHoraAgora(){
+  var el=document.getElementById('vHora'); if(!el) return;
+  var d=new Date(), p=function(n){ return (n<10?'0':'')+n; };
+  el.value=p(d.getHours())+':'+p(d.getMinutes());
+  try{ if(typeof _stxToast==='function') _stxToast('Hora da leitura: '+el.value); }catch(e){}
+}
 /* Nome legível do usuário logado (perfis/roster/admin) — p/ auditoria e assinatura */
 function _currentUserName(){
   var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
@@ -6855,7 +6876,18 @@ function _pranchaPayload(qid, sid, variavel){
          usar em todas as legendas, e sem isso toda folha saía sem dizer o alvo.
          escala = a escala diagramática, quando a variável for do tipo escala. */
       alvo:variavel, tipoEstudo:(s.tipoEstudo||''),
+      /* CAMPO ou BANCADA — dito, não deduzido. A folha vinha adivinhando o mundo
+         pelo sentido da variável, e por isso um bioensaio saía intitulado "curva
+         de progresso da doença". Quem sabe é a quadra. */
+      contexto:((typeof isQuadraLab==='function' && isQuadraLab(qid))?'lab':'campo'),
+      labTipo:((typeof quadraLabTipo==='function' && quadraLabTipo(qid))||''),
+      /* a contagem do tempo que o estudo declarou (horas na bancada) */
+      tempoUnidade:(s.avalUnidade==='horas'?'horas':'dias'),
       variavel:{ nome:variavel, tipo:_avTipo(avRef,variavel), sentido:_avSentido(avRef,variavel) },
+      /* A quadra já sabe o cultivar e a data de plantio; a prancha pedia os dois
+         em "completar o que falta" e ele redigitava a cada folha, porque nunca
+         eram enviados. O rodapé de identificação vive deles. */
+      variedade:(q.cultivar||''), plantio:(q.plantio||''),
       refDAA:base.fonte,
       pt:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:escalaTxt },
       en:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:escalaTxt }
@@ -7589,7 +7621,7 @@ function openStudyDetail(qid,sid){
         h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(info?' · '+esc(info.fase):'')+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
-      h+=carimboHtml(a.carimbo);
+      h+=carimboHtml(a.carimbo,a.data,a.hora);
       h+='</div>';
     });
     h+='</div>';
@@ -7605,7 +7637,11 @@ function openStudyDetail(qid,sid){
     var sortAvs=study.avaliacoes.slice().sort(function(a,b){return (a.data||"").localeCompare(b.data||"")});
     sortAvs.forEach(function(a,i){
       h+='<div class="evento-item">';
-      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação rubricada" style="margin-left:6px;font-size:12px">✍️</span>':'');
+      /* Data sozinha não identifica leitura de bancada: 24 e 48 HAT caem no
+         mesmo dia. Sai o momento quando declarado, senão a hora da leitura. */
+      var _mrot=''; try{ if(a.momento){ var _mm2=avMomento(a,null); if(_mm2&&_mm2.explicito) _mrot=' · '+_mm2.rotulo; } }catch(e){}
+      if(!_mrot && a.hora) _mrot=' · '+esc(String(a.hora).slice(0,5));
+      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação rubricada" style="margin-left:6px;font-size:12px">✍️</span>':'');
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
@@ -7616,7 +7652,7 @@ function openStudyDetail(qid,sid){
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       h+=avGridHtml(a);
       h+=avResultHtml(study,a);
-      h+=carimboHtml(a.carimbo);
+      h+=carimboHtml(a.carimbo,a.data,a.hora);
       h+='</div>';
     });
     h+='</div>';
@@ -8099,6 +8135,12 @@ function importStudyProtocolFile(inp){
   rd.readAsArrayBuffer(file);
 }
 
+/* Trocar horas<->dias redesenha a seção: os campos dos dois modos não convivem,
+   e deixá-los juntos convidava a programar em dias um ensaio contado em horas. */
+function _seTrocaContagem(){
+  try{ syncStudyInputs(); }catch(e){}
+  try{ renderStudyEditModal(); }catch(e){}
+}
 function renderStudyEditModal(){
   var s=workingStudy;
   var q=data[curV]||{};
@@ -8187,12 +8229,33 @@ function renderStudyEditModal(){
   }
 
   h+='<div class="se-section-title">Avaliações (programação)</div>';
+  /* CAMPO conta em dias e o intervalo é regular. BANCADA conta em HORAS e os
+     momentos não são regulares — 2, 12, 24, 48, 72 h. Forçar "a cada X" ali
+     obrigava a digitar avaliação por avaliação, e sem o momento declarado duas
+     leituras do mesmo dia se engoliam. */
+  var _emH=(s.avalUnidade==='horas'), _lab=isQuadraLab(curV);
+  if(_lab){
+    h+='<div class="se-field"><label>Contagem do tempo</label><select id="seAvalUnid" onchange="_seTrocaContagem()">'+
+       '<option value="horas"'+(_emH?' selected':'')+'>Horas após o tratamento (HAT)</option>'+
+       '<option value="dias"'+(_emH?'':' selected')+'>Dias após o tratamento (DAT)</option>'+
+       '</select></div>';
+  }
   h+='<div class="se-row">';
-  h+='<div class="se-field"><label>1ª avaliação</label><input type="date" id="seAvalInicio" value="'+esc(s.avalInicio||'')+'"></div>';
-  h+='<div class="se-field"><label>A cada (dias)</label><input type="number" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
-  h+='<div class="se-field"><label>Nº avaliações</label><input type="number" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
+  h+='<div class="se-field"><label>'+(_lab?'Dia do tratamento':'1ª avaliação')+'</label><input type="date" id="seAvalInicio" value="'+esc(s.avalInicio||'')+'"></div>';
+  if(_lab){
+    /* Bancada programa por LISTA, nas duas unidades: em horas os momentos são
+       2, 12, 24, 36, 72; em dias são DAT 1, DAT 3, DAT 7 — também irregulares.
+       A grade "a cada X" é do campo e não descreve nem um nem outro. */
+    h+='<div class="se-field"><label>Hora zero</label><input type="time" id="seAvalHora0" value="'+esc(s.avalHora0||'')+'" placeholder="08:00"></div>';
+    h+='<div class="se-field"><label>Momentos ('+(_emH?'h':'dias')+')</label><input type="text" id="seAvalMom" value="'+esc(s.avalMomentos||'')+'" placeholder="'+(_emH?'2, 12, 24, 36, 72':'1, 3, 7')+'" inputmode="decimal"></div>';
+  }else{
+    h+='<div class="se-field"><label>A cada (dias)</label><input type="number" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
+    h+='<div class="se-field"><label>Nº avaliações</label><input type="number" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
+  }
   h+='</div>';
-  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Ex.: de 7 em 7, 6 avaliações → o app cria as datas (aparecem na agenda e no estudo). Nº = 0 não gera. Cada data fica editável depois. Se em branco, usa a data da 1ª aplicação.</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">'+(_lab
+     ? 'Escreva os momentos separados por vírgula, na unidade escolhida acima — ex.: '+(_emH?'2, 12, 24, 36, 72':'1, 3, 7')+'. O app cria uma avaliação para cada um, já com data, hora e o momento em '+(_emH?'HAT':'DAT')+' preenchidos.<br><b>Precisa misturar?</b> Ponha o sufixo: <b>2h, 1d, 2d, 3d</b> lê o choque a 2 horas e depois um por dia. Meia hora se escreve com ponto (0.5h) — a vírgula aqui separa um momento do outro.<br>Duas leituras no mesmo dia deixam de se engolir, porque a chave é o momento, não a data.'
+     : 'Ex.: de 7 em 7, 6 avaliações → o app cria as datas (aparecem na agenda e no estudo). Nº = 0 não gera. Cada data fica editável depois. Se em branco, usa a data da 1ª aplicação.')+'</div>';
 
   /* Como a dose é definida. Só o laboratório pode ser em ppm — ensaio de campo
      é sempre dose por área. A unidade escolhida é o padrão de quem não escrever
@@ -8311,8 +8374,13 @@ function syncStudyInputs(){
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
   /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
-  workingStudy.avalIntervalo=intVal("seAvalInt",workingStudy.avalIntervalo||7);
-  workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
+  /* os campos de horas e de dias não coexistem na tela: só lê o que está lá,
+     senão trocar de contagem apagaria o que já estava programado no outro modo */
+  x=el("seAvalUnid"); if(x) workingStudy.avalUnidade=(x.value==='horas'?'horas':'dias');
+  x=el("seAvalHora0"); if(x) workingStudy.avalHora0=x.value||'';
+  x=el("seAvalMom"); if(x) workingStudy.avalMomentos=x.value||'';
+  if(el("seAvalInt")) workingStudy.avalIntervalo=intVal("seAvalInt",workingStudy.avalIntervalo||7);
+  if(el("seAvalNum")) workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
   syncTratInputs();
   var _ft=(workingStudy.tratamentos||[]).find(function(t){return t&&t.testemunha;}); workingStudy.testemunha=_ft?_ft.id:''; /* legado s.testemunha reflete os checkboxes (não ressuscita T1) */
 }
@@ -8333,15 +8401,83 @@ function syncTratInputs(){
 
 /* Gera datas de avaliação a partir do protocolo (1ª data + a cada X dias + N vezes).
    Aditivo por data; reprograma só os placeholders auto AINDA vazios (não apaga avaliação com dados). */
+/* Lista de momentos, MISTURANDO unidades: "2h, 1d, 2d, 3d".
+   É assim que o choque é lido de verdade — knockdown 2 horas depois e, a partir
+   daí, leitura diária. Forçar a agenda inteira em horas ou inteira em dias
+   obrigava a escrever "48, 72" para dizer "2 e 3 dias", e o eixo saía em horas.
+
+   Sufixo: h/hat = horas; d/dat/dia = dias. Número solto usa a unidade padrão do
+   estudo. Separadores: vírgula, ponto e vírgula ou espaço. MEIA HORA COM PONTO
+   ("0.5h"), porque a vírgula aqui separa um momento do outro. */
+function _parseMomentos(txt, unidadePadrao){
+  var padrao=(unidadePadrao==='horas')?'HAT':'DAT';
+  var vistos={}, out=[];
+  /* "2 hat" e "1 dia" são a mesma coisa que "2hat" e "1dia" — sem colar o
+     sufixo antes de separar, o espaço no meio jogava a unidade fora e a leitura
+     virava a unidade padrão, calada. */
+  String(txt||'')
+    .replace(/(\d)\s+(h|hat|hs|horas?|d|dat|daa|dias?)\b/gi, '$1$2')
+    .split(/[;,\s]+/).forEach(function(tok){
+    if(!tok) return;
+    var m=String(tok).match(/^(\d+(?:\.\d+)?)\s*(h|hat|hs|hora|horas|d|dat|daa|dia|dias)?$/i);
+    if(!m) return;
+    var v=parseFloat(m[1]); if(!isFinite(v)||v<0) return;
+    var u=padrao;
+    if(m[2]) u=/^(h|hat|hs|hora|horas)$/i.test(m[2])?'HAT':'DAT';
+    if(u==='HAT' && v>8760) return;
+    if(u==='DAT' && v>365) return;
+    var k=u+':'+v; if(vistos[k]) return; vistos[k]=1;
+    out.push({valor:v, unidade:u, dias:(u==='HAT'?v/24:v)});
+  });
+  return out.sort(function(a,b){ return a.dias-b.dias; });
+}
+/* Instante = dia do tratamento + hora zero + o deslocamento do momento. */
+function _instanteMomento(dataISO, hora0, mom){
+  var base=new Date(String(dataISO)+'T'+((hora0&&/^\d{1,2}:\d{2}/.test(hora0))?hora0.slice(0,5):'08:00')+':00');
+  if(isNaN(base)) return null;
+  var d=new Date(base.getTime()+mom.dias*86400000), p=function(n){ return (n<10?'0':'')+n; };
+  return { data:d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()), hora:p(d.getHours())+':'+p(d.getMinutes()) };
+}
+/* BANCADA: uma avaliação por MOMENTO, não por data.
+   O gerador de campo indexa por data — assim 2, 12 e 24 HAT viram uma só,
+   porque as três caem no mesmo dia. Aqui a chave é o momento, e cada avaliação
+   nasce com momento:{valor,unidade} preenchido, que é o que o gráfico, a
+   deduplicação e o eixo do tempo consomem. */
+function _gerarAvalMomentos(s){
+  var start=s.avalInicio||s.dataInicio; if(!start) return 0;
+  var moms=_parseMomentos(s.avalMomentos, s.avalUnidade); if(!moms.length) return 0;
+  var tem={};
+  s.avaliacoes.forEach(function(a){
+    var m=a&&a.momento;
+    if(m&&(m.unidade==='HAT'||m.unidade==='DAT')) tem[m.unidade+':'+m.valor]=true;
+  });
+  var add=0;
+  moms.forEach(function(mo){
+    var k=mo.unidade+':'+mo.valor;
+    if(tem[k]) return;
+    var q=_instanteMomento(start, s.avalHora0, mo); if(!q) return;
+    /* id determinístico pelo MOMENTO: dois aparelhos geram o mesmo id e o merge não duplica */
+    var _avid='auto_'+mo.unidade.toLowerCase()+String(mo.valor).replace('.','_');
+    if(s._deletedAvaliacoes) delete s._deletedAvaliacoes[_avid];
+    s.avaliacoes.push({id:_avid, data:q.data, hora:q.hora, momento:{valor:mo.valor, unidade:mo.unidade},
+      tipo:'', bbch:'', obs:'', variaveis:[], tipos:{}, notas:{}, auto:true, _ts:Date.now()});
+    tem[k]=true; add++;
+  });
+  return add;
+}
 function gerarAvaliacoesAuto(s){
   if(!s) return 0;
-  var start=s.avalInicio||s.dataInicio, iv=parseInt(s.avalIntervalo)||0, n=parseInt(s.avalNum)||0;
-  if(!start||n<=0) return 0;
   if(!Array.isArray(s.avaliacoes)) s.avaliacoes=[];
   s.avaliacoes=s.avaliacoes.filter(function(a){
     var vazio=(!a.variaveis||!a.variaveis.length)&&!a.obs&&!a.tipo&&!a.bbch;
     return !(a.auto && vazio);
   });
+  /* Bancada programa por LISTA DE MOMENTOS — em horas (2, 12, 24, 36, 72) ou em
+     dias (1, 3, 7), que também não são regulares ali. A grade "a cada X" é do
+     campo. Sem lista escrita, cai na grade, para não travar quem já usava. */
+  if(_parseMomentos(s.avalMomentos, s.avalUnidade).length) return _gerarAvalMomentos(s);
+  var start=s.avalInicio||s.dataInicio, iv=parseInt(s.avalIntervalo)||0, n=parseInt(s.avalNum)||0;
+  if(!start||n<=0) return 0;
   var temData={}; s.avaliacoes.forEach(function(a){ if(a.data) temData[a.data]=true; });
   var add=0;
   for(var i=0;i<n;i++){
@@ -8446,24 +8582,48 @@ function _aplAtual(){
 function _aplDur(ap){ try{ if(ap&&ap.inicio&&ap.fim&&ap.inicio.ts&&ap.fim.ts){ var ms=ap.fim.ts-ap.inicio.ts; if(ms>=0){ var min=Math.round(ms/60000); return min>=60?(Math.floor(min/60)+'h'+(min%60?(' '+(min%60)+'min'):'')):(min+'min'); } } }catch(e){} return ''; }
 function _aplRenderClimaBox(){
   var box=document.getElementById('aplClimaBox'); if(!box) return; var ap=_aplAtual();
-  function ln(rot,o){ if(!o) return '<div style="color:var(--text-3,#8aa88a)">'+rot+': — <span style="font-size:11px">(toque no botão na hora)</span></div>'; var cl=o.clima||{}; return '<div><b style="color:var(--accent,#37d684)">'+rot+'</b> '+esc(o.hora||'')+(cl.temp!=null?' · '+cl.temp+'°C':'')+(cl.umidade!=null?' · '+Math.round(cl.umidade)+'%UR':'')+(cl.vento!=null?' · vento '+cl.vento+'km/h':'')+(cl.clima_falhou?' <span style="color:#dccd8c;font-size:11px">(sem clima — só horário)</span>':'')+'</div>'; }
+  var _hoje=(typeof todayISO==='function')?todayISO():'';
+  function ln(rot,o){ if(!o) return '<div style="color:var(--text-3,#8aa88a)">'+rot+': — <span style="font-size:11px">(toque no botão na hora)</span></div>'; var cl=o.clima||{};
+    /* Dia junto quando não é hoje — sem ele, "08:14" de uma aplicação de ontem
+       se lê como sendo de hoje, que é exatamente a confusão que se quer evitar. */
+    var _d=(o.data&&o.data!==_hoje)?(((typeof isoToBR==='function'&&isoToBR(o.data))||o.data)+' '):'';
+    return '<div><b style="color:var(--accent,#37d684)">'+rot+'</b> '+esc(_d+(o.hora||''))+(cl.temp!=null?' · '+cl.temp+'°C':'')+(cl.umidade!=null?' · '+Math.round(cl.umidade)+'%UR':'')+(cl.vento!=null?' · vento '+cl.vento+'km/h':'')+(cl.clima_falhou?' <span style="color:#dccd8c;font-size:11px">(sem clima — só horário)</span>':'')+'</div>'; }
   var dur=_aplDur(ap);
   box.innerHTML=ln('Início',ap&&ap.inicio)+ln('Fim',ap&&ap.fim)+(dur?('<div style="margin-top:4px;color:var(--accent,#37d684)">⏱ Tempo de aplicação: <b>'+dur+'</b></div>'):'');
 }
 function aplMarcarClima(qual){
   var ap=_aplAtual(); if(!ap){ if(typeof _stxToast==='function')_stxToast('Abra a aplicação primeiro'); return; }
   if(qual==='fim' && !ap.inicio){ if(typeof _stxToast==='function')_stxToast('Marque o Início primeiro'); return; }
+  /* A data que manda é a DO FORMULÁRIO — mesmo antes de salvar. Marcar "agora" numa
+     aplicação de ontem gravava a hora de quem digita e o clima de hoje: nem o
+     horário nem o tempo eram os da pulverização. Em dia passado a hora é
+     perguntada, e o clima vem daquele instante na estação. */
+  var _elD=document.getElementById('aeData');
+  var hoje=(typeof todayISO==='function')?todayISO():'';
+  var dia=String((_elD&&_elD.value)||ap.data||hoje).slice(0,10);
   var now=new Date(), hora=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  var passado=!!(dia && hoje && dia<hoje);
+  if(passado){
+    var _sug=(ap[qual]&&ap[qual].hora)||hora;
+    var _r=prompt('Aplicação de '+(((typeof isoToBR==='function')&&isoToBR(dia))||dia)+'.\nQue horas foi o '+(qual==='inicio'?'INÍCIO':'FIM')+'? (HH:MM)', _sug);
+    if(_r===null) return;
+    _r=String(_r).trim().replace(/[hH]/,':');
+    var _m=_r.match(/^(\d{1,2}):(\d{2})$/);
+    if(!_m || +_m[1]>23 || +_m[2]>59){ if(typeof _stxToast==='function')_stxToast('Hora inválida — use HH:MM'); return; }
+    hora=(_m[1].length<2?'0':'')+_m[1]+':'+_m[2];
+  }
+  var ts=now.getTime();
+  if(passado){ var _d=new Date(dia+'T'+hora+':00'); if(!isNaN(_d)) ts=_d.getTime(); }
   var btn=document.getElementById(qual==='inicio'?'aplIniBtn':'aplFimBtn'); if(btn){ btn.disabled=true; var _t=btn.textContent; btn.textContent='Clima…'; btn._txt=_t; }
   function done(cl){
-    ap[qual]={ ts:now.getTime(), hora:hora, clima: cl?{fonte:cl.fonte, temp:cl.temp, umidade:cl.umidade, vento:cl.vento, vpd:cl.vpd, chuva:cl.chuva}:{clima_falhou:true} };
+    ap[qual]={ ts:ts, data:dia, hora:hora, clima: cl?{fonte:cl.fonte, temp:cl.temp, umidade:cl.umidade, vento:cl.vento, vpd:cl.vpd, chuva:cl.chuva}:{clima_falhou:true} };
     if(btn){ btn.disabled=false; if(btn._txt)btn.textContent=btn._txt; }
     _aplRenderClimaBox();
     /* salva já (o horário/clima é dado de campo no momento — não pode depender de lembrar de Salvar) */
     try{ if(typeof save==='function') save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSaveSoon==='function')cloudSaveSoon(); if(typeof dbUpsertAplicacao==='function'&&editingAplId!=='__new__')dbUpsertAplicacao(curV,curSid,ap); }catch(e){}
     if(typeof _stxToast==='function')_stxToast((qual==='inicio'?'Início':'Fim')+' registrado · '+hora+(cl&&cl.temp!=null?(' · '+cl.temp+'°C'):''));
   }
-  try{ _carimboClima(curV, function(cl){ done(cl); }); }catch(e){ done(null); }
+  try{ _carimboClima(curV, dia, (passado?hora:null), function(cl){ done(cl); }); }catch(e){ done(null); }
 }
 function openStudyEditAplicacao(aid){
   editingAplId=aid;editingAvId=null;draftAv=null;
@@ -8667,19 +8827,47 @@ function carimbar(qid,sid,recId,kind,recDate,recHora){
   _carimboClima(qid,recDate,recHora,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
   _carimboNdvi(qid,function(nd){ if(nd) _carimboSet(qid,sid,recId,kind,'ndvi',nd); });
 }
-function _carimboTSV(c){
+function _recarimbaEvento(qid,sid,recId,kind,recDate,recHora){
+  /* A data/hora do evento mudou DEPOIS do primeiro carimbo. O registro original
+     (ts/data) não se toca — é a evidência de quando se registrou, e em BPL isso
+     é imutável. O que tem de acompanhar é o EVENTO: dataEvento/horaEvento e,
+     com eles, o clima, que é lido justamente pela data do ensaio. Sem isto,
+     corrigir a data deixava carimbado o clima do dia errado, calado. */
+  var rec=_carimboFind(qid,sid,recId,kind); if(!rec||!rec.carimbo) return;
+  var c=rec.carimbo;
+  if(String(c.dataEvento||'')===String(recDate||'') && String(c.horaEvento||'')===String(recHora||'')) return;
+  c.dataEvento=(recDate||null); c.horaEvento=(recHora||null); c.eventoRevisadoEm=Date.now();
+  try{ save(); }catch(e){}
+  _carimboClima(qid,recDate,recHora,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
+}
+/* Quando o evento aconteceu, em texto — é a data que vale no relatório.
+   `data`/`ts` do carimbo é OUTRA coisa: a hora em que se registrou. Confundir as
+   duas fazia uma aplicação de ontem, digitada hoje, aparecer com a data de hoje. */
+function _carimboQuando(c,recDate,recHora){
+  var iso=(c&&c.dataEvento)||recDate||'', hr=(c&&c.horaEvento)||recHora||'';
+  if(!iso) return '';
+  var d=(typeof isoToBR==='function'&&isoToBR(iso))||iso;
+  return d+(hr?(' '+String(hr).slice(0,5)):'');
+}
+function _carimboTSV(c,recDate,recHora){
   if(!c) return '';
-  var p=[]; if(c.data)p.push('Registrado '+c.data);
+  var p=[], _ev=_carimboQuando(c,recDate,recHora);
+  if(_ev) p.push('Evento '+_ev);
+  if(c.data) p.push('Registrado '+c.data);
   if(c.clima){ var cl=c.clima; p.push('Clima('+(cl.fonte==='estacao'?'estacao':'previsao')+') '+(cl.temp!=null?cl.temp+'C':'')+(cl.umidade!=null?' '+cl.umidade+'%UR':'')+(cl.vpd!=null?' VPD'+cl.vpd:'')+(cl.vento!=null?' vento'+cl.vento+'km/h':'')+(cl.chuva!=null?' chuva'+cl.chuva+'mm':'')); }
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push('NDVI '+c.ndvi.ndvi+(c.ndvi.ndre!=null?' NDRE '+c.ndvi.ndre:'')+(c.ndvi.data?' ('+c.ndvi.data+')':''));
   var ll=c.gps?(c.gps.lat+','+c.gps.lng):(c.centro&&c.centro.length===2?(c.centro[0]+','+c.centro[1]):'');
   if(ll) p.push('GPS '+ll);
   return p.length?('  carimbo\t'+p.join('\t')):'';
 }
-function carimboHtml(c){
+function carimboHtml(c,recDate,recHora){
   if(!c) return '';
   var p=[];
-  if(c.data) p.push(ic('calendar',12)+' '+esc(c.data));
+  /* Primeiro o DIA DO ENSAIO — é o que o relatório e o auditor procuram. A hora
+     do registro fica atrás, escrita como registro, para não se passar por ela. */
+  var _ev=_carimboQuando(c,recDate,recHora);
+  if(_ev) p.push(ic('calendar',12)+' '+esc(_ev)+(c.data?('<span style="color:#8a948e"> · registrado '+esc(c.data)+'</span>'):''));
+  else if(c.data) p.push(ic('calendar',12)+' registrado '+esc(c.data));
   if(c.clima){ var cl=c.clima, s=ic('thermo',12)+' '+(cl.temp!=null?(Math.round(cl.temp*10)/10)+'°C':'—');
     if(cl.umidade!=null)s+=' · '+ic('droplet',12)+Math.round(cl.umidade)+'%';
     if(cl.vpd!=null)s+=' · '+ic('gauge',12)+'VPD '+(Math.round(cl.vpd*100)/100);
@@ -8751,6 +8939,7 @@ function saveAplicacao(){
     draftAp=null;
   }
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data,ap.hora);
+  else _recarimbaEvento(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
@@ -8853,15 +9042,58 @@ function _avBrutoTxt(src,key,v){
 /* ===== Catálogo de variáveis por tipo de estudo =====
    Sem isso a variável é texto livre e vira "Mortalidade" / "mortalidade" / "Mort."
    em avaliações diferentes — e aí a série da AACPD e da prancha não fecha. */
-var TIPOS_ESTUDO=['Eficácia','Mortalidade','Fungo in vitro','Fungo in vivo','Seletividade/Fitotoxicidade','Produtividade','Outro'];
-/* Tipos que fazem sentido em cada laboratório — o cadastro do estudo numa quadra
-   de lab oferece só esses, na ordem. Nematologia não usa: lá o registro é a fila
-   de amostras, não avaliação com tratamentos. */
+var TIPOS_ESTUDO=['Eficácia','Mortalidade','Fungo in vitro','Fungo in vivo','Folha destacada','Seletividade/Fitotoxicidade','Produtividade','Outro'];
+/* CAMPO e LABORATÓRIO não são o mesmo mundo, e tratá-los como se fossem foi o
+   que deixou um bioensaio de mortalidade sair rotulado como "curva de progresso
+   da doença". No campo: severidade, incidência, fito, produtividade — e a AACPD
+   faz sentido. Na bancada: mortalidade, inibição do crescimento in vitro, folha
+   destacada — o tempo é em HORAS e não existe área sob a curva.
+   Por isso a quadra de lab oferece SÓ os tipos de laboratório: escolher
+   "severidade" ali era possível, e era a porta de entrada do erro.
+   Nematologia não usa: lá o registro é fila de amostras, não avaliação. */
 var TIPOS_POR_LAB={
-  Entomologia:['Mortalidade','Eficácia','Seletividade/Fitotoxicidade','Outro'],
-  Fitopatologia:['Fungo in vitro','Fungo in vivo','Eficácia','Outro'],
+  Entomologia:['Mortalidade','Folha destacada','Outro'],
+  /* "Fungo in vivo" fica: na Fitopatologia dele é ensaio de bancada com planta
+     inoculada, e mede severidade — não é tipo de campo que vazou. Saíram só os
+     que não têm o que fazer numa bancada: "Eficácia" e "Seletividade". */
+  Fitopatologia:['Fungo in vitro','Folha destacada','Fungo in vivo','Outro'],
   Nematologia:['Outro']
 };
+/* Tipos cuja variável principal é "quanto MAIOR, melhor" — a testemunha é a
+   MENOR e a eficácia é a mortalidade corrigida de Abbott. É daqui que sai o
+   sentido quando a variável foi criada à mão e ninguém o declarou. */
+var TIPOS_SENTIDO_MAIOR={'Mortalidade':1};
+/* O sentido da variável VINHA SÓ do que foi digitado na coluna da avaliação.
+   Coluna criada à mão num estudo de mortalidade ficava sem sentido declarado, e
+   'menor' é o padrão — daí saíam eficácia de −1431%, letra "a" na testemunha e
+   a folha inteira falando em severidade e doença. Agora, quando o sentido NÃO
+   foi declarado, ele vem do tipo do estudo e do catálogo daquele tipo. Escolha
+   explícita do usuário nunca é sobrescrita: só se preenche o que está em branco.
+   Roda no normalizeStudy, então conserta sozinho os estudos já gravados. */
+function _sentidoDoTipo(s){
+  try{
+    var tipo=String((s&&s.tipoEstudo)||'').trim(); if(!tipo) return;
+    var cat=(typeof CATALOGO_AVAL==='object'&&CATALOGO_AVAL[tipo])||null;
+    var doTipo=!!TIPOS_SENTIDO_MAIOR[tipo];
+    if(!cat && !doTipo) return;
+    var porNome={};
+    (cat||[]).forEach(function(c){ if(c&&c.nome) porNome[String(c.nome).toLowerCase()]=c.sentido||null; });
+    (s.avaliacoes||[]).forEach(function(a){
+      if(!a || !Array.isArray(a.variaveis)) return;
+      a.variaveis.forEach(function(v){
+        var cfg=(a.varcfg&&a.varcfg[v])||null;
+        if(cfg && (cfg.sentido==='maior'||cfg.sentido==='menor')) return;   /* declarado: não toca */
+        var sent=porNome[String(v).toLowerCase()];
+        /* Sem entrada no catálogo, o tipo ainda decide: num estudo de
+           Mortalidade, coluna com "morta"/"mortalidade" no nome é 'maior'. */
+        if(!sent && doTipo && /mortalidad|mortos|morte/i.test(String(v))) sent='maior';
+        if(!sent) return;
+        if(!a.varcfg||typeof a.varcfg!=='object') a.varcfg={};
+        a.varcfg[v]=Object.assign({}, a.varcfg[v], {sentido:sent, _sentidoDoTipo:true});
+      });
+    });
+  }catch(e){}
+}
 var CATALOGO_AVAL={
   'Eficácia':[
     {nome:'Severidade',tipo:'pct',sub:10},
@@ -8889,6 +9121,16 @@ var CATALOGO_AVAL={
     {nome:'Diâmetro da colônia (mm)',tipo:'contagem',sub:2},
     {nome:'Crescimento micelial (mm/dia)',tipo:'contagem'},
     {nome:'Esporulação (conídios/mL)',tipo:'contagem'}
+  ],
+  /* FOLHA DESTACADA: bancada, folha ou disco foliar em placa. Serve tanto para
+     ácaro/inseto (mortalidade sobre a folha) quanto para fungo (lesão na folha
+     destacada). As duas variáveis convivem porque o mesmo teste é usado pelos
+     dois laboratórios — o sentido é que separa uma da outra. */
+  'Folha destacada':[
+    {nome:'Mortalidade',tipo:'razao',N:10,sentido:'maior'},
+    {nome:'Severidade na folha',tipo:'pct'},
+    {nome:'Diâmetro da lesão (mm)',tipo:'contagem',sub:2},
+    {nome:'Nº de indivíduos vivos',tipo:'contagem'}
   ],
   'Fungo in vivo':[
     {nome:'Severidade',tipo:'pct',sub:10},
@@ -9627,7 +9869,10 @@ function avResultHtml(study, av){
   _avCss(); var test=studyTestemunha(study), ts=(study.tratamentos||[]), h='';
   vars.forEach(function(v){
     var tm=(means[test]&&means[test][v]);
-    h+='<div class="res-title">'+esc(v)+' · média &amp; % controle</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>% ctrl</th></tr></thead><tbody>';
+    /* Em mortalidade o número de Abbott é a EFICÁCIA — chamar de "% controle"
+       obriga quem lê o relatório a adivinhar qual das duas fórmulas rodou. */
+    var _efic=(_avSentido(av,v)==='maior');
+    h+='<div class="res-title">'+esc(v)+' · média &amp; '+(_efic?'eficácia (Abbott)':'% controle')+'</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>'+(_efic?'% efic':'% ctrl')+'</th></tr></thead><tbody>';
     ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
       if(t.id===test) ctrl='<b>test.</b>';
       else { var _c=_pctCtrl(tm,mv,_avSentido(av,v)); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
@@ -9643,25 +9888,47 @@ function studyAudpcHtml(study){
   var test=studyTestemunha(study), ts=(study.tratamentos||[]), h='';
   Object.keys(byVar).forEach(function(v){
     var pts=byVar[v]; if(pts.length<2) return;
+    /* Bioensaio não tem AACPD. A área sob a curva de knockdown não é resultado
+       de nada — mortalidade a 24 h é a leitura daquela hora, não um acumulado.
+       Numa variável de sentido 'maior' a seção inteira sai de cena, e quem
+       responde é o ranking de eficácia de Abbott, logo acima. */
+    if(_avSentido(_avCfgDoEstudo(study,v),v)==='maior') return;
     var t0=new Date(pts[0].date), days=pts.map(function(p){ return Math.max(0,Math.round((new Date(p.date)-t0)/864e5)); });
     function audpc(tr){ var s=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null) return null; if(prev!=null) s+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return s; }
     var ta=audpc(test);
+    /* Só chega aqui variável de dano/doença — em 'maior' a seção já saiu acima.
+       A conta é a redução de Abbott sobre a AACPD, que é o que ela sempre foi. */
     h+='<div class="res-title">'+esc(v)+' · '+pts.length+' datas, '+days[days.length-1]+'d</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>AUDPC</th><th>% ctrl</th></tr></thead><tbody>';
-    ts.forEach(function(t){ var a=audpc(t.id), ctrl; if(t.id===test)ctrl='<b>test.</b>'; else { var _c=_pctCtrl(ta,a); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
+    ts.forEach(function(t){ var a=audpc(t.id), ctrl;
+      if(t.id===test) ctrl='<b>test.</b>';
+      else { var _c=_pctCtrl(ta,a,'menor'); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(a!=null?Math.round(a):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
   });
   if(!h) return '';
-  return '<div class="sd-section"><div class="sd-section-title">AUDPC / progresso da doença <span style="font-weight:400;color:#8a948e">(● testemunha)</span></div>'+h+'</div>';
+  return '<div class="sd-section"><div class="sd-section-title">AUDPC / progresso no tempo <span style="font-weight:400;color:#8a948e">(● testemunha)</span></div>'+h+'</div>';
 }
 function _chartPal(i){ var p=['#1f8a52','#2f85c9','#d69431','#9b59b6','#e0566b','#16a085','#c0392b','#2c3e50','#f39c12','#27ae60','#8e44ad','#d35400']; return p[i%p.length]; }
+/* Ranking do melhor para o pior, barra horizontal de 0 a 100% — o formato do
+   plot_rank do pipeline de bioensaio. A ordem de cadastro dos tratamentos não
+   responde a primeira pergunta que se faz a um ensaio ("qual funcionou melhor?");
+   a ordenada responde. Uma cor por tratamento, para casar com a legenda. */
 function _barsSvg(bars){
-  var W=320,rowH=24,pad=6,n=bars.length,Hh=n*rowH+pad*2,lblW=34,barX=lblW+4,barW=W-barX-46;
-  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" preserveAspectRatio="xMinYMin meet" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;max-width:360px;margin-top:2px">';
+  var W=360,rowH=26,pad=8,n=bars.length,eixoH=16,Hh=n*rowH+pad*2+eixoH;
+  var lblW=76,barX=lblW+4,barW=W-barX-46;
+  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" preserveAspectRatio="xMinYMin meet" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;max-width:420px;margin-top:2px">';
+  /* grade de 0 a 100%: sem ela a barra mais longa vira "100%" aos olhos, seja
+     ela 42% ou 97% — comparar entre figuras exige a escala fixa */
+  [0,20,40,60,80,100].forEach(function(t){
+    var gx=barX+barW*t/100;
+    h+='<line x1="'+gx.toFixed(1)+'" y1="'+pad+'" x2="'+gx.toFixed(1)+'" y2="'+(pad+n*rowH)+'" stroke="'+(t===0?'#c9d4cc':'#eef2ee')+'" stroke-width="1"/>';
+    h+='<text x="'+gx.toFixed(1)+'" y="'+(pad+n*rowH+12)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+t+'%</text>';
+  });
   bars.forEach(function(b,i){ var y=pad+i*rowH, v=(b.val==null?0:Math.max(0,Math.min(100,b.val))), w=barW*v/100;
-    h+='<text x="'+lblW+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="11" font-weight="700" fill="#26312b">'+esc(b.label)+'</text>';
-    h+='<rect x="'+barX+'" y="'+(y+4)+'" width="'+barW+'" height="'+(rowH-9)+'" rx="3" fill="#eef2ee"/>';
-    h+='<rect x="'+barX+'" y="'+(y+4)+'" width="'+w.toFixed(1)+'" height="'+(rowH-9)+'" rx="3" fill="#1f8a52"/>';
+    var rot=(b.nome&&b.nome!==b.label)?(b.label+' · '+b.nome):b.label;
+    if(rot.length>16) rot=rot.slice(0,15)+'…';
+    h+='<text x="'+lblW+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="10.5" font-weight="700" fill="#26312b">'+esc(rot)+'</text>';
+    h+='<rect x="'+barX+'" y="'+(y+4)+'" width="'+Math.max(0.5,w).toFixed(1)+'" height="'+(rowH-11)+'" rx="3" fill="'+(b.cor||'#1f8a52')+'"/>';
     h+='<text x="'+(barX+barW+4)+'" y="'+(y+rowH/2+4)+'" font-size="11" fill="#26312b">'+(b.val==null?'—':(Math.round(b.val*10)/10)+'%')+'</text>'; });
   return h+'</svg>';
 }
@@ -9683,6 +9950,13 @@ function _progressSvg(study,v,avs,test,ts){
     leg+='<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 2px 0;font-size:10px;color:#26312b"><span style="width:12px;height:3px;background:'+col+';display:inline-block;border-radius:2px"></span>'+esc(t.id)+(t.id===test?' (test.)':'')+'</span>'; });
   return h+'</svg><div style="margin:4px 0 2px;line-height:1.8">'+leg+'</div>';
 }
+/* Como chamar o momento da avaliação num título: "24 HAT" quando ela declara o
+   momento, a data quando não declara. Em bancada a data sozinha não identifica
+   nada — 24 e 48 HAT podem cair no mesmo dia. */
+function _momentoRotulo(av){
+  try{ if(av && av.momento){ var m=avMomento(av,null); if(m && m.explicito) return m.rotulo; } }catch(e){}
+  return (typeof isoToBR==='function' && isoToBR(av&&av.data)) || (av&&av.data) || '';
+}
 function studyChartsHtml(study){
   var avsR=study.avaliacoes.slice().filter(function(a){return a.data&&a.variaveis&&a.variaveis.length;}).sort(function(a,b){return (a.data||'').localeCompare(b.data||'');});
   if(!avsR.length) return '';
@@ -9690,12 +9964,20 @@ function studyChartsHtml(study){
   var test=studyTestemunha(study), ts=study.tratamentos||[], H='';
   Object.keys(vars).forEach(function(v){
     var lastAv=null,i; for(i=avsR.length-1;i>=0;i--){ if((avsR[i].variaveis||[]).indexOf(v)>=0){ lastAv=avsR[i]; break; } }
-    if(lastAv){ var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
-      ts.forEach(function(t){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v]; bars.push({label:t.id, val:_pctCtrl(tm,mv,_avSentido(lastAv,v))}); });
-      if(bars.length) H+='<div class="res-title">'+esc(v)+' · % de controle ('+esc(isoToBR(lastAv.data))+')</div>'+_barsSvg(bars);
+    if(lastAv){ var _mai=(_avSentido(lastAv,v)==='maior');
+      var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
+      ts.forEach(function(t,ti){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v];
+        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_pctCtrl(tm,mv,_avSentido(lastAv,v))}); });
+      /* Do melhor para o pior. É a leitura que o bioensaio pede primeiro, e a
+         ordem de cadastro não a responde. Sem valor vai para o fim. */
+      bars.sort(function(a,b){ return (b.val==null?-1e9:b.val)-(a.val==null?-1e9:a.val); });
+      if(bars.length) H+='<div class="res-title">'+esc(v)+' · '+(_mai?'eficácia de Abbott':'% de controle')+
+        ' — ranking em '+esc(_momentoRotulo(lastAv))+'</div>'+_barsSvg(bars);
     }
     var pts=avsR.filter(function(a){return (a.variaveis||[]).indexOf(v)>=0;});
-    if(pts.length>=2) H+='<div class="res-title">'+esc(v)+' · progresso (severidade × tempo)</div>'+_progressSvg(study,v,pts,test,ts);
+    /* "severidade × tempo" era cravado: numa mortalidade o título dizia a coisa
+       errada em cima do gráfico certo. O eixo é a própria variável. */
+    if(pts.length>=2) H+='<div class="res-title">'+esc(v)+' · progresso ('+esc(String(v).toLowerCase())+' × tempo)</div>'+_progressSvg(study,v,pts,test,ts);
   });
   if(!H) return '';
   return '<div class="sd-section"><div class="sd-section-title">Gráficos</div>'+H+'</div>';
@@ -9749,7 +10031,12 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
      '<option value="HAT"'+(_mm&&_mm.unidade==='HAT'?' selected':'')+'>HAT (horas)</option>'+
      '<option value="DAT"'+(_mm&&_mm.unidade==='DAT'?' selected':'')+'>DAT (dias)</option>'+
      '</select></div>';
-  h+='<div class="se-field"><label>Hora <span style="opacity:.6">opcional</span></label><input type="time" id="vHora" value="'+esc(av.hora||'')+'"></div>';
+  /* A hora da LEITURA é dado de bancada: 24 e 26 HAT são leituras diferentes, e
+     o carimbo do clima também sai por ela. O botão evita digitar no meio do
+     ensaio; salvar uma leitura de hoje sem hora preenche sozinho (ver saveAvaliacao). */
+  h+='<div class="se-field"><label>Hora <span style="opacity:.6">da leitura</span></label>'+
+     '<div style="display:flex;gap:6px"><input type="time" id="vHora" value="'+esc(av.hora||'')+'" style="flex:1">'+
+     '<button type="button" class="btn-sm" onclick="_avHoraAgora()" title="Carimbar a hora deste momento">🕐 agora</button></div></div>';
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Deixe em branco e o momento sai da data, como sempre. Preencha quando houver mais de uma leitura no MESMO dia (ex.: knockdown a 1, 2, 4 e 24 HAT) — sem isto o app guarda só a primeira.</div>';
   h+='<div class="se-field"><label>Tipo de avaliação</label><select id="vTipo"><option value="">—</option>';
@@ -10037,6 +10324,16 @@ function saveAvaliacao(){
   else delete av.momento;
   var _hr=document.getElementById("vHora");
   if(_hr && _hr.value) av.hora=_hr.value; else delete av.hora;
+  /* Leitura do PRÓPRIO DIA sem hora digitada: carimba este instante. É o dado de
+     bancada que mais se perde — ninguém para no meio da contagem para anotar a
+     hora, e depois 24 e 26 HAT viram a mesma coisa. Só no mesmo dia: numa
+     leitura de outro dia, "agora" seria a hora de quem digita, não a da leitura
+     — o mesmo erro que a aplicação já cometia. */
+  if(!av.hora && av.data && typeof todayISO==='function' && av.data===todayISO()){
+    var _ag=new Date(), _p=function(n){ return (n<10?'0':'')+n; };
+    av.hora=_p(_ag.getHours())+':'+_p(_ag.getMinutes());
+    av.horaAuto=true;
+  } else if(av.hora) delete av.horaAuto;
   av.tipo=document.getElementById("vTipo").value;
   var bbchEl=document.getElementById("vBBCH");
   av.bbch=bbchEl?bbchEl.value:"";
@@ -10083,6 +10380,7 @@ function saveAvaliacao(){
     draftAv=null;
   }
   if(!av.carimbo) carimbar(curV,curSid,av.id,'aval',av.data,av.hora);
+  else _recarimbaEvento(curV,curSid,av.id,'aval',av.data,av.hora);
   av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   /* Trilha BPL: de→por célula + motivo (quando reabertura de avaliação assinada) */
   var _mud = isNew ? null : _avDiffCells(oldNotas, av.notas);

@@ -1,11 +1,29 @@
+/* Sobe o app inteiro num DOM de verdade e vê se ele arranca sem estourar.
+ *
+ * Este teste apontava para "/Users/victorchavesmachado/Documents/projeto
+ * bioestat/", uma pasta que não existe mais em máquina nenhuma — então ele
+ * falhava SEMPRE, e o "Conferir antes de publicar" dizia NAO SUBA em toda
+ * publicação. Um alarme que toca sempre é um alarme que ninguém mais escuta.
+ * Agora ele lê a pasta onde ele mesmo está.
+ *
+ * O jsdom é opcional: sem ele instalado o teste se declara PULADO em vez de
+ * falhar, porque não ter a biblioteca não diz nada sobre o app.
+ * Para rodar de verdade: npm install jsdom
+ */
 var fs = require('fs');
 var path = require('path');
-var jsdom = require('jsdom');
+var jsdom;
+try{ jsdom = require('jsdom'); }
+catch(e){
+  console.log('PULADO: jsdom não está instalado (npm install jsdom para rodar este teste).');
+  process.exit(0);
+}
 var JSDOM = jsdom.JSDOM;
 
-var htmlPath = '/Users/victorchavesmachado/Documents/projeto bioestat/index.html';
+var raiz = __dirname;
+var htmlPath = path.join(raiz, 'index.html');
 var html = fs.readFileSync(htmlPath, 'utf8');
-var vendorDir = '/Users/victorchavesmachado/Documents/projeto bioestat/vendor';
+var vendorDir = path.join(raiz, 'vendor');
 
 var virtualConsole = new jsdom.VirtualConsole();
 virtualConsole.on("error", function(err) {
