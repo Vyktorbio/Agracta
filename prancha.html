@@ -42,6 +42,13 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
 .opt{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--linha);border-radius:4px;background:var(--folha);cursor:pointer;font-size:13px;transition:border-color .12s,background .12s}
 .opt:hover{border-color:var(--linha-forte)}
 .opt input{position:absolute;opacity:0;width:0;height:0}
+/* o seletor de cor é o único input VISÍVEL dentro de um .opt — a regra acima
+   esconde todos, então ele precisa desfazer cada propriedade dela */
+.opt input.cor-trat{position:static;opacity:1;width:22px;height:16px;flex:none;padding:0;border:1px solid var(--linha-forte);border-radius:3px;background:none;cursor:pointer}
+.rot-trat{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mover{display:inline-flex;gap:3px;flex:none}
+.mover .mini{padding:1px 6px;font-size:12px;line-height:1.2;min-width:0}
+.mover .mini:disabled{opacity:.3;cursor:default}
 .opt .marcador{width:13px;height:13px;flex:none;border:1px solid var(--linha-forte);border-radius:50%;background:var(--folha)}
 .opt.ativo{border-color:var(--realce);background:#eef3f4}
 .opt.ativo .marcador{background:var(--realce);border-color:var(--realce);box-shadow:inset 0 0 0 2px var(--folha)}
@@ -104,6 +111,7 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
       <h2>2 · Tipo de gráfico</h2>
       <div class="opcoes" id="g-vista">
         <label class="opt ativo"><input type="radio" name="vista" value="barras" checked><span class="marcador"></span>Barras verticais</label>
+        <label class="opt"><input type="radio" name="vista" value="ranking"><span class="marcador"></span>Ranking — do melhor para o pior</label>
         <label class="opt"><input type="radio" name="vista" value="sev-curva"><span class="marcador"></span>Severidade — curva de progresso</label>
         <label class="opt"><input type="radio" name="vista" value="sev-paineis"><span class="marcador"></span>Severidade — um painel por tratamento</label>
         <label class="opt"><input type="radio" name="vista" value="plantec"><span class="marcador"></span>Severidade por data — barras verticais</label>
@@ -178,6 +186,8 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
       <h2>Completar o que falta</h2>
       <div class="campos" id="g-pl-campos">
         <label class="campo"><span>Estudo</span><input type="text" data-plc="codigo" placeholder="193 018"></label>
+        <label class="campo"><span>Título do estudo</span><input type="text" data-plc="titulo" placeholder="Mortalidade de Brevipalpus em bancada"></label>
+        <label class="campo"><span>Título da figura</span><input type="text" data-plc="tituloFig" placeholder="(automático — escreva para trocar)"></label>
         <label class="campo"><span>Alvo</span><input type="text" data-plc="alvo" placeholder="Ferrugem asiática"></label>
         <label class="campo"><span>Nome científico</span><input type="text" data-plc="alvoSci" placeholder="Phakopsora pachyrhizi"></label>
         <label class="campo"><span>Cultura</span><input type="text" data-plc="cultura" placeholder="Soja"></label>
@@ -204,6 +214,14 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
     <div class="grupo" id="grupo-dados">
       <h2>Quais dados</h2>
       <div class="opcoes" id="g-sel-aval"></div>
+      <h2 style="margin-top:16px">Ordem dos tratamentos</h2>
+      <div class="opcoes" id="g-sel-ordem">
+        <label class="opt ativo"><input type="radio" name="selordem" value="cadastro" checked><span class="marcador"></span>Como foram cadastrados</label>
+        <label class="opt"><input type="radio" name="selordem" value="efic"><span class="marcador"></span>Por eficácia — melhor primeiro</label>
+        <label class="opt"><input type="radio" name="selordem" value="medida"><span class="marcador"></span>Pela leitura da avaliação em foco</label>
+        <label class="opt"><input type="radio" name="selordem" value="dose"><span class="marcador"></span>Por dose, da menor para a maior</label>
+        <label class="opt"><input type="radio" name="selordem" value="manual"><span class="marcador"></span>Na minha ordem (setas abaixo)</label>
+      </div>
       <h2 style="margin-top:16px">Tratamentos na figura</h2>
       <div class="opcoes" id="g-sel-trat"></div>
       <div class="botoes" style="margin-top:8px">
@@ -211,6 +229,30 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
         <button class="mini" id="btn-trat-nenhum" type="button">Só a testemunha</button>
       </div>
       <p class="dica">Tirar um tratamento muda só a figura. A ANOVA, o CV, a DMS e as letras de Tukey continuam sendo os do ensaio inteiro — recalcular num subgrupo escolhido a dedo seria outro experimento. A testemunha fica sempre, porque é a referência de Abbott.</p>
+    </div>
+
+    <div class="grupo" id="grupo-fig">
+      <h2>Dispersão e escala</h2>
+      <div class="opcoes" id="g-fig-erro">
+        <label class="opt ativo"><input type="radio" name="figerro" value="nenhum" checked><span class="marcador"></span>Sem barra de erro</label>
+        <label class="opt"><input type="radio" name="figerro" value="ep"><span class="marcador"></span>Erro padrão da média</label>
+        <label class="opt"><input type="radio" name="figerro" value="ic95"><span class="marcador"></span>Intervalo de confiança 95%</label>
+      </div>
+      <div class="opcoes" id="g-fig-n" style="margin-top:10px">
+        <label class="opt"><input type="checkbox" data-fig="n"><span class="marcador"></span>Escrever o n embaixo de cada tratamento</label>
+      </div>
+      <h2 style="margin-top:16px">Eixo Y</h2>
+      <div class="opcoes" id="g-fig-eixo">
+        <label class="opt ativo"><input type="radio" name="figeixo" value="auto" checked><span class="marcador"></span>Automático (até o maior valor)</label>
+        <label class="opt"><input type="radio" name="figeixo" value="100"><span class="marcador"></span>Fixo em 0–100%</label>
+      </div>
+      <h2 style="margin-top:16px">Casas decimais</h2>
+      <div class="opcoes" id="g-fig-dec">
+        <label class="opt"><input type="radio" name="figdec" value="0"><span class="marcador"></span>Sem casa (85%)</label>
+        <label class="opt ativo"><input type="radio" name="figdec" value="1" checked><span class="marcador"></span>Uma casa (85,4%)</label>
+        <label class="opt"><input type="radio" name="figdec" value="2"><span class="marcador"></span>Duas casas (85,42%)</label>
+      </div>
+      <p class="dica" id="dica-fig">A barra de erro acompanha a leitura medida — a eficácia de Abbott é um valor derivado da testemunha, e desenhar dispersão nela sugeriria uma precisão que a conta não tem. Fixar o eixo em 0–100% é o que permite comparar duas figuras lado a lado no relatório.</p>
     </div>
 
     <div class="grupo">
@@ -812,13 +854,15 @@ const estado = {idioma:"pt", vista:"barras", patamar:80,
   /* Que DADOS entram na figura. `ocultos` guarda ids de tratamento que não são
      desenhados; `aval` é qual avaliação a folha de uma data usa (-1 = a última).
      Nada disso refaz a análise — só escolhe o recorte que vai para a folha. */
-  sel:{ocultos:{}, aval:-1},
+  sel:{ocultos:{}, aval:-1, ordem:"cadastro", manual:null},
   /* linha de identificação (estudo/alvo/cultura/variedade/plantio) em toda folha */
   ident:{mostrar:1},
   /* 'auto' = o momento declarado na avaliação; as outras recalculam pelos dias */
   unidade:"auto",
   /* a cascata: tipo de ensaio manda o padrão, base do cálculo pode discordar */
-  ensaio:"auto", base:"auto"};
+  ensaio:"auto", base:"auto",
+  /* dispersão e escala — valem para todas as folhas de barras e para o ranking */
+  fig:{erro:"nenhum", n:0, eixo:"auto", dec:1}};
 /* modo de severidade derivado da vista: barras | abbott | curva | paineis | null */
 const modoSev = () => estado.vista.startsWith("sev-") ? estado.vista.slice(4) : null;
 const t = () => L[estado.idioma];
@@ -827,12 +871,23 @@ const E = () => ESTUDO[estado.idioma];
    divergirem. O slide vinha cravado no título da vista "por data", então um
    slide de eficácia saía chamado de "porcentagem de severidade". */
 function tituloDaVista(){
+  /* Título escrito à mão manda. Em branco, volta o automático — assim dá para
+     experimentar sem perder o que o app calculava sozinho. */
+  const meu = String(ESTUDO.tituloFig || "").trim();
+  if(meu) return meu;
   const d = t();
   if(estado.vista === "barras"){
     const B = estado.bv;
     return String(B.serie === "efic"  ? d.tituloEfic
                 : B.serie === "ambos" ? d.tituloSevA
                 : (B.quando === "todas" ? d.tituloSevAv : d.tituloSevB));
+  }
+  if(estado.vista === "ranking"){
+    const q = (estado.bv.serie === "efic")
+      ? (estado.idioma==="pt" ? "eficácia de controle" : "control efficacy")
+      : MEDl[estado.idioma];
+    return estado.idioma==="pt" ? `Ranking de ${q} a ${rotMom(avalIdx())}`
+                                : `${_cap1(q)} ranking at ${rotMom(avalIdx())}`;
   }
   if(modoSev())                  return String(d.tituloSev);
   if(estado.vista === "plantec") return estado.idioma==="pt" ? `Porcentagem de ${MEDl.pt}` : `Percent ${MEDl.en}`;
@@ -912,7 +967,7 @@ function tabela(x, y, cols, linhas, o={}){
 /* --- cabeçalho da prancha --- */
 function secCabecalho(x,y,w){
   let s = txt(x, y+12, ESTUDO.codigo, {t:12,w:600,ls:1.6,c:GRAF});
-  s += txt(x, y+40, E().titulo, {t:21,w:600});
+  s += txt(x, y+40, E().titulo, {t:21,w:600});   /* editável no painel */
   s += txt(x, y+62, [E().local, E().cultura, E().safra].filter(Boolean).join(" · "), {t:13.5,c:GRAF});
   s += rule(x, y+80, w, 1.1);
   return {svg:s, h:88};
@@ -1375,6 +1430,27 @@ function rotulosDatas(){
 
    A folha "Severidade por data — barras verticais" (secPlantec) não passou por
    aqui: continua exatamente como estava. */
+/* t de Student a 95%, bilateral. Tabela até 30 gl e 1,96 daí em diante — um
+   bioensaio raramente passa de 30 gl, e onde passa a diferença para a normal
+   é menor que a espessura do traço. Sem isto o "IC 95%" seria ±2·EP chutado. */
+const _T95 = [0,12.706,4.303,3.182,2.776,2.571,2.447,2.365,2.306,2.262,2.228,
+  2.201,2.179,2.160,2.145,2.131,2.120,2.110,2.101,2.093,2.086,2.080,2.074,
+  2.069,2.064,2.060,2.056,2.052,2.048,2.045,2.042];
+const t95 = gl => (gl >= 1 && gl <= 30) ? _T95[gl] : 1.96;
+/* Meia-barra de erro para a média de um tratamento numa avaliação. */
+function meiaBarra(g, i){
+  const ep = SEM[g] && SEM[g][i];
+  if(!Number.isFinite(ep)) return null;
+  if(estado.fig.erro === "ep")   return ep;
+  if(estado.fig.erro === "ic95") return ep * t95(Math.max(1, NB - 1));
+  return null;
+}
+/* Casas decimais escolhidas no painel. */
+const dec = () => Math.max(0, Math.min(2, parseInt(estado.fig.dec, 10) || 0));
+const fmtD = v => fmt(v, dec());
+/* O tique do eixo não herda as casas dos dados: numa escala fixa de 0 a 100,
+   "100,00%" é ruído. Inteiro quando o valor é inteiro, uma casa quando não é. */
+const fmtEixo = v => fmt(v, (Math.abs(v - Math.round(v)) < 1e-9) ? 0 : 1);
 function _bvSeries(){
   const d = t(), B = estado.bv;
   const ult = avalIdx();   /* a avaliação escolhida no painel, não sempre a última */
@@ -1383,15 +1459,94 @@ function _bvSeries(){
      e o rótulo diz de qual, senão duas figuras iguais mostram números diferentes. */
   const rotEfic= (estado.idioma==="pt" ? "Eficácia (Abbott)" : "Efficacy (Abbott)")
                + (SENT==='maior' ? ` — ${rotMom(ult)}` : "");
+  /* Eficácia por avaliação: só existe quando a análise é por data. Sobre a
+     AACPD, Abbott dá UM número por tratamento — não há série para quebrar. */
+  /* mSEV e iTest já vêm fatiados por comSelecao — usar as séries originais aqui
+     desalinharia o índice quando o autor esconde um tratamento. */
+  const eficDaData = i => {
+    const mT = mSEV[iTest] && mSEV[iTest][i];
+    return g => (g === iTest) ? 0 : _efic1(mSEV[g][i], mT);
+  };
+  /* `medida:i` marca a série como sendo a LEITURA da avaliação i — é ela que
+     tem dispersão para desenhar. A eficácia de Abbott é derivada da testemunha;
+     barra de erro nela sugeriria uma precisão que a conta não carrega. */
+  const rotEf = estado.idioma==="pt" ? "Eficácia" : "Efficacy";
+  const todas = (B.quando === "todas") && porData();
   if(B.serie === "efic")
-    return [{ rot:rotEfic, val:g => EFIC[g], letra:false }];
+    return todas
+      ? DAA.map((_,i)=> ({ rot:`${rotEf} — ${rotMom(i)}`, val:eficDaData(i), letra:false, medida:null }))
+      : [{ rot:rotEfic, val:g => EFIC[g], letra:false, medida:null }];
   if(B.serie === "ambos")
-    return [{ rot:`${rotSev} — ${rotMom(ult)}`, val:g => mSEV[g][ult], letra:true },
-            { rot:rotEfic,                      val:g => EFIC[g],      letra:false }];
-  /* só severidade */
+    return todas
+      ? DAA.map((_,i)=> ([
+          { rot:`${rotSev} — ${rotMom(i)}`, val:g => mSEV[g][i], letra:false, medida:i },
+          { rot:`${rotEf} — ${rotMom(i)}`,  val:eficDaData(i),   letra:false, medida:null }
+        ])).flat()
+      : [{ rot:`${rotSev} — ${rotMom(ult)}`, val:g => mSEV[g][ult], letra:true,  medida:ult },
+         { rot:rotEfic,                      val:g => EFIC[g],      letra:false, medida:null }];
+  /* só a medida */
   if(B.quando === "todas")
-    return DAA.map((_,i)=> ({ rot:rotMom(i), val:g => mSEV[g][i], letra:false }));
-  return [{ rot:`${rotSev} — ${rotMom(ult)}`, val:g => mSEV[g][ult], letra:true }];
+    return DAA.map((_,i)=> ({ rot:rotMom(i), val:g => mSEV[g][i], letra:false, medida:i }));
+  return [{ rot:`${rotSev} — ${rotMom(ult)}`, val:g => mSEV[g][ult], letra:true, medida:ult }];
+}
+/* ============================ vista RANKING ================================
+   Barras horizontais, do melhor para o pior — o formato do plot_rank do
+   pipeline de bioensaio. A primeira pergunta que se faz a um ensaio é "qual
+   funcionou melhor", e a ordem de cadastro dos tratamentos não responde isso.
+   Uma cor por tratamento, escala de 0 a 100%, valor na ponta.
+   ========================================================================= */
+function secRanking(x, y, w, alt){
+  const B = estado.bv;
+  const ult = avalIdx();
+  const efic = (B.serie === "efic");
+  /* o que ordena: a eficácia, ou a leitura da avaliação em foco */
+  const valor = g => efic ? EFIC[g] : mSEV[g][ult];
+  const linhas = TRAT.map((tr,g)=>({ tr, g, v:valor(g), letra:LETRAS[g],
+                                     erro: efic ? null : meiaBarra(g, ult) }))
+    .filter(o => Number.isFinite(o.v));
+  /* melhor primeiro. Em dano o melhor é o MENOR; em mortalidade, o MAIOR. */
+  linhas.sort((a,b)=> MENOS_MELHOR ? (a.v - b.v) : (b.v - a.v));
+
+  const rotW = Math.min(210, Math.max(90, Math.round(w*0.24)));
+  const esq = x + rotW, dir = x + w - 54, larg = dir - esq;
+  const topo = y + 8;
+  const rowH = Math.max(16, Math.min(34, Math.floor((alt - 34) / Math.max(1, linhas.length))));
+  const base = topo + linhas.length*rowH;
+
+  const brutos = linhas.map(o => o.v + (o.erro||0));
+  const maxV = brutos.length ? Math.max(...brutos) : 0;
+  const topoX = (estado.fig.eixo === "100") ? 100 : Math.max(5, (Math.floor(maxV/5)+1)*5);
+  const px = v => esq + (v/topoX) * larg;
+
+  let s = "";
+  /* grade vertical + escala embaixo */
+  for(let i=0;i<=5;i++){
+    const v = topoX*i/5, gx = px(v);
+    s += `<line x1="${gx.toFixed(1)}" y1="${topo}" x2="${gx.toFixed(1)}" y2="${base}" stroke="${i?'#EEEEEE':'#BBBBBB'}" stroke-width="${i?0.8:1}"/>`;
+    s += txt(gx, base+15, fmtEixo(v)+"%", {t:10, a:"middle", c:"#7a857f"});
+  }
+  linhas.forEach((o, k)=>{
+    const yy = topo + k*rowH, h = Math.max(6, rowH-9);
+    const nome = (estado.idioma==="pt" ? o.tr.pt : o.tr.en) || o.tr.id;
+    let rot = `${o.tr.id} · ${nome}`;
+    const lim = Math.floor(rotW/6.0);
+    if(rot.length > lim) rot = rot.slice(0, lim-1) + "…";
+    s += txt(x + rotW - 8, yy + h/2 + 4, rot, {t:Math.min(11.5, rowH*0.42), a:"end", w:600, c:"#26312b"});
+    const larguraBarra = Math.max(0.5, px(Math.max(0,o.v)) - esq);
+    s += `<rect x="${esq}" y="${yy.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${h}" fill="${o.tr.cor}"/>`;
+    if(o.erro){
+      const x1 = px(Math.max(0, o.v - o.erro)), x2 = px(o.v + o.erro), cy = yy + h/2, asa = Math.max(2.5, h*0.28);
+      s += `<line x1="${x1.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${cy.toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`
+         + `<line x1="${x2.toFixed(1)}" y1="${(cy-asa).toFixed(1)}" x2="${x2.toFixed(1)}" y2="${(cy+asa).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`
+         + `<line x1="${x1.toFixed(1)}" y1="${(cy-asa).toFixed(1)}" x2="${x1.toFixed(1)}" y2="${(cy+asa).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
+    }
+    const pontaX = Math.max(px(Math.max(0,o.v)), o.erro ? px(o.v+o.erro) : 0) + 6;
+    let cauda = fmtD(o.v) + "%";
+    if(B.letras && o.letra) cauda += "  " + o.letra;
+    if(estado.fig.n)        cauda += "  (n=" + NB + ")";
+    s += txt(pontaX, yy + h/2 + 4, cauda, {t:Math.min(11, rowH*0.40), c:"#26312b"});
+  });
+  return { svg:s, h: base - y + 24 };
 }
 function secBarras(x, y, w, alt){
   const B = estado.bv;
@@ -1439,24 +1594,33 @@ function secBarras(x, y, w, alt){
   /* inclinado a 45°, a altura que o rótulo ocupa é sen(45°) x o comprimento do
      texto — por isso a reserva cresce com a maior legenda, e não com o nº de linhas */
   const maxChars = inclinado ? Math.max(...rotulosInc.map(r=>r.length)) : 0;
-  const alturaRot = inclinado
+  /* o "n = 4" mora entre o eixo e os rótulos: sem reservar a faixa, ele ficava
+     em cima do nome do produto */
+  const dn = estado.fig.n ? 12 : 0;
+  const alturaRot = dn + (inclinado
     ? 16 + Math.min(150, Math.round(0.71 * maxChars * fonteX * 0.52))
-    : 14 + maxLinhas * (fonteX + 3);
+    : 14 + maxLinhas * (fonteX + 3));
   const base = y + alt - alturaRot;
   const esq = x + 52, dir = x + w;
   const larg = dir - esq;
 
-  /* escala: 0 até o próximo múltiplo de 5 acima do maior valor plotado */
+  /* escala: automática (próximo múltiplo de 5 acima do maior valor, já contando
+     a ponta da barra de erro) ou fixa em 0–100%, que é a que deixa duas figuras
+     do mesmo relatório comparáveis lado a lado. */
   const vals = [];
-  series.forEach(se => TRAT.forEach((_,g)=>{ const v = se.val(g); if(Number.isFinite(v)) vals.push(v); }));
+  series.forEach(se => TRAT.forEach((_,g)=>{
+    const v = se.val(g); if(!Number.isFinite(v)) return;
+    vals.push(v);
+    if(se.medida != null){ const e = meiaBarra(g, se.medida); if(e) vals.push(v + e); }
+  }));
   const maximo = vals.length ? Math.max(...vals) : 0;
-  const topoY = Math.max(5, (Math.floor(maximo/5)+1)*5);
+  const topoY = (estado.fig.eixo === "100") ? 100 : Math.max(5, (Math.floor(maximo/5)+1)*5);
   const py = v => base - (v/topoY) * (base - topo0);
 
   for(let i=0;i<=10;i++){
     const v = topoY*i/10, yy = py(v);
     if(B.grade) s += `<line x1="${esq}" y1="${yy.toFixed(1)}" x2="${dir}" y2="${yy.toFixed(1)}" stroke="#DDDDDD" stroke-width="0.8"/>`;
-    s += txt(esq-8, yy+4, v.toFixed(1), {t:11, a:"end", c:"#555555"});
+    s += txt(esq-8, yy+4, fmtEixo(v), {t:11, a:"end", c:"#555555"});
   }
   s += `<line x1="${esq}" y1="${topo0}" x2="${esq}" y2="${base}" stroke="#BBBBBB" stroke-width="1"/>`;
   s += `<line x1="${esq}" y1="${base}" x2="${dir}" y2="${base}" stroke="#BBBBBB" stroke-width="1"/>`;
@@ -1495,23 +1659,39 @@ function secBarras(x, y, w, alt){
       const bx = centro + desloc - (largBarra*0.9)/2;
       const by = py(Math.max(0,v)), bh = base - by;
       if(bh <= 0) return;
-      s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(largBarra*0.9).toFixed(1)}" height="${bh.toFixed(1)}" fill="${cores[i]}"/>`;
+      /* Com UMA série, a cor é livre para identificar o TRATAMENTO — e é o que
+         faz o mesmo produto sair da mesma cor no ranking, na curva e aqui. Com
+         duas ou mais, a cor tem de codificar a SÉRIE, senão não se distingue
+         mortalidade de eficácia. */
+      const fill = (nS === 1) ? (tr.cor || cores[0]) : cores[i];
+      s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(largBarra*0.9).toFixed(1)}" height="${bh.toFixed(1)}" fill="${fill}"/>`;
       let acima = by - 4;
+      /* barra de erro: só na leitura medida, e sempre acima do topo da barra */
+      const meia = (se.medida != null) ? meiaBarra(g, se.medida) : null;
+      if(meia){
+        const cx = bx + largBarra*0.45, topoE = py(v + meia), baseE = py(Math.max(0, v - meia));
+        const asa = Math.max(2.5, largBarra*0.22);
+        s += `<line x1="${cx.toFixed(1)}" y1="${topoE.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${Math.min(baseE, base).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`
+           + `<line x1="${(cx-asa).toFixed(1)}" y1="${topoE.toFixed(1)}" x2="${(cx+asa).toFixed(1)}" y2="${topoE.toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
+        acima = Math.min(acima, topoE - 4);
+      }
       /* letra do Tukey vai só na série que a análise realmente comparou */
       if(B.letras && se.letra && LETRAS[g]){
         s += txt(bx + largBarra*0.45, acima, LETRAS[g], {t:10, w:600, a:"middle", c:TINTA});
         acima -= 12;
       }
-      if(B.valores) s += txt(bx + largBarra*0.45, acima, fmt(v,1), {t:9.5, a:"middle", c:"#333333"});
+      if(B.valores) s += txt(bx + largBarra*0.45, acima, fmtD(v), {t:9.5, a:"middle", c:"#333333"});
     });
+    /* o n por tratamento, logo abaixo do eixo — antes dos rótulos */
+    if(estado.fig.n) s += txt(centro, base + 11, "n = " + NB, {t:9, a:"middle", c:"#7a857f"});
     if(inclinado){
       /* ancorado no fim e girado -45°: o texto "cai" para a esquerda a partir do
          centro do grupo, que é como ele não invade o vizinho */
-      s += `<g transform="translate(${centro.toFixed(1)},${(base+13).toFixed(1)}) rotate(-45)">`
+      s += `<g transform="translate(${centro.toFixed(1)},${(base+13+dn).toFixed(1)}) rotate(-45)">`
          + txt(0, 0, rotulosInc[g], {t:fonteX, a:"end", c:"#333333"}) + `</g>`;
     }else{
       rotulos[g].forEach((linha, k)=>{
-        s += txt(centro, base + 16 + k*(fonteX+3), linha, {t:fonteX, a:"middle", c:"#333333"});
+        s += txt(centro, base + 16 + dn + k*(fonteX+3), linha, {t:fonteX, a:"middle", c:"#333333"});
       });
     }
   });
@@ -1553,7 +1733,8 @@ function secPlantec(x, y, w, alt){
 
   /* área do gráfico */
   const topo0 = y + (P.legenda ? 30 : 6);
-  const alturaRot = 14 + maxLinhas * (fonteX + 3);
+  const dnPl = estado.fig.n ? 12 : 0;   /* faixa do "n = 4", entre o eixo e os rótulos */
+  const alturaRot = dnPl + 14 + maxLinhas * (fonteX + 3);
   const base = y + alt - alturaRot;
   const esq = x + 52, dir = x + w;
   const larg = dir - esq;
@@ -1568,7 +1749,7 @@ function secPlantec(x, y, w, alt){
   for(let i=0;i<=10;i++){
     const v = topoY*i/10, yy = py(v);
     if(P.grade) s += `<line x1="${esq}" y1="${yy.toFixed(1)}" x2="${dir}" y2="${yy.toFixed(1)}" stroke="#DDDDDD" stroke-width="0.8"/>`;
-    s += txt(esq-8, yy+4, v.toFixed(1), {t:11, a:"end", c:"#555555"});
+    s += txt(esq-8, yy+4, fmtEixo(v), {t:11, a:"end", c:"#555555"});
   }
   s += `<line x1="${esq}" y1="${topo0}" x2="${esq}" y2="${base}" stroke="#BBBBBB" stroke-width="1"/>`;
   s += `<line x1="${esq}" y1="${base}" x2="${dir}" y2="${base}" stroke="#BBBBBB" stroke-width="1"/>`;
@@ -1590,11 +1771,12 @@ function secPlantec(x, y, w, alt){
       const by = py(media), bh = base - by;
       if(bh <= 0) return;
       s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(largBarra*0.9).toFixed(1)}" height="${bh.toFixed(1)}" fill="${cores[i]}"/>`;
-      if(P.valores) s += txt(bx + largBarra*0.45, by - 4, fmt(media,1), {t:9.5, a:"middle", c:"#333333"});
+      if(P.valores) s += txt(bx + largBarra*0.45, by - 4, fmtD(media), {t:9.5, a:"middle", c:"#333333"});
     });
+    if(estado.fig.n) s += txt(centro, base + 11, "n = " + NB, {t:9, a:"middle", c:"#7a857f"});
     /* rótulo do tratamento, uma linha por componente */
     rotulos[g].forEach((linha, k)=>{
-      s += txt(centro, base + 16 + k*(fonteX+3), linha, {t:fonteX, a:"middle", c:"#333333"});
+      s += txt(centro, base + 16 + dnPl + k*(fonteX+3), linha, {t:fonteX, a:"middle", c:"#333333"});
     });
   });
 
@@ -1636,6 +1818,24 @@ function prancha(){
       cy += 20;
     }
     const g = secBarras(M, cy, w, 430); s += g.svg; cy += g.h + 12;
+    let hr = 0;
+    if(B.rodape){ const rod = secRodape(M, cy, w); s += rod.svg; hr = rod.h; }
+    H = cy + hr + 18;
+  }
+  else if(estado.vista === "ranking"){
+    const B = estado.bv;
+    W = 1100; w = W - 2*M; cy = M;
+    if(B.titulo){
+      const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 10;
+      s += secTitulo(M, cy, w, tituloDaVista().toUpperCase()); cy += 26;
+    }
+    if(B.subtitulo){
+      s += txt(M, cy, (estado.idioma==="pt"
+            ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
+            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`), {t:13, w:600, c:"#C86A08"});
+      cy += 20;
+    }
+    const g = secRanking(M, cy, w, Math.max(140, TRAT.length*30 + 30)); s += g.svg; cy += g.h + 12;
     let hr = 0;
     if(B.rodape){ const rod = secRodape(M, cy, w); s += rod.svg; hr = rod.h; }
     H = cy + hr + 18;
@@ -1788,6 +1988,17 @@ function legendaTexto(){
       B.serie==="ambos" ? d.legSevAbbott() :
       B.quando==="todas"? d.legSevAval() : d.legSevSimples()};
   }
+  if(estado.vista==="ranking"){
+    const q = (estado.bv.serie==="efic")
+      ? (estado.idioma==="pt"?"Eficácia de controle":"Control efficacy")
+      : (estado.idioma==="pt"?MED.pt:MED.en);
+    const disp = estado.fig.erro==="ic95" ? (estado.idioma==="pt"?" As barras indicam o intervalo de confiança de 95%.":" Bars indicate the 95% confidence interval.")
+               : estado.fig.erro==="ep"   ? (estado.idioma==="pt"?" As barras indicam o erro padrão da média.":" Bars indicate the standard error of the mean.")
+               : "";
+    return {rot:`${d.figura} 1`, txt:(estado.idioma==="pt"
+      ? `${q} por tratamento a ${rotMom(avalIdx())}, do melhor para o pior, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} ${LAB?'repetições':'blocos'}.${disp}${estado.bv.letras?' Tratamentos seguidos da mesma letra não diferem pelo teste de Tukey (α = 0,05).':''}`
+      : `${q} by treatment at ${rotMom(avalIdx())}, ranked best to worst, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} ${LAB?'replicates':'blocks'}.${disp}${estado.bv.letras?" Treatments followed by the same letter do not differ by Tukey's test (α = 0.05).":''}`)};
+  }
   const ms = modoSev();
   if(ms) return {rot:`${d.figura} 1`, txt:
     ms==="avaliacao" ? d.legSevAval() :
@@ -1804,13 +2015,39 @@ function legendaTexto(){
 function visiveis(){
   const oc = estado.sel.ocultos;
   const v = _TRAT0.map((tr,i)=>i).filter(i=> !oc[_TRAT0[i].id] || _TRAT0[i].testemunha);
-  return v.length ? v : _TRAT0.map((_,i)=>i);
+  return ordenaIdx(v.length ? v : _TRAT0.map((_,i)=>i));
+}
+/* A ORDEM dos tratamentos na figura. A de cadastro raramente é a que se quer
+   mostrar: num relatório o leitor procura o melhor primeiro, ou a sequência de
+   doses. Roda ANTES de comSelecao fatiar, então EFIC e mSEV ainda são os
+   arrays inteiros — e nada aqui recalcula estatística, só reordena o desenho. */
+function ordenaIdx(v){
+  const modo = estado.sel.ordem, j = avalIdx();
+  const num = x => Number.isFinite(x) ? x : (MENOS_MELHOR ? Infinity : -Infinity);
+  if(modo === "efic")
+    return v.slice().sort((a,b)=> (num(EFIC[b]) - num(EFIC[a])));
+  if(modo === "medida")
+    return v.slice().sort((a,b)=> MENOS_MELHOR
+      ? (num(mSEV[a] && mSEV[a][j]) - num(mSEV[b] && mSEV[b][j]))
+      : (num(mSEV[b] && mSEV[b][j]) - num(mSEV[a] && mSEV[a][j])));
+  if(modo === "dose")
+    return v.slice().sort((a,b)=> (parseFloat(_TRAT0[a].dose)||0) - (parseFloat(_TRAT0[b].dose)||0));
+  if(modo === "manual" && Array.isArray(estado.sel.manual) && estado.sel.manual.length){
+    const pos = {}; estado.sel.manual.forEach((id,k)=> pos[id] = k);
+    return v.slice().sort((a,b)=>
+      (pos[_TRAT0[a].id] == null ? 999 : pos[_TRAT0[a].id]) -
+      (pos[_TRAT0[b].id] == null ? 999 : pos[_TRAT0[b].id]));
+  }
+  return v;
 }
 /* Desenha com o recorte escolhido e devolve os originais em seguida. Só as
    séries POR TRATAMENTO são fatiadas; nada aqui recalcula estatística. */
 function comSelecao(fn){
   const idx = visiveis();
-  if(idx.length === _TRAT0.length) return fn();
+  /* O atalho "nada escondido, então nem fatia" ignorava a ORDEM: com todos os
+     tratamentos visíveis, a ordem escolhida no painel nunca chegava à figura.
+     Só se pode pular quando a lista está inteira E na ordem natural. */
+  if(idx.length === _TRAT0.length && idx.every((v,k)=> v === k)) return fn();
   const o = {TRAT, mSEV, mAACPD, EFIC, LETRAS, SEM, iTest};
   try{
     TRAT   = idx.map(i=>o.TRAT[i]);
@@ -2069,14 +2306,29 @@ const grupoPl = document.getElementById("grupo-plantec");
 const grupoBv = document.getElementById("grupo-bv");
 const grupoSev = document.getElementById("grupo-sev");
 function sincronizaPainelPl(){
+  const rank = (estado.vista === "ranking");
   grupoPl.style.display  = estado.vista === "plantec" ? "" : "none";
-  grupoBv.style.display  = estado.vista === "barras"  ? "" : "none";
+  /* o ranking usa o mesmo grupo das barras (série, letras, título, rodapé),
+     mas grade, eixo Y, valor-na-barra e patamar não existem nele — mostrá-los
+     era exatamente a "bagunça": botão que não muda nada na figura. */
+  grupoBv.style.display  = (estado.vista === "barras" || rank) ? "" : "none";
+  ["grade","eixoY","valores","patamar","subtitulo"].forEach(k=>{
+    const cb = document.querySelector(`#g-bv-el input[data-bv="${k}"]`);
+    const o = cb && cb.closest(".opt");
+    if(o) o.style.display = (rank && k !== "subtitulo") ? "none" : "";
+  });
   grupoSev.style.display = modoSev() ? "" : "none";
   /* "uma barra por avaliação" só existe para a severidade: a eficácia de Abbott
      sai da AACPD do ensaio inteiro, então é um número por tratamento. */
-  const soSev = estado.bv.serie === "sev";
+  /* "Só a última / uma barra por avaliação" ficava escondido em tudo que não
+     fosse a medida sozinha — e a mortalidade abre em "as duas", então a opção
+     sumia justamente onde ele mais precisava dela. A restrição existia porque a
+     eficácia de Abbott sobre a AACPD é UM número por tratamento, sem série no
+     tempo. Na análise por data ela é da avaliação: tem série, e a escolha vale. */
+  const temSerieNoTempo = ((estado.bv.serie === "sev") || porData()) && !rank;
   const qd = document.getElementById("g-bv-quando");
-  if(qd) qd.style.display = soSev ? "" : "none";
+  if(qd) qd.style.display = temSerieNoTempo ? "" : "none";
+  const soSev = estado.bv.serie === "sev";
   /* e a linha de patamar não diz nada num gráfico só de severidade */
   const pat = document.querySelector('#g-bv-el input[data-bv="patamar"]');
   if(pat){ const o = pat.closest(".opt"); if(o) o.style.display = soSev ? "none" : ""; }
@@ -2176,13 +2428,25 @@ function _montaPainelDados(){
     gA.previousElementSibling.style.display = "none";   /* o <h2> "Quais dados" */
     gA.style.display = "none";
   }
-  gT.innerHTML = _TRAT0.map(tr=>{
+  /* A lista segue a ORDEM que vai para a figura — vê-la aqui na ordem de
+     cadastro enquanto o gráfico sai noutra é confuso. Cada linha traz a cor do
+     tratamento e, no modo manual, as setas para movê-lo. */
+  const ordem = ordenaIdx(_TRAT0.map((_,i)=>i));
+  const manual = (estado.sel.ordem === "manual");
+  gT.innerHTML = ordem.map((i, pos)=>{
+    const tr = _TRAT0[i];
     const fixo = !!tr.testemunha;
     const on = fixo || !estado.sel.ocultos[tr.id];
     const nm = (estado.idioma==="pt" ? tr.pt : tr.en) || tr.id;
+    const setas = manual
+      ? `<span class="mover"><button type="button" class="mini" data-sobe="${tr.id}"${pos===0?" disabled":""}>↑</button>`
+        + `<button type="button" class="mini" data-desce="${tr.id}"${pos===ordem.length-1?" disabled":""}>↓</button></span>`
+      : "";
     return `<label class="opt${on?" ativo":""}"${fixo?' title="A testemunha é a referência de Abbott — não sai da figura."':""}>`
          + `<input type="checkbox" data-trat="${tr.id}"${on?" checked":""}${fixo?" disabled":""}>`
-         + `<span class="marcador"></span>${tr.id} · ${nm}${fixo?" (test.)":""}</label>`;
+         + `<span class="marcador"></span>`
+         + `<input type="color" class="cor-trat" data-cor="${tr.id}" value="${tr.cor}" title="Cor de ${tr.id} nesta e nas próximas figuras">`
+         + `<span class="rot-trat">${tr.id} · ${nm}${fixo?" (test.)":""}</span>${setas}</label>`;
   }).join("");
 }
 document.getElementById("g-sel-aval").addEventListener("change", ev=>{
@@ -2192,12 +2456,42 @@ document.getElementById("g-sel-aval").addEventListener("change", ev=>{
   render();
   try{ _sincCascata(); }catch(e){}   /* a base do cálculo cita a avaliação em foco */
 });
+document.getElementById("g-sel-ordem").addEventListener("change", ev=>{
+  estado.sel.ordem = ev.target.value; sinc(ev.currentTarget,"opt");
+  /* ao entrar no modo manual, congela a ordem que está na tela como ponto de
+     partida — começar de uma lista aleatória obrigaria a remontar tudo */
+  if(estado.sel.ordem === "manual" && !estado.sel.manual)
+    estado.sel.manual = ordenaIdx(_TRAT0.map((_,i)=>i)).map(i=>_TRAT0[i].id);
+  _campoGrava("ordem", estado.sel.ordem);
+  _montaPainelDados(); render();
+});
 document.getElementById("g-sel-trat").addEventListener("change", ev=>{
+  const cor = ev.target.closest("input[data-cor]");
+  if(cor){
+    /* a cor mora no tratamento e fica gravada POR ESTUDO: é o que faz o mesmo
+       produto sair da mesma cor em todas as figuras do relatório */
+    const tr = _TRAT0.find(t=>t.id === cor.dataset.cor);
+    if(tr){ tr.cor = cor.value; _corGrava(tr.id, cor.value); render(); }
+    return;
+  }
   const cb = ev.target.closest("input[data-trat]"); if(!cb) return;
   if(cb.checked) delete estado.sel.ocultos[cb.dataset.trat];
   else estado.sel.ocultos[cb.dataset.trat] = 1;
   cb.closest(".opt").classList.toggle("ativo", cb.checked);
   render();
+});
+document.getElementById("g-sel-trat").addEventListener("click", ev=>{
+  const b = ev.target.closest("button[data-sobe],button[data-desce]");
+  if(!b) return;
+  ev.preventDefault();
+  const id = b.dataset.sobe || b.dataset.desce, passo = b.dataset.sobe ? -1 : 1;
+  const arr = (estado.sel.manual || ordenaIdx(_TRAT0.map((_,i)=>i)).map(i=>_TRAT0[i].id)).slice();
+  const k = arr.indexOf(id), alvo = k + passo;
+  if(k < 0 || alvo < 0 || alvo >= arr.length) return;
+  arr[k] = arr[alvo]; arr[alvo] = id;
+  estado.sel.manual = arr;
+  _campoGrava("ordemManual", arr.join(","));
+  _montaPainelDados(); render();
 });
 document.getElementById("btn-trat-todos").addEventListener("click", ()=>{
   estado.sel.ocultos = {}; _montaPainelDados(); render();
@@ -2307,13 +2601,49 @@ function _campoGrava(k, v){
     localStorage.setItem(_CHAVE_CAMPOS, JSON.stringify(todos));
   }catch(e){}
 }
+function _corGrava(idTrat, cor){
+  try{
+    const todos = _campoLido(), id = ESTUDO.codigo || "_";
+    const cores = Object.assign({}, (todos[id]||{}).cores, {[idTrat]: cor});
+    todos[id] = Object.assign({}, todos[id], {cores});
+    localStorage.setItem(_CHAVE_CAMPOS, JSON.stringify(todos));
+  }catch(e){}
+}
+/* Restaura cor e ordem gravadas ANTES do primeiro desenho — senão a folha abre
+   com as cores de fábrica e só corrige no segundo render, piscando. */
+(function(){
+  const g = _campoLido()[ESTUDO.codigo || "_"] || {};
+  if(g.cores) _TRAT0.forEach(tr=>{ if(g.cores[tr.id]) tr.cor = g.cores[tr.id]; });
+  if(g.ordem) estado.sel.ordem = g.ordem;
+  if(g.ordemManual) estado.sel.manual = String(g.ordemManual).split(",").filter(Boolean);
+  document.querySelectorAll('#g-sel-ordem input').forEach(i=>{
+    i.checked = (i.value === estado.sel.ordem);
+    const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
+  });
+})();
 document.getElementById("g-pl-campos").addEventListener("input", ev=>{
   const inp = ev.target.closest("input[data-plc]"); if(!inp) return;
   const k = inp.dataset.plc, v = inp.value.trim();
-  /* cultura mora nos dois idiomas; o resto é comum à folha */
+  /* cultura e título moram nos dois idiomas; o resto é comum à folha */
   if(k === "cultura"){ ESTUDO.pt.cultura = v; ESTUDO.en.cultura = v; }
+  else if(k === "titulo"){ ESTUDO.pt.titulo = v; ESTUDO.en.titulo = v; }
   else ESTUDO[k] = v;
   _campoGrava(k, v);
+  render();
+});
+document.getElementById("g-fig-erro").addEventListener("change", ev=>{
+  estado.fig.erro = ev.target.value; sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("g-fig-eixo").addEventListener("change", ev=>{
+  estado.fig.eixo = ev.target.value; sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("g-fig-dec").addEventListener("change", ev=>{
+  estado.fig.dec = parseInt(ev.target.value, 10); sinc(ev.currentTarget,"opt"); render();
+});
+document.getElementById("g-fig-n").addEventListener("change", ev=>{
+  const cb = ev.target.closest("input[data-fig]"); if(!cb) return;
+  estado.fig[cb.dataset.fig] = cb.checked ? 1 : 0;
+  cb.closest(".opt").classList.toggle("ativo", cb.checked);
   render();
 });
 document.getElementById("g-ident-el").addEventListener("change", ev=>{
@@ -2331,15 +2661,24 @@ document.getElementById("g-unidade").addEventListener("change", ev=>{
    já digitou nesta folha em outra sessão */
 (function(){
   const salvos = _campoLido()[ESTUDO.codigo || "_"] || {};
-  [["codigo",()=>ESTUDO.codigo],["alvo",()=>ESTUDO.alvo],["alvoSci",()=>ESTUDO.alvoSci],
+  /* Quem vence o quê:
+     - `titulo`, `tituloFig`, `alvo`, `alvoSci` são REESCRITA dele. Se digitou,
+       digitou de propósito: o que ele escreveu vence o que o app manda. Para
+       voltar ao automático, é só apagar o campo.
+     - `codigo`, `cultura`, `variedade`, `plantio` o app conhece de verdade
+       (vêm da quadra e do estudo); ali o gravado só preenche o que veio vazio. */
+  const dele = {titulo:1, tituloFig:1, alvo:1, alvoSci:1};
+  const aplica = (k, v) => {
+    if(k === "cultura"){ ESTUDO.pt.cultura = v; ESTUDO.en.cultura = v; }
+    else if(k === "titulo"){ ESTUDO.pt.titulo = v; ESTUDO.en.titulo = v; }
+    else ESTUDO[k] = v;
+  };
+  [["codigo",()=>ESTUDO.codigo],["titulo",()=>E().titulo],["tituloFig",()=>ESTUDO.tituloFig],
+   ["alvo",()=>ESTUDO.alvo],["alvoSci",()=>ESTUDO.alvoSci],
    ["cultura",()=>E().cultura],
    ["variedade",()=>ESTUDO.variedade],["plantio",()=>ESTUDO.plantio]].forEach(([k,get])=>{
     let v = get() || "";
-    if(!v && salvos[k]){
-      v = salvos[k];
-      if(k === "cultura"){ ESTUDO.pt.cultura = v; ESTUDO.en.cultura = v; }
-      else ESTUDO[k] = v;
-    }
+    if(salvos[k] && (dele[k] || !v)){ v = salvos[k]; aplica(k, v); }
     const el = document.querySelector(`[data-plc="${k}"]`);
     if(el) el.value = v;
   });
