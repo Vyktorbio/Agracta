@@ -298,6 +298,8 @@ function ensureConfig(){
   if(typeof data.__config.adminEmail !== 'string' || data.__config.adminEmail === '' || data.__config.adminEmail === 'admin@agracta.com') {
     data.__config.adminEmail = 'machadovictorchaves@gmail.com';
   }
+  /* o nome com que a pessoa assina a trilha BPL; vazio = ainda não declarado */
+  if(typeof data.__config.meuNome !== 'string') data.__config.meuNome = '';
 }
 
 function load(){
@@ -5678,18 +5680,46 @@ function _avHoraAgora(){
   try{ if(typeof _stxToast==='function') _stxToast('Hora da leitura: '+el.value); }catch(e){}
 }
 /* Nome legível do usuário logado (perfis/roster/admin) — p/ auditoria e assinatura */
+/* QUEM ASSINA. Isto vai para a trilha BPL e para a rubrica das avaliações, então
+   tem de ser o NOME da pessoa — "Machado, V. C." —, não o e-mail nem o cargo.
+
+   Antes a ordem falhava para quem mais usa o app: o roster `allowedUsers` só
+   ganha nome quando um técnico é CRIADO pelo painel, e o administrador nunca
+   passa por ali. Então caía no ramo do adminEmail e a trilha registrava
+   "Administrador"; com outro e-mail, registrava o e-mail cru. Nos dois casos, um
+   auditor lê a folha e não sabe quem assinou.
+
+   Agora a ordem é: o nome que a PESSOA declarou > o roster BPL local > o perfil
+   do Supabase > o cargo > o e-mail (último recurso, nunca a primeira escolha). */
 function _currentUserName(){
   var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
   if(!email) return 'Local/Offline';
+  var alvo = email.toLowerCase().trim();
   try{
     ensureConfig();
+    var meu = (data && data.__config && data.__config.meuNome || '').trim();
+    if(meu) return meu;
     var allowed = (data && data.__config && data.__config.allowedUsers || []);
-    var user = allowed.find(function(u){ return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim(); });
+    var user = allowed.find(function(u){ return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === alvo; });
     if(user && user.nome) return user.nome;
+    var perfil = (window._perfisCache || []).find(function(p){ return p && p.email && String(p.email).toLowerCase().trim() === alvo; });
+    if(perfil && perfil.nome) return perfil.nome;
     var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
-    if(admEmail && email.toLowerCase().trim() === admEmail) return 'Administrador';
+    if(admEmail && alvo === admEmail) return 'Administrador';
   }catch(e){}
   return email;
+}
+/* O nome com que a pessoa assina. Fica no aparelho e sobe junto com a config. */
+function definirMeuNome(){
+  try{ ensureConfig(); }catch(e){}
+  var atual = (data && data.__config && data.__config.meuNome) || '';
+  var novo = (window.prompt('Como o seu nome deve aparecer na trilha BPL e na rubrica das avaliações?\n\nUse o formato que você usa no relatório — ex.: Machado, V. C. — CRBio-01', atual) || '').trim();
+  if(novo === '') return;
+  data.__config.meuNome = novo;
+  try{ save(); }catch(e){}
+  try{ if(typeof cloudSave === 'function') cloudSave(); }catch(e){}
+  if(typeof _stxToast === 'function') _stxToast('As próximas assinaturas saem como "' + novo + '"');
+  try{ if(typeof renderAdminDashboard === 'function') renderAdminDashboard(); }catch(e){}
 }
 /* Trilha BPL: além de quem/quando/ação, aceita extra (mudancas de→para, motivo). Append-only. */
 function logStudyAuditInObject(study, action, details, extra) {
@@ -6983,7 +7013,11 @@ function _pranchaPayload(qid, sid, variavel){
       labTipo:((typeof quadraLabTipo==='function' && quadraLabTipo(qid))||''),
       /* a contagem do tempo que o estudo declarou (horas na bancada) */
       tempoUnidade:(s.avalUnidade==='horas'?'horas':'dias'),
-      variavel:{ nome:variavel, tipo:_avTipo(avRef,variavel), sentido:_avSentido(avRef,variavel) },
+      /* N e sub: quantos INDIVÍDUOS a parcela tem. Num bioensaio "n = 4" são os
+         potes; o que sustenta o resultado são os 4 × 10 = 40 ácaros. A figura
+         precisa dos dois números para dizer a verdade sobre o tamanho amostral. */
+      variavel:{ nome:variavel, tipo:_avTipo(avRef,variavel), sentido:_avSentido(avRef,variavel),
+                 N:(_vc.N||0), sub:(_vc.sub||1) },
       /* Identificação: o ESTUDO manda, a QUADRA é o padrão. A quadra já sabe
          cultivar e plantio; o estudo pode discordar (mesma quadra, outro
          ensaio) ou completar o que a quadra não tem. */
@@ -11566,6 +11600,15 @@ function renderAdminDashboard(){
   m.innerHTML = '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:460px;width:100%;padding:20px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">⚙️ Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
     '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Controle de acesso BPL para sincronização de dados.</div>'+
+    /* Quem assina. O administrador nunca passa pela criação de técnico, então
+       seu nome não estava em lugar nenhum e a trilha registrava "Administrador"
+       ou o e-mail cru — inútil numa auditoria. Aqui ele declara como assina. */
+    '<div style="margin-top:14px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
+      '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Como você assina</div>'+
+      '<div style="font-size:12px;color:#eaf3ed;line-height:1.6">Trilha BPL e rubrica saem como:<br><b style="font-size:13px">'+esc(_currentUserName())+'</b></div>'+
+      '<button onclick="definirMeuNome()" style="margin-top:8px;width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:8px;font-weight:700;font-size:12px;cursor:pointer">Mudar o nome da assinatura</button>'+
+      '<div style="font-size:10px;color:#8aa88a;margin-top:6px">Use o formato do relatório — ex.: Machado, V. C. — CRBio-01. Vale para as PRÓXIMAS assinaturas; o que já foi assinado não muda, por exigência de BPL.</div>'+
+    '</div>'+
     credsHtml+
 
     '<div style="margin-top:14px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+

@@ -700,6 +700,20 @@ function usarAnalise(j){
 /* Estes vinham cravados no protótipo ("4 blocos", "mSEV[iTest][2]"), o que só
    valia para o estudo de demonstração. Agora seguem o delineamento real. */
 const NB = BLOCOS.length;
+/* Quantos INDIVÍDUOS por parcela. Em razão n/N é o N declarado (20 insetos);
+   em variável com sub-amostras é o número de sub-amostras (10 folhas). Zero
+   quando a parcela é a própria unidade medida — aí "n" são só os blocos. */
+const NIND = (() => {
+  const v = ESTUDO.variavel || {};
+  const n = Math.round(Number(v.N) || 0), sub = Math.round(Number(v.sub) || 1);
+  return n > 0 ? n : (sub > 1 ? sub : 0);
+})();
+/* O "n" que a figura declara. Sem indivíduos por parcela, são os blocos —
+   como sempre foi. Com eles, o total, e a conta escrita ao lado: quem lê um
+   bioensaio quer saber quantos indivíduos sustentam o número, não quantos
+   potes. "n = 40 (4 × 10)" diz as duas coisas sem ambiguidade. */
+const nTexto = () => (NIND > 0) ? `n = ${NB*NIND} (${NB} × ${NIND})` : `n = ${NB}`;
+const nCurto  = () => (NIND > 0) ? `n = ${NB*NIND}` : `n = ${NB}`;
 const ULTAV = DAA.length - 1;
 /* "ferrugem-asiática" e "segunda aplicação" vinham cravados do protótipo. Uma
    folha de relatório não pode nomear a doença errada nem contar aplicação que
@@ -1362,9 +1376,18 @@ function secRodape(x,y,w){
   const d = t(), dl = ESTUDO.delineamento;
   let s = rule(x,y,w,1.1);
   /* o tamanho da parcela é opcional — sem ele o rodapé simplesmente não fala nisso */
+  /* Aqui `n` é o do DELINEAMENTO: quantas parcelas a ANOVA usou (k × r). É
+     outra coisa do "n" que sai embaixo de cada barra, que são os indivíduos do
+     tratamento. Quando a parcela tem indivíduos declarados, os dois aparecem —
+     confundir um com o outro é inflar o tamanho amostral do ensaio. */
+  const pt = estado.idioma === "pt";
+  const nInd = (NIND > 0)
+    ? `${NB*NIND} ${pt?"indivíduos por tratamento":"individuals per treatment"} (${NB} × ${NIND})`
+    : null;
   s += txt(x, y+20, [`${d.ref}: ${dl.blocos} ${d.dbc}`,
                      dl.parcela ? `${d.parc} ${dl.parcela}` : null,
-                     `n = ${AN.N}`].filter(Boolean).join(" · "), {t:12, c:GRAF});
+                     `n = ${AN.N} ${pt?"parcelas":"plots"}`,
+                     nInd].filter(Boolean).join(" · "), {t:12, c:GRAF});
   /* Sem "Gerado por … · Agracta": a figura vai para relatório de cliente e o
      nome da ferramenta não tem o que fazer ali. O código do estudo fica. */
   s += txt(x+w, y+20, ESTUDO.codigo, {t:12, w:600, ls:1.4, a:"end"});
@@ -1432,7 +1455,11 @@ function rotulosDatas(){
   const ord = estado.idioma==="pt"
     ? {1:"1ª",2:"2ª",3:"3ª",4:"4ª",5:"5ª",6:"6ª"}
     : {1:"1st",2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th"};
+  /* Na BANCADA a série é por MOMENTO, não por data: 2, 24 e 48 HAT caem no mesmo
+     dia, e três barras rotuladas com a mesma data não dizem nada. No campo cada
+     avaliação é de um dia, e a data é o rótulo natural — segue como sempre. */
   const fmt = DAA.map((_,i)=>{
+    if(LAB) return rotMom(i);
     const a = (AVALIACOES||[])[i];
     const d = a && a.data ? (estado.idioma==="pt" ? a.data.pt : a.data.en) : "";
     return d || rotMom(i);
@@ -1722,7 +1749,7 @@ function secBarras(x, y, w, alt){
       if(B.valores) s += txt(bx + largBarra*0.45, acima, fmtD(v), {t:9.5, a:"middle", c:"#333333"});
     });
     /* o n por tratamento, logo abaixo do eixo — antes dos rótulos */
-    if(estado.fig.n) s += txt(centro, base + 11, "n = " + NB, {t:9, a:"middle", c:"#7a857f"});
+    if(estado.fig.n) s += txt(centro, base + 11, nCurto(), {t:9, a:"middle", c:"#7a857f"});
     if(inclinado){
       /* ancorado no fim e girado -45°: o texto "cai" para a esquerda a partir do
          centro do grupo, que é como ele não invade o vizinho */
@@ -1752,7 +1779,10 @@ function secBarras(x, y, w, alt){
 function secPlantec(x, y, w, alt){
   const nG = TRAT.length, nS = DAA.length;
   const cores = coresSeries(nS);
-  const legs = rotulosDatas();
+  /* o momento analisado ganha ● — é a única avaliação a que a ANOVA, a DMS e as
+     letras desta prancha se referem; sem a marca, as três séries parecem ter o
+     mesmo respaldo estatístico */
+  const legs = rotulosDatas().map((r,i)=> i === avalIdx() ? `${r} ●` : r);
   const rotulos = TRAT.map(rotuloTratamento);
   const maxLinhas = Math.max(...rotulos.map(r=>r.length));
   const fonteX = maxLinhas <= 3 ? 10 : (maxLinhas === 4 ? 9 : 8);
@@ -1781,7 +1811,10 @@ function secPlantec(x, y, w, alt){
   /* escala: 0 até o próximo múltiplo de 5, dez divisões */
   const vals = SEV.flat(2).filter(v=>Number.isFinite(v));
   const maximo = vals.length ? Math.max(...vals) : 0;
-  const topoY = Math.max(5, (Math.floor(maximo/5)+1)*5);
+  /* respeita a escala escolhida no painel, igual às outras folhas — sem isto o
+     eixo desta ia a 105 enquanto o das barras ia a 100, e duas figuras do mesmo
+     relatório não podiam ser comparadas lado a lado */
+  const topoY = (estado.fig.eixo === "100") ? 100 : Math.max(5, (Math.floor(maximo/5)+1)*5);
   const py = v => base - (v/topoY) * (base - topo0);
 
   /* grade e eixo Y */
@@ -1812,7 +1845,7 @@ function secPlantec(x, y, w, alt){
       s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(largBarra*0.9).toFixed(1)}" height="${bh.toFixed(1)}" fill="${cores[i]}"/>`;
       if(P.valores) s += txt(bx + largBarra*0.45, by - 4, fmtD(media), {t:9.5, a:"middle", c:"#333333"});
     });
-    if(estado.fig.n) s += txt(centro, base + 11, "n = " + NB, {t:9, a:"middle", c:"#7a857f"});
+    if(estado.fig.n) s += txt(centro, base + 11, nCurto(), {t:9, a:"middle", c:"#7a857f"});
     /* rótulo do tratamento, uma linha por componente */
     rotulos[g].forEach((linha, k)=>{
       s += txt(centro, base + 16 + dnPl + k*(fonteX+3), linha, {t:fonteX, a:"middle", c:"#333333"});
@@ -2009,7 +2042,12 @@ function secBPL(x, y, w){
 function secPlantecRodape(x, y, w){
   const l1 = estado.ident.mostrar ? identRuns() : [];
   const apl = (APLICACOES||[]).map(a=> a && a.data ? (estado.idioma==="pt"?a.data.pt:a.data.en) : null).filter(Boolean);
-  const avl = (AVALIACOES||[]).map(a=> a && a.data ? (estado.idioma==="pt"?a.data.pt:a.data.en) : null).filter(Boolean);
+  /* Na bancada as avaliações caem no mesmo dia — listar as datas dava
+     "11/08/2026 · 11/08/2026", que não identifica nada. Ali quem identifica é o
+     MOMENTO. No campo segue a data, como sempre. */
+  const avl = LAB
+    ? DAA.map((_,i)=> rotMom(i))
+    : (AVALIACOES||[]).map(a=> a && a.data ? (estado.idioma==="pt"?a.data.pt:a.data.en) : null).filter(Boolean);
   const l2 = [ apl.length ? (estado.idioma==="pt"?"Aplicações: ":"Applications: ") + apl.join(" · ") : null,
                avl.length ? (estado.idioma==="pt"?"Avaliações: ":"Assessments: ") + avl.join(" · ") : null
              ].filter(Boolean).join("   |   ");
@@ -2256,9 +2294,21 @@ function legendaTexto(){
     ms==="avaliacao" ? d.legSevAval() :
     ms==="abbott" ? d.legSevAbbott() :
     ms==="barras" ? d.legSevSimples() : d.legSev()};
-  if(estado.vista==="plantec")  return {rot:`${d.figura} 1`, txt:(estado.idioma==="pt"
-      ? `${MED.pt} média por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.`
-      : `Mean ${MEDl.en} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.`)};
+  if(estado.vista==="plantec"){
+    /* DECISÃO, e não omissão por acaso: esta folha mostra TODAS as avaliações
+       lado a lado, mas a ANOVA e o Tukey são de UMA só. Pôr letra em todas as
+       barras faria o leitor comparar momentos com um teste que não os comparou.
+       Então a folha não traz letra nenhuma — é descritiva — e a legenda diz
+       isso, apontando onde a estatística está. O momento analisado sai marcado
+       com ● na legenda do gráfico. */
+    const pt = estado.idioma === "pt";
+    const un = (NIND > 0)
+      ? (pt ? `${NB} repetições de ${NIND} indivíduos` : `${NB} replicates of ${NIND} individuals`)
+      : (pt ? `${NB} ${LAB?"repetições":"blocos"}` : `${NB} ${LAB?"replicates":"blocks"}`);
+    return {rot:`${d.figura} 1`, txt:(pt
+      ? `${MED.pt} média por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${un}. Figura descritiva, sem teste de médias: a ANOVA e o teste de Tukey são de uma avaliação por vez — a marcada com ● (${rotMom(avalIdx())}). O agrupamento de médias está na tabela de resultados e na folha de estatística completa.`
+      : `Mean ${MEDl.en} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${un}. Descriptive figure, no mean comparison: ANOVA and Tukey refer to one assessment at a time — the one marked ● (${rotMom(avalIdx())}). Mean grouping is in the results table and in the full statistics sheet.`)};
+  }
   if(estado.vista==="tabela")   return {rot:`${d.tabela} 1`, txt:d.legTab()};
   return {rot:`${d.figura} 1`, txt:d.legComp()};
 }
@@ -2793,19 +2843,14 @@ function _rotulaPainel(){
     };
     trocaTexto('#g-vista input[value="sev-curva"]',   `${MED.pt} no tempo`);
     trocaTexto('#g-vista input[value="sev-paineis"]', `${MED.pt} no tempo — um painel por tratamento`);
-    /* "Severidade por data — barras verticais" é a folha do CAMPO, no formato do
-       gerar_grafico.py. Não se renomeia nem se adapta: numa quadra de bancada
-       ela simplesmente não é oferecida. */
-    const _pl = document.querySelector('#g-vista input[value="plantec"]');
-    if(_pl){
-      const o = _pl.closest(".opt"); if(o) o.style.display = "none";
-      if(estado.vista === "plantec"){
-        estado.vista = "barras";
-        const b = document.querySelector('#g-vista input[value="barras"]');
-        if(b){ b.checked = true; }
-        try{ _sincVista(); }catch(e){}
-      }
-    }
+    /* A folha "por data — barras verticais" é o formato do gerar_grafico.py, e é
+       a identidade visual que ele usa no relatório. Eu a tinha ESCONDIDO na
+       bancada por ter lido "não mexa nela" como "não a use no lab" — errado. O
+       formato serve igualmente ao bioensaio: um grupo por tratamento, uma barra
+       por momento. O que muda é só o VOCABULÁRIO: no campo a série é por DATA,
+       na bancada é por MOMENTO (2, 24, 48 HAT), porque as três caem no mesmo
+       dia e a data não as distingue. O desenho é o mesmo. */
+    trocaTexto('#g-vista input[value="plantec"]', `${MED.pt} por momento — barras verticais`);
     /* a base do cálculo não é escolha aqui: na bancada não existe AACPD */
     const gb = document.getElementById("grupo-base");
     if(gb) gb.style.display = "none";
