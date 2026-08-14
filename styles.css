@@ -1707,3 +1707,31 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
   border-radius:10px;padding:10px 12px;margin:2px 0 12px;
 }
 .se-nema-nota b{color:var(--text,#1d2723)}
+
+/* ============================================================================
+   CAMPO, CELULAR: o botão SALVAR não pode ficar no fim de uma rolagem de 1900 px
+
+   A grade de notas de um ensaio com 6 tratamentos × 4 blocos deixa o painel da
+   avaliação com quase 2000 px de altura. Num visor de 812 px, o SALVAR ficava a
+   1100 px de rolagem do topo — e no aparelho, com a mão ocupada, virava "não
+   consegui salvar". A rolagem existia; o alvo é que estava longe demais.
+
+   A barra de ações passa a ser fixa no rodapé do painel: rola-se a grade, o
+   botão fica. env(safe-area-inset-bottom) afasta do indicador do iPhone.
+   ============================================================================ */
+.se-overlay{
+  -webkit-overflow-scrolling:touch;      /* rolagem por toque em iOS antigo */
+  overscroll-behavior:contain;           /* não arrasta o mapa atrás junto */
+}
+.se-panel .se-actions{
+  position:sticky; bottom:0; z-index:3;
+  margin:14px -16px -16px; padding:12px 16px;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top:1px solid var(--gp-line, var(--border, #1a2a1a));
+  background:var(--gp-glass-strong, var(--vm-panel, #0d150d));
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  border-radius:0 0 18px 18px;
+}
+/* o fieldset desabilitado (avaliação assinada) não pode comer o toque */
+#eePnl fieldset[disabled]{ pointer-events:none }
+#eePnl fieldset[disabled] ~ .se-actions{ pointer-events:auto }

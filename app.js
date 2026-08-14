@@ -3022,21 +3022,54 @@ function onProbeClick(e){
 }
 /* GPS de PRECISÃO: coleta vários sinais por alguns segundos e fica com o de MENOR erro
    (ignora leituras grosseiras > maxAcc; para cedo quando atinge 'target'). onUpd = cada melhora; onEnd = melhor (ou null). */
+/* Por que o GPS "dava erro" mesmo com o aparelho localizando:
+
+   1. LEITURA IMPRECISA ERA JOGADA FORA. `if(a>maxAcc) return;` descartava toda
+      leitura acima de 80 m. Dentro do laboratório, sob copa fechada ou com o
+      céu encoberto, TODAS as leituras vêm assim — e a função terminava com
+      best=null, ou seja, "sem sinal", com o GPS funcionando o tempo todo.
+      Agora a leitura ruim é GUARDADA (a precisão vai junto, no campo acc, e é
+      ela que o auditor lê); maxAcc só decide se vale a pena continuar tentando.
+
+   2. ERRO PASSAGEIRO MATAVA A TENTATIVA. O watchPosition dispara erro
+      transitório (kCLErrorLocationUnknown no iPhone) e logo depois entrega uma
+      posição boa. O código encerrava no primeiro erro. Agora só encerra na hora
+      se for PERMISSÃO NEGADA (code 1) — o resto espera o cronômetro.
+
+   3. A MENSAGEM NÃO DIZIA A CAUSA. "sem sinal" servia para permissão negada,
+      para página sem HTTPS e para demora. São três consertos diferentes. */
 function gpsBest(opts, onUpd, onEnd){
   opts=opts||{};
   var target=opts.target||10, maxWait=opts.maxWait||9000, maxAcc=opts.maxAcc||80;
-  if(!navigator.geolocation){ if(onEnd)onEnd(null,'GPS indisponível'); return; }
-  var best=null, watch=null, timer=null, done=false;
-  function finish(reason){ if(done)return; done=true; try{navigator.geolocation.clearWatch(watch);}catch(e){} clearTimeout(timer); if(onEnd)onEnd(best, best?null:(reason||'sem sinal')); }
+  if(!navigator.geolocation){ if(onEnd)onEnd(null,'Este navegador não oferece GPS.'); return; }
+  if(location.protocol==='file:'){ if(onEnd)onEnd(null,'Abrindo o arquivo direto (file://) o navegador bloqueia o GPS. Use o app instalado ou o endereço https.'); return; }
+  var best=null, watch=null, timer=null, done=false, ultimoErro=null;
+  function finish(reason){
+    if(done)return; done=true;
+    try{navigator.geolocation.clearWatch(watch);}catch(e){}
+    clearTimeout(timer);
+    if(onEnd)onEnd(best, best?null:(reason||ultimoErro||'não consegui uma posição a tempo'));
+  }
   try{
     watch=navigator.geolocation.watchPosition(function(p){
       var a=(p.coords.accuracy==null?9999:p.coords.accuracy);
-      if(a>maxAcc) return;
+      /* guarda SEMPRE a melhor leitura, mesmo imprecisa — melhor um carimbo de
+         ±150 m com a imprecisão declarada do que carimbo nenhum */
       if(!best || a<best.acc){ best={lat:p.coords.latitude,lng:p.coords.longitude,acc:a,ts:Date.now()}; if(onUpd)onUpd(best); }
-      if(best && best.acc<=target) finish();
-    }, function(err){ if(!best) finish(err&&err.message); }, {enableHighAccuracy:true, timeout:maxWait, maximumAge:0});
-  }catch(e){ finish('erro'); return; }
-  timer=setTimeout(function(){ finish('timeout'); }, maxWait+500);
+      if(best.acc<=target) finish();               /* já está bom: para agora */
+    }, function(err){
+      var c=err&&err.code;
+      if(c===1){ finish('Permissão de localização negada. Libere o acesso ao GPS para este site nos ajustes do aparelho.'); return; }
+      ultimoErro = (c===2) ? 'O aparelho não conseguiu se localizar (sinal fraco). Tente a céu aberto.'
+                 : (c===3) ? 'O GPS demorou mais que o esperado.'
+                 : (err&&err.message)||null;
+      /* erro passageiro: não encerra — a próxima leitura costuma vir boa */
+    }, {enableHighAccuracy:true, timeout:maxWait, maximumAge:0});
+  }catch(e){ finish('Falha ao iniciar o GPS: '+(e&&e.message||e)); return; }
+  timer=setTimeout(function(){ finish(); }, maxWait+500);
+  /* Sinal ruim mas existente: em vez de devolver nada, devolve o que tem.
+     maxAcc deixa de ser filtro de descarte e vira só o alvo de qualidade. */
+  void maxAcc;
 }
 function locateMe(){
   if(!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
@@ -3053,7 +3086,8 @@ function locateMe(){
     if(fim && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
   }
   gpsBest({target:8, maxWait:9000, maxAcc:80}, function(b){ draw(b,false); }, function(b,err){
-    if(!b){ alert('Não consegui o GPS.\nObs.: abrindo o arquivo direto (file://) o navegador bloqueia o GPS — funciona via localhost/https ou no app instalado.'+(err?('\n('+err+')'):'')); return; }
+    /* a mensagem agora vem pronta do gpsBest, dizendo a causa real */
+    if(!b){ alert('Não consegui o GPS.\n\n'+(err||'Sem posição disponível.')); return; }
     draw(b,true);
   });
 }
@@ -5510,6 +5544,10 @@ function normalizeStudy(s){
   if(typeof s.codigo!=="string")s.codigo=s.nome||"";
   if(typeof s.descricao!=="string")s.descricao="";
   if(typeof s.tipoEstudo!=="string")s.tipoEstudo="";
+  /* identificação: vazio = herda da quadra na hora de desenhar a figura */
+  ["alvo","alvoSci","cultura","variedade","plantio"].forEach(function(k){
+    if(typeof s[k]!=="string") s[k]=(s[k]==null?"":String(s[k]));
+  });
   if(typeof s.dataInicio!=="string")s.dataInicio="";
   if(typeof s.intervaloDias!=="number")s.intervaloDias=parseInt(s.intervaloDias)||14;
   if(typeof s.numAplicacoes!=="number")s.numAplicacoes=parseInt(s.numAplicacoes)||1;
@@ -6805,6 +6843,29 @@ function _pranchaDiag(qid, sid){
     return o;
   });
 }
+/* Um registro da folha forense: o que aconteceu, quando aconteceu, quando foi
+   digitado, onde, com que clima e por quem foi assinado. As DUAS datas saem
+   juntas de propósito — é a diferença entre elas que um auditor procura. */
+function _forenseDe(r, tipo){
+  if(!r) return null;
+  var c=r.carimbo||{};
+  var mom=''; try{ if(r.momento){ var m=avMomento(r,null); if(m&&m.explicito) mom=m.rotulo; } }catch(e){}
+  return {
+    tipo:tipo,
+    evento:((typeof isoToBR==='function'?isoToBR(r.data):r.data)||''),
+    hora:(r.hora||c.horaEvento||''),
+    momento:mom,
+    registro:(c.data||''),
+    gps:(c.gps?{lat:c.gps.lat, lng:c.gps.lng, acc:c.gps.acc}
+        :(c.centro&&c.centro.length===2?{lat:c.centro[0], lng:c.centro[1], centro:true}:null)),
+    clima:(c.clima?{fonte:(c.clima.fonte||''), temp:c.clima.temp, umidade:c.clima.umidade,
+                    vento:c.clima.vento, hora:(c.clima.hora||'')}:null),
+    ndvi:(c.ndvi&&c.ndvi.ndvi!=null?c.ndvi.ndvi:null),
+    assinada:!!c.rubrica,
+    assinadaPor:(c.rubricaNome||c.rubricaPor||''),
+    assinadaEm:(c.rubricaEm||null)
+  };
+}
 function _pranchaPayload(qid, sid, variavel){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
   if(!s) return { erro:'Estudo não encontrado.' };
@@ -6865,6 +6926,8 @@ function _pranchaPayload(qid, sid, variavel){
   var avRef=(_avCfgDoEstudo(s,variavel)||avs[avs.length-1].av);
   var _vc=_avCfg(avRef,variavel);
   var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas 0–'+_vc.escalaMax)):'';
+  /* cultura: o estudo manda, a quadra é o padrão */
+  var _cultura=((s.cultura||'').trim() || q.cultura || '');
 
   return {
     estudo:{
@@ -6875,7 +6938,13 @@ function _pranchaPayload(qid, sid, variavel){
       /* alvo = a variável avaliada (Mancha angular, Cercospora...): a prancha já sabe
          usar em todas as legendas, e sem isso toda folha saía sem dizer o alvo.
          escala = a escala diagramática, quando a variável for do tipo escala. */
-      alvo:variavel, tipoEstudo:(s.tipoEstudo||''),
+      /* O ALVO é o que se combate — "Ferrugem asiática", "Ácaro-da-leprose" —
+         e não o nome da coluna medida. Vinha da variável por falta de campo
+         próprio, e por isso saía "Alvo: Mortalidade" no rodapé. Agora vem do
+         cadastro do estudo; sem preencher, cai na variável como antes. */
+      alvo:((s.alvo||'').trim() || variavel),
+      alvoSci:((s.alvoSci||'').trim()),
+      tipoEstudo:(s.tipoEstudo||''),
       /* CAMPO ou BANCADA — dito, não deduzido. A folha vinha adivinhando o mundo
          pelo sentido da variável, e por isso um bioensaio saía intitulado "curva
          de progresso da doença". Quem sabe é a quadra. */
@@ -6884,13 +6953,14 @@ function _pranchaPayload(qid, sid, variavel){
       /* a contagem do tempo que o estudo declarou (horas na bancada) */
       tempoUnidade:(s.avalUnidade==='horas'?'horas':'dias'),
       variavel:{ nome:variavel, tipo:_avTipo(avRef,variavel), sentido:_avSentido(avRef,variavel) },
-      /* A quadra já sabe o cultivar e a data de plantio; a prancha pedia os dois
-         em "completar o que falta" e ele redigitava a cada folha, porque nunca
-         eram enviados. O rodapé de identificação vive deles. */
-      variedade:(q.cultivar||''), plantio:(q.plantio||''),
+      /* Identificação: o ESTUDO manda, a QUADRA é o padrão. A quadra já sabe
+         cultivar e plantio; o estudo pode discordar (mesma quadra, outro
+         ensaio) ou completar o que a quadra não tem. */
+      variedade:((s.variedade||'').trim() || q.cultivar || ''),
+      plantio:((s.plantio||'').trim() || q.plantio || ''),
       refDAA:base.fonte,
-      pt:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:escalaTxt },
-      en:{ titulo:titulo, local:(loc.nome||''), cultura:(q.cultura||''), safra:'', escala:escalaTxt }
+      pt:{ titulo:titulo, local:(loc.nome||''), cultura:_cultura, safra:'', escala:escalaTxt },
+      en:{ titulo:titulo, local:(loc.nome||''), cultura:_cultura, safra:'', escala:escalaTxt }
     },
     tratamentos: trats.map(function(t,i){
       return { id:t.id, pt:(t.produto||t.id), en:(t.produto||t.id),
@@ -6914,6 +6984,24 @@ function _pranchaPayload(qid, sid, variavel){
                ur:(a.urIni||null), vento:(a.ventoIni||null), bico:(a.bico||'') };
     }),
     variavel: variavel,
+    /* BPL: a folha forense precisa das duas datas de cada registro (quando o
+       evento aconteceu × quando foi digitado), de onde e com que clima, de quem
+       assinou, e da trilha de auditoria do estudo. Nada disso é derivável da
+       matriz de notas — tem de viajar junto. */
+    bpl: {
+      autor: (s.autor || (typeof _currentUserName==='function' ? _currentUserName() : '') || ''),
+      finalizado: !!s.finalizado,
+      finalizadoEm: (s.finalizadoEm || null),
+      registros: []
+        .concat((s.aplicacoes||[]).map(function(a){ return _forenseDe(a,'APL'); }))
+        .concat((s.avaliacoes||[]).map(function(a){ return _forenseDe(a,'AV'); }))
+        .filter(Boolean),
+      trilha: (s.audit||[]).map(function(e){
+        var q=new Date(e.ts||0);
+        return { quando: (isNaN(q) ? '' : q.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})),
+                 quem: (e.user || e.por || ''), acao: (e.action || ''), detalhe: (e.details || '') };
+      })
+    },
     avisos: avisos
   };
 }
@@ -8192,6 +8280,27 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Descrição / objetivo</label>';
   h+='<textarea id="seDescricao" placeholder="Ex: Avaliação de eficácia de fungicidas sistêmicos no controle de ferrugem asiática" rows="3">'+esc(s.descricao)+'</textarea></div>';
 
+  /* IDENTIFICAÇÃO — o que aparece no rodapé de toda figura do relatório.
+     Isto morava só na prancha, e ele redigitava a cada folha. É do ESTUDO:
+     cultura, variedade e plantio vêm prontos da quadra e ficam editáveis (nem
+     toda quadra tem tudo preenchido); alvo e nome científico não existem em
+     lugar nenhum e passam a existir aqui. O que for salvo aqui é o que a
+     prancha usa — lá sobra só o título da figura. */
+  var _q0 = data[curV] || {};
+  h+='<div class="se-section-title">Identificação (vai no rodapé das figuras)</div>';
+  h+='<div class="se-row">';
+  h+='<div class="se-field"><label>Alvo</label><input type="text" id="seAlvo" value="'+esc(s.alvo||'')+'" placeholder="Ferrugem asiática"></div>';
+  h+='<div class="se-field"><label>Nome científico <span style="opacity:.6">itálico na figura</span></label><input type="text" id="seAlvoSci" value="'+esc(s.alvoSci||'')+'" placeholder="Phakopsora pachyrhizi"></div>';
+  h+='</div>';
+  h+='<div class="se-row">';
+  h+='<div class="se-field"><label>Cultura</label><input type="text" id="seCultura" value="'+esc(s.cultura||'')+'" placeholder="'+esc(_q0.cultura||'Soja')+'"></div>';
+  h+='<div class="se-field"><label>Variedade</label><input type="text" id="seVariedade" value="'+esc(s.variedade||'')+'" placeholder="'+esc(_q0.cultivar||'BMX Potência RR')+'"></div>';
+  h+='<div class="se-field"><label>Plantio</label><input type="text" id="sePlantio" value="'+esc(s.plantio||'')+'" placeholder="'+esc(_q0.plantio||'12/05/2026')+'"></div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Em branco, a figura usa o que está na quadra'+
+     ((_q0.cultura||_q0.cultivar||_q0.plantio)?(' — hoje: '+[_q0.cultura,_q0.cultivar,_q0.plantio].filter(Boolean).join(' · ')):'')+
+     '. Preencha aqui só quando este estudo for diferente da quadra, ou quando a quadra estiver vazia.</div>';
+
   h+='<div class="se-row">';
   h+='<div class="se-field"><label>1ª aplicação</label><input type="date" id="seDataInicio" value="'+esc(s.dataInicio)+'"></div>';
   h+='<div class="se-field"><label>Nº aplicações</label><input type="number" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
@@ -8354,6 +8463,12 @@ function syncStudyInputs(){
   var x;
   x=el("seCodigo"); if(x) workingStudy.codigo=x.value.trim();
   x=el("seDescricao"); if(x) workingStudy.descricao=x.value.trim();
+  /* identificação do estudo — o que a prancha imprime no rodapé das figuras */
+  x=el("seAlvo");      if(x) workingStudy.alvo=x.value.trim();
+  x=el("seAlvoSci");   if(x) workingStudy.alvoSci=x.value.trim();
+  x=el("seCultura");   if(x) workingStudy.cultura=x.value.trim();
+  x=el("seVariedade"); if(x) workingStudy.variedade=x.value.trim();
+  x=el("sePlantio");   if(x) workingStudy.plantio=x.value.trim();
   x=el("seTipoEstudo"); if(x) workingStudy.tipoEstudo=x.value;
   x=el("seDataInicio"); if(x) workingStudy.dataInicio=x.value;
   workingStudy.numAplicacoes=intVal("seNumAp",workingStudy.numAplicacoes||1);
@@ -9351,7 +9466,10 @@ function renderAvGrid(){
     else if(cfg.tipo==='razao') suf=' <small style="opacity:.6">n/N</small>';
     else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">0–'+cfg.escalaMax+'</small>';
     if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
-    html+='<th>'+esc(v)+suf+'<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">×</button></th>';
+    var _vjs=esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+    html+='<th>'+esc(v)+suf+
+      '<button type="button" class="av-delcol" title="Corrigir o nome desta coluna" onclick="avRenameCol(\''+_vjs+'\')">✎</button>'+
+      '<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+_vjs+'\')">×</button></th>';
   });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
   rows.forEach(function(rw){
@@ -9782,6 +9900,56 @@ function avColConfirm(){
   _avGrid.varcfg[name]=cfg;
   var m=document.getElementById('avColModal'); if(m) m.style.display='none';
   renderAvGrid();
+}
+/* Renomear a coluna já criada — para quando o nome sai errado e só se percebe
+   depois de lançar nota.
+
+   O nome da variável NÃO é rótulo: é a CHAVE. Ele indexa notas, tipos, varcfg e
+   bruto, e é por ele que a prancha junta a série no tempo. Renomear só nesta
+   avaliação partiria o ensaio em duas variáveis com o mesmo significado — a
+   curva perderia metade dos pontos, sem erro nenhum na tela. Por isso a troca
+   percorre TODAS as avaliações do estudo, e fica na trilha de auditoria. */
+function avRenameCol(name){
+  _avSyncInputs();
+  var novo=(window.prompt('Corrigir o nome da coluna.\n\nEle é a chave da variável: a troca vale para TODAS as avaliações deste estudo, para a série do gráfico não se partir em duas.', name)||'').trim();
+  if(!novo || novo===name) return;
+  var st=_avStudy();
+  /* colisão: já existe coluna com o nome novo em alguma avaliação */
+  var colide=(_avGrid.variaveis||[]).indexOf(novo)>=0
+    || ((st&&st.avaliacoes)||[]).some(function(a){ return a && (a.variaveis||[]).indexOf(novo)>=0; });
+  if(colide){
+    if(typeof _stxToast==='function') _stxToast('Já existe uma coluna "'+novo+'" — juntar as duas mudaria os dados.');
+    else alert('Já existe uma coluna "'+novo+'".');
+    return;
+  }
+  function trocaEm(o){
+    if(!o) return 0;
+    var mexeu=0;
+    if(Array.isArray(o.variaveis)){
+      var i=o.variaveis.indexOf(name);
+      if(i>=0){ o.variaveis[i]=novo; mexeu=1; }
+    }
+    ['tipos','varcfg'].forEach(function(k){
+      if(o[k] && Object.prototype.hasOwnProperty.call(o[k],name)){ o[k][novo]=o[k][name]; delete o[k][name]; mexeu=1; }
+    });
+    /* notas, meta e bruto são por PARCELA: a variável é a segunda chave */
+    ['notas','meta','notasMeta','bruto'].forEach(function(k){
+      var m=o[k]; if(!m) return;
+      Object.keys(m).forEach(function(p){
+        if(m[p] && Object.prototype.hasOwnProperty.call(m[p],name)){ m[p][novo]=m[p][name]; delete m[p][name]; mexeu=1; }
+      });
+    });
+    return mexeu;
+  }
+  var n=trocaEm(_avGrid);
+  ((st&&st.avaliacoes)||[]).forEach(function(a){ n+=trocaEm(a); });
+  if(st){
+    try{ logStudyAuditInObject(st,'Correção do nome de variável','"'+name+'" -> "'+novo+'" (em todas as avaliações do estudo)'); }catch(e){}
+    st._ts=Date.now();
+  }
+  try{ save(); }catch(e){}
+  renderAvGrid();
+  if(typeof _stxToast==='function') _stxToast('Coluna renomeada para "'+novo+'"');
 }
 function avDelCol(name){
   _avSyncInputs();

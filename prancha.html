@@ -112,6 +112,8 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
       <div class="opcoes" id="g-vista">
         <label class="opt ativo"><input type="radio" name="vista" value="barras" checked><span class="marcador"></span>Barras verticais</label>
         <label class="opt"><input type="radio" name="vista" value="ranking"><span class="marcador"></span>Ranking — do melhor para o pior</label>
+        <label class="opt"><input type="radio" name="vista" value="estatistica"><span class="marcador"></span>Estatística completa</label>
+        <label class="opt"><input type="radio" name="vista" value="bpl"><span class="marcador"></span>Trilha BPL e auditoria forense</label>
         <label class="opt"><input type="radio" name="vista" value="sev-curva"><span class="marcador"></span>Severidade — curva de progresso</label>
         <label class="opt"><input type="radio" name="vista" value="sev-paineis"><span class="marcador"></span>Severidade — um painel por tratamento</label>
         <label class="opt"><input type="radio" name="vista" value="plantec"><span class="marcador"></span>Severidade por data — barras verticais</label>
@@ -183,21 +185,15 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
     </div>
 
     <div class="grupo" id="grupo-ident">
-      <h2>Completar o que falta</h2>
+      <h2>Títulos</h2>
       <div class="campos" id="g-pl-campos">
-        <label class="campo"><span>Estudo</span><input type="text" data-plc="codigo" placeholder="193 018"></label>
         <label class="campo"><span>Título do estudo</span><input type="text" data-plc="titulo" placeholder="Mortalidade de Brevipalpus em bancada"></label>
         <label class="campo"><span>Título da figura</span><input type="text" data-plc="tituloFig" placeholder="(automático — escreva para trocar)"></label>
-        <label class="campo"><span>Alvo</span><input type="text" data-plc="alvo" placeholder="Ferrugem asiática"></label>
-        <label class="campo"><span>Nome científico</span><input type="text" data-plc="alvoSci" placeholder="Phakopsora pachyrhizi"></label>
-        <label class="campo"><span>Cultura</span><input type="text" data-plc="cultura" placeholder="Soja"></label>
-        <label class="campo"><span>Variedade</span><input type="text" data-plc="variedade" placeholder="BMX Potência RR"></label>
-        <label class="campo"><span>Plantio</span><input type="text" data-plc="plantio" placeholder="12/05/2026"></label>
       </div>
       <div class="opcoes" id="g-ident-el" style="margin-top:10px">
-        <label class="opt ativo"><input type="checkbox" data-id="mostrar" checked><span class="marcador"></span>Mostrar esta linha na figura</label>
+        <label class="opt ativo"><input type="checkbox" data-id="mostrar" checked><span class="marcador"></span>Mostrar a linha de identificação</label>
       </div>
-      <p class="dica">Vale para TODAS as folhas, não só a de barras por data. O nome científico sai em itálico, como manda a nomenclatura. Os campos ficam só nesta folha — não alteram o estudo.</p>
+      <p class="dica" id="dica-ident"></p>
     </div>
 
     <div class="grupo" id="grupo-tempo">
@@ -324,6 +320,9 @@ let DAA = [7,14,21];
    HAT declarado é "2 HAT", e é o rótulo que vai para o eixo e para a legenda —
    DAA continua sendo o número EM DIAS, que é o que a AACPD integra. */
 let MOM = null;
+/* BPL: carimbos e trilha de auditoria do estudo. Só existem quando o app abre a
+   folha; na demonstração ficam vazios e a vista diz isso em vez de mentir. */
+let BPL = {autor:"", finalizado:false, finalizadoEm:null, registros:[], trilha:[]};
 /* Número curto para rótulo: sem casa decimal quando é inteiro, e vírgula em PT. */
 const numRot = v => {
   const n = Math.round(v*10)/10;
@@ -403,6 +402,11 @@ let BLOCOS = FATOR_BLOCO.map((_,i)=> i+1);
   if(Array.isArray(h.aplicacoes) && h.aplicacoes.length) APLICACOES = h.aplicacoes;
   if(Array.isArray(h.avaliacoes) && h.avaliacoes.length) AVALIACOES = h.avaliacoes;
   if(!TRAT.some(t=>t.testemunha) && TRAT.length) TRAT[0].testemunha = true;
+  if(h.bpl && typeof h.bpl === "object"){
+    BPL = Object.assign({autor:"", finalizado:false, finalizadoEm:null, registros:[], trilha:[]}, h.bpl);
+    if(!Array.isArray(BPL.registros)) BPL.registros = [];
+    if(!Array.isArray(BPL.trilha))    BPL.trilha = [];
+  }
 })();
 /* A lista COMPLETA de tratamentos. `TRAT` é trocado por uma fatia na hora de
    desenhar (ver comSelecao), então quem precisa do ensaio inteiro — o painel de
@@ -892,6 +896,8 @@ function tituloDaVista(){
   if(modoSev())                  return String(d.tituloSev);
   if(estado.vista === "plantec") return estado.idioma==="pt" ? `Porcentagem de ${MEDl.pt}` : `Percent ${MEDl.en}`;
   if(estado.vista === "tabela")  return String(d.tituloTab);
+  if(estado.vista === "estatistica") return estado.idioma==="pt" ? "Estatística completa" : "Full statistics";
+  if(estado.vista === "bpl")     return estado.idioma==="pt" ? "Trilha BPL e auditoria forense" : "GLP trail and forensic audit";
   return String(E().titulo || ESTUDO.codigo);
 }
 function fmt(v,c=2){
@@ -931,6 +937,17 @@ function secTitulo(x,y,w,titulo){
 }
 
 /* tabela estilo booktabs */
+/* Corta o texto ao que cabe na largura da célula, com reticências. Sem isto,
+   um rótulo maior que a coluna simplesmente transbordava por cima da coluna
+   vizinha — foi assim que "Tratamento" e "Produto comercial" saíram grudados. */
+function _cabeNaColuna(texto, maxPx, fs){
+  const s = String(texto == null ? "" : texto);
+  const larguraChar = fs * 0.53;
+  const cabe = Math.floor(Math.max(0, maxPx) / larguraChar);
+  if(cabe >= s.length) return s;
+  if(cabe <= 1) return s.slice(0, 1);
+  return s.slice(0, cabe - 1) + "…";
+}
 function tabela(x, y, cols, linhas, o={}){
   const th = o.th||22, rh = o.rh||21, fs = o.fs||12.5;
   const larg = cols.reduce((a,c)=>a+c.w,0);
@@ -939,7 +956,7 @@ function tabela(x, y, cols, linhas, o={}){
   let cx = x;
   cols.forEach(c=>{
     const ax = c.a==="right" ? cx+c.w-6 : c.a==="middle" ? cx+c.w/2 : cx;
-    s += txt(ax, cy, c.t, {t:fs-0.5, w:600, a:c.a==="right"?"end":c.a==="middle"?"middle":null, c:GRAF});
+    s += txt(ax, cy, _cabeNaColuna(c.t, c.w-6, fs-0.5), {t:fs-0.5, w:600, a:c.a==="right"?"end":c.a==="middle"?"middle":null, c:GRAF});
     cx += c.w;
   });
   cy += 8; s += rule(x, cy, larg, 0.8); cy += 4;
@@ -955,7 +972,8 @@ function tabela(x, y, cols, linhas, o={}){
       const font = (cel && cel.f) || FC;
       const ax = c.a==="right" ? cx2+c.w-6 : c.a==="middle" ? cx2+c.w/2 : cx2;
       if(cel && cel.swatch) s += `<rect x="${cx2}" y="${cy-10}" width="11" height="11" fill="${cel.swatch}" stroke="${TINTA}" stroke-width="0.7"/>`;
-      s += txt(ax + (cel&&cel.swatch?17:0), cy, v, {t:fs, f:font, w:peso, a:c.a==="right"?"end":c.a==="middle"?"middle":null, c:cor});
+      const recuo = (cel && cel.swatch) ? 17 : 0;
+      s += txt(ax + recuo, cy, _cabeNaColuna(v, c.w - 6 - recuo, fs), {t:fs, f:font, w:peso, a:c.a==="right"?"end":c.a==="middle"?"middle":null, c:cor});
       cx2 += c.w;
     });
     if(i < linhas.length-1) s += ruleL(x, cy+6, larg);
@@ -1261,7 +1279,9 @@ function secResultados(x,y,w){
   const semAacpd = porData() && DAA.length > 1;
   const jFoco = _jAnalise;
   const cols = [
-    {t:d.trat, w:w*0.06}, {t:d.produto, w:w*0.26},
+    /* "Tratamento" não cabia em 6% da largura e transbordava por cima de
+       "Produto comercial" — as duas saíam grudadas no cabeçalho. */
+    {t:d.trat, w:w*0.11}, {t:d.produto, w:w*0.21},
     /* rotMom, não "N DAA" cravado: com knockdown a 24 e 48 HAT a coluna saía
        "1 DAA" e "2 DAA", que é outra leitura e no mesmo dia sequer existe. */
     ...AVALIACOES.map((a,i)=>({t:rotMom(i) + (semAacpd && i===jFoco ? " ●" : ""), w:wAv, a:"right"})),
@@ -1783,6 +1803,179 @@ function secPlantec(x, y, w, alt){
   return { svg:s, h:alt };
 }
 
+/* ===================== ESTATÍSTICA COMPLETA =====================
+   A folha de resultados mostra o que o leitor precisa; esta mostra o que o
+   AUDITOR precisa: sobre o que a análise rodou, com que transformação, o
+   quadro de variância inteiro, os parâmetros do teste de médias e a média de
+   cada tratamento nas duas escalas — a original e a transformada, que é onde
+   Tukey de fato comparou. Sem isso, refazer a conta exige o dado bruto. */
+function secEstatistica(x, y, w){
+  const pt = estado.idioma === "pt", d = t();
+  let s = "", cy = y;
+  const linha = (rot, val) => {
+    s += txt(x, cy, rot, {t:12, c:GRAF});
+    s += txt(x + w, cy, val, {t:12, w:600, a:"end"});
+    cy += 19;
+  };
+  const resposta = porData()
+    ? `${MED[estado.idioma]} — ${rotMom(_jAnalise)}`
+    : (pt ? "AACPD (área abaixo da curva de progresso)" : "AUDPC (area under the disease progress curve)");
+
+  s += txt(x, cy, pt ? "O QUE FOI ANALISADO" : "WHAT WAS ANALYSED", {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
+  s += ruleL(x, cy-12, w);
+  linha(pt ? "Resposta" : "Response", resposta);
+  linha(pt ? "Transformação" : "Transformation", pt ? "√(x + 0,5)" : "√(x + 0.5)");
+  linha(pt ? "Delineamento" : "Design",
+        pt ? `Blocos ao acaso · ${AN.k} tratamentos · ${AN.r} blocos · N = ${AN.N}`
+           : `Randomised complete blocks · ${AN.k} treatments · ${AN.r} blocks · N = ${AN.N}`);
+  linha(pt ? "Testemunha (referência de Abbott)" : "Untreated check (Abbott reference)", TRAT[iTest] ? TRAT[iTest].id : "—");
+  linha(pt ? "Fórmula da eficácia" : "Efficacy formula",
+        SENT === 'maior'
+          ? (pt ? "Mortalidade corrigida: (trat − test) / (100 − test)" : "Corrected mortality: (treat − check) / (100 − check)")
+          : (pt ? "Redução de Abbott: (test − trat) / test" : "Abbott reduction: (check − treat) / check"));
+  cy += 8;
+
+  s += txt(x, cy, pt ? "QUADRO DE ANÁLISE DE VARIÂNCIA" : "ANALYSIS OF VARIANCE", {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
+  const a = secAnova(x, cy, w); s += a.svg; cy += a.h + 14;
+
+  s += txt(x, cy, pt ? "TESTE DE MÉDIAS" : "MEAN COMPARISON", {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
+  s += ruleL(x, cy-12, w);
+  linha(pt ? "Teste" : "Test", pt ? "Tukey (HSD)" : "Tukey (HSD)");
+  linha(pt ? "Nível de significância" : "Significance level", "α = 0,05".replace(",", pt ? "," : "."));
+  linha(pt ? "q crítico (k, gl do resíduo)" : "critical q (k, error df)", `${fmt(Q,3)}  (k = ${AN.k}, gl = ${AN.glE})`);
+  linha(pt ? "DMS (escala transformada)" : "HSD (transformed scale)", fmt(DMS,4));
+  linha(pt ? "Coeficiente de variação" : "Coefficient of variation", fmt(AN.CV,2) + "%");
+  linha(pt ? "Erro padrão da média" : "Standard error of the mean", fmt(Math.sqrt(AN.QMerro/AN.r),4));
+  linha("F", `${fmt(AN.F,2)}   (p ${P<0.001 ? (pt?"< 0,001":"< 0.001") : "= "+fmt(P,4)})`);
+  cy += 10;
+
+  s += txt(x, cy, pt ? "MÉDIAS POR TRATAMENTO" : "TREATMENT MEANS", {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
+  const cols = [
+    {t:d.trat,   w:w*0.11},
+    {t:d.produto, w:w*0.31},
+    {t:(pt?"Média (escala original)":"Mean (original scale)"), w:w*0.20, a:"right"},
+    {t:(pt?"Média √(x+0,5)":"Mean √(x+0.5)"),                  w:w*0.18, a:"right"},
+    {t:d.eficC, w:w*0.10, a:"right"},
+    {t:d.grupo, w:w*0.10, a:"middle"}
+  ];
+  const linhas = TRAT.map((tr,i)=>[
+    {v:tr.id, w:600, swatch:tr.cor},
+    (estado.idioma==="pt" ? tr.pt : tr.en) || tr.id,
+    fmtD(mAACPD[i]),
+    fmt(AN.mT[i], 4),
+    tr.testemunha ? "—" : fmtD(EFIC[i]),
+    {v:LETRAS[i], w:600}
+  ]);
+  const tb = tabela(x, cy, cols, linhas, {zebra:true});
+  s += tb.svg; cy += tb.h + 14;
+  s += txt(x, cy, pt
+      ? "Médias seguidas da mesma letra não diferem entre si. A comparação é feita na escala transformada; as médias na escala original estão ao lado apenas para leitura."
+      : "Means followed by the same letter do not differ. Comparison is made on the transformed scale; original-scale means are shown for reading only.",
+      {t:11, c:GRAF});
+  cy += 16;
+  return {svg:s, h:cy-y};
+}
+
+/* ===================== TRILHA BPL E AUDITORIA FORENSE =====================
+   Duas coisas diferentes, e a folha separa as duas de propósito:
+
+   FORENSE — por registro: quando o evento aconteceu × quando foi digitado ×
+   onde × com que clima × quem assinou. A defasagem entre as duas datas é a
+   primeira coisa que um auditor procura, então ela sai escrita, não deduzida.
+
+   TRILHA — o histórico de alterações do estudo, na ordem em que aconteceram.
+   É o que responde "quem mudou o quê, quando". */
+function secBPL(x, y, w){
+  const pt = estado.idioma === "pt";
+  const B = (typeof BPL === "object" && BPL) ? BPL : {registros:[], trilha:[]};
+  let s = "", cy = y;
+
+  if(!B.registros.length && !B.trilha.length){
+    s += txt(x, cy+6, pt
+      ? "Este estudo ainda não tem carimbos nem trilha registrados. Eles nascem ao salvar uma aplicação ou avaliação no app."
+      : "This study has no stamps or audit trail yet.", {t:12.5, c:GRAF});
+    return {svg:s, h:30};
+  }
+
+  /* ---- quem responde pelo estudo ---- */
+  s += txt(x, cy, pt ? "RESPONSÁVEL" : "RESPONSIBLE", {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
+  s += ruleL(x, cy-12, w);
+  s += txt(x, cy, pt ? "Autor do estudo" : "Study author", {t:12, c:GRAF});
+  s += txt(x+w, cy, B.autor || "—", {t:12, w:600, a:"end"}); cy += 19;
+  s += txt(x, cy, pt ? "Situação" : "Status", {t:12, c:GRAF});
+  s += txt(x+w, cy, B.finalizado
+      ? (pt ? "Finalizado" : "Finalised") + (B.finalizadoEm ? " · " + B.finalizadoEm : "")
+      : (pt ? "Em andamento" : "In progress"), {t:12, w:600, a:"end"}); cy += 24;
+
+  /* ---- folha forense, um registro por linha ---- */
+  if(B.registros.length){
+    s += txt(x, cy, pt ? "CARIMBO DE CADA REGISTRO" : "PER-RECORD STAMP", {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
+    const cols = [
+      {t:(pt?"Reg.":"Rec."),            w:w*0.07},
+      {t:(pt?"Evento":"Event"),         w:w*0.15},
+      {t:(pt?"Momento":"Moment"),       w:w*0.11},
+      {t:(pt?"Registrado em":"Entered"),w:w*0.19},
+      {t:(pt?"Local (GPS)":"Location"), w:w*0.20},
+      {t:(pt?"Clima":"Weather"),        w:w*0.17},
+      {t:(pt?"Assin.":"Signed"),        w:w*0.11, a:"middle"}
+    ];
+    const linhas = B.registros.map(r=>{
+      const gps = r.gps
+        ? `${r.gps.lat.toFixed(5)}, ${r.gps.lng.toFixed(5)}`
+          + (r.gps.acc != null ? ` ±${Math.round(r.gps.acc)}m` : "")
+          + (r.gps.centro ? (pt?" (centro)":" (centre)") : "")
+        : "—";
+      const cl = r.clima
+        ? [ r.clima.temp!=null ? fmt(r.clima.temp,1)+"°C" : null,
+            r.clima.umidade!=null ? Math.round(r.clima.umidade)+"%" : null,
+            r.clima.vento!=null ? fmt(r.clima.vento,1)+"km/h" : null ].filter(Boolean).join(" · ") || "—"
+        : "—";
+      return [
+        {v:r.tipo, w:600},
+        r.evento + (r.hora ? " " + r.hora : ""),
+        r.momento || "—",
+        r.registro || "—",
+        gps,
+        cl,
+        {v:(r.assinada ? "✓" : "—"), w:600, c:(r.assinada ? "#1f8a52" : GRAF)}
+      ];
+    });
+    const tb = tabela(x, cy, cols, linhas, {zebra:true, fs:11});
+    s += tb.svg; cy += tb.h + 12;
+    s += txt(x, cy, pt
+      ? "“Evento” é quando o trabalho foi feito; “Registrado em” é quando foi digitado no app. As duas são guardadas separadas — a diferença entre elas é evidência, não erro."
+      : "“Event” is when the work was done; “Entered” is when it was typed into the app. Both are kept apart on purpose.",
+      {t:10.5, c:GRAF});
+    cy += 22;
+  }
+
+  /* ---- trilha de auditoria ---- */
+  if(B.trilha.length){
+    /* a folha não é infinita: mostra as mais recentes e diz quantas ficaram */
+    const MAX = 18;
+    const todas = B.trilha.slice();
+    const most = todas.slice(-MAX).reverse();
+    s += txt(x, cy, pt ? "TRILHA DE ALTERAÇÕES" : "AUDIT TRAIL", {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
+    const cols2 = [
+      {t:(pt?"Quando":"When"),   w:w*0.17},
+      {t:(pt?"Quem":"Who"),      w:w*0.18},
+      {t:(pt?"Ação":"Action"),   w:w*0.22},
+      {t:(pt?"Detalhe":"Detail"),w:w*0.43}
+    ];
+    const linhas2 = most.map(e=>[e.quando || "—", e.quem || "—", e.acao || "—", e.detalhe || ""]);
+    const tb2 = tabela(x, cy, cols2, linhas2, {zebra:true, fs:11});
+    s += tb2.svg; cy += tb2.h + 12;
+    if(todas.length > MAX){
+      s += txt(x, cy, pt
+        ? `Mostrando as ${MAX} alterações mais recentes de ${todas.length}. A trilha completa fica no estudo, no app, e não é apagável.`
+        : `Showing the ${MAX} most recent of ${todas.length} changes. The full trail lives in the study.`,
+        {t:10.5, c:GRAF});
+      cy += 18;
+    }
+  }
+  return {svg:s, h:cy-y};
+}
+
 /* rodapé do gráfico: estudo, alvo, datas de aplicação e de avaliação */
 function secPlantecRodape(x, y, w){
   const l1 = estado.ident.mostrar ? identRuns() : [];
@@ -1868,6 +2061,22 @@ function prancha(){
     let hr = 0;
     if(estado.pl.rodape){ const rod = secPlantecRodape(M, cy, w); s += rod.svg; hr = rod.h; }
     H = cy + hr + 18;
+  }
+  else if(estado.vista === "estatistica"){
+    W = 1040; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+    s += secTitulo(M, cy, w, tituloDaVista().toUpperCase()); cy += 26;
+    const e = secEstatistica(M, cy, w); s += e.svg; cy += e.h + 10;
+    const rod = secRodape(M, cy, w); s += rod.svg;
+    H = cy + rod.h + 18;
+  }
+  else if(estado.vista === "bpl"){
+    W = 1040; w = W - 2*M; cy = M;
+    const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
+    s += secTitulo(M, cy, w, tituloDaVista().toUpperCase()); cy += 26;
+    const b = secBPL(M, cy, w); s += b.svg; cy += b.h + 10;
+    const rod = secRodape(M, cy, w); s += rod.svg;
+    H = cy + rod.h + 18;
   }
   else if(estado.vista === "tabela"){
     W = 1040; H = 560; w = W - 2*M; cy = M;
@@ -1981,6 +2190,20 @@ let DIM = {W:1040,H:660};
 
 function legendaTexto(){
   const d = t();
+  if(estado.vista==="estatistica"){
+    const pt = estado.idioma==="pt";
+    const resp = porData() ? `${MEDl[estado.idioma]} a ${rotMom(_jAnalise)}` : (pt?"AACPD":"AUDPC");
+    return {rot:`${pt?"Tabela":"Table"} 1`, txt:(pt
+      ? `Análise estatística completa do estudo ${ESTUDO.codigo}: delineamento, resposta analisada (${resp}), transformação, quadro de análise de variância, parâmetros do teste de Tukey e médias por tratamento nas escalas original e transformada.`
+      : `Full statistical analysis of study ${ESTUDO.codigo}: design, analysed response (${resp}), transformation, analysis of variance, Tukey test parameters and treatment means on the original and transformed scales.`)};
+  }
+  if(estado.vista==="bpl"){
+    const pt = estado.idioma==="pt";
+    const nR = (BPL.registros||[]).length, nT = (BPL.trilha||[]).length;
+    return {rot:`${pt?"Tabela":"Table"} 1`, txt:(pt
+      ? `Rastreabilidade do estudo ${ESTUDO.codigo}: ${nR} registro(s) com carimbo de data do evento, data de digitação, localização, clima e assinatura, e ${nT} alteração(ões) na trilha de auditoria.`
+      : `Traceability of study ${ESTUDO.codigo}: ${nR} record(s) stamped with event date, entry date, location, weather and signature, and ${nT} change(s) in the audit trail.`)};
+  }
   if(estado.vista==="barras"){
     const B = estado.bv;
     return {rot:`${d.figura} 1`, txt:
@@ -2012,10 +2235,25 @@ function legendaTexto(){
 }
 /* Índices dos tratamentos que vão para a folha. A testemunha nunca sai: é a
    referência de Abbott — sem ela a coluna de eficácia não quer dizer nada. */
+/* A figura é SÓ de eficácia? (barras em modo eficácia, ou o ranking de eficácia) */
+function figuraSoEficacia(){
+  return estado.bv.serie === "efic"
+      && (estado.vista === "barras" || estado.vista === "ranking");
+}
 function visiveis(){
   const oc = estado.sel.ocultos;
-  const v = _TRAT0.map((tr,i)=>i).filter(i=> !oc[_TRAT0[i].id] || _TRAT0[i].testemunha);
-  return ordenaIdx(v.length ? v : _TRAT0.map((_,i)=>i));
+  let v = _TRAT0.map((tr,i)=>i).filter(i=> !oc[_TRAT0[i].id] || _TRAT0[i].testemunha);
+  if(!v.length) v = _TRAT0.map((_,i)=>i);
+  /* Numa figura só de eficácia a testemunha não tem o que fazer: eficácia dela
+     contra si mesma é zero por definição, e a barra saía vazia ocupando espaço.
+     Ela continua sendo a referência do cálculo — só não é desenhada. Quando a
+     figura mostra a MEDIDA (sozinha ou ao lado da eficácia), ela volta: ali é
+     ela que dá a escala do que aconteceu sem tratamento. */
+  if(figuraSoEficacia()){
+    const semTest = v.filter(i => !_TRAT0[i].testemunha);
+    if(semTest.length) v = semTest;
+  }
+  return ordenaIdx(v);
 }
 /* A ORDEM dos tratamentos na figura. A de cadastro raramente é a que se quer
    mostrar: num relatório o leitor procura o melhor primeiro, ou a sequência de
@@ -2338,6 +2576,16 @@ function sincronizaPainelPl(){
    discordar dele na hora de montar a figura. Então cada degrau diz, em texto,
    o que está valendo AGORA e por quê — e nenhum degrau tranca o de baixo. */
 function _sincCascata(){
+  /* Mostra a linha de identificação como ela vai sair, e diz de onde ela vem —
+     o cadastro do estudo. Sem isso, um campo vazio parece defeito da folha
+     quando na verdade é campo em branco no estudo. */
+  const dI = document.getElementById("dica-ident");
+  if(dI){
+    const txtId = runsTexto(identRuns());
+    dI.textContent = txtId
+      ? `Sai assim: ${txtId}. Vem do cadastro do estudo, no app (Identificação) — corrija lá e vale para todas as figuras. O nome científico sai em itálico.`
+      : `Sem identificação: preencha alvo, cultura, variedade e plantio no cadastro do estudo, no app. Aqui ficam só os títulos.`;
+  }
   const dE = document.getElementById("dica-ensaio");
   const dB = document.getElementById("dica-base");
   const pr = presetAtual(), base = baseAnalise(), efic = baseEficacia();
@@ -2661,24 +2909,18 @@ document.getElementById("g-unidade").addEventListener("change", ev=>{
    já digitou nesta folha em outra sessão */
 (function(){
   const salvos = _campoLido()[ESTUDO.codigo || "_"] || {};
-  /* Quem vence o quê:
-     - `titulo`, `tituloFig`, `alvo`, `alvoSci` são REESCRITA dele. Se digitou,
-       digitou de propósito: o que ele escreveu vence o que o app manda. Para
-       voltar ao automático, é só apagar o campo.
-     - `codigo`, `cultura`, `variedade`, `plantio` o app conhece de verdade
-       (vêm da quadra e do estudo); ali o gravado só preenche o que veio vazio. */
-  const dele = {titulo:1, tituloFig:1, alvo:1, alvoSci:1};
+  /* Só os TÍTULOS moram nesta folha, e são reescrita dele: se digitou, digitou
+     de propósito e vence o automático — apagar volta ao automático.
+     Alvo, nome científico, cultura, variedade e plantio saíram daqui: agora são
+     campos do ESTUDO, no app. Lembrá-los aqui faria a cópia velha desta folha
+     vencer a correção que ele fizesse no cadastro. */
   const aplica = (k, v) => {
-    if(k === "cultura"){ ESTUDO.pt.cultura = v; ESTUDO.en.cultura = v; }
-    else if(k === "titulo"){ ESTUDO.pt.titulo = v; ESTUDO.en.titulo = v; }
+    if(k === "titulo"){ ESTUDO.pt.titulo = v; ESTUDO.en.titulo = v; }
     else ESTUDO[k] = v;
   };
-  [["codigo",()=>ESTUDO.codigo],["titulo",()=>E().titulo],["tituloFig",()=>ESTUDO.tituloFig],
-   ["alvo",()=>ESTUDO.alvo],["alvoSci",()=>ESTUDO.alvoSci],
-   ["cultura",()=>E().cultura],
-   ["variedade",()=>ESTUDO.variedade],["plantio",()=>ESTUDO.plantio]].forEach(([k,get])=>{
+  [["titulo",()=>E().titulo],["tituloFig",()=>ESTUDO.tituloFig]].forEach(([k,get])=>{
     let v = get() || "";
-    if(salvos[k] && (dele[k] || !v)){ v = salvos[k]; aplica(k, v); }
+    if(salvos[k]){ v = salvos[k]; aplica(k, v); }
     const el = document.querySelector(`[data-plc="${k}"]`);
     if(el) el.value = v;
   });
