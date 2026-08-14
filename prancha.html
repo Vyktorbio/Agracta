@@ -107,20 +107,29 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
       <p class="dica" id="dica-ensaio"></p>
     </div>
 
+    <!-- GRÁFICO e TABELA são coisas diferentes e estavam na mesma lista, o que
+         fazia procurar a folha de estatística no meio dos gráficos. Uma lista
+         só continua existindo por baixo (mesmo name="vista"), então nada muda
+         no resto do código — só a leitura melhora. -->
     <div class="grupo">
-      <h2>2 · Tipo de gráfico</h2>
+      <h2>2 · Gráfico</h2>
       <div class="opcoes" id="g-vista">
         <label class="opt ativo"><input type="radio" name="vista" value="barras" checked><span class="marcador"></span>Barras verticais</label>
         <label class="opt"><input type="radio" name="vista" value="ranking"><span class="marcador"></span>Ranking — do melhor para o pior</label>
-        <label class="opt"><input type="radio" name="vista" value="estatistica"><span class="marcador"></span>Estatística completa</label>
-        <label class="opt"><input type="radio" name="vista" value="bpl"><span class="marcador"></span>Trilha BPL e auditoria forense</label>
         <label class="opt"><input type="radio" name="vista" value="sev-curva"><span class="marcador"></span>Severidade — curva de progresso</label>
         <label class="opt"><input type="radio" name="vista" value="sev-paineis"><span class="marcador"></span>Severidade — um painel por tratamento</label>
         <label class="opt"><input type="radio" name="vista" value="plantec"><span class="marcador"></span>Severidade por data — barras verticais</label>
-        <label class="opt"><input type="radio" name="vista" value="tabela"><span class="marcador"></span>Tabela de resultados</label>
+      </div>
+      <p class="dica">“Barras verticais” é a folha do dia a dia — nos botões abaixo ela vira severidade, eficácia, as duas juntas ou uma barra por avaliação. A curva e os painéis mostram a AACPD como área sombreada.</p>
+
+      <h2 style="margin-top:16px">…ou uma tabela</h2>
+      <div class="opcoes" id="g-vista-tab">
+        <label class="opt"><input type="radio" name="vista" value="tabela"><span class="marcador"></span>Resultados por tratamento</label>
+        <label class="opt"><input type="radio" name="vista" value="estatistica"><span class="marcador"></span>Estatística completa</label>
+        <label class="opt"><input type="radio" name="vista" value="bpl"><span class="marcador"></span>Trilha BPL e auditoria forense</label>
         <label class="opt"><input type="radio" name="vista" value="completa"><span class="marcador"></span>Página completa (A4)</label>
       </div>
-      <p class="dica">“Barras verticais” é a folha do dia a dia — nos botões abaixo ela vira severidade, eficácia, as duas juntas ou uma barra por avaliação. A A4 é a que vai pro relatório. A curva e os painéis mostram a AACPD como área sombreada.</p>
+      <p class="dica">A A4 é a que vai pro relatório: junta gráfico, tratamentos, aplicações, resultados e ANOVA numa folha só. A de estatística completa e a da trilha BPL são para o auditor, não para o cliente.</p>
     </div>
 
     <div class="grupo" id="grupo-base">
@@ -1597,17 +1606,27 @@ function secBarras(x, y, w, alt){
   const fonteX = inclinado ? fonteInc
                : (maxLinhas <= 3 ? 10 : (maxLinhas === 4 ? 9 : 8));
 
-  /* legenda no topo — com uma série só ela não informa nada, então some */
+  /* Legenda no topo. Com uma série só ela não repete cor nenhuma — MAS é ela
+     que diz DE QUAL AVALIAÇÃO a figura é. Escondê-la deixava o gráfico de "só
+     a última avaliação" sem nada escrito identificando o momento: a barra
+     estava lá, e o leitor não tinha como saber se era 2, 24 ou 48 HAT.
+     Com uma série, ela vira um rótulo do momento, sem quadradinho de cor. */
   let s = "", ly = y + 10;
-  const comLegenda = B.legenda && nS > 1;
+  const comLegenda = !!B.legenda;
   if(comLegenda){
-    const largura = series.reduce((a,se)=> a + 13 + 6 + se.rot.length*6.2 + 26, 0) - 26;
-    let lx = x + (w - largura)/2;
-    series.forEach((se,i)=>{
-      s += `<rect x="${lx}" y="${ly-9}" width="12" height="12" fill="${cores[i]}"/>`;
-      s += txt(lx+18, ly+1, se.rot, {t:11, c:"#333333"});
-      lx += 13 + 6 + se.rot.length*6.2 + 26;
-    });
+    if(nS > 1){
+      const largura = series.reduce((a,se)=> a + 13 + 6 + se.rot.length*6.2 + 26, 0) - 26;
+      let lx = x + (w - largura)/2;
+      series.forEach((se,i)=>{
+        s += `<rect x="${lx}" y="${ly-9}" width="12" height="12" fill="${cores[i]}"/>`;
+        s += txt(lx+18, ly+1, se.rot, {t:11, c:"#333333"});
+        lx += 13 + 6 + se.rot.length*6.2 + 26;
+      });
+    }else{
+      /* série única: sem quadradinho, mas COM o texto — é a única coisa na
+         figura que identifica a avaliação escolhida em "Quais dados". */
+      s += txt(x + w/2, ly+1, series[0].rot, {t:11.5, w:600, a:"middle", c:"#333333"});
+    }
   }
 
   const topo0 = y + (comLegenda ? 30 : 6);
@@ -1914,17 +1933,22 @@ function secBPL(x, y, w){
       {t:(pt?"Reg.":"Rec."),            w:w*0.07},
       {t:(pt?"Evento":"Event"),         w:w*0.15},
       {t:(pt?"Momento":"Moment"),       w:w*0.11},
-      {t:(pt?"Registrado em":"Entered"),w:w*0.19},
-      {t:(pt?"Local (GPS)":"Location"), w:w*0.20},
-      {t:(pt?"Clima":"Weather"),        w:w*0.17},
-      {t:(pt?"Assin.":"Signed"),        w:w*0.11, a:"middle"}
+      {t:(pt?"Registrado em":"Entered"),w:w*0.17},
+      /* DUAS colunas, não uma: onde o ENSAIO está (centro da quadra, do mapa) e
+         onde o AVALIADOR estava (GPS do aparelho na hora). Antes o centro
+         entrava disfarçado quando o GPS falhava, e a folha dizia "estive lá"
+         mostrando coordenada de cadastro. A distância entre os dois é o que
+         responde se a pessoa estava mesmo na parcela. */
+      {t:(pt?"Avaliador (GPS)":"Assessor (GPS)"), w:w*0.22},
+      {t:(pt?"Clima":"Weather"),        w:w*0.15},
+      {t:(pt?"Assin.":"Signed"),        w:w*0.09, a:"middle"}
     ];
     const linhas = B.registros.map(r=>{
       const gps = r.gps
         ? `${r.gps.lat.toFixed(5)}, ${r.gps.lng.toFixed(5)}`
           + (r.gps.acc != null ? ` ±${Math.round(r.gps.acc)}m` : "")
-          + (r.gps.centro ? (pt?" (centro)":" (centre)") : "")
-        : "—";
+          + (r.distancia != null ? (pt?` · ${r.distancia} m da quadra`:` · ${r.distancia} m from plot`) : "")
+        : (pt ? "— sem GPS" : "— no GPS");
       const cl = r.clima
         ? [ r.clima.temp!=null ? fmt(r.clima.temp,1)+"°C" : null,
             r.clima.umidade!=null ? Math.round(r.clima.umidade)+"%" : null,
@@ -1945,6 +1969,11 @@ function secBPL(x, y, w){
     s += txt(x, cy, pt
       ? "“Evento” é quando o trabalho foi feito; “Registrado em” é quando foi digitado no app. As duas são guardadas separadas — a diferença entre elas é evidência, não erro."
       : "“Event” is when the work was done; “Entered” is when it was typed into the app. Both are kept apart on purpose.",
+      {t:10.5, c:GRAF});
+    cy += 15;
+    s += txt(x, cy, pt
+      ? "“Avaliador (GPS)” é onde o aparelho estava no momento do registro, com a precisão da leitura, e a distância até o centro da quadra cadastrada no mapa. Coordenada do ensaio e posição do avaliador são informações diferentes."
+      : "“Assessor (GPS)” is where the device was at entry time, with reading accuracy and the distance to the mapped plot centre.",
       {t:10.5, c:GRAF});
     cy += 22;
   }
@@ -2178,7 +2207,7 @@ if(UMA){
   if(estado.vista === "sev-curva"){ estado.vista = "barras"; estado.bv.serie = "sev"; }
   /* e "uma barra por avaliação" não existe com uma avaliação só */
   estado.bv.quando = "ultima";
-  document.querySelectorAll('#g-vista input').forEach(i=>{
+  document.querySelectorAll('#g-vista input, #g-vista-tab input').forEach(i=>{
     i.checked = (i.value === estado.vista);
     const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
   });
@@ -2773,7 +2802,8 @@ function _rotulaPainel(){
       if(estado.vista === "plantec"){
         estado.vista = "barras";
         const b = document.querySelector('#g-vista input[value="barras"]');
-        if(b){ b.checked = true; const ob = b.closest(".opt"); if(ob) ob.classList.add("ativo"); }
+        if(b){ b.checked = true; }
+        try{ _sincVista(); }catch(e){}
       }
     }
     /* a base do cálculo não é escolha aqui: na bancada não existe AACPD */
@@ -2934,8 +2964,18 @@ document.getElementById("g-idioma").addEventListener("change", ev=>{
   try{ _montaPainelDados(); }catch(e){}   /* os nomes dos tratamentos são por idioma */
   render();
 });
-document.getElementById("g-vista").addEventListener("change", ev=>{
-  estado.vista = ev.target.value; sinc(ev.currentTarget,"opt"); sincronizaPainelPl(); render();
+/* A vista mora em DOIS grupos (gráficos e tabelas) mas é um radio só — então o
+   "ativo" tem de ser limpo nos dois, senão fica marcação acesa nos dois lados. */
+function _sincVista(){
+  ["g-vista","g-vista-tab"].forEach(id=>{
+    const g = document.getElementById(id); if(g) sinc(g,"opt");
+  });
+}
+["g-vista","g-vista-tab"].forEach(id=>{
+  const g = document.getElementById(id); if(!g) return;
+  g.addEventListener("change", ev=>{
+    estado.vista = ev.target.value; _sincVista(); sincronizaPainelPl(); render();
+  });
 });
 document.getElementById("g-patamar").addEventListener("change", ev=>{
   estado.patamar = Number(ev.target.value); sinc(ev.currentTarget,"opt"); render();

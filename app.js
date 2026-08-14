@@ -3774,9 +3774,34 @@ function buildClimaPanel(){
     '';
   p.style.display='block';
 }
+/* ONDE o clima é medido. Vinha só do "centro do Local" — um campo que quase
+   ninguém preenche, porque a posição real do trabalho está nas QUADRAS, que já
+   estão desenhadas no mapa. Sem o centro, o painel abria com um aviso pedindo
+   uma coordenada que o app já tinha, e o clima não carregava.
+
+   Agora desce a escada até achar posição de verdade:
+     1. o centro do Local, se ele foi definido à mão;
+     2. o centro médio das quadras daquele Local — é o campo, de fato;
+     3. o centro da quadra aberta agora.
+   O GPS do aparelho continua existindo no botão 📍, mas como ESCOLHA dele, não
+   como exigência para o painel abrir. Ele é outra coisa: onde a pessoa está,
+   não onde o ensaio está. */
 function _climaLocalCoord(){
   var c=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro);
   if(c&&c.length===2&&!isNaN(c[0])) return c.slice();
+  try{
+    var qs=(typeof quadrasDoLocal==='function'&&localAtivo)?quadrasDoLocal(localAtivo):[];
+    var sLat=0,sLng=0,n=0;
+    (qs||[]).forEach(function(q){
+      var ctr=quadraCenter(q);
+      if(ctr&&!isNaN(ctr[0])){ sLat+=ctr[0]; sLng+=ctr[1]; n++; }
+    });
+    if(n) return [sLat/n, sLng/n];
+  }catch(e){}
+  try{
+    var ca=(typeof curV!=='undefined'&&curV)?quadraCenter(curV):null;
+    if(ca&&!isNaN(ca[0])) return ca.slice();
+  }catch(e){}
   return null;
 }
 function climaGps(){
@@ -3790,7 +3815,9 @@ function climaGps(){
 function climaLocalLoad(ll,fromGps){
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
   ll = ll || _climaWhere || _climaLocalCoord();
-  if(!ll){ climaSay('Sem coordenada do local — toque em 📍 GPS, ou defina o centro do Local.'); return; }
+  /* Só avisa quando NÃO HÁ mesmo posição nenhuma: nem centro do Local, nem
+     quadra desenhada. Aí o aviso é informação, não obstáculo. */
+  if(!ll){ climaSay('Este Local ainda não tem quadra desenhada no mapa. Desenhe uma quadra, ou toque em 📍 GPS para ver o clima de onde você está agora.'); return; }
   _climaWhere=ll;
   climaSay('Buscando previsão do local…');
   var url='https://api.open-meteo.com/v1/forecast?latitude='+(+ll[0]).toFixed(4)+'&longitude='+(+ll[1]).toFixed(4)+
@@ -6856,8 +6883,12 @@ function _forenseDe(r, tipo){
     hora:(r.hora||c.horaEvento||''),
     momento:mom,
     registro:(c.data||''),
-    gps:(c.gps?{lat:c.gps.lat, lng:c.gps.lng, acc:c.gps.acc}
-        :(c.centro&&c.centro.length===2?{lat:c.centro[0], lng:c.centro[1], centro:true}:null)),
+    /* separadas, sempre: onde o ENSAIO está × onde o AVALIADOR estava */
+    centro:(c.centro&&c.centro.length===2?{lat:c.centro[0], lng:c.centro[1]}:null),
+    gps:(c.gps?{lat:c.gps.lat, lng:c.gps.lng, acc:c.gps.acc}:null),
+    distancia:((c.gps && c.centro && c.centro.length===2)
+      ? (function(){ try{ return Math.round(measureDistance([c.centro[0],c.centro[1]],[c.gps.lat,c.gps.lng])); }catch(e){ return null; } })()
+      : null),
     clima:(c.clima?{fonte:(c.clima.fonte||''), temp:c.clima.temp, umidade:c.clima.umidade,
                     vento:c.clima.vento, hora:(c.clima.hora||'')}:null),
     ndvi:(c.ndvi&&c.ndvi.ndvi!=null?c.ndvi.ndvi:null),
@@ -8971,8 +9002,9 @@ function _carimboTSV(c,recDate,recHora){
   if(c.data) p.push('Registrado '+c.data);
   if(c.clima){ var cl=c.clima; p.push('Clima('+(cl.fonte==='estacao'?'estacao':'previsao')+') '+(cl.temp!=null?cl.temp+'C':'')+(cl.umidade!=null?' '+cl.umidade+'%UR':'')+(cl.vpd!=null?' VPD'+cl.vpd:'')+(cl.vento!=null?' vento'+cl.vento+'km/h':'')+(cl.chuva!=null?' chuva'+cl.chuva+'mm':'')); }
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push('NDVI '+c.ndvi.ndvi+(c.ndvi.ndre!=null?' NDRE '+c.ndvi.ndre:'')+(c.ndvi.data?' ('+c.ndvi.data+')':''));
-  var ll=c.gps?(c.gps.lat+','+c.gps.lng):(c.centro&&c.centro.length===2?(c.centro[0]+','+c.centro[1]):'');
-  if(ll) p.push('GPS '+ll);
+  /* as duas coordenadas, separadas — ver o comentário em carimboHtml */
+  if(c.centro&&c.centro.length===2) p.push('Estudo '+c.centro[0]+','+c.centro[1]);
+  if(c.gps) p.push('Avaliador '+c.gps.lat+','+c.gps.lng+(c.gps.acc?(' ±'+Math.round(c.gps.acc)+'m'):''));
   return p.length?('  carimbo\t'+p.join('\t')):'';
 }
 function carimboHtml(c,recDate,recHora){
@@ -9013,8 +9045,26 @@ function carimboHtml(c,recDate,recHora){
     }
     p.push(s+' ('+_src+')'+_diaTxt+bplBadge); }
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push(ic('sat',12)+' NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
-  if(c.gps) p.push(ic('pin',12)+' '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
-  else if(c.centro&&c.centro.length===2) p.push(ic('pin',12)+' '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5)+' (centro)');
+  /* DUAS coordenadas, e elas respondem perguntas diferentes:
+       centro  = onde o ENSAIO está — o centro da quadra desenhada no mapa;
+       gps     = onde o AVALIADOR estava quando registrou, lido do aparelho.
+     Antes saía uma só, com o centro entrando disfarçado quando o GPS falhava —
+     e aí a folha dizia "estive lá" mostrando uma coordenada de cadastro. Agora
+     saem separadas, e a DISTÂNCIA entre elas vai junto: é ela que diz se a
+     pessoa estava mesmo na parcela. */
+  var _distM=function(la1,lo1,la2,lo2){
+    try{ return measureDistance([la1,lo1],[la2,lo2]); }catch(e){ return null; }
+  };
+  var _temCtr=(c.centro&&c.centro.length===2);
+  if(_temCtr) p.push(ic('pin',12)+' Estudo '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5));
+  if(c.gps){
+    var _g=ic('pin',12)+' Avaliador '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':'');
+    if(_temCtr){
+      var _d=_distM(c.centro[0],c.centro[1],c.gps.lat,c.gps.lng);
+      if(_d!=null) _g+=' · '+(_d<1000?(Math.round(_d)+' m'):( (Math.round(_d/100)/10)+' km'))+' da quadra';
+    }
+    p.push(_g);
+  }
   if(!p.length) return '';
   return '<div style="font-size:11px;color:#5a6b61;margin-top:6px;line-height:1.8;border-top:1px dashed #d2dcd5;padding-top:6px">'+p.join(' · ')+'</div>';
 }
