@@ -7423,6 +7423,9 @@ function _bioestatJobAoa(qid,study,av,v){
   }});
   return rows;
 }
+/* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
+   o estatistica/index.html novo — e com ele o app.js e os .py novos. */
+var MOTOR_VERSAO='agracta-6';
 function _bioestatJobs(qid,study){
   var jobs=[];
   (study.avaliacoes||[]).forEach(function(av){ (av.variaveis||[]).forEach(function(v){
@@ -7444,7 +7447,10 @@ function _bioestatEnsureFrame(){
   f=document.createElement('iframe'); f.id='bioEngineFrame'; f.title='Motor estatístico Agracta';
   f.style.cssText='position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none';
   f.onload=function(){_bioEngineReady=true;_bioestatPump();};
-  f.src='estatistica/index.html?agracta_engine=1';
+  /* O iframe do motor vinha SEM versão na URL. Como o navegador guarda o
+     estatistica/index.html, uma correção no motor não chegava a quem já tinha
+     aberto o app uma vez — seguia rodando o Python velho, calado. */
+  f.src='estatistica/index.html?agracta_engine=1&v='+MOTOR_VERSAO;
   document.body.appendChild(f);
   return f;
 }
@@ -7464,8 +7470,16 @@ function _bioestatEnsureStudy(qid,sid){
     [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
       var fjob={jobKey:m[1],avId:j.avId,date:j.date,variavel:j.variavel,tipo:j.tipo};
       var req=key+'|'+sig+'|'+i+'-'+mi+'|'+Date.now();
+      /* Sentido da variável, para o motor pôr a letra 'a' no MELHOR tratamento.
+         Sem isto ele cravava "maior média = a", e numa folha de severidade a
+         testemunha — o pior — saía com 'a', contradizendo a prancha. */
+      var _mm=true; try{
+        var _avJ=(study.avaliacoes||[]).find(function(x){ return x && x.id===j.avId; });
+        _mm=(_avSentido(_avJ||_avCfgDoEstudo(study,j.variavel), j.variavel)==='maior');
+      }catch(e){}
       var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:j.aoa,modo:m[0],titulo:tit,
-        responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn}};
+        responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn,
+        maiorMelhor:_mm}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
   });
@@ -9624,6 +9638,7 @@ function _avTouchCell(row,v){
 }
 function _avCss(){ if(document.getElementById('avCss'))return; var s=document.createElement('style'); s.id='avCss';
   s.textContent='.av-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:4px;padding-bottom:4px;position:relative}'+
+  '.av-varlab{font-size:11px;font-weight:700;color:var(--text-2,#9ab39a);margin:8px 0 -2px}'+
   '.av-table{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-content}'+
   '.av-table th,.av-table td{border:1px solid var(--border,#2a3a2a);padding:4px 6px;text-align:center;white-space:nowrap}'+
   '.av-table th{background:var(--surface-2,#11210f);color:var(--text-2,#9ab39a);font-weight:700}'+
@@ -10349,28 +10364,59 @@ function avDelCol(name){
   renderAvGrid();
 }
 /* Grade read-only (no detalhe do estudo e no export) */
+/* Grade read-only (no detalhe do estudo e no export).
+
+   Saía UMA LINHA POR PARCELA: 5 tratamentos × 4 blocos = 20 linhas, numa coluna
+   de 160 px, por avaliação. Com três avaliações eram 60 linhas de rolagem antes
+   de chegar nos gráficos, e a página ficava vazia à direita.
+
+   Um DBC se lê como MATRIZ — tratamento na linha, bloco na coluna. As mesmas 20
+   notas viram 5 linhas, a média do tratamento aparece ao lado, e dá para varrer
+   a linha com o olho e ver bloco fora do padrão, que é como se pega problema de
+   bordadura ou de avaliador. Com mais de uma variável, cada uma ganha a sua. */
 function avGridHtml(a){
   if(!a.variaveis||!a.variaveis.length) return '';
   var st=_avStudy(), rows=_avRowsForStudy(st,false); if(!rows.length) return '';
   _avCss();
-  var h='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
+  var reps=[], porTrat={}, ordemTrat=[];
+  rows.forEach(function(rw){
+    if(reps.indexOf(rw.rep)<0) reps.push(rw.rep);
+    if(!porTrat[rw.tratId]){ porTrat[rw.tratId]={produto:rw.produto, cel:{}}; ordemTrat.push(rw.tratId); }
+    porTrat[rw.tratId].cel[rw.rep]=rw;
+  });
+  reps.sort(function(x,y){ return x-y; });
+  var h='';
   a.variaveis.forEach(function(v){
     var cfg=_avCfg(a,v), suf='';
     if(cfg.tipo==='razao') suf=' <small style="opacity:.6">%</small>';
     else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">índice</small>';
     if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
-    h+='<th>'+esc(v)+suf+'</th>';
+    /* O canto da matriz é fixo em 70 px (coluna grudada na rolagem): "Severidade
+       ×10" não cabe e transbordaria por cima da coluna do primeiro bloco. */
+    if(a.variaveis.length>1) h+='<div class="av-varlab">'+esc(v)+suf+'</div>';
+    else if(suf) h+='<div class="av-varlab">'+suf.replace(/<\/?small[^>]*>/g,'')+'</div>';
+    h+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th>';
+    reps.forEach(function(r){ h+='<th style="text-align:center">'+esc(_repDisplay(r))+'</th>'; });
+    h+='<th style="text-align:center">Média</th></tr></thead><tbody>';
+    ordemTrat.forEach(function(tid){
+      var t=porTrat[tid], soma=0, n=0;
+      h+='<tr><td class="av-tname" title="'+esc(t.produto||'')+'">'+esc(tid)+'</td>';
+      reps.forEach(function(r){
+        var rw=t.cel[r];
+        var val=rw?_avNota(a,rw,v):null;
+        var br=rw?_avBrutoTxt(a,rw.key,v):'';
+        var num=parseFloat(String(val==null?'':val).replace(',','.'));
+        if(isFinite(num)){ soma+=num; n++; }
+        h+='<td style="text-align:center"'+(br?' title="'+esc(br)+'"':'')+'>'+esc(val||'—')+'</td>';
+      });
+      h+='<td style="text-align:center;font-weight:700">'+(n?esc(_fmtBR(Math.round(soma/n*10)/10)):'—')+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
   });
-  h+='</tr></thead><tbody>';
-  rows.forEach(function(rw){ h+='<tr><td class="av-tname" title="'+esc(rw.produto||'')+'">'+esc(rw.label)+'</td>';
-    a.variaveis.forEach(function(v){
-      var val=_avNota(a,rw,v), cfg=_avCfg(a,v), br=_avBrutoTxt(a,rw.key,v), sub='';
-      if(br){ sub=(cfg.tipo==='razao')?br:(_avSubCheias((a.bruto&&a.bruto[rw.key])?a.bruto[rw.key][v]:null)+' amostras'); }
-      h+='<td'+(br?' title="'+esc(br)+'"':'')+'>'+esc(val||'—')+(sub?'<small style="display:block;font-size:9px;color:#7c8a80;font-weight:400">'+esc(sub)+'</small>':'')+'</td>';
-    }); h+='</tr>'; });
-  h+='</tbody></table></div>';
   return h;
 }
+/* número no padrão do país, para a coluna de média da grade */
+function _fmtBR(x){ return (x==null||!isFinite(x))?'—':String(x).replace('.',','); }
 /* ===== Análise: testemunha selecionável, % de controle e AUDPC ===== */
 function studyTestemunha(s){ /* base do % de controle: 1ª testemunha marcada (preserva a antiga se ainda marcada). */
   var ts=(s.tratamentos||[]), ids=ts.map(function(t){return t.id;});
@@ -10470,7 +10516,20 @@ function _chartPal(i){ var p=['#1f8a52','#2f85c9','#d69431','#9b59b6','#e0566b',
    a ordenada responde. Uma cor por tratamento, para casar com a legenda. */
 function _barsSvg(bars){
   var W=360,rowH=26,pad=8,n=bars.length,eixoH=16,Hh=n*rowH+pad*2+eixoH;
-  var lblW=76,barX=lblW+4,barW=W-barX-46;
+  /* A coluna do rótulo era fixa em 76 px, mas o texto é ancorado à DIREITA
+     dela: nome de produto comprido crescia para a ESQUERDA, passava do x=0 e
+     era cortado pelo viewBox — sumia a primeira letra e o leitor via "5 ·
+     Picoxistro…" sem saber que era o T5. Agora a coluna nasce do rótulo mais
+     comprido que existe, com teto para a barra não sumir. */
+  var _lim=26;
+  var _rot=function(b){
+    var r=(b.nome&&b.nome!==b.label)?(b.label+' · '+b.nome):b.label;
+    return r.length>_lim ? r.slice(0,_lim-1)+'…' : r;
+  };
+  var _maxCh=bars.reduce(function(m,b){ return Math.max(m,_rot(b).length); },0);
+  var lblW=Math.min(190, Math.max(76, Math.round(_maxCh*5.6)+6));
+  var barX=lblW+4,barW=W-barX-46;
+  if(barW<90){ barW=90; W=barX+barW+46; }
   var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" preserveAspectRatio="xMinYMin meet" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;max-width:420px;margin-top:2px">';
   /* grade de 0 a 100%: sem ela a barra mais longa vira "100%" aos olhos, seja
      ela 42% ou 97% — comparar entre figuras exige a escala fixa */
@@ -10480,8 +10539,7 @@ function _barsSvg(bars){
     h+='<text x="'+gx.toFixed(1)+'" y="'+(pad+n*rowH+12)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+t+'%</text>';
   });
   bars.forEach(function(b,i){ var y=pad+i*rowH, v=(b.val==null?0:Math.max(0,Math.min(100,b.val))), w=barW*v/100;
-    var rot=(b.nome&&b.nome!==b.label)?(b.label+' · '+b.nome):b.label;
-    if(rot.length>16) rot=rot.slice(0,15)+'…';
+    var rot=_rot(b);
     h+='<text x="'+lblW+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="10.5" font-weight="700" fill="#26312b">'+esc(rot)+'</text>';
     h+='<rect x="'+barX+'" y="'+(y+4)+'" width="'+Math.max(0.5,w).toFixed(1)+'" height="'+(rowH-11)+'" rx="3" fill="'+(b.cor||'#1f8a52')+'"/>';
     h+='<text x="'+(barX+barW+4)+'" y="'+(y+rowH/2+4)+'" font-size="11" fill="#26312b">'+(b.val==null?'—':(Math.round(b.val*10)/10)+'%')+'</text>'; });
@@ -10532,7 +10590,10 @@ function studyChartsHtml(study){
     var pts=avsR.filter(function(a){return (a.variaveis||[]).indexOf(v)>=0;});
     /* "severidade × tempo" era cravado: numa mortalidade o título dizia a coisa
        errada em cima do gráfico certo. O eixo é a própria variável. */
-    if(pts.length>=2) H+='<div class="res-title">'+esc(v)+' · progresso ('+esc(String(v).toLowerCase())+' × tempo)</div>'+_progressSvg(study,v,pts,test,ts);
+    /* dizia "Severidade · progresso (severidade × tempo)" — o nome da variável
+       duas vezes na mesma linha. O eixo já é ela; o título precisa dizer que
+       isto é a variável AO LONGO DO TEMPO. */
+    if(pts.length>=2) H+='<div class="res-title">'+esc(v)+' · ao longo do tempo</div>'+_progressSvg(study,v,pts,test,ts);
   });
   if(!H) return '';
   return '<div class="sd-section"><div class="sd-section-title">Gráficos</div>'+H+'</div>';
