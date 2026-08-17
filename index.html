@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="styles.css?v=22">
 <script>try{if(localStorage.getItem('agracta-theme')!=='dark'){document.documentElement.classList.add('light');}else{document.addEventListener('DOMContentLoaded',function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content='#101513';});}}catch(e){document.documentElement.classList.add('light');}</script>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="theme-2026.css?v=3">
+<link rel="stylesheet" href="theme-2026.css?v=4">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
@@ -19,14 +19,22 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=3">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=93').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=94').catch(function(){});});}</script>
 </head>
 <body>
 <div class="top-bar">
-<div class="tb-brand"></div>
+<div class="tb-brand">
+<!-- Clima resumido fica dentro da mesma ilha do local. Mantém a leitura de
+     relance sem criar mais um cartão solto sobre o mapa. -->
+<button id="climaChip" class="clima-chip" onclick="toggleClima()" style="display:none"
+        title="Clima do local ativo — toque para abrir o painel completo" aria-label="Clima do local ativo"></button>
+</div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
-<button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">Agenda <span id="agendaBadge"></span></button>
+<button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">
+  <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+  <span class="tb-nav-label">Agenda</span><span id="agendaBadge"></span>
+</button>
 </div>
 </div>
 <div class="agenda-panel" id="agendaPanel"></div>
@@ -41,11 +49,6 @@
 </defs>
 </svg>
 </div>
-<!-- Clima do local ativo, sobre o mapa. Sai do dock: o tempo é o dado que se
-     olha de relance, e escondê-lo atrás de dois toques fazia ninguém olhar.
-     Toque abre o painel completo, que continua sendo o mesmo. -->
-<button id="climaChip" class="clima-chip" onclick="toggleClima()" style="display:none"
-        title="Clima do local ativo — toque para abrir o painel completo" aria-label="Clima do local ativo"></button>
 </div>
 <div class="overlay" id="dOvl" onclick="closeDetail()"><div class="panel" id="dPnl" onclick="event.stopPropagation()"></div></div>
 <div class="overlay" id="eOvl" onclick="closeEdit()"><div class="edit-panel" id="ePnl" onclick="event.stopPropagation()"></div></div>
@@ -84,6 +87,7 @@
 <!-- Ferramentas do mapa: agrupadas num botão só (FAB) — mapa limpo por padrão -->
 <div class="toolbar-extra" id="toolDock">
 <button class="tool-ndvi tool-item" onclick="toggleToolDock(false);toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)" aria-label="NDVI"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10a7.31 7.31 0 0 0 10 10Z"/><path d="m9 15 3-3"/><path d="M17 13a6 6 0 0 0-6-6"/><path d="M21 13A10 10 0 0 0 11 3"/></svg></span></button>
+<button class="tool-clima tool-item" onclick="toggleToolDock(false);toggleClima()" title="Abrir clima do local" aria-label="Clima"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="M20 12h2"/><path d="m17.7 6.3 1.4-1.4"/><path d="M16 12a4 4 0 1 0-8 0"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></svg></span></button>
 <button class="tool-measure tool-item" onclick="toggleToolDock(false);toggleMeasure()" title="Medir área no mapa ou com o GPS" aria-label="Medir"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/></svg></span></button>
 <button class="tool-note tool-item" onclick="toggleToolDock(false);toggleScoutingMode()" title="Registrar Observação (Nota de Campo)" aria-label="Observação"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></span></button>
 <button class="tool-gps tool-item" onclick="toggleToolDock(false);locateMe()" title="Ir para minha localização (GPS)" aria-label="GPS"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></span></button>
@@ -115,7 +119,7 @@
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
-<script src="app.js?v=57"></script>
+<script src="app.js?v=58"></script>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>

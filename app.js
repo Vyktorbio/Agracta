@@ -12192,16 +12192,16 @@ function injectTopbarButtons(){
   if(!tbr||tbr.querySelector(".btn-today"))return;
   var btnHoje=document.createElement("button");
   btnHoje.className="btn-sm btn-today";
-  btnHoje.innerHTML='Hoje <span id="todayBadge" class="today-badge">0</span>';
+  btnHoje.innerHTML=ic('calendar',18)+'<span class="tb-nav-label">Hoje</span><span id="todayBadge" class="today-badge">0</span>';
   btnHoje.onclick=openToday;
   var btnBusca=document.createElement("button");
   btnBusca.className="btn-sm btn-search";
-  btnBusca.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align:-2px" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
+  btnBusca.innerHTML=ic('search',18)+'<span class="tb-nav-label">Buscar</span>';
   btnBusca.setAttribute("aria-label","Buscar");
   btnBusca.onclick=openSearch;
   var btnEstudos=document.createElement("button");
   btnEstudos.className="btn-sm btn-studies";
-  btnEstudos.textContent="Estudos";
+  btnEstudos.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Estudos</span>';
   btnEstudos.onclick=openStudiesPanel;
   /* Insere antes do botão AGENDA */
   var btnAgenda=document.getElementById("btnAgenda");
