@@ -130,9 +130,9 @@ ck(aSev.indexOf('progresso no tempo')>=0 || aSev.indexOf('AUDPC')>=0, 'a seção
 console.log('Título do gráfico de progresso segue a variável');
 var gMort = context.studyChartsHtml(mort);
 var gSev  = context.studyChartsHtml(sev);
-ck(gMort.indexOf('progresso (mortalidade × tempo)')>=0, 'mortalidade: "progresso (mortalidade × tempo)"');
+ck(gMort.indexOf('Mortalidade · ao longo do tempo')>=0, 'mortalidade: título curto com a variável ao longo do tempo');
 ck(gMort.indexOf('severidade × tempo')<0,               'mortalidade: a palavra severidade sumiu do título');
-ck(gSev.indexOf('progresso (mancha angular × tempo)')>=0, 'doença: o título usa o nome da variável');
+ck(gSev.indexOf('Mancha angular · ao longo do tempo')>=0, 'doença: o título usa o nome da variável');
 
 console.log('Ranking: barras do melhor para o pior, como no pipeline');
 ck(gMort.indexOf('eficácia de Abbott — ranking')>=0, 'mortalidade: o gráfico se chama ranking de eficácia de Abbott');

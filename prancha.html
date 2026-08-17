@@ -1972,9 +1972,11 @@ function secBPL(x, y, w){
          entrava disfarçado quando o GPS falhava, e a folha dizia "estive lá"
          mostrando coordenada de cadastro. A distância entre os dois é o que
          responde se a pessoa estava mesmo na parcela. */
-      {t:(pt?"Avaliador (GPS)":"Assessor (GPS)"), w:w*0.22},
-      {t:(pt?"Clima":"Weather"),        w:w*0.15},
-      {t:(pt?"Assin.":"Signed"),        w:w*0.09, a:"middle"}
+      {t:(pt?"Avaliador (GPS)":"Assessor (GPS)"), w:w*0.19},
+      {t:(pt?"Clima":"Weather"),        w:w*0.13},
+      /* Não basta um ✓: a exigência é saber QUAL pessoa assinou. O e-mail fica
+         no payload técnico; nesta coluna legível sai o nome humano resolvido. */
+      {t:(pt?"Assinatura":"Signature"),  w:w*0.14}
     ];
     const linhas = B.registros.map(r=>{
       const gps = r.gps
@@ -1994,7 +1996,8 @@ function secBPL(x, y, w){
         r.registro || "—",
         gps,
         cl,
-        {v:(r.assinada ? "✓" : "—"), w:600, c:(r.assinada ? "#1f8a52" : GRAF)}
+        {v:(r.assinada ? (r.assinadaPor || "Não identificado") : "—"), w:600,
+         c:(r.assinada ? "#1f8a52" : GRAF)}
       ];
     });
     const tb = tabela(x, cy, cols, linhas, {zebra:true, fs:11});

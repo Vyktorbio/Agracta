@@ -1253,7 +1253,13 @@ function setLocalAtivo(id){
   /* o chip do clima acompanha o local: trocar de lugar troca a estação. climaMac
      zera junto, senão o painel continuaria aberto na estação do local anterior. */
   climaMac=null;
+  _climaWhere=null;
+  _climaWhereGPS=false;
   if(typeof climaChipAtualiza==='function'){ try{ climaChipAtualiza(); }catch(e){} }
+  var cp=document.getElementById('climaPanel');
+  if(cp&&cp.style.display==='block'){
+    try{ buildClimaPanel(); climaModeInit(); }catch(e){}
+  }
   var p=document.getElementById('ndviPanel'); if(p&&p.style.display==='block'){ try{ ndviLoadDates(); }catch(e){} if(ndviIndex&&ndviDate) setTimeout(function(){ try{ndviLoadImage();}catch(e){} },350); }
 }
 /* ---- UI: chip do local + menu + modal "Novo local" (busca geocoder) ---- */
@@ -3710,7 +3716,7 @@ function deleteNote(noteId){
 
 /* ===================== CLIMA — estação meteorológica (Ecowitt) ===================== */
 var CLIMA_PROXY=NDVI_PROXY;
-var _climaStations=null, climaMac=null, _climaTimer=null, _climaMode='estacao', _climaWhere=null;
+var _climaStations=null, climaMac=null, _climaTimer=null, _climaMode='estacao', _climaWhere=null, _climaWhereGPS=false, _climaPanelSeq=0;
 function _climaCss(){ if(document.getElementById('climaCss'))return; var s=document.createElement('style'); s.id='climaCss';
   s.textContent='.clima-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}'+
   '.clima-card{background:var(--surface-2,#11210f);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px 10px;min-width:0}'+
@@ -3740,7 +3746,7 @@ function climaMatch(){
 }
 function toggleClima(){
   var p=document.getElementById('climaPanel');
-  if(p&&p.style.display==='block'){ p.style.display='none'; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
+  if(p&&p.style.display==='block'){ p.style.display='none'; _climaPanelSeq++; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
   var nv=document.getElementById('ndviPanel'); if(nv) nv.style.display='none';
   if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   _climaCss(); buildClimaPanel(); climaModeInit();
@@ -3818,7 +3824,17 @@ function climaGps(){
 }
 function climaLocalLoad(ll,fromGps){
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
-  ll = ll || _climaWhere || _climaLocalCoord();
+  var seq=++_climaPanelSeq;
+  if(ll){
+    _climaWhere=ll.slice?ll.slice():ll;
+    _climaWhereGPS=!!fromGps;
+  }else if(_climaWhere){
+    ll=_climaWhere;
+    fromGps=_climaWhereGPS;
+  }else{
+    ll=_climaLocalCoord();
+    fromGps=false;
+  }
   /* Só avisa quando NÃO HÁ mesmo posição nenhuma: nem centro do Local, nem
      quadra desenhada. Aí o aviso é informação, não obstáculo. */
   if(!ll){ climaSay('Este Local ainda não tem quadra desenhada no mapa. Desenhe uma quadra, ou toque em 📍 GPS para ver o clima de onde você está agora.'); return; }
@@ -3827,11 +3843,12 @@ function climaLocalLoad(ll,fromGps){
   var url='https://api.open-meteo.com/v1/forecast?latitude='+(+ll[0]).toFixed(4)+'&longitude='+(+ll[1]).toFixed(4)+
     '&current=temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m,vapour_pressure_deficit,shortwave_radiation'+
     '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration,sunrise,sunset,daylight_duration'+
-    '&timezone=America%2FSao_Paulo&forecast_days=7';
+    '&temperature_unit=celsius&precipitation_unit=mm&wind_speed_unit=kmh&timezone=America%2FSao_Paulo&forecast_days=7';
   fetch(url).then(function(r){return r.json();}).then(function(j){
+    if(seq!==_climaPanelSeq) return;
     if(!j||j.error){ climaSay('Previsão indisponível: '+((j&&j.reason)||'erro'),'err'); return; }
     climaLocalRender(j, ll, fromGps);
-  }).catch(function(){ climaSay('Sem internet pra previsão agora. (Open-Meteo precisa de conexão.)','err'); });
+  }).catch(function(){ if(seq===_climaPanelSeq) climaSay('Sem internet pra previsão agora. (Open-Meteo precisa de conexão.)','err'); });
 }
 function climaLocalRender(j, ll, fromGps){
   var b=document.getElementById('climaBody'); if(!b) return;
@@ -3867,7 +3884,8 @@ function climaLocalRender(j, ll, fromGps){
   }
   var lbl = fromGps ? ('📍 onde estou ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')')
     : ('📍 '+esc((typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||((+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3))));
-  h+='<div class="clima-foot">'+lbl+' · previsão Open-Meteo (grátis)</div>';
+  var atual=(c.time&&String(c.time).indexOf('T')>=0)?String(c.time).split('T')[1].slice(0,5):'';
+  h+='<div class="clima-foot">'+lbl+' · previsão Open-Meteo'+(atual?(' · atualizado '+atual):'')+'</div>';
   b.innerHTML=h;
 }
 function climaSay(msg,cls){ var b=document.getElementById('climaBody'); if(b) b.innerHTML='<div class="ndvi-status'+(cls?' '+cls:'')+'" style="margin:8px 0;min-height:auto">'+esc(msg)+'</div>'; }
@@ -3879,14 +3897,25 @@ function climaSay(msg,cls){ var b=document.getElementById('climaBody'); if(b) b.
    Cordeirópolis — cai na previsão por satélite e o selo diz "satélite", para
    ninguém confundir leitura de sensor com previsão de grade.
    Toque abre o painel completo, que continua sendo o mesmo de antes. */
-var _climaChipTimer=null, _climaChipMac=null;
+var _climaChipTimer=null, _climaChipMac=null, _climaChipSeq=0, _climaChipLocalMostrado=null;
 function _climaChipEl(){ return document.getElementById('climaChip'); }
 function climaChipPinta(o){
   var el=_climaChipEl(); if(!el) return;
   if(!o){ el.style.display='none'; return; }
-  var n=function(v,d){ return (v==null||v==='')?null:(Math.round(v*Math.pow(10,d||0))/Math.pow(10,d||0)); };
+  if(o.estado){
+    el.innerHTML='<span class="cc-t">—</span><span class="cc-v">'+esc(o.estado)+'</span>';
+    el.title=(o.title||o.estado)+(o.lugar?(' · '+o.lugar):'')+' — toque para abrir o painel';
+    el.setAttribute('aria-label',el.title);
+    el.style.display='flex';
+    return;
+  }
+  var n=function(v,d){
+    if(v==null||v==='') return null;
+    var x=Number(v); if(!isFinite(x)) return null;
+    return Math.round(x*Math.pow(10,d||0))/Math.pow(10,d||0);
+  };
   var t=n(o.temp,1), ur=n(o.umidade,0), vt=n(o.vento,0);
-  if(t==null && ur==null){ el.style.display='none'; return; }
+  if(t==null && ur==null){ climaChipPinta({estado:'Clima indisponível',lugar:o.lugar}); return; }
   /* Uma linha só. O nome do lugar saiu: já está na barra de cima, e era ele que
      fazia o chip ocupar meia tela. Fica no title, para quem quiser confirmar. */
   /* O separador mora DENTRO do span do vento: em tela estreita o CSS esconde o
@@ -3897,36 +3926,58 @@ function climaChipPinta(o){
   el.innerHTML='<span class="cc-t">'+(t!=null?(String(t).replace('.',',')+'°'):'—')+'</span>'+
     (linha?('<span class="cc-v">'+linha+'</span>'):'')+
     '<span class="cc-src '+(o.estacao?'est':'sat')+'">'+(o.estacao?'estação':'satélite')+'</span>';
+  var hora='';
+  if(o.atualizado!=null){
+    if(typeof o.atualizado==='number'){
+      try{ hora=new Date(o.atualizado*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){}
+    }else if(String(o.atualizado).indexOf('T')>=0){ hora=String(o.atualizado).split('T')[1].slice(0,5); }
+  }
   el.title=(o.estacao?'Estação Ecowitt de ':'Previsão por satélite para ')+(o.lugar||'este local')+
-           ' — toque para abrir o painel completo';
+           (hora?(' · atualizado '+hora):'')+' — toque para abrir o painel completo';
+  el.setAttribute('aria-label',el.title);
   el.style.display='flex';
 }
 function climaChipAtualiza(){
   var el=_climaChipEl(); if(!el) return;
+  var seq=++_climaChipSeq;
+  var localDaBusca=String((typeof localAtivo!=='undefined'&&localAtivo)||'');
   var lugar=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'';
+  function atual(){ return seq===_climaChipSeq && String((typeof localAtivo!=='undefined'&&localAtivo)||'')===localDaBusca; }
+  function pinta(o){ if(!atual()) return; _climaChipLocalMostrado=localDaBusca; climaChipPinta(o); }
+  if(_climaChipLocalMostrado!==localDaBusca){
+    _climaChipLocalMostrado=localDaBusca;
+    climaChipPinta({estado:'Buscando clima…',lugar:lugar});
+  }
   function satelite(){
+    if(!atual()) return;
     var ll=(typeof _climaLocalCoord==='function')?_climaLocalCoord():null;
-    if(!ll){ climaChipPinta(null); return; }
+    if(!ll){ pinta({estado:'Clima sem coordenada',title:'O local ainda não tem coordenada nem quadra desenhada',lugar:lugar}); return; }
     fetch('https://api.open-meteo.com/v1/forecast?latitude='+(+ll[0]).toFixed(4)+'&longitude='+(+ll[1]).toFixed(4)+
-          '&current=temperature_2m,relative_humidity_2m,wind_speed_10m&timezone=America%2FSao_Paulo')
-      .then(function(r){ return r.json(); })
-      .then(function(j){ var c=j&&j.current; if(!c){ climaChipPinta(null); return; }
-        climaChipPinta({temp:c.temperature_2m, umidade:c.relative_humidity_2m, vento:c.wind_speed_10m,
-                        lugar:lugar, estacao:false}); })
-      .catch(function(){ climaChipPinta(null); });
+          '&current=temperature_2m,relative_humidity_2m,wind_speed_10m&temperature_unit=celsius&wind_speed_unit=kmh&timezone=America%2FSao_Paulo')
+      .then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){
+        if(!atual()) return;
+        var c=j&&j.current;
+        if(!c || (c.temperature_2m==null&&c.relative_humidity_2m==null)){ pinta({estado:'Clima indisponível',lugar:lugar}); return; }
+        pinta({temp:c.temperature_2m, umidade:c.relative_humidity_2m, vento:c.wind_speed_10m,
+               atualizado:c.time, lugar:lugar, estacao:false});
+      })
+      .catch(function(){ pinta({estado:'Clima indisponível',title:'Sem leitura de clima agora',lugar:lugar}); });
   }
   function comEstacoes(){
+    if(!atual()) return;
     var mac=climaMatch();
     _climaChipMac=mac;
     if(!mac){ satelite(); return; }
-    fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ return r.json(); }).then(function(d){
+    fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(d){
+      if(!atual()) return;
       if(!d||d.error){ satelite(); return; }
       var v=function(x){ return (x&&x.value!=null)?x.value:null; };
-      climaChipPinta({temp:v(d.temp), umidade:v(d.humidity), vento:v(d.wind_speed), lugar:lugar, estacao:true});
+      pinta({temp:v(d.temp), umidade:v(d.humidity), vento:v(d.wind_speed), atualizado:d.time, lugar:lugar, estacao:true});
     }).catch(satelite);
   }
   if(_climaStations){ comEstacoes(); return; }
-  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ return r.json(); }).then(function(arr){
+  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(arr){
     if(Array.isArray(arr)) _climaStations=arr;
     comEstacoes();
   }).catch(satelite);   /* proxy dormindo não pode deixar o chip vazio */
@@ -3959,12 +4010,14 @@ function climaLoad(){
     return;
   }
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
+  var seq=++_climaPanelSeq;
   climaSay('Carregando dados ao vivo…');
   fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
+    if(seq!==_climaPanelSeq) return;
     if(!d||d.error){ climaSay((d&&d.error)||'Erro ao ler a estação.','err'); return; }
     climaRender(d);
     _climaTimer=setInterval(function(){ var p=document.getElementById('climaPanel'); if(p&&p.style.display==='block') climaLoad(); else { clearInterval(_climaTimer); _climaTimer=null; } }, 300000);
-  }).catch(function(){ climaSay('Não consegui ler a estação agora.','err'); });
+  }).catch(function(){ if(seq===_climaPanelSeq) climaSay('Não consegui ler a estação agora.','err'); });
 }
 function _cval(n,dec){ if(!n||n.value==null||n.value==='') return '—'; var v=n.value; if(typeof v==='number'&&dec!=null) v=v.toFixed(dec); return v; }
 function _compass(deg){ if(deg==null) return ''; return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round(deg/22.5)%16]; }
@@ -5546,8 +5599,16 @@ var TIPOS_AVALIACAO = [
 ];
 
 function newStudy(){
+  var _autor='';
+  var _autorEmail='';
+  try{ _autor=_currentUserName()||''; }catch(e){}
+  try{ _autorEmail=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; }catch(e){}
   return {
     id:uid(),
+    /* Responsável capturado na criação. Sem isto, a folha BPL usava o nome de
+       quem ABRIU o documento depois, que pode ser outra pessoa. */
+    autor:_autor,
+    autorEmail:_autorEmail,
     codigo:"",
     descricao:"",
     tipoEstudo:"",        /* dirige o catálogo de variáveis da avaliação */
@@ -5788,6 +5849,59 @@ function _avHoraAgora(){
   el.value=p(d.getHours())+':'+p(d.getMinutes());
   try{ if(typeof _stxToast==='function') _stxToast('Hora da leitura: '+el.value); }catch(e){}
 }
+/* Identidade BPL tem duas colunas diferentes:
+     nome  — a pessoa que executou/assinou;
+     e-mail — o identificador técnico da conta.
+
+   Dados antigos às vezes gravaram o e-mail dentro do campo de nome. Estes
+   auxiliares corrigem apenas a APRESENTAÇÃO/EXPORTAÇÃO, consultando o cadastro
+   atual da mesma conta. O registro histórico bruto continua intacto. */
+function _identidadeEhEmail(v){
+  v=String(v==null?'':v).trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+function _identidadeNomeValido(v){
+  v=String(v==null?'':v).trim();
+  return (v && !_identidadeEhEmail(v)) ? v : '';
+}
+function _nomeCadastradoPorEmail(email){
+  email=String(email||'').toLowerCase().trim();
+  if(!_identidadeEhEmail(email)) return '';
+  try{
+    ensureConfig();
+    var cfg=(data&&data.__config)||{};
+    var n=_identidadeNomeValido((cfg.nomesPorEmail||{})[email]);
+    if(n) return n;
+    var au=(typeof _authUser!=='undefined'&&_authUser)||null;
+    if(au && String(au.email||'').toLowerCase().trim()===email){
+      n=_identidadeNomeValido(au.displayName||au.name); if(n) return n;
+    }
+    var roster=(cfg.allowedUsers||[]).find(function(u){
+      return u&&String(u.email||'').toLowerCase().trim()===email;
+    });
+    n=_identidadeNomeValido(roster&&roster.nome); if(n) return n;
+    var perfil=(window._perfisCache||[]).find(function(p){
+      return p&&String(p.email||'').toLowerCase().trim()===email;
+    });
+    n=_identidadeNomeValido(perfil&&perfil.nome); if(n) return n;
+  }catch(e){}
+  return '';
+}
+function _identidadeBPL(nome, email){
+  var nomeBruto=String(nome==null?'':nome).trim();
+  var idEmail=String(email==null?'':email).toLowerCase().trim();
+  if(!_identidadeEhEmail(idEmail)) idEmail='';
+  if(_identidadeEhEmail(nomeBruto)){
+    if(!idEmail) idEmail=nomeBruto.toLowerCase();
+    nomeBruto='';
+  }
+  /* Se o registro já contém um nome humano, ele é evidência histórica e não é
+     reescrito por uma eventual alteração posterior no cadastro. O lookup serve
+     apenas para recuperar o nome que faltou nos registros legados. */
+  var humano=_identidadeNomeValido(nomeBruto) || _nomeCadastradoPorEmail(idEmail);
+  return {nome:(humano||'Não identificado'), email:idEmail};
+}
+
 /* Nome legível do usuário logado (perfis/roster/admin) — p/ auditoria e assinatura */
 /* QUEM ASSINA. Isto vai para a trilha BPL e para a rubrica das avaliações, então
    tem de ser o NOME da pessoa — "Machado, V. C." —, não o e-mail nem o cargo.
@@ -5806,27 +5920,18 @@ function _currentUserName(){
     /* Sem sessão — o caso normal no talhão. O nome declarado NESTE APARELHO vale:
        a alternativa era gravar "Local/Offline" na rubrica, que não é o nome de
        ninguém. A trilha marca que não houve autenticação (ver `autenticado`). */
-    try{ ensureConfig(); return String((data.__config||{}).meuNome || '').trim(); }catch(e){ return ''; }
+    try{ ensureConfig(); return _identidadeNomeValido((data.__config||{}).meuNome); }catch(e){ return ''; }
   }
   var alvo = email.toLowerCase().trim();
   try{
     ensureConfig();
     var cfg = data && data.__config || {};
-    var nomes = cfg.nomesPorEmail || {};
-    var meu = String(nomes[alvo] || '').trim();
-    if(meu) return meu;
-    /* Perfis do Firebase Auth preservam o displayName no login. */
-    var authNome = String((_authUser && (_authUser.displayName || _authUser.name)) || '').trim();
-    if(authNome) return authNome;
-    var allowed = (data && data.__config && data.__config.allowedUsers || []);
-    var user = allowed.find(function(u){ return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === alvo; });
-    if(user && user.nome) return user.nome;
-    var perfil = (window._perfisCache || []).find(function(p){ return p && p.email && String(p.email).toLowerCase().trim() === alvo; });
-    if(perfil && perfil.nome) return perfil.nome;
+    var conhecido=_nomeCadastradoPorEmail(alvo);
+    if(conhecido) return conhecido;
     var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
     /* Migração segura: o valor legado nasceu no painel do administrador. Nunca o
        oferecemos a um técnico, pois não há como provar a autoria desse campo antigo. */
-    var legado = String(cfg.meuNome || '').trim();
+    var legado = _identidadeNomeValido(cfg.meuNome);
     if(legado && admEmail && alvo === admEmail){
       cfg.nomesPorEmail[alvo] = legado;
       cfg.meuNome = '';
@@ -5960,6 +6065,7 @@ function studyAuditHtml(study){
   s.audit.slice().reverse().forEach(function(entry){
     var dt = new Date(entry.ts);
     var dateStr = isNaN(dt.getTime()) ? '?' : dt.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+    var ident=_identidadeBPL(entry.user,entry.por);
     html += '<div style="border-bottom:1px solid var(--border,#26322b);padding-bottom:6px;font-size:11px;line-height:1.45">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">' +
         '<span style="color:var(--accent,#37d684);font-weight:700">' + esc(entry.action) + '</span>' +
@@ -5968,7 +6074,7 @@ function studyAuditHtml(study){
       '<div style="color:var(--text,#e8efe9);word-break:break-word">' + esc(entry.details) + '</div>' +
       (entry.motivo ? '<div style="color:#d8b6e6;font-size:10px;margin-top:2px">Motivo: <b>'+esc(entry.motivo)+'</b></div>' : '') +
       ((Array.isArray(entry.mudancas) && entry.mudancas.length) ? '<div style="margin-top:3px;font-size:10px;color:var(--text-2,#9fb1a5);border-left:2px solid var(--border,#26322b);padding-left:6px">'+entry.mudancas.slice(0,12).map(function(m){return esc(m.parcela)+'·'+esc(m.variavel)+': <span style="color:#ff9a8a">'+esc(m.de||'∅')+'</span> → <span style="color:#9fe0b6">'+esc(m.para||'∅')+'</span>';}).join('<br>')+((entry.total_mudancas&&entry.total_mudancas>12)?('<br>… +'+(entry.total_mudancas-12)+' alterações'):'')+'</div>' : '') +
-      '<div style="color:var(--text-2,#9fb1a5);font-size:9px;margin-top:2px;font-style:italic">Por: ' + esc(entry.user) + (entry.por?(' ('+esc(entry.por)+')'):'') + '</div>' +
+      '<div style="color:var(--text-2,#9fb1a5);font-size:9px;margin-top:2px;font-style:italic">Por: <b>' + esc(ident.nome) + '</b>' + (ident.email?(' · ID '+esc(ident.email)):'') + '</div>' +
       '</div>';
   });
   
@@ -7150,6 +7256,7 @@ function _forenseDe(r, tipo){
   if(!r) return null;
   var c=r.carimbo||{};
   var mom=''; try{ if(r.momento){ var m=avMomento(r,null); if(m&&m.explicito) mom=m.rotulo; } }catch(e){}
+  var ident=_identidadeBPL(c.rubricaNome,c.rubricaPor);
   return {
     tipo:tipo,
     evento:((typeof isoToBR==='function'?isoToBR(r.data):r.data)||''),
@@ -7166,9 +7273,23 @@ function _forenseDe(r, tipo){
                     vento:c.clima.vento, hora:(c.clima.hora||'')}:null),
     ndvi:(c.ndvi&&c.ndvi.ndvi!=null?c.ndvi.ndvi:null),
     assinada:!!c.rubrica,
-    assinadaPor:(c.rubricaNome||c.rubricaPor||''),
+    assinadaPor:ident.nome,
+    assinadaEmail:ident.email,
     assinadaEm:(c.rubricaEm||null)
   };
+}
+function _autorBPL(study){
+  study=study||{};
+  var id=_identidadeBPL(study.autor,study.autorEmail);
+  /* Se o estudo já aponta para uma conta específica, nunca atribuir a autoria a
+     quem apenas abriu a folha. Sem nome cadastrado, a saída honesta é
+     "Não identificado" + o ID técnico; depois que o cadastro for preenchido a
+     mesma folha passa a resolver essa pessoa. */
+  if(id.nome!=='Não identificado' || String(study.autor||study.autorEmail||'').trim()) return id;
+  var nome='',email='';
+  try{ nome=(typeof _currentUserName==='function'&&_currentUserName())||''; }catch(e){}
+  try{ email=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; }catch(e){}
+  return _identidadeBPL(nome,email);
 }
 function _pranchaPayload(qid, sid, variavel){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
@@ -7224,7 +7345,8 @@ function _pranchaPayload(qid, sid, variavel){
   var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
   var dd=function(n){ return (n<10?'0':'')+n; };
   var hoje=new Date();
-  var autor=''; try{ autor=(typeof _currentUserName==='function'?_currentUserName():'')||''; }catch(e){}
+  var autorId=_autorBPL(s);
+  var autor=(autorId.nome==='Não identificado'?'':autorId.nome);
   var titulo=s.nome||s.codigo||s.id;
   /* config da variável vem da avaliação mais recente que a define */
   var avRef=(_avCfgDoEstudo(s,variavel)||avs[avs.length-1].av);
@@ -7297,17 +7419,21 @@ function _pranchaPayload(qid, sid, variavel){
        assinou, e da trilha de auditoria do estudo. Nada disso é derivável da
        matriz de notas — tem de viajar junto. */
     bpl: {
-      autor: (s.autor || (typeof _currentUserName==='function' ? _currentUserName() : '') || ''),
-      finalizado: !!s.finalizado,
-      finalizadoEm: (s.finalizadoEm || null),
+      /* Registros antigos podiam trazer o e-mail em `autor`. Resolve o nome no
+         cadastro da MESMA conta e mantém o e-mail em campo técnico separado. */
+      autor: autorId.nome,
+      autorEmail: autorId.email,
+      finalizado: !!(s.finalizado || s.finalizacao),
+      finalizadoEm: (s.finalizadoEm || (s.finalizacao&&s.finalizacao.em) || null),
       registros: []
         .concat((s.aplicacoes||[]).map(function(a){ return _forenseDe(a,'APL'); }))
         .concat((s.avaliacoes||[]).map(function(a){ return _forenseDe(a,'AV'); }))
         .filter(Boolean),
       trilha: (s.audit||[]).map(function(e){
         var q=new Date(e.ts||0);
+        var id=_identidadeBPL(e.user,e.por);
         return { quando: (isNaN(q) ? '' : q.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})),
-                 quem: (e.user || e.por || ''), acao: (e.action || ''), detalhe: (e.details || '') };
+                 quem: id.nome, email:id.email, acao: (e.action || ''), detalhe: (e.details || '') };
       })
     },
     avisos: avisos
@@ -7318,6 +7444,21 @@ function openPranchaEstudo(qid, sid, variavel){
   try{ p=_pranchaPayload(qid, sid, variavel); }
   catch(e){ alert('Não consegui montar a prancha: '+e.message); return; }
   if(p && p.erro){ alert(p.erro); return; }
+  /* Se a conta do próprio usuário é a responsável e ainda não tem nome, pede
+     uma vez e remonta a folha. Assim o documento nunca troca silenciosamente o
+     nome da pessoa pelo e-mail. Conta de OUTRA pessoa sem nome não é atribuída a
+     quem abriu: fica não identificada até o cadastro correto ser preenchido. */
+  if(p&&p.bpl&&p.bpl.autor==='Não identificado'){
+    var atualEmail=''; try{ atualEmail=String((typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'').toLowerCase(); }catch(e){}
+    if(!p.bpl.autorEmail || (atualEmail&&String(p.bpl.autorEmail).toLowerCase()===atualEmail)){
+      var nome=_nomeParaAssinatura();
+      if(nome&&nome!=='Não identificado'){
+        try{ p=_pranchaPayload(qid,sid,variavel); }catch(e){}
+      }
+    }else if(typeof _stxToast==='function'){
+      _stxToast('⚠ O responsável deste estudo ainda não tem nome cadastrado. O e-mail ficará apenas como ID técnico.');
+    }
+  }
   /* a folha sai, mas o que ficou de fora precisa ser dito ANTES — senão o gráfico
      parece completo e não é (o que vale relatório em BPL) */
   if(p && p.avisos && p.avisos.length && typeof _stxToast==='function') _stxToast('⚠ '+p.avisos.join(' · '));
@@ -7911,7 +8052,7 @@ function openStudyDetail(qid,sid){
   var _fin=estudoFinalizado(study), _finEm='', _finQuem='', _finN=0, _finFuso='';
   if(_fin){
     try{ _finEm=new Date(study.finalizacao.em).toLocaleString('pt-BR'); }catch(e){ _finEm=study.finalizacao.em||''; }
-    _finQuem=study.finalizacao.nome||study.finalizacao.por||'';
+    _finQuem=_identidadeBPL(study.finalizacao.nome,study.finalizacao.por).nome;
     _finN=study.finalizacao.nResultados||((study.estatisticaFinal||{}).itens||[]).length;
     _finFuso=study.finalizacao.fuso||'';
   }
@@ -9263,7 +9404,7 @@ function _carimboClima(qid, dateStr, horaStr, cb){
       if(horaStr){
         var ah='https://archive-api.open-meteo.com/v1/archive?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+
           '&start_date='+dateStr+'&end_date='+dateStr+
-          '&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m,shortwave_radiation&timezone=America%2FSao_Paulo';
+          '&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m,shortwave_radiation&temperature_unit=celsius&precipitation_unit=mm&wind_speed_unit=kmh&timezone=America%2FSao_Paulo';
         fetch(ah).then(function(r){return r.json();}).then(function(j){
           var hh=j&&j.hourly; if(!hh||!hh.time||!hh.time.length){ cb(null); return; }
           var alvo=dateStr+'T'+String(horaStr).slice(0,5);
@@ -9281,12 +9422,12 @@ function _carimboClima(qid, dateStr, horaStr, cb){
       }
       var au='https://archive-api.open-meteo.com/v1/archive?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+
         '&start_date='+dateStr+'&end_date='+dateStr+
-        '&daily=temperature_2m_mean,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,precipitation_sum,wind_speed_10m_max,shortwave_radiation_sum&timezone=America%2FSao_Paulo';
+        '&daily=temperature_2m_mean,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,precipitation_sum,wind_speed_10m_max,shortwave_radiation_sum&temperature_unit=celsius&precipitation_unit=mm&wind_speed_unit=kmh&timezone=America%2FSao_Paulo';
       fetch(au).then(function(r){return r.json();}).then(function(j){ var dd=j&&j.daily; if(!dd||!dd.time||!dd.time.length){cb(null);return;}
         cb({fonte:'openmeteo-hist',data:dateStr,histor:true,temp:_p(dd.temperature_2m_mean),temp_min:_p(dd.temperature_2m_min),temp_max:_p(dd.temperature_2m_max),umidade:_p(dd.relative_humidity_2m_mean),vento:_p(dd.wind_speed_10m_max),chuva:_p(dd.precipitation_sum),solar:_p(dd.shortwave_radiation_sum)}); }).catch(function(){ cb(null); });
       return;
     }
-    var url='https://api.open-meteo.com/v1/forecast?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+'&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,vapour_pressure_deficit,shortwave_radiation&timezone=America%2FSao_Paulo';
+    var url='https://api.open-meteo.com/v1/forecast?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+'&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,vapour_pressure_deficit,shortwave_radiation&temperature_unit=celsius&precipitation_unit=mm&wind_speed_unit=kmh&timezone=America%2FSao_Paulo';
     fetch(url).then(function(r){return r.json();}).then(function(j){ var c=j&&j.current; if(!c){cb(null);return;}
       cb({fonte:'openmeteo',data:dateStr||hoje,hora:c.time,temp:c.temperature_2m,umidade:c.relative_humidity_2m,orvalho:c.dew_point_2m,vpd:c.vapour_pressure_deficit,pressao:c.surface_pressure,vento:c.wind_speed_10m,rajada:c.wind_gusts_10m,vento_dir:c.wind_direction_10m,chuva:c.precipitation,solar:c.shortwave_radiation}); }).catch(function(){ cb(null); });
   }
@@ -10679,7 +10820,8 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   var reopened=!!(_avReopen && _avReopen.avid===av.id);
   var locked=signed && !forceUnlock && !reopened;
   var assinEm=''; try{ if(av.carimbo&&av.carimbo.rubricaEm){ var _dd=new Date(av.carimbo.rubricaEm); assinEm=isNaN(_dd)?'':_dd.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } }catch(e){}
-  var assinPor=(av.carimbo&&(av.carimbo.rubricaNome||av.carimbo.rubricaPor))||'';
+  var assinPor='';
+  if(av.carimbo){ assinPor=_identidadeBPL(av.carimbo.rubricaNome,av.carimbo.rubricaPor).nome; }
 
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
   if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+'</div>'; }
@@ -10802,7 +10944,7 @@ function finalizarEstudo(qid,sid){
       st.finalizacao={
         em:new Date().toISOString(),
         por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
-        nome:_currentUserName(),
+        nome:_nomeParaAssinatura(),
         rubrica:url,
         significado:'Estudo finalizado — dados conferidos e estatística congelada',
         fuso:(function(){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||''; }catch(e){ return ''; } })(),
@@ -10854,8 +10996,9 @@ function reabrirEstudo(qid,sid){
 function _bloqueadoPorFinalizacao(qid,sid){
   var s=_estudoDe(qid,sid);
   if(!estudoFinalizado(s)) return false;
+  var finQuem=_identidadeBPL(s.finalizacao.nome,s.finalizacao.por).nome;
   alert('Estudo finalizado em '+new Date(s.finalizacao.em).toLocaleString('pt-BR')+
-        (s.finalizacao.nome?(' por '+s.finalizacao.nome):'')+'.\n\n'+
+        (finQuem&&finQuem!=='Não identificado'?(' por '+finQuem):'')+'.\n\n'+
         'Ele está somente-leitura. Use "Reabrir estudo" — pede senha e registra o motivo na trilha.');
   return true;
 }
