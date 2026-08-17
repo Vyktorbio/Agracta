@@ -930,7 +930,9 @@ function addRotateControl(){
 function addMapCtlToggle(){
   if(!_map || _map.__ctlToggle) return; _map.__ctlToggle=true;
   if(!document.getElementById('mapCtlCss')){ var s=document.createElement('style'); s.id='mapCtlCss';
-    s.textContent='.leaflet-top.leaflet-left .leaflet-control{display:none}.leaflet-top.leaflet-left .leaflet-control.mapctl-toggle{display:block}body.mapctl-open .leaflet-top.leaflet-left .leaflet-control{display:block}body.mapctl-open .leaflet-top.leaflet-left .rot-ctl{display:flex}';
+    /* !important é intencional: o tema pode estilizar .leaflet-bar, mas não
+       pode arrancar zoom/camadas/giro de dentro deste agrupador. */
+    s.textContent='.leaflet-top.leaflet-left .leaflet-control{display:none!important}.leaflet-top.leaflet-left .leaflet-control.mapctl-toggle{display:block!important}body.mapctl-open .leaflet-top.leaflet-left .leaflet-control{display:block!important}body.mapctl-open .leaflet-top.leaflet-left .rot-ctl{display:flex!important}';
     document.head.appendChild(s); }
   var C=LF.control({position:'topleft'});
   C.onAdd=function(){
@@ -1531,10 +1533,12 @@ function toggleMainMenu(){
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
   var adm=isAdmin();
+  var _menuNome=''; try{_menuNome=_currentUserName();}catch(e){}
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="forcarAtualizacao()">🔄 Atualizar</button>'+
     '<button onclick="toggleTheme()">'+(document.documentElement.classList.contains('light')?'◑ Tema escuro':'◐ Tema claro')+'</button>'+
+    '<button onclick="closeMainMenu();definirMeuNome()">'+ic('pencil')+' Meu nome e assinatura</button>'+
     '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
     '<div class="mm-sep"></div>'+
@@ -1545,7 +1549,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();openAvalRecovery()">'+ic('save')+' Recuperação de avaliações</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
     (adm?'<button onclick="closeMainMenu();openComplianceISMS()">'+ic('archive')+' Conformidade &amp; ISMS</button>':'')+
-    (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
+    (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+(_menuNome?('<b>'+esc(_menuNome)+'</b><br>'):'')+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
   var b=document.getElementById('menuBtn'), r=b?b.getBoundingClientRect():null;
@@ -3136,6 +3140,7 @@ function navStart(lat,lng,label){
   if(!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
   if(!_map) initMap();
   navStop();
+  document.body.classList.add('nav-gps-active');
   _navTarget=[lat,lng]; _navLabel=label||'destino'; _navCentered=false;
   try{ if(typeof closeDetail==='function') closeDetail(); }catch(e){}
   ['sdOvl','dOvl','eeOvl'].forEach(function(o){ var el=document.getElementById(o); if(el) el.classList.remove('open'); });
@@ -3175,6 +3180,11 @@ function navStop(){
   if(_navOrient){ try{ window.removeEventListener('deviceorientationabsolute',_navOrient,true); window.removeEventListener('deviceorientation',_navOrient,true); }catch(e){} _navOrient=null; }
   if(_navLine){ try{ _map.removeLayer(_navLine); }catch(e){} _navLine=null; }
   if(_navTgtMarker){ try{ _map.removeLayer(_navTgtMarker); }catch(e){} _navTgtMarker=null; }
+  /* A bolinha azul representa posição AO VIVO durante a navegação. Ao parar,
+     ela não pode virar um ponto permanente e parecer uma camada do mapa. */
+  if(_gpsMarker){ try{ _map.removeLayer(_gpsMarker); }catch(e){} _gpsMarker=null; }
+  if(_gpsCircle){ try{ _map.removeLayer(_gpsCircle); }catch(e){} _gpsCircle=null; }
+  document.body.classList.remove('nav-gps-active');
   _navHeading=null; _navTarget=null; _navCentered=false;
   var h=document.getElementById('navHud'); if(h) h.remove();
 }
@@ -4446,7 +4456,7 @@ function buildStudyRecord(qid,s){
   var aHa=quadraAreaHa(qid), dim=quadraDims(qid), ctr=quadraCenter(qid);
   var L=[]; function add(k,v){ L.push(k+'\t'+(v==null?'':String(v))); }
   add('Local',locNome); add('Quadra',quadraNome(qid));
-  add('Cultura',q.cultura||''); add('Cultivar',q.cultivar||'');
+  add('Cultura',studyCultura(s,q)); add('Cultivar',studyVariedade(s,q));
   add('Estudo (codigo)',s.codigo||''); if(s.descricao) add('Descricao',s.descricao);
   add('Inicio',isoToBR(s.dataInicio)||''); add('No aplicacoes',s.numAplicacoes);
   add('Intervalo (dias)',s.intervaloDias); add('Repeticoes',s.numRepeticoes);
@@ -4577,10 +4587,10 @@ function buildStudyModelo(qid, s, opts){
   /* CABEÇALHO (rótulos cols 0/2/4/6 ; valores 1/3/5/7) — linhas 0–10, igual ao modelo.xls */
   lbl(0,0,'STATUS DO ESTUDO'); put(0,1,(s.aplicacoes&&s.aplicacoes.length)?'INSTALADO':'AGUARDANDO APLICAÇÃO');
   lbl(1,0,'OBJETIVO DO ESTUDO:'); put(1,1,s.objetivo||s.descricao||'');
-  lbl(2,0,'Proposta Comercial:'); lbl(2,2,'RET ou Dispensa:'); lbl(2,4,'Cultivar:'); put(2,5,q.cultivar||''); lbl(2,6,'Equipamento:');
-  lbl(3,0,'Número de Estudo:'); put(3,1,s.codigo||s.nome||''); lbl(3,2,'Diretor de Estudo:'); lbl(3,4,'Data de Plantio:'); put(3,5,BR(q.plantio)); lbl(3,6,'Pressão de trabalho:');
+  lbl(2,0,'Proposta Comercial:'); lbl(2,2,'RET ou Dispensa:'); lbl(2,4,'Cultivar:'); put(2,5,studyVariedade(s,q)); lbl(2,6,'Equipamento:');
+  lbl(3,0,'Número de Estudo:'); put(3,1,s.codigo||s.nome||''); lbl(3,2,'Diretor de Estudo:'); lbl(3,4,'Data de Plantio:'); put(3,5,BR(studyPlantio(s,q))); lbl(3,6,'Pressão de trabalho:');
   lbl(4,0,'Município:'); put(4,1,lx.municipio||''); lbl(4,2,'Técnico de Campo:'); put(4,3,(typeof _currentUserName==='function'?_currentUserName():'')); lbl(4,4,'Data de Emergência:'); lbl(4,6,'Volume de calda:');
-  lbl(5,0,'UF:'); put(5,1,lx.uf||''); lbl(5,2,'Cultura:'); put(5,3,q.cultura||''); lbl(5,4,'Espaçamento de plantio:'); put(5,5,q.espacamento||''); lbl(5,6,'Ponta de pulverização:');
+  lbl(5,0,'UF:'); put(5,1,lx.uf||''); lbl(5,2,'Cultura:'); put(5,3,studyCultura(s,q)); lbl(5,4,'Espaçamento de plantio:'); put(5,5,q.espacamento||''); lbl(5,6,'Ponta de pulverização:');
   lbl(6,0,'Latitude (S):'); put(6,1,ctr?ctr[0].toFixed(6):''); lbl(6,2,'Alvo:'); put(6,3,s.alvo||q.alvo||''); lbl(6,4,'Tamanho da Parcela'); put(6,5,dim?(Math.round(dim.comprimento)+'x'+Math.round(dim.largura)+' m'):''); lbl(6,6,'N° de Bicos:');
   lbl(7,0,'Longitude (O):'); put(7,1,ctr?ctr[1].toFixed(6):''); lbl(7,2,'Data de Início (1ª aplicação):'); put(7,3,BR(s.dataInicio)); lbl(7,4,'População:'); lbl(7,6,'Distância bico-cultura:');
   lbl(8,0,'Altitude:'); lbl(8,2,'Data de Término:'); lbl(8,4,'Quadra:'); put(8,5,(typeof quadraNome==='function'?quadraNome(qid):qid)); lbl(8,6,'Delineamento estatístico'); put(8,7,s.delineamento||'DBC');
@@ -4821,16 +4831,20 @@ async function downloadStudyWorkbook(qid,sid){
     /* A planilha agora é também o dossiê de análise: espera análise + forense.
        Se o limite for atingido, as abas ainda saem e marcam cada linha pendente. */
     var _aJobs=_bioestatJobs(qid,s), _dossieOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey] && c.results[j.jobKey+'|F']; }); };
-    var cache=_bioAutoCache[qid+'|'+sid], limite=Date.now()+90000;
+    /* Exportar não pode prender o usuário por até 90 s esperando a triagem. O
+       motor continua em segundo plano e a planilha já sabe marcar PENDENTE ou
+       ERRO nas abas correspondentes. Quinze segundos cobrem a análise comum e
+       mantêm o botão com resposta rápida no campo. */
+    var cache=_bioAutoCache[qid+'|'+sid], limite=Date.now()+15000;
     while(cache&&cache.status==='loading'&&!_dossieOk(cache)&&Date.now()<limite){await new Promise(function(ok){setTimeout(ok,500);});cache=_bioAutoCache[qid+'|'+sid];}
     var resp=await fetch('modelos/modelo-protocolo.xls'); if(!resp.ok)throw new Error('Modelo de planilha não encontrado.');
     var wb=XLSX.read(await resp.arrayBuffer(),{type:'array',cellFormula:true,cellStyles:true,cellDates:true}), ws=wb.Sheets[wb.SheetNames[0]];
     var p=s.protocolo||{}, loc=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]])||{}, lx=loc.extras||loc||{}, ctr=quadraCenter(qid), dim=quadraDims(qid);
     var status=(s.aplicacoes&&s.aplicacoes.length)?'INSTALADO':'AGUARDANDO APLICAÇÃO', tech=(typeof _currentUserName==='function'?_currentUserName():'');
-    [[1,1,status],[2,1,s.objetivo||s.descricao],[3,1,p.proposta],[3,3,p.ret],[3,5,p.cultivar||q.cultivar],[3,7,p.equipamento],
-      [4,1,s.codigo],[4,3,p.diretor],[4,5,isoToBR(p.plantio||q.plantio)],[4,7,p.pressao],
+    [[1,1,status],[2,1,s.objetivo||s.descricao],[3,1,p.proposta],[3,3,p.ret],[3,5,p.cultivar||studyVariedade(s,q)],[3,7,p.equipamento],
+      [4,1,s.codigo],[4,3,p.diretor],[4,5,isoToBR(p.plantio||studyPlantio(s,q))],[4,7,p.pressao],
       [5,1,p.municipio||lx.municipio],[5,3,p.tecnico||tech],[5,5,isoToBR(p.emergencia)],[5,7,p.volumeCalda],
-      [6,1,p.uf||lx.uf],[6,3,p.cultura||q.cultura],[6,5,p.espacamento||q.espacamento],[6,7,p.ponta],
+      [6,1,p.uf||lx.uf],[6,3,p.cultura||studyCultura(s,q)],[6,5,p.espacamento||q.espacamento],[6,7,p.ponta],
       [7,1,p.latitude||(ctr&&ctr[0].toFixed(6))],[7,3,s.alvo||p.alvo],[7,5,p.tamanhoParcela||(dim&&(Math.round(dim.comprimento)+'x'+Math.round(dim.largura)+' m'))],[7,7,p.bicos],
       [8,1,p.longitude||(ctr&&ctr[1].toFixed(6))],[8,3,isoToBR(s.dataInicio)],[8,5,p.populacao],[8,7,p.distanciaBico],
       [9,1,p.altitude],[9,3,isoToBR(p.termino)],[9,5,p.quadra||quadraNome(qid)],[9,7,s.delineamento||p.delineamento||'DBC'],
@@ -4858,7 +4872,9 @@ async function downloadStudyWorkbook(qid,sid){
     _bioestatAppendSheet(wb,'Forense',_bioestatForensicSheet(qid,s));
     var nome=(s.codigo||'estudo').replace(/[^\w.-]+/g,'_')+'-Agracta.xlsx';
     XLSX.writeFile(wb,nome,{bookType:'xlsx',cellStyles:true});
-    _stxToast(_dossieOk(cache)?'✓ Planilha completa: dados + estatística + forense':'✓ Planilha baixada; resultados pendentes estão identificados');
+    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]&&cache.results[j.jobKey+'|F']);}).length;
+    var _errs=0; if(cache&&cache.results)Object.keys(cache.results).forEach(function(k){if(cache.results[k]&&cache.results[k].ok===false)_errs++;});
+    _stxToast(_pend?'✓ Planilha baixada; '+_pend+' análise(s) pendente(s) estão identificadas':(_errs?'✓ Planilha baixada; revise '+_errs+' resultado(s) com alerta':'✓ Planilha completa: dados + estatística + forense'));
   }catch(e){console.error(e);alert('Não consegui gerar a planilha: '+e.message);}
 }
 function studyExport(qid,sid){
@@ -5161,7 +5177,7 @@ function openStudyEdit(qid,sid){
   avalHtml+='</div>';
 
   var isNew = !sid;
-  var h='<div class="edit-title">'+(isNew?'NOVO ESTUDO':'EDITAR ESTUDO')+'</div>';
+  var h='<div class="edit-title">'+(isNew?'Novo estudo':'Editar estudo')+'</div>';
   h+='<div class="edit-id">'+esc(quadraNome(qid))+'</div>';
   h+='<div class="edit-subtitle" style="color:#8a8">'+esc((data[qid]||{}).cultura||'')+' • '+esc((data[qid]||{}).cultivar||'')+'</div>';
 
@@ -5184,7 +5200,7 @@ function openStudyEdit(qid,sid){
   h+='<div class="eval-add-row"><input id="s_newAval" class="e-inp" type="date"><button class="eval-add-btn" onclick="addAval()">+</button></div>';
   h+='<div class="e-hint">Adicione uma ou mais datas de avaliação de campo.</div>';
 
-  h+='<div class="e-btns"><button class="e-btn e-save" onclick="saveStudy()">SALVAR</button><button class="e-btn e-cancel" onclick="closeStudyEdit()">CANCELAR</button></div>';
+  h+='<div class="e-btns"><button class="e-btn e-save" onclick="saveStudy()">Salvar</button><button class="e-btn e-cancel" onclick="closeStudyEdit()">Cancelar</button></div>';
   if(!isNew){
     h+='<button class="e-btn-del" onclick="deleteStudy(\''+qid+'\',\''+sid+'\',true)">EXCLUIR ESTUDO</button>';
   }
@@ -5597,6 +5613,21 @@ function getBBCHInfo(cultura,code){
     if(list[i].code===code)return list[i];
   }
   return null;
+}
+
+/* Identificação efetiva do ensaio. A quadra é somente o padrão geográfico;
+   quando o estudo declara outra cultura/variedade/plantio, é esse contexto que
+   deve aparecer no painel, no BBCH, nas planilhas e nas figuras. Centralizar a
+   regra evita o erro perigoso de cadastrar soja numa quadra de café e continuar
+   recebendo a escala fenológica do café durante aplicação e avaliação. */
+function studyCultura(study,q){
+  return String((study&&study.cultura)||'').trim() || String((q&&q.cultura)||'').trim();
+}
+function studyVariedade(study,q){
+  return String((study&&study.variedade)||'').trim() || String((q&&q.cultivar)||'').trim();
+}
+function studyPlantio(study,q){
+  return String((study&&study.plantio)||'').trim() || String((q&&q.plantio)||'').trim();
 }
 
 /* ============ NOVO SISTEMA DE ESTUDOS ============
@@ -6411,9 +6442,10 @@ function _studyWorkflow(qid,study){
   var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(avFeitas===avs.length?'complete':(avFeitas?'active':'ready')),detail:avFeitas+' de '+avs.length+' lançada'+(avs.length===1?'':'s')};
   var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,study):[], c=_bioAutoCache[qid+'|'+study.id], rr=c&&c.results||{};
   var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey+'|F'];});
-  var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!avFeitas?'pending':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready')),detail:!avFeitas?'Aguardando dados':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular'))};
-  var dossierOk=anaDone&&forDone;
-  var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':(dossierOk?'ready':'pending'),detail:estudoFinalizado(study)?'Finalizado':(dossierOk?'Pronto para revisar':'Aguardando resultados')};
+  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobs.some(function(j){return rr[j.jobKey+'|F']&&rr[j.jobKey+'|F'].ok===false;});
+  var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!avFeitas?'pending':(anaErr?'attention':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready'))),detail:!avFeitas?'Aguardando dados':(anaErr?'Revisar falha de cálculo':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular')))};
+  var dossierOk=anaDone&&forDone&&!anaErr&&!forErr;
+  var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':((anaErr||forErr)?'attention':(dossierOk?'ready':'pending')),detail:estudoFinalizado(study)?'Finalizado':((anaErr||forErr)?'Revisar pendências':(dossierOk?'Pronto para revisar':'Aguardando resultados'))};
   return {stages:[protocolo,planejamento,execucao,avaliacoes,analise,dossie],protocolo:protocolo,planejamento:planejamento,execucao:execucao,avaliacoes:avaliacoes,analise:analise,dossie:dossie,anaDone:anaDone,forDone:forDone};
 }
 function studyGoStage(id){
@@ -6968,12 +7000,13 @@ function _labCompute(){
       var fTipo=_ppm?_labVal('labPpmFonte'):'', fValor=_ppm?_labVal('labPpmValor'):'';
       var html='', txt=[];
       (s.tratamentos||[]).forEach(function(t){
+        var _isWitness=!!t.testemunha || studyTestemunha(s)===t.id;
         var dose=_calcNum(t.dose);
         var vazao=_ppm?0:(_calcNum(t.volume)||vazaoDef);
         var sub=_ppm ? ((t.dose||'—')+' ppm') : ((t.dose||'—')+' · '+F(vazao)+' L/ha');
-        var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(t.testemunha?' <span style="color:#dccd8c">(test.)</span>':'')+'</span>'+
+        var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+'</span>'+
                  '<span style="font-size:10px;color:#9fb1a5">'+esc(sub)+'</span></div>';
-        if(t.testemunha||!(dose>0)){
+        if(_isWitness||!(dose>0)){
           html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>só solvente — '+F(vol)+' mL</b></div></div>';
           txt.push(t.id+': só solvente, '+F(vol)+' mL'); return;
         }
@@ -7091,9 +7124,14 @@ function _calcCompute(){
   function f(v,p){ return BC.formatBR(v,p==null?2:p); }
   var html='';
   (study.tratamentos||[]).forEach(function(t){
+    var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
     var vol=t.volume?_calcNum(t.volume):volDef;
-    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(t.testemunha?' <span style="color:#dccd8c">(test.)</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
+    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
+    if(_isWitness && !(dval>0)){
+      html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>não preparar</b><span>Produto / calda</span><b>0 / 0</b></div><div class="calc-warn" style="color:#7ca88a">Testemunha sem aplicação: nenhuma calda é necessária.</div></div>';
+      return;
+    }
     var res=null, err='';
     try{ res=BC.calculateTreatment({doseHa:dval, doseUnit:dunit, sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap}); }
     catch(e){ err=e.message||String(e); }
@@ -7123,6 +7161,8 @@ function _calcCopy(){
     'Trat\tProduto\tDose\tProd/parc\tCalda/parc(L)\tProd total\tCalda total(L)'];
   (study.tratamentos||[]).forEach(function(t){
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose), vol=t.volume?_calcNum(t.volume):volDef, r;
+    var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
+    if(_isWitness && !(dval>0)){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\t0\t0\t0\t0'); return; }
     try{ r=BC.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:len,plotWidth:wid,numPlots:plots,numBottles:bottles,deadVolumeMl:dead,bottleCapacity:cap}); }catch(e){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
     L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+f(r.productPerPlot)+' '+r.productUnit+'\t'+f(r.sprayPerPlotMl/1000)+'\t'+f(r.productTotal)+' '+r.productUnit+'\t'+f(r.sprayTotalMl/1000));
   });
@@ -7149,7 +7189,7 @@ function _bioestatAoa(qid, study){
         for(var r=1;r<=reps;r++){
           var val=_avNota(a,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v);
           if(val==null||String(val).trim()==='') continue;
-          rows.push([locNome, qn, (q.cultura||''), (study.codigo||study.nome||study.id), (isoToBR(a.data)||a.data||''), (a.tipo||''), (a.bbch||''), t.id, r, (t.produto||''), v, val]);
+          rows.push([locNome, qn, studyCultura(study,q), (study.codigo||study.nome||study.id), (isoToBR(a.data)||a.data||''), (a.tipo||''), (a.bbch||''), t.id, r, (t.produto||''), v, val]);
         }
       });
     });
@@ -7389,7 +7429,7 @@ function _pranchaPayload(qid, sid, variavel){
   var _vc=_avCfg(avRef,variavel);
   var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas 0–'+_vc.escalaMax)):'';
   /* cultura: o estudo manda, a quadra é o padrão */
-  var _cultura=((s.cultura||'').trim() || q.cultura || '');
+  var _cultura=studyCultura(s,q);
 
   return {
     estudo:{
@@ -7422,8 +7462,8 @@ function _pranchaPayload(qid, sid, variavel){
       /* Identificação: o ESTUDO manda, a QUADRA é o padrão. A quadra já sabe
          cultivar e plantio; o estudo pode discordar (mesma quadra, outro
          ensaio) ou completar o que a quadra não tem. */
-      variedade:((s.variedade||'').trim() || q.cultivar || ''),
-      plantio:((s.plantio||'').trim() || q.plantio || ''),
+      variedade:studyVariedade(s,q),
+      plantio:studyPlantio(s,q),
       refDAA:base.fonte,
       pt:{ titulo:titulo, local:(loc.nome||''), cultura:_cultura, safra:'', escala:escalaTxt },
       en:{ titulo:titulo, local:(loc.nome||''), cultura:_cultura, safra:'', escala:escalaTxt }
@@ -7480,17 +7520,14 @@ function openPranchaEstudo(qid, sid, variavel){
   try{ p=_pranchaPayload(qid, sid, variavel); }
   catch(e){ alert('Não consegui montar a prancha: '+e.message); return; }
   if(p && p.erro){ alert(p.erro); return; }
-  /* Se a conta do próprio usuário é a responsável e ainda não tem nome, pede
-     uma vez e remonta a folha. Assim o documento nunca troca silenciosamente o
-     nome da pessoa pelo e-mail. Conta de OUTRA pessoa sem nome não é atribuída a
-     quem abriu: fica não identificada até o cadastro correto ser preenchido. */
+  /* Abrir um gráfico é leitura, não assinatura: nunca interromper a prancha com
+     um prompt inesperado. Se faltar nome, a folha continua honesta (não usa o
+     e-mail como pessoa) e orienta onde cadastrar. A rubrica/finalização ainda
+     exige a identificação no momento do ato. */
   if(p&&p.bpl&&p.bpl.autor==='Não identificado'){
     var atualEmail=''; try{ atualEmail=String((typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'').toLowerCase(); }catch(e){}
     if(!p.bpl.autorEmail || (atualEmail&&String(p.bpl.autorEmail).toLowerCase()===atualEmail)){
-      var nome=_nomeParaAssinatura();
-      if(nome&&nome!=='Não identificado'){
-        try{ p=_pranchaPayload(qid,sid,variavel); }catch(e){}
-      }
+      if(typeof _stxToast==='function') _stxToast('⚠ Responsável sem nome cadastrado. Use menu → Meu nome e assinatura.');
     }else if(typeof _stxToast==='function'){
       _stxToast('⚠ O responsável deste estudo ainda não tem nome cadastrado. O e-mail ficará apenas como ID técnico.');
     }
@@ -7647,7 +7684,7 @@ function _bioestatJobAoa(qid,study,av,v){
   (study.tratamentos||[]).forEach(function(t){ for(var r=1;r<=reps;r++){
     var raw=_avNota(av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v);
     if(raw==null||String(raw).trim()===''||isNaN(parseFloat(String(raw).replace(',','.'))))continue;
-    rows.push([loc.nome||'',quadraNome(qid),q.cultura||'',study.codigo||study.id,isoToBR(av.data)||av.data||'',av.tipo||v,av.bbch||'',t.id,r,t.produto||'',v,raw]);
+    rows.push([loc.nome||'',quadraNome(qid),studyCultura(study,q),study.codigo||study.id,isoToBR(av.data)||av.data||'',av.tipo||v,av.bbch||'',t.id,r,t.produto||'',v,raw]);
   }});
   return rows;
 }
@@ -8029,6 +8066,11 @@ function _impCriar(){
   s.codigo=f.codigo||s.codigo||'';
   s.descricao=f.objetivo||'';
   s.dataInicio=_impDateISO(f.dataInicio)||'';
+  /* O protocolo descreve o estudo, não apenas a quadra. Guardar este retrato
+     evita que uma troca posterior de cultura na área reescreva o histórico. */
+  s.cultura=f.cultura||s.cultura||'';
+  s.variedade=f.cultivar||s.variedade||'';
+  s.plantio=_impDateISO(f.plantio)||s.plantio||'';
   var nr=parseInt(f.numRepeticoes); if(nr>0) s.numRepeticoes=nr;
   s.delineamento=f.delineamento||'DBC';
   if(f.alvo) s.alvo=f.alvo;
@@ -8080,7 +8122,8 @@ function openStudyDetail(qid,sid){
   if(!study)return;
   study=normalizeStudy(study);
 
-  var bbchList=getBBCHList(q.cultura);
+  var studyCrop=studyCultura(study,q), studyVar=studyVariedade(study,q);
+  var bbchList=getBBCHList(studyCrop);
   var ne=nextEventV2(study);
 
   /* Estudo finalizado é somente-leitura: o que escreve some da tela, e o que
@@ -8095,9 +8138,8 @@ function openStudyDetail(qid,sid){
 
   var h="";
   if(_fin){
-    h+='<div style="margin:0 0 10px;padding:9px 12px;border-radius:10px;background:#102218;border:1px solid #245a36;color:#9fe0b6;font-size:12px;line-height:1.5">'+
-       '🔒 <b>Estudo finalizado</b> em '+esc(_finEm)+(_finQuem?(' por '+esc(_finQuem)):'')+
-       '. Somente leitura — a estatística está congelada. Para editar, use <b>Reabrir estudo</b> lá embaixo.</div>';
+    h+='<div class="study-finalized-banner"><span aria-hidden="true">🔒</span><div><b>Estudo finalizado</b><small>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+
+       '</small><span>Somente leitura — a estatística está congelada. Para editar, use <b>Reabrir estudo</b> lá embaixo.</span></div></div>';
   }
   h+='<div class="sd-header">';
   /* quadraNome, não o qid: o id interno carrega o sufixo anti-colisão (~a3f2) que
@@ -8115,7 +8157,7 @@ function openStudyDetail(qid,sid){
   if(!_fin){
     h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
     if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
-    h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">EDITAR</button>';
+    h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">Editar</button>';
   }
   h+='</div>';
   h+='</div>';
@@ -8125,7 +8167,7 @@ function openStudyDetail(qid,sid){
   /* Laboratório não tem planta plantada: mostra a especialidade no lugar da cultura. */
   h+= isQuadraLab(qid)
     ? '<div class="sd-meta-item"><span class="sd-meta-lbl">Laboratório</span><span>'+esc(quadraLabTipo(qid)||"—")+'</span></div>'
-    : '<div class="sd-meta-item"><span class="sd-meta-lbl">Cultura</span><span>'+esc(q.cultura||"—")+(q.cultivar?" · "+esc(q.cultivar):"")+'</span></div>';
+    : '<div class="sd-meta-item"><span class="sd-meta-lbl">Cultura do estudo</span><span>'+esc(studyCrop||"—")+(studyVar?" · "+esc(studyVar):"")+'</span></div>';
   if(study.dataInicio){
     h+='<div class="sd-meta-item"><span class="sd-meta-lbl">1ª aplicação</span><span>'+esc(isoToBR(study.dataInicio))+'</span></div>';
   }
@@ -8157,7 +8199,7 @@ function openStudyDetail(qid,sid){
   }
   if(study.protocoloOrigem){
     var pm=study.protocolo||{};
-    h+='<div class="sd-section"><div class="sd-section-title">Protocolo de origem</div><div style="padding:10px 12px;border:1px solid #dce5df;background:#fbfdfb;border-radius:9px;font-size:11px;color:#53635a;line-height:1.55"><b style="color:#26352c">'+esc(study.protocoloOrigem.nome||'Planilha importada')+'</b>'+
+    h+='<div class="sd-section"><div class="sd-section-title">Protocolo de origem</div><div class="study-protocol-origin"><b>'+esc(study.protocoloOrigem.nome||'Planilha importada')+'</b>'+
       (pm.cultura?' · Cultura: '+esc(pm.cultura):'')+(pm.cultivar?' · '+esc(pm.cultivar):'')+(pm.alvo?' · Alvo: '+esc(pm.alvo):'')+
       '<br>Os campos reconhecidos foram incorporados ao estudo; a planilha completa pode ser baixada novamente pelo botão <b>Planilha</b>.</div></div>';
   }
@@ -8168,16 +8210,16 @@ function openStudyDetail(qid,sid){
     var lbl=ne.diff===0?"HOJE":(ne.diff<0?"ATRASADO "+Math.abs(ne.diff)+"d":"em "+ne.diff+"d");
     var tipo=ne.ev.type==='apl'?("Aplicação "+ne.ev.idx+"/"+ne.ev.total):("Avaliação"+(ne.ev.tipo?" — "+ne.ev.tipo:""));
     h+='<div class="sd-next '+cls+'">';
-    h+='<div class="sd-next-lbl">PRÓXIMO</div>';
+    h+='<div class="sd-next-lbl">Próxima atividade</div>';
     h+='<div class="sd-next-evt">'+esc(tipo)+'</div>';
     h+='<div class="sd-next-date">'+fD(ne.ev.date)+' · <strong>'+lbl+'</strong></div>';
     h+='</div>';
   }
 
   /* Tratamentos */
-  h+='<div class="sd-section"><div class="sd-section-title">Tratamentos & Protocolo</div>';
+  h+='<div class="sd-section"><div class="sd-section-title">Tratamentos e protocolo</div>';
   if(study.tratamentos.length===0){
-    h+='<div class="sd-empty">Nenhum tratamento cadastrado. Toque em EDITAR para adicionar.</div>';
+    h+='<div class="sd-empty">Nenhum tratamento cadastrado. Toque em <b>Editar</b> para adicionar.</div>';
   }else{
     h+='<div class="trat-table">';
     h+='<div class="trat-head"><span>#</span><span>Produto</span><span>Dose</span><span>V. Calda</span></div>';
@@ -8215,7 +8257,7 @@ function openStudyDetail(qid,sid){
       h+='<div class="evento-head"><span class="evento-tipo apl">APL '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+'</span>';
       h+='<button class="evento-del" onclick="removeAplicacao(\''+a.id+'\')" title="Excluir aplicação" aria-label="Excluir aplicação APL '+(i+1)+'">×</button></div>';
       if(a.bbch){
-        var info=getBBCHInfo(q.cultura,a.bbch);
+        var info=getBBCHInfo(studyCrop,a.bbch);
         h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(info?' · '+esc(info.fase):'')+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
@@ -8245,7 +8287,7 @@ function openStudyDetail(qid,sid){
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
-        var infoE=getBBCHInfo(q.cultura,a.bbch);
+        var infoE=getBBCHInfo(studyCrop,a.bbch);
         h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(infoE?' · '+esc(infoE.fase):'')+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
@@ -8273,17 +8315,21 @@ function openStudyDetail(qid,sid){
   h+='<div class="sd-section" style="margin-top:14px">';
   if(_fin){
     h+='<div class="sd-section-title">Finalização</div>'+
-       '<div style="padding:11px 13px;border:1px solid #245a36;background:#0f2016;border-radius:10px;font-size:12px;line-height:1.6;color:#9fe0b6">'+
-       '<b>🔒 Estudo finalizado</b> em '+esc(_finEm)+(_finQuem?(' por '+esc(_finQuem)):'')+'.<br>'+
-       esc(String(_finN))+' resultado(s) de estatística congelados — o relatório usa este retrato, não um recálculo.'+
-       (_finFuso?('<br><span style="opacity:.75">Fuso do carimbo: '+esc(_finFuso)+'</span>'):'')+
+       '<div class="study-finalized-card">'+
+       '<b>🔒 Estudo finalizado</b><span>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+'</span>'+
+       '<p>'+esc(String(_finN))+' resultado(s) de estatística congelados — o relatório usa este retrato, não um recálculo.</p>'+
+       (_finFuso?('<small>Fuso do carimbo: '+esc(_finFuso)+'</small>'):'')+
        (study.finalizacao.rubrica?('<div style="margin-top:8px"><img src="'+esc(study.finalizacao.rubrica)+'" alt="Rubrica de quem finalizou" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>'):'')+
        '</div>'+
        '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">🔓 Reabrir estudo</button>';
   }else{
+    var _closeReview=_studyFinalizationReview(qid,study);
     h+='<div class="sd-section-title">Finalização</div>'+
-       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin-bottom:8px">Fecha o estudo: pede senha e rubrica, carimba data e hora, e <b>congela a estatística</b> — hoje ela é recalculada no aparelho toda vez que a folha abre. Depois de finalizado o estudo fica somente-leitura e sai da agenda.</div>'+
-       '<button class="btn-sm" onclick="finalizarEstudo(\''+qid+'\',\''+sid+'\')">✅ Finalizar estudo</button>';
+       '<div class="study-close-check '+(_closeReview.ok?'ready':'attention')+'"><b>'+(_closeReview.ok?'Pronto para finalizar':'Revise antes de finalizar')+'</b>'+
+       (_closeReview.ok?'<span>Aplicações, avaliações e notas estão completas.</span>':'<ul>'+_closeReview.issues.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>')+
+       (_closeReview.notes.length?'<small>'+esc(_closeReview.notes.join(' · '))+'</small>':'')+'</div>'+
+       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin:9px 0 8px">Finalizar pede senha e rubrica, carimba data e hora e <b>congela a estatística</b>. O estudo passa a somente-leitura e sai da agenda.</div>'+
+       '<button class="btn-sm" onclick="finalizarEstudo(\''+qid+'\',\''+sid+'\')">Finalizar estudo</button>';
   }
   h+='</div>';
 
@@ -8489,7 +8535,7 @@ function _seWizardActions(){
   var h='<div class="se-actions se-wizard-actions">';
   h+='<button type="button" class="btn-cancel" onclick="'+(first?'closeStudyEditV2()':'_seStudyGo('+(studyEditStep-1)+')')+'">'+(first?'Cancelar':'Voltar')+'</button>';
   h+='<span class="se-wizard-position">Etapa '+studyEditStep+' de '+STUDY_EDIT_STEPS.length+'</span>';
-  h+=last?'<button class="btn-save" onclick="saveStudyV2()">SALVAR ESTUDO</button>':'<button type="button" class="btn-save" onclick="_seStudyGo('+(studyEditStep+1)+')">Continuar</button>';
+  h+=last?'<button class="btn-save" onclick="saveStudyV2()">Salvar estudo</button>':'<button type="button" class="btn-save" onclick="_seStudyGo('+(studyEditStep+1)+')">Continuar</button>';
   return h+'</div>';
 }
 function _seWizardSummary(s){
@@ -8507,6 +8553,10 @@ function openStudyEditV2(qid,sid){
     workingStudy=JSON.parse(JSON.stringify(normalizeStudy(existing)));
   }else{
     workingStudy=newStudy();
+    var _qNew=data[qid]||{};
+    workingStudy.cultura=_qNew.cultura||'';
+    workingStudy.variedade=_qNew.cultivar||'';
+    workingStudy.plantio=_qNew.plantio||'';
     curSid=workingStudy.id;
   }
   studyEditStep=1;
@@ -8517,6 +8567,13 @@ function openStudyEditV2(qid,sid){
 function openNewStudy(qid){
   curV=qid;
   workingStudy=newStudy();
+  /* O estudo nasce com uma fotografia do contexto da quadra. Além de deixar o
+     formulário explícito, isto impede uma futura troca de cultura da quadra de
+     reescrever silenciosamente o cabeçalho de um estudo antigo. */
+  var _qNew=data[qid]||{};
+  workingStudy.cultura=_qNew.cultura||'';
+  workingStudy.variedade=_qNew.cultivar||'';
+  workingStudy.plantio=_qNew.plantio||'';
   curSid=workingStudy.id;
   studyEditStep=1;
   renderStudyEditModal();
@@ -8744,6 +8801,9 @@ function applyStudyProtocol(parsed){
   if(m.codigo)workingStudy.codigo=String(m.codigo);
   if(m.objetivo)workingStudy.descricao=String(m.objetivo);
   if(m.inicio)workingStudy.dataInicio=m.inicio;
+  if(m.cultura)workingStudy.cultura=String(m.cultura);
+  if(m.cultivar)workingStudy.variedade=String(m.cultivar);
+  if(m.plantio)workingStudy.plantio=_impDateISO(m.plantio)||String(m.plantio);
   workingStudy.numAplicacoes=parsed.numAplicacoes||workingStudy.numAplicacoes||1;
   workingStudy.intervaloDias=parsed.intervaloDias!=null?parsed.intervaloDias:workingStudy.intervaloDias;
   workingStudy.numRepeticoes=parsed.numRepeticoes||workingStudy.numRepeticoes||4;
@@ -8788,7 +8848,7 @@ function _seTrocaContagem(){
 function renderStudyEditModal(){
   var s=workingStudy;
   var q=data[curV]||{};
-  var bbchList=getBBCHList(q.cultura);
+  var bbchList=getBBCHList(studyCultura(s,q));
 
   var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()">×</button></div>';
 
@@ -8805,7 +8865,7 @@ function renderStudyEditModal(){
     h+='<div class="se-nema-nota">Só o número do estudo é obrigatório aqui.<br>'+
        'As amostras — <b>solo ou raiz</b> e o <b>dia em DAA</b> — você registra na '+
        '<b>fila de amostras</b>, na tela do laboratório, conforme forem chegando.</div>';
-    h+='<div class="se-actions"><button class="btn-save" onclick="saveStudyV2()">SALVAR</button><button class="btn-cancel" onclick="closeStudyEditV2()">Cancelar</button></div>';
+    h+='<div class="se-actions"><button class="btn-save" onclick="saveStudyV2()">Salvar</button><button class="btn-cancel" onclick="closeStudyEditV2()">Cancelar</button></div>';
     document.getElementById("sePnl").innerHTML=h;
     return;
   }
@@ -9194,6 +9254,9 @@ function saveStudyV2(){
     if(old.codigo !== s.codigo) changes.push('Código: "' + old.codigo + '" -> "' + s.codigo + '"');
     if(old.descricao !== s.descricao) changes.push('Descrição alterada');
     if((old.tipoEstudo||'') !== s.tipoEstudo) changes.push('Tipo de estudo: "' + (old.tipoEstudo||'—') + '" -> "' + (s.tipoEstudo||'—') + '"');
+    if((old.cultura||'') !== s.cultura) changes.push('Cultura do estudo: "' + (old.cultura||'herdada da quadra') + '" -> "' + (s.cultura||'herdada da quadra') + '"');
+    if((old.variedade||'') !== s.variedade) changes.push('Variedade do estudo: "' + (old.variedade||'herdada da quadra') + '" -> "' + (s.variedade||'herdada da quadra') + '"');
+    if((old.plantio||'') !== s.plantio) changes.push('Plantio do estudo: "' + (old.plantio||'herdado da quadra') + '" -> "' + (s.plantio||'herdado da quadra') + '"');
     if(old.dataInicio !== s.dataInicio) changes.push('Início: ' + old.dataInicio + ' -> ' + s.dataInicio);
     if(old.numAplicacoes !== s.numAplicacoes) changes.push('Nº Apls: ' + old.numAplicacoes + ' -> ' + s.numAplicacoes);
     if(old.intervaloDias !== s.intervaloDias) changes.push('Intervalo: ' + old.intervaloDias + ' -> ' + s.intervaloDias);
@@ -9316,7 +9379,7 @@ function openStudyEditAplicacao(aid){
     ap=study.aplicacoes.find(function(a){return a.id===aid});
   }
   if(!ap)return;
-  var bbchList=getBBCHList(q.cultura);
+  var bbchList=getBBCHList(studyCultura(study,q));
 
   var h='<div class="se-head"><h3>Aplicação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
   /* Data E hora. Sem a hora, uma aplicação de ontem só podia receber a MÉDIA do
@@ -9343,7 +9406,7 @@ function openStudyEditAplicacao(aid){
     '<div style="display:flex;gap:8px;margin-bottom:7px"><button type="button" id="aplIniBtn" class="btn-sm" style="flex:1" onclick="aplMarcarClima(\'inicio\')">▶ Iniciar</button><button type="button" id="aplFimBtn" class="btn-sm" style="flex:1" onclick="aplMarcarClima(\'fim\')">⏹ Terminar</button></div>'+
     '<div id="aplClimaBox" style="font-size:12px;line-height:1.7;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;padding:8px 10px"></div></div>';
   h+='<div class="se-field"><label>Observações</label><textarea id="aeObs" rows="4" placeholder="Condições climáticas, produtos, ocorrências...">'+esc(ap.obs||"")+'</textarea></div>';
-  h+='<div class="se-actions"><button class="btn-save" onclick="saveAplicacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
+  h+='<div class="se-actions"><button class="btn-save" onclick="saveAplicacao()">Salvar aplicação</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
 
   document.getElementById("eePnl").innerHTML=h;
   _aplRenderClimaBox();
@@ -10850,7 +10913,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   };
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
-  var bbchList=getBBCHList(q.cultura);
+  var bbchList=getBBCHList(studyCultura(study,q));
 
   var signed=!!(av.carimbo && av.carimbo.rubrica);
   var reopened=!!(_avReopen && _avReopen.avid===av.id);
@@ -10913,7 +10976,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   h+='<div class="se-field"><label>Observações / Resultados</label><textarea id="vObs" rows="4" placeholder="Dados coletados, notas de campo...">'+esc(av.obs||"")+'</textarea></div>';
   h+='</fieldset>';
   if(locked){ h+='<div class="se-actions"><button class="btn-save" onclick="reabrirAvaliacao(\''+av.id+'\')">🔓 Reabrir para editar</button><button class="btn-cancel" onclick="closeEventEdit()">Fechar</button></div>'; }
-  else { h+='<div class="se-actions"><button class="btn-save" onclick="saveAvaliacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>'; }
+  else { h+='<div class="se-actions"><button class="btn-save" onclick="saveAvaliacao()">Salvar avaliação</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>'; }
 
   document.getElementById("eePnl").innerHTML=h;
   renderAvGrid();
@@ -10962,6 +11025,35 @@ function _statSnapshot(s){
   });
   return out;
 }
+/* Checklist de fechamento. Não inventa um segundo status: lê o próprio estudo e
+   explica, antes da senha/rubrica, o que ainda está incompleto. A pessoa pode
+   fechar um ensaio excepcional, mas nunca sem enxergar a pendência que entrará
+   no dossiê. */
+function _studyFinalizationReview(qid,s){
+  s=normalizeStudy(s); var q=data[qid]||{}, issues=[], notes=[];
+  var crop=studyCultura(s,q), test=''; try{test=studyTestemunha(s);}catch(e){}
+  if(!crop && !isQuadraLab(qid)) issues.push('Cultura não informada');
+  if((s.tratamentos||[]).length<2) issues.push('Menos de 2 tratamentos');
+  if(!test) issues.push('Testemunha de referência não definida');
+  var nap=Math.max(1,parseInt(s.numAplicacoes)||1), apl=(s.aplicacoes||[]).length;
+  if(apl<nap) issues.push((nap-apl)+' aplicação(ões) ainda não registrada(s)');
+  var avs=s.avaliacoes||[], feitas=avs.filter(_avTemNota).length;
+  if(!avs.length) issues.push('Nenhuma avaliação cadastrada');
+  else if(feitas<avs.length) issues.push((avs.length-feitas)+' avaliação(ões) sem lançamento');
+  var missing=0;
+  avs.forEach(function(av){
+    var rows=_avRowsForStudy(s,false); (av.variaveis||[]).forEach(function(v){
+      rows.forEach(function(r){var x=_avNota(av,r,v);if(x==null||String(x).trim()==='')missing++;});
+    });
+  });
+  if(missing) issues.push(missing+' nota(s) de parcela em branco');
+  var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,s):[], cache=_bioAutoCache[qid+'|'+s.id], rr=cache&&cache.results||{};
+  if(feitas && !jobs.length) issues.push('Nenhuma comparação estatística válida');
+  else if(jobs.some(function(j){return !rr[j.jobKey];})) notes.push('Há análise estatística ainda em processamento');
+  if(jobs.some(function(j){return !rr[j.jobKey+'|F'];})) notes.push('Há triagem forense ainda em processamento');
+  try{ if(!_currentUserName()) notes.push('O nome do responsável será solicitado na assinatura'); }catch(e){}
+  return {issues:issues,notes:notes,ok:issues.length===0};
+}
 function finalizarEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s) return;
   s=normalizeStudy(s);
@@ -10969,9 +11061,12 @@ function finalizarEstudo(qid,sid){
   var nAv=(s.avaliacoes||[]).length;
   if(!nAv && !confirm('Este estudo não tem nenhuma avaliação registrada.\n\nFinalizar assim mesmo?')) return;
   var prev=_statSnapshot(s);
+  var review=_studyFinalizationReview(qid,s);
   var resumo='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
              (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+
-             '.\n\nDepois disso o estudo fica somente-leitura e sai da agenda.';
+             '.\n\n'+(review.issues.length?('PENDÊNCIAS ENCONTRADAS:\n• '+review.issues.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
+             (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
+             'Depois disso o estudo fica somente-leitura e sai da agenda.';
   requireDeletePassword(resumo, function(){
     openRubrica(function(url){
       if(!url){ alert('Sem a rubrica o estudo não é finalizado.'); return; }
@@ -11185,7 +11280,10 @@ function saveAvaliacao(){
   var bbchEl=document.getElementById("vBBCH");
   av.bbch=bbchEl?bbchEl.value:"";
   av.obs=document.getElementById("vObs").value.trim();
-  var autoInp=document.getElementById('avAutoInput'); if(autoInp) avAutoWrite(autoInp.value);
+  /* O input do modo automático já grava em _avGrid no evento `input`. Não o
+     reaplique aqui: a grade manual pode ter sido editada enquanto o cartão
+     automático continuou aberto com um valor antigo. Regravar esse valor no
+     clique de Salvar apagava silenciosamente a primeira parcela da grade. */
   _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
   av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
   
@@ -11501,13 +11599,13 @@ function _buildXlsx(soDoLocal){
     var q=data[qid]; if(!q||!Array.isArray(q.estudos)||!q.estudos.length) return;
     if(soDoLocal && ((QLOCAL&&QLOCAL[qid])||HOME_LOCAL)!==localAtivo) return;
     var locNome=_locNome(qid), aHa=quadraAreaHa(qid), dim=quadraDims(qid), ctr=quadraCenter(qid), qn=quadraNome(qid);
-    var plant=q.plantio||'', plantBR=isoToBR(plant)||'';
     q.estudos.forEach(function(s){
       s=normalizeStudy(s);
-      est.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(s.dataInicio)||'',s.numAplicacoes,s.intervaloDias,s.numRepeticoes,s.tratamentos.length,s.tratamentos.length*s.numRepeticoes,studyTestemunha(s),(s.avaliacoes||[]).length,aHa!=null?+aHa.toFixed(3):'',dim?Math.round(dim.comprimento):'',dim?Math.round(dim.largura):'',ctr?+ctr[0].toFixed(6):'',ctr?+ctr[1].toFixed(6):'']);
+      var sCrop=studyCultura(s,q), sVar=studyVariedade(s,q), plant=studyPlantio(s,q), plantBR=isoToBR(plant)||'';
+      est.push([locNome,qn,sCrop,sVar,plantBR,s.codigo||'',s.descricao||'',isoToBR(s.dataInicio)||'',s.numAplicacoes,s.intervaloDias,s.numRepeticoes,s.tratamentos.length,s.tratamentos.length*s.numRepeticoes,studyTestemunha(s),(s.avaliacoes||[]).length,aHa!=null?+aHa.toFixed(3):'',dim?Math.round(dim.comprimento):'',dim?Math.round(dim.largura):'',ctr?+ctr[0].toFixed(6):'',ctr?+ctr[1].toFixed(6):'']);
       var prod={},dose={},vol={}, _tst=studyTestemunha(s); s.tratamentos.forEach(function(t){ prod[t.id]=t.produto||''; dose[t.id]=t.dose||''; vol[t.id]=t.volume||''; trat.push([locNome,qn,s.codigo||'',t.id,t.produto||'',t.dose||'',t.volume||'',t.obs||'',(t.id===_tst?'sim':'')]); });
       s.aplicacoes.forEach(function(a){ var c=a.carimbo||{}, cl=c.clima||{};
-        apl.push([locNome,qn,q.cultura||'',s.codigo||'',isoToBR(a.data)||'',a.bbch||'',a.obs||'',c.data||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),(c.ndvi&&c.ndvi.ndvi!=null)?toNum(c.ndvi.ndvi):'']); });
+        apl.push([locNome,qn,sCrop,s.codigo||'',isoToBR(a.data)||'',a.bbch||'',a.obs||'',c.data||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),(c.ndvi&&c.ndvi.ndvi!=null)?toNum(c.ndvi.ndvi):'']); });
       s.avaliacoes.forEach(function(a){ var c=a.carimbo||{}, cl=c.clima||{}, vars=a.variaveis||[];
         var lat=(c.gps&&c.gps.lat!=null)?+c.gps.lat.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[0].toFixed(6):''), lng=(c.gps&&c.gps.lng!=null)?+c.gps.lng.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[1].toFixed(6):'');
         var ndvi=(c.ndvi&&c.ndvi.ndvi!=null)?c.ndvi.ndvi:'', ndre=(c.ndvi&&c.ndvi.ndre!=null)?c.ndvi.ndre:'', dapv=dap(plant,a.data);
@@ -11518,10 +11616,10 @@ function _buildXlsx(soDoLocal){
               /* BPL: o derivado vai em Valor e o BRUTO sai junto — sub-amostras e n/N */
               var _subs=(_cf.tipo!=='razao'&&_cel&&_cel.sub)?_cel.sub.filter(function(x){return x!=null&&String(x).trim()!=='';}).join('; '):'';
               var _n=(_cf.tipo==='razao'&&_cel)?toNum(_cel.n):'', _N=(_cf.tipo==='razao'&&_cel)?toNum(_cel.N):'';
-              tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'',rw.campo||'',rw.tratId,rw.repDisplay||_repDisplay(rw.rep),prod[rw.tratId]||'',dose[rw.tratId]||'',vol[rw.tratId]||'',v,(_tv==='pct'?'numero/%':_tv),toNum(_avNota(a,rw,v)),_subs,_n,_N,a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]); });
+              tidy.push([locNome,qn,sCrop,sVar,plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'',rw.campo||'',rw.tratId,rw.repDisplay||_repDisplay(rw.rep),prod[rw.tratId]||'',dose[rw.tratId]||'',vol[rw.tratId]||'',v,(_tv==='pct'?'numero/%':_tv),toNum(_avNota(a,rw,v)),_subs,_n,_N,a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]); });
           });
         } else {
-          tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'','','','','','','','','','','','','',a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]);
+          tidy.push([locNome,qn,sCrop,sVar,plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'','','','','','','','','','','','','',a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]);
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
@@ -11767,7 +11865,7 @@ function renderTodayCard(e){
   h+=_btn;
   h+='</div>';
   h+='<div class="today-card-body" onclick="goToStudy(\''+e.qid+'\',\''+e.study.id+'\')">';
-  h+='<div class="today-card-quadra">'+esc(quadraNome(e.qid))+' · '+esc(q.cultura||"—")+'</div>';
+  h+='<div class="today-card-quadra">'+esc(quadraNome(e.qid))+' · '+esc(studyCultura(e.study,q)||"—")+'</div>';
   h+='<div class="today-card-estudo">'+esc(e.study.codigo||"(sem código)")+'</div>';
   h+='<div class="today-card-evt">'+esc(typeName)+'</div>';
   h+='</div>';
@@ -12047,7 +12145,7 @@ function renderStudiesPanel(){
     if(f==='pendentes' && !(x.state.key==='urgent'||x.state.key==='soon'||x.state.key==='go'))return false;
     if(f==='andamento' && !(x.progress.total&&x.progress.filled<x.progress.total&&!estudoFinalizado(x.study)))return false;
     if(f==='concluidos' && !(x.state.key==='done'||x.state.key==='final'))return false;
-    if(query){ var hay=[x.study.codigo,x.study.nome,x.localNome,x.qid,quadraNome(x.qid),x.q.cultura,x.q.cultivar].join(' ').toLowerCase(); if(hay.indexOf(query)<0)return false; }
+    if(query){ var hay=[x.study.codigo,x.study.nome,x.localNome,x.qid,quadraNome(x.qid),studyCultura(x.study,x.q),studyVariedade(x.study,x.q)].join(' ').toLowerCase(); if(hay.indexOf(query)<0)return false; }
     return true;
   }).sort(function(a,b){
     var pa={urgent:0,soon:1,go:2,done:3,final:4}[a.state.key], pb={urgent:0,soon:1,go:2,done:3,final:4}[b.state.key];
@@ -12068,14 +12166,18 @@ function renderStudiesPanel(){
   h+='<div class="studies-dashboard-summary">'+summary('todos','',all.length,'estudos')+summary('acao','urgent',now,'pedem ação')+summary('andamento','',ongoing,'em lançamento')+summary('concluidos','done',complete,'concluídos')+'</div>';
   h+='<div class="studies-dashboard-tools">'+chip('todos','Todos')+chip('acao','Ação agora')+chip('pendentes','Pendentes')+chip('andamento','Em andamento')+chip('concluidos','Concluídos')+'<input id="studiesFilterSearch" class="study-filter-search" value="'+esc(_studiesPanelQuery)+'" oninput="setStudiesPanelQuery(this.value)" placeholder="Buscar código, estudo, localidade, cultura ou quadra"></div>';
   h+='<div class="studies-dashboard-list">';
-  if(!visible.length){ h+='<div class="studies-dashboard-empty">Nenhum estudo encontrado com este filtro.</div>'; }
+  if(!visible.length){
+    h+=!all.length
+      ? '<div class="studies-dashboard-empty studies-dashboard-empty-start"><span class="empty-mark">01</span><b>Comece pelo protocolo</b><small>Crie o primeiro estudo e o Agracta monta o delineamento, a calculadora, a agenda e a trilha operacional.</small><button type="button" onclick="toggleStudiesNew()">Criar primeiro estudo</button></div>'
+      : '<div class="studies-dashboard-empty"><b>Nenhum estudo neste filtro</b><small>Tente outro status ou limpe a busca.</small></div>';
+  }
   else visible.forEach(function(x){
-    var st=x.study,p=x.progress,state=x.state,code=st.codigo||st.nome||'(sem código)', name=(st.nome&&st.nome!==code)?st.nome:(st.descricao||'Sem descrição');
+    var st=x.study,p=x.progress,state=x.state,code=st.codigo||st.nome||'(sem código)', name=(st.nome&&st.nome!==code)?st.nome:(st.descricao||'Sem descrição'), crop=studyCultura(st,x.q), variety=studyVariedade(st,x.q);
     h+='<button type="button" class="study-dashboard-card" onclick="openStudyFromPanel(\''+_avCroquiEscJs(x.qid)+'\',\''+_avCroquiEscJs(st.id)+'\')">'+
       '<div class="study-dashboard-top"><span class="study-dashboard-code">'+esc(code)+'</span><span class="study-dashboard-status '+state.key+'">'+esc(state.label)+'</span></div>'+
       '<div class="study-dashboard-name">'+esc(name)+'</div>'+
       '<div class="study-dashboard-where"><b>'+esc(x.localNome)+'</b> · '+esc(quadraNome(x.qid))+'</div>'+
-      '<div class="study-dashboard-crop">'+esc(x.q.cultura||((typeof isQuadraLab==='function'&&isQuadraLab(x.qid))?(quadraLabTipo(x.qid)||'Laboratório'):'Sem cultura'))+(x.q.cultivar?' · '+esc(x.q.cultivar):'')+'</div>'+
+      '<div class="study-dashboard-crop">'+esc(crop||((typeof isQuadraLab==='function'&&isQuadraLab(x.qid))?(quadraLabTipo(x.qid)||'Laboratório'):'Sem cultura'))+(variety?' · '+esc(variety):'')+'</div>'+
       '<div class="study-dashboard-progress"><i style="width:'+p.pct+'%"></i></div><div class="study-dashboard-meta"><span>'+p.filled+' / '+p.total+' lançamentos</span><span>'+p.pct+'%</span></div>'+
       '<div class="study-dashboard-next"><b>Próximo:</b> '+esc(_studyPanelNext(state))+'</div></button>';
   });
