@@ -3084,8 +3084,9 @@ function gpsBest(opts, onUpd, onEnd){
   void maxAcc;
 }
 /* Localização automática ao abrir: depois que o Local ativo serve como reserva,
-   o GPS assume o centro do mapa. A permissão é decisão do aparelho; se estiver
-   negada ou sem sinal, o app continua no Local sem abrir um alerta intrusivo. */
+   o GPS assume o centro do mapa. É uma navegação silenciosa: não deixa marcador
+   nem círculo de precisão permanente sobre as quadras. A permissão é decisão do
+   aparelho; se estiver negada ou sem sinal, o app continua no Local sem alerta. */
 function autoLocateOnOpen(){
   if(_gpsAutoStarted||!navigator.geolocation) return;
   _gpsAutoStarted=true;
@@ -3096,22 +3097,24 @@ function locateMe(opts){
   var automatic=!!opts.automatic;
   if(!navigator.geolocation){ if(!automatic) alert('GPS não disponível neste navegador.'); return; }
   if(!_map) initMap();
+  /* O botão GPS significa "ir para minha posição", não criar mais uma camada.
+     Marcadores continuam existindo somente nos fluxos que precisam deles
+     (navegação até uma quadra e registro de observação). */
+  if(_gpsMarker){ try{ _map.removeLayer(_gpsMarker); }catch(e){} _gpsMarker=null; }
+  if(_gpsCircle){ try{ _map.removeLayer(_gpsCircle); }catch(e){} _gpsCircle=null; }
   var centered=false;
-  function draw(b, fim){
+  function center(b, fim){
     var ll=[b.lat,b.lng];
-    if(_gpsMarker) _map.removeLayer(_gpsMarker);
-    _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400}).addTo(_map);
-    if(_gpsCircle) _map.removeLayer(_gpsCircle);
-    _gpsCircle=LF.circle(ll,{radius:Math.max(b.acc,1),color:'#2196f3',weight:1,fillColor:'#2196f3',fillOpacity:.12,interactive:false}).addTo(_map);
-    _gpsMarker.bindPopup('Você está aqui · ±'+Math.round(b.acc)+' m'+(fim?'':' · afinando…'));
-    if(!automatic) _gpsMarker.openPopup();
-    if(!centered){ centered=true; try{ _map.setView(ll, Math.max(_map.getZoom()||16,17)); }catch(e){} }
+    /* A primeira leitura abre logo no lugar; a leitura final reposiciona uma
+       única vez caso o aparelho tenha refinado bastante a coordenada. */
+    if(!centered || fim){ centered=true; try{ _map.setView(ll, Math.max(_map.getZoom()||16,17)); }catch(e){} }
+    if(fim && !automatic && typeof _stxToast==='function') _stxToast('Mapa centralizado no seu GPS · precisão ±'+Math.round(b.acc)+' m');
     if(fim && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
   }
-  gpsBest({target:8, maxWait:9000, maxAcc:80}, function(b){ draw(b,false); }, function(b,err){
+  gpsBest({target:8, maxWait:9000, maxAcc:80}, function(b){ center(b,false); }, function(b,err){
     /* a mensagem agora vem pronta do gpsBest, dizendo a causa real */
     if(!b){ if(!automatic) alert('Não consegui o GPS.\n\n'+(err||'Sem posição disponível.')); return; }
-    draw(b,true);
+    center(b,true);
   });
 }
 /* ===================== NAVEGAÇÃO GPS ATÉ UM PONTO (quadra / estudo / pin) ===================== */
