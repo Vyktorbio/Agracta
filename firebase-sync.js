@@ -226,14 +226,42 @@
 
   function onFirebaseUser(user){
     FB.user=user;
-    window._authUser=user?{id:user.uid,uid:user.uid,email:user.email||'',email_verified:!!user.emailVerified}:null;
+    window._authUser=user?{
+      id:user.uid,uid:user.uid,email:user.email||'',email_verified:!!user.emailVerified,
+      displayName:user.displayName||'',name:user.displayName||''
+    }:null;
     if(user){
       try{localStorage.setItem('agracta-trusted-device','1');}catch(e){}
       try{hideAuthGate();}catch(e){}
       if(!window._appStarted)window._appStarted=true;
+      /* Carrega o nome administrado no roster mesmo para usuários que nunca
+         abriram o Painel Admin. Assim a primeira avaliação da sessão já é
+         atribuída à pessoa, não ao e-mail. */
+      try{
+        var email=String(user.email||'').toLowerCase().trim();
+        if(email&&FB.db) FB.db.doc(ROOT).collection('members').doc(email).get().then(function(doc){
+          if(!doc||!doc.exists)return;
+          var m=doc.data()||{}, nome=String(m.nome||'').trim();
+          if(nome&&window._authUser){window._authUser.displayName=nome;window._authUser.name=nome;}
+          var arr=window._perfisCache||[];
+          var p=arr.find(function(x){return x&&x.email&&String(x.email).toLowerCase().trim()===email;});
+          if(p){p.nome=nome||p.nome;p.active=m.active!==false;}
+          else arr.push({email:email,nome:nome,active:m.active!==false});
+          window._perfisCache=arr;
+        }).catch(function(){});
+      }catch(e){}
       cloudStart();
     }
   }
+
+  window._saveOwnDisplayName=function(nome){
+    nome=String(nome||'').trim();
+    if(!nome||!FB.user||typeof FB.user.updateProfile!=='function')return Promise.resolve(false);
+    return FB.user.updateProfile({displayName:nome}).then(function(){
+      if(window._authUser){window._authUser.displayName=nome;window._authUser.name=nome;}
+      return true;
+    }).catch(function(){return false;});
+  };
   window.authInit=function(){
     if(!firebaseInit()){startLocal('— Firebase ainda não configurado');return;}
     buildAuthGate();
@@ -494,7 +522,9 @@
     if(!batches.length)batches.push(FB.db.batch());
     batches[batches.length-1].set(FB.db.doc(ROOT),{
       rev:newRev,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy:FB.user.email||'',schema:1
+      updatedBy:FB.user.email||'',
+      updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
+      schema:1
     },{merge:true});
     FB.pendingWrites=ops.length;
     cloudBadge('saving',ops.length?('· '+ops.length+' alterações'):'');

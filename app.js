@@ -298,7 +298,13 @@ function ensureConfig(){
   if(typeof data.__config.adminEmail !== 'string' || data.__config.adminEmail === '' || data.__config.adminEmail === 'admin@agracta.com') {
     data.__config.adminEmail = 'machadovictorchaves@gmail.com';
   }
-  /* o nome com que a pessoa assina a trilha BPL; vazio = ainda não declarado */
+  /* Nome de assinatura POR identidade. `meuNome` era um único valor sincronizado
+     para todo o workspace: bastava um técnico defini-lo para outro usuário passar
+     a assinar com o nome errado. Ele fica apenas como campo legado para migração
+     controlada do administrador; toda gravação nova usa nomesPorEmail. */
+  if(!data.__config.nomesPorEmail || typeof data.__config.nomesPorEmail !== 'object' || Array.isArray(data.__config.nomesPorEmail)) {
+    data.__config.nomesPorEmail = {};
+  }
   if(typeof data.__config.meuNome !== 'string') data.__config.meuNome = '';
 }
 
@@ -1482,7 +1488,7 @@ function installApp(){
   if(isiOS()){ alert('📲 Instalar no iPhone:\n\n1) Abra este site no SAFARI (não dentro do WhatsApp/Instagram)\n2) Toque em Compartilhar (o quadrado com a seta ↑, na barra de baixo)\n3) Role e toque em "Adicionar à Tela de Início"\n4) Toque em "Adicionar"\n\nPronto: vira um ícone na sua tela.'); return; }
   alert('📲 Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
 }
-/* Forçar atualização: limpa service worker + caches (preserva o Pyodide) e recarrega na versão nova.
+/* Atualização: limpa service worker + caches (preserva o Pyodide) e recarrega na versão nova.
    Resolve o PWA preso numa versão velha sem precisar desinstalar. Os dados ficam salvos (localStorage/Firestore). */
 function forcarAtualizacao(){
   if(typeof closeMainMenu==='function') closeMainMenu();
@@ -1519,15 +1525,11 @@ function toggleMainMenu(){
   var adm=isAdmin();
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
-    '<button onclick="forcarAtualizacao()">🔄 Forçar atualização</button>'+
+    '<button onclick="forcarAtualizacao()">🔄 Atualizar</button>'+
     '<button onclick="toggleTheme()">'+(document.documentElement.classList.contains('light')?'◑ Tema escuro':'◐ Tema claro')+'</button>'+
     '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
-    (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
     '<div class="mm-sep"></div>'+
-    '<button onclick="closeMainMenu();openImportProtocolo()">📥 Importar protocolo (planilha)</button>'+
-    '<div class="mm-sep"></div>'+
-    (adm?'<button onclick="closeMainMenu();exportXlsx(false)">'+ic('sheet')+' Exportar planilha (Excel/Sheets)</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();exportData()">'+ic('save')+' Backup (arquivo)</button>'+
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
@@ -2553,7 +2555,7 @@ function _obProcess(db, ops){
 /* monta as linhas (revertendo o mapeamento da migração) */
 function _rowQuadra(qid){ var d=(typeof data!=='undefined'&&data[qid])||{}; var ex={}; for(var k in d){ if(k!=='estudos'&&k!=='culturas'&&k!=='_deletedStudies') ex[k]=d[k]; } return { id:qid, local_id:((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis'), nome:((typeof QNOME!=='undefined'&&QNOME[qid])||qid), geo:((typeof QGEO!=='undefined'&&QGEO[qid])||null), area_ha:(d.area!=null&&d.area!==''?Number(d.area):null), culturas:(d.culturas||[]), extras:ex, client_ts:((typeof QGEO_TS!=='undefined'&&QGEO_TS[qid])||Date.now()) }; }
 function _rowLocal(lid){ var L=(typeof LOCAIS!=='undefined'&&LOCAIS[lid])||{}; return { id:lid, nome:(L.nome||lid), centro:(L.centro||null), zoom:(L.zoom!=null?Number(L.zoom):null), client_ts:((typeof LOCAIS_TS!=='undefined'&&LOCAIS_TS[lid])||Date.now()) }; }
-function _rowEstudo(qid, est){ var skip={aplicacoes:1,avaliacoes:1,tratamentos:1,randomizacao:1,auditLog:1,id:1,codigo:1,nome:1,descricao:1,dataInicio:1,numAplicacoes:1,intervaloDias:1,numRepeticoes:1,_deletedStudies:1}; var ex={}; for(var k in est){ if(!skip[k]) ex[k]=est[k]; } return { id:est.id, quadra_id:qid, codigo:est.codigo||null, nome:est.nome||null, descricao:est.descricao||null, data_inicio:_f4date(est.dataInicio), num_aplicacoes:_f4int(est.numAplicacoes), intervalo_dias:_f4int(est.intervaloDias), num_repeticoes:_f4int(est.numRepeticoes), tratamentos:est.tratamentos||[], randomizacao:est.randomizacao||null, audit:est.auditLog||[], extras:ex, client_ts:est._ts||Date.now() }; }
+function _rowEstudo(qid, est){ var skip={aplicacoes:1,avaliacoes:1,tratamentos:1,randomizacao:1,audit:1,auditLog:1,id:1,codigo:1,nome:1,descricao:1,dataInicio:1,numAplicacoes:1,intervaloDias:1,numRepeticoes:1,_deletedStudies:1}; var ex={}; for(var k in est){ if(!skip[k]) ex[k]=est[k]; } return { id:est.id, quadra_id:qid, codigo:est.codigo||null, nome:est.nome||null, descricao:est.descricao||null, data_inicio:_f4date(est.dataInicio), num_aplicacoes:_f4int(est.numAplicacoes), intervalo_dias:_f4int(est.intervaloDias), num_repeticoes:_f4int(est.numRepeticoes), tratamentos:est.tratamentos||[], randomizacao:est.randomizacao||null, audit:est.audit||est.auditLog||[], extras:ex, client_ts:est._ts||Date.now() }; }
 function _avTableId(sid, av){ return (av.id&&av.id.indexOf('auto_')===0)?(sid+':'+av.id):av.id; }
 function _rowAval(sid, av){ var skip={id:1,data:1,tipo:1,bbch:1,obs:1,auto:1,variaveis:1,tipos:1,carimbo:1,notas:1,notasMeta:1}; var ex={}; for(var k in av){ if(!skip[k]) ex[k]=av[k]; } return { id:_avTableId(sid,av), estudo_id:sid, data:_f4date(av.data), tipo:av.tipo||null, bbch:av.bbch||null, obs:av.obs||null, auto:!!av.auto, variaveis:av.variaveis||[], tipos:av.tipos||{}, carimbo:av.carimbo||null, extras:ex, client_ts:av._ts||Date.now() }; }
 /* hook do saveAvaliacao: enfileira a cadeia (local→quadra→estudo→avaliação→lançamentos) na ordem dos FKs */
@@ -4615,6 +4617,110 @@ function _bioestatResumo(qid,s,av,v){
   var p=(typeof _bioestatP==='function')?_bioestatP(rel):null;
   return { order:order, vals:vals, letras:letras, p:p, metodo:metodo, tipo:(rel.deteccao&&rel.deteccao.tipo_resposta)||'', transform:a.transformacao||'' };
 }
+/* Abas auditáveis do dossiê. A primeira planilha-modelo continua intacta; estas
+   duas folhas acrescentam a saída estruturada do MESMO resultado que aparece no
+   painel. Cada resumo leva também o JSON completo, para nenhum campo novo do
+   motor desaparecer silenciosamente de uma exportação futura. */
+function _bioestatExcelJson(v){
+  if(v==null)return '';
+  try{return JSON.stringify(v,function(k,x){
+    if(typeof x==='number'&&!isFinite(x))return String(x);
+    return x;
+  });}catch(e){return String(v);}
+}
+function _bioestatExportBase(qid,s,job){
+  var loc='',qn=qid;
+  try{loc=((LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]])||{}).nome||'';}catch(e){}
+  try{qn=quadraNome(qid)||qid;}catch(e){}
+  return {
+    local:loc,quadra:qn,estudo:s.codigo||s.nome||s.id||'',
+    avaliacao:job&&job.avId||'',data:job&&job.date||'',variavel:job&&job.variavel||'',
+    exportadoEm:new Date().toISOString(),
+    exportadoPor:(typeof _currentUserName==='function'?_currentUserName():''),
+    exportadoPorEmail:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''
+  };
+}
+function _bioestatStatSheet(qid,s){
+  var H=['Local','Quadra','Estudo','Avaliacao_ID','Data','Variavel','Status','Secao','Item','Tratamento','N','Media','DP','EP','Mediana','Min','Max','CV_pct','Grupo','Metodo','Tipo_resposta','Tipo_analise','Transformacao','Pressupostos_OK','Formula','Escala_usada','QME','GL_erro','Alfa','Dagostino_p','Bartlett_p','Assimetria','Curtose','Fonte','GL','SQ','QM','F','Estatistica','P_valor','Resultado','Interpretacao','Detalhes_JSON','Exportado_em','Exportado_por','Exportado_por_email'];
+  var out=[H], jobs=(typeof _bioestatJobs==='function'?_bioestatJobs(qid,s):[]), cache=_bioAutoCache[qid+'|'+s.id], res=cache&&cache.results||{};
+  function add(job,status,secao,item,x,det){
+    x=x||{};var b=_bioestatExportBase(qid,s,job);
+    out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,secao,item,x.tratamento||'',x.n==null?'':x.n,x.media==null?'':x.media,x.dp==null?'':x.dp,x.ep==null?'':x.ep,x.mediana==null?'':x.mediana,x.min==null?'':x.min,x.max==null?'':x.max,x.cv==null?'':x.cv,x.grupo||'',x.metodo||'',x.tipoResposta||'',x.tipoAnalise||'',x.transformacao||'',x.pressupostos==null?'':(x.pressupostos?'sim':'não'),x.formula||'',x.escala||'',x.mse==null?'':x.mse,x.dfErro==null?'':x.dfErro,x.alfa==null?'':x.alfa,x.dagostino==null?'':x.dagostino,x.bartlett==null?'':x.bartlett,x.assimetria==null?'':x.assimetria,x.curtose==null?'':x.curtose,x.fonte||'',x.gl==null?'':x.gl,x.sq==null?'':x.sq,x.qm==null?'':x.qm,x.F==null?'':x.F,x.estatistica==null?'':x.estatistica,x.p==null?'':x.p,x.resultado==null?'':x.resultado,x.interpretacao||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
+  }
+  if(!jobs.length){add(null,'SEM_DADOS','Resumo','Sem avaliação com dados suficientes',{},{motivo:'São necessários ao menos 2 tratamentos com 2 repetições válidas.'});return out;}
+  jobs.forEach(function(job){
+    var rel=res[job.jobKey];
+    if(!rel){add(job,'PENDENTE','Resumo','Análise ainda em processamento',{},{});return;}
+    if(!rel.ok){add(job,'ERRO','Resumo',rel.erro||'Análise não concluída',{},rel);return;}
+    var a=rel.analise||{}, det=rel.deteccao||{}, cm=rel.comparacao_medias||{};
+    var p=(typeof _bioestatP==='function')?_bioestatP(rel):null;
+    add(job,'CONCLUIDO','Resumo','Resultado completo',{
+      metodo:Object.keys(cm).join(', '),tipoResposta:det.tipo_resposta||'',tipoAnalise:a.tipo_analise||rel.tipo_analise||'',
+      transformacao:a.transformacao||'',pressupostos:a.pressupostos_ok,formula:a.formula||'',escala:a.escala_usada||'',mse:a.mse,dfErro:a.df_erro,p:p,
+      resultado:rel.decisao||'',interpretacao:(rel.avisos||[]).join(' | ')
+    },rel);
+    if(a.normalidade)add(job,'CONCLUIDO','Diagnostico','Normalidade',{
+      n:a.normalidade.n,metodo:a.normalidade.teste,estatistica:a.normalidade.estatistica,p:a.normalidade.p,dagostino:a.normalidade.dagostino_p,assimetria:a.normalidade.assimetria,curtose:a.normalidade.curtose,
+      resultado:a.normalidade.normal==null?'inconclusivo':(a.normalidade.normal?'compatível':'não compatível'),
+      interpretacao:a.normalidade.nota||a.normalidade.erro||''
+    },a.normalidade);
+    if(a.homogeneidade)add(job,'CONCLUIDO','Diagnostico','Homogeneidade de variâncias',{
+      metodo:a.homogeneidade.teste,estatistica:a.homogeneidade.estatistica,p:a.homogeneidade.p,bartlett:a.homogeneidade.bartlett_p,
+      resultado:a.homogeneidade.homogenea==null?'inconclusivo':(a.homogeneidade.homogenea?'homogêneas':'heterogêneas'),
+      interpretacao:a.homogeneidade.nota||a.homogeneidade.erro||''
+    },a.homogeneidade);
+    (a.tabela_anova||[]).forEach(function(l){add(job,'CONCLUIDO','ANOVA',l.fonte||'',{
+      fonte:l.fonte,gl:l.gl,sq:l.sq,qm:l.qm,F:l.F,p:l.p,tipoAnalise:a.tipo_analise||'',transformacao:a.transformacao||'',pressupostos:a.pressupostos_ok
+    },l);});
+    if(a.kruskal)add(job,'CONCLUIDO','Nao_parametrico','Kruskal-Wallis',{
+      metodo:'Kruskal-Wallis',estatistica:a.kruskal.H,p:a.kruskal.p,resultado:a.kruskal.significativo?'significativo':'não significativo'
+    },a.kruskal);
+    (rel.descritiva||[]).forEach(function(d){add(job,'CONCLUIDO','Descritiva','Tratamento '+(d.tratamento||''),{
+      tratamento:d.tratamento,n:d.n,media:(d.media!=null?d.media:d.proporcao),dp:d.dp,ep:d.ep,mediana:d.mediana,min:d.min,max:d.max,cv:d.cv
+    },d);});
+    Object.keys(cm).forEach(function(k){
+      var cmp=cm[k]||{}, metodo=cmp.metodo||k, letras=cmp.letras||{}, medias=cmp.medias_exibicao||cmp.medias||cmp.medianas||{}, ordem=cmp.ordem||Object.keys(medias).concat(Object.keys(letras)).filter(function(x,i,a2){return a2.indexOf(x)===i;});
+      ordem.forEach(function(t){add(job,'CONCLUIDO','Comparacao','Grupo de médias',{
+        tratamento:t,media:medias[t],grupo:letras[t]||'',metodo:metodo,transformacao:cmp.escala_teste||'',alfa:cmp.alfa
+      },{metodo:k,tratamento:t,media:medias[t],grupo:letras[t]||'',alfa:cmp.alfa,escala_teste:cmp.escala_teste});});
+      (cmp.comparacoes||[]).forEach(function(c){add(job,'CONCLUIDO','Comparacao_pares',(c.g1||'')+' × '+(c.g2||''),{
+        metodo:metodo,estatistica:c.diferenca,p:c.p,alfa:cmp.alfa,resultado:c.significativo?'diferem':'não diferem'
+      },c);});
+    });
+    (rel.avisos||[]).forEach(function(av,i){add(job,'CONCLUIDO','Aviso','Aviso '+(i+1),{interpretacao:String(av)},av);});
+  });
+  return out;
+}
+function _bioestatForensicSheet(qid,s){
+  var H=['Local','Quadra','Estudo','Avaliacao_ID','Data','Variavel','Status','Linha','Veredito','Classe','Modo','Flags','Alertas','Testes_previstos','Testes_executados','Inconclusivos','Cobertura_pct','Cobertura_suficiente','Tipo_dado','Controle','N_grupos','Segundo_conjunto','Achado','Severidade','Executado','Estatistica','Leitura','Explicacao_inocente','Resumo','Aviso','Detalhes_JSON','Exportado_em','Exportado_por','Exportado_por_email'];
+  var out=[H],jobs=(typeof _bioestatJobs==='function'?_bioestatJobs(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
+  function add(job,status,linha,v,p,a,det){
+    v=v||{};p=p||{};a=a||{};var b=_bioestatExportBase(qid,s,job);
+    out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,linha,v.nivel||'',v.classe||'',v.modo||p.modo||'',v.flags==null?'':v.flags,v.watches==null?'':v.watches,v.testes_previstos==null?'':v.testes_previstos,v.testes_executados==null?'':v.testes_executados,v.testes_inconclusivos==null?'':v.testes_inconclusivos,v.cobertura==null?'':Math.round(v.cobertura*10000)/100,v.cobertura_suficiente==null?'':(v.cobertura_suficiente?'sim':'não'),p.tipo_dado||'',p.controle==null?'':p.controle,p.n_grupos==null?'':p.n_grupos,p.tem_segundo_conjunto==null?'':(p.tem_segundo_conjunto?'sim':'não'),a.nome||'',a.severidade||'',a.executado==null?'':(a.executado?'sim':'não'),a.estatistica||'',a.leitura||'',a.explicacao_inocente||'',v.resumo||'',det&&det.aviso||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
+  }
+  if(!jobs.length){add(null,'SEM_DADOS','Resumo',{}, {}, {}, {aviso:'Sem avaliação com dados suficientes para triagem.'});return out;}
+  jobs.forEach(function(job){
+    var rel=res[job.jobKey+'|F'];
+    if(!rel){add(job,'PENDENTE','Resumo',{}, {}, {}, {aviso:'Triagem ainda em processamento.'});return;}
+    if(!rel.ok){add(job,'ERRO','Resumo',{}, {}, {}, {aviso:rel.erro||'Triagem não concluída.',resultado:rel});return;}
+    var v=rel.veredito||{},p=rel.parametros||{};
+    add(job,'CONCLUIDO','Veredito',v,p,{},rel);
+    (rel.achados||[]).forEach(function(a){add(job,'CONCLUIDO','Achado',v,p,a,{aviso:rel.aviso,achado:a});});
+  });
+  return out;
+}
+function _bioestatAppendSheet(wb,nome,aoa){
+  if(!window.XLSX||!wb||!aoa||!aoa.length)return;
+  var ws=XLSX.utils.aoa_to_sheet(aoa), ncol=aoa[0].length;
+  ws['!cols']=aoa[0].map(function(h,c){
+    var mx=String(h||'').length;
+    for(var r=1;r<Math.min(aoa.length,500);r++)mx=Math.max(mx,String(aoa[r][c]==null?'':aoa[r][c]).length);
+    return {wch:Math.min(Math.max(mx+2,10),48)};
+  });
+  if(ncol)ws['!autofilter']={ref:'A1:'+XLSX.utils.encode_col(ncol-1)+aoa.length};
+  var ix=wb.SheetNames.indexOf(nome);if(ix>=0){wb.SheetNames.splice(ix,1);delete wb.Sheets[nome];}
+  XLSX.utils.book_append_sheet(wb,ws,nome);
+}
 async function downloadStudyWorkbook(qid,sid){
   try{
     if(!window.XLSX)throw new Error('Leitor de Excel indisponível.');
@@ -4623,10 +4729,11 @@ async function downloadStudyWorkbook(qid,sid){
     if((s.tratamentos||[]).length>7)throw new Error('Este modelo possui espaço para até 7 tratamentos. Use “Copiar” para protocolos maiores.');
     _stxToast('Preparando planilha e resultados…');
     _bioestatEnsureStudy(qid,sid);
-    /* só precisamos das LETRAS da análise (não do forense) — não espera os jobs de triagem forense */
-    var _aJobs=_bioestatJobs(qid,s), _analiseOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey]; }); };
+    /* A planilha agora é também o dossiê de análise: espera análise + forense.
+       Se o limite for atingido, as abas ainda saem e marcam cada linha pendente. */
+    var _aJobs=_bioestatJobs(qid,s), _dossieOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey] && c.results[j.jobKey+'|F']; }); };
     var cache=_bioAutoCache[qid+'|'+sid], limite=Date.now()+90000;
-    while(cache&&cache.status==='loading'&&!_analiseOk(cache)&&Date.now()<limite){await new Promise(function(ok){setTimeout(ok,500);});cache=_bioAutoCache[qid+'|'+sid];}
+    while(cache&&cache.status==='loading'&&!_dossieOk(cache)&&Date.now()<limite){await new Promise(function(ok){setTimeout(ok,500);});cache=_bioAutoCache[qid+'|'+sid];}
     var resp=await fetch('modelos/modelo-protocolo.xls'); if(!resp.ok)throw new Error('Modelo de planilha não encontrado.');
     var wb=XLSX.read(await resp.arrayBuffer(),{type:'array',cellFormula:true,cellStyles:true,cellDates:true}), ws=wb.Sheets[wb.SheetNames[0]];
     var p=s.protocolo||{}, loc=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]])||{}, lx=loc.extras||loc||{}, ctr=quadraCenter(qid), dim=quadraDims(qid);
@@ -4658,9 +4765,11 @@ async function downloadStudyWorkbook(qid,sid){
         if(letras[t.id])_xlsPut(ws,r,c0+7,letras[t.id]);
       });
     });});
+    _bioestatAppendSheet(wb,'Estatistica',_bioestatStatSheet(qid,s));
+    _bioestatAppendSheet(wb,'Forense',_bioestatForensicSheet(qid,s));
     var nome=(s.codigo||'estudo').replace(/[^\w.-]+/g,'_')+'-Agracta.xlsx';
     XLSX.writeFile(wb,nome,{bookType:'xlsx',cellStyles:true});
-    _stxToast('✓ Planilha completa baixada');
+    _stxToast(_dossieOk(cache)?'✓ Planilha completa: dados + estatística + forense':'✓ Planilha baixada; resultados pendentes estão identificados');
   }catch(e){console.error(e);alert('Não consegui gerar a planilha: '+e.message);}
 }
 function studyExport(qid,sid){
@@ -5690,34 +5799,60 @@ function _avHoraAgora(){
    auditor lê a folha e não sabe quem assinou.
 
    Agora a ordem é: o nome que a PESSOA declarou > o roster BPL local > o perfil
-   do Supabase > o cargo > o e-mail (último recurso, nunca a primeira escolha). */
+   do cadastro de membros no Firebase > o cargo > o e-mail (último recurso, nunca a primeira escolha). */
 function _currentUserName(){
   var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
   if(!email) return 'Local/Offline';
   var alvo = email.toLowerCase().trim();
   try{
     ensureConfig();
-    var meu = (data && data.__config && data.__config.meuNome || '').trim();
+    var cfg = data && data.__config || {};
+    var nomes = cfg.nomesPorEmail || {};
+    var meu = String(nomes[alvo] || '').trim();
     if(meu) return meu;
+    /* Perfis do Firebase Auth preservam o displayName no login. */
+    var authNome = String((_authUser && (_authUser.displayName || _authUser.name)) || '').trim();
+    if(authNome) return authNome;
     var allowed = (data && data.__config && data.__config.allowedUsers || []);
     var user = allowed.find(function(u){ return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === alvo; });
     if(user && user.nome) return user.nome;
     var perfil = (window._perfisCache || []).find(function(p){ return p && p.email && String(p.email).toLowerCase().trim() === alvo; });
     if(perfil && perfil.nome) return perfil.nome;
     var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
-    if(admEmail && alvo === admEmail) return 'Administrador';
+    /* Migração segura: o valor legado nasceu no painel do administrador. Nunca o
+       oferecemos a um técnico, pois não há como provar a autoria desse campo antigo. */
+    var legado = String(cfg.meuNome || '').trim();
+    if(legado && admEmail && alvo === admEmail){
+      cfg.nomesPorEmail[alvo] = legado;
+      cfg.meuNome = '';
+      try{ save(); }catch(_e){}
+      return legado;
+    }
   }catch(e){}
   return email;
 }
-/* O nome com que a pessoa assina. Fica no aparelho e sobe junto com a config. */
+/* O nome com que a pessoa assina. É vinculado ao e-mail da sessão e sobe junto
+   com a configuração, sem contaminar a identidade de outra pessoa. */
 function definirMeuNome(){
   try{ ensureConfig(); }catch(e){}
-  var atual = (data && data.__config && data.__config.meuNome) || '';
+  var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? String(_authUser.email).toLowerCase().trim() : '';
+  if(!email){ if(typeof alert==='function') alert('Entre com sua conta para definir o nome da assinatura.'); return; }
+  var atual = (data && data.__config && data.__config.nomesPorEmail && data.__config.nomesPorEmail[email]) || _currentUserName() || '';
   var novo = (window.prompt('Como o seu nome deve aparecer na trilha BPL e na rubrica das avaliações?\n\nUse o formato que você usa no relatório — ex.: Machado, V. C. — CRBio-01', atual) || '').trim();
   if(novo === '') return;
-  data.__config.meuNome = novo;
+  data.__config.nomesPorEmail[email] = novo;
+  data.__config.meuNome = ''; /* impede clientes novos de reutilizarem o valor global */
+  try{ _authUser.displayName=novo; _authUser.name=novo; }catch(e){}
+  try{
+    var allowed=data.__config.allowedUsers||[];
+    var u=allowed.find(function(x){return x&&x.email&&String(x.email).toLowerCase().trim()===email;});
+    if(u)u.nome=novo;
+    var p=(window._perfisCache||[]).find(function(x){return x&&x.email&&String(x.email).toLowerCase().trim()===email;});
+    if(p)p.nome=novo;
+  }catch(e){}
   try{ save(); }catch(e){}
   try{ if(typeof cloudSave === 'function') cloudSave(); }catch(e){}
+  try{ if(typeof window._saveOwnDisplayName === 'function') window._saveOwnDisplayName(novo); }catch(e){}
   if(typeof _stxToast === 'function') _stxToast('As próximas assinaturas saem como "' + novo + '"');
   try{ if(typeof renderAdminDashboard === 'function') renderAdminDashboard(); }catch(e){}
 }
@@ -6039,6 +6174,7 @@ function studyEventsV2(study){
       out.push({
         type:'eval',
         idx:i+1,
+        id:a.id,
         date:d,
         tipo:a.tipo||"",
         realizada:(!!a.realizada||_avTemNota(a))  /* registrada (tem nota) => sai do HOJE/agenda automaticamente */
@@ -6061,6 +6197,62 @@ function nextEventV2(study){
 }
 
 /* ============ RENDER DO PAINEL DE ESTUDO (tela cheia) ============ */
+
+/* O painel do estudo é uma jornada, não uma pilha de cartões. Estes estados são
+   derivados do próprio registro e nunca criam uma segunda fonte de verdade. */
+function _studyWorkflow(qid,study){
+  study=normalizeStudy(study);
+  var tr=study.tratamentos||[], test='';try{test=studyTestemunha(study);}catch(e){}
+  var faltas=[];
+  if(!String(study.codigo||study.nome||'').trim())faltas.push('código');
+  if(tr.length<2)faltas.push('2+ tratamentos');
+  if(tr.some(function(t){return !String(t.produto||'').trim();}))faltas.push('produto');
+  if(tr.some(function(t){return t.id!==test&&!t.testemunha&&!String(t.dose||'').trim();}))faltas.push('dose');
+  var protocolo={id:'protocolo',label:'Protocolo',anchor:'study-stage-protocolo',state:faltas.length?'attention':'complete',detail:faltas.length?('Falta '+faltas.join(', ')):'Conferido'};
+  var reps=Math.max(0,parseInt(study.numRepeticoes)||0), nparcelas=tr.length*reps;
+  var randomOk=!!(study.randomizado&&study.randomizacao&&study.randomizacao.ordem&&study.randomizacao.ordem.length===nparcelas);
+  var planejamento={id:'planejamento',label:'Planejamento',anchor:'study-stage-planejamento',state:(reps<2||tr.length<2)?'pending':(randomOk||study.desenho==='faixas'?'complete':'ready'),detail:(reps<2?'Definir repetições':(randomOk?'Croqui randomizado':'Conferir croqui'))};
+  var nap=Math.max(1,parseInt(study.numAplicacoes)||1), feitas=(study.aplicacoes||[]).length;
+  var execucao={id:'execucao',label:'Aplicação',anchor:'study-stage-execucao',state:feitas>=nap?'complete':(feitas?'active':(study.dataInicio?'ready':'pending')),detail:feitas+' de '+nap+' registrada'+(nap===1?'':'s')};
+  var avs=study.avaliacoes||[], avFeitas=avs.filter(_avTemNota).length;
+  var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(avFeitas===avs.length?'complete':(avFeitas?'active':'ready')),detail:avFeitas+' de '+avs.length+' lançada'+(avs.length===1?'':'s')};
+  var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,study):[], c=_bioAutoCache[qid+'|'+study.id], rr=c&&c.results||{};
+  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey+'|F'];});
+  var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!avFeitas?'pending':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready')),detail:!avFeitas?'Aguardando dados':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular'))};
+  var dossierOk=anaDone&&forDone;
+  var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':(dossierOk?'ready':'pending'),detail:estudoFinalizado(study)?'Finalizado':(dossierOk?'Pronto para revisar':'Aguardando resultados')};
+  return {stages:[protocolo,planejamento,execucao,avaliacoes,analise,dossie],protocolo:protocolo,planejamento:planejamento,execucao:execucao,avaliacoes:avaliacoes,analise:analise,dossie:dossie,anaDone:anaDone,forDone:forDone};
+}
+function studyGoStage(id){
+  var el=document.getElementById(id);if(!el)return;
+  try{el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){el.scrollIntoView();}
+}
+function _studyWorkflowHtml(qid,sid,study){
+  var w=_studyWorkflow(qid,study), q=_avCroquiEscJs(qid), s=_avCroquiEscJs(sid), next=nextEventV2(study), focus={};
+  if(w.protocolo.state!=='complete')focus={title:'Complete o protocolo',text:w.protocolo.detail,button:'Editar protocolo',onclick:"openStudyEditV2('"+q+"','"+s+"')"};
+  else if(w.planejamento.state!=='complete')focus={title:'Confira o planejamento',text:'Valide repetições, randomização e posição das parcelas antes de instalar.',button:'Ver croqui',onclick:"openStudyParcelas('"+q+"','"+s+"')"};
+  else if(next&&next.ev.type==='apl')focus={title:'Próxima ação: aplicação '+next.ev.idx+'/'+next.ev.total,text:fD(next.ev.date)+(next.diff<0?' · atrasada '+Math.abs(next.diff)+'d':(next.diff===0?' · hoje':'')),button:'Registrar aplicação',onclick:'quickAddAplicacao()'};
+  else if(next&&next.ev.type==='eval')focus={title:'Próxima ação: '+(next.ev.tipo||'avaliação'),text:fD(next.ev.date)+(next.diff<0?' · atrasada '+Math.abs(next.diff)+'d':(next.diff===0?' · hoje':'')),button:'Abrir avaliação',onclick:"openStudyEditAvaliacao('"+_avCroquiEscJs(next.ev.id)+"')"};
+  else if(w.avaliacoes.state!=='complete')focus={title:'Complete as avaliações',text:w.avaliacoes.detail,button:'Ver avaliações',onclick:"studyGoStage('study-stage-avaliacoes')"};
+  else if(w.analise.state!=='complete')focus={title:'Confira a análise',text:w.analise.detail,button:'Ir para análise',onclick:"studyGoStage('study-stage-analise')"};
+  else focus={title:'Monte e revise o dossiê',text:w.dossie.detail,button:'Ir para o dossiê',onclick:"studyGoStage('study-stage-dossie')"};
+  var h='<div class="study-workflow" aria-label="Fluxo do estudo"><div class="study-workflow-rail">';
+  w.stages.forEach(function(x,i){h+='<button type="button" class="study-workflow-step '+x.state+'" onclick="studyGoStage(\''+x.anchor+'\')"><span class="study-workflow-n">'+(i+1)+'</span><span class="study-workflow-copy"><b>'+esc(x.label)+'</b><small>'+esc(x.detail)+'</small></span></button>';});
+  h+='</div><div class="study-focus"><div><span>PRÓXIMA MELHOR AÇÃO</span><b>'+esc(focus.title)+'</b><small>'+esc(focus.text||'')+'</small></div><button type="button" onclick="'+focus.onclick+'">'+esc(focus.button)+'</button></div></div>';
+  return h;
+}
+function closeStudyParcelas(){var o=document.getElementById('studyParcelasOvl');if(o)o.style.display='none';}
+function openStudyParcelas(qid,sid){
+  var q=data[qid]||{},st=(q.estudos||[]).find(function(x){return x.id===sid;});if(!st)return;
+  st=normalizeStudy(st);var rows=_avRowsForStudy(st,true),by={},ord=[];
+  rows.forEach(function(r){var n=Number(r.rep)||1;if(!by[n]){by[n]=[];ord.push(n);}by[n].push(r);});
+  var ov=document.getElementById('studyParcelasOvl');if(!ov){ov=document.createElement('div');ov.id='studyParcelasOvl';ov.className='study-parcelas-ovl';ov.onclick=function(e){if(e.target===ov)closeStudyParcelas();};document.body.appendChild(ov);}
+  var dim=(st.protocolo||{}).tamanhoParcela||'',h='<div class="study-parcelas-box"><div class="study-parcelas-head"><div><span>PLANEJAMENTO DE CAMPO</span><b>'+esc(st.codigo||st.nome||st.id)+'</b><small>'+esc(quadraNome(qid))+' · '+rows.length+' parcelas'+(dim?' · '+esc(dim):'')+'</small></div><button type="button" onclick="closeStudyParcelas()">×</button></div>';
+  h+='<div class="study-parcelas-note">Croqui operacional por bloco. A sequência segue '+(st.randomizado?'a ordem randomizada salva':'a ordem dos tratamentos; ative a randomização se este não for o plano de campo')+'.</div><div class="study-parcelas-grid">';
+  ord.forEach(function(rep){var set=by[rep],cols=Math.min(Math.max(set.length,1),6);h+='<section><h4>Bloco / repetição '+esc(_repDisplay(rep))+'</h4><div class="av-croqui-grid" style="--croqui-cols:'+cols+'">';set.forEach(function(r){h+='<div class="av-croqui-parcela planned" title="'+esc((r.produto||'')+' · '+(r.campo||r.label||r.key))+'"><span class="n">'+esc(r.campo||r.label||r.key)+'</span><span class="p">'+esc(r.tratId)+(r.produto?' · '+esc(r.produto):'')+'</span></div>';});h+='</div></section>';});
+  h+='</div><div class="study-parcelas-actions">'+(!estudoFinalizado(st)?'<button type="button" onclick="closeStudyParcelas();openRandomizacaoModal(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Conferir randomização</button>':'')+'<button type="button" class="secondary" onclick="closeStudyParcelas()">Fechar</button></div></div>';
+  ov.innerHTML=h;ov.style.display='flex';
+}
 
 /* ===================== CALCULADORA DE APLICAÇÃO (motor BioCalculo campo, embutida) =====================
    Reusa vendor/biocalc-campo-core.js (window.BioCalculoCampo). Pré-preenche dose/volume dos tratamentos
@@ -7714,8 +7906,10 @@ function openStudyDetail(qid,sid){
     if(_pc.length) h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo de calda</span><span>'+esc(_pc.join(' · '))+'</span></div>';
   }
   h+='</div>';
+  h+=_studyWorkflowHtml(qid,sid,study);
 
   /* Descrição */
+  h+='<div id="study-stage-protocolo" class="study-stage-anchor" aria-hidden="true"></div>';
   if(study.descricao){
     h+='<div class="sd-section"><div class="sd-section-title">Descrição</div><div class="sd-descricao">'+esc(study.descricao)+'</div></div>';
   }
@@ -7758,7 +7952,16 @@ function openStudyDetail(qid,sid){
   }
   h+='</div>';
 
+  /* Planejamento fica explícito e acionável; antes randomização/croqui estavam
+     espalhados entre o cabeçalho e a tela de avaliação. */
+  h+='<div id="study-stage-planejamento" class="study-stage-anchor" aria-hidden="true"></div>'+
+     '<div class="sd-section study-plan-card"><div class="sd-section-title">Planejamento &amp; parcelas</div><div class="study-plan-grid">'+
+     '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(study.randomizado?'Randomizada':'A conferir')+'</b></div></div><div class="study-plan-actions">'+
+     '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
+     (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
+
   /* Aplicações realizadas */
+  h+='<div id="study-stage-execucao" class="study-stage-anchor" aria-hidden="true"></div>';
   h+='<div class="sd-section"><div class="sd-section-title">Aplicações'+(_fin?'':' <button class="sd-add" onclick="quickAddAplicacao()">+ Registrar</button>')+'</div>';
   if(study.aplicacoes.length===0){
     h+='<div class="sd-empty">Nenhuma aplicação registrada ainda.</div>';
@@ -7782,6 +7985,7 @@ function openStudyDetail(qid,sid){
   h+='</div>';
 
   /* Avaliações */
+  h+='<div id="study-stage-avaliacoes" class="study-stage-anchor" aria-hidden="true"></div>';
   h+='<div class="sd-section"><div class="sd-section-title">Avaliações'+(_fin?'':' <button class="sd-add" onclick="quickAddAvaliacao()">+ Nova</button>')+'</div>';
   if(study.avaliacoes.length===0){
     h+='<div class="sd-empty">Nenhuma avaliação programada ou registrada.</div>';
@@ -7811,10 +8015,17 @@ function openStudyDetail(qid,sid){
     h+='</div>';
   }
   h+='</div>';
+  h+='<div id="study-stage-analise" class="study-stage-anchor" aria-hidden="true"></div>';
   h+=studyAudpcHtml(study);
   h+=studyChartsHtml(study);
   h+=_bioestatIntegratedHtml(qid,sid,study);
-  h+=studyAuditHtml(study);
+  h+='<div id="study-stage-dossie" class="study-stage-anchor" aria-hidden="true"></div>'+
+     '<div class="sd-section study-dossier"><div class="sd-section-title">Dossiê &amp; entregáveis</div><div class="study-dossier-copy">Protocolo, dados brutos, estatística, investigação forense, figuras e trilha reunidos a partir deste estudo.</div><div class="study-dossier-actions">'+
+     '<button type="button" onclick="downloadStudyWorkbook(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Baixar planilha completa</button>'+
+     '<button type="button" onclick="openPranchaEstudo(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Gerar gráficos</button>'+
+     '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Croqui de parcelas</button>'+
+     '<button type="button" class="secondary" onclick="studyGoStage(\'study-audit\')">Revisar trilha</button></div></div>';
+  h+='<div id="study-audit">'+studyAuditHtml(study)+'</div>';
 
   /* Finalizar / reabrir — o fecho BPL do estudo */
   h+='<div class="sd-section" style="margin-top:14px">';
@@ -8008,6 +8219,42 @@ function confirmDeleteStudy(qid,sid){
 
 /* ============ EDIT MODAL PRINCIPAL DO ESTUDO ============ */
 var workingStudy=null;
+/* O cadastro completo continua usando o mesmo objeto de estudo; estas etapas só
+   tornam a conversa com o usuário mais curta e legível no campo. */
+var studyEditStep=1;
+var STUDY_EDIT_STEPS=['Protocolo','Contexto','Delineamento','Programação'];
+
+function _seWizardNav(){
+  var h='<nav class="se-wizard" aria-label="Etapas do cadastro do estudo">';
+  STUDY_EDIT_STEPS.forEach(function(label,i){
+    var n=i+1, cls=n===studyEditStep?' active':(n<studyEditStep?' done':'');
+    h+='<button type="button" class="se-wizard-step'+cls+'" onclick="_seStudyGo('+n+')"'+(n>studyEditStep?' disabled':'')+'><span>'+n+'</span><b>'+label+'</b></button>';
+  });
+  return h+'</nav>';
+}
+function _seStudyGo(step){
+  if(!workingStudy)return;
+  syncStudyInputs();
+  if(step>1 && !workingStudy.codigo){
+    studyEditStep=1;
+    _stxToast('Informe o código do estudo para continuar.');
+  }else studyEditStep=Math.max(1,Math.min(STUDY_EDIT_STEPS.length,step));
+  renderStudyEditModal();
+  var pnl=document.getElementById('sePnl'); if(pnl)pnl.parentNode.scrollTop=0;
+}
+function _seWizardActions(){
+  var first=studyEditStep===1, last=studyEditStep===STUDY_EDIT_STEPS.length;
+  var h='<div class="se-actions se-wizard-actions">';
+  h+='<button type="button" class="btn-cancel" onclick="'+(first?'closeStudyEditV2()':'_seStudyGo('+(studyEditStep-1)+')')+'">'+(first?'Cancelar':'Voltar')+'</button>';
+  h+='<span class="se-wizard-position">Etapa '+studyEditStep+' de '+STUDY_EDIT_STEPS.length+'</span>';
+  h+=last?'<button class="btn-save" onclick="saveStudyV2()">SALVAR ESTUDO</button>':'<button type="button" class="btn-save" onclick="_seStudyGo('+(studyEditStep+1)+')">Continuar</button>';
+  return h+'</div>';
+}
+function _seWizardSummary(s){
+  var n=(s.tratamentos||[]).length, reps=s.numRepeticoes||0, av=s.avalNum||0;
+  var parcelas=(s.desenho==='faixas')?n*Math.max(1,reps):n*Math.max(1,reps);
+  return '<div class="se-wizard-summary"><b>Resumo do estudo</b><span>'+esc(s.codigo||'Sem código')+' · '+n+' tratamento'+(n===1?'':'s')+' · '+reps+' repetiç'+(reps===1?'ão':'ões')+' · '+parcelas+' parcela'+(parcelas===1?'':'s')+(av?' · '+av+' avaliação'+(av===1?'':'ões'):'')+'</span></div>';
+}
 
 function openStudyEditV2(qid,sid){
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
@@ -8020,6 +8267,7 @@ function openStudyEditV2(qid,sid){
     workingStudy=newStudy();
     curSid=workingStudy.id;
   }
+  studyEditStep=1;
   renderStudyEditModal();
   document.getElementById("seOvl").classList.add("open");
 }
@@ -8028,6 +8276,7 @@ function openNewStudy(qid){
   curV=qid;
   workingStudy=newStudy();
   curSid=workingStudy.id;
+  studyEditStep=1;
   renderStudyEditModal();
   document.getElementById("seOvl").classList.add("open");
 }
@@ -8320,6 +8569,8 @@ function renderStudyEditModal(){
   }
 
   var po=s.protocoloOrigem||{}, pm=s.protocolo||{};
+  h+=_seWizardNav();
+  h+='<div class="se-step'+(studyEditStep===1?' is-active':'')+'" data-step="1">';
   h+='<div style="margin:0 0 14px;padding:14px;border:1px solid rgba(52,209,120,.25);border-radius:14px;background:var(--gp-s1,#141816)">'+
     '<div style="font-size:13px;font-weight:850;color:var(--gp-green,#34d178)">Protocolo da planilha</div>'+
     '<div style="font-size:10px;color:var(--gp-text-3,#727c75);line-height:1.45;margin:3px 0 9px">Abra uma cópia do modelo ou copie a planilha inteira e cole abaixo. O Agracta preenche o que reconhecer; o restante continua manual.</div>'+
@@ -8344,6 +8595,7 @@ function renderStudyEditModal(){
 
   h+='<div class="se-field"><label>Descrição / objetivo</label>';
   h+='<textarea id="seDescricao" placeholder="Ex: Avaliação de eficácia de fungicidas sistêmicos no controle de ferrugem asiática" rows="3">'+esc(s.descricao)+'</textarea></div>';
+  h+='</div><div class="se-step'+(studyEditStep===2?' is-active':'')+'" data-step="2">';
 
   /* IDENTIFICAÇÃO — o que aparece no rodapé de toda figura do relatório.
      Isto morava só na prancha, e ele redigitava a cada folha. É do ESTUDO:
@@ -8371,6 +8623,7 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Nº aplicações</label><input type="number" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
   h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
   h+='</div>';
+  h+='</div><div class="se-step'+(studyEditStep===4?' is-active':'')+'" data-step="4">';
 
   /* Quadra de laboratório troca "Preparo de calda" por "Preparo no laboratório":
      os mesmos valores que a calculadora de diluição vai precisar. Em quadra de
@@ -8436,6 +8689,7 @@ function renderStudyEditModal(){
      a unidade na dose, e é ela que sai impressa no rótulo do gráfico e da tabela. */
   var _dm=(s.doseModo==='ppm')?'ppm':'campo';
   if(!isQuadraLab(curV)) _dm='campo';
+  h+='</div><div class="se-step'+(studyEditStep===3?' is-active':'')+'" data-step="3">';
   h+='<div class="se-section-title">Dose dos tratamentos</div>';
   h+='<div class="se-row">';
   if(isQuadraLab(curV)){
@@ -8496,8 +8750,10 @@ function renderStudyEditModal(){
   }
   h+='</div>';
   h+='<button class="se-add-trat" onclick="addTrat()">+ Adicionar tratamento</button>';
+  h+='</div>';
 
-  h+='<div class="se-actions"><button class="btn-save" onclick="saveStudyV2()">SALVAR</button><button class="btn-cancel" onclick="closeStudyEditV2()">Cancelar</button></div>';
+  if(studyEditStep===4) h+=_seWizardSummary(s);
+  h+=_seWizardActions();
 
   document.getElementById("sePnl").innerHTML=h;
   /* A lista de faixas é montada DEPOIS do innerHTML porque depende dos
@@ -9354,22 +9610,17 @@ function _avCatalogo(){
 var _avGrid={variaveis:[],notas:{},tipos:{},meta:{},varcfg:{},bruto:{}};
 var _avAuto={on:false,pos:0};
 function _avGridUser(){
-  var email = _authUser && _authUser.email;
-  if(!email) return 'local';
-  ensureConfig();
-  var allowed = (data && data.__config && data.__config.allowedUsers || []);
-  var user = allowed.find(function(u){
-    return u && typeof u.email === 'string' && u.email.toLowerCase().trim() === email.toLowerCase().trim();
-  });
-  if(user) return user.nome;
-  var admEmail = (data && data.__config && data.__config.adminEmail || '').toLowerCase().trim();
-  if(admEmail && email.toLowerCase().trim() === admEmail) return 'Administrador';
-  return email;
+  return (typeof _currentUserName==='function') ? _currentUserName() :
+    ((_authUser&&(_authUser.displayName||_authUser.name||_authUser.email))||'Local/Offline');
 }
 function _avTouchCell(row,v){
   if(!_avGrid.meta||typeof _avGrid.meta!=='object') _avGrid.meta={};
   if(!_avGrid.meta[row]) _avGrid.meta[row]={};
-  _avGrid.meta[row][v]={ts:Date.now(),user:_avGridUser()};
+  _avGrid.meta[row][v]={
+    ts:Date.now(),
+    user:_avGridUser(),
+    por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||null
+  };
 }
 function _avCss(){ if(document.getElementById('avCss'))return; var s=document.createElement('style'); s.id='avCss';
   s.textContent='.av-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:4px;padding-bottom:4px;position:relative}'+
@@ -9526,6 +9777,57 @@ function avValidateCell(inp){
   _avPersistNow(); /* autosave da grade manual no blur */
 }
 
+/* Croqui operacional da avaliação. A posição vem da ordem por bloco do
+   delineamento/randomização; por isso ele serve para orientar o lançamento e
+   não se apresenta como coordenada GPS da parcela. */
+var _avCroquiOpen=true, _avCroquiKey=null;
+function _avCroquiEscJs(v){ return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function _avCroquiStatus(row, vars){
+  if(!vars.length) return 'empty';
+  var filled=0;
+  vars.forEach(function(v){ var x=_avGrid.notas&&_avGrid.notas[row.key]&&_avGrid.notas[row.key][v]; if(x!=null&&String(x).trim()!=='') filled++; });
+  return filled===0?'empty':(filled===vars.length?'done':'partial');
+}
+function avCroquiHtml(st, rows, vars){
+  if(!st||!rows||!rows.length) return '';
+  var byRep={}, order=[];
+  rows.forEach(function(row){ var rep=Number(row.rep)||1; if(!byRep[rep]){byRep[rep]=[];order.push(rep);} byRep[rep].push(row); });
+  var complete=0, partial=0, empty=0;
+  rows.forEach(function(r){ var x=_avCroquiStatus(r,vars); if(x==='done')complete++; else if(x==='partial')partial++; else empty++; });
+  var h='<div class="av-croqui"><div class="av-croqui-head"><span class="av-croqui-title">Croqui de parcelas</span><span class="av-croqui-sub">'+rows.length+' parcelas</span><button type="button" class="av-croqui-toggle" onclick="toggleAvCroqui()">'+(_avCroquiOpen?'Ocultar':'Mostrar')+'</button></div>';
+  if(!_avCroquiOpen) return h+'</div>';
+  h+='<div class="av-croqui-body">';
+  order.forEach(function(rep){
+    var set=byRep[rep], cols=Math.min(Math.max(set.length,1),6);
+    h+='<div class="av-croqui-rep"><div class="av-croqui-rep-label">Bloco / repetição '+esc(_repDisplay(rep))+'</div><div class="av-croqui-grid" style="--croqui-cols:'+cols+'">';
+    set.forEach(function(row){
+      var state=_avCroquiStatus(row,vars), label=row.campo||row.label||row.key;
+      h+='<button type="button" class="av-croqui-parcela '+state+(_avCroquiKey===row.key?' selected':'')+'" onclick="avCroquiSelect(\''+_avCroquiEscJs(row.key)+'\')" title="'+esc((row.produto?row.produto+' · ':'')+label)+'">'+
+        '<span class="n">'+esc(label)+'</span><span class="p">'+esc(row.tratId||'')+'</span></button>';
+    });
+    h+='</div></div>';
+  });
+  h+='<div class="av-croqui-legend"><span><i class="empty"></i> '+empty+' pendente'+(empty===1?'':'s')+'</span><span><i class="partial"></i> '+partial+' parcial</span><span><i class="done"></i> '+complete+' concluída'+(complete===1?'':'s')+'</span></div>'+
+     '<div class="av-croqui-hint">Toque numa parcela para destacá-la na grade. A disposição segue o bloco e a ordem de randomização do ensaio.</div></div></div>';
+  return h;
+}
+function toggleAvCroqui(){ _avCroquiOpen=!_avCroquiOpen; renderAvGrid(); }
+function avCroquiSelect(key){
+  _avCroquiKey=key;
+  var st=_avStudy();
+  if(_avAuto.on&&st){
+    var steps=_avAutoSteps(), idx=-1;
+    steps.some(function(s,i){ if(s.row&&s.row.key===key){idx=i;return true;} return false; });
+    if(idx>=0) _avAuto.pos=idx;
+  }
+  renderAvGrid();
+  setTimeout(function(){
+    var w=document.getElementById('avGridWrap'); if(!w)return;
+    var input=Array.prototype.find.call(w.querySelectorAll('.av-cell'),function(el){return el.getAttribute('data-t')===key;});
+    if(input){ input.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); input.focus(); input.select&&input.select(); }
+  },30);
+}
+
 function renderAvGrid(){
   _avCss(); var w=document.getElementById('avGridWrap'); if(!w) return;
   var st=_avStudy(), rows=_avRowsForStudy(st,false), ts=(st&&st.tratamentos)||[];
@@ -9543,6 +9845,7 @@ function renderAvGrid(){
       html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle off" onclick="avEnableStudyRandomizado()">Ativar automático randomizado</button><span class="av-auto-note">Modelo disponível: '+esc(mi.nome+' · '+mi.reps+' rep.')+'</span></div>';
     }
   }
+  html+=avCroquiHtml(st,rows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
   vs.forEach(function(v){
     var cfg=_avCfg(_avGrid,v), suf='';
@@ -9558,7 +9861,7 @@ function renderAvGrid(){
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
   rows.forEach(function(rw){
     var row=_avGrid.notas[rw.key]||{}, old=(rw.rep===1&&_avGrid.notas[rw.tratId])?_avGrid.notas[rw.tratId]:{};
-    html+='<tr><td class="av-tname" title="'+esc((rw.produto||'')+(rw.parcela?' · parcela '+rw.parcela:''))+'">'+esc(rw.label)+'</td>';
+    html+='<tr data-av-row="'+esc(rw.key)+'"><td class="av-tname" title="'+esc((rw.produto||'')+(rw.parcela?' · parcela '+rw.parcela:''))+'">'+esc(rw.label)+'</td>';
     vs.forEach(function(v){
       var val=(row[v]!=null&&row[v]!=='')?row[v]:((old&&old[v]!=null)?old[v]:'');
       var cfg=_avCfg(_avGrid,v), k=esc(rw.key), ev=esc(v);
@@ -10422,6 +10725,7 @@ function reabrirEstudo(qid,sid){
     st.finalizacoesAnteriores.push({ finalizacao:fin, estatistica:st.estatisticaFinal||null,
                                      reabertoEm:new Date().toISOString(),
                                      reabertoPor:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
+                                     reabertoNome:_currentUserName(),
                                      motivo:motivo });
     delete st.finalizacao; delete st.estatisticaFinal;
     logStudyAuditInObject(st,'Reabertura do Estudo',
@@ -10643,7 +10947,7 @@ function saveAvaliacao(){
   logStudyAuditInObject(study, action, details, { mudancas:(_mud&&_mud.length?_mud.slice(0,80):null), total_mudancas:(_mud?_mud.length:null), motivo:_motivo });
   save();
   /* rede de segurança no aparelho: registra a avaliação no diário (IndexedDB). Best-effort, nunca quebra o salvar. */
-  try{ journalAval({ ts:Date.now(), who:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', qid:curV, quadra:(typeof quadraNome==='function'?quadraNome(curV):curV), sid:curSid, avid:av.id, data:av.data, tipo:av.tipo, bbch:av.bbch, variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), notasMeta:JSON.parse(JSON.stringify(av.notasMeta||{})), motivo:_motivo, mudancas:(_mud&&_mud.length?_mud:null) }); }catch(e){}
+  try{ journalAval({ ts:Date.now(), who:_currentUserName(), whoEmail:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', qid:curV, quadra:(typeof quadraNome==='function'?quadraNome(curV):curV), sid:curSid, avid:av.id, data:av.data, tipo:av.tipo, bbch:av.bbch, variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), notasMeta:JSON.parse(JSON.stringify(av.notasMeta||{})), motivo:_motivo, mudancas:(_mud&&_mud.length?_mud:null) }); }catch(e){}
   /* Etapa 3 Fase B: escrita dupla nas tabelas por-linha (só com flag _dualWrite; nunca quebra o save do blob) */
   try{ if(typeof dbUpsertAvaliacao==='function') dbUpsertAvaliacao(curV,curSid,av); }catch(e){}
   _stxToast('✓ Avaliação salva!');
@@ -11361,6 +11665,133 @@ render=function(){
   });
 };
 
+/* ============ CENTRAL DE ENSAIOS ============================================
+   Mapa = onde estão as coisas. Central = o que precisa acontecer nos estudos.
+   Mantém cada ensaio ligado à sua quadra (modelo de dados atual), mas oferece
+   uma leitura transversal para a rotina de campo e para a gestão. */
+var _studiesPanelFilter='todos', _studiesPanelQuery='', _studiesNewOpen=false;
+function _studyPanelLocal(qid){
+  try{ ensureLocais(); }catch(e){}
+  var lid=(typeof QLOCAL!=='undefined'&&QLOCAL&&QLOCAL[qid])||localAtivo||HOME_LOCAL;
+  return {id:lid,nome:(typeof LOCAIS!=='undefined'&&LOCAIS&&LOCAIS[lid]&&LOCAIS[lid].nome)||'Sem local'};
+}
+function _studyPanelQuadraGroups(){
+  var grupos={};
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config')return;
+    var loc=_studyPanelLocal(qid);
+    if(!grupos[loc.id])grupos[loc.id]={id:loc.id,nome:loc.nome,quadras:[]};
+    grupos[loc.id].quadras.push({id:qid,nome:quadraNome(qid),lab:(typeof isQuadraLab==='function'&&isQuadraLab(qid)),labTipo:(typeof quadraLabTipo==='function'?quadraLabTipo(qid):'')});
+  });
+  return Object.keys(grupos).map(function(k){
+    grupos[k].quadras.sort(function(a,b){return String(a.nome).localeCompare(String(b.nome),'pt-BR');});
+    return grupos[k];
+  }).sort(function(a,b){
+    if(a.id===localAtivo)return -1;if(b.id===localAtivo)return 1;
+    return String(a.nome).localeCompare(String(b.nome),'pt-BR');
+  });
+}
+function _studyPanelItems(){
+  var out=[];
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config') return;
+    var q=data[qid]||{};
+    var loc=_studyPanelLocal(qid);
+    (q.estudos||[]).forEach(function(st){ if(st) out.push({qid:qid,q:q,localId:loc.id,localNome:loc.nome,study:normalizeStudy(st)}); });
+  });
+  return out;
+}
+function _studyPanelProgress(study){
+  var total=0, filled=0, rows=_avRowsForStudy(study,false);
+  (study.avaliacoes||[]).forEach(function(av){
+    var vars=av.variaveis||[];
+    total+=rows.length*vars.length;
+    rows.forEach(function(row){ vars.forEach(function(v){ var x=_avNota(av,row,v); if(x!=null&&String(x).trim()!=='') filled++; }); });
+  });
+  return {total:total,filled:filled,pct:total?Math.round(filled/total*100):0};
+}
+function _studyPanelState(study, progress){
+  if(estudoFinalizado(study)) return {key:'final',label:'Finalizado'};
+  var ne=nextEventV2(study);
+  if(ne){
+    if(ne.diff<=0) return {key:'urgent',label:ne.diff<0?'Atrasado':'Hoje',next:ne};
+    if(ne.diff<=3) return {key:'soon',label:'Em '+ne.diff+'d',next:ne};
+    return {key:'go',label:'Programado',next:ne};
+  }
+  if(progress.total&&progress.filled<progress.total) return {key:'go',label:'Em andamento'};
+  if(progress.total&&progress.filled===progress.total) return {key:'done',label:'Avaliado'};
+  return {key:'go',label:'Sem agenda'};
+}
+function _studyPanelNext(state){
+  if(!state.next) return state.key==='done'?'Todas as avaliações lançadas':'Sem próxima atividade programada';
+  var ev=state.next.ev, what=ev.type==='apl'?('Aplicação '+ev.idx+'/'+ev.total):('Avaliação'+(ev.tipo?' · '+ev.tipo:''));
+  var when=state.next.diff===0?'hoje':(state.next.diff<0?'atrasada '+Math.abs(state.next.diff)+'d':'em '+state.next.diff+'d');
+  return what+' · '+when;
+}
+function openStudiesPanel(){
+  _studiesPanelFilter='todos'; _studiesPanelQuery=''; _studiesNewOpen=false;
+  renderStudiesPanel();
+  var ov=document.getElementById('studiesOvl'); if(ov) ov.classList.add('open');
+}
+function closeStudiesPanel(){ _studiesNewOpen=false; var ov=document.getElementById('studiesOvl'); if(ov)ov.classList.remove('open'); }
+function setStudiesPanelFilter(f){ _studiesPanelFilter=f||'todos'; renderStudiesPanel(); }
+function setStudiesPanelQuery(v){ _studiesPanelQuery=String(v||''); renderStudiesPanel(); }
+function toggleStudiesNew(){ _studiesNewOpen=!_studiesNewOpen; renderStudiesPanel(); }
+function startNewStudyFromPanel(){
+  var sel=document.getElementById('studiesNewQuadra'), qid=sel&&sel.value;
+  if(!qid){ if(typeof _stxToast==='function')_stxToast('Selecione uma quadra ou laboratório.'); return; }
+  closeStudiesPanel(); openNewStudy(qid);
+}
+function openStudyFromPanel(qid,sid){ closeStudiesPanel(); openStudyDetail(qid,sid); }
+function renderStudiesPanel(){
+  var box=document.getElementById('studiesPnl'); if(!box)return;
+  var all=_studyPanelItems().map(function(x){ x.progress=_studyPanelProgress(x.study); x.state=_studyPanelState(x.study,x.progress); return x; });
+  var now=all.filter(function(x){return x.state.key==='urgent';}).length;
+  var ongoing=all.filter(function(x){return !estudoFinalizado(x.study)&&x.progress.total&&x.progress.filled<x.progress.total;}).length;
+  var complete=all.filter(function(x){return x.state.key==='done'||x.state.key==='final';}).length;
+  var query=_studiesPanelQuery.trim().toLowerCase();
+  var visible=all.filter(function(x){
+    var f=_studiesPanelFilter;
+    if(f==='acao' && x.state.key!=='urgent')return false;
+    if(f==='pendentes' && !(x.state.key==='urgent'||x.state.key==='soon'||x.state.key==='go'))return false;
+    if(f==='andamento' && !(x.progress.total&&x.progress.filled<x.progress.total&&!estudoFinalizado(x.study)))return false;
+    if(f==='concluidos' && !(x.state.key==='done'||x.state.key==='final'))return false;
+    if(query){ var hay=[x.study.codigo,x.study.nome,x.localNome,x.qid,quadraNome(x.qid),x.q.cultura,x.q.cultivar].join(' ').toLowerCase(); if(hay.indexOf(query)<0)return false; }
+    return true;
+  }).sort(function(a,b){
+    var pa={urgent:0,soon:1,go:2,done:3,final:4}[a.state.key], pb={urgent:0,soon:1,go:2,done:3,final:4}[b.state.key];
+    if(pa!==pb)return pa-pb;
+    return String(a.study.codigo||a.study.nome||'').localeCompare(String(b.study.codigo||b.study.nome||''),'pt-BR');
+  });
+  function chip(key,label){return '<button type="button" class="study-filter '+(_studiesPanelFilter===key?'active':'')+'" onclick="setStudiesPanelFilter(\''+key+'\')">'+label+'</button>';}
+  function summary(key,cls,value,label){return '<button type="button" class="study-summary-card '+(cls||'')+(_studiesPanelFilter===key?' active':'')+'" onclick="setStudiesPanelFilter(\''+key+'\')"><b>'+value+'</b><span>'+label+'</span></button>';}
+  var grupos=_studyPanelQuadraGroups(), opt='';
+  grupos.forEach(function(g){ opt+='<optgroup label="'+esc(g.nome)+'">'; g.quadras.forEach(function(q){ var tipo=q.lab?(' · Laboratório'+(q.labTipo?' de '+q.labTipo:'')):''; opt+='<option value="'+esc(q.id)+'">'+esc(q.nome+tipo)+'</option>'; }); opt+='</optgroup>'; });
+  var h='<div class="studies-dashboard-head"><div><div class="studies-dashboard-kicker">Gestão de estudos</div><div class="studies-dashboard-title">Ensaios</div><div class="studies-dashboard-sub">Visão de todos os estudos, localidades e próximas atividades.</div></div><div class="studies-dashboard-actions"><button type="button" class="studies-dashboard-new" onclick="toggleStudiesNew()">+ Novo estudo</button><button type="button" class="studies-dashboard-close" onclick="closeStudiesPanel()">Fechar ×</button></div></div>';
+  if(_studiesNewOpen){
+    h+='<div class="studies-new-study"><div class="studies-new-copy"><b>Novo estudo</b><span>Onde este estudo será executado?</span></div>';
+    if(opt)h+='<select id="studiesNewQuadra" aria-label="Localidade e quadra do novo estudo">'+opt+'</select><button type="button" class="studies-new-continue" onclick="startNewStudyFromPanel()">Continuar</button>';
+    else h+='<span class="studies-new-empty">Cadastre uma quadra ou laboratório antes de criar o estudo.</span>';
+    h+='<button type="button" class="studies-new-cancel" onclick="toggleStudiesNew()">Cancelar</button></div>';
+  }
+  h+='<div class="studies-dashboard-summary">'+summary('todos','',all.length,'estudos')+summary('acao','urgent',now,'pedem ação')+summary('andamento','',ongoing,'em lançamento')+summary('concluidos','done',complete,'concluídos')+'</div>';
+  h+='<div class="studies-dashboard-tools">'+chip('todos','Todos')+chip('acao','Ação agora')+chip('pendentes','Pendentes')+chip('andamento','Em andamento')+chip('concluidos','Concluídos')+'<input id="studiesFilterSearch" class="study-filter-search" value="'+esc(_studiesPanelQuery)+'" oninput="setStudiesPanelQuery(this.value)" placeholder="Buscar código, estudo, localidade, cultura ou quadra"></div>';
+  h+='<div class="studies-dashboard-list">';
+  if(!visible.length){ h+='<div class="studies-dashboard-empty">Nenhum estudo encontrado com este filtro.</div>'; }
+  else visible.forEach(function(x){
+    var st=x.study,p=x.progress,state=x.state,code=st.codigo||st.nome||'(sem código)', name=(st.nome&&st.nome!==code)?st.nome:(st.descricao||'Sem descrição');
+    h+='<button type="button" class="study-dashboard-card" onclick="openStudyFromPanel(\''+_avCroquiEscJs(x.qid)+'\',\''+_avCroquiEscJs(st.id)+'\')">'+
+      '<div class="study-dashboard-top"><span class="study-dashboard-code">'+esc(code)+'</span><span class="study-dashboard-status '+state.key+'">'+esc(state.label)+'</span></div>'+
+      '<div class="study-dashboard-name">'+esc(name)+'</div>'+
+      '<div class="study-dashboard-where"><b>'+esc(x.localNome)+'</b> · '+esc(quadraNome(x.qid))+'</div>'+
+      '<div class="study-dashboard-crop">'+esc(x.q.cultura||((typeof isQuadraLab==='function'&&isQuadraLab(x.qid))?(quadraLabTipo(x.qid)||'Laboratório'):'Sem cultura'))+(x.q.cultivar?' · '+esc(x.q.cultivar):'')+'</div>'+
+      '<div class="study-dashboard-progress"><i style="width:'+p.pct+'%"></i></div><div class="study-dashboard-meta"><span>'+p.filled+' / '+p.total+' lançamentos</span><span>'+p.pct+'%</span></div>'+
+      '<div class="study-dashboard-next"><b>Próximo:</b> '+esc(_studyPanelNext(state))+'</div></button>';
+  });
+  h+='</div>';
+  box.innerHTML=h;
+}
+
 /* ============ BOTÃO "HOJE" E BUSCA NO TOPO ============ */
 /* Injeta os botões dentro da top-bar-right existente */
 function injectTopbarButtons(){
@@ -11375,9 +11806,14 @@ function injectTopbarButtons(){
   btnBusca.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align:-2px" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
   btnBusca.setAttribute("aria-label","Buscar");
   btnBusca.onclick=openSearch;
+  var btnEstudos=document.createElement("button");
+  btnEstudos.className="btn-sm btn-studies";
+  btnEstudos.textContent="ENSAIOS";
+  btnEstudos.onclick=openStudiesPanel;
   /* Insere antes do botão AGENDA */
   var btnAgenda=document.getElementById("btnAgenda");
   if(btnAgenda){
+    tbr.insertBefore(btnEstudos,btnAgenda);
     tbr.insertBefore(btnHoje,btnAgenda);
     tbr.insertBefore(btnBusca,btnHoje);
   }else{
@@ -11445,29 +11881,29 @@ try{load();}catch(e){
    Os campos do ISMS ficam em data.__isms (sincroniza no blob + entra no backup). */
 function ensureISMS(){ if(!data.__isms || typeof data.__isms!=='object') data.__isms={}; return data.__isms; }
 var _ISMS_FIELDS=[
-  {k:'escopo', l:'Escopo do SGSI (ISO 27001 §4.3)', ph:'ex.: registros eletrônicos de estudos de campo no Agracta + infraestrutura (Supabase, aparelhos).'},
+  {k:'escopo', l:'Escopo do SGSI (ISO 27001 §4.3)', ph:'ex.: dados do Agracta + Firebase/Firestore, GitHub Pages, serviço NDVI e aparelhos.'},
   {k:'owner', l:'Responsável pelo SGSI / System Owner (§5.3)', ph:'nome e cargo'},
   {k:'de_gq', l:'Diretor de Estudo / Garantia da Qualidade / Arquivista (papéis BPL)', ph:'quem ocupa cada papel'},
   {k:'politica', l:'Política de Segurança da Informação (§5.2)', ph:'resumo ou referência ao documento aprovado'},
   {k:'riscos', l:'Registro de riscos (§6.1)', ph:'ativo · ameaça · prob. · impacto · tratamento · responsável (1 por linha)'},
   {k:'treinamento', l:'Competência e treinamento (§7.2)', ph:'registro de treinamento da equipe (BPL + segurança)'},
-  {k:'backup', l:'Política de backup e retenção (A.8.13 / NIT-Dicla-072)', ph:'frequência, período de guarda (5–20 anos), mídia, migração de formato'},
+  {k:'backup', l:'Política de backup e retenção (A.8.13)', ph:'frequência, retenção aplicável, destino, teste de restauração e migração de formato'},
   {k:'incidentes', l:'Incidentes e ações corretivas — CAPA (§10.1)', ph:'data · não-conformidade · causa · ação · responsável · status'},
   {k:'soa', l:'Declaração de Aplicabilidade (SoA) — observações (Anexo A)', ph:'controles aplicáveis/justificativas além dos já cobertos pelo app'}
 ];
 var _ISMS_MAPA=[
   ['ALCOA+ · Atribuível','Login individual + autor por registro','ok'],
   ['ALCOA+ · Contemporâneo','Carimbo no salvar (clima/GPS/NDVI)','parcial'],
-  ['ALCOA+ · Original','Histórico de versões (servidor) + diário no aparelho','ok'],
+  ['ALCOA+ · Original','Dado ativo no Firestore + diário local; histórico imutável pendente','parcial'],
   ['ALCOA+ · Exato','Edição assinada exige motivo + de→para + re-assinatura','ok'],
-  ['NIT-038 · Trilha de auditoria','Quem/quando/valor anterior/motivo','ok'],
-  ['NIT-038 · Assinatura eletrônica','Nome + significado + data','ok'],
-  ['ISO A.5.15/8.2 · Controle de acesso','Papéis admin/técnico + RLS','ok'],
-  ['ISO A.8.15 · Logs','Trilha por estudo + updated_by/at','ok'],
-  ['ISO A.8.13 · Backup','Histórico + export (formalizar política)','parcial'],
-  ['ISO A.8.24 · Criptografia','TLS + repouso (Supabase)','ok'],
+  ['NIT-038 · Trilha de auditoria','Quem/quando/de→para/motivo; append-only servidor pendente','parcial'],
+  ['NIT-038 · Assinatura eletrônica','Rubrica interna: nome + e-mail + significado + data','parcial'],
+  ['ISO A.5.15/8.2 · Controle de acesso','Firebase Auth + membro ativo; regras granulares pendentes','parcial'],
+  ['ISO A.8.15 · Logs','Trilha no estudo; não imutável no servidor','parcial'],
+  ['ISO A.8.13 · Backup','Diário local + export; política/restauração pendentes','parcial'],
+  ['ISO A.8.24 · Criptografia','HTTPS + proteção do fornecedor (confirmar configuração)','parcial'],
   ['NIT-038 · Validação IQ/OQ/PQ','docs/VALIDACAO-SISTEMA.md (manter)','doc'],
-  ['ALCOA+ · Trilha imutável server-side','app_state_history (melhoria: tabela append-only)','parcial']
+  ['ALCOA+ · Trilha imutável server-side','Não implementada — criar eventos append-only + hora do servidor','parcial']
 ];
 function openComplianceISMS(){
   ensureISMS(); var m=data.__isms;
