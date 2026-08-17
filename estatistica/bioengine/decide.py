@@ -301,6 +301,10 @@ def _rodar_dose_resposta(dados, papeis, rinfo, chaves, fatores_cols, opcoes, alf
 def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
                  bloco, chaves, tipo, alfa, opcoes, avisos):
     valores = np.asarray(rinfo["valores"], float)
+    # 'a' vai para o MELHOR tratamento; qual lado é o melhor depende da variável
+    # (severidade: quanto menos, melhor / mortalidade: quanto mais, melhor).
+    # Precisa ser lido AQUI: é nesta função que os pós-testes rodam.
+    maior_melhor = bool((opcoes or {}).get("maior_melhor", True))
 
     relatorio["descritiva"] = _descritiva(valores, chaves)
 
@@ -340,7 +344,7 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
 
     if res_anova["pressupostos_ok"] or res_anova["kruskal"] is None:
         try:
-            tukey = posthoc.tukey(valores_modelo, chaves, alfa)
+            tukey = posthoc.tukey(valores_modelo, chaves, alfa, maior_melhor)
             tukey["medias_exibicao"] = medias
             tukey["escala_teste"] = res_anova["escala_usada"]
             comparacoes["tukey"] = tukey
@@ -348,7 +352,8 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
             avisos.append(f"Tukey falhou: {e}")
         try:
             sk = posthoc.scott_knott(
-                medias_modelo, reps, res_anova["mse"], res_anova["df_erro"], alfa)
+                medias_modelo, reps, res_anova["mse"], res_anova["df_erro"], alfa,
+                maior_melhor)
             sk["medias_exibicao"] = medias
             sk["escala_teste"] = res_anova["escala_usada"]
             comparacoes["scott_knott"] = sk
@@ -357,7 +362,7 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
 
     if res_anova["kruskal"] is not None:
         try:
-            comparacoes["dunn"] = posthoc.dunn(valores, chaves, alfa)
+            comparacoes["dunn"] = posthoc.dunn(valores, chaves, alfa, maior_melhor=maior_melhor)
         except Exception as e:
             avisos.append(f"Dunn falhou: {e}")
 

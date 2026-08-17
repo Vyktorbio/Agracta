@@ -7,7 +7,19 @@ Comparação múltipla de médias com letras (compact letter display).
   - Duncan / LSD       (opcionais)
 
 As letras seguem a convenção: tratamentos que compartilham ao menos uma
-letra NÃO diferem significativamente. Por padrão 'a' é o maior grupo.
+letra NÃO diferem significativamente.
+
+CONVENÇÃO DA LETRA 'a': o MELHOR tratamento.
+
+    maior_melhor=True   -> 'a' vai para a MAIOR média (mortalidade, eficácia,
+                           produtividade: quanto mais, melhor)
+    maior_melhor=False  -> 'a' vai para a MENOR média (severidade, incidência,
+                           dano: quanto menos, melhor)
+
+Antes era cravado em "maior média recebe 'a'", sem olhar a variável. Numa folha
+de severidade isso dava a letra 'a' para a TESTEMUNHA — o pior tratamento — e
+contradizia a prancha, que já ordenava pelo melhor. O mesmo ensaio saía com
+letras diferentes em duas telas do app, o que é indefensável num relatório.
 """
 
 from __future__ import annotations
@@ -69,14 +81,16 @@ def compact_letters(ordem, difere):
     return letras_de
 
 
-def _ordenar_por_media(medias):
-    return [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1], reverse=True)]
+def _ordenar_por_media(medias, maior_melhor=True):
+    """Ordena do MELHOR para o pior — é essa ordem que define quem recebe 'a'."""
+    return [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1],
+                                 reverse=bool(maior_melhor))]
 
 
 # --------------------------------------------------------------------------- #
 # Tukey HSD
 # --------------------------------------------------------------------------- #
-def tukey(valores, grupos, alfa=0.05):
+def tukey(valores, grupos, alfa=0.05, maior_melhor=True):
     """
     valores : array 1d de todas as observações
     grupos  : array 1d (mesmo tamanho) com o rótulo do tratamento de cada obs
@@ -101,7 +115,7 @@ def tukey(valores, grupos, alfa=0.05):
             difere.add(frozenset({g1, g2}))
 
     medias = {g: float(np.mean(valores[grupos == g])) for g in nomes}
-    ordem = _ordenar_por_media(medias)
+    ordem = _ordenar_por_media(medias, maior_melhor)
     letras = compact_letters(ordem, difere)
     return {"metodo": "Tukey HSD", "alfa": alfa, "medias": medias,
             "letras": letras, "comparacoes": detalhes, "ordem": ordem}
@@ -123,7 +137,7 @@ def _b0_max(med_ordenadas):
     return melhor_b0, melhor_i
 
 
-def scott_knott(medias, reps, mse, df_erro, alfa=0.05):
+def scott_knott(medias, reps, mse, df_erro, alfa=0.05, maior_melhor=True):
     """
     medias  : dict tratamento -> média
     reps    : repetições por tratamento (escalar; usa média se desbalanceado)
@@ -158,8 +172,8 @@ def scott_knott(medias, reps, mse, df_erro, alfa=0.05):
 
     dividir(list(range(k)))
 
-    # atribui letras: grupos com maior média recebem 'a'
-    grupos.sort(key=lambda g: -np.mean([vals[j] for j in g]))
+    # 'a' para o grupo do MELHOR tratamento — o lado depende da variável
+    grupos.sort(key=lambda g: (-1 if maior_melhor else 1) * np.mean([vals[j] for j in g]))
     abc = "abcdefghijklmnopqrstuvwxyz"
     letras = {}
     for j, g in enumerate(grupos):
@@ -168,7 +182,7 @@ def scott_knott(medias, reps, mse, df_erro, alfa=0.05):
             letras[nomes[idx]] = L
 
     medias_ord = {t: float(medias[t]) for t in
-                  sorted(medias, key=lambda t: medias[t], reverse=True)}
+                  sorted(medias, key=lambda t: medias[t], reverse=bool(maior_melhor))}
     return {"metodo": "Scott-Knott", "alfa": alfa, "medias": medias_ord,
             "letras": letras, "n_grupos": len(grupos),
             "ordem": list(medias_ord.keys())}
@@ -177,7 +191,7 @@ def scott_knott(medias, reps, mse, df_erro, alfa=0.05):
 # --------------------------------------------------------------------------- #
 # Dunn (não-paramétrico)
 # --------------------------------------------------------------------------- #
-def dunn(valores, grupos, alfa=0.05, ajuste="holm"):
+def dunn(valores, grupos, alfa=0.05, ajuste="holm", maior_melhor=True):
     """Teste de Dunn com correção de múltiplas comparações (Holm por padrão)."""
     valores = np.asarray(valores, float)
     grupos = np.asarray([str(g) for g in grupos])
@@ -218,7 +232,7 @@ def dunn(valores, grupos, alfa=0.05, ajuste="holm"):
             difere.add(frozenset({ga, gb}))
 
     medianas = {g: float(np.median(valores[grupos == g])) for g in nomes}
-    ordem = [t for t, _ in sorted(medianas.items(), key=lambda kv: kv[1], reverse=True)]
+    ordem = [t for t, _ in sorted(medianas.items(), key=lambda kv: kv[1], reverse=bool(maior_melhor))]
     letras = compact_letters(ordem, difere)
     return {"metodo": f"Dunn ({ajuste})", "alfa": alfa, "medianas": medianas,
             "letras": letras, "comparacoes": detalhes, "ordem": ordem}
