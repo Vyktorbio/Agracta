@@ -5802,7 +5802,12 @@ function _avHoraAgora(){
    do cadastro de membros no Firebase > o cargo > o e-mail (último recurso, nunca a primeira escolha). */
 function _currentUserName(){
   var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
-  if(!email) return 'Local/Offline';
+  if(!email){
+    /* Sem sessão — o caso normal no talhão. O nome declarado NESTE APARELHO vale:
+       a alternativa era gravar "Local/Offline" na rubrica, que não é o nome de
+       ninguém. A trilha marca que não houve autenticação (ver `autenticado`). */
+    try{ ensureConfig(); return String((data.__config||{}).meuNome || '').trim(); }catch(e){ return ''; }
+  }
   var alvo = email.toLowerCase().trim();
   try{
     ensureConfig();
@@ -5829,19 +5834,60 @@ function _currentUserName(){
       return legado;
     }
   }catch(e){}
-  return email;
+  /* NUNCA devolver o e-mail: este valor vai para o campo NOME da trilha e para a
+     rubrica da avaliação, e rubrica é o nome da pessoa. O e-mail continua sendo
+     gravado ao lado, em `por`/`rubricaPor`, como identificador técnico — os dois
+     juntos é que fecham a rastreabilidade. Sem nome conhecido, devolve vazio e
+     quem for assinar pergunta (ver _nomeParaAssinatura). */
+  return '';
+}
+/* O nome que vai para a trilha e para a rubrica. Se ainda não há nome conhecido,
+   PERGUNTA em vez de carimbar e-mail — assinar é ato da pessoa, e um e-mail no
+   lugar do nome não é assinatura de ninguém. */
+function _nomeParaAssinatura(){
+  var n = '';
+  try{ n = String(_currentUserName() || '').trim(); }catch(e){}
+  if(n) return n;
+  try{
+    var q = (window.prompt(
+      'Antes de registrar, diga como o seu nome deve aparecer na trilha BPL e na rubrica.\n\n' +
+      'Use o formato do relatório — ex.: Machado, V. C. — CRBio-01', '') || '').trim();
+    if(q){ _gravarNomeAssinatura(q); return q; }
+  }catch(e){}
+  return 'Não identificado';
+}
+/* Grava o nome onde ele pertence: preso ao e-mail quando há sessão; no aparelho
+   quando o trabalho é offline — que é o caso normal no talhão. */
+function _gravarNomeAssinatura(nome){
+  nome = String(nome || '').trim(); if(!nome) return;
+  try{
+    ensureConfig();
+    var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email)
+      ? String(_authUser.email).toLowerCase().trim() : '';
+    if(email){ data.__config.nomesPorEmail[email] = nome; }
+    else { data.__config.meuNome = nome; }   /* offline: fica no aparelho */
+    try{ if(_authUser){ _authUser.displayName = nome; _authUser.name = nome; } }catch(e){}
+    save();
+    if(typeof cloudSaveSoon === 'function') cloudSaveSoon();
+  }catch(e){}
 }
 /* O nome com que a pessoa assina. É vinculado ao e-mail da sessão e sobe junto
    com a configuração, sem contaminar a identidade de outra pessoa. */
 function definirMeuNome(){
   try{ ensureConfig(); }catch(e){}
   var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? String(_authUser.email).toLowerCase().trim() : '';
-  if(!email){ if(typeof alert==='function') alert('Entre com sua conta para definir o nome da assinatura.'); return; }
   var atual = (data && data.__config && data.__config.nomesPorEmail && data.__config.nomesPorEmail[email]) || _currentUserName() || '';
   var novo = (window.prompt('Como o seu nome deve aparecer na trilha BPL e na rubrica das avaliações?\n\nUse o formato que você usa no relatório — ex.: Machado, V. C. — CRBio-01', atual) || '').trim();
   if(novo === '') return;
-  data.__config.nomesPorEmail[email] = novo;
-  data.__config.meuNome = ''; /* impede clientes novos de reutilizarem o valor global */
+  /* Com sessão, o nome fica preso ao e-mail — não contamina outra identidade.
+     Sem sessão, fica no aparelho: é assim que quem trabalha offline consegue
+     assinar com o próprio nome em vez de "Local/Offline". */
+  if(email){
+    data.__config.nomesPorEmail[email] = novo;
+    data.__config.meuNome = '';
+  }else{
+    data.__config.meuNome = novo;
+  }
   try{ _authUser.displayName=novo; _authUser.name=novo; }catch(e){}
   try{
     var allowed=data.__config.allowedUsers||[];
@@ -5860,10 +5906,15 @@ function definirMeuNome(){
 function logStudyAuditInObject(study, action, details, extra) {
   if(!study) return;
   if(!Array.isArray(study.audit)) study.audit = [];
+  /* `user` é o NOME (é o que vira rubrica); `por` é o e-mail, identificador
+     técnico ao lado. Nunca o e-mail no lugar do nome. Sem nome conhecido fica
+     "Não identificado" — que é a verdade, e não um e-mail disfarçado de pessoa. */
+  var _email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
   var entry = {
     ts: Date.now(),
-    user: _currentUserName(),
-    por: (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null,
+    user: (String(_currentUserName()||'').trim() || 'Não identificado'),
+    por: _email,
+    autenticado: !!_email,
     action: action,
     details: details
   };
@@ -11025,7 +11076,7 @@ function saveAvaliacao(){
         var _q=data[_rqid], _st=_q&&(_q.estudos||[]).find(function(s){return s.id===_rsid;});
         var _a=_st&&(_st.avaliacoes||[]).find(function(x){return x.id===_raid;});
         if(_a){ if(!_a.carimbo)_a.carimbo={}; _a.carimbo.rubrica=url; _a.carimbo.rubricaEm=new Date().toISOString();
-          _a.carimbo.rubricaPor=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; _a.carimbo.rubricaNome=_currentUserName(); _a.carimbo.rubricaSignificado='Conferido e assinado';
+          _a.carimbo.rubricaPor=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; _a.carimbo.rubricaNome=_nomeParaAssinatura(); _a.carimbo.rubricaSignificado='Conferido e assinado';
           save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSave==='function')cloudSave();
           if(typeof openStudyDetail==='function')openStudyDetail(_rqid,_rsid); }
       }catch(e){} }, 'Avaliação '+(isoToBR(_rdata)||_rdata||''));
