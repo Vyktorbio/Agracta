@@ -2217,7 +2217,7 @@ function buildAuthGate(){
   g.innerHTML='<form class="auth-box" onsubmit="return false">'+
     '<div class="auth-logo">Agracta</div>'+
     '<div class="auth-title">Entrar</div>'+
-    '<div class="auth-sub">Acesso restrito</div>'+
+    '<div class="auth-sub">Estudos de campo, do protocolo ao relatório.</div>'+
     '<label class="auth-l">E-MAIL</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
     '<label class="auth-l">SENHA</label><input id="authPass" class="auth-i" type="password" autocomplete="current-password" placeholder="••••••••">'+
     '<div id="authErr" class="auth-err"></div>'+
@@ -12087,7 +12087,7 @@ function injectTopbarButtons(){
   if(!tbr||tbr.querySelector(".btn-today"))return;
   var btnHoje=document.createElement("button");
   btnHoje.className="btn-sm btn-today";
-  btnHoje.innerHTML='HOJE <span id="todayBadge" class="today-badge">0</span>';
+  btnHoje.innerHTML='Hoje <span id="todayBadge" class="today-badge">0</span>';
   btnHoje.onclick=openToday;
   var btnBusca=document.createElement("button");
   btnBusca.className="btn-sm btn-search";
@@ -12096,7 +12096,7 @@ function injectTopbarButtons(){
   btnBusca.onclick=openSearch;
   var btnEstudos=document.createElement("button");
   btnEstudos.className="btn-sm btn-studies";
-  btnEstudos.textContent="ENSAIOS";
+  btnEstudos.textContent="Estudos";
   btnEstudos.onclick=openStudiesPanel;
   /* Insere antes do botão AGENDA */
   var btnAgenda=document.getElementById("btnAgenda");
