@@ -584,7 +584,9 @@ function initMap(){
     'H\u00edbrido (Google)':  LF.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:_gsub, maxZoom:SAT_MAX_ZOOM, maxNativeZoom:20, attribution:'\u00a9 Google' }),
     'Sat\u00e9lite (Esri)':   LF.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:SAT_MAX_ZOOM, maxNativeZoom:19, attribution:'\u00a9 Esri, Maxar' })
   };
-  _baseSat=_bases['Sat\u00e9lite (Google)']; _baseSat.addTo(_map);
+  /* Abre sempre no Google híbrido: imagem aérea + nomes de ruas e lugares.
+     As outras camadas continuam disponíveis no seletor do mapa. */
+  _baseSat=_bases['H\u00edbrido (Google)']; _baseSat.addTo(_map);
   try{ LF.control.layers(_bases, null, { position:'topleft', collapsed:true }).addTo(_map); }catch(e){}
   _qLayer = LF.layerGroup().addTo(_map);
   _notesLayer = LF.layerGroup().addTo(_map);
@@ -3008,7 +3010,7 @@ function ndviBBoxMedida(){
 }
 function _bboxDegenerada(bb){ return !bb || !(bb[2]-bb[0]>1e-9) || !(bb[3]-bb[1]>1e-9); }
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
-var ndviProbe=false, _gpsMarker=null, _gpsCircle=null;
+var ndviProbe=false, _gpsMarker=null, _gpsCircle=null, _gpsAutoStarted=false;
 function quadraAt(lat,lng){ ensureQGEO(); var f=null;
   quadrasAtivas().forEach(function(id){ var pp=QGEO[id]; if(!pp||pp.length<3)return;
     var ring=pp.map(function(p){return [p[1],p[0]];}); if(pointInRing(lng,lat,ring)) f=id; }); return f; }
@@ -3081,8 +3083,18 @@ function gpsBest(opts, onUpd, onEnd){
      maxAcc deixa de ser filtro de descarte e vira só o alvo de qualidade. */
   void maxAcc;
 }
-function locateMe(){
-  if(!navigator.geolocation){ alert('GPS não disponível neste navegador.'); return; }
+/* Localização automática ao abrir: depois que o Local ativo serve como reserva,
+   o GPS assume o centro do mapa. A permissão é decisão do aparelho; se estiver
+   negada ou sem sinal, o app continua no Local sem abrir um alerta intrusivo. */
+function autoLocateOnOpen(){
+  if(_gpsAutoStarted||!navigator.geolocation) return;
+  _gpsAutoStarted=true;
+  setTimeout(function(){ try{ locateMe({automatic:true}); }catch(e){} },350);
+}
+function locateMe(opts){
+  opts=opts||{};
+  var automatic=!!opts.automatic;
+  if(!navigator.geolocation){ if(!automatic) alert('GPS não disponível neste navegador.'); return; }
   if(!_map) initMap();
   var centered=false;
   function draw(b, fim){
@@ -3091,13 +3103,14 @@ function locateMe(){
     _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400}).addTo(_map);
     if(_gpsCircle) _map.removeLayer(_gpsCircle);
     _gpsCircle=LF.circle(ll,{radius:Math.max(b.acc,1),color:'#2196f3',weight:1,fillColor:'#2196f3',fillOpacity:.12,interactive:false}).addTo(_map);
-    _gpsMarker.bindPopup('Você está aqui · ±'+Math.round(b.acc)+' m'+(fim?'':' · afinando…')).openPopup();
+    _gpsMarker.bindPopup('Você está aqui · ±'+Math.round(b.acc)+' m'+(fim?'':' · afinando…'));
+    if(!automatic) _gpsMarker.openPopup();
     if(!centered){ centered=true; try{ _map.setView(ll, Math.max(_map.getZoom()||16,17)); }catch(e){} }
     if(fim && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
   }
   gpsBest({target:8, maxWait:9000, maxAcc:80}, function(b){ draw(b,false); }, function(b,err){
     /* a mensagem agora vem pronta do gpsBest, dizendo a causa real */
-    if(!b){ alert('Não consegui o GPS.\n\n'+(err||'Sem posição disponível.')); return; }
+    if(!b){ if(!automatic) alert('Não consegui o GPS.\n\n'+(err||'Sem posição disponível.')); return; }
     draw(b,true);
   });
 }
@@ -3764,16 +3777,19 @@ function buildClimaPanel(){
     var opts=_climaStations? _climaStations.map(function(st){ return '<option value="'+st.mac+'"'+(st.mac===climaMac?' selected':'')+'>'+esc(st.name)+'</option>'; }).join('') : '';
     ctrl=(_climaStations? '<label class="gr-ctl"><span>Estação</span><select onchange="climaPick(this.value)">'+opts+'</select></label>' : '');
     /* A coordenada da estação é digitada por quem instala e às vezes fica no
-       padrão de fábrica. Isso não afeta a LEITURA (que vem pelo MAC), mas
-       estraga o nascer/pôr do sol — e ninguém descobre sem ser avisado. */
+       padrão de fábrica. Isso não afeta a LEITURA (que vem pelo MAC). Para o
+       sol, o Agracta prefere a posição georreferenciada do Local/quadras. */
     var _stSel=(_climaStations||[]).filter(function(s){ return s.mac===climaMac; })[0];
     if(_stSel && _coordSuspeita(_stSel.lat,_stSel.lng)){
       var _cAtivo=(LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro)||null;
       var _dist=_cAtivo?Math.round(_kmEntre(_cAtivo[0],_cAtivo[1],_stSel.lat,_stSel.lng)):null;
+      var _solProtegido=!!_climaSunLocalLL(_stSel);
       ctrl+='<div style="margin:6px 0;padding:7px 9px;border-radius:8px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a;font-size:11px;line-height:1.5">'+
         '⚠ A coordenada cadastrada nesta estação ('+(+_stSel.lat).toFixed(4)+', '+(+_stSel.lng).toFixed(4)+')'+
         (_dist!=null?(' fica a '+_dist+' km daqui'):' não parece ser do Brasil')+'. '+
-        'A leitura do tempo continua correta — ela vem pelo aparelho, não pela coordenada. Só o nascer/pôr do sol a usa. Vale corrigir no app da Ecowitt.</div>';
+        'A leitura do tempo continua correta — ela vem pelo aparelho. '+
+        (_solProtegido?'Para nascer e pôr do sol, o Agracta está usando a coordenada do local no mapa, então os horários continuam corretos. ':'Sem uma coordenada do local no mapa, os horários do sol podem ficar deslocados. ')+
+        'Vale corrigir o cadastro no app da Ecowitt.</div>';
     }
   } else {
     var nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
@@ -4041,10 +4057,27 @@ function sunriseSunset(date, lat, lng){
   var sr=jd2date(Jtransit - H/360.0), ss=jd2date(Jtransit + H/360.0);
   return { sunrise:sr, sunset:ss, dayMs:(ss-sr) };
 }
-/* Coordenada p/ o sol da estação selecionada: prefere o CENTRO do Local georreferenciado
-   que casa com a estação (confiável); senão a coord cadastrada da estação. */
+/* A estação selecionada representa o Local ativo? Mantém a mesma regra de
+   casamento nominal usada pelo chip, sem cair por engano em outra estação. */
+function _climaEstacaoCasaLocal(st){
+  if(!st||!LOCAIS||!localAtivo||!LOCAIS[localAtivo]) return false;
+  var sn=_climaNorm(st.name||''), ln=_climaNorm(LOCAIS[localAtivo].nome||'');
+  if(!sn||!ln) return false;
+  if(sn.indexOf(ln)>=0||ln.indexOf(sn)>=0) return true;
+  var toks=ln.match(/[a-z]{4,}/g)||[];
+  for(var i=0;i<toks.length;i++){ if(sn.indexOf(toks[i])>=0) return true; }
+  return false;
+}
+/* Se a estação é a do Local ativo, usa toda a escada geográfica do mapa:
+   centro cadastrado, média das quadras ou quadra aberta. */
+function _climaSunLocalLL(st){
+  return _climaEstacaoCasaLocal(st)?_climaLocalCoord():null;
+}
+/* Coordenada p/ o sol da estação selecionada: prefere a geografia do mapa que
+   casa com a estação (confiável); senão a coord cadastrada da estação. */
 function _climaSunLL(){
   var st=(_climaStations||[]).filter(function(s){return s.mac===climaMac;})[0]; if(!st) return null;
+  var ativo=_climaSunLocalLL(st); if(ativo) return ativo;
   if(typeof LOCAIS==='object' && LOCAIS){
     var sn=_climaNorm(st.name||''), ids=Object.keys(LOCAIS), i, k;
     for(i=0;i<ids.length;i++){ var c=LOCAIS[ids[i]].centro, ln=_climaNorm(LOCAIS[ids[i]].nome||'');
@@ -12110,6 +12143,9 @@ function init(){
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
+  /* O Local ativo é a reserva; com permissão, o mapa passa para onde a pessoa
+     realmente está, como o botão de localização do Maps. */
+  try{ autoLocateOnOpen(); }catch(e){}
   /* Chip do clima sobre o mapa. Em try próprio: rede fora do ar aqui não pode
      derrubar o resto do init — o app abre offline no talhão. */
   try{ climaChipIniciar(); }catch(e){}

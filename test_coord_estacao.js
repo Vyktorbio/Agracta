@@ -22,7 +22,7 @@ vm.createContext(ctx);
 function pega(n){var i=src.indexOf('function '+n+'(');var j=i,d=0,v=false;
  for(;j<src.length;j++){if(src[j]==='{'){d++;v=true}else if(src[j]==='}'){d--;if(v&&d===0){j++;break}}}
  return src.slice(i,j);}
-vm.runInContext(pega('_kmEntre')+'\n'+pega('_coordDistanciaDoLocal')+'\n'+pega('_coordNoBrasil')+'\n'+pega('_coordPlausivel')+'\n'+pega('_coordSuspeita')+'\nvar LOCAIS=null,localAtivo=null;',ctx);
+vm.runInContext(pega('_climaNorm')+'\n'+pega('_climaEstacaoCasaLocal')+'\n'+pega('_climaSunLocalLL')+'\n'+pega('_kmEntre')+'\n'+pega('_coordDistanciaDoLocal')+'\n'+pega('_coordNoBrasil')+'\n'+pega('_coordPlausivel')+'\n'+pega('_coordSuspeita')+'\nvar LOCAIS=null,localAtivo=null; var _climaLocalCoord=function(){return [-22.658,-47.521];};',ctx);
 var f=0,p=0;
 function ck(c,n){ if(c){p++;console.log('  ok    '+n)}else{f++;console.log('  FALHA '+n)} }
 console.log('Sem local ativo: julga só pelo Brasil');
@@ -33,6 +33,10 @@ ck(ctx._coordPlausivel(null,null)===false,'nulo é rejeitado');
 ck(ctx._coordPlausivel('abc',-47)===false,'lixo é rejeitado');
 console.log('Com local ativo em Iracemápolis: exige proximidade');
 vm.runInContext("LOCAIS={ira:{nome:'Iracemapolis',centro:[-22.658,-47.521]}}; localAtivo='ira';",ctx);
+ck(ctx._climaEstacaoCasaLocal({name:'Estação_Iracemapolis'})===true,'estação Iracemápolis casa com o Local ativo');
+ck(JSON.stringify(ctx._climaSunLocalLL({name:'Estação_Iracemapolis'}))==='[-22.658,-47.521]','sol usa a coordenada georreferenciada do mapa');
+ck(ctx._climaEstacaoCasaLocal({name:'Estação Inaciolândia'})===false,'estação de outro Local não herda a coordenada ativa');
+ck(ctx._climaSunLocalLL({name:'Estação Inaciolândia'})===null,'sol de outra estação não usa a quadra errada');
 ck(ctx._coordPlausivel(-22.60,-47.50)===true,'estação a poucos km passa');
 ck(ctx._coordPlausivel(-23.5304,-46.6536)===true,'capital (138 km) ainda é USADA: erro no sol é ~3,5 min');
 ck(ctx._coordSuspeita(-23.5304,-46.6536)===true,'mas 138 km GERA AVISO de cadastro errado');
