@@ -4,9 +4,9 @@
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
                     "posthoc.py","anova.py","glmcount.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-4";
+const APP_VERSION = "bioensaio-auditoria-6";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v37-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v39-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -2451,6 +2451,11 @@ $("#btn-analisar").addEventListener("click", async () => {
   const papeis = lerPapeis();
   if(!papeis.resposta){ avisar("Defina qual coluna é a Resposta."); return; }
   const opcoes = { alfa: parseFloat($("#opt-alfa").value), log_dose: $("#opt-logdose").checked };
+  /* Lado do "melhor": a letra 'a' vai para o MELHOR tratamento, e qual lado é o
+     melhor depende da variável — severidade quanto menos melhor, mortalidade
+     quanto mais melhor. Vem do Agracta junto com os dados; sem informação,
+     mantém o padrão histórico (maior média = 'a'). */
+  if(window.__agractaMaiorMelhor != null) opcoes.maior_melhor = !!window.__agractaMaiorMelhor;
   const uni = ($("#opt-unidade").value||"").trim(); if(uni) opcoes.unidade_dose = uni;
   const niveisStr = ($("#opt-niveis").value||"").trim();
   if(niveisStr){
@@ -3422,6 +3427,8 @@ function __agractaHandoff(payload){
     if(!payload || !payload.aoa || !payload.aoa.length) return false;
     window.__agractaEmbed = true; /* gate do autoteste vira só aviso (análise consultiva no Agracta) */
     window.__agractaRequestId = payload.requestId || '';
+    /* sentido da variável, para a letra 'a' cair no melhor tratamento */
+    if(payload.maiorMelhor != null) window.__agractaMaiorMelhor = !!payload.maiorMelhor;
     var modo = payload.modo || 'analise';
     var linhas = linhasMatrizDeAoa(payload.aoa);
     if(!linhas.length){ avisar('Não encontrei valores (Tratamento/Variável/Valor) para analisar.'); return false; }
