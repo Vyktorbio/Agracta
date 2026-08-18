@@ -483,3 +483,205 @@
     ligado: ligado
   };
 })();
+
+/* ==========================================================================
+   Agracta — gaveta "Menu" e mapa sem chrome
+   Engrenagem de controles, ☰ do menu principal e o botão "1 ha" viviam soltos
+   por cima das quadras. Agora moram atrás de um único item na barra de baixo,
+   que abre de lado igual ao "Mapa". Sobre a imagem sobra só o mostrador do
+   clima. Rotação é o único controle que não cabe numa gaveta — quem gira
+   precisa ver girando —, então ela vira uma faixa temporária no rodapé.
+   ========================================================================== */
+(function(){
+  'use strict';
+
+  function $(id){ return document.getElementById(id); }
+  function svg(d, size){
+    return '<svg width="'+(size||20)+'" height="'+(size||20)+'" viewBox="0 0 24 24" fill="none" '+
+           'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+  }
+  var I = {
+    menu:'<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>',
+    pin:'<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
+    bussola:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5.5-5.5 2 2-5.5Z"/>',
+    quadrado:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/><path d="M12 4v16"/>',
+    lapis:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    baixar:'<path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/>',
+    subir:'<path d="M12 21V9"/><path d="m7 12 5-5 5 5"/><path d="M5 3h14"/>',
+    caixa:'<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>',
+    nuvem:'<path d="M20 17.6A4 4 0 0 0 18 10h-1.3A7 7 0 1 0 5 16.7"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/>',
+    engrenagem:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+    escudo:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+    sair:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    lua:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
+    recarregar:'<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
+    celular:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+    x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+  };
+
+  function existe(f){ return typeof window[f] === 'function'; }
+  function chamar(f, arg){
+    agMenu(false);
+    setTimeout(function(){ try{ if(existe(f)) window[f](arg); }catch(e){} }, 180);
+  }
+  window.agMenuAcao = chamar;
+
+  function linha(icone, titulo, sub, acao){
+    return '<button class="ag-row" onclick="'+acao+'">'+
+      '<span class="ag-ic">'+svg(icone)+'</span>'+
+      '<span class="ag-lbl">'+titulo+(sub?'<span class="ag-sub">'+sub+'</span>':'')+'</span>'+
+    '</button>';
+  }
+
+  /* O administrador só existe depois do login, então o corpo é remontado a
+     cada abertura em vez de uma vez só na carga. */
+  function corpo(){
+    var adm = false;
+    try{ adm = existe('isAdmin') && window.isAdmin(); }catch(e){}
+    var instalar = true;
+    try{ instalar = existe('isStandalone') ? !window.isStandalone() : true; }catch(e){}
+    var escuro = document.documentElement.classList.contains('light');
+
+    return '<div class="ag-sec">'+
+        '<div class="ag-sec-t">Local ativo</div>'+
+        '<div id="agLocalHost"></div>'+
+      '</div>'+
+      '<div class="ag-sec">'+
+        '<div class="ag-sec-t">Enquadrar o mapa</div>'+
+        '<div class="ag-steps">'+
+          '<button onclick="agZoom(1)">Aproximar +</button>'+
+          '<button onclick="agZoom(-1)">Afastar −</button>'+
+        '</div>'+
+        linha(I.bussola, 'Girar o mapa', 'Abre a régua de giro no rodapé', 'agRotBar(true)')+
+        linha(I.quadrado, 'Quadrado de 1 hectare', 'Referência de 100 × 100 m no centro', 'agMenuAcao(\'toggleHaRef\')')+
+        linha(I.lapis, 'Editar quadras', 'Mover vértices e redesenhar', 'agMenuAcao(\'toggleQuadraEdit\')')+
+      '</div>'+
+      '<div class="ag-sec">'+
+        '<div class="ag-sec-t">Dados</div>'+
+        linha(I.baixar, 'Backup em arquivo', 'Baixa tudo para o aparelho', 'agMenuAcao(\'exportData\')')+
+        linha(I.subir, 'Importar arquivo', 'Restaura de um backup .json', 'agImportar()')+
+        linha(I.caixa, 'Backups (restaurar)', 'Pontos de restauração guardados', 'agMenuAcao(\'openBackups\')')+
+        linha(I.nuvem, 'Histórico da nuvem', 'Versões sincronizadas', 'agMenuAcao(\'openCloudHistory\')')+
+        linha(I.recarregar, 'Recuperação de avaliações', 'Resgata lançamentos perdidos', 'agMenuAcao(\'openAvalRecovery\')')+
+      '</div>'+
+      '<div class="ag-sec">'+
+        '<div class="ag-sec-t">Este aparelho</div>'+
+        linha(I.lua, escuro?'Tema escuro':'Tema claro', 'Alterna o visual', 'agMenuAcao(\'toggleTheme\')')+
+        linha(I.lapis, 'Meu nome e assinatura', 'Como você assina na trilha BPL', 'agMenuAcao(\'definirMeuNome\')')+
+        linha(I.recarregar, 'Buscar versão nova', 'Força a atualização do app', 'agMenuAcao(\'forcarAtualizacao\')')+
+        (instalar ? linha(I.celular, 'Instalar o app', 'Fica como aplicativo na tela inicial', 'agMenuAcao(\'installApp\')') : '')+
+      '</div>'+
+      (adm ? '<div class="ag-sec">'+
+        '<div class="ag-sec-t">Administração</div>'+
+        linha(I.engrenagem, 'Painel Admin', 'Técnicos, horários e acessos', 'agMenuAcao(\'openAdminPanel\')')+
+        linha(I.escudo, 'Conformidade &amp; ISMS', 'Registro de segurança da informação', 'agMenuAcao(\'openComplianceISMS\')')+
+      '</div>' : '')+
+      '<div class="ag-sec">'+
+        linha(I.sair, 'Sair da conta', '', 'agMenuAcao(\'doLogout\')')+
+      '</div>';
+  }
+
+  function montarGaveta(){
+    if($('agMenuDrawer')) return;
+    var bg = document.createElement('div');
+    bg.id = 'agMenuBg'; bg.className = 'ag-drawer-bg';
+    bg.onclick = function(){ agMenu(false); };
+    document.body.appendChild(bg);
+
+    var d = document.createElement('aside');
+    d.id = 'agMenuDrawer'; d.className = 'ag-drawer';
+    d.setAttribute('role','dialog'); d.setAttribute('aria-label','Menu');
+    d.innerHTML =
+      '<div class="ag-dw-head"><h2>Menu</h2>'+
+        '<button class="ag-dw-x" onclick="agMenu(false)" aria-label="Fechar">'+svg(I.x,20)+'</button></div>'+
+      '<div class="ag-dw-body" id="agMenuBody"></div>';
+    document.body.appendChild(d);
+  }
+
+  function agMenu(abrir){
+    montarGaveta();
+    var d = $('agMenuDrawer'), bg = $('agMenuBg'), b = $('agMenuBtn');
+    var vai = (abrir === undefined) ? !d.classList.contains('on') : !!abrir;
+    if(vai){
+      $('agMenuBody').innerHTML = corpo();
+      /* O seletor de local é o elemento de verdade, mudado de endereço: assim o
+         menu de locais continua ancorando nele e nada foi reimplementado. */
+      var chip = $('localChip'), host = $('agLocalHost');
+      if(chip && host && chip.parentNode !== host) host.appendChild(chip);
+      /* a gaveta do mapa e a do menu não convivem */
+      try{ if(window.agToggleDrawer) window.agToggleDrawer(false); }catch(e){}
+    }
+    d.classList.toggle('on', vai);
+    bg.classList.toggle('on', vai);
+    if(b){ b.classList.toggle('on', vai); b.setAttribute('aria-expanded', vai?'true':'false'); }
+  }
+  window.agMenu = agMenu;
+
+  window.agImportar = function(){
+    agMenu(false);
+    setTimeout(function(){ var i = $('imp'); if(i) i.click(); }, 180);
+  };
+  window.agZoom = function(d){
+    try{ if(window._map) window._map.setZoom((window._map.getZoom()||0) + d); }catch(e){}
+  };
+
+  /* ---- régua de giro ---- */
+  function montarRot(){
+    if($('agRotBar')) return $('agRotBar');
+    var el = document.createElement('div');
+    el.id = 'agRotBar'; el.className = 'ag-rotbar';
+    el.innerHTML =
+      '<button onclick="agRotSet(0)">Norte</button>'+
+      '<input type="range" id="agRotRange" min="0" max="359" step="1" value="0" oninput="agRotSet(this.value)">'+
+      '<span class="rb-v" id="agRotVal">0°</span>'+
+      '<button class="ok" onclick="agRotBar(false)">Pronto</button>';
+    document.body.appendChild(el);
+    return el;
+  }
+  window.agRotSet = function(v){
+    v = ((Math.round(Number(v)||0) % 360) + 360) % 360;
+    try{ if(window._map && window._map.setBearing) window._map.setBearing(v); }catch(e){}
+    var r = $('agRotRange'); if(r && Number(r.value) !== v) r.value = v;
+    var s = $('agRotVal'); if(s) s.textContent = v + '°';
+  };
+  window.agRotBar = function(abrir){
+    var el = montarRot();
+    var vai = (abrir === undefined) ? !el.classList.contains('on') : !!abrir;
+    if(vai){
+      agMenu(false);
+      var b = 0;
+      try{ b = ((Math.round(window._map && window._map.getBearing && window._map.getBearing() || 0) % 360) + 360) % 360; }catch(e){}
+      var r = $('agRotRange'); if(r) r.value = b;
+      var s = $('agRotVal'); if(s) s.textContent = b + '°';
+    }
+    el.classList.toggle('on', vai);
+  };
+
+  /* ---- botão na barra de baixo ---- */
+  function montarBotao(){
+    var tbr = document.querySelector('.top-bar-right');
+    if(!tbr || $('agMenuBtn')) return;
+    var b = document.createElement('button');
+    b.id = 'agMenuBtn';
+    b.className = 'btn-sm btn-menu';
+    b.setAttribute('aria-label','Menu');
+    b.setAttribute('aria-expanded','false');
+    b.innerHTML = svg(I.menu,18)+'<span class="tb-nav-label">Menu</span>';
+    b.onclick = function(){ agMenu(); };
+    tbr.appendChild(b);
+  }
+
+  function iniciar(){
+    montarBotao(); montarGaveta(); montarRot();
+    setTimeout(montarBotao, 400);
+    setTimeout(montarBotao, 1500);
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape'){
+        var d = $('agMenuDrawer');
+        if(d && d.classList.contains('on')) agMenu(false);
+      }
+    });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+  else iniciar();
+})();

@@ -28,7 +28,7 @@ titulo "1. Os arquivos abrem sem erro de sintaxe?"
 if ! command -v node >/dev/null 2>&1; then
   avisar "node não encontrado — não dá para conferir sintaxe nem rodar teste."
 else
-  for f in app.js estatistica.js firebase-sync.js estatistica/app.js; do
+  for f in app.js estatistica.js firebase-sync.js ui-campo.js acesso-horario.js alvos-catalogo.js estatistica/app.js; do
     [ -f "$f" ] || continue
     if node -e "new Function(require('fs').readFileSync('$f','utf8'))" 2>/dev/null; then
       ok "$f"

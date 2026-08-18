@@ -2,20 +2,20 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v139';
+var CACHE = 'agracta-app-v140';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './', './index.html',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=22', './theme-2026.css?v=6', './ui-campo.css?v=2', './app.js?v=61', './mapa-base.jpg',
+  './styles.css?v=22', './theme-2026.css?v=6', './ui-campo.css?v=3', './app.js?v=62', './mapa-base.jpg',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js', './vendor/biocalc-campo-core.js', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=5',
-  './acesso-horario.js?v=2', './ui-campo.js?v=2',
+  './acesso-horario.js?v=2', './ui-campo.js?v=3', './alvos-catalogo.js?v=1',
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js', './croqui.html', './prancha.html',

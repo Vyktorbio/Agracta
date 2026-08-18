@@ -197,3 +197,167 @@ html.light .btn-tools .ag-dot{box-shadow:0 0 0 2px #fff}
 
 /* modo tela cheia do mapa esconde a casca inteira */
 body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{display:none!important}
+
+/* ==========================================================================
+   MAPA LIMPO — nada de chrome flutuante sobre a imagem
+   Engrenagem, ☰, giro e "1 ha" moravam soltos por cima das quadras. Foram
+   todos para a gaveta "Menu", que abre de lado igual à do Mapa. Sobre o mapa
+   fica só o mostrador do clima.
+   ========================================================================== */
+.leaflet-top.leaflet-left .leaflet-control,
+.leaflet-top.leaflet-right .leaflet-control,
+.rot-ctl,.menu-ctl,.ha-ctl,.mapctl-toggle{display:none!important}
+
+/* a barra de cima deixa de ser barra: vira só o cantinho do mostrador */
+.top-bar{
+  position:absolute!important;top:0;left:0;right:0;z-index:60;
+  background:none!important;border:none!important;box-shadow:none!important;
+  padding:calc(8px + env(safe-area-inset-top)) 12px 0!important;min-height:0!important;
+  pointer-events:none!important;
+}
+.tb-brand{
+  background:none!important;border:none!important;box-shadow:none!important;
+  height:auto!important;max-width:none!important;padding:0!important;
+}
+#localChip{display:none!important}          /* o local mudou-se para a gaveta */
+.top-bar-info{display:none!important}
+
+/* ---- mostrador do clima: painel de LED, tipo relógio de bolso ---- */
+.clima-chip{
+  pointer-events:auto!important;
+  display:inline-flex!important;align-items:baseline!important;gap:9px!important;
+  margin:0!important;padding:5px 10px 4px!important;border-radius:6px!important;
+  background:linear-gradient(180deg,#18261d,#0d1712)!important;
+  border:1px solid rgba(122,226,169,.20)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 -6px 12px rgba(0,0,0,.35),0 4px 16px rgba(0,0,0,.28)!important;
+  font-family:var(--ag-mono,ui-monospace,monospace)!important;
+  font-variant-numeric:tabular-nums!important;
+  color:#6ef0ab!important;text-shadow:0 0 7px rgba(76,240,155,.42)!important;
+  font-size:10.5px!important;font-weight:600!important;letter-spacing:.08em!important;
+  white-space:nowrap!important;max-width:none!important;
+}
+.clima-chip svg{display:none!important}      /* os ícones quebram a leitura de mostrador */
+.clima-chip .cc-t{
+  font-size:16px!important;font-weight:700!important;line-height:1!important;
+  color:#7dfcb4!important;letter-spacing:.02em!important;
+}
+.clima-chip .cc-v{color:#43c98a!important;font-size:10.5px!important}
+.clima-chip:hover{border-color:rgba(122,226,169,.42)!important}
+
+html.light .clima-chip{
+  background:linear-gradient(180deg,#20302a,#141f1a)!important;
+  color:#6ef0ab!important;
+}
+
+/* ---- faixa temporária de rotação: aparece, gira, some ---- */
+.ag-rotbar{
+  position:fixed;left:10px;right:10px;z-index:1160;
+  bottom:calc(84px + env(safe-area-inset-bottom,0px));
+  padding:11px 14px;border-radius:20px;display:none;align-items:center;gap:12px;
+  background:var(--gp-glass-strong,rgba(15,24,18,.96));
+  backdrop-filter:var(--gp-blur,blur(22px));-webkit-backdrop-filter:var(--gp-blur,blur(22px));
+  border:1px solid var(--gp-line,rgba(232,244,235,.10));
+  box-shadow:0 18px 50px rgba(12,35,20,.22);
+  font-family:var(--ag-font,system-ui);
+}
+.ag-rotbar.on{display:flex}
+.ag-rotbar input[type=range]{flex:1;min-width:0;accent-color:var(--gp-green,#3bd27f)}
+.ag-rotbar .rb-v{
+  flex:0 0 auto;font:700 12px/1 var(--ag-mono,ui-monospace);color:var(--gp-green,#3bd27f);
+  min-width:42px;text-align:right;font-variant-numeric:tabular-nums
+}
+.ag-rotbar button{
+  flex:0 0 auto;border:1px solid var(--gp-line,rgba(232,244,235,.10));cursor:pointer;
+  background:var(--gp-s1,#111c16);color:var(--gp-text-2,#bdc9c0);
+  border-radius:10px;padding:7px 12px;font:700 11px var(--ag-font,system-ui)
+}
+.ag-rotbar button.ok{background:var(--gp-green,#3bd27f);color:#062015;border-color:transparent}
+@media(min-width:721px){
+  .ag-rotbar{left:50%;right:auto;transform:translateX(-50%);width:min(620px,calc(100vw - 24px))}
+}
+
+/* botões de passo dentro da gaveta (zoom, 1 ha) */
+.ag-steps{display:flex;gap:6px;padding:2px 2px 6px}
+.ag-steps button{
+  flex:1;cursor:pointer;border-radius:12px;padding:11px 6px;
+  background:var(--gp-s1,#111c16);border:1px solid var(--gp-line,rgba(232,244,235,.10));
+  color:var(--gp-text-2,#bdc9c0);font:700 12px var(--ag-font,system-ui)
+}
+.ag-steps button:hover{background:var(--gp-s2,#17231b);color:var(--gp-text,#f2f7f3)}
+.ag-drawer #localChip{display:inline-flex!important;margin:2px 2px 8px!important;max-width:100%!important}
+.btn-menu{order:5!important}
+.btn-menu.on{color:var(--gp-green,#3bd27f)!important;border-color:var(--gp-green,#3bd27f)!important}
+
+/* ==========================================================================
+   Correções de especificidade — o app injeta <style> em tempo de execução,
+   depois desta folha, então aqui é preciso mirar o CANTO do Leaflet (o pai) em
+   vez de cada controle: escondido o canto, nenhuma regra filha ressuscita.
+   ========================================================================== */
+.leaflet-top.leaflet-left,
+.leaflet-top.leaflet-right{display:none!important}
+.leaflet-control-scale{display:none!important}
+body.mapctl-open .leaflet-top.leaflet-left{display:none!important}
+
+/* a marca some do mapa: ela já está na tela de login e no cabeçalho impresso */
+.tb-brand::before{display:none!important}
+.tb-brand{gap:0!important}
+
+/* ---- o mostrador, agora sem ninguém para brigar ---- */
+html body .clima-chip{
+  position:absolute!important;
+  top:calc(6px + env(safe-area-inset-top,0px))!important;left:12px!important;right:auto!important;
+  max-width:none!important;width:auto!important;overflow:visible!important;
+}
+/* O tema 2026 reduzia o chip a só a temperatura (display:none no .cc-v). Aqui
+   ele volta inteiro: temperatura, umidade e vento são a leitura que interessa
+   em campo, e agora há espaço porque nada mais divide o topo com ele. */
+html body .clima-chip .cc-v{
+  display:inline!important;
+  max-width:none!important;overflow:visible!important;text-overflow:clip!important;
+  color:#43c98a!important;font:600 10.5px/1 var(--ag-mono,ui-monospace)!important;
+  letter-spacing:.06em!important;white-space:nowrap!important;
+}
+html body .clima-chip .cc-v .cc-w{display:inline!important}
+html body .clima-chip .cc-t{
+  font:700 16px/1 var(--ag-mono,ui-monospace)!important;color:#7dfcb4!important;letter-spacing:.02em!important;
+}
+html body .clima-chip .cc-src{display:none!important}   /* o selo de fonte não é leitura de mostrador */
+
+/* ==========================================================================
+   Busca de alvo biológico na nova coluna de avaliação
+   ========================================================================== */
+.avcol-lab-dim{font-weight:500;opacity:.6}
+.alvo-lista{
+  margin:6px 0 2px;max-height:236px;overflow-y:auto;
+  border-radius:12px;background:rgba(0,0,0,.03);
+  -webkit-overflow-scrolling:touch
+}
+.alvo-lista:empty{display:none}
+.alvo-cab{
+  padding:8px 11px 5px;font:650 9.5px/1 var(--ag-font,system-ui);
+  letter-spacing:.12em;text-transform:uppercase;color:#8a978e
+}
+.alvo-item{
+  width:100%;display:flex;align-items:flex-start;gap:9px;cursor:pointer;text-align:left;
+  padding:9px 11px;border:0;background:none;border-top:1px solid rgba(20,40,28,.07)
+}
+.alvo-item:hover{background:rgba(35,132,82,.09)}
+.alvo-item:active{background:rgba(35,132,82,.16)}
+.alvo-n{
+  flex:1;min-width:0;font:650 13px/1.25 var(--ag-font,system-ui);color:#22312a
+}
+.alvo-n i{
+  display:block;margin-top:2px;font:italic 400 11px/1.3 var(--ag-font,system-ui);color:#7a8a80
+}
+.alvo-g{
+  flex:0 0 auto;margin-top:2px;padding:2px 6px;border-radius:5px;
+  font:700 8.5px/1.5 var(--ag-font,system-ui);letter-spacing:.06em;text-transform:uppercase
+}
+.alvo-g-d{background:rgba(191,75,62,.13);color:#a53f33}   /* doença */
+.alvo-g-p{background:rgba(156,104,23,.15);color:#8a5c14}   /* praga  */
+.alvo-g-w{background:rgba(35,132,82,.13);color:#1d6b44}    /* daninha */
+
+html:not(.light) .alvo-lista{background:rgba(255,255,255,.04)}
+html:not(.light) .alvo-item{border-top-color:rgba(232,244,235,.07)}
+html:not(.light) .alvo-n{color:#e8f1ea}
+html:not(.light) .alvo-n i{color:#93a89b}

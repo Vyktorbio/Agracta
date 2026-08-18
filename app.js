@@ -8397,12 +8397,12 @@ function openStudyDetail(qid,sid){
   h+=studyAudpcHtml(study);
   h+=studyChartsHtml(study);
   h+=_bioestatIntegratedHtml(qid,sid,study);
-  h+='<div id="study-stage-dossie" class="study-stage-anchor" aria-hidden="true"></div>'+
-     '<div class="sd-section study-dossier"><div class="sd-section-title">Dossiê &amp; entregáveis</div><div class="study-dossier-copy">Protocolo, dados brutos, estatística, investigação forense, figuras e trilha reunidos a partir deste estudo.</div><div class="study-dossier-actions">'+
-     '<button type="button" onclick="downloadStudyWorkbook(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Baixar planilha completa</button>'+
-     '<button type="button" onclick="openPranchaEstudo(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Gerar gráficos</button>'+
-     '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Croqui de parcelas</button>'+
-     '<button type="button" class="secondary" onclick="studyGoStage(\'study-audit\')">Revisar trilha</button></div></div>';
+  /* O bloco "Dossiê & entregáveis" saiu daqui. Ele repetia, em botões grandes e
+     verdes, quatro ações que já existem mais perto de onde fazem sentido:
+     a planilha no cabeçalho do estudo, o croqui no planejamento, os gráficos
+     por alvo dentro da própria análise e a trilha logo abaixo. Um atalho que
+     duplica o que está a um dedo de distância só rouba atenção do resultado. */
+  h+='<div id="study-stage-dossie" class="study-stage-anchor" aria-hidden="true"></div>';
   h+='<div id="study-audit">'+studyAuditHtml(study)+'</div>';
 
   /* Finalizar / reabrir — o fecho BPL do estudo */
@@ -10611,13 +10611,18 @@ function avAddCol(){
   var m=document.getElementById('avColModal');
   if(!m){ m=document.createElement('div'); m.id='avColModal'; m.className='avcol-ovl';
     m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  /* A grade de chips saiu. Ela oferecia TIPOS DE MEDIDA (Severidade, Incidência)
+     e, ao tocar, escrevia por cima do que a pessoa já tinha digitado — o gesto
+     de consultar destruía o trabalho. No lugar entra busca de ALVO BIOLÓGICO
+     abaixo do próprio campo: nada é escrito sem um toque na sugestão, e o nome
+     escolhido é sempre o mesmo entre datas, então o gráfico sai com um rótulo
+     só em vez de "ferrugem", "Ferrugem" e "ferrugem asiatica". */
   var cat=_avCatalogo(); window._avColItens=cat.itens;
-  var chips=cat.itens.map(function(it,i){ return '<button type="button" class="avcol-chip" onclick="avColPreset('+i+')">'+esc(it.nome)+'</button>'; }).join('');
   m.innerHTML='<div class="avcol-box">'+
     '<div class="avcol-title">Nova coluna de avaliação</div>'+
-    (chips?('<label class="avcol-lab">Catálogo'+(cat.tipo?(' · '+esc(cat.tipo)):' (todos os tipos de estudo)')+'</label><div class="avcol-chips">'+chips+'</div>'):'')+
-    '<label class="avcol-lab">Nome da variável</label>'+
-    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Fitoplasma, Severidade, Stand" autocomplete="off" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
+    '<label class="avcol-lab">Nome da variável <span class="avcol-lab-dim">— doença, praga, daninha ou medida</span></label>'+
+    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
+    '<div id="avColAlvos" class="alvo-lista"></div>'+
     '<label class="avcol-lab">Como você vai lançar?</label>'+
     '<div class="avcol-types">'+
       '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\')">% / número<small>digita (severidade)</small></button>'+
@@ -10629,8 +10634,23 @@ function avAddCol(){
     '<div class="avcol-btns"><button type="button" class="avcol-ok" onclick="avColConfirm()">Adicionar</button>'+
       '<button type="button" class="avcol-cancel" onclick="document.getElementById(\'avColModal\').style.display=\'none\'">Cancelar</button></div>'+
   '</div>';
-  m.style.display='flex'; window._avColTipo='pct'; window._avColOpts={sub:1,N:20,escalaMax:4,sentido:'menor'};
+  /* A inteligência que morava nos chips não se perdeu: o tipo de estudo ainda
+     decide como a coluna nasce (razão n/N com N=20 num ensaio de mortalidade,
+     % num de eficácia). Só que agora ela vem pronta em vez de exigir um toque. */
+  var padrao=(cat.itens&&cat.itens[0])||null;
+  window._avColTipo=(padrao&&AV_TIPOS[padrao.tipo])?padrao.tipo:'pct';
+  window._avColOpts={
+    sub:Math.max(1,parseInt(padrao&&padrao.sub)||1),
+    N:(padrao&&padrao.N!=null)?padrao.N:20,
+    escalaMax:(padrao&&padrao.escalaMax!=null)?padrao.escalaMax:4,
+    sentido:(padrao&&padrao.sentido==='maior')?'maior':'menor'
+  };
+  m.style.display='flex';
+  Array.prototype.forEach.call(m.querySelectorAll('.avcol-type'), function(b){
+    b.classList.toggle('on', b.getAttribute('data-t')===window._avColTipo);
+  });
   _avColOptsRender();
+  _alvoRender();
   setTimeout(function(){ var i=document.getElementById('avColNome'); if(i) i.focus(); },60);
 }
 function _avColLerOpts(){
@@ -10664,6 +10684,41 @@ function avColPreset(i){
   var nome=document.getElementById('avColNome'); if(nome) nome.value=it.nome;
   window._avColOpts={sub:Math.max(1,parseInt(it.sub)||1), N:(it.N!=null?it.N:20), escalaMax:(it.escalaMax!=null?it.escalaMax:4), sentido:(it.sentido==='maior'?'maior':'menor')};
   _avColType(it.tipo||'pct');
+}
+/* ===== Busca de alvo biológico (doença, praga, daninha) =====
+   A cultura da quadra filtra a lista; sem cultura declarada, procura em todas.
+   O binômio aparece na sugestão porque é ele que dá confiança de que o alvo é
+   o certo — "mancha-alvo" e "mancha angular" só se distinguem pelo nome do
+   patógeno quando a folha está na mão. */
+function _alvoCultura(){
+  try{ var q=(typeof data!=='undefined'&&typeof curV!=='undefined')?data[curV]:null; return (q&&q.cultura)||''; }
+  catch(e){ return ''; }
+}
+function _alvoRender(){
+  var box=document.getElementById('avColAlvos'); if(!box) return;
+  if(typeof window.alvosBuscar!=='function'){ box.innerHTML=''; return; }
+  var inp=document.getElementById('avColNome'), termo=(inp&&inp.value)||'';
+  var cultura=_alvoCultura();
+  var achados=window.alvosBuscar(cultura, termo, 8);
+  window._alvoAchados=achados;
+  if(!achados.length){ box.innerHTML=''; return; }
+  /* Quando o campo bate exatamente com um alvo já escolhido, a lista some:
+     ela é ajuda para achar, não decoração permanente. */
+  if(achados.length===1 && String(termo).trim().toLowerCase()===achados[0].comum.toLowerCase()){ box.innerHTML=''; return; }
+  var cab=cultura?('Alvos de '+esc(cultura)):'Alvos (todas as culturas)';
+  box.innerHTML='<div class="alvo-cab">'+cab+(termo?'':' · comece a digitar para filtrar')+'</div>'+
+    achados.map(function(a,i){
+      return '<button type="button" class="alvo-item" onclick="_alvoEscolher('+i+')">'+
+        '<span class="alvo-g alvo-g-'+(a.grupo==='doença'?'d':(a.grupo==='praga'?'p':'w'))+'">'+esc(a.grupo)+'</span>'+
+        '<span class="alvo-n">'+esc(a.comum)+'<i>'+esc(a.cientifico)+'</i></span>'+
+      '</button>';
+    }).join('');
+}
+function _alvoEscolher(i){
+  var a=(window._alvoAchados||[])[i]; if(!a) return;
+  var inp=document.getElementById('avColNome');
+  if(inp){ inp.value=a.comum; inp.focus(); }
+  var box=document.getElementById('avColAlvos'); if(box) box.innerHTML='';
 }
 function _avColType(t){ if(document.getElementById('avColOpts')) _avColLerOpts();
   window._avColTipo=AV_TIPOS[t]?t:'pct';
