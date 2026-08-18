@@ -223,37 +223,47 @@ body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{d
 .top-bar-info{display:none!important}
 
 /* ---- mostrador do clima ----
-   A primeira versão era verde de LED de rádio-relógio: chamava mais atenção que
-   a lavoura, que é o oposto do objetivo. Agora é um mostrador apagado — placa
-   escura translúcida, dígitos em cinza-gelo, brilho quase nulo. Continua com
-   cara de instrumento, mas não disputa o olho com o mapa. */
-.clima-chip{
+   Sem placa. Uma caixa em cima do mapa é mais uma janela disputando espaço com
+   a lavoura, e era exatamente isso que queríamos tirar. Ficam só os números,
+   legíveis sobre imagem clara ou escura por halo — a mesma solução que os
+   rótulos das quadras já usam — em vez de fundo. Menor, mais junto, mais
+   contrastado: lê-se de relance e some do caminho. */
+html body .clima-chip{
   pointer-events:auto!important;
-  display:inline-flex!important;align-items:baseline!important;gap:8px!important;
-  margin:0!important;padding:4px 9px 3px!important;border-radius:7px!important;
-  background:rgba(12,18,15,.42)!important;
-  border:1px solid rgba(226,238,230,.13)!important;
-  box-shadow:none!important;backdrop-filter:blur(9px)!important;-webkit-backdrop-filter:blur(9px)!important;
+  position:absolute!important;
+  top:calc(5px + env(safe-area-inset-top,0px))!important;left:11px!important;right:auto!important;
+  display:inline-flex!important;align-items:baseline!important;gap:5px!important;
+  margin:0!important;padding:0!important;border:0!important;border-radius:0!important;
+  background:none!important;box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  max-width:none!important;width:auto!important;min-width:0!important;
+  min-height:0!important;height:auto!important;overflow:visible!important;
   font-family:var(--ag-mono,ui-monospace,monospace)!important;
   font-variant-numeric:tabular-nums!important;
-  color:rgba(228,238,232,.72)!important;text-shadow:none!important;
-  font-size:10px!important;font-weight:500!important;letter-spacing:.05em!important;
-  white-space:nowrap!important;max-width:none!important;opacity:.88!important;
-  transition:opacity .15s,border-color .15s!important;
+  color:#fff!important;opacity:1!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.75)!important;
+  white-space:nowrap!important;letter-spacing:0!important;
 }
-.clima-chip svg{display:none!important}
-.clima-chip .cc-t{
-  font-size:13.5px!important;font-weight:600!important;line-height:1!important;
-  color:rgba(240,247,243,.9)!important;letter-spacing:.01em!important;
+html body .clima-chip svg{display:none!important}
+html body .clima-chip .cc-t{
+  font:700 13px/1 var(--ag-mono,ui-monospace)!important;
+  color:#fff!important;letter-spacing:-.01em!important;
 }
-.clima-chip:hover{opacity:1!important;border-color:rgba(226,238,230,.26)!important}
+html body .clima-chip .cc-v{
+  display:inline!important;
+  max-width:none!important;overflow:visible!important;text-overflow:clip!important;
+  font:600 9.5px/1 var(--ag-mono,ui-monospace)!important;
+  color:#fff!important;opacity:.85!important;letter-spacing:0!important;white-space:nowrap!important;
+}
+html body .clima-chip .cc-v .cc-w{display:inline!important}
+html body .clima-chip .cc-src{display:none!important}
+html body .clima-chip:hover{opacity:.75!important;background:none!important}
 
-html.light .clima-chip{
-  background:rgba(255,255,255,.55)!important;
-  border-color:rgba(24,55,35,.13)!important;
-  color:rgba(38,53,45,.72)!important;
-}
-html.light .clima-chip .cc-t{color:rgba(20,36,26,.88)!important}
+/* No tema claro vale o mesmo: o fundo é sempre imagem de satélite, então o que
+   garante leitura é o halo, não a cor do tema. */
+html.light body .clima-chip,
+html.light body .clima-chip .cc-t,
+html.light body .clima-chip .cc-v{color:#fff!important}
 
 /* ---- faixa temporária de rotação: aparece, gira, some ---- */
 .ag-rotbar{
@@ -307,27 +317,6 @@ body.mapctl-open .leaflet-top.leaflet-left{display:none!important}
 /* a marca some do mapa: ela já está na tela de login e no cabeçalho impresso */
 .tb-brand::before{display:none!important}
 .tb-brand{gap:0!important}
-
-/* ---- o mostrador, agora sem ninguém para brigar ---- */
-html body .clima-chip{
-  position:absolute!important;
-  top:calc(6px + env(safe-area-inset-top,0px))!important;left:12px!important;right:auto!important;
-  max-width:none!important;width:auto!important;overflow:visible!important;
-}
-/* O tema 2026 reduzia o chip a só a temperatura (display:none no .cc-v). Aqui
-   ele volta inteiro: temperatura, umidade e vento são a leitura que interessa
-   em campo, e agora há espaço porque nada mais divide o topo com ele. */
-html body .clima-chip .cc-v{
-  display:inline!important;
-  max-width:none!important;overflow:visible!important;text-overflow:clip!important;
-  color:inherit!important;opacity:.72!important;font:500 10px/1 var(--ag-mono,ui-monospace)!important;
-  letter-spacing:.06em!important;white-space:nowrap!important;
-}
-html body .clima-chip .cc-v .cc-w{display:inline!important}
-html body .clima-chip .cc-t{
-  font:600 13.5px/1 var(--ag-mono,ui-monospace)!important;letter-spacing:.01em!important;
-}
-html body .clima-chip .cc-src{display:none!important}   /* o selo de fonte não é leitura de mostrador */
 
 /* ==========================================================================
    Busca de alvo biológico na nova coluna de avaliação
