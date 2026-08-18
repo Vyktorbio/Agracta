@@ -205,12 +205,28 @@
   function addOfflineButton(){
     var box=document.querySelector('.auth-box');
     if(!box||document.getElementById('authOfflineBtn')||!hasLocalRecords())return;
+    var nome='';try{if(typeof window._currentUserName==='function')nome=String(window._currentUserName()||'').trim();}catch(e){}
+    var nomeWrap=null;
+    if(!nome){
+      nomeWrap=document.createElement('label');
+      nomeWrap.id='authOfflineNameWrap';
+      nomeWrap.style.cssText='display:block;margin-top:14px;text-align:left;color:#5c6b62;font:650 12px/1.35 system-ui,sans-serif';
+      nomeWrap.innerHTML='Seu nome no registro BPL<input id="authOfflineName" type="text" autocomplete="name" maxlength="120" placeholder="Ex.: Machado, V. C. — CRBio-01" style="display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:12px 13px;border:1px solid #cfd8d1;border-radius:12px;background:#fff;color:#26352c;font:600 14px system-ui,sans-serif;outline:none"><small style="display:block;margin-top:5px;color:#7a887f;font-weight:500">Fica salvo neste aparelho e aparece no lugar do e-mail.</small>';
+    }
     var b=document.createElement('button');
     b.id='authOfflineBtn';b.type='button';b.className='auth-btn';
     b.style.cssText='margin-top:9px;background:#eef2ee;color:#35443b;border:1px solid #cfd8d1';
     b.textContent='Continuar offline neste aparelho';
-    b.onclick=function(){try{localStorage.setItem('agracta-trusted-device','1');}catch(e){}startLocal('— modo offline');};
+    b.onclick=function(){
+      var n=nome;
+      if(!n){var inp=document.getElementById('authOfflineName');n=String((inp&&inp.value)||'').trim();}
+      if(!n||n.length<3){try{authErr('Informe o nome da pessoa responsável antes de continuar offline.');}catch(e){}var el=document.getElementById('authOfflineName');if(el)el.focus();return;}
+      try{if(typeof window._gravarNomeAssinatura==='function')window._gravarNomeAssinatura(n);}catch(e){}
+      try{localStorage.setItem('agracta-trusted-device','1');}catch(e){}
+      startLocal('— modo offline · '+n);
+    };
     var foot=box.querySelector('.auth-foot');
+    if(nomeWrap)box.insertBefore(nomeWrap,foot||null);
     box.insertBefore(b,foot||null);
   }
   var originalBuildAuthGate=window.buildAuthGate;

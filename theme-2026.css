@@ -195,6 +195,16 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(35,132,82,.35)!impor
   -webkit-backdrop-filter:var(--gp-blur)!important;
 }
 .rot-ctl button:hover,.leaflet-bar a:hover{color:var(--gp-green)!important;background:var(--gp-glass-strong)!important}
+.leaflet-control-layers-toggle{
+  /* A regra acima usa `background` abreviado e zerava o ícone herdado do
+     Leaflet. Reaplicamos depois dela para o controle nunca virar um quadrado
+     branco sem significado. */
+  background-color:var(--gp-glass-strong)!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232d4335' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3 9 5-9 5-9-5 9-5Z'/%3E%3Cpath d='m3 12 9 5 9-5M3 16l9 5 9-5'/%3E%3C/svg%3E")!important;
+  background-repeat:no-repeat!important;
+  background-position:center!important;
+  background-size:21px 21px!important;
+}
 .leaflet-bar{overflow:visible!important;box-shadow:none!important}
 .leaflet-bar a{border-bottom:1px solid var(--gp-line)!important}
 .rot-ctl{gap:7px!important}
@@ -240,6 +250,16 @@ body.nav-gps-active .gps-dot{display:block!important}
 .toolbar-extra.open .tool-fab{margin-left:8px!important}
 .toolbar-extra button:hover .tool-ico{color:var(--gp-green)!important;background:var(--gp-s2)!important;transform:translateY(-1px)!important}
 .tool-note.on .tool-ico{color:#fff!important;background:var(--gp-green-deep)!important}
+.toolbar-extra.open .tool-note::after{content:"Nota"!important}
+
+.bio-fast-card{padding:10px 11px;border:1px solid #cfe0d4;background:#fbfdfb;border-radius:11px;margin-top:7px}
+.bio-fast-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;color:#26352c}
+.bio-fast-top>span{flex:0 0 auto;padding:3px 7px;border-radius:999px;background:#e4f3e9;color:#326044;font:750 9px/1 var(--ag-font);text-transform:uppercase;letter-spacing:.04em}
+.bio-fast-meta{margin-top:4px;color:#607068;font:600 10px/1.45 var(--ag-font)}
+.bio-fast-card>small{display:block;margin-top:6px;color:#79877e;font:500 10px/1.45 var(--ag-font)}
+.bio-engine-status{padding:10px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:10px;color:#64736a;font:600 11px/1.45 var(--ag-font);margin-top:7px}
+.bio-engine-status small{display:block;margin-top:3px;color:#89958e;font-weight:500}
+.av-schema-inherited{margin:0 0 11px;padding:9px 11px;border:1px solid #cfe0d4;background:#f4faf6;color:#356047;border-radius:10px;font:600 11px/1.45 var(--ag-font)}
 
 .cloud-badge{
   bottom:18px!important;

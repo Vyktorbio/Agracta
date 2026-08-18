@@ -123,7 +123,37 @@ function brToIso(br){
   if(!m)return "";
   return m[3]+"-"+String(m[2]).padStart(2,'0')+"-"+String(m[1]).padStart(2,'0');
 }
-function today0(){var d=new Date();d.setHours(0,0,0,0);return d}
+/* O registro agronômico usa o fuso da operação, não o fuso acidental do
+   navegador. Isso importa em auditorias abertas em outro país, em máquinas
+   virtuais e perto da meia-noite: o mesmo evento não pode trocar de dia só
+   porque foi consultado em outro aparelho. O instante continua armazenado em
+   UTC (ISO/epoch); estas funções cuidam apenas da data/hora civil exibida. */
+var AGRACTA_TIME_ZONE='America/Sao_Paulo';
+function _agDateParts(value){
+  var d=value instanceof Date?value:new Date(value==null?Date.now():value), out={};
+  if(isNaN(d))return null;
+  try{
+    new Intl.DateTimeFormat('en-CA',{timeZone:AGRACTA_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(d).forEach(function(p){if(p.type!=='literal')out[p.type]=p.value;});
+    return out;
+  }catch(e){
+    return {year:String(d.getFullYear()),month:String(d.getMonth()+1).padStart(2,'0'),day:String(d.getDate()).padStart(2,'0'),hour:String(d.getHours()).padStart(2,'0'),minute:String(d.getMinutes()).padStart(2,'0'),second:String(d.getSeconds()).padStart(2,'0')};
+  }
+}
+function _agFormatDateTime(value,opts){
+  var d=value instanceof Date?value:new Date(value); if(isNaN(d))return '';
+  var o=opts?Object.assign({},opts):{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'};
+  try{o.timeZone=AGRACTA_TIME_ZONE;return new Intl.DateTimeFormat('pt-BR',o).format(d);}catch(e){return d.toLocaleString('pt-BR',o);}
+}
+function _agNowHHMM(){var p=_agDateParts(Date.now());return p?(p.hour+':'+p.minute):'';}
+/* Converte uma data/hora civil do estudo para epoch no fuso operacional. A
+   iteração também lida corretamente com mudanças históricas de offset. */
+function _agLocalEpoch(iso,hhmm){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||''))||!/^\d{2}:\d{2}$/.test(String(hhmm||'')))return NaN;
+  var a=String(iso).split('-'),h=String(hhmm).split(':'),target=Date.UTC(+a[0],+a[1]-1,+a[2],+h[0],+h[1],0),guess=target;
+  for(var i=0;i<3;i++){var p=_agDateParts(guess);if(!p)break;var shown=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second);guess+=target-shown;}
+  return guess;
+}
+function today0(){return pD(todayISO())}
 function daysBetween(a,b){return Math.round((b-a)/864e5)}
 
 /* ===== MOMENTO DA AVALIAÇÃO — HAT/DAT explícito, OPCIONAL ====================
@@ -192,7 +222,7 @@ function ic(n,sz){ var P={
   ruler:'<path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/>',
   gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>'
 }; var s=sz||16; return '<svg class="ic" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(P[n]||'')+'</svg>'; }
-function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function todayISO(){var p=_agDateParts(Date.now());return p?(p.year+'-'+p.month+'-'+p.day):''}
 function normStr(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
 
 /* ============ STATE ============ */
@@ -937,12 +967,13 @@ function addMapCtlToggle(){
   var C=LF.control({position:'topleft'});
   C.onAdd=function(){
     var d=LF.DomUtil.create('div','rot-ctl mapctl-toggle');
-    d.innerHTML='<button id="mapCtlBtn" title="Controles do mapa (zoom, camadas, girar)" aria-expanded="false" aria-label="Controles do mapa">\u2699\ufe0e</button>';
+    var gear=ic('gear',20), fechar='<svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    d.innerHTML='<button id="mapCtlBtn" title="Controles do mapa (zoom, camadas, girar)" aria-expanded="false" aria-label="Controles do mapa">'+gear+'</button>';
     LF.DomEvent.disableClickPropagation(d); LF.DomEvent.disableScrollPropagation(d);
     d.querySelector('button').onclick=function(){
       var open=!document.body.classList.contains('mapctl-open');
       document.body.classList.toggle('mapctl-open', open);
-      this.textContent=open?'\u2715':'\u2699\ufe0e';
+      this.innerHTML=open?fechar:gear;
       this.setAttribute('aria-expanded', open?'true':'false');
     };
     return d;
@@ -3958,7 +3989,7 @@ function climaChipPinta(o){
   var hora='';
   if(o.atualizado!=null){
     if(typeof o.atualizado==='number'){
-      try{ hora=new Date(o.atualizado*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){}
+      try{ hora=_agFormatDateTime(o.atualizado*1000,{hour:'2-digit',minute:'2-digit'}); }catch(e){}
     }else if(String(o.atualizado).indexOf('T')>=0){ hora=String(o.atualizado).split('T')[1].slice(0,5); }
   }
   el.title=(o.estacao?'Estação Ecowitt de ':'Previsão por satélite para ')+(o.lugar||'este local')+
@@ -4175,7 +4206,7 @@ function climaRender(d){
     }
   }
   var ts=d.time?new Date(d.time*1000):null;
-  h+='<div class="clima-foot">'+(ts?('atualizado '+ts.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min '+ic('refresh',11)+'</div>';
+  h+='<div class="clima-foot">'+(ts?('atualizado '+_agFormatDateTime(ts,{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min '+ic('refresh',11)+'</div>';
   b.innerHTML=h;
 }
 function toggleNdvi(){
@@ -4376,7 +4407,7 @@ function _ncdf(x){ return 1-0.5*_erfc(x/Math.SQRT2); }
 function _prange(w,k){ if(w<=0)return 0; var lo=-8,hi=8,n=240,h=(hi-lo)/n,sum=0,SQ=Math.sqrt(2*Math.PI); for(var i=0;i<=n;i++){ var u=lo+i*h,f=Math.exp(-u*u/2)/SQ*Math.pow(_ncdf(u)-_ncdf(u-w),k-1),wg=(i===0||i===n)?1:(i%2?4:2); sum+=wg*f; } return Math.min(1,Math.max(0,k*sum*h/3)); }
 function _ptukey(q,k,nu){ if(nu>2000) return _prange(q,k); var c=(nu/2)*Math.log(nu/2)-_lgamma(nu/2), lo=1e-4, hi=Math.max(3,1+10/Math.sqrt(Math.max(1,nu))), n=160, h=(hi-lo)/n, sum=0; for(var i=0;i<=n;i++){ var s=lo+i*h, dens=Math.exp(Math.log(2)+c+(nu-1)*Math.log(s)-nu*s*s/2), f=_prange(q*s,k)*dens, wg=(i===0||i===n)?1:(i%2?4:2); sum+=wg*f; } return Math.min(1,Math.max(0,sum*h/3)); }
 function _qtukey(k,nu,alpha){ alpha=alpha||0.05; var target=1-alpha,lo=0.1,hi=30; for(var it=0;it<60;it++){ var mid=(lo+hi)/2; if(_ptukey(mid,k,nu)<target) lo=mid; else hi=mid; } return (lo+hi)/2; }
-function _tukeyLetters(order, tMean, hsd){ var n=order.length, m=order.map(function(id){return tMean[id];}); var ivs=[], lastB=-1; for(var a=0;a<n;a++){ var b=a; while(b+1<n && (m[a]-m[b+1])<=hsd+1e-9) b++; if(b>lastB){ ivs.push([a,b]); lastB=b; } } var lt=order.map(function(){return '';}); ivs.forEach(function(iv,ki){ var ch=String.fromCharCode(97+ki); for(var x=iv[0];x<=iv[1];x++) lt[x]+=ch; }); var out={}; order.forEach(function(id,i){ out[id]=lt[i]; }); return out; }
+function _tukeyLetters(order, tMean, hsd){ var n=order.length, m=order.map(function(id){return tMean[id];}); var ivs=[], lastB=-1; for(var a=0;a<n;a++){ var b=a; while(b+1<n && Math.abs(m[a]-m[b+1])<=hsd+1e-9) b++; if(b>lastB){ ivs.push([a,b]); lastB=b; } } var lt=order.map(function(){return '';}); ivs.forEach(function(iv,ki){ var ch=String.fromCharCode(97+ki); for(var x=iv[0];x<=iv[1];x++) lt[x]+=ch; }); var out={}; order.forEach(function(id,i){ out[id]=lt[i]; }); return out; }
 /* ANOVA em blocos casualizados (DBC, blocos=repetições) + Tukey 5% p/ UMA avaliação+variável. null se desbalanceado/insuficiente. */
 /* ===== O ESTUDO TEM REPLICAÇÃO DE VERDADE? =================================
    Esta função é o portão. Ela decide, olhando o dado REGISTRADO e não o que o
@@ -4447,8 +4478,9 @@ function statDBC(s, av, v){
   var MSt=SSt/dft, MSe=dfe>0?SSe/dfe:0, F=MSe>0?MSt/MSe:Infinity, p=_fpval(F,dft,dfe);
   var cv=grand!==0?Math.sqrt(MSe)/Math.abs(grand)*100:null;
   var q=_qtukey(t,dfe,0.05), hsd=q*Math.sqrt(MSe/r);
-  var order=ts.slice().sort(function(a,b){return tM[b]-tM[a];});
-  return { t:t,r:r,N:N, grand:grand, dft:dft,dfb:dfb,dfe:dfe, SSt:SSt,SSb:SSb,SSe:SSe,SStot:SStot, MSt:MSt,MSe:MSe, F:F,p:p,cv:cv, q:q,hsd:hsd, tMean:tM, letras:_tukeyLetters(order,tM,hsd), order:order, sig:(p<0.05) };
+  var sentido='menor';try{sentido=_avSentido(av,v);}catch(e){}
+  var order=ts.slice().sort(function(a,b){return sentido==='maior'?(tM[b]-tM[a]):(tM[a]-tM[b]);});
+  return { t:t,r:r,N:N, grand:grand, dft:dft,dfb:dfb,dfe:dfe, SSt:SSt,SSb:SSb,SSe:SSe,SStot:SStot, MSt:MSt,MSe:MSe, F:F,p:p,cv:cv, q:q,hsd:hsd, tMean:tM, letras:_tukeyLetters(order,tM,hsd), order:order, sentido:sentido, sig:(p<0.05) };
 }
 function buildStudyRecord(qid,s){
   var q=data[qid]||{};
@@ -4572,7 +4604,7 @@ function buildStudyModelo(qid, s, opts){
   var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
   var lx=loc.extras||loc||{};
   var ctr=(typeof quadraCenter==='function')?quadraCenter(qid):null;
-  var dim=(typeof quadraDims==='function')?quadraDims(qid):null;
+  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||_calcParcelaDefault();
   var reps=Math.max(1,parseInt(s.numRepeticoes)||1);
   var trats=s.tratamentos||[];
   var test=(typeof studyTestemunha==='function')?studyTestemunha(s):null;
@@ -4591,7 +4623,7 @@ function buildStudyModelo(qid, s, opts){
   lbl(3,0,'Número de Estudo:'); put(3,1,s.codigo||s.nome||''); lbl(3,2,'Diretor de Estudo:'); lbl(3,4,'Data de Plantio:'); put(3,5,BR(studyPlantio(s,q))); lbl(3,6,'Pressão de trabalho:');
   lbl(4,0,'Município:'); put(4,1,lx.municipio||''); lbl(4,2,'Técnico de Campo:'); put(4,3,(typeof _currentUserName==='function'?_currentUserName():'')); lbl(4,4,'Data de Emergência:'); lbl(4,6,'Volume de calda:');
   lbl(5,0,'UF:'); put(5,1,lx.uf||''); lbl(5,2,'Cultura:'); put(5,3,studyCultura(s,q)); lbl(5,4,'Espaçamento de plantio:'); put(5,5,q.espacamento||''); lbl(5,6,'Ponta de pulverização:');
-  lbl(6,0,'Latitude (S):'); put(6,1,ctr?ctr[0].toFixed(6):''); lbl(6,2,'Alvo:'); put(6,3,s.alvo||q.alvo||''); lbl(6,4,'Tamanho da Parcela'); put(6,5,dim?(Math.round(dim.comprimento)+'x'+Math.round(dim.largura)+' m'):''); lbl(6,6,'N° de Bicos:');
+  lbl(6,0,'Latitude (S):'); put(6,1,ctr?ctr[0].toFixed(6):''); lbl(6,2,'Alvo:'); put(6,3,s.alvo||q.alvo||''); lbl(6,4,'Tamanho da Parcela'); put(6,5,parc?(parc.comprimento+'x'+parc.largura+' m'):''); lbl(6,6,'N° de Bicos:');
   lbl(7,0,'Longitude (O):'); put(7,1,ctr?ctr[1].toFixed(6):''); lbl(7,2,'Data de Início (1ª aplicação):'); put(7,3,BR(s.dataInicio)); lbl(7,4,'População:'); lbl(7,6,'Distância bico-cultura:');
   lbl(8,0,'Altitude:'); lbl(8,2,'Data de Término:'); lbl(8,4,'Quadra:'); put(8,5,(typeof quadraNome==='function'?quadraNome(qid):qid)); lbl(8,6,'Delineamento estatístico'); put(8,7,s.delineamento||'DBC');
   lbl(9,0,'Estação Experimental:'); put(9,1,loc.nome||''); lbl(9,2,'Número de Tratamentos:'); put(9,3,trats.length); lbl(9,4,'Adjuvante Utilizado:');
@@ -4638,7 +4670,8 @@ function buildStudyModelo(qid, s, opts){
   }); });
   /* CÁLCULO DE APLICAÇÃO (motor BioCalculo) — calda/produto por tratamento. Só no download/cópia
      completa; OMITIDO em paraColar (não faz parte do modelo.xls do usuário). */
-  var parc=_parseParcelaDim((s.protocolo||{}).tamanhoParcela)||_calcParcelaDefault(); /* protocolo do estudo, senão o padrão salvo da calculadora (3×5) — nunca a quadra inteira */
+  /* `parc` já foi resolvida no cabeçalho: protocolo do estudo, senão o padrão
+     salvo da calculadora (3×5) — nunca a quadra inteira. */
   if(!paraColar && window.BioCalculoCampo && parc){
     var crow=maxR+2;
     /* preparo de calda do cadastro do estudo — o export tem que bater com a calculadora */
@@ -4697,6 +4730,15 @@ function _xlsPut(ws,r,c,v){
   ws[addr]=Object.assign({},old,{t:numeric?'n':'s',v:numeric?n:String(v)});
   delete ws[addr].f; delete ws[addr].w;
 }
+/* Apaga somente o conteúdo, preservando bordas, preenchimento e demais estilos
+   do modelo. Isso evita que fórmulas legadas de blocos não utilizados exportem
+   #DIV/0!, zeros e grupos fictícios para o dossiê do estudo. */
+function _xlsClearValue(ws,r,c){
+  var addr=XLSX.utils.encode_cell({r:r,c:c}),old=ws[addr];
+  if(!old)return;
+  ws[addr]=Object.assign({},old,{t:'s',v:''});
+  delete ws[addr].f;delete ws[addr].w;
+}
 function _bioestatLetters(qid,s,av,v){
   var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v]; if(!rel||!rel.ok)return {};
   var cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn;
@@ -4746,11 +4788,34 @@ function _bioestatStatSheet(qid,s){
     x=x||{};var b=_bioestatExportBase(qid,s,job);
     out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,secao,item,x.tratamento||'',x.n==null?'':x.n,x.media==null?'':x.media,x.dp==null?'':x.dp,x.ep==null?'':x.ep,x.mediana==null?'':x.mediana,x.min==null?'':x.min,x.max==null?'':x.max,x.cv==null?'':x.cv,x.grupo||'',x.metodo||'',x.tipoResposta||'',x.tipoAnalise||'',x.transformacao||'',x.pressupostos==null?'':(x.pressupostos?'sim':'não'),x.formula||'',x.escala||'',x.mse==null?'':x.mse,x.dfErro==null?'':x.dfErro,x.alfa==null?'':x.alfa,x.dagostino==null?'':x.dagostino,x.bartlett==null?'':x.bartlett,x.assimetria==null?'':x.assimetria,x.curtose==null?'':x.curtose,x.fonte||'',x.gl==null?'':x.gl,x.sq==null?'':x.sq,x.qm==null?'':x.qm,x.F==null?'':x.F,x.estatistica==null?'':x.estatistica,x.p==null?'':x.p,x.resultado==null?'':x.resultado,x.interpretacao||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
   }
+  /* Reserva imediata e determinística. O Python acrescenta diagnósticos e pode
+     escolher outra rota, mas o usuário nunca recebe uma aba Estatística vazia
+     só porque os ~115 MB do motor avançado ainda estão no primeiro download. */
+  function addFast(job,erroAvancado){
+    var av=(s.avaliacoes||[]).find(function(x){return x&&x.id===job.avId;}), st=null;
+    try{st=av&&statDBC(s,av,job.variavel);}catch(e){st=null;}
+    if(!st)return false;
+    var aviso=erroAvancado?('Motor avançado: '+erroAvancado):'Diagnósticos avançados ainda em processamento; ANOVA-DBC e Tukey 5% calculados localmente.';
+    add(job,'CONCLUIDO_RAPIDO','Resumo','Resultado imediato',{metodo:'Tukey 5%',tipoAnalise:'ANOVA-DBC',mse:st.MSe,dfErro:st.dfe,p:st.p,cv:st.cv,resultado:st.sig?'significativo':'não significativo',interpretacao:aviso},st);
+    [
+      {fonte:'Tratamentos',gl:st.dft,sq:st.SSt,qm:st.MSt,F:st.F,p:st.p},
+      {fonte:'Blocos',gl:st.dfb,sq:st.SSb,qm:st.dfb?st.SSb/st.dfb:null},
+      {fonte:'Resíduo',gl:st.dfe,sq:st.SSe,qm:st.MSe},
+      {fonte:'Total',gl:st.N-1,sq:st.SStot}
+    ].forEach(function(l){add(job,'CONCLUIDO_RAPIDO','ANOVA',l.fonte,{fonte:l.fonte,gl:l.gl,sq:l.sq,qm:l.qm,F:l.F,p:l.p,tipoAnalise:'ANOVA-DBC'},l);});
+    (st.order||[]).forEach(function(tid){
+      var vals=[];for(var rp=1;rp<=st.r;rp++){var raw=_avNota(av,{key:_avRowKey(tid,rp),tratId:tid,rep:rp},job.variavel),n=parseFloat(String(raw==null?'':raw).replace(',','.'));if(isFinite(n))vals.push(n);}
+      var mean=st.tMean[tid],ss=0;vals.forEach(function(n){ss+=Math.pow(n-mean,2);});var dp=vals.length>1?Math.sqrt(ss/(vals.length-1)):0;
+      add(job,'CONCLUIDO_RAPIDO','Descritiva','Tratamento '+tid,{tratamento:tid,n:vals.length,media:mean,dp:dp,ep:vals.length?dp/Math.sqrt(vals.length):'',min:vals.length?Math.min.apply(null,vals):'',max:vals.length?Math.max.apply(null,vals):'',cv:mean?dp/Math.abs(mean)*100:''},{valores:vals});
+      add(job,'CONCLUIDO_RAPIDO','Comparacao','Grupo de médias',{tratamento:tid,media:mean,grupo:(st.letras||{})[tid]||'',metodo:'Tukey 5%',alfa:.05},st);
+    });
+    return true;
+  }
   if(!jobs.length){add(null,'SEM_DADOS','Resumo','Sem avaliação com dados suficientes',{},{motivo:'São necessários ao menos 2 tratamentos com 2 repetições válidas.'});return out;}
   jobs.forEach(function(job){
     var rel=res[job.jobKey];
-    if(!rel){add(job,'PENDENTE','Resumo','Análise ainda em processamento',{},{});return;}
-    if(!rel.ok){add(job,'ERRO','Resumo',rel.erro||'Análise não concluída',{},rel);return;}
+    if(!rel){if(!addFast(job,''))add(job,'PENDENTE','Resumo','Análise ainda em processamento',{},{});return;}
+    if(!rel.ok){if(!addFast(job,rel.erro||'análise não concluída'))add(job,'ERRO','Resumo',rel.erro||'Análise não concluída',{},rel);return;}
     var a=rel.analise||{}, det=rel.deteccao||{}, cm=rel.comparacao_medias||{};
     var p=(typeof _bioestatP==='function')?_bioestatP(rel):null;
     add(job,'CONCLUIDO','Resumo','Resultado completo',{
@@ -4797,11 +4862,29 @@ function _bioestatForensicSheet(qid,s){
     v=v||{};p=p||{};a=a||{};var b=_bioestatExportBase(qid,s,job);
     out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,linha,v.nivel||'',v.classe||'',v.modo||p.modo||'',v.flags==null?'':v.flags,v.watches==null?'':v.watches,v.testes_previstos==null?'':v.testes_previstos,v.testes_executados==null?'':v.testes_executados,v.testes_inconclusivos==null?'':v.testes_inconclusivos,v.cobertura==null?'':Math.round(v.cobertura*10000)/100,v.cobertura_suficiente==null?'':(v.cobertura_suficiente?'sim':'não'),p.tipo_dado||'',p.controle==null?'':p.controle,p.n_grupos==null?'':p.n_grupos,p.tem_segundo_conjunto==null?'':(p.tem_segundo_conjunto?'sim':'não'),a.nome||'',a.severidade||'',a.executado==null?'':(a.executado?'sim':'não'),a.estatistica||'',a.leitura||'',a.explicacao_inocente||'',v.resumo||'',det&&det.aviso||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
   }
+  /* Triagem local de contingência: entrega indicadores descritivos auditáveis
+     mesmo no primeiro uso offline. Não substitui a forense avançada e não faz
+     acusação; apenas torna explícitos repetição exata e arredondamento. */
+  function addRapida(job,erro){
+    var rows=(job&&job.aoa||[]).slice(1),vals=rows.map(function(r){return parseFloat(String(r[11]).replace(',','.'));}).filter(isFinite),n=vals.length;
+    if(!n){add(job,'SEM_DADOS','Resumo',{}, {}, {}, {aviso:'Sem valores numéricos para triagem.'});return;}
+    var freq={},sum=0,inteiros=0,mult5=0,digitos={};
+    vals.forEach(function(x){var k=String(Math.round(x*1000000)/1000000);freq[k]=(freq[k]||0)+1;sum+=x;if(Math.abs(x-Math.round(x))<1e-9)inteiros++;if(Math.abs(x/5-Math.round(x/5))<1e-9)mult5++;var d=Math.abs(Math.round(x))%10;digitos[d]=(digitos[d]||0)+1;});
+    var distintos=Object.keys(freq).length,dup=n-distintos,media=sum/n,ss=0;vals.forEach(function(x){ss+=Math.pow(x-media,2);});var dp=n>1?Math.sqrt(ss/(n-1)):0;
+    var ach=[];
+    if(n>=12&&dup/n>=.5)ach.push({nome:'Repetição exata elevada',severidade:'watch',executado:true,estatistica:Math.round(dup/n*1000)/10+'%',leitura:dup+' de '+n+' observações repetem um valor já usado.',explicacao_inocente:'Escalas discretas, baixa incidência e limites 0/100 podem produzir muitas repetições legítimas.'});
+    if(n>=12&&mult5/n>=.7)ach.push({nome:'Concentração em múltiplos de 5',severidade:'watch',executado:true,estatistica:Math.round(mult5/n*1000)/10+'%',leitura:'Muitos valores terminam em 0 ou 5.',explicacao_inocente:'A escala de avaliação ou o treinamento do avaliador pode trabalhar naturalmente em passos de 5.'});
+    var v={nivel:ach.length?'ATENÇÃO':'SEM SINAL FORTE',classe:'preliminar',modo:'local-rapido',flags:0,watches:ach.length,testes_previstos:2,testes_executados:2,testes_inconclusivos:0,cobertura:1,cobertura_suficiente:true,resumo:n+' observações · '+distintos+' valores distintos · média '+(Math.round(media*100)/100)+' · DP '+(Math.round(dp*100)/100)};
+    var p={modo:'local-rapido',tipo_dado:'numérico',controle:studyTestemunha(s)||'',n_grupos:Object.keys(rows.reduce(function(o,r){o[r[7]]=1;return o;},{})).length,tem_segundo_conjunto:false};
+    var det={aviso:(erro?('Motor avançado indisponível: '+erro+'. '):'')+'Triagem rápida incluída; rebaixe a planilha após o motor avançado concluir para os testes completos.',n:n,distintos:distintos,duplicados:dup,duplicados_pct:dup/n*100,inteiros_pct:inteiros/n*100,multiplos_5_pct:mult5/n*100,min:Math.min.apply(null,vals),max:Math.max.apply(null,vals),media:media,dp:dp,digito_final:digitos};
+    add(job,'TRIAGEM_RAPIDA','Resumo',v,p,{},det);
+    ach.forEach(function(a){add(job,'TRIAGEM_RAPIDA','Achado',v,p,a,{aviso:det.aviso,achado:a,indicadores:det});});
+  }
   if(!jobs.length){add(null,'SEM_DADOS','Resumo',{}, {}, {}, {aviso:'Sem avaliação com dados suficientes para triagem.'});return out;}
   jobs.forEach(function(job){
     var rel=res[job.jobKey+'|F'];
-    if(!rel){add(job,'PENDENTE','Resumo',{}, {}, {}, {aviso:'Triagem ainda em processamento.'});return;}
-    if(!rel.ok){add(job,'ERRO','Resumo',{}, {}, {}, {aviso:rel.erro||'Triagem não concluída.',resultado:rel});return;}
+    if(!rel){addRapida(job,'');return;}
+    if(!rel.ok){addRapida(job,rel.erro||'triagem não concluída');return;}
     var v=rel.veredito||{},p=rel.parametros||{};
     add(job,'CONCLUIDO','Veredito',v,p,{},rel);
     (rel.achados||[]).forEach(function(a){add(job,'CONCLUIDO','Achado',v,p,a,{aviso:rel.aviso,achado:a});});
@@ -4826,26 +4909,34 @@ async function downloadStudyWorkbook(qid,sid){
     var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s)throw new Error('Estudo não encontrado.');
     s=normalizeStudy(s);
     if((s.tratamentos||[]).length>7)throw new Error('Este modelo possui espaço para até 7 tratamentos. Use “Copiar” para protocolos maiores.');
-    _stxToast('Preparando planilha e resultados…');
+    _stxToast('Montando planilha; a análise avançada continua em segundo plano…');
     _bioestatEnsureStudy(qid,sid);
     /* A planilha agora é também o dossiê de análise: espera análise + forense.
        Se o limite for atingido, as abas ainda saem e marcam cada linha pendente. */
     var _aJobs=_bioestatJobs(qid,s), _dossieOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey] && c.results[j.jobKey+'|F']; }); };
     /* Exportar não pode prender o usuário por até 90 s esperando a triagem. O
        motor continua em segundo plano e a planilha já sabe marcar PENDENTE ou
-       ERRO nas abas correspondentes. Quinze segundos cobrem a análise comum e
-       mantêm o botão com resposta rápida no campo. */
-    var cache=_bioAutoCache[qid+'|'+sid], limite=Date.now()+15000;
+       ERRO nas abas correspondentes. Quatro segundos preservam a resposta
+       rápida; a ANOVA-DBC local já preenche a aba enquanto o motor avança. */
+    var cache=_bioAutoCache[qid+'|'+sid], limite=Date.now()+4000;
     while(cache&&cache.status==='loading'&&!_dossieOk(cache)&&Date.now()<limite){await new Promise(function(ok){setTimeout(ok,500);});cache=_bioAutoCache[qid+'|'+sid];}
     var resp=await fetch('modelos/modelo-protocolo.xls'); if(!resp.ok)throw new Error('Modelo de planilha não encontrado.');
     var wb=XLSX.read(await resp.arrayBuffer(),{type:'array',cellFormula:true,cellStyles:true,cellDates:true}), ws=wb.Sheets[wb.SheetNames[0]];
-    var p=s.protocolo||{}, loc=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]])||{}, lx=loc.extras||loc||{}, ctr=quadraCenter(qid), dim=quadraDims(qid);
+    var p=s.protocolo||{}, loc=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]])||{}, lx=loc.extras||loc||{}, ctr=quadraCenter(qid);
+    var parc=_parseParcelaDim(p.tamanhoParcela)||_calcParcelaDefault();
     var status=(s.aplicacoes&&s.aplicacoes.length)?'INSTALADO':'AGUARDANDO APLICAÇÃO', tech=(typeof _currentUserName==='function'?_currentUserName():'');
+    var protoTech=String(p.tecnico||tech||'').trim();
+    if(_identidadeEhEmail(protoTech)){var _tid=_identidadeBPL('',protoTech);protoTech=_tid.nome==='Não identificado'?(tech||''):_tid.nome;}
+    /* Corrige também os rótulos do arquivo-modelo legado. Escrever aqui mantém
+       o download certo mesmo antes de uma futura troca física do template. */
+    _xlsPut(ws,4,4,'Data de Plantio:');
+    _xlsPut(ws,9,6,'Delineamento estatístico');
+    _xlsPut(ws,15,0,'DESCRIÇÃO DOS TRATAMENTOS');
     [[1,1,status],[2,1,s.objetivo||s.descricao],[3,1,p.proposta],[3,3,p.ret],[3,5,p.cultivar||studyVariedade(s,q)],[3,7,p.equipamento],
       [4,1,s.codigo],[4,3,p.diretor],[4,5,isoToBR(p.plantio||studyPlantio(s,q))],[4,7,p.pressao],
-      [5,1,p.municipio||lx.municipio],[5,3,p.tecnico||tech],[5,5,isoToBR(p.emergencia)],[5,7,p.volumeCalda],
+      [5,1,p.municipio||lx.municipio],[5,3,protoTech],[5,5,isoToBR(p.emergencia)],[5,7,p.volumeCalda],
       [6,1,p.uf||lx.uf],[6,3,p.cultura||studyCultura(s,q)],[6,5,p.espacamento||q.espacamento],[6,7,p.ponta],
-      [7,1,p.latitude||(ctr&&ctr[0].toFixed(6))],[7,3,s.alvo||p.alvo],[7,5,p.tamanhoParcela||(dim&&(Math.round(dim.comprimento)+'x'+Math.round(dim.largura)+' m'))],[7,7,p.bicos],
+      [7,1,p.latitude||(ctr&&ctr[0].toFixed(6))],[7,3,s.alvo||p.alvo],[7,5,p.tamanhoParcela||(parc&&(parc.comprimento+'x'+parc.largura+' m'))],[7,7,p.bicos],
       [8,1,p.longitude||(ctr&&ctr[1].toFixed(6))],[8,3,isoToBR(s.dataInicio)],[8,5,p.populacao],[8,7,p.distanciaBico],
       [9,1,p.altitude],[9,3,isoToBR(p.termino)],[9,5,p.quadra||quadraNome(qid)],[9,7,s.delineamento||p.delineamento||'DBC'],
       [10,1,p.estacao||loc.nome],[10,3,s.tratamentos.length],[10,5,p.adjuvante],
@@ -4859,12 +4950,25 @@ async function downloadStudyWorkbook(qid,sid){
       var c=12+i, ini=(a.inicio&&a.inicio.clima)||(a.carimbo&&a.carimbo.clima)||{}, fim=(a.fim&&a.fim.clima)||{};
       [[2,i+1],[3,isoToBR(a.data)],[4,(a.inicio&&a.inicio.hora)||''],[5,(a.fim&&a.fim.hora)||''],[6,ini.temp],[7,fim.temp],[8,ini.umidade],[9,fim.umidade],[10,ini.vento],[11,fim.vento],[12,ini.nebulosidade],[13,a.bbch]].forEach(function(x){_xlsPut(ws,x[0],c,x[1]);});
     });
+    /* O arquivo-base traz fórmulas prontas em 21 blocos. Limpa primeiro todas
+       as linhas de dados; em seguida escreve apenas avaliações/tratamentos que
+       realmente existem. Os estilos do modelo permanecem intactos. */
+    for(var _bi=0;_bi<21;_bi++){
+      var _bc=11+8*_bi;
+      _xlsClearValue(ws,15,_bc);
+      for(var _br=17;_br<24;_br++)for(var _bcol=0;_bcol<8;_bcol++)_xlsClearValue(ws,_br,_bc+_bcol);
+    }
     var blk=0,reps=Math.max(1,parseInt(s.numRepeticoes)||1);
     (s.avaliacoes||[]).slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).forEach(function(a){(a.variaveis||[]).forEach(function(v){
-      if(blk>=21)return;var c0=11+8*blk++, letras=_bioestatLetters(qid,s,a,v);
+      if(blk>=21)return;var c0=11+8*blk++, letras=_bioestatLetters(qid,s,a,v), rapido=statDBC(s,a,v);
+      if(!Object.keys(letras).length&&rapido&&rapido.letras)letras=rapido.letras;
       _xlsPut(ws,15,c0,'AVALIAÇÃO — '+v+' · '+isoToBR(a.data)); _xlsPut(ws,16,c0+7,'grupo');
+      function media(tid){var vals=[];for(var rr=1;rr<=reps;rr++){var rv=_avNota(a,{key:_avRowKey(tid,rr),tratId:tid,rep:rr},v),nn=parseFloat(String(rv==null?'':rv).replace(',','.'));if(isFinite(nn))vals.push(nn);}return vals.length?vals.reduce(function(x,y){return x+y;},0)/vals.length:null;}
+      var mediaTest=test?media(test):null;
       (s.tratamentos||[]).forEach(function(t,ti){var r=17+ti;_xlsPut(ws,r,c0,ti+1);
         for(var rp=1;rp<=Math.min(4,reps);rp++){var raw=_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v);_xlsPut(ws,r,c0+rp,raw);}
+        var med=media(t.id);if(med!=null)_xlsPut(ws,r,c0+5,Math.round(med*100)/100);
+        if(test&&t.id!==test){var ef=_pctCtrl(mediaTest,med,_avSentido(a,v));if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
         if(letras[t.id])_xlsPut(ws,r,c0+7,letras[t.id]);
       });
     });});
@@ -4874,7 +4978,7 @@ async function downloadStudyWorkbook(qid,sid){
     XLSX.writeFile(wb,nome,{bookType:'xlsx',cellStyles:true});
     var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]&&cache.results[j.jobKey+'|F']);}).length;
     var _errs=0; if(cache&&cache.results)Object.keys(cache.results).forEach(function(k){if(cache.results[k]&&cache.results[k].ok===false)_errs++;});
-    _stxToast(_pend?'✓ Planilha baixada; '+_pend+' análise(s) pendente(s) estão identificadas':(_errs?'✓ Planilha baixada; revise '+_errs+' resultado(s) com alerta':'✓ Planilha completa: dados + estatística + forense'));
+    _stxToast(_pend?'✓ Planilha baixada; estatística rápida incluída e '+_pend+' triagem(ns) avançada(s) identificada(s)':(_errs?'✓ Planilha baixada; revise '+_errs+' resultado(s) com alerta':'✓ Planilha completa: dados + estatística + forense'));
   }catch(e){console.error(e);alert('Não consegui gerar a planilha: '+e.message);}
 }
 function studyExport(qid,sid){
@@ -5912,8 +6016,7 @@ function normalizeStudy(s){
 /* Carimba a hora deste instante no campo Hora da avaliação. */
 function _avHoraAgora(){
   var el=document.getElementById('vHora'); if(!el) return;
-  var d=new Date(), p=function(n){ return (n<10?'0':'')+n; };
-  el.value=p(d.getHours())+':'+p(d.getMinutes());
+  el.value=_agNowHHMM();
   try{ if(typeof _stxToast==='function') _stxToast('Hora da leitura: '+el.value); }catch(e){}
 }
 /* Identidade BPL tem duas colunas diferentes:
@@ -5929,7 +6032,11 @@ function _identidadeEhEmail(v){
 }
 function _identidadeNomeValido(v){
   v=String(v==null?'':v).trim();
-  return (v && !_identidadeEhEmail(v)) ? v : '';
+  var n=v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  /* Marcadores técnicos antigos não são nomes de pessoas. Rejeitá-los permite
+     recuperar o nome real pelo e-mail cadastrado sem alterar o registro bruto. */
+  if(!v||_identidadeEhEmail(v)||/^(nao identificado|local\/?offline|offline|administrador|usuario)$/.test(n))return '';
+  return v;
 }
 function _nomeCadastradoPorEmail(email){
   email=String(email||'').toLowerCase().trim();
@@ -6084,6 +6191,8 @@ function logStudyAuditInObject(study, action, details, extra) {
   var _email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
   var entry = {
     ts: Date.now(),
+    iso: new Date().toISOString(),
+    fuso: AGRACTA_TIME_ZONE,
     user: (String(_currentUserName()||'').trim() || 'Não identificado'),
     por: _email,
     autenticado: !!_email,
@@ -6131,7 +6240,7 @@ function studyAuditHtml(study){
     
   s.audit.slice().reverse().forEach(function(entry){
     var dt = new Date(entry.ts);
-    var dateStr = isNaN(dt.getTime()) ? '?' : dt.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+    var dateStr = isNaN(dt.getTime()) ? '?' : _agFormatDateTime(dt, {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
     var ident=_identidadeBPL(entry.user,entry.por);
     html += '<div style="border-bottom:1px solid var(--border,#26322b);padding-bottom:6px;font-size:11px;line-height:1.45">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">' +
@@ -6472,7 +6581,7 @@ function openStudyParcelas(qid,sid){
   st=normalizeStudy(st);var rows=_avRowsForStudy(st,true),by={},ord=[];
   rows.forEach(function(r){var n=Number(r.rep)||1;if(!by[n]){by[n]=[];ord.push(n);}by[n].push(r);});
   var ov=document.getElementById('studyParcelasOvl');if(!ov){ov=document.createElement('div');ov.id='studyParcelasOvl';ov.className='study-parcelas-ovl';ov.onclick=function(e){if(e.target===ov)closeStudyParcelas();};document.body.appendChild(ov);}
-  var dim=(st.protocolo||{}).tamanhoParcela||'',h='<div class="study-parcelas-box"><div class="study-parcelas-head"><div><span>PLANEJAMENTO DE CAMPO</span><b>'+esc(st.codigo||st.nome||st.id)+'</b><small>'+esc(quadraNome(qid))+' · '+rows.length+' parcelas'+(dim?' · '+esc(dim):'')+'</small></div><button type="button" onclick="closeStudyParcelas()">×</button></div>';
+  var dim=(st.protocolo||{}).tamanhoParcela||'',h='<div class="study-parcelas-box"><div class="study-parcelas-head"><div><span>PLANEJAMENTO DE CAMPO</span><b>'+esc(st.codigo||st.nome||st.id)+'</b><small>'+esc(quadraNome(qid))+' · '+rows.length+' parcelas'+(dim?' · '+esc(dim):'')+'</small></div><button type="button" onclick="closeStudyParcelas()" aria-label="Fechar croqui" title="Fechar">×</button></div>';
   h+='<div class="study-parcelas-note">Croqui operacional por bloco. A sequência segue '+(st.randomizado?'a ordem randomizada salva':'a ordem dos tratamentos; ative a randomização se este não for o plano de campo')+'.</div><div class="study-parcelas-grid">';
   ord.forEach(function(rep){var set=by[rep],cols=Math.min(Math.max(set.length,1),6);h+='<section><h4>Bloco / repetição '+esc(_repDisplay(rep))+'</h4><div class="av-croqui-grid" style="--croqui-cols:'+cols+'">';set.forEach(function(r){h+='<div class="av-croqui-parcela planned" title="'+esc((r.produto||'')+' · '+(r.campo||r.label||r.key))+'"><span class="n">'+esc(r.campo||r.label||r.key)+'</span><span class="p">'+esc(r.tratId)+(r.produto?' · '+esc(r.produto):'')+'</span></div>';});h+='</div></section>';});
   h+='</div><div class="study-parcelas-actions">'+(!estudoFinalizado(st)?'<button type="button" onclick="closeStudyParcelas();openRandomizacaoModal(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Conferir randomização</button>':'')+'<button type="button" class="secondary" onclick="closeStudyParcelas()">Fechar</button></div></div>';
@@ -7508,7 +7617,7 @@ function _pranchaPayload(qid, sid, variavel){
       trilha: (s.audit||[]).map(function(e){
         var q=new Date(e.ts||0);
         var id=_identidadeBPL(e.user,e.por);
-        return { quando: (isNaN(q) ? '' : q.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})),
+        return { quando: (isNaN(q) ? '' : _agFormatDateTime(q,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})),
                  quem: id.nome, email:id.email, acao: (e.action || ''), detalhe: (e.details || '') };
       })
     },
@@ -7797,6 +7906,18 @@ function _bioestatResumoCard(job,rel){
     (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
   '</div>';
 }
+function _bioestatRapidoCard(job,study){
+  var av=(study.avaliacoes||[]).find(function(x){return x&&x.id===job.avId;}),st=null;
+  try{st=av&&statDBC(study,av,job.variavel);}catch(e){st=null;}
+  if(!st)return '';
+  var nf=function(x,d){return (x==null||!isFinite(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:d==null?2:d});};
+  var pf=function(x){return x<.001?'&lt;0,001':nf(x,3);};
+  var rows=(st.order||[]).map(function(tid){return '<tr><td class="av-tname">'+esc(tid)+'</td><td>'+nf(st.tMean[tid],2)+'</td><td><b style="color:#1f6f43">'+esc((st.letras||{})[tid]||'—')+'</b></td></tr>';}).join('');
+  return '<div class="bio-fast-card"><div class="bio-fast-top"><b>'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span>prévia imediata</span></div>'+
+    '<div class="bio-fast-meta">ANOVA-DBC · F='+nf(st.F,2)+' · p='+pf(st.p)+' · CV '+nf(st.cv,1)+'% · Tukey 5%</div>'+
+    '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<small>Resultado local disponível agora. Pressupostos, rota alternativa e triagem forense seguem em segundo plano.</small></div>';
+}
 function _bioestatForenseCard(job,rel){
   if(!rel||!rel.ok) return '';
   var v=rel.veredito||{}, flags=v.flags||0, watches=v.watches||0;
@@ -7816,18 +7937,22 @@ function _bioestatIntegratedHtml(qid,sid,study){
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
   var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
-  if(!c||c.sig!==sig){ body='<div id="bioAutoStatus" style="padding:11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px">Calculando automaticamente no aparelho… '+((c&&c.done)||0)+' de '+tot+'</div>'; }
+  if(!c||c.sig!==sig){
+    jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
+    body+='<div id="bioAutoStatus" class="bio-engine-status">Carregando verificações avançadas no aparelho… '+((c&&c.done)||0)+' de '+tot+'<small>No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.</small></div>';
+    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado… 0 de '+jobs.length+'<small>Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
+  }
   else if(c.status==='empty'){ body='<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>'; }
   else {
     /* Renderização PROGRESSIVA: mostra a análise de cada avaliação assim que o job dela termina,
        sem esperar a triagem forense (que no Pyodide frio pode demorar ~1 min). */
     var res=(c&&c.results)||{}, faltamAnalise=0, faltamForense=0;
     jobs.forEach(function(j){
-      if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey]); else faltamAnalise++;
+      if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey]); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
       if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
     });
-    if(faltamAnalise>0) body+='<div id="bioAutoStatus" style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(body?'7px':'0')+'">Calculando análise… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'</div>';
-    if(faltamForense>0) fbody+='<div style="padding:9px 11px;border:1px solid #dce5df;background:#f8faf8;border-radius:9px;color:#64736a;font-size:11px;margin-top:'+(fbody?'7px':'0')+'">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
+    if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
+    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
   }
   /* UMA folha por ALVO. Antes era um botão só, cravado na variável mais frequente —
      estudo com alvos diferentes (Mancha angular + Cercospora) só gerava a primeira. */
@@ -8130,7 +8255,7 @@ function openStudyDetail(qid,sid){
      sobrou de escrita ainda passa por _bloqueadoPorFinalizacao antes de gravar. */
   var _fin=estudoFinalizado(study), _finEm='', _finQuem='', _finN=0, _finFuso='';
   if(_fin){
-    try{ _finEm=new Date(study.finalizacao.em).toLocaleString('pt-BR'); }catch(e){ _finEm=study.finalizacao.em||''; }
+    try{ _finEm=_agFormatDateTime(study.finalizacao.em); }catch(e){ _finEm=study.finalizacao.em||''; }
     _finQuem=_identidadeBPL(study.finalizacao.nome,study.finalizacao.por).nome;
     _finN=study.finalizacao.nResultados||((study.estatisticaFinal||{}).itens||[]).length;
     _finFuso=study.finalizacao.fuso||'';
@@ -8370,7 +8495,7 @@ function openRandomizacaoModal(qid,sid){
   var ids=(study.tratamentos||[]).map(function(t){return t.id;}).join(', ');
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:flex-start;justify-content:center;z-index:3300;overflow:auto;padding:18px 10px';
   m.innerHTML='<div style="background:#0d150d;border:1px solid #2a3a2a;border-radius:12px;width:520px;max-width:96vw;color:#d0d8d0;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.6)">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="font-size:16px;font-weight:800;color:#afa">Randomização</div><div style="font-size:11px;color:#8aa88a;margin-top:2px">'+esc(study.tratamentos.length+' tratamentos × '+study.numRepeticoes+' repetições')+'</div></div><button onclick="closeRandomizacaoModal()" style="background:none;border:none;color:#aaa;font-size:24px;cursor:pointer">×</button></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="font-size:16px;font-weight:800;color:#afa">Randomização</div><div style="font-size:11px;color:#8aa88a;margin-top:2px">'+esc(study.tratamentos.length+' tratamentos × '+study.numRepeticoes+' repetições')+'</div></div><button onclick="closeRandomizacaoModal()" aria-label="Fechar randomização" title="Fechar" style="background:none;border:none;color:#aaa;font-size:24px;cursor:pointer">×</button></div>'+
     '<div style="font-size:12px;color:#9a8;line-height:1.5;margin-bottom:8px">Cole uma repetição por linha, na ordem das parcelas. Pode usar <b>T1 T3 T2</b> ou só <b>1 3 2</b>. Tratamentos esperados: '+esc(ids)+'.</div>'+
     '<textarea id="rzText" rows="9" style="width:100%;box-sizing:border-box;background:#050805;border:1px solid #2a3a2a;color:#eaf3ed;border-radius:8px;padding:10px;font:14px ui-monospace,Menlo,monospace;line-height:1.45">'+esc(randomizacaoToText(study))+'</textarea>'+
     '<div id="rzErr" style="min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px"></div>'+
@@ -8850,7 +8975,7 @@ function renderStudyEditModal(){
   var q=data[curV]||{};
   var bbchList=getBBCHList(studyCultura(s,q));
 
-  var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()">×</button></div>';
+  var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()" aria-label="Fechar formulário do estudo" title="Fechar">×</button></div>';
 
   /* NEMATOLOGIA: o registro é só o NÚMERO DO ESTUDO. Matriz (solo/raiz) e o dia
      em DAA são da AMOSTRA, e moram na fila — não aqui. Tratamento, aplicação,
@@ -9171,10 +9296,11 @@ function _parseMomentos(txt, unidadePadrao){
 }
 /* Instante = dia do tratamento + hora zero + o deslocamento do momento. */
 function _instanteMomento(dataISO, hora0, mom){
-  var base=new Date(String(dataISO)+'T'+((hora0&&/^\d{1,2}:\d{2}/.test(hora0))?hora0.slice(0,5):'08:00')+':00');
-  if(isNaN(base)) return null;
-  var d=new Date(base.getTime()+mom.dias*86400000), p=function(n){ return (n<10?'0':'')+n; };
-  return { data:d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()), hora:p(d.getHours())+':'+p(d.getMinutes()) };
+  var hora=(hora0&&/^\d{1,2}:\d{2}/.test(hora0))?hora0.slice(0,5):'08:00';
+  if(/^\d:\d{2}$/.test(hora))hora='0'+hora;
+  var base=_agLocalEpoch(String(dataISO),hora); if(!isFinite(base))return null;
+  var p=_agDateParts(base+mom.dias*86400000); if(!p)return null;
+  return { data:p.year+'-'+p.month+'-'+p.day, hora:p.hour+':'+p.minute };
 }
 /* BANCADA: uma avaliação por MOMENTO, não por data.
    O gerador de campo indexa por data — assim 2, 12 e 24 HAT viram uma só,
@@ -9342,7 +9468,7 @@ function aplMarcarClima(qual){
   var _elD=document.getElementById('aeData');
   var hoje=(typeof todayISO==='function')?todayISO():'';
   var dia=String((_elD&&_elD.value)||ap.data||hoje).slice(0,10);
-  var now=new Date(), hora=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  var now=new Date(), hora=_agNowHHMM();
   var passado=!!(dia && hoje && dia<hoje);
   if(passado){
     var _sug=(ap[qual]&&ap[qual].hora)||hora;
@@ -9354,7 +9480,7 @@ function aplMarcarClima(qual){
     hora=(_m[1].length<2?'0':'')+_m[1]+':'+_m[2];
   }
   var ts=now.getTime();
-  if(passado){ var _d=new Date(dia+'T'+hora+':00'); if(!isNaN(_d)) ts=_d.getTime(); }
+  if(passado){ var _ep=_agLocalEpoch(dia,hora); if(isFinite(_ep))ts=_ep; }
   var btn=document.getElementById(qual==='inicio'?'aplIniBtn':'aplFimBtn'); if(btn){ btn.disabled=true; var _t=btn.textContent; btn.textContent='Clima…'; btn._txt=_t; }
   function done(cl){
     ap[qual]={ ts:ts, data:dia, hora:hora, clima: cl?{fonte:cl.fonte, temp:cl.temp, umidade:cl.umidade, vento:cl.vento, vpd:cl.vpd, chuva:cl.chuva}:{clima_falhou:true} };
@@ -9381,7 +9507,7 @@ function openStudyEditAplicacao(aid){
   if(!ap)return;
   var bbchList=getBBCHList(studyCultura(study,q));
 
-  var h='<div class="se-head"><h3>Aplicação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
+  var h='<div class="se-head"><h3>Aplicação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()" aria-label="Fechar aplicação" title="Fechar">×</button></div>';
   /* Data E hora. Sem a hora, uma aplicação de ontem só podia receber a MÉDIA do
      dia — que mistura a madrugada com a tarde e não é a condição em que se
      aplicou. Com a hora, o carimbo busca a leitura daquele instante na estação. */
@@ -9562,7 +9688,7 @@ function carimbar(qid,sid,recId,kind,recDate,recHora){
   /* recDate = data DO EVENTO (YYYY-MM-DD, do campo data da aplicação/avaliação).
      'data' do carimbo = quando foi REGISTRADO (rastreabilidade BPL/ISO27001 — imutável).
      'dataEvento' = o dia do ensaio que o usuário informou; é dele que vem o clima. */
-  rec.carimbo={ ts:now.getTime(), data:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}), dataEvento:(recDate||null), horaEvento:(recHora||null), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
+  rec.carimbo={ ts:now.getTime(), iso:now.toISOString(), fuso:AGRACTA_TIME_ZONE, data:_agFormatDateTime(now), dataEvento:(recDate||null), horaEvento:(recHora||null), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
   try{ save(); }catch(e){}
   _carimboLoc(function(loc){ if(loc) _carimboSet(qid,sid,recId,kind,'gps',loc); });
   _carimboClima(qid,recDate,recHora,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
@@ -10136,7 +10262,7 @@ function avCroquiSelect(key){
 
 function renderAvGrid(){
   _avCss(); var w=document.getElementById('avGridWrap'); if(!w) return;
-  var st=_avStudy(), rows=_avRowsForStudy(st,false), ts=(st&&st.tratamentos)||[];
+  var st=_avStudy(), rows=_avRowsForStudy(st,false), croquiRows=_avRowsForStudy(st,true), ts=(st&&st.tratamentos)||[];
   if(!ts.length){ w.innerHTML='<div class="av-hint">Cadastre os tratamentos do estudo (botão EDITAR) para lançar notas por tratamento.</div>'; return; }
   var vs=_avGrid.variaveis;
   var html='';
@@ -10151,7 +10277,7 @@ function renderAvGrid(){
       html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle off" onclick="avEnableStudyRandomizado()">Ativar automático randomizado</button><span class="av-auto-note">Modelo disponível: '+esc(mi.nome+' · '+mi.reps+' rep.')+'</span></div>';
     }
   }
-  html+=avCroquiHtml(st,rows,vs);
+  html+=avCroquiHtml(st,croquiRows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
   vs.forEach(function(v){
     var cfg=_avCfg(_avGrid,v), suf='';
@@ -10903,12 +11029,22 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
     av=study.avaliacoes.find(function(a){return a.id===aid});
   }
   if(!av)return;
+  /* Avaliações da mesma série medem, em geral, o mesmo conjunto de variáveis.
+     Herdamos somente o ESQUEMA da leitura anterior — nunca os valores — para
+     evitar recriar “Ferrugem”, tipo e escala em toda data da agenda. */
+  var inheritedFrom=null, avVars=(av.variaveis||[]).slice(), avTipos=JSON.parse(JSON.stringify(av.tipos||{})), avCfg=JSON.parse(JSON.stringify(av.varcfg||{}));
+  if(!avVars.length){
+    var avIndex=(study.avaliacoes||[]).indexOf(av), candidatos=[];
+    (study.avaliacoes||[]).forEach(function(x,i){if(x&&x!==av&&(x.variaveis||[]).length&&(i<avIndex||String(x.data||'')<=String(av.data||'')))candidatos.push({av:x,i:i});});
+    candidatos.sort(function(a,b){return String(a.av.data||'').localeCompare(String(b.av.data||''))||a.i-b.i;});
+    if(candidatos.length){inheritedFrom=candidatos[candidatos.length-1].av;avVars=(inheritedFrom.variaveis||[]).slice();avTipos=JSON.parse(JSON.stringify(inheritedFrom.tipos||{}));avCfg=JSON.parse(JSON.stringify(inheritedFrom.varcfg||{}));}
+  }
   _avGrid={
-    variaveis:(av.variaveis||[]).slice(),
+    variaveis:avVars,
     notas:JSON.parse(JSON.stringify(av.notas||{})),
-    tipos:JSON.parse(JSON.stringify(av.tipos||{})),
+    tipos:avTipos,
     meta:JSON.parse(JSON.stringify(av.notasMeta||{})),
-    varcfg:JSON.parse(JSON.stringify(av.varcfg||{})),
+    varcfg:avCfg,
     bruto:JSON.parse(JSON.stringify(av.bruto||{}))
   };
   if(study.randomizado) ensureStudyRandomizacao(study);
@@ -10918,13 +11054,14 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   var signed=!!(av.carimbo && av.carimbo.rubrica);
   var reopened=!!(_avReopen && _avReopen.avid===av.id);
   var locked=signed && !forceUnlock && !reopened;
-  var assinEm=''; try{ if(av.carimbo&&av.carimbo.rubricaEm){ var _dd=new Date(av.carimbo.rubricaEm); assinEm=isNaN(_dd)?'':_dd.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } }catch(e){}
+  var assinEm=''; try{ if(av.carimbo&&av.carimbo.rubricaEm){ var _dd=new Date(av.carimbo.rubricaEm); assinEm=isNaN(_dd)?'':_agFormatDateTime(_dd,{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } }catch(e){}
   var assinPor='';
   if(av.carimbo){ assinPor=_identidadeBPL(av.carimbo.rubricaNome,av.carimbo.rubricaPor).nome; }
 
-  var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
+  var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()" aria-label="Fechar avaliação" title="Fechar">×</button></div>';
   if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+'</div>'; }
   if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
+  if(inheritedFrom){h+='<div class="av-schema-inherited">✓ Campos herdados da avaliação de '+esc(isoToBR(inheritedFrom.data)||inheritedFrom.data||'data anterior')+'. A grade veio vazia para esta leitura.</div>';}
   h+='<fieldset id="avFs"'+(locked?' disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">';
   h+='<div class="se-field"><label>Data</label><input type="date" id="vData" value="'+esc(av.data)+'"></div>';
   /* Momento explícito — OPCIONAL. Em branco, o app segue derivando o DAA da data,
@@ -11078,7 +11215,7 @@ function finalizarEstudo(qid,sid){
         nome:_nomeParaAssinatura(),
         rubrica:url,
         significado:'Estudo finalizado — dados conferidos e estatística congelada',
-        fuso:(function(){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||''; }catch(e){ return ''; } })(),
+        fuso:AGRACTA_TIME_ZONE,
         nAvaliacoes:(st.avaliacoes||[]).length,
         nResultados:(st.estatisticaFinal.itens||[]).length
       };
@@ -11089,7 +11226,7 @@ function finalizarEstudo(qid,sid){
       save();
       try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
       alert('Estudo finalizado.\n\n'+st.finalizacao.nResultados+' resultado(s) de estatística congelados em '+
-            new Date(st.finalizacao.em).toLocaleString('pt-BR')+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
+            _agFormatDateTime(st.finalizacao.em)+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
       try{ renderAgenda(); }catch(e){}
       openStudyDetail(qid,sid);
     }, 'Rubrique para finalizar o estudo '+(s.codigo||s.id));
@@ -11115,7 +11252,7 @@ function reabrirEstudo(qid,sid){
     delete st.finalizacao; delete st.estatisticaFinal;
     logStudyAuditInObject(st,'Reabertura do Estudo',
       'Reaberto para edição. Motivo: "'+motivo+'". A finalização de '+
-      (fin.em?new Date(fin.em).toLocaleString('pt-BR'):'—')+' foi arquivada.');
+      (fin.em?_agFormatDateTime(fin.em):'—')+' foi arquivada.');
     st._ts=Date.now();
     save();
     try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
@@ -11128,7 +11265,7 @@ function _bloqueadoPorFinalizacao(qid,sid){
   var s=_estudoDe(qid,sid);
   if(!estudoFinalizado(s)) return false;
   var finQuem=_identidadeBPL(s.finalizacao.nome,s.finalizacao.por).nome;
-  alert('Estudo finalizado em '+new Date(s.finalizacao.em).toLocaleString('pt-BR')+
+  alert('Estudo finalizado em '+_agFormatDateTime(s.finalizacao.em)+
         (finQuem&&finQuem!=='Não identificado'?(' por '+finQuem):'')+'.\n\n'+
         'Ele está somente-leitura. Use "Reabrir estudo" — pede senha e registra o motivo na trilha.');
   return true;
@@ -11232,7 +11369,7 @@ function openAvalRecovery(){
     if(!arr.length){ box.innerHTML='<div style="color:#8aa88a;font-size:12px;text-align:center;padding:10px">Nenhuma avaliação registrada neste aparelho ainda.</div>'; return; }
     arr=arr.slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
     box.innerHTML='<div style="font-size:11px;color:#8aa88a;margin-bottom:6px">'+arr.length+' registro(s) — mais recente primeiro</div>'+arr.slice(0,300).map(function(r){
-      var d=new Date(r.ts||0), dt=isNaN(d)?'':(d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR').slice(0,5));
+      var d=new Date(r.ts||0), dt=isNaN(d)?'':_agFormatDateTime(d);
       return '<div style="border-bottom:1px solid #1f2c22;padding:7px 0;font-size:12px">'+
         '<div style="color:#cfe0d4;font-weight:700">'+esc(r.quadra||r.qid||'—')+' · '+esc(r.data||'')+(r.tipo?' · '+esc(r.tipo):'')+'</div>'+
         '<div style="color:#8aa88a;font-size:11px">'+_avjCells(r)+' valor(es) · '+esc(r.who||'—')+' · '+dt+'</div>'+
@@ -11272,8 +11409,7 @@ function saveAvaliacao(){
      leitura de outro dia, "agora" seria a hora de quem digita, não a da leitura
      — o mesmo erro que a aplicação já cometia. */
   if(!av.hora && av.data && typeof todayISO==='function' && av.data===todayISO()){
-    var _ag=new Date(), _p=function(n){ return (n<10?'0':'')+n; };
-    av.hora=_p(_ag.getHours())+':'+_p(_ag.getMinutes());
+    av.hora=_agNowHHMM();
     av.horaAuto=true;
   } else if(av.hora) delete av.horaAuto;
   av.tipo=document.getElementById("vTipo").value;
@@ -11797,7 +11933,7 @@ function renderToday(){
   var h='<div class="today-head" style="position:relative">';
   h+='<button class="panel-x-tr" onclick="closeToday()" aria-label="Fechar" title="Fechar">✕</button>';
   h+='<div class="today-title">HOJE</div>';
-  h+='<div class="today-date">'+new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})+'</div>';
+  h+='<div class="today-date">'+_agFormatDateTime(Date.now(),{weekday:'long',day:'numeric',month:'long'})+'</div>';
   h+='</div>';
 
   /* Resumo numérico */
@@ -12101,10 +12237,11 @@ function _studyPanelProgress(study){
 }
 function _studyPanelState(study, progress){
   if(estudoFinalizado(study)) return {key:'final',label:'Finalizado'};
-  var ne=nextEventV2(study);
+  var ne=nextEventV2(study), iniciado=!!((study.aplicacoes||[]).length||(progress&&progress.filled));
   if(ne){
     if(ne.diff<=0) return {key:'urgent',label:ne.diff<0?'Atrasado':'Hoje',next:ne};
     if(ne.diff<=3) return {key:'soon',label:'Em '+ne.diff+'d',next:ne};
+    if(iniciado) return {key:'go',label:'Em andamento',next:ne};
     return {key:'go',label:'Programado',next:ne};
   }
   if(progress.total&&progress.filled<progress.total) return {key:'go',label:'Em andamento'};
@@ -12163,7 +12300,7 @@ function renderStudiesPanel(){
     else h+='<span class="studies-new-empty">Cadastre uma quadra ou laboratório antes de criar o estudo.</span>';
     h+='<button type="button" class="studies-new-cancel" onclick="toggleStudiesNew()">Cancelar</button></div>';
   }
-  h+='<div class="studies-dashboard-summary">'+summary('todos','',all.length,'estudos')+summary('acao','urgent',now,'pedem ação')+summary('andamento','',ongoing,'em lançamento')+summary('concluidos','done',complete,'concluídos')+'</div>';
+  h+='<div class="studies-dashboard-summary">'+summary('todos','',all.length,all.length===1?'estudo':'estudos')+summary('acao','urgent',now,'pedem ação')+summary('andamento','',ongoing,'em lançamento')+summary('concluidos','done',complete,'concluídos')+'</div>';
   h+='<div class="studies-dashboard-tools">'+chip('todos','Todos')+chip('acao','Ação agora')+chip('pendentes','Pendentes')+chip('andamento','Em andamento')+chip('concluidos','Concluídos')+'<input id="studiesFilterSearch" class="study-filter-search" value="'+esc(_studiesPanelQuery)+'" oninput="setStudiesPanelQuery(this.value)" placeholder="Buscar código, estudo, localidade, cultura ou quadra"></div>';
   h+='<div class="studies-dashboard-list">';
   if(!visible.length){
@@ -12244,7 +12381,7 @@ function init(){
   if(window._initDone)return;
   window._initDone=true;
   try{
-    document.getElementById("dateInfo").textContent=new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"short",year:"numeric"});
+    document.getElementById("dateInfo").textContent=_agFormatDateTime(Date.now(),{day:'numeric',month:'short',year:'numeric'});
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
