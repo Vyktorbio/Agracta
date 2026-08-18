@@ -213,7 +213,7 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(35,132,82,.35)!impor
 /* O ponto azul só tem significado enquanto o navegador GPS está ativo. Esta
    trava visual também protege contra um marcador residual de versões antigas. */
 .gps-dot{display:none!important}
-body.nav-gps-active .gps-dot{display:block!important}
+body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!important}
 
 .clima-chip{
   top:76px!important;

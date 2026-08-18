@@ -2906,6 +2906,7 @@ function updateAgendaBadge(){
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
 var NDVI_PROXY=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://localhost:8799':'https://ndvi-iracemapolis.onrender.com';
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null, ndviZonas=false;
+var _ndviAutoLatest=false,_ndviDatesSeq=0;
 function _lerpColor(a,b,t){ function h(s,i){return parseInt(s.substr(i,2),16);} function c(x){x=Math.max(0,Math.min(255,Math.round(x)));return (x<16?'0':'')+x.toString(16);} return '#'+c(h(a,1)+(h(b,1)-h(a,1))*t)+c(h(a,3)+(h(b,3)-h(a,3))*t)+c(h(a,5)+(h(b,5)-h(a,5))*t); }
 function _ndviColor(v){ if(v==null||isNaN(v)) return '#9e9e9e'; var s=[[0.15,'#d73027'],[0.3,'#fc8d59'],[0.45,'#fee08b'],[0.6,'#d9ef8b'],[0.75,'#91cf60'],[0.85,'#1a9850']]; if(v<=s[0][0])return s[0][1]; if(v>=s[s.length-1][0])return s[s.length-1][1]; for(var i=1;i<s.length;i++){ if(v<=s[i][0]) return _lerpColor(s[i-1][1],s[i][1],(v-s[i-1][0])/(s[i][0]-s[i-1][0])); } return s[s.length-1][1]; }
 function ndviToggleZonas(){
@@ -3001,7 +3002,7 @@ function quadrasMultiPolygon(){
   return { type:"MultiPolygon", coordinates: polys };
 }
 function ndviSetClip(v){ ndviClip=!!v; ndviLoadImage(); }
-function ndviRefresh(){ ndviLoadDates(); if(ndviIndex && ndviDate) ndviLoadImage(); else ndviStatus('Escolha um índice e uma data.'); }
+function ndviRefresh(){ _ndviAutoLatest=true;ndviLoadDates(); }
 /* Ao mover/zoom o mapa com um índice ativo, recarrega a camada para a nova área (debounce) */
 function ndviOnMove(){ var p=document.getElementById('ndviPanel'); if(!(p && p.style.display==='block' && ndviIndex && ndviDate)) return; clearTimeout(_ndviMoveT); _ndviMoveT=setTimeout(function(){ ndviLoadImage(); }, 700); }
 function stationBBox(){
@@ -3132,23 +3133,27 @@ function locateMe(opts){
   var automatic=!!opts.automatic;
   if(!navigator.geolocation){ if(!automatic) alert('GPS não disponível neste navegador.'); return; }
   if(!_map) initMap();
-  /* O botão GPS significa "ir para minha posição", não criar mais uma camada.
-     Marcadores continuam existindo somente nos fluxos que precisam deles
-     (navegação até uma quadra e registro de observação). */
+  /* A abertura automática só centraliza. O toque deliberado no botão GPS
+     também mostra a bolinha azul de "você está aqui". */
   if(_gpsMarker){ try{ _map.removeLayer(_gpsMarker); }catch(e){} _gpsMarker=null; }
   if(_gpsCircle){ try{ _map.removeLayer(_gpsCircle); }catch(e){} _gpsCircle=null; }
+  document.body.classList.toggle('gps-manual-visible',!automatic);
   var centered=false;
   function center(b, fim){
     var ll=[b.lat,b.lng];
     /* A primeira leitura abre logo no lugar; a leitura final reposiciona uma
        única vez caso o aparelho tenha refinado bastante a coordenada. */
     if(!centered || fim){ centered=true; try{ _map.setView(ll, Math.max(_map.getZoom()||16,17)); }catch(e){} }
+    if(!automatic){
+      if(_gpsMarker){try{_map.removeLayer(_gpsMarker);}catch(e2){}}
+      _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400}).addTo(_map);
+    }
     if(fim && !automatic && typeof _stxToast==='function') _stxToast('Mapa centralizado no seu GPS · precisão ±'+Math.round(b.acc)+' m');
     if(fim && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
   }
   gpsBest({target:8, maxWait:9000, maxAcc:80}, function(b){ center(b,false); }, function(b,err){
     /* a mensagem agora vem pronta do gpsBest, dizendo a causa real */
-    if(!b){ if(!automatic) alert('Não consegui o GPS.\n\n'+(err||'Sem posição disponível.')); return; }
+    if(!b){ if(!automatic){document.body.classList.remove('gps-manual-visible');alert('Não consegui o GPS.\n\n'+(err||'Sem posição disponível.'));} return; }
     center(b,true);
   });
 }
@@ -3216,6 +3221,7 @@ function navStop(){
   if(_gpsMarker){ try{ _map.removeLayer(_gpsMarker); }catch(e){} _gpsMarker=null; }
   if(_gpsCircle){ try{ _map.removeLayer(_gpsCircle); }catch(e){} _gpsCircle=null; }
   document.body.classList.remove('nav-gps-active');
+  document.body.classList.remove('gps-manual-visible');
   _navHeading=null; _navTarget=null; _navCentered=false;
   var h=document.getElementById('navHud'); if(h) h.remove();
 }
@@ -3773,7 +3779,9 @@ function deleteNote(noteId){
 
 /* ===================== CLIMA — estação meteorológica (Ecowitt) ===================== */
 var CLIMA_PROXY=NDVI_PROXY;
-var _climaStations=null, climaMac=null, _climaTimer=null, _climaMode='estacao', _climaWhere=null, _climaWhereGPS=false, _climaPanelSeq=0;
+var CLIMA_STATION_RADIUS_KM=10;
+var _climaStations=null, climaMac=null, _climaTimer=null, _climaWhere=null, _climaWhereGPS=false, _climaPanelSeq=0;
+var _climaMapLast=null, _climaMoveTimer=null;
 function _climaCss(){ if(document.getElementById('climaCss'))return; var s=document.createElement('style'); s.id='climaCss';
   s.textContent='.clima-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}'+
   '.clima-card{background:var(--surface-2,#11210f);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px 10px;min-width:0}'+
@@ -3786,21 +3794,43 @@ function _climaCss(){ if(document.getElementById('climaCss'))return; var s=docum
   document.head.appendChild(s);
 }
 function _climaNorm(t){ return (t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,''); }
-function climaMatch(){
-  if(!_climaStations||!_climaStations.length) return null;
-  var nm=_climaNorm((LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'');
-  if(nm){
-    for(var i=0;i<_climaStations.length;i++){ var sn=_climaNorm(_climaStations[i].name); if(sn&&(sn.indexOf(nm)>=0||nm.indexOf(sn)>=0)) return _climaStations[i].mac; }
-    var toks=nm.match(/[a-z]{4,}/g)||[];
-    for(var j=0;j<_climaStations.length;j++){ var s2=_climaNorm(_climaStations[j].name);
-      for(var k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[j].mac; } }
+function _climaNameTokens(t){
+  var genericas={estacao:1,experimental:1,fazenda:1,local:1,unidade:1,station:1,site:1,sitio:1};
+  return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/)
+    .filter(function(x){return x.length>=4&&!genericas[x];});
+}
+function _climaNamesMatch(a,b){
+  var an=_climaNorm(a),bn=_climaNorm(b);if(!an||!bn)return false;
+  if(an===bn)return true;
+  var at=_climaNameTokens(a),bt=_climaNameTokens(b);
+  for(var i=0;i<at.length;i++)for(var j=0;j<bt.length;j++)if(at[i]===bt[j])return true;
+  return false;
+}
+function _climaStationByMac(mac){
+  return (_climaStations||[]).filter(function(s){return s&&s.mac===mac;})[0]||null;
+}
+/* A posição da estação é definida pelo próprio mapa do Agracta sempre que
+   existe um Local correspondente. A latitude da conta Ecowitt vira apenas a
+   última reserva: ela pode continuar no padrão de fábrica sem deslocar o clima
+   nem produzir um alerta permanente para o técnico. */
+function _climaStationCoord(st){
+  if(!st)return null;
+  if(typeof LOCAIS==='object'&&LOCAIS){
+    var ids=Object.keys(LOCAIS),i;
+    for(i=0;i<ids.length;i++)if(_climaNamesMatch(st.name,LOCAIS[ids[i]].nome)){
+      var c=_climaCoordDoLocal(ids[i]);if(c)return c;
+    }
   }
-  /* NÃO cai na primeira estação da lista. Num local sem Ecowitt (Picolini, em
-     Cordeirópolis) isso mostrava o tempo de Iracemápolis como se fosse dali —
-     dado de outro município apresentado como local, sem nada avisando. Sem
-     estação que case, quem chamou trata o null e vai para o satélite. */
+  if(st.lat!=null&&st.lng!=null&&_coordNoBrasil(st.lat,st.lng))return [Number(st.lat),Number(st.lng)];
   return null;
 }
+function _climaStationForCoord(ll){
+  if(!ll||!_climaStations||!_climaStations.length)return null;
+  var best=null,dist=Infinity;
+  _climaStations.forEach(function(st){var c=_climaStationCoord(st);if(!c)return;var d=_kmEntre(ll[0],ll[1],c[0],c[1]);if(d<dist){dist=d;best=st;}});
+  return best&&dist<=CLIMA_STATION_RADIUS_KM?best:null;
+}
+function climaMatch(ll){ var st=_climaStationForCoord(ll||_climaMapCoord());return st?st.mac:null; }
 function toggleClima(){
   var p=document.getElementById('climaPanel');
   if(p&&p.style.display==='block'){ p.style.display='none'; _climaPanelSeq++; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
@@ -3808,59 +3838,28 @@ function toggleClima(){
   if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   _climaCss(); buildClimaPanel(); climaModeInit();
 }
-function climaModeInit(){ if(_climaMode==='local') climaLocalLoad(); else climaInit(); }
-function climaSetMode(m){ _climaMode=m; buildClimaPanel(); climaModeInit(); }
+function climaModeInit(){ climaInit(); }
+function climaSetMode(){ buildClimaPanel(); climaInit(); }
 function buildClimaPanel(){
   var p=document.getElementById('climaPanel');
   if(!p){ p=document.createElement('div'); p.id='climaPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
-  var modeBtns='<div class="ndvi-ixrow" style="margin-bottom:6px">'+
-    '<button class="ndvi-ix'+(_climaMode==='estacao'?' on':'')+'" onclick="climaSetMode(\'estacao\')">'+ic('sat',14)+' Estação</button>'+
-    '<button class="ndvi-ix'+(_climaMode==='local'?' on':'')+'" onclick="climaSetMode(\'local\')">'+ic('globe',14)+' Local</button></div>';
-  var ctrl='';
-  if(_climaMode==='estacao'){
-    var opts=_climaStations? _climaStations.map(function(st){ return '<option value="'+st.mac+'"'+(st.mac===climaMac?' selected':'')+'>'+esc(st.name)+'</option>'; }).join('') : '';
-    ctrl=(_climaStations? '<label class="gr-ctl"><span>Estação</span><select onchange="climaPick(this.value)">'+opts+'</select></label>' : '');
-    /* A coordenada da estação é digitada por quem instala e às vezes fica no
-       padrão de fábrica. Isso não afeta a LEITURA (que vem pelo MAC). Para o
-       sol, o Agracta prefere a posição georreferenciada do Local/quadras. */
-    var _stSel=(_climaStations||[]).filter(function(s){ return s.mac===climaMac; })[0];
-    if(_stSel && _coordSuspeita(_stSel.lat,_stSel.lng)){
-      var _cAtivo=(LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro)||null;
-      var _dist=_cAtivo?Math.round(_kmEntre(_cAtivo[0],_cAtivo[1],_stSel.lat,_stSel.lng)):null;
-      var _solProtegido=!!_climaSunLocalLL(_stSel);
-      ctrl+='<div style="margin:6px 0;padding:7px 9px;border-radius:8px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a;font-size:11px;line-height:1.5">'+
-        '⚠ A coordenada cadastrada nesta estação ('+(+_stSel.lat).toFixed(4)+', '+(+_stSel.lng).toFixed(4)+')'+
-        (_dist!=null?(' fica a '+_dist+' km daqui'):' não parece ser do Brasil')+'. '+
-        'A leitura do tempo continua correta — ela vem pelo aparelho. '+
-        (_solProtegido?'Para nascer e pôr do sol, o Agracta está usando a coordenada do local no mapa, então os horários continuam corretos. ':'Sem uma coordenada do local no mapa, os horários do sol podem ficar deslocados. ')+
-        'Vale corrigir o cadastro no app da Ecowitt.</div>';
-    }
-  } else {
-    var nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
-    ctrl='<div class="gr-ctl"><span>Local</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis">'+esc(nm)+'</span><button class="ndvi-ix" onclick="climaGps()">'+ic('pin',14)+' GPS</button></div>';
-  }
-  p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('weather',14)+' CLIMA</div><button class="gr-x" onclick="toggleClima()" aria-label="Fechar" title="Fechar">×</button></div>'+modeBtns+ctrl+
+  var ll=_climaMapCoord(),st=_climaStationForCoord(ll),fonte=!_climaStations?'Identificando a fonte…':(st?('Estação Ecowitt · '+st.name):'Previsão para o centro do mapa');
+  var coord=ll?((+ll[0]).toFixed(4)+', '+(+ll[1]).toFixed(4)):'sem coordenada';
+  var ctrl='<div class="gr-ctl"><span>Fonte automática</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(fonte)+'</span></div>'+
+    '<div style="font-size:10px;color:var(--text-3,#7a8a7a);margin:2px 3px 7px">'+ic('pin',11)+' Centro do mapa · '+esc(coord)+'</div>';
+  p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('weather',14)+' CLIMA</div><button class="gr-x" onclick="toggleClima()" aria-label="Fechar" title="Fechar">×</button></div>'+ctrl+
     '<div id="climaBody"></div>'+
     '';
   p.style.display='block';
 }
-/* ONDE o clima é medido. Vinha só do "centro do Local" — um campo que quase
-   ninguém preenche, porque a posição real do trabalho está nas QUADRAS, que já
-   estão desenhadas no mapa. Sem o centro, o painel abria com um aviso pedindo
-   uma coordenada que o app já tinha, e o clima não carregava.
-
-   Agora desce a escada até achar posição de verdade:
-     1. o centro do Local, se ele foi definido à mão;
-     2. o centro médio das quadras daquele Local — é o campo, de fato;
-     3. o centro da quadra aberta agora.
-   O GPS do aparelho continua existindo no botão 📍, mas como ESCOLHA dele, não
-   como exigência para o painel abrir. Ele é outra coisa: onde a pessoa está,
-   não onde o ensaio está. */
-function _climaLocalCoord(){
-  var c=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro);
+/* Coordenada canônica de um Local: cadastro ou centro das quadras. Também é
+   usada para ancorar uma Ecowitt ao mapa quando a coordenada da conta está
+   errada. */
+function _climaCoordDoLocal(id){
+  var c=(typeof LOCAIS==='object'&&LOCAIS&&id&&LOCAIS[id]&&LOCAIS[id].centro);
   if(c&&c.length===2&&!isNaN(c[0])) return c.slice();
   try{
-    var qs=(typeof quadrasDoLocal==='function'&&localAtivo)?quadrasDoLocal(localAtivo):[];
+    var qs=(typeof quadrasDoLocal==='function'&&id)?quadrasDoLocal(id):[];
     var sLat=0,sLng=0,n=0;
     (qs||[]).forEach(function(q){
       var ctr=quadraCenter(q);
@@ -3868,19 +3867,26 @@ function _climaLocalCoord(){
     });
     if(n) return [sLat/n, sLng/n];
   }catch(e){}
+  return null;
+}
+function _climaLocalCoord(){
+  var c=_climaCoordDoLocal((typeof localAtivo!=='undefined')?localAtivo:null);
+  if(c)return c;
   try{
     var ca=(typeof curV!=='undefined'&&curV)?quadraCenter(curV):null;
     if(ca&&!isNaN(ca[0])) return ca.slice();
   }catch(e){}
   return null;
 }
+/* O clima visível acompanha o ponto central que a pessoa está olhando. Quando
+   o GPS ou a seleção de um Local move o mapa, esta coordenada muda junto. */
+function _climaMapCoord(){
+  try{var c=(typeof _map!=='undefined'&&_map&&_map.getCenter)?_map.getCenter():null;if(c&&isFinite(c.lat)&&isFinite(c.lng))return [Number(c.lat),Number(c.lng)];}catch(e){}
+  return _climaLocalCoord();
+}
+function _climaMapKey(ll){return ll?((+ll[0]).toFixed(3)+'|'+(+ll[1]).toFixed(3)):'sem-coord';}
 function climaGps(){
-  if(!navigator.geolocation){ climaSay('GPS indisponível neste aparelho.','err'); return; }
-  climaSay('Pegando seu GPS…');
-  gpsBest({target:15, maxWait:8000, maxAcc:300}, null, function(b){
-    if(b) climaLocalLoad([b.lat,b.lng],true);
-    else climaSay('Não consegui o GPS (precisa de https e permissão).','err');
-  });
+  try{locateMe();}catch(e){climaSay('Não consegui abrir o GPS.','err');}
 }
 function climaLocalLoad(ll,fromGps){
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
@@ -3888,11 +3894,8 @@ function climaLocalLoad(ll,fromGps){
   if(ll){
     _climaWhere=ll.slice?ll.slice():ll;
     _climaWhereGPS=!!fromGps;
-  }else if(_climaWhere){
-    ll=_climaWhere;
-    fromGps=_climaWhereGPS;
   }else{
-    ll=_climaLocalCoord();
+    ll=_climaMapCoord();
     fromGps=false;
   }
   /* Só avisa quando NÃO HÁ mesmo posição nenhuma: nem centro do Local, nem
@@ -3943,7 +3946,7 @@ function climaLocalRender(j, ll, fromGps){
     h+='</div></div>';
   }
   var lbl = fromGps ? ('📍 onde estou ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')')
-    : ('📍 '+esc((typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||((+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3))));
+    : ('📍 centro do mapa ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')');
   var atual=(c.time&&String(c.time).indexOf('T')>=0)?String(c.time).split('T')[1].slice(0,5):'';
   h+='<div class="clima-foot">'+lbl+' · previsão Open-Meteo'+(atual?(' · atualizado '+atual):'')+'</div>';
   b.innerHTML=h;
@@ -3952,10 +3955,9 @@ function climaSay(msg,cls){ var b=document.getElementById('climaBody'); if(b) b.
 
 /* ===== CHIP DO CLIMA SOBRE O MAPA ==========================================
    O tempo é o dado que se olha de relance, e no dock ele estava a dois toques
-   de distância. O chip segue o LOCAL ATIVO: se o local tem estação Ecowitt, é
-   dela que vem o número (selo "estação"); se não tem — Picolini, em
-   Cordeirópolis — cai na previsão por satélite e o selo diz "satélite", para
-   ninguém confundir leitura de sensor com previsão de grade.
+   de distância. O chip segue o CENTRO DO MAPA: dentro de 10 km de uma Ecowitt
+   usa o sensor e mostra “estação”; fora desse raio consulta a coordenada do
+   mapa e mostra “mapa”, para não confundir medição com previsão.
    Toque abre o painel completo, que continua sendo o mesmo de antes. */
 var _climaChipTimer=null, _climaChipMac=null, _climaChipSeq=0, _climaChipLocalMostrado=null;
 function _climaChipEl(){ return document.getElementById('climaChip'); }
@@ -3985,14 +3987,14 @@ function climaChipPinta(o){
   if(vt!=null) linha+='<span class="cc-w">'+(linha?' · ':'')+ic('wind',10)+' '+vt+' km/h</span>';
   el.innerHTML='<span class="cc-t">'+(t!=null?(String(t).replace('.',',')+'°'):'—')+'</span>'+
     (linha?('<span class="cc-v">'+linha+'</span>'):'')+
-    '<span class="cc-src '+(o.estacao?'est':'sat')+'">'+(o.estacao?'estação':'satélite')+'</span>';
+    '<span class="cc-src '+(o.estacao?'est':'sat')+'">'+(o.estacao?'estação':'mapa')+'</span>';
   var hora='';
   if(o.atualizado!=null){
     if(typeof o.atualizado==='number'){
       try{ hora=_agFormatDateTime(o.atualizado*1000,{hour:'2-digit',minute:'2-digit'}); }catch(e){}
     }else if(String(o.atualizado).indexOf('T')>=0){ hora=String(o.atualizado).split('T')[1].slice(0,5); }
   }
-  el.title=(o.estacao?'Estação Ecowitt de ':'Previsão por satélite para ')+(o.lugar||'este local')+
+  el.title=(o.estacao?'Estação Ecowitt · ':'Previsão para o centro do mapa · ')+(o.lugar||'este ponto')+
            (hora?(' · atualizado '+hora):'')+' — toque para abrir o painel completo';
   el.setAttribute('aria-label',el.title);
   el.style.display='flex';
@@ -4000,9 +4002,9 @@ function climaChipPinta(o){
 function climaChipAtualiza(){
   var el=_climaChipEl(); if(!el) return;
   var seq=++_climaChipSeq;
-  var localDaBusca=String((typeof localAtivo!=='undefined'&&localAtivo)||'');
-  var lugar=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'';
-  function atual(){ return seq===_climaChipSeq && String((typeof localAtivo!=='undefined'&&localAtivo)||'')===localDaBusca; }
+  var ll=_climaMapCoord(),localDaBusca=_climaMapKey(ll);
+  var lugar=ll?((+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)):'';
+  function atual(){ return seq===_climaChipSeq && _climaMapKey(_climaMapCoord())===localDaBusca; }
   function pinta(o){ if(!atual()) return; _climaChipLocalMostrado=localDaBusca; climaChipPinta(o); }
   if(_climaChipLocalMostrado!==localDaBusca){
     _climaChipLocalMostrado=localDaBusca;
@@ -4010,7 +4012,6 @@ function climaChipAtualiza(){
   }
   function satelite(){
     if(!atual()) return;
-    var ll=(typeof _climaLocalCoord==='function')?_climaLocalCoord():null;
     if(!ll){ pinta({estado:'Clima sem coordenada',title:'O local ainda não tem coordenada nem quadra desenhada',lugar:lugar}); return; }
     fetch('https://api.open-meteo.com/v1/forecast?latitude='+(+ll[0]).toFixed(4)+'&longitude='+(+ll[1]).toFixed(4)+
           '&current=temperature_2m,relative_humidity_2m,wind_speed_10m&temperature_unit=celsius&wind_speed_unit=kmh&timezone=America%2FSao_Paulo')
@@ -4026,14 +4027,14 @@ function climaChipAtualiza(){
   }
   function comEstacoes(){
     if(!atual()) return;
-    var mac=climaMatch();
+    var mac=climaMatch(ll),st=_climaStationByMac(mac);
     _climaChipMac=mac;
     if(!mac){ satelite(); return; }
     fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(d){
       if(!atual()) return;
       if(!d||d.error){ satelite(); return; }
       var v=function(x){ return (x&&x.value!=null)?x.value:null; };
-      pinta({temp:v(d.temp), umidade:v(d.humidity), vento:v(d.wind_speed), atualizado:d.time, lugar:lugar, estacao:true});
+      pinta({temp:v(d.temp), umidade:v(d.humidity), vento:v(d.wind_speed), atualizado:d.time, lugar:(st&&st.name)||lugar, estacao:true});
     }).catch(satelite);
   }
   if(_climaStations){ comEstacoes(); return; }
@@ -4044,29 +4045,41 @@ function climaChipAtualiza(){
 }
 function climaChipIniciar(){
   if(!_climaChipEl()) return;
+  _climaMapLast=_climaMapCoord();
+  if(typeof _map!=='undefined'&&_map&&!_map.__climaMove){
+    _map.__climaMove=true;
+    _map.on('moveend',function(){
+      var ll=_climaMapCoord();if(!ll)return;
+      if(_climaMapLast&&_climaMapKey(_climaMapLast)===_climaMapKey(ll))return;
+      _climaMapLast=ll.slice();
+      clearTimeout(_climaMoveTimer);
+      _climaMoveTimer=setTimeout(function(){
+        climaMac=null;_climaWhere=null;_climaWhereGPS=false;climaChipAtualiza();
+        var p=document.getElementById('climaPanel');if(p&&p.style.display==='block'){buildClimaPanel();climaInit();}
+      },250);
+    });
+  }
   climaChipAtualiza();
   if(_climaChipTimer) clearInterval(_climaChipTimer);
   /* 5 min: é o passo de gravação da própria Ecowitt; puxar mais rápido só gasta bateria */
   _climaChipTimer=setInterval(function(){ if(!document.hidden) climaChipAtualiza(); }, 300000);
 }
 function climaInit(){
-  if(_climaStations){ if(!climaMac) climaMac=climaMatch(); buildClimaPanel(); climaLoad(); return; }
-  climaSay('Conectando à estação…');
+  if(_climaStations){ climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad(); return; }
+  climaSay('Identificando a melhor fonte para este ponto do mapa…');
   fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
     if(!arr||arr.error){ climaSay((arr&&arr.error)||'Não consegui listar as estações.','err'); return; }
-    _climaStations=arr; climaMac=climaMatch(); buildClimaPanel(); climaLoad();
-  }).catch(function(){ climaSay('Servidor do clima fora do ar. Tente em alguns segundos (ele “acorda” na 1ª chamada).','err'); });
+    _climaStations=arr; climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad();
+  }).catch(function(){ _climaStations=[];climaMac=null;buildClimaPanel();climaLocalLoad(_climaMapCoord(),false); });
 }
 function climaPick(mac){ climaMac=mac; climaLoad(); }
 function climaLoad(){
-  /* Sem estação que case com o local ativo, o clima vem do satélite (Open-Meteo)
-     para a coordenada DESTE local — e o rodapé diz que é previsão, não estação.
-     Antes caía na primeira estação da lista e mostrava outro município como se
-     fosse aqui. Trocar de estação na mão continua funcionando. */
+  /* O mapa escolhe a fonte. Dentro do raio da estação usa a Ecowitt; fora dele,
+     usa Open-Meteo exatamente para o centro visível. */
+  var ll=_climaMapCoord();
+  climaMac=climaMatch(ll);
   if(!climaMac){
-    var _nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'este local';
-    climaSay('Sem estação Ecowitt em '+_nm+' — usando a previsão por satélite.');
-    try{ climaLocalLoad(null,false); }catch(e){}
+    try{ climaLocalLoad(ll,false); }catch(e){}
     return;
   }
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
@@ -4074,10 +4087,10 @@ function climaLoad(){
   climaSay('Carregando dados ao vivo…');
   fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
     if(seq!==_climaPanelSeq) return;
-    if(!d||d.error){ climaSay((d&&d.error)||'Erro ao ler a estação.','err'); return; }
+    if(!d||d.error){ climaMac=null;buildClimaPanel();climaLocalLoad(ll,false); return; }
     climaRender(d);
     _climaTimer=setInterval(function(){ var p=document.getElementById('climaPanel'); if(p&&p.style.display==='block') climaLoad(); else { clearInterval(_climaTimer); _climaTimer=null; } }, 300000);
-  }).catch(function(){ if(seq===_climaPanelSeq) climaSay('Não consegui ler a estação agora.','err'); });
+  }).catch(function(){ if(seq===_climaPanelSeq){climaMac=null;buildClimaPanel();climaLocalLoad(ll,false);} });
 }
 function _cval(n,dec){ if(!n||n.value==null||n.value==='') return '—'; var v=n.value; if(typeof v==='number'&&dec!=null) v=v.toFixed(dec); return v; }
 function _compass(deg){ if(deg==null) return ''; return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round(deg/22.5)%16]; }
@@ -4101,74 +4114,12 @@ function sunriseSunset(date, lat, lng){
   var sr=jd2date(Jtransit - H/360.0), ss=jd2date(Jtransit + H/360.0);
   return { sunrise:sr, sunset:ss, dayMs:(ss-sr) };
 }
-/* A estação selecionada representa o Local ativo? Mantém a mesma regra de
-   casamento nominal usada pelo chip, sem cair por engano em outra estação. */
-function _climaEstacaoCasaLocal(st){
-  if(!st||!LOCAIS||!localAtivo||!LOCAIS[localAtivo]) return false;
-  var sn=_climaNorm(st.name||''), ln=_climaNorm(LOCAIS[localAtivo].nome||'');
-  if(!sn||!ln) return false;
-  if(sn.indexOf(ln)>=0||ln.indexOf(sn)>=0) return true;
-  var toks=ln.match(/[a-z]{4,}/g)||[];
-  for(var i=0;i<toks.length;i++){ if(sn.indexOf(toks[i])>=0) return true; }
-  return false;
-}
-/* Se a estação é a do Local ativo, usa toda a escada geográfica do mapa:
-   centro cadastrado, média das quadras ou quadra aberta. */
-function _climaSunLocalLL(st){
-  return _climaEstacaoCasaLocal(st)?_climaLocalCoord():null;
-}
-/* Coordenada p/ o sol da estação selecionada: prefere a geografia do mapa que
-   casa com a estação (confiável); senão a coord cadastrada da estação. */
-function _climaSunLL(){
-  var st=(_climaStations||[]).filter(function(s){return s.mac===climaMac;})[0]; if(!st) return null;
-  var ativo=_climaSunLocalLL(st); if(ativo) return ativo;
-  if(typeof LOCAIS==='object' && LOCAIS){
-    var sn=_climaNorm(st.name||''), ids=Object.keys(LOCAIS), i, k;
-    for(i=0;i<ids.length;i++){ var c=LOCAIS[ids[i]].centro, ln=_climaNorm(LOCAIS[ids[i]].nome||'');
-      if(c&&c.length===2&&ln&&(sn.indexOf(ln)>=0||ln.indexOf(sn)>=0)) return c; }
-    var toks=sn.match(/[a-z]{4,}/g)||[];
-    for(i=0;i<ids.length;i++){ var c2=LOCAIS[ids[i]].centro, ln2=_climaNorm(LOCAIS[ids[i]].nome||'');
-      if(c2&&c2.length===2){ for(k=0;k<toks.length;k++){ if(ln2.indexOf(toks[k])>=0) return c2; } } }
-  }
-  /* Última reserva: a coordenada CADASTRADA na estação. Só que ela é digitada
-     por quem instala o aparelho e frequentemente fica no padrão de fábrica —
-     em agosto/2026, das quatro estações, a de Anápolis apontava para Cleveland
-     (EUA), 7.259 km fora, e a de Iracemápolis para a capital, 138 km fora.
-     Usar isso para calcular nascer/pôr do sol daria horário de outro fuso.
-     Só aceita se for plausível: dentro do Brasil e perto do local ativo. */
-  if(st.lat!=null && st.lng!=null && _coordPlausivel(st.lat, st.lng)) return [st.lat, st.lng];
-  return null;
-}
-/* São DUAS perguntas diferentes, e misturá-las num limite só estava errado:
-
-   USAR a coordenada?  Só recusa erro grosseiro — fora do Brasil ou a mais de
-   300 km. A 138 km o erro no nascer do sol é de ~3,5 min, irrelevante em campo;
-   recusar por isso seria jogar fora um dado utilizável.
-
-   AVISAR o usuário?  Bem antes disso. Estação a mais de 50 km do local que ela
-   deveria representar é erro de cadastro, mesmo que o cálculo aguente. Ele só
-   conserta no app da Ecowitt se alguém contar. */
-function _coordDistanciaDoLocal(lat, lng){
-  try{
-    var c=(LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].centro)||null;
-    if(c&&c.length===2) return _kmEntre(c[0],c[1],Number(lat),Number(lng));
-  }catch(e){}
-  return null;
-}
+/* Nascer/pôr do sol seguem a mesma referência do restante do painel: centro do
+   mapa. A coordenada cadastrada na Ecowitt nunca mais desloca este cálculo. */
+function _climaSunLL(){ return _climaMapCoord(); }
 function _coordNoBrasil(lat, lng){
   lat=Number(lat); lng=Number(lng);
   return isFinite(lat)&&isFinite(lng) && lat>-34 && lat<6 && lng>-74 && lng<-34;
-}
-function _coordPlausivel(lat, lng){          /* dá para USAR no cálculo do sol? */
-  if(!_coordNoBrasil(lat,lng)) return false;
-  var d=_coordDistanciaDoLocal(lat,lng);
-  return !(d!=null && d>300);
-}
-function _coordSuspeita(lat, lng){           /* merece AVISO ao usuário? */
-  if(lat==null||lng==null) return false;
-  if(!_coordNoBrasil(lat,lng)) return true;
-  var d=_coordDistanciaDoLocal(lat,lng);
-  return (d!=null && d>50);
 }
 function _kmEntre(la1,lo1,la2,lo2){
   var R=6371, r=Math.PI/180;
@@ -4206,7 +4157,8 @@ function climaRender(d){
     }
   }
   var ts=d.time?new Date(d.time*1000):null;
-  h+='<div class="clima-foot">'+(ts?('atualizado '+_agFormatDateTime(ts,{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min '+ic('refresh',11)+'</div>';
+  var st=_climaStationByMac(climaMac);
+  h+='<div class="clima-foot">'+(st?('Estação Ecowitt · '+esc(st.name)+' · '):'')+(ts?('atualizado '+_agFormatDateTime(ts,{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min '+ic('refresh',11)+'</div>';
   b.innerHTML=h;
 }
 function toggleNdvi(){
@@ -4217,6 +4169,10 @@ function toggleNdvi(){
   if(!_map) initMap();
   ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras */
   if(_map && !_map.__ndviMove){ _map.__ndviMove=true; _map.on('moveend', ndviOnMove); }
+  /* Uso normal: abrir já significa "mostre o NDVI mais recente". A lista de
+     datas permanece para voltar no histórico depois que a imagem atual abriu. */
+  if(!ndviIndex)ndviIndex='NDVI';
+  _ndviAutoLatest=true;
   buildNdviPanel(); ndviCheckProxy();
 }
 function buildNdviPanel(){
@@ -4246,20 +4202,32 @@ function ndviCheckProxy(){
   }).catch(function(){ ndviStatus('Proxy desligado. No Terminal: python3 ndvi-proxy.py','err'); });
 }
 function ndviLoadDates(){
+  var seq=++_ndviDatesSeq;
   var bb=ndviBBox(), to=todayISO();
   var dt=new Date(); dt.setMonth(dt.getMonth()-6);
   var from=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   ndviStatus('Buscando datas disponíveis…');
   fetch(NDVI_PROXY+'/dates?bbox='+bb.join(',')+'&from='+from+'&to='+to).then(function(r){return r.json();}).then(function(arr){
+    if(seq!==_ndviDatesSeq)return;
     if(arr.error || !arr.length){ ndviStatus('Lista de datas indisponível — digite uma data no campo acima.'); return; }
+    arr=arr.slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
     var sel=document.getElementById('ndviDateSel'); if(!sel)return;
     sel.innerHTML='<option value="">datas com imagem…</option>'+arr.map(function(d){
-      return '<option value="'+d.date+'">'+d.date+(d.cloud!=null?'  ('+Math.round(d.cloud)+'% nuvem)':'')+'</option>'; }).join('');
-    ndviStatus(arr.length+' datas disponíveis. Escolha índice + data.','ok');
-  }).catch(function(){ ndviStatus('Lista de datas indisponível — digite uma data no campo acima.'); });
+      return '<option value="'+d.date+'"'+(d.date===ndviDate?' selected':'')+'>'+d.date+(d.cloud!=null?'  ('+Math.round(d.cloud)+'% nuvem)':'')+'</option>'; }).join('');
+    var latest=arr[0]&&arr[0].date;
+    if(latest&&(_ndviAutoLatest||!ndviDate)){
+      _ndviAutoLatest=false;ndviDate=latest;
+      var inp=document.getElementById('ndviDateInput');if(inp)inp.value=latest;
+      sel.value=latest;
+      ndviStatus('Abrindo o '+(ndviIndex||'NDVI')+' mais recente · '+latest+'…');
+      ndviLoadImage();
+      return;
+    }
+    ndviStatus(arr.length+' datas disponíveis · atual '+(ndviDate||latest),'ok');
+  }).catch(function(){ if(seq===_ndviDatesSeq)ndviStatus('Lista de datas indisponível — digite uma data no campo acima.'); });
 }
 function ndviSetIndex(ix){ ndviIndex=ix; buildNdviPanel(); ndviCheckProxy(); ndviLoadImage(); }
-function ndviSetDate(d){ ndviDate=d||null; var inp=document.getElementById('ndviDateInput'); if(inp&&d) inp.value=d; ndviLoadImage(); }
+function ndviSetDate(d){ _ndviAutoLatest=false;ndviDate=d||null; var inp=document.getElementById('ndviDateInput'); if(inp&&d) inp.value=d; ndviLoadImage(); }
 function ndviSetOpacity(v){ ndviOpacity=parseFloat(v); if(ndviOverlay) ndviOverlay.setOpacity(ndviOpacity); }
 function ndviClear(){ ndviIndex=null; ndviMeans=null; if(ndviOverlay){ _map.removeLayer(ndviOverlay); ndviOverlay=null; } buildNdviPanel(); ndviCheckProxy(); render(); }
 var _ndviObjURL=null;
@@ -9603,12 +9571,9 @@ function _carimboLoc(cb){
 function _stationMacForQuadra(qid){
   if(!_climaStations||!_climaStations.length) return null;
   var loc=(typeof QLOCAL==='object'&&QLOCAL&&QLOCAL[qid])||(typeof HOME_LOCAL!=='undefined'?HOME_LOCAL:null);
-  var nm=_climaNorm((typeof LOCAIS==='object'&&LOCAIS&&loc&&LOCAIS[loc]&&LOCAIS[loc].nome)||''); if(!nm) return null;
-  var i,k;
-  for(i=0;i<_climaStations.length;i++){ var sn=_climaNorm(_climaStations[i].name); if(sn&&(sn.indexOf(nm)>=0||nm.indexOf(sn)>=0)) return _climaStations[i].mac; }
-  var toks=nm.match(/[a-z]{4,}/g)||[];
-  for(i=0;i<_climaStations.length;i++){ var s2=_climaNorm(_climaStations[i].name); for(k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[i].mac; } }
-  return null;
+  var ll=null;try{ll=quadraCenter(qid);}catch(e){}
+  if(!ll)ll=_climaCoordDoLocal(loc);
+  return ll?climaMatch(ll):null;
 }
 function _carimboClima(qid, dateStr, horaStr, cb){
   /* dateStr = data DO EVENTO (YYYY-MM-DD), horaStr = hora dele (HH:MM, opcional).
