@@ -103,7 +103,7 @@
           '<div class="ag-sec-t">Campo</div>'+
           linha('agRowNota', IC.pino, 'Registrar observação', 'Nota de campo georreferenciada', 'agAcao(\'toggleScoutingMode\')')+
           linha('agRowMedir', IC.regua, 'Medir área', 'No mapa ou caminhando com o GPS', 'agAcao(\'toggleMeasure\')')+
-          linha('agRowGps', IC.gps, 'Minha localização', 'Centraliza o mapa no GPS', 'agAcao(\'locateMe\')')+
+          linha('agRowGps', IC.gps, 'Minha localização', 'Bolinha azul no mapa · toque de novo para apagar', 'agGps()', true)+
         '</div>'+
         '<div class="ag-sec">'+
           '<div class="ag-sec-t">Consultar</div>'+
@@ -132,6 +132,8 @@
     if(z) z.classList.toggle('on', !!window.ndviZonas);
     var n = $('agRowNota');
     if(n) n.classList.toggle('on', !!window.scoutingModeActive);
+    var g = $('agRowGps');
+    if(g) g.classList.toggle('on', document.body.classList.contains('gps-manual-visible'));
     var b = $('agToolsBtn');
     if(b) b.classList.toggle('layer-on', ligado());
   }
@@ -148,6 +150,27 @@
     sincronizarGaveta();
     if(ligado()) abrirGaveta(false);
   };
+  /* O GPS ligava e não desligava: a bolinha azul ficava no mapa para sempre,
+     porque locateMe() só sabe acender. Aqui ele é interruptor — segundo toque
+     apaga o marcador, o círculo de precisão e o estado. */
+  window.agGps = function(){
+    var ligado = document.body.classList.contains('gps-manual-visible');
+    if(ligado){
+      try{ if(window._gpsMarker && window._map) window._map.removeLayer(window._gpsMarker); }catch(e){}
+      try{ if(window._gpsCircle && window._map) window._map.removeLayer(window._gpsCircle); }catch(e){}
+      window._gpsMarker = null; window._gpsCircle = null;
+      document.body.classList.remove('gps-manual-visible');
+      sincronizarGaveta();
+      abrirGaveta(false);
+      return;
+    }
+    abrirGaveta(false);
+    setTimeout(function(){
+      try{ if(typeof locateMe === 'function') locateMe(); }catch(e){}
+      setTimeout(sincronizarGaveta, 400);
+    }, 180);
+  };
+
   window.agZonas = function(){
     try{ if(typeof ndviToggleZonas === 'function') ndviToggleZonas(); }catch(e){}
     sincronizarGaveta();
@@ -503,6 +526,7 @@
   var I = {
     menu:'<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>',
     pin:'<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
+    pinCheio:'<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z" fill="currentColor" stroke="none"/><circle cx="12" cy="9" r="2.4" fill="#fff" stroke="none"/>',
     bussola:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5.5-5.5 2 2-5.5Z"/>',
     quadrado:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/><path d="M12 4v16"/>',
     lapis:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
@@ -520,6 +544,133 @@
   };
 
   function existe(f){ return typeof window[f] === 'function'; }
+
+  /* ====================================================================== */
+  /* Locais: lista aberta na gaveta + escolha automática pelo GPS            */
+  /* ====================================================================== */
+
+  var _autoLocalFeito = false;   /* só tenta uma vez por sessão */
+  var _autoLocalVetado = false;  /* se a pessoa desfizer, não insiste */
+
+  function e_(t){ return (typeof esc === 'function') ? esc(t) : String(t||''); }
+
+  /* Centro das quadras de um local. Sem quadras desenhadas, o local não entra
+     na conta do GPS — palpite sem geometria é chute, não inteligência. */
+  function centroLocal(id){
+    try{
+      var qs = quadrasDoLocal(id) || [], la = 0, lo = 0, n = 0;
+      qs.forEach(function(q){
+        var pts = (typeof QGEO !== 'undefined' && QGEO[q]) ? QGEO[q] : null;
+        if(!pts || !pts.length){
+          var pl = (typeof quadraPonto === 'function') ? quadraPonto(q) : null;
+          pts = pl ? [pl] : [];
+        }
+        pts.forEach(function(p){ la += p[0]; lo += p[1]; n++; });
+      });
+      return n ? {lat: la/n, lng: lo/n, quadras: qs.length} : null;
+    }catch(err){ return null; }
+  }
+
+  function km(aLat, aLng, bLat, bLng){
+    var R = 6371, r = Math.PI/180;
+    var dLat = (bLat-aLat)*r, dLng = (bLng-aLng)*r;
+    var x = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(aLat*r)*Math.cos(bLat*r)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2*R*Math.asin(Math.min(1, Math.sqrt(x)));
+  }
+
+  /* Local mais próximo de uma coordenada, com a distância — quem decide se
+     vale trocar é quem chama, porque "perto" depende do contexto. */
+  window.agLocalMaisProximo = function(lat, lng){
+    try{ ensureLocais(); }catch(err){ return null; }
+    var melhor = null;
+    Object.keys(LOCAIS || {}).forEach(function(id){
+      var c = centroLocal(id);
+      if(!c) return;
+      var d = km(lat, lng, c.lat, c.lng);
+      if(!melhor || d < melhor.km) melhor = {id: id, km: d, nome: (LOCAIS[id]||{}).nome || id};
+    });
+    return melhor;
+  };
+
+  function listaLocais(){
+    var h = '';
+    try{ ensureLocais(); }catch(err){ return '<div class="ag-local-dica">Locais indisponíveis.</div>'; }
+    var ids = Object.keys(LOCAIS || {});
+    if(!ids.length) return '<div class="ag-local-dica">Nenhum local cadastrado ainda.</div>';
+    ids.forEach(function(id){
+      var L = LOCAIS[id] || {}, n = 0;
+      try{ n = (quadrasDoLocal(id) || []).length; }catch(err){}
+      var ativo = (id === localAtivo);
+      h += '<button class="ag-row ag-local' + (ativo ? ' on' : '') + '" onclick="agIrParaLocal(' + JSON.stringify(id).replace(/"/g,'&quot;') + ')">' +
+             '<span class="ag-ic">' + svg(ativo ? I.pinCheio : I.pin) + '</span>' +
+             '<span class="ag-lbl">' + e_(L.nome || id) +
+               '<span class="ag-sub">' + n + ' quadra' + (n === 1 ? '' : 's') + (ativo ? ' · aqui agora' : '') + '</span>' +
+             '</span>' +
+           '</button>';
+    });
+    h += '<div class="ag-local-acoes">' +
+           '<button onclick="agMenuAcao(\'abrirNovoLocal\')">+ Novo local</button>' +
+           '<button onclick="agMenuAcao(\'gerenciarLocais\')">Gerenciar</button>' +
+         '</div>';
+    return h;
+  }
+
+  /* Ir a um local é o gesto mais comum aqui: troca e sai da frente. */
+  window.agIrParaLocal = function(id){
+    agMenu(false);
+    setTimeout(function(){
+      try{ if(existe('setLocalAtivo')) window.setLocalAtivo(id); }catch(err){}
+    }, 160);
+  };
+
+  /* ---- O GPS decide, mas nunca sem avisar e nunca sem volta ---- */
+  function avisoLocal(msg, rotulo, acao){
+    var el = $('agLocalAviso');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'agLocalAviso';
+      el.className = 'ag-aviso';
+      document.body.appendChild(el);
+    }
+    el.innerHTML = '<span>' + msg + '</span>' +
+      (acao ? '<button id="agAvisoBtn">' + rotulo + '</button>' : '');
+    el.classList.add('on');
+    if(acao){
+      var b = $('agAvisoBtn');
+      if(b) b.onclick = function(){ acao(); el.classList.remove('on'); };
+    }
+    clearTimeout(el._t);
+    el._t = setTimeout(function(){ el.classList.remove('on'); }, 9000);
+  }
+
+  window.agAutoLocal = function(forcado){
+    if(_autoLocalFeito && !forcado) return;
+    if(_autoLocalVetado && !forcado) return;
+    _autoLocalFeito = true;
+    if(!existe('gpsBest')) return;
+    try{ ensureLocais(); }catch(err){ return; }
+    if(Object.keys(LOCAIS || {}).length < 2) return;   /* com um local só não há o que decidir */
+    /* não interrompe quem está desenhando ou lançando */
+    if(typeof editMode !== 'undefined' && editMode) return;
+
+    window.gpsBest({target: 1, maxWait: 12000, maxAcc: 200}, null, function(b){
+      if(!b) return;
+      var perto = window.agLocalMaisProximo(b.lat, b.lng);
+      if(!perto) return;
+      /* 25 km é o raio de "estou nesta fazenda". Além disso a pessoa está no
+         escritório ou na estrada, e trocar o local seria palpite. */
+      if(perto.km > 25) return;
+      if(perto.id === localAtivo) return;
+      var anterior = localAtivo, nomeAnterior = ((LOCAIS[anterior] || {}).nome) || anterior;
+      try{ if(existe('setLocalAtivo')) window.setLocalAtivo(perto.id); }catch(err){ return; }
+      avisoLocal('Você está em <b>' + e_(perto.nome) + '</b> — local trocado.', 'Voltar para ' + e_(nomeAnterior), function(){
+        _autoLocalVetado = true;
+        try{ window.setLocalAtivo(anterior); }catch(err){}
+      });
+    });
+  };
+
   function chamar(f, arg){
     agMenu(false);
     setTimeout(function(){ try{ if(existe(f)) window[f](arg); }catch(e){} }, 180);
@@ -543,9 +694,8 @@
     var escuro = document.documentElement.classList.contains('light');
 
     return '<div class="ag-sec">'+
-        '<div class="ag-sec-t">Local ativo</div>'+
-        '<div id="agLocalHost"></div>'+
-        '<div class="ag-local-dica">Toque para trocar de local, criar um novo ou gerenciar.</div>'+
+        '<div class="ag-sec-t">Locais</div>'+
+        listaLocais()+
       '</div>'+
       '<div class="ag-sec">'+
         '<div class="ag-sec-t">Enquadrar o mapa</div>'+
@@ -605,10 +755,6 @@
     var vai = (abrir === undefined) ? !d.classList.contains('on') : !!abrir;
     if(vai){
       $('agMenuBody').innerHTML = corpo();
-      /* O seletor de local é o elemento de verdade, mudado de endereço: assim o
-         menu de locais continua ancorando nele e nada foi reimplementado. */
-      var chip = $('localChip'), host = $('agLocalHost');
-      if(chip && host && chip.parentNode !== host) host.appendChild(chip);
       /* a gaveta do mapa e a do menu não convivem */
       try{ if(window.agToggleDrawer) window.agToggleDrawer(false); }catch(e){}
     }
@@ -682,15 +828,21 @@
         if(d && d.classList.contains('on')) agMenu(false);
       }
     });
-    /* Escolher um local é um pedido para VER aquele local: a gaveta sai da
-       frente sozinha em vez de exigir um segundo toque para fechar. */
-    document.addEventListener('click', function(e){
-      var alvo = e.target && e.target.closest && e.target.closest('.loc-mi[data-go]');
-      if(!alvo) return;
-      var d = $('agMenuDrawer');
-      if(d && d.classList.contains('on')) setTimeout(function(){ agMenu(false); }, 120);
-    }, true);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();
+
+  /* A troca automática espera o app estar de pé e visível: antes disso não há
+     mapa medido nem quadras carregadas, e trocar de local seria no escuro. */
+  function tentarAutoLocal(){
+    if(document.documentElement.classList.contains('pre-auth')) return false;
+    if(!window._map) return false;
+    try{ if(!window.LOCAIS) ensureLocais(); }catch(e){ return false; }
+    window.agAutoLocal();
+    return true;
+  }
+  var _tentativas = 0;
+  var _timerAuto = setInterval(function(){
+    if(++_tentativas > 20 || tentarAutoLocal()) clearInterval(_timerAuto);
+  }, 1500);
 })();

@@ -372,3 +372,42 @@ html:not(.light) .alvo-n i{color:#93a89b}
 .ag-local-dica{
   margin:0 4px 2px;font:500 11px/1.4 var(--ag-font,system-ui);color:var(--gp-text-3,#7f9085)
 }
+
+/* ==========================================================================
+   Locais: lista aberta na gaveta
+   O seletor era um chip que abria um menu flutuante POR CIMA da gaveta. Além
+   de estranho, ele sumia: remontar a gaveta apagava o chip, que tinha sido
+   mudado de lugar para dentro dela. Lista construída na hora não some.
+   ========================================================================== */
+.ag-row.ag-local .ag-ic{color:var(--gp-text-3,#7f9085)}
+.ag-row.ag-local.on .ag-ic{color:var(--gp-green,#3bd27f)}
+.ag-local-acoes{display:flex;gap:6px;margin-top:8px}
+.ag-local-acoes button{
+  flex:1;cursor:pointer;border-radius:12px;padding:10px 6px;
+  background:transparent;border:1px dashed var(--gp-line-2,rgba(232,244,235,.20));
+  color:var(--gp-text-3,#7f9085);font:650 11.5px var(--ag-font,system-ui)
+}
+.ag-local-acoes button:hover{color:var(--gp-text,#f2f7f3);border-color:var(--gp-green,#3bd27f)}
+.ag-local-dica{margin:0 4px;font:500 11px/1.4 var(--ag-font,system-ui);color:var(--gp-text-3,#7f9085)}
+
+/* aviso da troca automática — sempre com volta */
+.ag-aviso{
+  position:fixed;left:12px;right:12px;z-index:2200;
+  bottom:calc(84px + env(safe-area-inset-bottom,0px));
+  display:none;align-items:center;gap:10px;padding:11px 14px;border-radius:16px;
+  background:var(--gp-glass-strong,rgba(15,24,18,.96));
+  backdrop-filter:var(--gp-blur,blur(22px));-webkit-backdrop-filter:var(--gp-blur,blur(22px));
+  border:1px solid var(--gp-line,rgba(232,244,235,.10));
+  box-shadow:0 18px 50px rgba(12,35,20,.24);
+  font:550 12.5px/1.35 var(--ag-font,system-ui);color:var(--gp-text-2,#bdc9c0)
+}
+.ag-aviso.on{display:flex}
+.ag-aviso span{flex:1;min-width:0}
+.ag-aviso b{color:var(--gp-text,#f2f7f3);font-weight:750}
+.ag-aviso button{
+  flex:0 0 auto;cursor:pointer;border:0;border-radius:11px;padding:8px 13px;
+  background:var(--gp-green,#3bd27f);color:#062015;font:700 11.5px var(--ag-font,system-ui)
+}
+@media(min-width:721px){
+  .ag-aviso{left:50%;right:auto;transform:translateX(-50%);width:min(560px,calc(100vw - 24px))}
+}
