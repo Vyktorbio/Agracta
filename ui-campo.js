@@ -545,6 +545,7 @@
     return '<div class="ag-sec">'+
         '<div class="ag-sec-t">Local ativo</div>'+
         '<div id="agLocalHost"></div>'+
+        '<div class="ag-local-dica">Toque para trocar de local, criar um novo ou gerenciar.</div>'+
       '</div>'+
       '<div class="ag-sec">'+
         '<div class="ag-sec-t">Enquadrar o mapa</div>'+
@@ -681,6 +682,14 @@
         if(d && d.classList.contains('on')) agMenu(false);
       }
     });
+    /* Escolher um local é um pedido para VER aquele local: a gaveta sai da
+       frente sozinha em vez de exigir um segundo toque para fechar. */
+    document.addEventListener('click', function(e){
+      var alvo = e.target && e.target.closest && e.target.closest('.loc-mi[data-go]');
+      if(!alvo) return;
+      var d = $('agMenuDrawer');
+      if(d && d.classList.contains('on')) setTimeout(function(){ agMenu(false); }, 120);
+    }, true);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();
