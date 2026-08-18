@@ -5,7 +5,7 @@
    ========================================================================== */
 
 /* ---- o dock flutuante sai de cena; o FAB vira o botão do topo ---- */
-.toolbar-extra{display:none!important}
+.toolbar-extra,.toolbar-extra.open{display:none!important}
 
 /* O painel antigo continua existindo para o resto do código perguntar "o NDVI
    está ligado?" (ele lê style.display). Some da tela, mas responde igual. */

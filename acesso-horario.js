@@ -199,10 +199,22 @@
 
   /* ---------- liberação da tela ---------- */
 
+  /* Devolver a tela é mais que tirar a classe: o Leaflet mede o container uma
+     vez e guarda. Se ele mediu enquanto a tela estava escondida — ou se ficou
+     escondido durante uma trava —, o mapa volta com o tamanho errado. Um
+     invalidateSize depois da liberação resolve, e é barato. */
   function liberarTela(){
+    var estava = document.documentElement.classList.contains('pre-auth');
     document.documentElement.classList.remove('pre-auth');
-    var el = document.getElementById('acessoLock');
+    var el = $('acessoLock');
     if(el) el.classList.remove('on');
+    if(!estava) return;
+    [60, 400].forEach(function(ms){
+      setTimeout(function(){
+        try{ if(window._map && window._map.invalidateSize) window._map.invalidateSize(); }catch(e){}
+        try{ if(typeof render === 'function') render(); }catch(e){}
+      }, ms);
+    });
   }
 
   /* Assina o documento do membro: se o administrador mudar o horário, vale na hora. */

@@ -112,6 +112,19 @@ ck(U.escolherData([{date:'2026-08-16', cloud:null}]) === '2026-08-16',
 ck(U.escolherData([]) === null && U.escolherData(null) === null,
    'lista vazia não quebra');
 
+titulo('A porta de entrada não pode quebrar o mapa');
+
+/* Aconteceu de verdade: esconder o app com display:none fazia o Leaflet nascer
+   dentro de uma caixa de 0x0 e guardar esse tamanho. Depois do login o mapa
+   voltava com um tile só e o desenho todo errado. Esconder por visibilidade
+   mantém o layout — e este teste existe para a lição não se perder. */
+var html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+var regra = (/html\.pre-auth body>[^{]*\{([^}]*)\}/.exec(html) || [])[1] || '';
+
+ck(regra !== '', 'a regra que esconde o app antes do login existe');
+ck(/visibility:\s*hidden/.test(regra), 'ela esconde por visibilidade');
+ck(!/display:\s*none/.test(regra), 'ela NÃO usa display:none (mataria a medida do mapa)');
+
 console.log('');
 if(falhas){ console.log(falhas + ' FALHA(S)'); process.exit(1); }
 console.log('tudo certo');
