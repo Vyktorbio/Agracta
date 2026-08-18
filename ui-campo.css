@@ -1,0 +1,199 @@
+/* ==========================================================================
+   AGRACTA — casca de uso
+   Uma gaveta no topo para as ferramentas, uma faixa de datas no rodapé para os
+   índices. O mapa fica limpo; o polegar alcança tudo. Carregado por último.
+   ========================================================================== */
+
+/* ---- o dock flutuante sai de cena; o FAB vira o botão do topo ---- */
+.toolbar-extra{display:none!important}
+
+/* O painel antigo continua existindo para o resto do código perguntar "o NDVI
+   está ligado?" (ele lê style.display). Some da tela, mas responde igual. */
+#ndviPanel{display:none!important}
+
+/* ---- botão único no topo ---- */
+.btn-tools{order:0!important;position:relative}
+.btn-tools.on{color:var(--gp-green,#3bd27f)!important;border-color:var(--gp-green,#3bd27f)!important}
+.btn-tools .ag-dot{
+  position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;
+  background:var(--gp-green,#3bd27f);box-shadow:0 0 0 2px var(--gp-s1,#111c16);display:none
+}
+.btn-tools.layer-on .ag-dot{display:block}
+
+/* ---- gaveta ---- */
+.ag-drawer-bg{
+  position:fixed;inset:0;z-index:2400;background:rgba(8,14,11,.44);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;transition:opacity .2s ease
+}
+.ag-drawer-bg.on{opacity:1;pointer-events:auto}
+
+.ag-drawer{
+  position:fixed;top:0;right:0;bottom:0;z-index:2500;width:min(360px,88vw);
+  display:flex;flex-direction:column;
+  background:var(--gp-glass-strong,rgba(15,24,18,.96));
+  backdrop-filter:var(--gp-blur,blur(22px));-webkit-backdrop-filter:var(--gp-blur,blur(22px));
+  border-left:1px solid var(--gp-line,rgba(232,244,235,.10));
+  box-shadow:-24px 0 60px rgba(0,0,0,.34);
+  transform:translateX(102%);transition:transform .26s cubic-bezier(.22,.9,.28,1);
+  font-family:var(--ag-font,system-ui)
+}
+.ag-drawer.on{transform:none}
+
+.ag-dw-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(16px + env(safe-area-inset-top)) 18px 12px;
+  border-bottom:1px solid var(--gp-line,rgba(232,244,235,.10))
+}
+.ag-dw-head h2{
+  margin:0;font:750 15px/1.2 var(--ag-display,system-ui);letter-spacing:-.01em;
+  color:var(--gp-text,#f2f7f3)
+}
+.ag-dw-x{
+  background:none;border:none;cursor:pointer;padding:6px;border-radius:10px;
+  color:var(--gp-text-3,#7f9085);display:flex
+}
+.ag-dw-x:hover{background:var(--gp-s3,#203026);color:var(--gp-text,#f2f7f3)}
+
+.ag-dw-body{flex:1;overflow-y:auto;padding:14px 14px calc(22px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+
+.ag-sec{margin-bottom:20px}
+.ag-sec-t{
+  font:650 10px/1 var(--ag-font,system-ui);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--gp-text-3,#7f9085);margin:0 4px 9px
+}
+
+/* linhas de ferramenta */
+.ag-row{
+  width:100%;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;
+  padding:12px 13px;margin-bottom:5px;border-radius:14px;
+  background:var(--gp-s1,#111c16);border:1px solid transparent;
+  color:var(--gp-text-2,#bdc9c0);font:600 13.5px/1.25 var(--ag-font,system-ui);
+  transition:background .14s,border-color .14s,color .14s
+}
+.ag-row:hover{background:var(--gp-s2,#17231b);color:var(--gp-text,#f2f7f3)}
+.ag-row:active{transform:translateY(1px)}
+.ag-row .ag-ic{flex:0 0 auto;width:20px;height:20px;color:var(--gp-text-3,#7f9085);display:flex}
+.ag-row .ag-lbl{flex:1;min-width:0}
+.ag-row .ag-sub{display:block;margin-top:2px;font:500 11px/1.3 var(--ag-font,system-ui);color:var(--gp-text-3,#7f9085)}
+.ag-row.on{
+  background:color-mix(in srgb,var(--gp-green,#3bd27f) 14%,transparent);
+  border-color:color-mix(in srgb,var(--gp-green,#3bd27f) 34%,transparent);
+  color:var(--gp-text,#f2f7f3)
+}
+.ag-row.on .ag-ic{color:var(--gp-green,#3bd27f)}
+.ag-row .ag-chk{
+  flex:0 0 auto;width:34px;height:20px;border-radius:999px;position:relative;
+  background:var(--gp-s3,#203026);transition:background .18s
+}
+.ag-row .ag-chk::after{
+  content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+  background:var(--gp-text-3,#7f9085);transition:transform .18s,background .18s
+}
+.ag-row.on .ag-chk{background:var(--gp-green,#3bd27f)}
+.ag-row.on .ag-chk::after{transform:translateX(14px);background:#fff}
+
+/* controles finos dentro da gaveta */
+.ag-ctl{display:flex;align-items:center;gap:11px;padding:9px 13px;font:600 12px var(--ag-font,system-ui);color:var(--gp-text-2,#bdc9c0)}
+.ag-ctl>span{flex:0 0 78px}
+.ag-ctl input[type=range]{flex:1;accent-color:var(--gp-green,#3bd27f)}
+
+/* ==========================================================================
+   Faixa de datas — o coração do uso diário do NDVI
+   ========================================================================== */
+/* Cartão flutuante logo ACIMA da barra de navegação — a navegação continua
+   acessível com o NDVI ligado, e a faixa fica na altura do polegar. */
+.ag-ndvibar{
+  position:fixed;left:10px;right:10px;z-index:1150;
+  bottom:calc(84px + env(safe-area-inset-bottom,0px));
+  padding:9px 0 10px;border-radius:20px;
+  background:var(--gp-glass-strong,rgba(15,24,18,.96));
+  backdrop-filter:var(--gp-blur,blur(22px));-webkit-backdrop-filter:var(--gp-blur,blur(22px));
+  border:1px solid var(--gp-line,rgba(232,244,235,.10));
+  box-shadow:0 18px 50px rgba(12,35,20,.22),0 4px 13px rgba(12,35,20,.10);
+  font-family:var(--ag-font,system-ui);
+  transform:translateY(14px) scale(.97);opacity:0;
+  transition:transform .24s cubic-bezier(.22,.9,.28,1),opacity .18s ease;
+  pointer-events:none
+}
+.ag-ndvibar.on{transform:none;opacity:1;pointer-events:auto}
+@media(min-width:721px){
+  .ag-ndvibar{left:50%;right:auto;transform:translateX(-50%) translateY(14px) scale(.97);width:min(620px,calc(100vw - 24px))}
+  .ag-ndvibar.on{transform:translateX(-50%)}
+}
+
+.nb-top{display:flex;align-items:center;gap:8px;padding:0 12px 8px}
+
+.nb-seg{display:flex;gap:2px;padding:2px;border-radius:11px;background:var(--gp-s1,#111c16);flex:0 0 auto}
+.nb-seg button{
+  border:none;background:none;cursor:pointer;padding:6px 11px;border-radius:9px;
+  font:700 11px/1 var(--ag-mono,ui-monospace);letter-spacing:.06em;
+  color:var(--gp-text-3,#7f9085);transition:background .14s,color .14s
+}
+.nb-seg button.on{background:var(--gp-green,#3bd27f);color:#062015}
+
+/* O recado ocupa a linha inteira embaixo — antes ele disputava espaço com os
+   botões e virava "Não co…", que não informa nada. */
+.nb-status{
+  padding:7px 13px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:550 11px/1.35 var(--ag-font,system-ui);color:var(--gp-text-3,#7f9085)
+}
+.nb-status:empty{display:none}
+.nb-gap{flex:1}
+.nb-ico{
+  flex:0 0 auto;background:none;border:none;cursor:pointer;padding:6px;border-radius:9px;
+  color:var(--gp-text-3,#7f9085);display:flex
+}
+.nb-ico:hover{background:var(--gp-s3,#203026);color:var(--gp-text,#f2f7f3)}
+.nb-ico.on{color:var(--gp-green,#3bd27f)}
+
+/* trilho de datas */
+.nb-dates{
+  display:flex;gap:7px;overflow-x:auto;padding:1px 12px 2px;scroll-behavior:smooth;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch
+}
+.nb-dates::-webkit-scrollbar{display:none}
+.nb-d{
+  flex:0 0 auto;cursor:pointer;border:1px solid var(--gp-line,rgba(232,244,235,.10));
+  background:var(--gp-s1,#111c16);border-radius:13px;padding:7px 11px 6px;min-width:62px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  transition:background .14s,border-color .14s,transform .1s
+}
+.nb-d:active{transform:scale(.96)}
+.nb-d b{font:700 12.5px/1 var(--ag-font,system-ui);color:var(--gp-text,#f2f7f3);white-space:nowrap}
+.nb-d i{font:600 9.5px/1 var(--ag-font,system-ui);font-style:normal;color:var(--gp-text-3,#7f9085);display:flex;align-items:center;gap:4px}
+.nb-d i::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--nb-c,#7f9085)}
+.nb-d.on{
+  background:color-mix(in srgb,var(--gp-green,#3bd27f) 16%,transparent);
+  border-color:var(--gp-green,#3bd27f)
+}
+.nb-d.on b{color:var(--gp-green,#3bd27f)}
+.nb-d.novo b::after{content:' •';color:var(--gp-green,#3bd27f)}
+
+.nb-adv{padding:4px 12px 0;display:none}
+.nb-adv.on{display:block}
+.nb-adv .ag-ctl{padding:7px 0}
+.nb-rank{max-height:132px;overflow-y:auto;margin-top:4px}
+
+/* dá espaço pra faixa não cobrir os botões flutuantes do mapa */
+body.ndvibar-on .leaflet-bottom{bottom:200px}
+body.ndvibar-on #scoutingBanner{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
+
+@media (max-width:520px){
+  .nb-seg button{padding:6px 8px;font-size:10px}
+  .nb-d{min-width:56px;padding:6px 9px 5px}
+}
+
+/* ---- tema claro ---- */
+html.light .ag-drawer,html.light .ag-ndvibar{background:rgba(255,255,252,.97)}
+html.light .ag-drawer-bg{background:rgba(20,36,26,.24)}
+html.light .nb-seg button.on{background:var(--gp-green,#238452);color:#fff}
+html.light .btn-tools .ag-dot{box-shadow:0 0 0 2px #fff}
+
+/* ---- a tela de login merece o mesmo cuidado ---- */
+.auth-box{border-radius:20px!important;padding:34px 26px!important}
+.auth-title{letter-spacing:-.02em}
+.auth-logo{color:var(--gp-green,#238452)!important}
+
+/* modo tela cheia do mapa esconde a casca inteira */
+body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{display:none!important}

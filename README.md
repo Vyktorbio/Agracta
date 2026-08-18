@@ -13,6 +13,12 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
 
 ## Estrutura
 - `index.html` — o app inteiro (mapa Leaflet + lógica).
+- `ui-campo.js` / `ui-campo.css` — a casca de uso do mapa: um ícone abre a gaveta
+  com todas as ferramentas, e ligar os índices abre a faixa de datas no rodapé,
+  já na imagem mais recente com céu limpo.
+- `acesso-horario.js` — janela de horário por técnico (tela travada fora do
+  expediente, com aviso e sincronização antes) e a porta de entrada: nada do app
+  é pintado antes de autenticar.
 - `vendor/` — Leaflet e plugins (offline).
 - `quadras-default.js` (em `vendor/`) — alinhamento + geometria das quadras (gerado de backup).
 - `ndvi-proxy.py` — proxy local que conversa com o Sentinel Hub (Copernicus).
@@ -20,6 +26,19 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
 
 ## Segurança
 `ndvi-credenciais.json` (segredo do Copernicus) **não** é versionado (ver `.gitignore`).
+
+O acesso é controlado em duas camadas. Na tela, o app fica invisível até a
+autenticação e volta a ficar invisível fora do horário liberado. No banco, as
+`firestore.rules` recusam leitura e escrita para quem não é membro ativo ou está
+fora da própria janela de horário — é essa camada que protege o dado de verdade,
+já que os arquivos do site são estáticos e públicos.
+
+O horário de cada técnico fica em `members/{email}.janela` e é editado no Painel
+Admin. Depois de mexer nas regras, publique-as:
+
+```bash
+npx firebase-tools deploy --only firestore:rules
+```
 
 ## Publicar
 - **App** → GitHub Pages (estático, https).

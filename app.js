@@ -3303,9 +3303,9 @@ function toggleScoutingMode(forceState){
       scoutingModeActive=false;
       return;
     }
-    if(typeof toggleNdvi==='function' && document.getElementById('ndviPanel') && document.getElementById('ndviPanel').style.display==='block'){
-      toggleNdvi();
-    }
+    /* Os índices continuam ligados durante a observação: quem marca uma nota
+       normalmente está olhando justamente a mancha do NDVI. A faixa de datas
+       se afasta do banner por CSS, então não há sobreposição. */
     if(typeof toggleClima==='function' && document.getElementById('climaPanel') && document.getElementById('climaPanel').style.display==='block'){
       toggleClima();
     }
@@ -3834,7 +3834,8 @@ function climaMatch(ll){ var st=_climaStationForCoord(ll||_climaMapCoord());retu
 function toggleClima(){
   var p=document.getElementById('climaPanel');
   if(p&&p.style.display==='block'){ p.style.display='none'; _climaPanelSeq++; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
-  var nv=document.getElementById('ndviPanel'); if(nv) nv.style.display='none';
+  /* O clima não desliga mais os índices — são leituras complementares e o
+     #ndviPanel virou o interruptor da camada, não uma janela concorrente. */
   if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   _climaCss(); buildClimaPanel(); climaModeInit();
 }

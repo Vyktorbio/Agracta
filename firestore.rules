@@ -1,7 +1,22 @@
 rules_version = '2';
 
+/* Agracta — controle de acesso do Firestore.
+ *
+ * Duas condições precisam valer ao mesmo tempo para ler ou escrever qualquer
+ * dado de pesquisa: a pessoa é membro ativo E está dentro da janela de horário
+ * que o administrador definiu para ela. A janela vive no próprio documento do
+ * membro, então mudar o horário no Painel Admin vale na hora, sem publicar
+ * regra nova.
+ *
+ * Formato de members/{email}.janela:
+ *   { on: true, dias: [1,2,3,4,5], iniMin: 420, fimMin: 1080 }
+ *   dias segue o padrão do JavaScript — 0 = domingo … 6 = sábado.
+ *   iniMin/fimMin são minutos desde a meia-noite, no fuso de São Paulo.
+ *   Sem o campo (ou com on:false) o acesso é livre a qualquer hora.
+ */
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function signedIn() {
       return request.auth != null
         && request.auth.token.email != null;
@@ -13,10 +28,44 @@ service cloud.firestore {
             || request.auth.token.email == 'vyktorbio@gmail.com');
     }
 
+    function memberPath() {
+      return /databases/$(database)/documents/workspaces/agracta/members/$(request.auth.token.email);
+    }
+
+    function memberExists() {
+      return signedIn() && exists(memberPath());
+    }
+
+    function memberData() {
+      return get(memberPath()).data;
+    }
+
+    /* America/Sao_Paulo é UTC-3 fixo desde 2019 (sem horário de verão). */
+    function localNow() {
+      return request.time - duration.value(180, 'm');
+    }
+    function localMinutes() {
+      return localNow().hours() * 60 + localNow().minutes();
+    }
+    /* dayOfWeek() devolve 1 (segunda) … 7 (domingo); %7 alinha com o JavaScript. */
+    function localWeekday() {
+      return localNow().dayOfWeek() % 7;
+    }
+
+    function withinWindow() {
+      return !('janela' in memberData())
+        || memberData().janela.get('on', false) == false
+        || (
+             memberData().janela.get('dias', [0,1,2,3,4,5,6]).hasAny([localWeekday()])
+             && localMinutes() >= memberData().janela.get('iniMin', 0)
+             && localMinutes() <  memberData().janela.get('fimMin', 1440)
+           );
+    }
+
     function isActiveMember() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/workspaces/agracta/members/$(request.auth.token.email))
-        && get(/databases/$(database)/documents/workspaces/agracta/members/$(request.auth.token.email)).data.active == true;
+      return memberExists()
+        && memberData().get('active', false) == true
+        && withinWindow();
     }
 
     function canUseAgracta() {
@@ -26,8 +75,12 @@ service cloud.firestore {
     match /workspaces/agracta {
       allow read, write: if canUseAgracta();
 
+      /* O membro precisa ler o próprio cadastro mesmo fora do horário — é assim
+         que o app descobre por que travou e quando volta a abrir. */
       match /members/{email} {
-        allow read: if canUseAgracta();
+        allow read: if isAdmin()
+                    || (signedIn() && email == request.auth.token.email)
+                    || canUseAgracta();
         allow write: if isAdmin();
       }
 
