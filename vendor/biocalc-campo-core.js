@@ -241,6 +241,13 @@
         perHa:round(p.perHa),unit:p.unit,
         concentration:round(sprayVolume>0?p.perHa/sprayVolume:0),
         concentrationUnit:p.liquid?"mL/L":"g/L",
+        /* A MESMA dose lida do outro jeito. Uma % só vira quantidade depois de
+           saber o volume: 0,25% é 7,5 mL/ha a 3 L/ha e 375 mL/ha a 150 L/ha —
+           50× de diferença escrevendo igual. E uma dose por área tem uma % que
+           lhe corresponde naquele volume. Guardar as duas leituras deixa a
+           troca de volume visível em vez de silenciosa.
+           Só faz sentido para líquido: sólido não tem v/v. */
+        pctCalda:p.liquid&&sprayVolume>0?round((p.perHa/(sprayVolume*1000))*100):null,
         perPlot:round(p.perHa*plotAreaHa),
         total:round(total),
         perBottle:round(total/numBottles)
