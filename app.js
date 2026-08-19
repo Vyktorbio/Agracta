@@ -6500,6 +6500,37 @@ function nextEventV2(study){
 
 /* ============ RENDER DO PAINEL DE ESTUDO (tela cheia) ============ */
 
+/* UMA resposta para "o croqui está pronto?", usada pela etapa Planejamento e
+   pelo cartão "Ordem de campo". Antes eram duas contas paralelas: o cartão olhava
+   só a marca `randomizado` e a etapa exigia a ordem guardada — então o mesmo
+   painel dizia "Randomizada" e "Conferir croqui" sobre o mesmo estudo.
+
+   Marcar "randomizado" JÁ É a resposta, não uma intenção a confirmar depois. A
+   ordem é DERIVADA — semente fixa a partir do id + chave do protocolo, ou o
+   modelo de planilha — e não sorteada na hora: derivar de novo devolve sempre o
+   mesmo croqui. Pedir "Conferir croqui" era pedir que o usuário confirmasse algo
+   que a máquina já sabia.
+
+   Deriva sozinho só quando não há nada a perder: estudo sem NENHUMA nota
+   lançada. Havendo nota, a posição das parcelas no campo é fato consumado — uma
+   ordem defasada (mudou tratamento ou repetição depois de começar) vira conflito
+   de verdade e continua pedindo confirmação humana, em vez de reescrever o
+   croqui debaixo de dados já colhidos. */
+function _studyRandomOk(study){
+  if(!study) return false;
+  var tr=study.tratamentos||[], reps=Math.max(0,parseInt(study.numRepeticoes)||0);
+  var n=tr.length*reps;
+  var pronto=function(){
+    var rz=study.randomizacao;
+    return !!(study.randomizado&&rz&&Array.isArray(rz.ordem)&&rz.ordem.length===n&&n>0);
+  };
+  if(pronto()) return true;
+  if(!study.randomizado||tr.length<2||reps<1) return false;
+  if((study.avaliacoes||[]).some(_avTemNota)) return false;   /* já tem nota: não se reescreve */
+  try{ ensureStudyRandomizacao(study); }catch(e){ return false; }
+  return pronto();
+}
+
 /* O painel do estudo é uma jornada, não uma pilha de cartões. Estes estados são
    derivados do próprio registro e nunca criam uma segunda fonte de verdade. */
 function _studyWorkflow(qid,study){
@@ -6512,7 +6543,7 @@ function _studyWorkflow(qid,study){
   if(tr.some(function(t){return t.id!==test&&!t.testemunha&&!String(t.dose||'').trim();}))faltas.push('dose');
   var protocolo={id:'protocolo',label:'Protocolo',anchor:'study-stage-protocolo',state:faltas.length?'attention':'complete',detail:faltas.length?('Falta '+faltas.join(', ')):'Conferido'};
   var reps=Math.max(0,parseInt(study.numRepeticoes)||0), nparcelas=tr.length*reps;
-  var randomOk=!!(study.randomizado&&study.randomizacao&&study.randomizacao.ordem&&study.randomizacao.ordem.length===nparcelas);
+  var randomOk=_studyRandomOk(study);
   var planejamento={id:'planejamento',label:'Planejamento',anchor:'study-stage-planejamento',state:(reps<2||tr.length<2)?'pending':(randomOk||study.desenho==='faixas'?'complete':'ready'),detail:(reps<2?'Definir repetições':(randomOk?'Croqui randomizado':'Conferir croqui'))};
   var nap=Math.max(1,parseInt(study.numAplicacoes)||1), feitas=(study.aplicacoes||[]).length;
   var execucao={id:'execucao',label:'Aplicação',anchor:'study-stage-execucao',state:feitas>=nap?'complete':(feitas?'active':(study.dataInicio?'ready':'pending')),detail:feitas+' de '+nap+' registrada'+(nap===1?'':'s')};
@@ -8378,7 +8409,7 @@ function openStudyDetail(qid,sid){
      espalhados entre o cabeçalho e a tela de avaliação. */
   h+='<div id="study-stage-planejamento" class="study-stage-anchor" aria-hidden="true"></div>'+
      '<div class="sd-section study-plan-card"><div class="sd-section-title">Planejamento &amp; parcelas</div><div class="study-plan-grid">'+
-     '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(study.randomizado?'Randomizada':'A conferir')+'</b></div></div><div class="study-plan-actions">'+
+     '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(_studyRandomOk(study)?'Randomizada':(study.randomizado?'A conferir':'Sequencial'))+'</b></div></div><div class="study-plan-actions">'+
      '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
      (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
 
