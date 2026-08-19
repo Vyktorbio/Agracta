@@ -415,3 +415,16 @@ html:not(.light) .alvo-n i{color:#93a89b}
 @media(min-width:721px){
   .ag-aviso{left:50%;right:auto;transform:translateX(-50%);width:min(560px,calc(100vw - 24px))}
 }
+
+/* ---- a faixa branca no alto do mapa ----
+   A .top-bar já não é barra: virou só a moldura que posiciona o mostrador do
+   clima. Mas styles.css pinta `html.light .top-bar` com fundo quase branco, e
+   esse seletor (0,2,1) ganha do `.top-bar` (0,1,0) daqui mesmo com !important
+   dos dois lados. Sobrava uma tira de 8px de fundo claro por cima do satélite.
+   A caixa fica — é o padding dela que segura o clima no lugar, e ela é
+   pointer-events:none, então não rouba toque. Só deixa de ser pintada. */
+html.light .top-bar,
+html:not(.light) .top-bar{
+  background:none!important;border:0!important;box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
