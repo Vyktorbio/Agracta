@@ -39,6 +39,9 @@
     gps:'<line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>',
     croqui:'<path d="M15 6.5 9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5Z"/><path d="M9 4v13"/><path d="M15 6.5v13"/>',
     lupa:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    bussola:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5.5-5.5 2 2-5.5Z"/>',
+    quadrado:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/><path d="M12 4v16"/>',
+    lapis:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     ajustes:'<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
     x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
   };
@@ -92,6 +95,19 @@
         '<button class="ag-dw-x" onclick="agToggleDrawer(false)" aria-label="Fechar">'+svg(IC.x,20)+'</button>'+
       '</div>'+
       '<div class="ag-dw-body">'+
+        '<div class="ag-sec">'+
+          '<div class="ag-sec-t">Enquadrar o mapa</div>'+
+          '<div class="ag-steps">'+
+            '<button onclick="agZoom(1)">Aproximar +</button>'+
+            '<button onclick="agZoom(-1)">Afastar −</button>'+
+          '</div>'+
+          linha('agRowGirar', IC.bussola, 'Girar o mapa',
+                'Abre a régua de giro no rodapé', 'agRotBar(true)')+
+          linha('agRowHa', IC.quadrado, 'Quadrado de 1 hectare',
+                'Referência de 100 × 100 m no centro', 'agAcao(\'toggleHaRef\')')+
+          linha('agRowEditar', IC.lapis, 'Editar quadras',
+                'Mover vértices e redesenhar', 'agAcao(\'toggleQuadraEdit\')')+
+        '</div>'+
         '<div class="ag-sec">'+
           '<div class="ag-sec-t">Satélite</div>'+
           linha('agRowNdvi', IC.folha, 'Índices de vegetação',
@@ -698,16 +714,6 @@
         listaLocais()+
       '</div>'+
       '<div class="ag-sec">'+
-        '<div class="ag-sec-t">Enquadrar o mapa</div>'+
-        '<div class="ag-steps">'+
-          '<button onclick="agZoom(1)">Aproximar +</button>'+
-          '<button onclick="agZoom(-1)">Afastar −</button>'+
-        '</div>'+
-        linha(I.bussola, 'Girar o mapa', 'Abre a régua de giro no rodapé', 'agRotBar(true)')+
-        linha(I.quadrado, 'Quadrado de 1 hectare', 'Referência de 100 × 100 m no centro', 'agMenuAcao(\'toggleHaRef\')')+
-        linha(I.lapis, 'Editar quadras', 'Mover vértices e redesenhar', 'agMenuAcao(\'toggleQuadraEdit\')')+
-      '</div>'+
-      '<div class="ag-sec">'+
         '<div class="ag-sec-t">Dados</div>'+
         linha(I.baixar, 'Backup em arquivo', 'Baixa tudo para o aparelho', 'agMenuAcao(\'exportData\')')+
         linha(I.subir, 'Importar arquivo', 'Restaura de um backup .json', 'agImportar()')+
@@ -796,6 +802,8 @@
     var vai = (abrir === undefined) ? !el.classList.contains('on') : !!abrir;
     if(vai){
       agMenu(false);
+      /* a régua mora no rodapé: qualquer gaveta aberta esconde o mapa que ela gira */
+      try{ if(window.agToggleDrawer) window.agToggleDrawer(false); }catch(e){}
       var b = 0;
       try{ b = ((Math.round(window._map && window._map.getBearing && window._map.getBearing() || 0) % 360) + 360) % 360; }catch(e){}
       var r = $('agRotRange'); if(r) r.value = b;

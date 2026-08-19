@@ -19,7 +19,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script>document.documentElement.classList.add('pre-auth');try{if(localStorage.getItem('agracta-theme')!=='dark'){document.documentElement.classList.add('light');}else{document.addEventListener('DOMContentLoaded',function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content='#101513';});}}catch(e){document.documentElement.classList.add('light');}</script>
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="theme-2026.css?v=6">
-<link rel="stylesheet" href="ui-campo.css?v=6">
+<link rel="stylesheet" href="ui-campo.css?v=7">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
@@ -141,6 +141,6 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <!-- Camadas de 2027: controle de horário de acesso e a nova casca de uso
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
 <script src="acesso-horario.js?v=2"></script>
-<script src="ui-campo.js?v=6"></script>
+<script src="ui-campo.js?v=7"></script>
 </body>
 </html>

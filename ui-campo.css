@@ -238,7 +238,7 @@ html body .clima-chip{
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
   max-width:none!important;width:auto!important;min-width:0!important;
   min-height:0!important;height:auto!important;overflow:visible!important;
-  font-family:var(--ag-mono,ui-monospace,monospace)!important;
+  font-family:var(--ag-font,system-ui,sans-serif)!important;
   font-variant-numeric:tabular-nums!important;
   color:#fff!important;opacity:1!important;
   text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.75)!important;
@@ -246,13 +246,17 @@ html body .clima-chip{
 }
 html body .clima-chip svg{display:none!important}
 html body .clima-chip .cc-t{
-  font:700 13px/1 var(--ag-mono,ui-monospace)!important;
-  color:#fff!important;letter-spacing:-.01em!important;
+  font:800 14px/1 var(--ag-font,system-ui,sans-serif)!important;
+  /* o atalho `font:` acima zera o font-variant-numeric herdado do chip; sem
+     esta linha o numero volta a mudar de largura a cada atualizacao */
+  font-variant-numeric:tabular-nums!important;
+  color:#fff!important;letter-spacing:-.015em!important;
 }
 html body .clima-chip .cc-v{
   display:inline!important;
   max-width:none!important;overflow:visible!important;text-overflow:clip!important;
-  font:600 9.5px/1 var(--ag-mono,ui-monospace)!important;
+  font:600 10.5px/1 var(--ag-font,system-ui,sans-serif)!important;
+  font-variant-numeric:tabular-nums!important;
   color:#fff!important;opacity:.85!important;letter-spacing:0!important;white-space:nowrap!important;
 }
 html body .clima-chip .cc-v .cc-w{display:inline!important}
