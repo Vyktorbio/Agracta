@@ -142,6 +142,42 @@ S("Porcentagem depende da calda; dose por área, não");
   quase("dose por área NÃO muda com a calda", achar(area, "P").perHa, 1500, 1e-6);
 }
 
+S("As duas leituras da mesma dose (% <-> por área)");
+{
+  /* 0,25% num volume de trator e num volume de drone: mesma escrita, 50× de
+     diferença por hectare. Conferido contra a conta direta, não contra o motor. */
+  const trator = C.calculateMixture(Object.assign({}, UM_LITRO, {
+    sprayVolume: 150, components: [{ nome: "Assist", valor: 0.25, unidade: "%" }], carrier: "Água" }));
+  const drone = C.calculateMixture(Object.assign({}, UM_LITRO, {
+    sprayVolume: 3, components: [{ nome: "Assist", valor: 0.25, unidade: "%" }], carrier: "Água" }));
+  quase("0,25% a 150 L/ha = 375 mL/ha", achar(trator, "Assist").perHa, 375, 1e-6);
+  quase("0,25% a 3 L/ha = 7,5 mL/ha", achar(drone, "Assist").perHa, 7.5, 1e-6);
+  certo("a razão entre eles é exatamente 50×",
+    perto(achar(trator, "Assist").perHa / achar(drone, "Assist").perHa, 50, 1e-9));
+
+  /* caminho inverso: dose por área tem a % que lhe corresponde naquele volume */
+  const area = C.calculateMixture(Object.assign({}, UM_LITRO, {
+    sprayVolume: 150, components: [{ nome: "P", valor: 1.5, unidade: "L/ha" }], carrier: "Água" }));
+  quase("1,5 L/ha em 150 L/ha de calda = 1% v/v", achar(area, "P").pctCalda, 1, 1e-9);
+
+  const drogaDrone = C.calculateMixture(Object.assign({}, UM_LITRO, {
+    components: [{ nome: "P", valor: 1.5, unidade: "L/ha" }], carrier: "Água" }));
+  quase("a mesma 1,5 L/ha em 3 L/ha de calda = 50% v/v",
+    achar(drogaDrone, "P").pctCalda, 50, 1e-9);
+
+  /* ida e volta: declarar por % ou por área tem de dar no mesmo lugar */
+  const porPct = C.calculateMixture(Object.assign({}, UM_LITRO, {
+    sprayVolume: 150, components: [{ nome: "X", valor: 1, unidade: "%" }], carrier: "Água" }));
+  quase("1% declarado = 1% calculado (ida e volta)", achar(porPct, "X").pctCalda, 1, 1e-9);
+  quase("e dá a mesma quantidade da dose por área equivalente",
+    achar(porPct, "X").total, achar(area, "P").total, 1e-6);
+
+  /* sólido não tem v/v */
+  const sol = C.calculateMixture(Object.assign({}, UM_LITRO, {
+    components: [{ nome: "Pó", valor: 500, unidade: "g/ha" }], carrier: "Água" }));
+  certo("sólido não recebe % v/v", achar(sol, "Pó").pctCalda === null);
+}
+
 S("Propriedades que precisam valer sempre");
 {
   const r = C.calculateMixture(Object.assign({}, UM_LITRO, {

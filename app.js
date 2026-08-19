@@ -6724,6 +6724,7 @@ function _calcCss(){
   '.calc-mixr span{color:var(--text-2,#9fb1a5);overflow:hidden;text-overflow:ellipsis}'+
   '.calc-mixr b{color:var(--text,#e8efe9);font-weight:700;text-align:right}'+
   '.calc-mixr.carrier{background:rgba(120,200,150,.06)}.calc-mixr.carrier span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
+  '.calc-eq{display:block;font-style:normal;font-size:10px;color:var(--text-3,#7f9085);margin-top:1px}'+
   '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
   '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
   document.head.appendChild(s);
@@ -7232,8 +7233,14 @@ function _calcCompute(){
        É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
     html+='<div class="calc-mix"><div class="calc-mixh"><span>Componente</span><span>Dose</span><span>Por frasco</span><span>Total</span></div>';
     res.components.forEach(function(c){
+      /* A dose escrita e a mesma dose lida do outro jeito. % só vira quantidade
+         depois do volume — e é aí que 3 L/ha e 150 L/ha se separam 50×. */
+      var eq='';
+      if(c.unidade==='%') eq=f(c.perHa,2)+' '+c.unit+'/ha';
+      else if(c.pctCalda!=null) eq=f(c.pctCalda,3)+' %';
       html+='<div class="calc-mixr"><span>'+esc(c.nome)+'</span>'+
-        '<span>'+f(c.dose,c.unidade==='%'?3:2)+' '+esc(c.unidade)+'</span>'+
+        '<span>'+f(c.dose,c.unidade==='%'?3:2)+' '+esc(c.unidade)+
+          (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>'+
         '<b>'+f(c.perBottle)+' '+c.unit+'</b>'+
         '<b>'+f(c.total)+' '+c.unit+'</b></div>';
     });
@@ -7272,7 +7279,9 @@ function _calcCopy(){
     try{ r=BC.calculateMixture({components:mix.components,carrier:(t.veiculo||'Água'),sprayVolume:vol,plotLength:len,plotWidth:wid,numPlots:plots,numBottles:bottles,deadVolumeMl:dead,bottleCapacity:cap}); }catch(e){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
     /* uma linha por componente — é a receita que se lê na bancada */
     r.components.forEach(function(c,i){
-      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?3:2)+' '+c.unidade+
+      var eq=(c.unidade==='%')?(' ('+f(c.perHa,2)+' '+c.unit+'/ha)')
+            :(c.pctCalda!=null?(' ('+f(c.pctCalda,3)+' %)'):'');
+      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?3:2)+' '+c.unidade+eq+
         '\t'+f(c.perBottle)+' '+c.unit+'\t'+f(c.total)+' '+c.unit+'\t'+(i===0?f(r.sprayTotalMl/1000):''));
     });
     L.push('\t'+r.carrier.nome+'\tcompleta\t'+f(r.carrier.perBottle)+' mL\t'+f(r.carrier.total)+' mL\t');
