@@ -6716,6 +6716,14 @@ function _calcCss(){
   '.calc-t{font-size:11px;border-collapse:collapse;width:100%;margin-top:4px}.calc-t th,.calc-t td{padding:6px 5px;border-bottom:1px solid var(--border,#26322b);text-align:right}.calc-t th:first-child,.calc-t td:first-child{text-align:left}.calc-t th{color:var(--text-3,#7c8a80);font-size:10px;text-transform:uppercase;letter-spacing:.4px}'+
   '.calc-tname{color:#9fe0b6;font-weight:700}.calc-terr{color:#ff9a8a;font-size:10px}.calc-empty{color:#8aa88a;font-size:12px;padding:10px 0;text-align:center}'+
   '.calc-card{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:11px;padding:9px 11px;margin-bottom:8px}.calc-cardh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}.calc-kv{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:11px}.calc-kv span{color:var(--text-2,#9fb1a5)}.calc-kv b{color:var(--text,#e8efe9);font-weight:700}'+
+  /* receita de preparo: uma linha por componente, veículo fechando o volume */
+  '.calc-mix{margin:2px 0 7px;border:1px solid var(--border,#26322b);border-radius:9px;overflow:hidden}'+
+  '.calc-mixh,.calc-mixr{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:6px;padding:5px 8px;font-size:11px;align-items:baseline}'+
+  '.calc-mixh{background:var(--surface-3,#111a16);color:var(--text-2,#9fb1a5);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.04em}'+
+  '.calc-mixr{border-top:1px solid var(--border,#26322b)}'+
+  '.calc-mixr span{color:var(--text-2,#9fb1a5);overflow:hidden;text-overflow:ellipsis}'+
+  '.calc-mixr b{color:var(--text,#e8efe9);font-weight:700;text-align:right}'+
+  '.calc-mixr.carrier{background:rgba(120,200,150,.06)}.calc-mixr.carrier span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
   '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
   '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
   document.head.appendChild(s);
@@ -7210,19 +7218,38 @@ function _calcCompute(){
       html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>não preparar</b><span>Produto / calda</span><b>0 / 0</b></div><div class="calc-warn" style="color:#7ca88a">Testemunha sem aplicação: nenhuma calda é necessária.</div></div>';
       return;
     }
+    /* Mistura: o tratamento pode ter N componentes ("Sankari + Silwet") e cada um
+       com a SUA base — L/ha no produto, % v/v no adjuvante. E o que completa a
+       calda pode ser óleo. Produto único cai no mesmo número de sempre. */
+    var mix=BC.parseComponents(t.produto, t.dose, dunit);
     var res=null, err='';
-    try{ res=BC.calculateTreatment({doseHa:dval, doseUnit:dunit, sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap}); }
+    try{ res=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'), sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap}); }
     catch(e){ err=e.message||String(e); }
     html+='<div class="calc-card">'+head;
     if(err){ html+='<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
+
+    /* Receita de preparo: uma linha por componente + o veículo fechando o volume.
+       É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
+    html+='<div class="calc-mix"><div class="calc-mixh"><span>Componente</span><span>Dose</span><span>Por frasco</span><span>Total</span></div>';
+    res.components.forEach(function(c){
+      html+='<div class="calc-mixr"><span>'+esc(c.nome)+'</span>'+
+        '<span>'+f(c.dose,c.unidade==='%'?3:2)+' '+esc(c.unidade)+'</span>'+
+        '<b>'+f(c.perBottle)+' '+c.unit+'</b>'+
+        '<b>'+f(c.total)+' '+c.unit+'</b></div>';
+    });
+    html+='<div class="calc-mixr carrier"><span>'+esc(res.carrier.nome)+'</span>'+
+      '<span>completa</span><b>'+f(res.carrier.perBottle)+' mL</b><b>'+f(res.carrier.total)+' mL</b></div>';
+    html+='</div>';
+
     html+='<div class="calc-kv">'+
-      '<span>Produto / parcela</span><b>'+f(res.productPerPlot)+' '+res.productUnit+'</b>'+
       '<span>Calda / parcela</span><b>'+f(res.sprayPerPlotMl/1000)+' L</b>'+
-      '<span>Produto total</span><b>'+f(res.productTotal)+' '+res.productUnit+'</b>'+
       '<span>Calda total</span><b>'+f(res.sprayTotalMl/1000)+' L</b>'+
-      '<span>Concentração</span><b>'+f(res.concentration)+' '+res.concentrationUnit+'</b>'+
-      '<span>Produto / frasco</span><b>'+f(res.productPerBottle)+' '+res.productUnit+'</b>'+
+      '<span>Concentração</span><b>'+res.components.map(function(c){return f(c.concentration)+' '+c.concentrationUnit;}).join(' · ')+'</b>'+
+      '<span>Calda / frasco</span><b>'+f(res.sprayPerBottleMl/1000)+' L</b>'+
     '</div>';
+    /* Nada de erro silencioso: se produto e dose não casam, isso aparece. */
+    mix.problems.forEach(function(p){ html+='<div class="calc-warn">⚠ '+esc(p)+'</div>'; });
+    (res.warnings||[]).forEach(function(w){ html+='<div class="calc-warn">⚠ '+esc(w)+'</div>'; });
     if(cap>0 && !res.bottleCapacityOk) html+='<div class="calc-warn">⚠ Calda total não cabe em '+bottles+' frasco(s) de '+f(cap,1)+' L — mínimo '+res.minBottles+'.</div>';
     html+='</div>';
   });
@@ -7236,13 +7263,21 @@ function _calcCopy(){
   function f(v,p){ return BC.formatBR(v,p==null?2:p); }
   var L=['CALCULADORA DE APLICAÇÃO — '+(study.codigo||study.nome||study.id),
     'Parcela '+f(len,1)+'×'+f(wid,1)+' m · '+plots+' parcela(s)/trat · vol. morto '+f(dead,0)+' mL'+(cap>0?(' · frasco '+f(cap,1)+' L'):''),
-    'Trat\tProduto\tDose\tProd/parc\tCalda/parc(L)\tProd total\tCalda total(L)'];
+    'Trat\tComponente\tDose\tPor frasco\tTotal\tCalda total(L)'];
   (study.tratamentos||[]).forEach(function(t){
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose), vol=t.volume?_calcNum(t.volume):volDef, r;
     var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
-    if(_isWitness && !(dval>0)){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\t0\t0\t0\t0'); return; }
-    try{ r=BC.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:len,plotWidth:wid,numPlots:plots,numBottles:bottles,deadVolumeMl:dead,bottleCapacity:cap}); }catch(e){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
-    L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+f(r.productPerPlot)+' '+r.productUnit+'\t'+f(r.sprayPerPlotMl/1000)+'\t'+f(r.productTotal)+' '+r.productUnit+'\t'+f(r.sprayTotalMl/1000));
+    if(_isWitness && !(dval>0)){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\t0\t0\t0'); return; }
+    var mix=BC.parseComponents(t.produto, t.dose, dunit);
+    try{ r=BC.calculateMixture({components:mix.components,carrier:(t.veiculo||'Água'),sprayVolume:vol,plotLength:len,plotWidth:wid,numPlots:plots,numBottles:bottles,deadVolumeMl:dead,bottleCapacity:cap}); }catch(e){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
+    /* uma linha por componente — é a receita que se lê na bancada */
+    r.components.forEach(function(c,i){
+      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?3:2)+' '+c.unidade+
+        '\t'+f(c.perBottle)+' '+c.unit+'\t'+f(c.total)+' '+c.unit+'\t'+(i===0?f(r.sprayTotalMl/1000):''));
+    });
+    L.push('\t'+r.carrier.nome+'\tcompleta\t'+f(r.carrier.perBottle)+' mL\t'+f(r.carrier.total)+' mL\t');
+    mix.problems.forEach(function(p){ L.push('\t⚠ '+p); });
+    (r.warnings||[]).forEach(function(w){ L.push('\t⚠ '+w); });
   });
   var txt=L.join('\n');
   if(typeof _stxCopy==='function'){ _stxCopy(txt).then(function(ok){ if(typeof _stxToast==='function') _stxToast(ok?'✓ Copiado':'Não consegui copiar'); }); }
@@ -8322,7 +8357,7 @@ function openStudyDetail(qid,sid){
       h+='<span class="trat-id">'+esc(t.id)+'</span>';
       h+='<span>'+esc(t.produto||"—")+'</span>';
       h+='<span>'+esc(t.dose||"—")+'</span>';
-      h+='<span>'+esc(t.volume||"—")+'</span>';
+      h+='<span>'+esc(t.volume||"—")+(t.veiculo?' <span style="opacity:.65">em '+esc(t.veiculo)+'</span>':'')+'</span>';
       if(t.obs)h+='<span class="trat-obs">📝 '+esc(t.obs)+'</span>';
       h+='</div>';
     });
@@ -9139,12 +9174,17 @@ function renderStudyEditModal(){
       h+='<div class="se-trat-head"><span class="se-trat-id">'+esc(t.id)+'</span><button class="se-trat-del" onclick="removeTrat('+i+')">×</button></div>';
       h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'">';
       h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1"><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
+      /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
+         drone: metade dos tratamentos fecha o volume com óleo de soja. Vazio
+         continua significando água, então nada muda em estudo antigo. */
+      h+='<input type="text" placeholder="Veículo — completa a calda (vazio = Água)" data-f="veiculo" list="seVeiculos" value="'+esc(t.veiculo||'')+'">';
       h+='<input type="text" placeholder="Observações (opcional)" data-f="obs" value="'+esc(t.obs)+'">';
       h+='<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#a8c4b0;text-transform:none;letter-spacing:0;margin-top:3px;cursor:pointer"><input type="checkbox" data-f="testemunha" '+(t.testemunha?'checked':'')+' style="width:auto"> Testemunha / check</label>';
       h+='</div>';
     });
   }
   h+='</div>';
+  h+='<datalist id="seVeiculos"><option value="Água"><option value="Óleo de soja"><option value="Óleo mineral"><option value="Óleo vegetal"></datalist>';
   h+='<button class="se-add-trat" onclick="addTrat()">+ Adicionar tratamento</button>';
   h+='</div>';
 
