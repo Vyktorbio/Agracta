@@ -59,6 +59,38 @@ def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
     df = df.dropna(subset=["y"])
     tem_bloco = bloco is not None
 
+    # Sem repetição não existe resíduo, e sem resíduo não existe teste F: não há
+    # com que comparar a variação entre tratamentos. Um ensaio de 11 tratamentos
+    # com 1 repetição gasta todos os graus de liberdade no próprio modelo.
+    #
+    # Antes daqui a conta seguia e o statsmodels estourava lá dentro com
+    # "r_matrix performs f_test for using dimensions that are asymptotically
+    # non-normal" — mensagem que não diz nada a quem está no campo. Melhor
+    # recusar antes, explicando o que falta.
+    n_obs = int(len(df))
+    n_par = 1  # intercepto
+    for nome in nomes_fatores:
+        n_par += max(int(df[nome].nunique()) - 1, 0)
+    if tem_bloco:
+        n_par += max(int(df["bloco"].nunique()) - 1, 0)
+    if n_obs - n_par < 1:
+        combin = df.groupby(nomes_fatores).size() if nomes_fatores else None
+        max_rep = int(combin.max()) if combin is not None and len(combin) else 0
+        return {
+            "ok": False,
+            "erro": ("Sem repetição não há como calcular o resíduo: com "
+                     f"{n_obs} observação(ões) e {n_par} parâmetro(s) no modelo, "
+                     "sobram 0 graus de liberdade para o erro."
+                     + (f" O tratamento mais repetido aparece {max_rep} vez(es)."
+                        if max_rep else "")
+                     + " Um ensaio precisa de ao menos 2 repetições por tratamento"
+                       " para ter ANOVA; com 1, os dados só permitem descrição"
+                       " (médias e gráficos), não teste de significância."),
+            "df_erro": 0,
+            "n_obs": n_obs,
+            "avisos": ["Ensaio sem repetição — resultado apenas descritivo."],
+        }
+
     transformacao = None
     inversa = None
     usada = "original"

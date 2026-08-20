@@ -311,6 +311,18 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
     res_anova = anova_mod.anova(
         valores, fatores_vals, bloco=bloco, alfa=alfa, tipo_resposta=tipo)
 
+    # A ANOVA pode recusar antes de calcular — ensaio sem repetição, por exemplo,
+    # onde não sobra grau de liberdade para o erro. Sem esta guarda o código
+    # seguia direto para res_anova["transformacao"], que não existe na recusa, e
+    # a mensagem clara virava um KeyError.
+    if res_anova.get("ok") is False:
+        relatorio["ok"] = False
+        relatorio["erro"] = res_anova.get(
+            "erro", "Não foi possível calcular a ANOVA para este conjunto.")
+        if res_anova.get("avisos"):
+            relatorio.setdefault("avisos", []).extend(res_anova["avisos"])
+        return relatorio
+
     decisao = ("Resposta CONTÍNUA" if tipo == "continua"
                else "Resposta de PROPORÇÃO/SEVERIDADE contínua")
     decisao += ". Verificadas normalidade dos resíduos (Shapiro-Wilk) e "

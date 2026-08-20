@@ -144,7 +144,20 @@ def scott_knott(medias, reps, mse, df_erro, alfa=0.05, maior_melhor=True):
     mse     : quadrado médio do erro (QME) da ANOVA
     df_erro : graus de liberdade do erro
     """
-    r = float(np.mean(list(reps.values()))) if isinstance(reps, dict) else float(reps)
+    # r entra como QME/r, a variância de UMA média. Com repetições desiguais
+    # (parcela perdida, que é rotina em campo) a média que preserva essa
+    # variância é a HARMÔNICA, não a aritmética.
+    #
+    # A aritmética superestima r, subestima QME/r, infla λ e o teste passa a
+    # partir grupos que o dado não sustenta. Varredura de 4.000 cenários
+    # desbalanceados: 75 casos separando MAIS que o correto, 0 separando menos —
+    # o erro é sempre na direção de declarar diferença inexistente, que num
+    # relatório de registro é afirmar eficácia que não se provou.
+    if isinstance(reps, dict):
+        vals_r = [float(v) for v in reps.values() if float(v) > 0]
+        r = (len(vals_r) / sum(1.0 / v for v in vals_r)) if vals_r else 1.0
+    else:
+        r = float(reps)
     itens = sorted(medias.items(), key=lambda kv: kv[1])  # crescente
     nomes = [t for t, _ in itens]
     vals = np.array([v for _, v in itens], float)
