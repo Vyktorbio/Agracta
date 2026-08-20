@@ -4510,7 +4510,7 @@ function buildStudyRecord(qid,s){
         _avsR.forEach(function(a){
           var mm=_means[a.data], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
           var cell=(mv!=null?String(_r1(mv)):'');
-          if(!isT){ var _c=_pctCtrl(tm,mv,_avSentido(a,v)); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
+          if(!isT){ var _c=_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
           line+='\t'+cell;
         });
         var au=_audpc(v,t.id), tau=_audpc(v,_test), ac=(au!=null?String(Math.round(au)):'');
@@ -4628,7 +4628,7 @@ function buildStudyModelo(qid, s, opts){
     trats.forEach(function(t,ti){ var r=15+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
-      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m,_avSentido(a,v)); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
+      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m,_avSentido(a,v),_avTipo(a,v)); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
       var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
       if(letra) put(r,c0+7, letra);
     });
@@ -4648,7 +4648,7 @@ function buildStudyModelo(qid, s, opts){
     var _cbr=function(n){ return String(n).replace('.',','); };
     lbl(crow,0,'CÁLCULO DE APLICAÇÃO  (parcela '+Math.round(parc.comprimento)+'×'+Math.round(parc.largura)+' m · '+reps+' parcela(s)/trat'+(_dead>0?(' · vol. morto '+_cbr(_dead)+' mL'):'')+(_bot>1?(' · '+_bot+' frascos/preparo'):'')+(_cap>0?(' · frasco '+_cbr(_cap)+' L'):'')+')');
     var ch=crow+1;
-    ['N°','Tratamento','Dose','V.Calda (L/ha)','Concentração','Calda/parcela','Calda total','Produto/parcela','Produto total'].forEach(function(h,c){ lbl(ch,c,h); });
+    ['N°','Tratamento','Dose','V.Calda (L/ha)','Concentração','Calda/parcela','Calda total','Produto/parcela','Produto total','Avisos'].forEach(function(h,c){ lbl(ch,c,h); });
     var _cf=function(x,p){ return BioCalculoCampo.formatBR(x,p==null?2:p); };
     trats.forEach(function(t,i){
       var rr=ch+1+i;
@@ -4661,13 +4661,27 @@ function buildStudyModelo(qid, s, opts){
       var dunit=(typeof doseUnidadeDe==='function')?doseUnidadeDe(s,t.dose):'L/ha';
       if(dunit==='ppm') dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
       if(dval>0 && vol>0){
-        try{ var res=BioCalculoCampo.calculateTreatment({doseHa:dval,doseUnit:dunit,sprayVolume:vol,plotLength:parc.comprimento,plotWidth:parc.largura,numPlots:reps,numBottles:_bot,deadVolumeMl:_dead,bottleCapacity:_cap});
-          put(rr,4,_cf(res.concentration)+' '+res.concentrationUnit);
+        /* Mistura também aqui: esta planilha é a que vai para a equipe de campo,
+           e usava o motor de produto único — "1,5 L + 0,2%" saía como 1,5 L/ha e
+           o adjuvante não aparecia em coluna nenhuma. Agora cada componente sai
+           somado na sua base, e o veículo fecha o volume. */
+        try{
+          var _mix=BioCalculoCampo.parseComponents(t.produto,t.dose,dunit);
+          var res=BioCalculoCampo.calculateMixture({components:_mix.components,carrier:(t.veiculo||'Água'),sprayVolume:vol,plotLength:parc.comprimento,plotWidth:parc.largura,numPlots:reps,numBottles:_bot,deadVolumeMl:_dead,bottleCapacity:_cap});
+          put(rr,4,res.components.map(function(c){return _cf(c.concentration)+' '+c.concentrationUnit;}).join(' + '));
           put(rr,5,_cf(res.sprayPerPlotMl/1000)+' L');
           put(rr,6,_cf(res.sprayTotalMl/1000)+' L');
-          put(rr,7,_cf(res.productPerPlot)+' '+res.productUnit);
-          put(rr,8,_cf(res.productTotal)+' '+res.productUnit);
-        }catch(e){}
+          put(rr,7,res.components.map(function(c){return _cf(c.perPlot)+' '+c.unit;}).join(' + '));
+          put(rr,8,res.components.map(function(c){return _cf(c.total)+' '+c.unit;}).join(' + ')+
+                   ' | '+res.carrier.nome+' '+_cf(res.carrier.total)+' mL');
+          /* problema de leitura da dose não pode sumir numa planilha impressa */
+          var _av=[].concat(_mix.problems||[], res.warnings||[]);
+          if(_av.length) put(rr,9,'⚠ '+_av.join(' '));
+        }catch(e){
+          /* Antes era catch vazio: a conta falhava e as células ficavam em
+             branco, e branco numa planilha lê-se como "não se aplica". */
+          put(rr,4,'⚠ '+(e&&e.message?e.message:'falha no cálculo'));
+        }
       }
     });
   }
@@ -4937,7 +4951,7 @@ async function downloadStudyWorkbook(qid,sid){
       (s.tratamentos||[]).forEach(function(t,ti){var r=17+ti;_xlsPut(ws,r,c0,ti+1);
         for(var rp=1;rp<=Math.min(4,reps);rp++){var raw=_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v);_xlsPut(ws,r,c0+rp,raw);}
         var med=media(t.id);if(med!=null)_xlsPut(ws,r,c0+5,Math.round(med*100)/100);
-        if(test&&t.id!==test){var ef=_pctCtrl(mediaTest,med,_avSentido(a,v));if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
+        if(test&&t.id!==test){var ef=_pctCtrl(mediaTest,med,_avSentido(a,v),_avTipo(a,v));if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
         if(letras[t.id])_xlsPut(ws,r,c0+7,letras[t.id]);
       });
     });});
@@ -7128,6 +7142,48 @@ function _labCompute(){
           html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>só solvente — '+F(vol)+' mL</b></div></div>';
           txt.push(t.id+': só solvente, '+F(vol)+' mL'); return;
         }
+        /* MISTURA NA BANCADA. Antes daqui saía _calcNum(t.dose), que lê só o
+           primeiro número: "1,5 L + 0,2%" virava 1,5 e o adjuvante sumia calado.
+           E _calcDoseUnit não conhece "%" — toda porcentagem caía no `return
+           'L/ha'` do fim, então 0,2% era preparado como 0,2 L/ha.
+
+           O motor de laboratório JÁ sabe fazer "% v/v" (calcCampo trata a
+           unidade e nem pede vazão); só nunca era avisado. Agora cada componente
+           é lido com a sua base e preparado separado, e o solvente é o que sobra
+           depois de somar todos os líquidos — não o que sobra de um só. */
+        var _BC=window.BioCalculoCampo;
+        var _comps=(!_ppm && _BC) ? _BC.parseComponents(t.produto, t.dose, _calcDoseUnit(t.dose)) : null;
+        if(_comps && _comps.components.length>1 || (_comps && _comps.components.length===1 && _comps.components[0].unidade==='%')){
+          var _linhas='', _somaMl=0, _errMix='';
+          _comps.components.forEach(function(cp){
+            if(_errMix) return;
+            try{
+              var rr=LB.calcCampo({dose:cp.valor, unidade:(cp.unidade==='%'?'% v/v':cp.unidade),
+                                   vazao:vazao, volumeMl:vol, pureza:pur, densidade:den});
+              var quanto = (rr.acao==='pesar') ? (F(rr.massaMg)+' mg')
+                                               : (F(rr.produtoUl)+' µL');
+              if(rr.acao!=='pesar') _somaMl += (rr.produtoMl||0);
+              _linhas+='<div class="calc-mixr"><span>'+esc(cp.nome)+'</span><span>'+
+                       F(cp.valor)+' '+esc(cp.unidade)+'</span><b>'+quanto+'</b><b>'+
+                       (rr.acao==='pesar'?'pesar':'pipetar')+'</b></div>';
+            }catch(e){ _errMix=e.message||String(e); }
+          });
+          if(_errMix){ html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ '+esc(_errMix)+'</div></div>'; return; }
+          var _solv=Math.max(0, vol-_somaMl);
+          var _veic=(t.veiculo||'Solvente');
+          html+='<div class="calc-card">'+head+
+            '<div class="calc-mix"><div class="calc-mixh"><span>Componente</span><span>Dose</span><span>Medir</span><span>Como</span></div>'+
+            _linhas+
+            '<div class="calc-mixr carrier"><span>'+esc(_veic)+'</span><span>completa</span><b>'+F(_solv)+' mL</b><b>—</b></div>'+
+            '</div>'+
+            (_comps.problems.length?('<div class="calc-warn">⚠ '+esc(_comps.problems.join(' ')) +'</div>'):'')+
+            (_somaMl>vol?('<div class="calc-warn">⚠ Os líquidos somam '+F(_somaMl)+' mL e o pote tem '+F(vol)+' mL.</div>'):'')+
+            '</div>';
+          txt.push(t.id+(t.produto?' · '+t.produto:'')+' — '+
+                   _comps.components.map(function(cp){return cp.nome+' '+F(cp.valor)+' '+cp.unidade;}).join(' + ')+
+                   ' + '+_veic+' até '+F(vol)+' mL');
+          return;
+        }
         var r=null, err='';
         try{
           r=_ppm
@@ -9245,11 +9301,92 @@ function addTrat(){
   renderStudyEditModal();
 }
 
+/* Renomear o id de um tratamento é renomear a CHAVE de tudo que aponta para ele.
+   As notas de campo moram em notas["T3R2"] — id + repetição. Renumerar os
+   tratamentos por posição sem mexer nas notas faz cada tratamento passar a ler a
+   nota do vizinho, CALADO: apagar o T2 de um ensaio de 5 fazia o Silwet reportar
+   a mortalidade do Sankari, o Assist a do Silwet, e a última nota virar órfã.
+   Números plausíveis, produto errado, nenhum aviso.
+
+   `mapa` é {idAtual: idNovo}, e idNovo === null significa "este sumiu, descarte o
+   que aponta para ele". O null é obrigatório: sem ele, as notas do tratamento
+   apagado continuam com a chave antiga e COLIDEM com as do que assumiu aquele
+   número — e quem vence depende da ordem de iteração.
+
+   Chame ANTES de trocar os ids no array; a função lê o id atual. */
+function _remapTratIds(study, mapa){
+  if(!study || !mapa) return;
+  var temMudanca=false;
+  for(var k in mapa){ if(mapa[k]!==k){ temMudanca=true; break; } }
+  if(!temMudanca) return;
+  var tem=function(id){ return Object.prototype.hasOwnProperty.call(mapa,id); };
+  var novo=function(id){ return tem(id)?mapa[id]:id; };
+  /* grades chaveadas por id+"R"+rep — reconstrói num objeto novo (sem colisão) */
+  var rechavear=function(obj){
+    if(!obj || typeof obj!=='object') return obj;
+    var out={};
+    Object.keys(obj).forEach(function(k){
+      var m=/^(.*)R(\d+)$/.exec(k);
+      if(!m){ out[k]=obj[k]; return; }
+      var n=novo(m[1]);
+      if(n===null) return;                 /* tratamento removido: some junto */
+      out[n+'R'+m[2]]=obj[k];
+    });
+    return out;
+  };
+  (study.avaliacoes||[]).forEach(function(a){
+    if(!a) return;
+    if(a.notas) a.notas=rechavear(a.notas);
+    if(a.bruto) a.bruto=rechavear(a.bruto);
+  });
+  if(study.testemunha){
+    var t=novo(study.testemunha);
+    study.testemunha=(t===null)?'':t;
+  }
+  if(Array.isArray(study.faixas)){
+    study.faixas=study.faixas.filter(function(f){ return !(f && f.trat && novo(f.trat)===null); });
+    study.faixas.forEach(function(f){ if(f && f.trat) f.trat=novo(f.trat); });
+  }
+  if(study.randomizacao && Array.isArray(study.randomizacao.ordem)){
+    study.randomizacao.ordem=study.randomizacao.ordem.filter(function(p){
+      return !(p && p.tratId && novo(p.tratId)===null);
+    });
+    study.randomizacao.ordem.forEach(function(p){ if(p && p.tratId) p.tratId=novo(p.tratId); });
+  }
+}
+/* Quantas notas de campo estão presas a este tratamento (todas as repetições). */
+function _notasDoTrat(study, tratId){
+  var n=0;
+  ((study||{}).avaliacoes||[]).forEach(function(a){
+    var notas=(a&&a.notas)||{};
+    Object.keys(notas).forEach(function(k){
+      var m=/^(.*)R(\d+)$/.exec(k); if(!m || m[1]!==tratId) return;
+      var linha=notas[k]||{};
+      for(var v in linha){ if(linha[v]!=null && String(linha[v]).trim()!=='') { n++; break; } }
+    });
+  });
+  return n;
+}
 function removeTrat(idx){
   syncStudyInputs();
+  var alvo=workingStudy.tratamentos[idx];
+  var removido=alvo && alvo.id;
+  /* Apagar tratamento com dado de campo lançado é destrutivo e irreversível —
+     não pode acontecer por toque errado num "×" ao lado do nome. */
+  var perde=removido?_notasDoTrat(workingStudy, removido):0;
+  if(perde>0){
+    var nome=(alvo.produto||removido||'').toString();
+    if(!confirm('O tratamento '+removido+(nome&&nome!==removido?(' ('+nome+')'):'')+
+                ' tem '+perde+' nota'+(perde===1?'':'s')+' de campo lançada'+(perde===1?'':'s')+'.\n\n'+
+                'Apagar o tratamento APAGA essas notas. Não há como desfazer.\n\nApagar mesmo assim?')) return;
+  }
   workingStudy.tratamentos.splice(idx,1);
-  /* Renumera */
-  workingStudy.tratamentos.forEach(function(t,i){t.id="T"+(i+1)});
+  /* Renumera — e leva junto tudo que aponta para os ids antigos. */
+  var mapa={};
+  if(removido) mapa[removido]=null;
+  workingStudy.tratamentos.forEach(function(t,i){ mapa[t.id]='T'+(i+1); });
+  _remapTratIds(workingStudy, mapa);
+  workingStudy.tratamentos.forEach(function(t,i){ t.id='T'+(i+1); });
   renderStudyEditModal();
 }
 
@@ -10951,7 +11088,7 @@ function _avMeans(study, av){
   var m={}; Object.keys(sum).forEach(function(k){ m[k]={}; vars.forEach(function(v){ if(cnt[k]&&cnt[k][v]) m[k][v]=sum[k][v]/cnt[k][v]; }); }); return m;
 }
 function _r1(x){ return Math.round(x*10)/10; }
-function _pctCtrl(ref, val, sentido){
+function _pctCtrl(ref, val, sentido, tipo){
   /* % de controle vs testemunha, em duas famílias:
 
      sentido 'menor' (padrão — dano, severidade, incidência: a testemunha é a MAIOR)
@@ -10964,6 +11101,21 @@ function _pctCtrl(ref, val, sentido){
        Só faz sentido em variável limitada a 100% (razão n/N e escala já são). */
   if(ref==null || val==null) return null;
   if(sentido==='maior'){
+    /* A fórmula abaixo divide por (100 − test): ela SÓ vale se a variável for
+       limitada a 100. 'razao' (n/N×100), 'escala' (McKinney) e 'pct' já saem
+       assim de _avDerivar; 'contagem' NÃO — chega como número bruto de insetos.
+
+       Antes isto passava: uma média de 5 mortos na testemunha e 40 no tratado
+       (de 50 avaliados) dava (40−5)/(100−5)×100 = 36,8%, quando o Abbott certo
+       sobre as porcentagens é (80−10)/(100−10)×100 = 77,8%. Subestimava 41
+       pontos. Pior: testemunha 99 e tratado 198 imprimia 9.900% de eficácia,
+       porque a única guarda barrava apenas testemunha ≥ 100.
+
+       Contagem não tem denominador aqui — o N avaliado não é guardado nesse
+       tipo. Então não há como corrigir a conta, só como recusá-la: devolve null
+       e a célula mostra "—". Para ter eficácia de Abbott numa variável de
+       mortalidade, a coluna precisa ser do tipo "razão n/N". */
+    if(tipo==='contagem') return null;
     if(!(ref<100) || ref<0) return null;
     var mc=(val-ref)/(100-ref)*100;
     if(!isFinite(mc) || mc < -100) return null;
@@ -10994,7 +11146,7 @@ function avResultHtml(study, av){
     h+='<div class="res-title">'+esc(v)+' · média &amp; '+(_efic?'eficácia (Abbott)':'% controle')+'</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>'+(_efic?'% efic':'% ctrl')+'</th></tr></thead><tbody>';
     ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
       if(t.id===test) ctrl='<b>test.</b>';
-      else { var _c=_pctCtrl(tm,mv,_avSentido(av,v)); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
+      else { var _c=_pctCtrl(tm,mv,_avSentido(av,v),_avTipo(av,v)); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(mv!=null?_r1(mv):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
   });
@@ -11098,7 +11250,7 @@ function studyChartsHtml(study){
     if(lastAv){ var _mai=(_avSentido(lastAv,v)==='maior');
       var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
       ts.forEach(function(t,ti){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v];
-        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_pctCtrl(tm,mv,_avSentido(lastAv,v))}); });
+        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_pctCtrl(tm,mv,_avSentido(lastAv,v),_avTipo(lastAv,v))}); });
       /* Do melhor para o pior. É a leitura que o bioensaio pede primeiro, e a
          ordem de cadastro não a responde. Sem valor vai para o fim. */
       bars.sort(function(a,b){ return (b.val==null?-1e9:b.val)-(a.val==null?-1e9:a.val); });
@@ -11860,7 +12012,7 @@ function _buildXlsx(soDoLocal){
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
-        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv,_avSentido(a,v)); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
+        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
         var bv={}; _av.forEach(function(a){ if(!a.data)return; var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ (bv[v]=bv[v]||[]).push({date:a.data,m:m}); }); });
         Object.keys(bv).forEach(function(v){ var pts=bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), dys=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); function af(tr){ var sm=0,pv=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(pv!=null)sm+=(pv+y)/2*(dys[i]-pt); pv=y; pt=dys[i]; } return sm; } var ta=af(_t); s.tratamentos.forEach(function(t){ var a=af(t.id); var _ca=(t.id===_t)?null:_pctCtrl(ta,a); var ctrl=(t.id===_t)?'':(_ca!=null?Math.round(_ca*10)/10:''); aud.push([locNome,qn,s.codigo||'',v,t.id,prod[t.id]||'',(t.id===_t?'sim':''),pts.length,dys[dys.length-1],(a!=null?Math.round(a):''),ctrl]); }); });
       })();
