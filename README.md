@@ -1,6 +1,6 @@
 # Agracta — registros de ensaios de campo (mapa + NDVI)
 
-App de agricultura de precisão da estação experimental (Plantec, Iracemápolis‑SP):
+App de agricultura de precisão:
 mapa de satélite real, quadras georreferenciadas (área e coordenadas), fenologia/estudos,
 e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série temporal e consulta por ponto.
 
