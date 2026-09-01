@@ -2,9 +2,18 @@
 
 Evolução para uma plataforma completa de P&D agrícola **sem ruptura da usabilidade atual**.
 
-> Documento de referência fixa. As notas em blocos `Estado (data)` foram verificadas
-> contra o código e existem para o roadmap não virar lista de desejos — quando um
-> item já estiver pronto, a nota diz onde ele mora.
+> **Este documento diz em que ORDEM construir e ONDE cada coisa mora na tela.**
+> O que o Agracta deve ser, e por quê, está em [`ARQUITETURA.md`](ARQUITETURA.md) —
+> a especificação-mãe. Os dois se complementam e devem ser lidos juntos.
+>
+> Divergências entre os dois estão registradas em **Decisões em aberto**, no fim do
+> `ARQUITETURA.md`. Uma delas afeta este arquivo: a §12.7 aqui recusa o "score
+> 96/100" que a especificação propõe. Enquanto não houver decisão, vale o que está
+> escrito aqui — contagem e classificação, não score.
+>
+> As notas em blocos `Estado (data)` foram verificadas contra o código e existem para
+> o roadmap não virar lista de desejos — quando um item já estiver pronto, a nota diz
+> onde ele mora.
 
 ---
 
@@ -128,7 +137,7 @@ estudo do Agracta.
 > - ✅ **7.8** parcialmente: `biocalc-lab-core.js` já traz `calcPPM`, `calcPPMInverso`, `calcCampo`, `calcAjusteIA`, `calcSerie`, `alertaPipeta`, `alertaMassa`.
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
 > - ✅ **7.4** parcialmente: já pré-preenche dose/volume dos tratamentos do estudo.
-> - ❌ **7.6** — `memoriaCalculo` não existe em lugar nenhum. O cálculo vive num overlay e **morre ao fechar**. A aplicação guarda só `data`, `bbch`, `obs`, `carimbo`.
+> - ✅ **7.6** feito (01/09/2026): `aplicacao.memoriaCalculo` grava entradas, resultado por componente, avisos, autoria e a versão do motor. Regravar preserva o anterior em `memoriasAnteriores`. Coberto por `test_memoria_calculo.js` (63 verificações, com golden test).
 > - ❌ **7.2** — não há método por tratamento.
 > - ❌ **7.3** — não há `equipmentProfiles`.
 >
