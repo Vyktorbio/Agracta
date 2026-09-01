@@ -1,140 +1,112 @@
-AGRACTA — 7a publicacao                     01/09/2026
+AGRACTA — 8a publicacao                     01/09/2026
 =====================================================
 
-Leva: 3 arquivos de codigo + 1 motor novo + 1 arquivo de teste.
+Leva: 3 arquivos de codigo + 2 de teste.
   CODIGO:  app.js  sw.js  index.html
-  MOTOR:   vendor/aplicacao-core.js  (novo)
-  TESTE:   test_calc_barra.js  (novo)
-  DOCS:    docs/ROADMAP.md  docs/ARQUITETURA.md
+  TESTE:   test_calc_barra.js  test_metodo_aplicacao.js (novo)
+  DOCS:    docs/ROADMAP.md
 
-Continuacao da Release B do roadmap (docs/ROADMAP.md), secao 7.7.
+Fecha as secoes 7.2, 7.3 e 7-bis do roadmap.
 
 
 COMO SUBIR
 ----------
-1. Abra  https://github.com/Vyktorbio/Agracta
-2. "Add file" -> "Upload files"
-3. Selecione os arquivos e arraste.
-   ATENCAO: o aplicacao-core.js fica dentro de vendor/ — arraste ele para
-   dentro dessa pasta no GitHub, nao para a raiz.
-4. Commit: "Barra e calibracao na calculadora de aplicacao"
-5. "Commit changes"
+Ja esta publicado — foi por pull request. Nao ha nada para arrastar.
 
 
 O QUE MUDOU
 -----------
-A calculadora de aplicacao respondia metade da pergunta: quanta calda
-preparar e quanto produto por em cada frasco. Voce mesmo disse que essa
-metade ja estava boa. Faltava a outra — a barra e a calibracao.
+Tres coisas, e a primeira e a fundacao das outras duas.
 
-E a metade que o auditor cobra, porque e a unica que liga o numero escrito
-no protocolo ao liquido que caiu na parcela. Nao se responde de cabeca: se
-mede. Coleta-se o que cada bico despeja num tempo cronometrado, e daquilo
-sai tudo o mais por algebra fechada.
+1) O LABORATORIO PAROU DE CARREGAR COISA DE CAMPO
 
-Agora a calculadora tem, entre os tratamentos e a memoria de calculo:
+Voce apontou e a auditoria confirmou. Tres vazamentos:
 
-    > BARRA E CALIBRACAO                    nao calibrada — 0/12 leituras
+  - o editor de estudo pedia "1a aplicacao / N aplicacoes / intervalo em dias"
+    e, mais abaixo, o MESMO formulario ja chamava aquilo de "Dia do tratamento".
+    Duas nocoes concorrentes de quando o tratamento aconteceu, lado a lado. Na
+    bancada a linha sumiu, com uma frase dizendo onde o momento se define.
 
-Fechada por padrao, porque a calda continua sendo o assunto principal da
-tela. O resumo a direita diz o estado sem precisar abrir. Aberta, ela pede
-equipamento (trator/barra ou costal a CO2), numero de bicos, espacamento,
-largura da barra, velocidade, tempo de coleta e taxa-alvo — e mostra ANTES
-da coleta a meta por bico:
+  - "Desenho do ensaio" oferecia FAIXAS, com o aviso inteiro falando de solo,
+    declive e bordadura. Nao existe faixa numa bancada: nem a pergunta se faz. E
+    estudo de bancada que tenha herdado "faixas" de uma edicao antiga e corrigido
+    ao salvar — o campo sumiu da tela, mas o dado errado nao some sozinho.
 
-    Meta por bico: 500,0 mL em 30 s.
+  - o BBCH estava guardado POR ACIDENTE: so nao aparecia porque a lista vinha
+    vazia sem cultura. Uma quadra convertida de campo que tivesse mantido a
+    cultura voltava a mostrar fenologia de planta num ensaio de placa. Agora a
+    pergunta e explicita: e laboratorio? Guarda acidental e guarda que volta a
+    falhar quando o dado reaparece.
 
-Que e o numero que se leva para o campo. Depois entram as leituras, tres por
-bico, e saem:
+2) METODO DE APLICACAO POR TRATAMENTO
 
-    Largura de trabalho      2,00 m
-    Vazao requerida          4,000 L/min
-    Coleta esperada / bico   500,0 mL
-    Vazao medida             4,000 L/min
-    Taxa real                240,0 L/ha
-    Desvio da meta           0,0 %
-    Velocidade ideal         5,00 km/h
-    CV entre coletas         0,0 %
+Agora um estudo pode aplicar T1 e T2 de drone e T3 de trator. Duas regras
+decidem o que aparece na tela:
 
-A velocidade ideal e a que entrega a taxa-alvo COM A VAZAO QUE A MAQUINA
-TEM. E o ajuste que nao exige trocar bico.
+  CATEGORIA. Bancada e campo nao compartilham metodo. Na quadra de laboratorio o
+  unico metodo e a Torre de Potter — sider e drone nem aparecem. Na quadra de
+  campo a Potter nao existe. E a mesma fronteira do item 1, vista do outro lado.
 
+  DIVERGENCIA E QUE E INFORMACAO. Enquanto todos os tratamentos usam o metodo do
+  estudo, ele nao vira tinta em lugar nenhum — repetir cinco vezes o mesmo rotulo
+  nao informa nada. Quando um diverge, TODOS passam a mostrar o seu. E a mesma
+  regra que o campo de volume da calculadora ja seguia.
 
-O CV E O NUMERO QUE A MEDIA ESCONDE
------------------------------------
-Quatro bicos coletando 300, 500, 500 e 700 mL dao a MESMA media de 500 do
-conjunto perfeito. A taxa fecha nos mesmos 240 L/ha e o desvio da zero. O
-painel inteiro tranquiliza.
+O override e DECLARADO: a chave "Metodos diferentes por tratamento" e a
+declaracao. Sem ela, um metodo guardado num tratamento numa edicao anterior NAO
+volta a valer sozinho — senao o calculo mudaria sem ninguem ter pedido.
 
-E um terco da faixa recebeu 40% menos que a dose, e outro terco recebeu 40%
-mais. O ensaio passa a medir uma dose que ninguem aplicou.
+O metodo vai gravado na memoria de calculo de todo jeito, divirja ou nao. Na tela
+ele so aparece quando informa; no registro, um calculo sem dizer com que maquina
+seria irreproduzivel tres anos depois.
 
-Por isso o CV desses quatro bicos (32,66%) aparece como ERRO, ao lado do
-desvio de taxa que continua sendo reportado como ok. As duas verdades
-convivem na tela; nenhuma cobre a outra.
+3) PERFIL DE EQUIPAMENTO, SEM TELA DE CADASTRO
 
-Pela mesma razao, coleta ZERO e tratada como MEDIDA e nao como celula vazia.
-Bico entupido tem vazao zero, e essa e a informacao: o zero entra na media,
-derruba a vazao total, derruba a taxa e vira erro com o numero do bico. Nao
-some.
+Nao ha cadastro nenhum para preencher. O perfil e APRENDIDO: toda calibracao
+valida que voce grava numa aplicacao vira a configuracao habitual daquela
+maquina. Da proxima vez, antes da coleta comecar, aparece:
 
-A tolerancia de taxa (padrao +-5%) e o limite de CV (padrao 10%) ficam
-EDITAVEIS. O criterio de aceitacao e do protocolo, nao do programa: um
-"+-5%" que o Agracta escolhesse sozinho nao seria criterio de ensaio.
+    Ultima calibracao deste equipamento em 12/08 — 4 bico(s) · 0,5 m ·
+    5 km/h · 30 s   [usar esta configuracao]
+    So a configuracao. As coletas continuam sendo medidas agora.
 
+A LINHA DURA: o perfil devolve bicos, espacamento, largura, velocidade, tempo e
+criterios. NUNCA as leituras. Pre-preencher coleta seria forjar medicao —
+apareceriam na tela numeros que ninguem coletou, com cara de que alguem coletou.
+A configuracao se herda; a medida se faz. Ha teste cobrando que nenhum valor de
+coleta sobreviva no perfil.
 
-ONDE ISSO FICA GUARDADO
------------------------
-Na memoria de calculo da aplicacao, em campo proprio, junto com a calda —
-com as leituras BRUTAS, os criterios declarados e a versao do motor.
-Resultado sem dado bruto nao se audita.
-
-E so quando a calibracao e VALIDA. Calibracao pela metade grava barra:null,
-ausencia explicita. Bloco vazio num registro BPL sugere calibracao que nao
-houve, e sugerir e pior do que omitir.
-
-O botao "Copiar" ja traz a secao junto, porque deriva da mesma memoria.
+A oferta so aparece quando a coleta ainda nao comecou: oferecer configuracao no
+meio de uma calibracao em andamento seria convidar a apaga-la.
 
 
-O MOTOR
--------
-A aritmetica inteira vem de vendor/aplicacao-core.js — o motor da
-Calculadora Universal de Aplicacao, extraido para dentro do Agracta sem uma
-linha de conta alterada. Aqui nao se recalcula nada: monta-se o estado
-minimo que o motor pede, le-se o resultado e traduz-se para a linguagem
-visual do Agracta.
-
-Motor duplicado e motor livre para divergir — foi exatamente esse o erro que
-a memoria de calculo veio corrigir na leva passada.
-
-Esse mesmo motor ja traz drone, atomizador e Torre de Potter, e metodo por
-tratamento. Nao foram expostos na tela: voce pediu barra e calibracao, e e
-isso que esta aqui. Eles ficam disponiveis para quando fizer sentido.
+UMA ESCOLHA QUE VALE CONHECER
+-----------------------------
+Quando um estudo nao declara metodo e o protocolo nao diz nada, o padrao e o
+COSTAL A CO2, nao o sider. Num app de P&D o costal e o pulverizador de pesquisa:
+e nele que se coleta bico a bico. Comecar pelo sider faria o estudo sem protocolo
+nascer sem a planilha de coleta, calado.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-FECHE E REABRA o Agracta no Mac. Cache foi de v154 para v155 (registro do
-sw.js de v112 para v113).
+FECHE E REABRA o Agracta no Mac. Cache foi de v155 para v158 (registro do sw.js
+de v113 para v116).
 
-O ndvi-proxy.py NAO mudou nesta leva — nao ha nada a esperar do Render.
+O ndvi-proxy.py NAO mudou — nao ha nada a esperar do Render.
 
 
 ANTES DA PROXIMA VEZ
 --------------------
 Duplo clique em  Conferir antes de publicar.command.
 
-Todas as suites passam: 34 em JavaScript e 2 em Python. O
-test_calc_barra.js novo tem 74 verificacoes, entre elas um GOLDEN TEST
-conferido a mao:
+35 suites em JavaScript e 2 em Python, todas passando.
+  test_calc_barra.js       127 verificacoes
+  test_metodo_aplicacao.js  47 verificacoes (novo)
 
-  4 bicos x 0,5 m, 5 km/h, coleta de 500 mL em 30 s, meta 240 L/ha
-  -> largura 4 x 0,5 = 2 m
-  -> vazao requerida 240 x 5 x 2 / 600 = 4,000 L/min
-  -> coleta esperada 4 x 1000 x 30 / 60 = 2000 mL na barra, 500 mL por bico
-  -> vazao medida 4,000 L/min -> taxa real 600 x 4 / (5 x 2) = 240 L/ha
-  -> desvio 0%, velocidade ideal 5,00 km/h
+Os golden tests da barra seguem intactos:
 
-E um segundo golden test para o caso perigoso, o dos bicos 300/500/500/700:
-media identica, taxa identica, CV 32,66%. Se uma alteracao futura fizer esse
-CV desaparecer, o teste FALHA. E proposital.
+  4 bicos x 0,5 m, 5 km/h, 500 mL em 30 s, meta 240 L/ha -> 2 m de barra,
+  4,000 L/min, 240 L/ha, desvio 0%, velocidade ideal 5,00 km/h
+
+  300/500/500/700 mL -> media identica, taxa identica, CV 32,66%

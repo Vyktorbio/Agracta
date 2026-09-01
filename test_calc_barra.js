@@ -62,6 +62,8 @@ var ctx={
   esc:function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){
         return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]; }); },
   studyTestemunha:function(st){ return (st.tratamentos||[]).filter(function(t){return t.testemunha;}).map(function(t){return t.id;})[0]||null; },
+  isQuadraLab:function(){ return false; },   /* estudo de campo */
+  tratMetodo:function(){ return 'co2'; },
   _currentUserName:function(){ return 'Daria'; }
 };
 ctx.window=ctx; ctx.globalThis=ctx;
@@ -77,7 +79,10 @@ ctx._calcStudy=function(){ return ESTUDO; };
 vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
   'var CALC_BARRA_EQUIP='+JSON.stringify({tractor:'Trator — sider', co2:'Costal pressurizado a CO₂'})+';',
-  pega('_calcBarraMetodo'),
+  'var APLIC_METODOS='+JSON.stringify({tractor:'Trator — sider',co2:'Costal pressurizado a CO₂',drone:'Drone',atomizer:'Atomizador costal motorizado',lab:'Torre de Potter — bancada'})+';',
+  "var _CALC_BARRA_FORA={drone:'drone', atomizer:'atomizador', lab:'Torre de Potter'};",
+  pega('aplicMetodosDe'), pega('aplicMetodoValido'), pega('aplicMetodoDoTexto'),
+  pega('studyMetodo'), pega('_calcBarraMetodo'),
   'var _calcBarra=null, _calcBarraAberta=false;',
   pega('_parseBicos'), pega('_calcBarraEquip'), pega('_calcBarraProto'),
   pega('_calcBarraPadrao'), pega('_calcBarraChave'), pega('_calcBarraEstado'),
@@ -275,6 +280,13 @@ eq(ctx._calcBarraEquip('Trator com barra').chave,'tractor','"trator" no protocol
 eq(ctx._calcBarraEquip('Drone DJI Agras T25P').chave,null,'drone nao vira barra em silencio');
 eq(ctx._calcBarraEquip('Drone DJI Agras T25P').naoSuportado,'drone','e a tela diz por que');
 eq(ctx._calcBarraEquip('Torre de Potter').naoSuportado,'Torre de Potter','bancada idem');
+/* O metodo DECLARADO manda sobre a frase do protocolo: um estudo declarado de drone
+   nao pode continuar sendo calibrado como barra porque a planilha escreveu
+   "pulverizador". */
+var GUARDAM=ESTUDO.metodoAplicacao;
+ESTUDO.metodoAplicacao='drone'; ctx._calcBarra=null; store={};
+eq(ctx._calcBarraProto().naoSuportado,'drone','o metodo declarado vence o texto do protocolo');
+ESTUDO.metodoAplicacao=GUARDAM; ctx._calcBarra=null; store={};
 eq(ctx._calcBarraEquip('Costal CO2 sobre o sider').chave,'co2','costal vence quando as duas palavras aparecem');
 
 ctx._calcBarra=null; store={};
