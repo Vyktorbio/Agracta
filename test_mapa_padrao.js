@@ -18,7 +18,16 @@ ck(src.indexOf('function autoLocateOnOpen()')>=0 && src.indexOf('locateMe({autom
   'abertura solicita a posição GPS em modo automático');
 ck(src.indexOf('try{ autoLocateOnOpen(); }catch(e){}')>=0,
   'GPS assume o centro depois do Local usado como reserva');
-ck(src.indexOf("if(!b){ if(!automatic) alert('Não consegui o GPS.")>=0,
+/* O que importa é a GUARDA, não como ela está escrita: o alerta de GPS só pode
+   aparecer quando a pessoa PEDIU a posição. Em modo automático, falhar tem de ser
+   silencioso — o Local já serve de reserva, e um alerta a cada abertura seria
+   ruído diário. Antes este teste casava o trecho letra a letra e quebrou quando
+   uma linha foi acrescentada dentro do if, sem que o comportamento mudasse. */
+var _gps = src.slice(src.indexOf('function locateMe('));
+_gps = _gps.slice(0, _gps.indexOf('\nfunction '));
+var _alertas = _gps.split('Não consegui o GPS.').length - 1;
+ck(_alertas > 0, 'locateMe ainda avisa quando o GPS falha a pedido');
+ck(/if\(!automatic\)\s*\{?[^}]*alert\('Não consegui o GPS\./.test(_gps),
   'falha do GPS automático mantém o Local sem alerta intrusivo');
 
 console.log('\n'+(f?f+' FALHA(S)':p+' verificações, nenhuma falha.'));

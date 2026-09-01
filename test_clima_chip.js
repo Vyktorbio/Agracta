@@ -44,8 +44,16 @@ var ctx={
 };
 ctx.window=ctx;ctx.globalThis=ctx;
 vm.createContext(ctx);
+/* A cadeia inteira que o chip percorre. Faltavam _climaMapCoord e _climaMapKey
+   (o chip passou a seguir o CENTRO DO MAPA, não mais só o Local ativo) e a cadeia
+   de casamento de estação. Sem elas o teste morria no primeiro toque, antes de
+   verificar coisa nenhuma. Aqui não há _map, então _climaMapCoord cai na reserva
+   — que é justamente o Local ativo, o caso que este teste guarda. */
 vm.runInContext([
-  pega('_climaNorm'),pega('climaMatch'),pega('_climaLocalCoord'),
+  pega('_climaNorm'),pega('_climaNameTokens'),pega('_climaNamesMatch'),
+  pega('_coordNoBrasil'),pega('_kmEntre'),
+  pega('_climaCoordDoLocal'),pega('_climaLocalCoord'),pega('_climaMapCoord'),pega('_climaMapKey'),
+  pega('_climaStationCoord'),pega('_climaStationForCoord'),pega('_climaStationByMac'),pega('climaMatch'),
   pega('_climaChipEl'),pega('climaChipPinta'),pega('climaChipAtualiza'),pega('climaLocalLoad')
 ].join('\n'),ctx);
 
@@ -67,7 +75,14 @@ function ck(ok,n){if(ok){p++;console.log('  ok    '+n);}else{f++;console.log('  
   ck(pedidos.length===2,'local B iniciou sua própria consulta');
   pedidos[1].resolve(resposta({temperature_2m:21.4,relative_humidity_2m:68,wind_speed_10m:7.2,time:'2026-08-17T10:15'}));
   await gira();await gira();
-  ck(el.innerHTML.indexOf('21,4°')>=0 && el.title.indexOf('Local B')>=0,'resposta de B aparece no mapa');
+  /* O chip passou a seguir o CENTRO DO MAPA, e por isso identifica a leitura pela
+     COORDENADA e não mais pelo nome do Local. O que este teste guarda continua o
+     mesmo — a leitura mostrada é a de B, e não a de A —, só que a identidade de B
+     agora é a posição dele. Checar as duas coordenadas é mais forte que o nome:
+     pega também o caso de pintar o valor certo com a procedência errada. */
+  ck(el.innerHTML.indexOf('21,4°')>=0, 'resposta de B aparece no mapa');
+  ck(el.title.indexOf('-16.300')>=0 && el.title.indexOf('-47.500')<0,
+     'e o chip diz que a leitura é da posição de B, não da de A');
   pedidos[0].resolve(resposta({temperature_2m:33.9,relative_humidity_2m:31,wind_speed_10m:15,time:'2026-08-17T10:10'}));
   await gira();await gira();
   ck(el.innerHTML.indexOf('21,4°')>=0 && el.innerHTML.indexOf('33,9°')<0,

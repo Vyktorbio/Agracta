@@ -43,6 +43,7 @@
     quadrado:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/><path d="M12 4v16"/>',
     lapis:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     ajustes:'<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
+    solo:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M3 14h18"/><path d="M8 4v5"/><path d="M15 9v5"/><path d="M11 14v6"/>',
     x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
   };
 
@@ -114,6 +115,8 @@
                 'Sentinel-2 · abre na data mais recente', 'agLigarIndices()', true)+
           linha('agRowZonas', IC.camadas, 'Colorir quadras por valor',
                 'Zonamento a partir do índice ativo', 'agZonas()', true)+
+          linha('agRowSolo', IC.solo, 'Mapa de solos',
+                'Levantamento pedológico da Embrapa', 'agAcao(\'toggleSoloLayer\')', true)+
         '</div>'+
         '<div class="ag-sec">'+
           '<div class="ag-sec-t">Campo</div>'+
@@ -150,6 +153,8 @@
     if(n) n.classList.toggle('on', !!window.scoutingModeActive);
     var g = $('agRowGps');
     if(g) g.classList.toggle('on', document.body.classList.contains('gps-manual-visible'));
+    var so = $('agRowSolo');
+    if(so) so.classList.toggle('on', typeof window.soloLayerAtiva === 'function' && window.soloLayerAtiva());
     var b = $('agToolsBtn');
     if(b) b.classList.toggle('layer-on', ligado());
   }
