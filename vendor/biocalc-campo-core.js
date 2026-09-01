@@ -296,7 +296,13 @@
     });
   }
 
+  /* Versao do motor. Vai gravada na memoria de calculo de cada aplicacao: sem
+     ela, um resultado guardado em 2026 nao teria como ser reconferido depois que
+     a formula mudasse. Subir aqui sempre que o calculo mudar de resultado. */
+  var VERSION="1.0.0";
+
   return{
+    VERSION:VERSION,
     parseNum:parseNum,
     calculateTreatment:calculateTreatment,
     calculateCalibration:calculateCalibration,

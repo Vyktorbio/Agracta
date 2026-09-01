@@ -6781,6 +6781,13 @@ function _calcCss(){
   '.calc-eq{display:block;font-style:normal;font-size:10px;color:var(--text-3,#7f9085);margin-top:1px}'+
   '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
   '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
+    s.textContent+='.calc-mem{margin-top:12px;border-top:1px solid rgba(255,255,255,.10);padding-top:10px}'+
+   '.calc-memh{font-size:10px;letter-spacing:.8px;color:#9fb1a5;font-weight:700;margin-bottom:6px}'+
+   '.calc-memrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}'+
+   '.calc-memrow select{flex:1 1 160px;min-width:0;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.14);color:#e9ede9;border-radius:7px;padding:7px 8px;font-size:12.5px;font-family:inherit}'+
+   '.calc-memrow button{flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:8px 13px;font-size:11.5px;font-weight:700;cursor:pointer}'+
+   '.calc-memrow button:hover{background:#246a31}'+
+   '.calc-memmsg{margin-top:6px;font-size:10.5px;color:#7f8e84;line-height:1.5}';
   document.head.appendChild(s);
 }
 function openCalcAplicacao(qid,sid){
@@ -7287,6 +7294,7 @@ function _calcRenderShell(){
     '</div>'+
     '<div class="calc-sub">'+esc(refTxt)+'</div>'+
     '<div id="calcResults"></div>'+
+    '<div id="calcMemBox" class="calc-mem"></div>'+
     '<div class="calc-actions"><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
   '</div>';
   _calcCompute();
@@ -7357,36 +7365,222 @@ function _calcCompute(){
     html+='</div>';
   });
   box.innerHTML=html||'<div class="calc-empty">—</div>';
+  try{ _calcMemSync(); }catch(e){}
 }
 function _calcCopy(){
+  /* Deriva da memória em vez de recalcular. Antes este laço era uma segunda
+     implementação do mesmo cálculo, livre para divergir da tela. */
   var study=_calcStudy(); if(!study) return;
-  var BC=window.BioCalculoCampo;
-  var len=_calcNum(_calcVal('calcLen')), wid=_calcNum(_calcVal('calcWid')), plots=Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1);
-  var volDef=_calcNum(_calcVal('calcVol')), dead=_calcNum(_calcVal('calcDead')), bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1), cap=_calcNum(_calcVal('calcCap'));
-  function f(v,p){ return BC.formatBR(v,p==null?2:p); }
-  var L=['CALCULADORA DE APLICAÇÃO — '+(study.codigo||study.nome||study.id),
-    'Parcela '+f(len,1)+'×'+f(wid,1)+' m · '+plots+' parcela(s)/trat · vol. morto '+f(dead,0)+' mL'+(cap>0?(' · frasco '+f(cap,1)+' L'):''),
-    'Trat\tComponente\tDose\tPor frasco\tTotal\tCalda total(L)'];
-  (study.tratamentos||[]).forEach(function(t){
-    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose), vol=t.volume?_calcNum(t.volume):volDef, r;
-    var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
-    if(_isWitness && !(dval>0)){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\t0\t0\t0'); return; }
-    var mix=BC.parseComponents(t.produto, t.dose, dunit);
-    try{ r=BC.calculateMixture({components:mix.components,carrier:(t.veiculo||'Água'),sprayVolume:vol,plotLength:len,plotWidth:wid,numPlots:plots,numBottles:bottles,deadVolumeMl:dead,bottleCapacity:cap}); }catch(e){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
-    /* uma linha por componente — é a receita que se lê na bancada */
-    r.components.forEach(function(c,i){
-      var eq=(c.unidade==='%')?(' ('+f(c.perHa,2)+' '+c.unit+'/ha)')
-            :(c.pctCalda!=null?(' ('+f(c.pctCalda,3)+' %)'):'');
-      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?3:2)+' '+c.unidade+eq+
-        '\t'+f(c.perBottle)+' '+c.unit+'\t'+f(c.total)+' '+c.unit+'\t'+(i===0?f(r.sprayTotalMl/1000):''));
-    });
-    L.push('\t'+r.carrier.nome+'\tcompleta\t'+f(r.carrier.perBottle)+' mL\t'+f(r.carrier.total)+' mL\t');
-    mix.problems.forEach(function(p){ L.push('\t⚠ '+p); });
-    (r.warnings||[]).forEach(function(w){ L.push('\t⚠ '+w); });
-  });
-  var txt=L.join('\n');
+  var txt=calcMemoriaTexto(calcMemoria(study, _calcConfigAtual()));
+  if(!txt){ if(typeof _stxToast==='function') _stxToast('Nada a copiar.'); return; }
   if(typeof _stxCopy==='function'){ _stxCopy(txt).then(function(ok){ if(typeof _stxToast==='function') _stxToast(ok?'✓ Copiado':'Não consegui copiar'); }); }
   else { try{ navigator.clipboard.writeText(txt); alert('Copiado.'); }catch(e){ alert(txt); } }
+}
+
+/* ===================== MEMÓRIA DE CÁLCULO DA APLICAÇÃO ============================
+   Até aqui o cálculo da calda vivia só na tela: era lido, copiado para a área de
+   transferência e morria ao fechar o overlay. A aplicação guardava data, BBCH,
+   observação e carimbo — nada do que foi efetivamente preparado.
+
+   Isso é um buraco de rastreabilidade: num ensaio sob BPL, cálculo que não fica
+   registrado é cálculo que não aconteceu. Quem conferir o estudo daqui a três anos
+   não tem como saber com que parcela, que volume morto e que dose a calda foi feita.
+
+   A memória é ESTRUTURA, não texto. Guarda entradas, resultado por componente,
+   avisos e a VERSÃO DO MOTOR — sem a versão, um número guardado hoje não teria como
+   ser reconferido depois que a fórmula mudasse.
+
+   Uma única função monta a memória, e a tela, a cópia e a gravação leem dela. Antes
+   havia três laços separados recalculando a mesma coisa, livres para divergir. ===== */
+
+/* Configuração que a tela da calculadora está mostrando neste instante. */
+function _calcConfigAtual(){
+  return {
+    parcelaComprimento:_calcNum(_calcVal('calcLen')),
+    parcelaLargura:_calcNum(_calcVal('calcWid')),
+    parcelas:Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1),
+    volumeCaldaLHa:_calcNum(_calcVal('calcVol')),
+    volumeMortoMl:_calcNum(_calcVal('calcDead')),
+    frascos:Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1),
+    capacidadeFrascoL:_calcNum(_calcVal('calcCap'))
+  };
+}
+
+function calcMemoria(study, cfg){
+  var BC=window.BioCalculoCampo;
+  if(!BC) return {erro:'O motor de cálculo não carregou.'};
+  if(!study||!(study.tratamentos||[]).length) return {erro:'Estudo sem tratamentos cadastrados.'};
+  cfg=cfg||{};
+
+  var mem={
+    motor:'BioCalculoCampo',
+    motorVersao:(BC.VERSION||'?'),
+    app:(typeof APP_VER!=='undefined'?APP_VER:null),
+    geradoEm:Date.now(),
+    iso:new Date().toISOString(),
+    user:(typeof _currentUserName==='function'?(_currentUserName()||'Não identificado'):'Não identificado'),
+    estudo:{id:study.id, codigo:(study.codigo||null), nome:(study.nome||null)},
+    entradas:cfg,
+    tratamentos:[]
+  };
+
+  (study.tratamentos||[]).forEach(function(t){
+    var testemunha=!!t.testemunha || (typeof studyTestemunha==='function' && studyTestemunha(study)===t.id);
+    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
+    var vol=t.volume?_calcNum(t.volume):cfg.volumeCaldaLHa;
+    var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
+             doseUnidade:dunit, volumeCaldaLHa:vol, testemunha:testemunha,
+             componentes:[], veiculo:null, caldaTotalL:null, avisos:[]};
+
+    /* Testemunha sem dose não gera calda — e isso é resultado, não falta de dado. */
+    if(testemunha && !(dval>0)){
+      reg.semPreparo=true;
+      mem.tratamentos.push(reg);
+      return;
+    }
+
+    var mix=BC.parseComponents(t.produto, t.dose, dunit);
+    (mix.problems||[]).forEach(function(p){ reg.avisos.push(p); });
+
+    var r;
+    try{
+      r=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'),
+        sprayVolume:vol, plotLength:cfg.parcelaComprimento, plotWidth:cfg.parcelaLargura,
+        numPlots:cfg.parcelas, numBottles:cfg.frascos,
+        deadVolumeMl:cfg.volumeMortoMl, bottleCapacity:cfg.capacidadeFrascoL});
+    }catch(e){
+      reg.erro=(e&&e.message)||String(e);
+      mem.tratamentos.push(reg);
+      return;
+    }
+
+    (r.components||[]).forEach(function(c){
+      reg.componentes.push({nome:c.nome, dose:c.dose, unidade:c.unidade,
+        perFrasco:c.perBottle, total:c.total, unidadeMassa:c.unit,
+        perHa:(c.perHa!=null?c.perHa:null), pctCalda:(c.pctCalda!=null?c.pctCalda:null)});
+    });
+    if(r.carrier) reg.veiculo={nome:r.carrier.nome, perFrasco:r.carrier.perBottle, total:r.carrier.total};
+    if(r.sprayTotalMl!=null) reg.caldaTotalL=r.sprayTotalMl/1000;
+    (r.warnings||[]).forEach(function(w){ reg.avisos.push(w); });
+
+    mem.tratamentos.push(reg);
+  });
+  return mem;
+}
+
+/* Texto para a área de transferência, derivado da memória — não um segundo cálculo. */
+function calcMemoriaTexto(mem){
+  if(!mem||mem.erro) return (mem&&mem.erro)||'';
+  var BC=window.BioCalculoCampo;
+  function f(v,p){ return BC?BC.formatBR(v,p==null?2:p):String(v); }
+  var e=mem.entradas||{};
+  var L=['CALCULADORA DE APLICAÇÃO — '+(mem.estudo.codigo||mem.estudo.nome||mem.estudo.id),
+    'Parcela '+f(e.parcelaComprimento,1)+'×'+f(e.parcelaLargura,1)+' m · '+e.parcelas+
+      ' parcela(s)/trat · vol. morto '+f(e.volumeMortoMl,0)+' mL'+
+      (e.capacidadeFrascoL>0?(' · frasco '+f(e.capacidadeFrascoL,1)+' L'):''),
+    'Trat\tComponente\tDose\tPor frasco\tTotal\tCalda total(L)'];
+  mem.tratamentos.forEach(function(t){
+    if(t.semPreparo){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\t0\t0\t0'); return; }
+    if(t.erro){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
+    t.componentes.forEach(function(c,i){
+      var eq=(c.unidade==='%')?(' ('+f(c.perHa,2)+' '+c.unidadeMassa+'/ha)')
+            :(c.pctCalda!=null?(' ('+f(c.pctCalda,3)+' %)'):'');
+      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?3:2)+' '+c.unidade+eq+
+        '\t'+f(c.perFrasco)+' '+c.unidadeMassa+'\t'+f(c.total)+' '+c.unidadeMassa+
+        '\t'+(i===0?f(t.caldaTotalL):''));
+    });
+    if(t.veiculo) L.push('\t'+t.veiculo.nome+'\tcompleta\t'+f(t.veiculo.perFrasco)+' mL\t'+f(t.veiculo.total)+' mL\t');
+    (t.avisos||[]).forEach(function(w){ L.push('\t⚠ '+w); });
+  });
+  L.push('');
+  L.push('Motor '+mem.motor+' '+mem.motorVersao+' · gerado em '+
+         (function(){ try{ return new Date(mem.geradoEm).toLocaleString('pt-BR'); }catch(_){ return mem.iso; } })()+
+         ' por '+mem.user);
+  return L.join('\n');
+}
+
+/* ----- Gravar a memória numa aplicação do estudo ----- */
+function calcAplicacoesDoEstudo(){
+  var st=(typeof _calcStudy==='function')?_calcStudy():null;
+  if(!st) return [];
+  return (st.aplicacoes||[]).slice().sort(function(a,b){
+    return String(b.data||'').localeCompare(String(a.data||''));
+  });
+}
+
+function calcGravarMemoria(){
+  var st=(typeof _calcStudy==='function')?_calcStudy():null;
+  if(!st){ alert('Nenhum estudo selecionado.'); return; }
+  if(typeof estudoFinalizado==='function' && estudoFinalizado(st)){
+    alert('Este estudo está finalizado. Reabra-o antes de gravar um novo cálculo.');
+    return;
+  }
+  var sel=document.getElementById('calcMemAlvo');
+  var aid=sel?sel.value:'';
+  if(!aid){ alert('Escolha em qual aplicação gravar o cálculo.'); return; }
+  var ap=(st.aplicacoes||[]).filter(function(a){ return a.id===aid; })[0];
+  if(!ap){ alert('Não encontrei essa aplicação.'); return; }
+
+  var mem=calcMemoria(st, _calcConfigAtual());
+  if(mem.erro){ alert(mem.erro); return; }
+
+  /* Regravar não apaga o anterior: a memória antiga vira histórico. Um cálculo
+     refeito depois de mudar a parcela é informação, não correção silenciosa. */
+  if(ap.memoriaCalculo){
+    ap.memoriasAnteriores=(ap.memoriasAnteriores||[]);
+    ap.memoriasAnteriores.push(ap.memoriaCalculo);
+  }
+  ap.memoriaCalculo=mem;
+  ap._ts=Date.now();
+
+  try{ save(); }catch(e){}
+  try{
+    if(typeof logStudyAuditInObject==='function')
+      logStudyAuditInObject(st,'aplicacao.memoriaCalculo',
+        'Cálculo de calda gravado na aplicação '+(ap.data||aid),
+        {aplicacao:aid, motor:mem.motor, motorVersao:mem.motorVersao});
+  }catch(e){}
+  try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(_calcSel&&_calcSel.qid, st.id, ap); }catch(e){}
+  try{ if(typeof _stxToast==='function') _stxToast('✓ Cálculo gravado na aplicação'); }catch(e){}
+  _calcMemSync();
+}
+
+/* Estado do bloco de gravação, relido a cada render. */
+function _calcMemSync(){
+  var box=document.getElementById('calcMemBox');
+  if(!box) return;
+  box.innerHTML=calcMemoriaBoxHtml();
+}
+
+function calcMemoriaBoxHtml(){
+  var aps=calcAplicacoesDoEstudo();
+  var h='<div class="calc-memh">MEMÓRIA DE CÁLCULO</div>';
+  if(!aps.length){
+    return h+'<div class="calc-memmsg">O estudo ainda não tem aplicação cadastrada. '+
+           'Crie a aplicação para poder gravar o cálculo nela.</div>';
+  }
+  var opts=aps.map(function(a){
+    var rot=(typeof isoToBR==='function'?(isoToBR(a.data)||a.data||'sem data'):(a.data||'sem data'));
+    if(a.bbch) rot+=' · BBCH '+a.bbch;
+    if(a.memoriaCalculo) rot+='  ✓';
+    return '<option value="'+esc(a.id)+'">'+esc(rot)+'</option>';
+  }).join('');
+  h+='<div class="calc-memrow"><select id="calcMemAlvo">'+opts+'</select>'+
+     '<button type="button" onclick="calcGravarMemoria()">Gravar nesta aplicação</button></div>';
+  var jaTem=aps.filter(function(a){ return !!a.memoriaCalculo; }).length;
+  h+='<div class="calc-memmsg">'+
+     (jaTem?(jaTem+' de '+aps.length+' aplicação(ões) já com cálculo gravado. '):'')+
+     'Fica guardado o que foi calculado, com quem calculou e a versão do motor.</div>';
+  return h;
+}
+
+/* Leitura da memória gravada, para a ficha da aplicação e para o relatório. */
+function aplicacaoMemoriaResumo(ap){
+  var m=ap&&ap.memoriaCalculo;
+  if(!m) return null;
+  var n=(m.tratamentos||[]).filter(function(t){ return !t.semPreparo && !t.erro; }).length;
+  return {quando:m.iso, user:m.user, motor:m.motor+' '+m.motorVersao,
+          tratamentos:n, refeito:((ap.memoriasAnteriores||[]).length||0)};
 }
 
 /* ===================== ANÁLISE ESTATÍSTICA (BioEstat embutido em estatistica/) =====================
