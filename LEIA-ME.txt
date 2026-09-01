@@ -1,8 +1,8 @@
 AGRACTA — 4a publicacao                    01/09/2026
 =====================================================
 
-Leva: 6 arquivos.
-  RAIZ:  app.js  ui-campo.js  sw.js  index.html  ndvi-proxy.py
+Leva: 7 arquivos.
+  RAIZ:  app.js  ui-campo.js  croqui.html  sw.js  index.html  ndvi-proxy.py
          test_solo.js  test_solo_proxy.py   (testes novos, opcionais no upload)
 
 O ndvi-proxy.py MUDOU nesta leva. Ele vai junto (ver DEPOIS DE PUBLICAR).
@@ -71,18 +71,87 @@ Tres cuidados que valem explicar, porque o dado e cartografico:
 Tambem entrou uma camada "Mapa de solos" na gaveta do mapa, ao lado dos
 indices de vegetacao.
 
+
+PROPRIEDADES ESTIMADAS (SoilGrids)
+----------------------------------
+Abaixo da classe, a ficha agora traz argila, areia, silte, pH, carbono
+organico, materia organica, CTC e densidade, com a textura deduzida das
+tres fracoes:
+
+    PROPRIEDADES ESTIMADAS                  [Consultar]
+    Argila 58 %   Areia 24 %   Silte 18 %   pH 5,8
+    Carbono organico 28 g/kg   Materia organica 48,27 g/kg
+    CTC 12 cmolc/kg   Densidade 1,3 kg/dm3
+    Textura argilosa
+    ATENCAO Estimativa de modelo global (SoilGrids 2.0 / ISRIC, 0-30 cm) —
+    NAO SUBSTITUI ANALISE DE SOLO e nao deve embasar recomendacao de adubacao.
+
+Esse aviso nao e enfeite. Sao numeros com cara de laudo, e sem o aviso eles
+voltariam num relatorio como se fossem analise.
+
+Dois cuidados nas unidades, que sao a parte mais facil de errar:
+
+  - o SoilGrids publica INTEIRO ESCALONADO. Argila vem "580" e pH vem "58".
+    A conversao acontece uma unica vez, no proxy, e tem teste so para ela —
+    exibir o numero cru daria "pH 58" num solo de pH 5,8.
+  - a CTC sai em cmolc/kg, que e a unidade do SoilGrids, e NAO em mmolc/dm3
+    do laudo brasileiro. Converter entre as duas exige a densidade da amostra;
+    preferi mostrar a unidade verdadeira a fazer uma conta que pareceria
+    comparavel com o laboratorio e nao seria.
+  - materia organica nao e medida: e o carbono organico vezes 1,724 (Van
+    Bemmelen). Vai marcada como derivada na propria tela.
+
+
+OBSERVADO EM CAMPO
+------------------
+A ultima secao da ficha e um formulario: classe observada, textura, data,
+observacao. O que voce anotar ali VENCE o mapa — na ficha, no croqui e no
+relatorio. Quem abriu uma trincheira sabe mais que o levantamento.
+
+Fica registrado quem observou e quando. Editar depois nao reescreve o
+carimbo original; marca revisao, do mesmo jeito que o carimbo dos eventos.
+
+A analise completa de fertilidade (P, K, Ca, Mg, V%...) NAO entra aqui —
+ela e o proximo modulo, com historico e grafico de evolucao.
+
+
+CROQUI: "POR UNIDADE DE SOLO"
+-----------------------------
+A barra do croqui ganhou um quarto modo de pintura, ao lado de NDVI. Ele
+colore as quadras pela ordem do SiBCS e monta a composicao pedologica da
+AREA na legenda:
+
+    UNIDADES PEDOLOGICAS
+    ▪ LVef — 83%
+      LATOSSOLO VERMELHO Eutroferrico
+    ▪ PVA — 17%
+      ARGISSOLO VERMELHO-AMARELO
+    Embrapa · 1:250.000
+
+O percentual pondera por AREA, nao por numero de quadras: uma quadra de 9 ha
+pesa nove vezes mais que uma de 1 ha. Quadra ainda nao consultada fica
+neutra e aparece como "sem consulta" — no croqui, cor e afirmacao, e pintar
+solo que ninguem consultou seria afirmar o que nao se sabe.
+
+A escala do levantamento vai impressa na folha. Sem ela, o croqui circularia
+por ai como se a classe tivesse precisao de talhao.
+
 Falha de rede nao esconde nada: a ficha diz "Solo indisponivel" com o
 motivo e um botao de tentar de novo — a licao do chip do clima.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-1. FECHE E REABRA o Agracta no Mac. Cache foi de v149 para v150
-   (registro do sw.js de v107 para v108).
+1. FECHE E REABRA o Agracta no Mac. Cache foi de v149 para v151
+   (registro do sw.js de v107 para v109).
 
-2. ESPERE O RENDER. O ndvi-proxy.py mudou nesta leva: ganhou a rota
-   /solo. Ate o redeploy terminar (~2 min), a ficha vai dizer "Solo
-   indisponivel" — e so esperar e tocar em "Tentar de novo".
+2. ESPERE O RENDER. O ndvi-proxy.py mudou nesta leva: ganhou as rotas
+   /solo e /solo/propriedades. Ate o redeploy terminar (~2 min), a ficha
+   vai dizer "Solo indisponivel" — e so esperar e tocar em "Tentar de novo".
+
+   A primeira consulta de propriedades demora mais que a de classe: sao
+   varias leituras no servidor do ISRIC, feitas em paralelo. Depois disso
+   fica em cache por 30 dias, no proxy e no aparelho.
 
 
 UMA COISA PARA CONFERIR NA PRIMEIRA QUADRA
@@ -113,7 +182,7 @@ ANTES DA PROXIMA VEZ
 --------------------
 Duplo clique em  Conferir antes de publicar.command.
 
-Nesta leva os testes novos passam (53 verificacoes no test_solo.js, 36 no
+Nesta leva os testes novos passam (99 verificacoes no test_solo.js, 68 no
 test_solo_proxy.py) e a sintaxe esta limpa.
 
 TRES SUITES JA ESTAVAM VERMELHAS ANTES DESTA LEVA e continuam:

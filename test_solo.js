@@ -77,7 +77,10 @@ vm.createContext(ctx);
 
 var fontes=['soloDaQuadra','soloObservado','_soloGeom','_soloChaveCoord','_soloLerCache',
   '_soloGravarCache','_soloGravar','consultarSolo','soloAtualizar','soloRevisar',
-  '_soloCss','soloBlocoHtml','_soloQuando','soloTexto','soloClasseRelatorio','soloCor'];
+  '_soloCss','soloBlocoHtml','_soloQuando','soloTexto','soloClasseRelatorio','soloCor',
+  'soloPropriedades','consultarSoloPropriedades','soloPropAtualizar','soloPropHtml',
+  'soloObsHtml','soloSalvarObservado','soloCancelarObservado','_soloVal','_soloDataBR',
+  '_soloOrdemDe','_croquiSolo'];
 var codigo=fontes.map(pega).join('\n');
 /* Constantes da seção SOLO, extraídas da própria fonte para o teste não divergir
    dela. Precisa contar chaves: SOLO_CORES ocupa várias linhas. */
@@ -93,7 +96,8 @@ function pegaVar(pref){
   }
   throw new Error('não terminou '+pref);
 }
-['var SOLO_PROXY=','var SOLO_CACHE_KEY=','var _soloSeq=','var SOLO_CORES=','var SOLO_WMS=']
+['var SOLO_PROXY=','var SOLO_CACHE_KEY=','var _soloSeq=','var SOLO_CORES=','var SOLO_WMS=',
+ 'var _soloPropSeq=','var SOLO_TEXTURAS=']
   .forEach(function(pref){ codigo+='\n'+pegaVar(pref); });
 vm.runInContext(codigo, ctx);
 
@@ -271,6 +275,122 @@ ck(src.indexOf('[11,5,soloClasseRelatorio(qid,p)]')>0,
 console.log('\n--- Cor por ordem do SiBCS ---');
 ck(ctx.soloCor('Latossolo')!==ctx.soloCor('Gleissolo'),'ordens diferentes recebem cores diferentes');
 ck(!!ctx.soloCor('Ordem Inexistente'),'ordem desconhecida cai numa cor padrão em vez de undefined');
+
+console.log('\n--- Propriedades edáficas (SoilGrids) ---');
+store={}; pedidos.length=0; ctx._soloPropEstado={};
+ctx.data.Q1.solo={cartografico:{classe:'LATOSSOLO VERMELHO',escalaN:250000,unidades:[]},observado:null};
+var pr=null;
+ctx.consultarSoloPropriedades('Q1',function(r){ pr=r; });
+eq(pedidos.length,1,'consulta dispara uma requisição');
+ck(pedidos[0].url.indexOf('/solo/propriedades?lat=')>0,'chama /solo/propriedades com a coordenada');
+pedidos[0].resolve(resposta({
+  fonte:'soilgrids', referencia:'SoilGrids 2.0 / ISRIC', profundidade:'0-30 cm (média ponderada)',
+  textura:'argilosa',
+  propriedades:{
+    clay:{rotulo:'Argila',unidade:'%',valor:58},
+    sand:{rotulo:'Areia',unidade:'%',valor:24},
+    phh2o:{rotulo:'pH (H2O)',unidade:'',valor:5.8},
+    mo:{rotulo:'Matéria orgânica',unidade:'g/kg',valor:48.27,derivada:'soc x 1,724'}
+  }}));
+await gira(); await gira();
+ck(pr!==null,'callback recebe as propriedades');
+eq(ctx.data.Q1.solo.propriedades.propriedades.clay.valor,58,'argila gravada');
+eq(ctx.data.Q1.solo.propriedades.estimativa,true,'marcada como estimativa');
+ck(ctx.data.Q1.solo.cartografico!==null,'consultar propriedades NÃO apaga o cartográfico');
+
+var hp=ctx.soloBlocoHtml('Q1');
+ck(hp.indexOf('58')>0 && hp.indexOf('Argila')>0,'ficha mostra argila');
+ck(hp.indexOf('5,8')>0,'pH sai com vírgula decimal (pt-BR)');
+ck(hp.indexOf('não substitui análise de solo')>0,
+   'a ficha diz que é estimativa e não substitui análise — o aviso não é opcional');
+ck(hp.indexOf('soc x 1,724')>0,'MO mostra que é derivada, não medida');
+ck(hp.indexOf('argilosa')>0,'textura aparece');
+
+console.log('\n--- Reconsultar o mapa não apaga as propriedades ---');
+pedidos.length=0; ctx._soloEstado={};
+ctx.consultarSolo('Q1',function(){},true);
+pedidos[0].resolve(resposta({classe:'NITOSSOLO VERMELHO',escala:'1:250.000',escalaN:250000,unidades:[]}));
+await gira(); await gira();
+ck(!!ctx.data.Q1.solo.propriedades,'propriedades sobrevivem à reconsulta do cartográfico');
+eq(ctx.data.Q1.solo.cartografico.classe,'NITOSSOLO VERMELHO','e o cartográfico foi atualizado');
+
+console.log('\n--- Estados das propriedades ---');
+ctx._soloPropEstado.Q1='buscando';
+ck(ctx.soloBlocoHtml('Q1').indexOf('Consultando propriedades')>0,'estado "buscando" visível');
+ctx._soloPropEstado.Q1={erro:'timeout'};
+ck(ctx.soloBlocoHtml('Q1').indexOf('Propriedades indisponíveis')>0,'falha é dita');
+ctx._soloPropEstado.Q1=null;
+
+console.log('\n--- Solo observado ---');
+var campos={};
+ctx.document.getElementById=function(id){
+  if(id==='soloObsForm') return {innerHTML:'',style:{}};
+  if(campos[id]!==undefined) return {value:campos[id]};
+  return null;
+};
+campos.soloObsClasse='Latossolo Vermelho (trincheira)';
+campos.soloObsTextura='argilosa';
+campos.soloObsData='2026-08-12';
+campos.soloObsNota='trincheira 1,2 m';
+ctx._currentUserName=function(){ return 'Daria'; };
+ctx.soloSalvarObservado('Q1');
+var ob=ctx.data.Q1.solo.observado;
+eq(ob.classe,'Latossolo Vermelho (trincheira)','classe observada gravada');
+eq(ob.textura,'argilosa','textura gravada');
+eq(ob.fonte,'manual','fonte marcada como manual');
+eq(ob.user,'Daria','autoria BPL registrada pelo NOME da pessoa');
+ck(ob.ts>0,'carimbo de quando foi registrado');
+ck(!ob.revisadoEm,'primeiro registro não é revisão');
+ck(!!ctx.data.Q1.solo.cartografico,'salvar o observado não apaga o cartográfico');
+ck(!!ctx.data.Q1.solo.propriedades,'nem as propriedades');
+
+var tsOriginal=ob.ts;
+campos.soloObsClasse='Latossolo Vermelho-Amarelo';
+ctx.soloSalvarObservado('Q1');
+eq(ctx.data.Q1.solo.observado.ts,tsOriginal,'editar NÃO reescreve o carimbo original (BPL)');
+ck(ctx.data.Q1.solo.observado.revisadoEm>0,'edição marca revisadoEm');
+
+var ho=ctx.soloBlocoHtml('Q1');
+ck(ho.indexOf('OBSERVADO EM CAMPO')>0,'ficha tem a seção do observado');
+ck(ho.indexOf('Daria')>0,'mostra quem observou');
+ck(ho.indexOf('12/08/2026')>0,'data sai em pt-BR');
+
+eq(ctx.soloClasseRelatorio('Q1',null),'Latossolo Vermelho-Amarelo','observado vence o cartográfico no relatório');
+
+campos.soloObsClasse='';
+ctx.soloSalvarObservado('Q1');
+eq(ctx.data.Q1.solo.observado,null,'classe em branco remove o observado');
+ck(!!ctx.data.Q1.solo.cartografico,'e o cartográfico continua lá');
+
+console.log('\n--- Ordem do SiBCS no texto livre do observado ---');
+eq(ctx._soloOrdemDe('Latossolo Vermelho eutroférrico'),'Latossolo','reconhece com acento e minúscula');
+eq(ctx._soloOrdemDe('ARGISSOLO VERMELHO-AMARELO'),'Argissolo','reconhece em maiúscula');
+eq(ctx._soloOrdemDe('não sei ainda'),null,'texto qualquer não vira ordem inventada');
+eq(ctx._soloDataBR('2026-08-12'),'12/08/2026','data ISO vira pt-BR');
+eq(ctx._soloDataBR(''),'','data vazia não quebra');
+
+console.log('\n--- Recorte do solo para o croqui ---');
+ctx.data.Q1.solo={cartografico:{classe:'LATOSSOLO VERMELHO Eutroférrico',ordem:'Latossolo',
+  sigla:'LVef',escala:'1:250.000',unidades:[
+    {classe:'LATOSSOLO VERMELHO Eutroférrico',ordem:'Latossolo',sigla:'LVef',pct:78},
+    {classe:'ARGISSOLO VERMELHO-AMARELO',ordem:'Argissolo',sigla:'PVA',pct:22}]},observado:null};
+var cs=ctx._croquiSolo('Q1');
+eq(cs.classe,'LATOSSOLO VERMELHO Eutroférrico','croqui recebe a classe');
+eq(cs.fonte,'mapa','e sabe que veio do mapa');
+eq(cs.unidades.length,2,'com as duas unidades');
+eq(cs.unidades[0].pct,78,'e os percentuais');
+ck(!!cs.cor && !!cs.unidades[0].cor,'com cor por ordem, para pintar a folha');
+eq(cs.escala,'1:250.000','e a escala, para ir impressa na folha');
+
+ctx.data.Q1.solo.observado={classe:'Nitossolo Vermelho'};
+var cs2=ctx._croquiSolo('Q1');
+eq(cs2.classe,'Nitossolo Vermelho','observado vence o mapa também no croqui');
+eq(cs2.fonte,'campo','e a folha sabe que veio do campo');
+
+ctx.data.Q2={cultura:'',estudos:[]};
+ck(ctx._croquiSolo('Q2')===null,'quadra sem solo devolve null (a folha deixa neutra)');
+ctx.data.Q1.solo={cartografico:{semCobertura:true},observado:null};
+ck(ctx._croquiSolo('Q1')===null,'sem cobertura também é null, não classe vazia');
 
 console.log('\n'+p+' ok, '+f+' falha(s)');
 process.exit(f?1:0);

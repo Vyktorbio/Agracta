@@ -7762,6 +7762,28 @@ function openPranchaEstudo(qid, sid, variavel){
    Monta a folha vetorial das quadras para o relatório. A geometria sai do QGEO
    (lat/lng); a projeção para metro acontece dentro do croqui.html. Cada quadra
    é pintada pelo estudo que abriga — ou pela cultura, quando não há estudo. */
+/* Recorte do solo que a folha do croqui precisa. Fora daqui o croqui não sabe
+   nada sobre Embrapa nem SoilGrids — ele recebe classe, ordem e composição. */
+function _croquiSolo(id){
+  var cart=(typeof soloDaQuadra==='function')?soloDaQuadra(id):null;
+  var ob=(typeof soloObservado==='function')?soloObservado(id):null;
+  if(!cart && !ob) return null;
+  var classe=(ob&&ob.classe)||((cart&&!cart.semCobertura)?cart.classe:null);
+  if(!classe) return null;
+  var ordem=(ob&&ob.classe)?(typeof _soloOrdemDe==='function'?_soloOrdemDe(ob.classe):null):(cart&&cart.ordem);
+  return {
+    classe:classe, ordem:ordem||null,
+    sigla:(cart&&cart.sigla)||null,
+    cor:(typeof soloCor==='function'?soloCor(ordem):null),
+    escala:(cart&&cart.escala)||null,
+    fonte:(ob&&ob.classe)?'campo':'mapa',
+    unidades:((cart&&cart.unidades)||[]).map(function(u){
+      return {sigla:u.sigla||null, classe:u.classe||null, ordem:u.ordem||null,
+              pct:(u.pct!=null?u.pct:null), cor:(typeof soloCor==='function'?soloCor(u.ordem):null)};
+    })
+  };
+}
+
 function _croquiPayload(){
   try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
   var geo = (typeof QGEO!=='undefined' && QGEO) ? QGEO : (window.DEFAULT_QGEO||{});
@@ -7788,7 +7810,11 @@ function _croquiPayload(){
              trat: rot || null,
              local: locNome,
              localAtivo: (locId === localAtivo),
-             ndvi: (typeof ndviMeans!=='undefined' && ndviMeans && ndviMeans[id]!=null) ? ndviMeans[id] : null };
+             ndvi: (typeof ndviMeans!=='undefined' && ndviMeans && ndviMeans[id]!=null) ? ndviMeans[id] : null,
+             /* O croqui pinta por ordem do SiBCS e monta a composição pedológica
+                da área a partir de `unidades` — que já vem calculada da consulta,
+                não é conta refeita lá. Observado em campo vence o mapa também aqui. */
+             solo: _croquiSolo(id) };
   });
 
   /* metadados do cabeçalho: o primeiro estudo encontrado dá o tom da folha */
@@ -13147,11 +13173,13 @@ function _soloGravarCache(k,val){
   }catch(e){}
 }
 
-/* Grava a resposta preservando o que foi observado em campo. */
+/* Grava a resposta preservando as OUTRAS metades do registro. Mesma armadilha do
+   saveE(): montar o objeto do zero e esquecer de carregar adiante o que não veio
+   desta consulta apaga dado alheio em silêncio. */
 function _soloGravar(id, cart){
   if(!data[id]) return;
   var ant=data[id].solo||{};
-  data[id].solo={cartografico:cart, observado:(ant.observado||null)};
+  data[id].solo={cartografico:cart, observado:(ant.observado||null), propriedades:(ant.propriedades||null)};
   data[id]._ts=Date.now();
   try{ save(); }catch(e){}
   try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
@@ -13245,7 +13273,21 @@ function _soloCss(){
    '.solo-ui{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--gp-text-2,#a8b3aa)}'+
    '.solo-ui i{flex:none;width:8px;height:8px;border-radius:2px;font-style:normal}'+
    '.solo-ui b{color:var(--gp-text,#e9ede9);font-weight:700;min-width:34px}'+
-   '.solo-est{color:var(--gp-text-3,#727c75);font-size:11.5px}';
+   '.solo-est{color:var(--gp-text-3,#727c75);font-size:11.5px}'+
+   '.solo-sub{margin-top:10px;padding-top:9px;border-top:1px dashed var(--gp-line,rgba(255,255,255,.09))}'+
+   '.solo-grid{margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px}'+
+   '.solo-card{background:rgba(255,255,255,.035);border:1px solid var(--gp-line,rgba(255,255,255,.08));border-radius:8px;padding:6px 8px}'+
+   '.solo-card .lab{font-size:9.5px;letter-spacing:.3px;color:var(--gp-text-3,#727c75);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+   '.solo-card .val{font-size:14px;font-weight:700;color:var(--gp-text,#e9ede9);margin-top:2px}'+
+   '.solo-card .val small{font-size:9.5px;font-weight:600;color:var(--gp-text-3,#727c75)}'+
+   '.solo-card .der{font-size:9px;color:var(--gp-text-3,#727c75);margin-top:2px}'+
+   '.solo-form{margin-top:8px}'+
+   '.solo-f{margin-bottom:7px}'+
+   '.solo-f label{display:block;font-size:9.5px;letter-spacing:.5px;color:var(--gp-text-3,#727c75);font-weight:700;margin-bottom:3px}'+
+   '.solo-f input,.solo-f select{width:100%;box-sizing:border-box;background:rgba(0,0,0,.25);border:1px solid var(--gp-line,rgba(255,255,255,.14));border-radius:7px;color:var(--gp-text,#e9ede9);padding:7px 8px;font-size:12.5px;font-family:inherit}'+
+   '.solo-fb{display:flex;gap:6px;margin-top:9px}'+
+   '.solo-ok{background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:6px 13px;font-size:11px;font-weight:700;cursor:pointer}'+
+   '.solo-ok:hover{background:#246a31}';
   document.head.appendChild(s);
 }
 
@@ -13262,9 +13304,10 @@ function soloBlocoHtml(id){
   if(est==='buscando') return h+'<div class="solo-est">Consultando solo…</div></div>';
   if(est&&est.erro) return h+'<div class="solo-est">Solo indisponível — '+esc(est.erro)+
     ' <button class="solo-rf" onclick="soloAtualizar(\''+esc(id)+'\')">Tentar de novo</button></div></div>';
-  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div></div>';
+  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloPropHtml(id)+soloObsHtml(id)+'</div>';
   if(s.semCobertura) return h+'<div class="solo-est">Sem cobertura pedológica mapeada para esta coordenada.</div>'+
-    '<div class="solo-meta"><span>Consultado em <b>'+esc(_soloQuando(s))+'</b></span></div></div>';
+    '<div class="solo-meta"><span>Consultado em <b>'+esc(_soloQuando(s))+'</b></span></div>'+
+    soloPropHtml(id)+soloObsHtml(id)+'</div>';
 
   h+='<div class="solo-cl"><span class="solo-dot" style="background:'+soloCor(s.ordem)+'"></span>'+esc(s.classe||'—')+'</div>';
   h+='<div class="solo-meta">';
@@ -13296,8 +13339,8 @@ function soloBlocoHtml(id){
   if(s.revisadoEm) h+='<span>Revisado após edição do polígono</span>';
   h+='</div>';
 
-  var ob=soloObservado(id);
-  if(ob&&ob.classe) h+='<div class="solo-meta" style="margin-top:6px"><span>Observado em campo <b>'+esc(ob.classe)+'</b></span></div>';
+  h+=soloPropHtml(id);
+  h+=soloObsHtml(id);
   return h+'</div>';
 }
 function _soloQuando(s){
@@ -13321,6 +13364,178 @@ function soloClasseRelatorio(id, proto){
   var ob=soloObservado(id);
   if(ob&&ob.classe&&String(ob.classe).trim()) return String(ob.classe).trim();
   return soloTexto(id);
+}
+
+/* ----- Propriedades edáficas estimadas (SoilGrids) -----
+   Estimativa de modelo global, NÃO análise de solo. A tela tem de dizer isso: um
+   número com cara de laudo, sem laudo por trás, é exatamente o tipo de dado que
+   volta como conclusão errada num relatório. Servem para caracterizar o ambiente
+   do ensaio — nunca para embasar recomendação de adubação. */
+var _soloPropSeq=0, _soloPropEstado={};
+function soloPropriedades(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return (d.solo&&d.solo.propriedades)||null; }
+
+function consultarSoloPropriedades(id, cb, forcar){
+  cb=cb||function(){};
+  if(typeof isQuadraLab==='function' && isQuadraLab(id)){ cb(null); return; }
+  var ctr=quadraCenter(id);
+  if(!ctr){ cb(null); return; }
+  if(!forcar && soloPropriedades(id)){ cb(soloPropriedades(id)); return; }
+
+  var seq=++_soloPropSeq;
+  _soloPropEstado[id]='buscando';
+  try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
+
+  fetch(SOLO_PROXY+'/solo/propriedades?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6))
+    .then(function(r){ if(r&&r.ok===false) throw new Error('o servidor respondeu '+r.status); return r.json(); })
+    .then(function(d){
+      if(seq!==_soloPropSeq) return;
+      if(!d||d.error) throw new Error((d&&d.error)||'resposta vazia');
+      var pr={
+        fonte:d.fonte||'soilgrids', referencia:d.referencia||null,
+        estimativa:true, profundidade:d.profundidade||null,
+        propriedades:d.propriedades||{}, textura:d.textura||null,
+        semCobertura:!!d.semCobertura,
+        ts:Date.now(), iso:new Date().toISOString(), app:(typeof APP_VER!=='undefined'?APP_VER:null)
+      };
+      _soloPropEstado[id]=null;
+      if(data[id]){
+        var ant=data[id].solo||{};
+        data[id].solo={cartografico:(ant.cartografico||null), observado:(ant.observado||null), propriedades:pr};
+        data[id]._ts=Date.now();
+        try{ save(); }catch(e){}
+        try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
+      }
+      try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
+      cb(pr);
+    })
+    .catch(function(err){
+      if(seq!==_soloPropSeq) return;
+      _soloPropEstado[id]={erro:(err&&err.message)||String(err)};
+      try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
+      cb(null);
+    });
+}
+function soloPropAtualizar(id){ consultarSoloPropriedades(id, null, true); }
+
+function soloPropHtml(id){
+  var est=_soloPropEstado[id], pr=soloPropriedades(id);
+  var h='<div class="solo-sub"><div class="solo-h"><b>PROPRIEDADES ESTIMADAS</b>';
+  if(est!=='buscando') h+='<button class="solo-rf" onclick="soloPropAtualizar(\''+esc(id)+'\')">'+(pr?'Reconsultar':'Consultar')+'</button>';
+  h+='</div>';
+  if(est==='buscando') return h+'<div class="solo-est">Consultando propriedades…</div></div>';
+  if(est&&est.erro) return h+'<div class="solo-est">Propriedades indisponíveis — '+esc(est.erro)+'</div></div>';
+  if(!pr) return h+'<div class="solo-est">Ainda não consultadas.</div></div>';
+  if(pr.semCobertura) return h+'<div class="solo-est">Sem estimativa disponível para esta coordenada.</div></div>';
+
+  var ordem=['clay','sand','silt','phh2o','soc','mo','cec','bdod'];
+  h+='<div class="solo-grid">';
+  ordem.forEach(function(k){
+    var v=pr.propriedades[k]; if(!v) return;
+    h+='<div class="solo-card"><div class="lab">'+esc(v.rotulo||k)+'</div><div class="val">'+
+       esc(String(v.valor).replace('.',','))+(v.unidade?' <small>'+esc(v.unidade)+'</small>':'')+'</div>'+
+       (v.derivada?'<div class="der">'+esc(v.derivada)+'</div>':'')+'</div>';
+  });
+  h+='</div>';
+  if(pr.textura) h+='<div class="solo-meta" style="margin-top:6px"><span>Textura <b>'+esc(pr.textura)+'</b></span></div>';
+  /* O aviso não é decorativo: é o que impede o número de ser lido como laudo. */
+  h+='<div class="solo-av grossa">⚠ Estimativa de modelo global ('+esc(pr.referencia||'SoilGrids')+
+     (pr.profundidade?', '+esc(pr.profundidade):'')+') — <b>não substitui análise de solo</b> '+
+     'e não deve embasar recomendação de adubação.</div>';
+  h+='<div class="solo-meta" style="margin-top:5px"><span>Consultado em <b>'+esc(_soloQuando(pr))+'</b></span>'+
+     '<span class="solo-src no">estimativa</span></div>';
+  return h+'</div>';
+}
+
+/* ----- Solo observado: o que a pessoa viu, e que o mapa nunca sobrescreve -----
+   A análise completa de fertilidade é outro módulo (banco de análises). Aqui fica
+   só a caracterização de campo: classe observada, textura, quem viu e quando. */
+var SOLO_TEXTURAS=['','arenosa','média','argilosa','muito argilosa','siltosa','orgânica'];
+function soloEditarObservado(id){
+  var ob=soloObservado(id)||{};
+  var alvo=document.getElementById('soloObsForm');
+  if(!alvo) return;
+  var opts=SOLO_TEXTURAS.map(function(t){
+    return '<option value="'+esc(t)+'"'+(ob.textura===t?' selected':'')+'>'+esc(t||'—')+'</option>';
+  }).join('');
+  alvo.innerHTML=
+    '<div class="solo-f"><label>CLASSE OBSERVADA</label>'+
+    '<input id="soloObsClasse" type="text" placeholder="ex.: Latossolo Vermelho" value="'+esc(ob.classe||'')+'"></div>'+
+    '<div class="solo-f"><label>TEXTURA</label><select id="soloObsTextura">'+opts+'</select></div>'+
+    '<div class="solo-f"><label>DATA DA OBSERVAÇÃO</label>'+
+    '<input id="soloObsData" type="date" value="'+esc(ob.data||'')+'"></div>'+
+    '<div class="solo-f"><label>OBSERVAÇÃO</label>'+
+    '<input id="soloObsNota" type="text" placeholder="trincheira, tradagem, laudo…" value="'+esc(ob.nota||'')+'"></div>'+
+    '<div class="solo-fb"><button class="solo-ok" onclick="soloSalvarObservado(\''+esc(id)+'\')">Salvar</button>'+
+    '<button class="solo-rf" onclick="soloCancelarObservado()">Cancelar</button>'+
+    (ob.classe?'<button class="solo-rf" onclick="soloApagarObservado(\''+esc(id)+'\')">Apagar</button>':'')+'</div>';
+  alvo.style.display='block';
+}
+function soloCancelarObservado(){
+  var alvo=document.getElementById('soloObsForm');
+  if(alvo){ alvo.style.display='none'; alvo.innerHTML=''; }
+}
+function _soloVal(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; }
+function soloSalvarObservado(id){
+  if(!data[id]) return;
+  var classe=_soloVal('soloObsClasse');
+  var ant=data[id].solo||{};
+  var obAnt=ant.observado||{};
+  /* Autoria e carimbo seguem a regra BPL: `user` é o nome da pessoa (o que vira
+     assinatura), e o registro original nunca é reescrito — edição marca revisão. */
+  var ob={
+    classe:classe, textura:_soloVal('soloObsTextura'), data:_soloVal('soloObsData'),
+    nota:_soloVal('soloObsNota'), fonte:'manual',
+    user:(typeof _currentUserName==='function'?(_currentUserName()||'Não identificado'):'Não identificado'),
+    ts:(obAnt.ts||Date.now()), iso:(obAnt.iso||new Date().toISOString()),
+    app:(typeof APP_VER!=='undefined'?APP_VER:null)
+  };
+  if(obAnt.ts) ob.revisadoEm=Date.now();
+  data[id].solo={cartografico:(ant.cartografico||null), observado:(classe?ob:null), propriedades:(ant.propriedades||null)};
+  data[id]._ts=Date.now();
+  try{ save(); }catch(e){}
+  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
+  soloCancelarObservado();
+  try{ if(typeof _stxToast==='function') _stxToast(classe?'Solo observado salvo':'Solo observado removido'); }catch(e){}
+  try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
+}
+function soloApagarObservado(id){
+  var el=document.getElementById('soloObsClasse'); if(el) el.value='';
+  soloSalvarObservado(id);
+}
+function soloObsHtml(id){
+  var ob=soloObservado(id);
+  var h='<div class="solo-sub"><div class="solo-h"><b>OBSERVADO EM CAMPO</b>'+
+        '<button class="solo-rf" onclick="soloEditarObservado(\''+esc(id)+'\')">'+(ob&&ob.classe?'Editar':'Registrar')+'</button></div>';
+  if(ob&&ob.classe){
+    h+='<div class="solo-cl" style="font-size:12.5px"><span class="solo-dot" style="background:'+soloCor(_soloOrdemDe(ob.classe))+'"></span>'+esc(ob.classe)+'</div>';
+    h+='<div class="solo-meta">';
+    if(ob.textura) h+='<span>Textura <b>'+esc(ob.textura)+'</b></span>';
+    if(ob.data) h+='<span>Em <b>'+esc(_soloDataBR(ob.data))+'</b></span>';
+    if(ob.user) h+='<span>Por <b>'+esc(ob.user)+'</b></span>';
+    h+='<span class="solo-src ok">campo</span></div>';
+    if(ob.nota) h+='<div class="solo-meta"><span>'+esc(ob.nota)+'</span></div>';
+    if(ob.revisadoEm) h+='<div class="solo-meta"><span>Revisado depois do primeiro registro</span></div>';
+  }else{
+    h+='<div class="solo-est">Nada registrado. O que for anotado aqui vence o mapa.</div>';
+  }
+  return h+'<div id="soloObsForm" class="solo-form" style="display:none"></div></div>';
+}
+function _soloDataBR(iso){
+  if(!iso) return '';
+  var p=String(iso).split('-');
+  return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):String(iso);
+}
+/* Mesma leitura de ordem do SiBCS que o proxy faz, para o ponto colorido do
+   observado combinar com o do cartográfico. */
+function _soloOrdemDe(txt){
+  var n=String(txt||'').toLowerCase()
+    .replace(/[áàâã]/g,'a').replace(/[éê]/g,'e').replace(/í/g,'i')
+    .replace(/[óôõ]/g,'o').replace(/[úü]/g,'u').replace(/ç/g,'c');
+  var ordens=Object.keys(SOLO_CORES);
+  for(var i=0;i<ordens.length;i++){
+    if(ordens[i]!=='_' && n.indexOf(ordens[i].toLowerCase())>=0) return ordens[i];
+  }
+  return null;
 }
 
 /* ----- Camada Solo no mapa (tiles WMS da Embrapa) -----

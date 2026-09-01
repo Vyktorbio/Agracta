@@ -192,6 +192,7 @@ body{
         <label class="opt ativo" data-tipo="radio"><input type="radio" name="pintura" value="quadra" checked><span class="marcador"></span>Por quadra</label>
         <label class="opt" data-tipo="radio"><input type="radio" name="pintura" value="tratamento"><span class="marcador"></span>Por estudo / cultura</label>
         <label class="opt" data-tipo="radio"><input type="radio" name="pintura" value="ndvi"><span class="marcador"></span>Por NDVI médio</label>
+        <label class="opt" data-tipo="radio"><input type="radio" name="pintura" value="solo"><span class="marcador"></span>Por unidade de solo</label>
       </div>
     </div>
 
@@ -250,22 +251,26 @@ body{
 const L = {
   pt:{
     tratamentos:"ESTUDO / CULTURA", tituloQuadras:"QUADRAS", ndvi:"NDVI MÉDIO", fonteNdvi:"Sentinel-2",
+    solo:"UNIDADES PEDOLÓGICAS", soloSem:"sem consulta", soloComp:"Composição da área",
     quadras:"quadras", totais:"ha totais", geradoEm:"Gerado em", poligonos:"polígonos georreferenciados sobre mapa",
     figura:"Figura 1", croqui:"Croqui", aerea:"Imagem aérea",
     ref:"Sistema de referência",
     frase:(n,a,p)=>`das ${n} quadras ${escopoTexto()}, totalizando ${a} ha, ${p}.`,
     pTrat:"com identificação do estudo ou cultura por cor", pQuadra:"com cada quadra identificada por cor",
     pNdvi:"com as quadras coloridas pelo NDVI médio obtido de imagem Sentinel-2",
+    pSolo:"com as quadras coloridas pela ordem do solo segundo o SiBCS",
     pVazio:"sem preenchimento"
   },
   en:{
     tratamentos:"STUDY / CROP", tituloQuadras:"FIELD BLOCKS", ndvi:"MEAN NDVI", fonteNdvi:"Sentinel-2",
+    solo:"SOIL MAPPING UNITS", soloSem:"not queried", soloComp:"Area composition",
     quadras:"field blocks", totais:"ha total", geradoEm:"Generated on", poligonos:"georeferenced polygons over map",
     figura:"Figure 1", croqui:"Sketch map", aerea:"Aerial imagery",
     ref:"Spatial reference",
     frase:(n,a,p)=>`of the ${n} field blocks ${escopoTexto()}, totalling ${a} ha, ${p}.`,
     pTrat:"with study or crop identified by colour", pQuadra:"with each field block identified by colour",
     pNdvi:"with blocks shaded by mean NDVI derived from Sentinel-2 imagery",
+    pSolo:"with blocks coloured by soil order under the Brazilian system (SiBCS)",
     pVazio:"outline only"
   }
 };
@@ -350,6 +355,7 @@ function _carregar(){
       .filter(q => q && q.id && (!m || m[q.key||q.id] || Array.isArray(q.pts)))
       .map(q => ({ key:q.key||q.id, id:q.id, trat:q.trat||null,
                    ndvi:(typeof q.ndvi==="number"?q.ndvi:null),
+                   solo:q.solo||null,
                    local:q.local||null, localAtivo:!!q.localAtivo,
                    latlng:(geo[q.key||q.id]||null),
                    pts:(m && m[q.key||q.id]) ? m[q.key||q.id] : q.pts }));
@@ -596,6 +602,7 @@ const claro = hex => {
 /* Sem tratamento atribuído (geometria crua da estação), a própria quadra é a
    categoria — a chave precisa bater com a que o _paletaAuto usou. */
 const SEM_TRAT = "\u0000sem";           /* balde único para quadra sem estudo */
+const SEM_SOLO = "\u0000solo";          /* idem, para quadra sem solo consultado */
 /* "Por quadra" é o croqui de identificação: cada quadra sua cor, e a legenda
    traz o NOME dela. "Por estudo / cultura" agrupa pelo que está conduzido.
    Antes um modo só fazia as duas coisas — usava o código do estudo quando
@@ -605,6 +612,10 @@ const chaveTrat = q => estado.pintura==="quadra" ? (q.key||q.id) : (q.trat || SE
 const preenche = q => {
   if(estado.pintura==="vazio") return "none";
   if(estado.pintura==="ndvi") return q.ndvi==null ? "#e6e8e3" : corNdvi(q.ndvi);
+  /* Quadra sem solo consultado fica neutra em vez de herdar a cor de outra: no
+     croqui, cor é afirmação, e afirmar solo que não foi consultado é pior que
+     deixar em branco. */
+  if(estado.pintura==="solo") return (q.solo && q.solo.cor) ? q.solo.cor : "#e6e8e3";
   if(chaveTrat(q) === SEM_TRAT) return "#d8dad5";   /* sem tratamento: neutro */
   const tr = TRATAMENTOS[chaveTrat(q)];
   return tr ? tr.cor : "#c9ccc6";
@@ -785,6 +796,59 @@ function desenhar(){
       if(usados.length > mostra.length){
         s += `<text x="${lx}" y="${ly+10}" font-family="${F_COND}" font-size="11.5" font-style="italic" fill="#646c6b">+${usados.length-mostra.length} ${esc(t().quadras)}</text>`;
       }
+    } else if(estado.pintura==="solo"){
+      /* Composição pedológica da ÁREA, não de cada quadra. Quando o levantamento
+         é mais grosso que a área, tudo cai numa unidade só e a lista tem uma
+         linha — o que já é a informação. Quando não, o percentual mostra que o
+         ensaio está assentado em mais de um solo. */
+      s += `<text x="${lx}" y="${ly+8}" font-family="${F_COND}" font-size="11" font-weight="600" letter-spacing="1.3" fill="#646c6b">${t().solo}</text>`;
+      ly += 26;
+      const comp = {};
+      let areaTotal = 0;
+      QUADRAS.forEach(q => {
+        const a = areaM2(q.pts); if(!a) return;
+        areaTotal += a;
+        const un = (q.solo && q.solo.unidades && q.solo.unidades.length) ? q.solo.unidades : null;
+        if(un){
+          un.forEach(u => {
+            const nome = u.sigla || u.classe || "—";
+            if(!comp[nome]) comp[nome] = {a:0, cor:u.cor||"#c9ccc6", classe:u.classe||nome};
+            comp[nome].a += a * ((u.pct==null?100:u.pct)/100);
+          });
+        }else if(q.solo && q.solo.classe){
+          const nome = q.solo.sigla || q.solo.classe;
+          if(!comp[nome]) comp[nome] = {a:0, cor:q.solo.cor||"#c9ccc6", classe:q.solo.classe};
+          comp[nome].a += a;
+        }else{
+          if(!comp[SEM_SOLO]) comp[SEM_SOLO] = {a:0, cor:"#e6e8e3", classe:t().soloSem};
+          comp[SEM_SOLO].a += a;
+        }
+      });
+      const linhas = Object.keys(comp).map(k => ({k, ...comp[k]}))
+                       .sort((a,b) => b.a - a.a);
+      const cabem = Math.max(1, Math.floor((baseMapa - ly - 34) / 34));
+      linhas.slice(0, cabem).forEach(u => {
+        const pct = areaTotal ? Math.round(100*u.a/areaTotal) : 0;
+        const rotulo = (u.k === SEM_SOLO) ? t().soloSem : u.k;   /* o balde não tem nome para mostrar */
+        s += `<rect x="${lx}" y="${ly}" width="13" height="13" fill="${u.cor}" stroke="#15181a" stroke-width="0.8"/>`;
+        s += `<text x="${lx+20}" y="${ly+11}" font-family="${F_COND}" font-size="13" font-weight="600" fill="${u.k===SEM_SOLO?"#646c6b":"#15181a"}">${esc(rotulo)} — ${pct}%</text>`;
+        const nome = (u.k !== SEM_SOLO && u.classe && u.classe !== u.k)
+              ? (u.classe.length>26 ? u.classe.slice(0,25)+"…" : u.classe) : "";
+        if(nome){
+          s += `<text x="${lx}" y="${ly+27}" font-family="${F_COND}" font-size="11.5" fill="#646c6b">${esc(nome)}</text>`;
+          ly += 34;
+        } else ly += 22;
+      });
+      if(linhas.length > cabem){
+        s += `<text x="${lx}" y="${ly+10}" font-family="${F_COND}" font-size="11.5" font-style="italic" fill="#646c6b">+${linhas.length-cabem}</text>`;
+        ly += 18;
+      }
+      /* A escala do levantamento vai impressa na folha: sem ela, o croqui
+         circularia como se a classe tivesse precisão de talhão. */
+      const esc1 = (QUADRAS.find(q => q.solo && q.solo.escala) || {}).solo;
+      if(esc1 && esc1.escala){
+        s += `<text x="${lx}" y="${ly+16}" font-family="${F_COND}" font-size="11" fill="#646c6b">Embrapa · ${esc(esc1.escala)}</text>`;
+      }
     } else {
       s += `<text x="${lx}" y="${ly+8}" font-family="${F_COND}" font-size="11" font-weight="600" letter-spacing="1.3" fill="#646c6b">${t().ndvi}</text>`;
       ly += 24;
@@ -849,7 +913,8 @@ function textoLegenda(){
   const total = num(QUADRAS.reduce((a,q)=>a+areaM2(q.pts),0)/10000);
   const pintura = estado.pintura==="quadra" ? d.pQuadra
                 : estado.pintura==="tratamento" ? d.pTrat
-                : estado.pintura==="ndvi" ? d.pNdvi : d.pVazio;
+                : estado.pintura==="ndvi" ? d.pNdvi
+                : estado.pintura==="solo" ? d.pSolo : d.pVazio;
   const fundo = estado.fundo==="croqui" ? d.croqui : d.aerea;
   return `${fundo} ${d.frase(QUADRAS.length, total, pintura)} `
        + `${[lugaresDaSelecao().length===1 ? lugaresDaSelecao()[0] : "", E().safra].filter(Boolean).join(", ")}${lugaresDaSelecao().length===1||E().safra?". ":""}${d.ref}: ${ESTUDO.datum}.`;

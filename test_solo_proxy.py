@@ -148,6 +148,82 @@ m._solo_cache.clear()
 r = m.do_solo(lat=-23.45, lng=-50.50)
 eq(r['camada'], CAMADA_BR, 'camada vazia é pulada e a cascata continua')
 
+print('\nSoilGrids: conversao das unidades escalonadas')
+# O SoilGrids publica INTEIROS ESCALONADOS. Exibir o numero cru daria "pH 58" num
+# solo de pH 5,8 e "580" de argila num solo com 58%. Estes fatores sao a coisa mais
+# facil de errar em silencio deste modulo inteiro.
+CRU = {'clay': 580, 'sand': 240, 'silt': 180, 'phh2o': 58, 'soc': 280, 'cec': 120, 'bdod': 130}
+m._sg_valor = lambda prop, prof, lon, lat: CRU.get(prop)
+m._solo_props_cache.clear()
+r = m.do_solo_propriedades(-22.658, -47.521)
+P = r['propriedades']
+eq(P['clay']['valor'], 58.0, 'argila 580 g/kg -> 58 %')
+eq(P['clay']['unidade'], '%', 'e a unidade e %')
+eq(P['sand']['valor'], 24.0, 'areia 240 -> 24 %')
+eq(P['silt']['valor'], 18.0, 'silte 180 -> 18 %')
+eq(P['phh2o']['valor'], 5.8, 'pH 58 -> 5,8 (nao 58)')
+eq(P['soc']['valor'], 28.0, 'carbono organico 280 dg/kg -> 28 g/kg')
+eq(P['cec']['valor'], 12.0, 'CTC 120 mmolc/kg -> 12 cmolc/kg')
+eq(P['cec']['unidade'], 'cmolc/kg', 'CTC sai em cmolc/kg — NAO em mmolc/dm3 do laudo')
+eq(P['bdod']['valor'], 1.3, 'densidade 130 cg/cm3 -> 1,3 kg/dm3')
+check(abs(P['clay']['valor'] + P['sand']['valor'] + P['silt']['valor'] - 100) < 1,
+      'as tres fracoes somam ~100 %')
+
+print('\nMateria organica e derivada, e diz que e')
+eq(P['mo']['valor'], round(28.0 * 1.724, 2), 'MO = COS x 1,724 (Van Bemmelen)')
+check('derivada' in P['mo'], 'MO vem marcada como derivada, nao medida')
+
+print('\nA estimativa se identifica como estimativa')
+check(r['estimativa'] is True, 'campo estimativa=True')
+eq(r['fonte'], 'soilgrids', 'fonte registrada')
+check('0-30' in r['profundidade'], 'a profundidade da media fica explicita')
+eq(r['textura'], 'argilosa', '58 % de argila -> textura argilosa')
+eq(P['clay']['perfil']['0-5cm'], 58.0, 'o perfil por camada tambem vem convertido')
+
+print('\nTextura pelas fracoes')
+for arg, are, esperado in ((70, 15, 'muito argilosa'), (45, 30, 'argilosa'),
+                           (25, 50, 'media'), (8, 80, 'arenosa')):
+    m._solo_props_cache.clear()
+    C = {'clay': arg*10, 'sand': are*10, 'silt': (100-arg-are)*10}
+    m._sg_valor = lambda prop, prof, lon, lat, _C=C: _C.get(prop)
+    eq(m.do_solo_propriedades(-22.0, -47.0).get('textura'), esperado,
+       '%d%% argila / %d%% areia -> %s' % (arg, are, esperado))
+
+print('\nSem estimativa nao inventa numero')
+m._solo_props_cache.clear()
+m._sg_valor = lambda *a: None
+z = m.do_solo_propriedades(0.0, 0.0)
+check(z.get('semCobertura') is True, 'sem valor nenhum: semCobertura')
+eq(z['propriedades'], {}, 'e nenhuma propriedade inventada')
+check('textura' not in z, 'sem fracoes nao deduz textura')
+
+print('\nLeitura do GetFeatureInfo')
+eq(m._sg_extrai('{"features":[{"properties":{"value_0":"580"}}]}'), 580.0, 'GeoJSON do MapServer')
+eq(m._sg_extrai("Layer 'clay_0-5cm_mean'\n  Feature 0:\n    value_0 = '580'\n"), 580.0,
+   'texto do MapServer')
+eq(m._sg_extrai('Band 1 value: 580'), 580.0,
+   'o "1" de "Band 1" nao pode vencer o valor de verdade')
+eq(m._sg_extrai('{"features":[{"properties":{"v":"-32768"}}]}'), None, 'nodata vira None')
+eq(m._sg_extrai(''), None, 'resposta vazia vira None')
+eq(m._sg_extrai('sem numero nenhum'), None, 'texto sem numero vira None')
+
+print('\nPropriedades tambem tem cache')
+n2 = [0]
+def conta_sg(prop, prof, lon, lat):
+    n2[0] += 1
+    return CRU.get(prop)
+m._sg_valor = conta_sg
+m._solo_props_cache.clear()
+m.do_solo_propriedades(-15.0, -47.0); primeira = n2[0]
+m.do_solo_propriedades(-15.0, -47.0)
+check(primeira > 0 and n2[0] == primeira, 'segunda consulta no mesmo ponto nao vai a rede')
+
+m._solo_props_cache.clear()
+try:
+    m.do_solo_propriedades(None, None); falhas[0] += 1; print('  FALHA sem lat/lng deveria recusar')
+except RuntimeError as e:
+    check(str(e).startswith('SOLO:'), 'sem lat/lng vira erro legivel')
+
 print('\n%s' % ('%d verificações, nenhuma falha.' % passes[0] if falhas[0] == 0
       else '%d FALHA(S) em %d verificações.' % (falhas[0], passes[0] + falhas[0])))
 sys.exit(0 if falhas[0] == 0 else 1)

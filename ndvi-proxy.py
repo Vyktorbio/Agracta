@@ -23,8 +23,10 @@ Endpoints (uso interno do app):
   GET /stats?index=NDVI&from=YYYY-MM-DD&to=YYYY-MM-DD&geom=<GeoJSON urlencoded>
   GET /solo?lat=..&lng=..            (classe de solo no ponto — Embrapa GeoInfo)
   GET /solo?geom=<GeoJSON urlencoded> (unidades sob a quadra, com % de area de cada)
+  GET /solo/propriedades?lat=..&lng=..  (argila/areia/silte/pH/COS/CTC — SoilGrids)
 """
-import json, os, time, urllib.request, urllib.parse, urllib.error
+import json, os, re, time, urllib.request, urllib.parse, urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("PORT", "8799"))
@@ -838,6 +840,157 @@ def do_solo(lat=None, lng=None, geometry=None):
     _solo_cache[chave] = {"ts": time.time(), "val": out}
     return out
 
+# --------------------------------------------------- Propriedades edaficas (SoilGrids / ISRIC)
+# Argila, areia, silte, pH, carbono organico, CTC e densidade a partir do SoilGrids.
+#
+# Por que WMS GetFeatureInfo e nao a API REST: o ISRIC PAUSOU a REST API
+# (properties/query) por tempo indeterminado e recomenda WCS/WMS. O WCS devolveria
+# GeoTIFF, que exigiria GDAL — e este proxy e stdlib puro por decisao. O
+# GetFeatureInfo devolve o valor do pixel como texto e resolve sem dependencia.
+#
+# ATENCAO AS UNIDADES: o SoilGrids publica INTEIROS ESCALONADOS. Argila vem em g/kg,
+# pH vem multiplicado por 10. Exibir o numero cru daria "pH 58" e "58 g/kg de argila"
+# num solo que tem pH 5,8 e 58% de argila. O fator de conversao de cada propriedade
+# esta na tabela abaixo e e aplicado uma unica vez, aqui.
+SOILGRIDS_WMS = "https://maps.isric.org/mapserv"
+
+# code: (fator, unidade convencional, rotulo)
+SOLO_PROPS = {
+    "clay":     (10,  "%",         "Argila"),
+    "sand":     (10,  "%",         "Areia"),
+    "silt":     (10,  "%",         "Silte"),
+    "phh2o":    (10,  "",          "pH (H2O)"),
+    "soc":      (10,  "g/kg",      "Carbono organico"),
+    "cec":      (10,  "cmolc/kg",  "CTC (pH 7)"),
+    "bdod":     (100, "kg/dm3",    "Densidade"),
+}
+# Camadas superficiais, com a espessura de cada uma — a media 0-30 cm e ponderada por
+# elas. 0-30 cm porque e a faixa que a amostragem agronomica cobre; as profundidades
+# individuais vao junto na resposta para quem quiser olhar o perfil.
+SOLO_PROFS = [("0-5cm", 5), ("5-15cm", 10), ("15-30cm", 15)]
+SOLO_PROPS_TTL = 30 * 24 * 3600
+
+_solo_props_cache = {}
+
+def _sg_valor(prop, prof, lon, lat):
+    """GetFeatureInfo de UMA camada. Uma camada por requisicao de proposito: com
+    varias, a resposta nao diz de forma confiavel qual valor e de qual camada, e
+    trocar argila por areia em silencio seria pior que demorar um pouco mais.
+    WMS 1.1.1 -> bbox em lon,lat (o 1.3.0 inverte para EPSG:4326)."""
+    d = 0.0002
+    camada = "%s_%s_mean" % (prop, prof)
+    qs = urllib.parse.urlencode({
+        "map": "/map/%s.map" % prop,
+        "service": "WMS", "version": "1.1.1", "request": "GetFeatureInfo",
+        "layers": camada, "query_layers": camada,
+        "srs": "EPSG:4326", "info_format": "application/json",
+        "bbox": "%.6f,%.6f,%.6f,%.6f" % (lon - d, lat - d, lon + d, lat + d),
+        "width": "3", "height": "3", "x": "1", "y": "1",
+    })
+    req = urllib.request.Request(SOILGRIDS_WMS + "?" + qs, headers={"User-Agent": "agracta-app"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            bruto = r.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+    return _sg_extrai(bruto)
+
+def _sg_extrai(bruto):
+    """O MapServer devolve GeoJSON quando entende info_format e texto quando nao.
+    Tentamos os dois: primeiro o numero dentro das properties, depois um numero
+    solto no texto. Sem valor plausivel, devolve None em vez de chutar."""
+    try:
+        d = json.loads(bruto)
+        for f in (d.get("features") or []):
+            for v in (f.get("properties") or {}).values():
+                try:
+                    n = float(v)
+                except (TypeError, ValueError):
+                    continue
+                if n > -9000:
+                    return n
+    except Exception:
+        pass
+    # Texto do MapServer: "  value_0 = '580'". Procurar o numero depois do '=' e
+    # importante — pegar o primeiro numero solto acharia o "1" de "Band 1 value".
+    for padrao in (r"=\s*'?(-?\d+\.?\d*)'?", r"value[^-\d]{0,12}(-?\d+\.?\d*)"):
+        for x in re.findall(padrao, bruto or "", re.I):
+            try:
+                n = float(x)
+            except ValueError:
+                continue
+            if -9000 < n < 100000:
+                return n
+    return None
+
+def do_solo_propriedades(lat, lng):
+    """Propriedades edaficas estimadas no ponto, ja convertidas para unidade usual.
+
+    Sao ESTIMATIVA DE MODELO GLOBAL, nao analise de solo — quem chama tem de dizer
+    isso na tela. Servem para caracterizar o ambiente do ensaio, nunca para
+    substituir laudo de laboratorio nem embasar recomendacao de adubacao."""
+    if lat is None or lng is None:
+        raise RuntimeError("SOLO:informe lat/lng.")
+    chave = "%.4f|%.4f" % (lat, lng)
+    hit = _solo_props_cache.get(chave)
+    if hit and (time.time() - hit["ts"]) < SOLO_PROPS_TTL:
+        return hit["val"]
+
+    tarefas = [(p, prof) for p in SOLO_PROPS for prof, _ in SOLO_PROFS]
+    with ThreadPoolExecutor(max_workers=7) as ex:
+        brutos = list(ex.map(lambda t: _sg_valor(t[0], t[1], lng, lat), tarefas))
+    cru = dict(zip(tarefas, brutos))
+
+    out = {"fonte": "soilgrids", "referencia": "SoilGrids 2.0 / ISRIC",
+           "estimativa": True, "profundidade": "0-30 cm (media ponderada)",
+           "propriedades": {},
+           "consultadoEm": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+    for prop, (fator, unidade, rotulo) in SOLO_PROPS.items():
+        soma = pesos = 0.0
+        perfil = {}
+        for prof, esp in SOLO_PROFS:
+            v = cru.get((prop, prof))
+            if v is None:
+                continue
+            conv = v / float(fator)
+            perfil[prof] = round(conv, 2)
+            soma += conv * esp; pesos += esp
+        if not pesos:
+            continue
+        out["propriedades"][prop] = {
+            "rotulo": rotulo, "unidade": unidade,
+            "valor": round(soma / pesos, 2), "perfil": perfil,
+        }
+
+    # Materia organica nao e medida pelo SoilGrids: e o carbono organico vezes o
+    # fator de Van Bemmelen. Vai marcada como derivada para ninguem confundir com
+    # o MO do laudo, que sai de outro metodo.
+    soc = out["propriedades"].get("soc")
+    if soc:
+        out["propriedades"]["mo"] = {
+            "rotulo": "Materia organica", "unidade": "g/kg",
+            "valor": round(soc["valor"] * 1.724, 2), "derivada": "soc x 1,724 (Van Bemmelen)",
+        }
+
+    if not out["propriedades"]:
+        out["semCobertura"] = True
+
+    # Textura pelo triangulo simplificado, so quando as tres fracoes existem.
+    arg = out["propriedades"].get("clay")
+    are = out["propriedades"].get("sand")
+    if arg and are:
+        a, s = arg["valor"], are["valor"]
+        if a >= 60: t = "muito argilosa"
+        elif a >= 35: t = "argilosa"
+        elif a >= 15: t = "media"
+        elif s >= 70: t = "arenosa"
+        else: t = "media"
+        out["textura"] = t
+
+    _solo_props_cache[chave] = {"ts": time.time(), "val": out}
+    return out
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -913,6 +1066,8 @@ class H(BaseHTTPRequestHandler):
                 lat = float(q["lat"]) if q.get("lat") else None
                 lng = float(q["lng"]) if q.get("lng") else None
                 return self._json(do_solo(lat, lng, geometry))
+            if u.path == "/solo/propriedades":
+                return self._json(do_solo_propriedades(float(q["lat"]), float(q["lng"])))
             self._json({"error": "rota desconhecida"}, 404)
         except RuntimeError as e:
             msg = str(e)
