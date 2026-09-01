@@ -7418,9 +7418,81 @@ var _calcBarra=null;         /* configuração corrente, por estudo */
    feito na máquina, e não deve empurrar os tratamentos para fora da tela. */
 var _calcBarraAberta=false;
 
+/* Le "4 bicos x 0,5 m", "6 bicos espacados 50 cm", "4 x 0,5 m" ou so "4".
+   A planilha de protocolo tem UMA celula para bicos e espacamento, entao ela chega
+   como texto livre. O que for lido aparece na tela e continua editavel: derivar sem
+   mostrar a derivacao seria trocar um campo errado por um numero errado invisivel. */
+function _parseBicos(str){
+  var s=String(str||'').toLowerCase().replace(/\s+/g,' ');
+  if(!s.trim()) return null;
+  var out={bicos:null, espacamento:null};
+  /* Espacamento e o numero que vem com unidade de comprimento. */
+  var e=s.match(/(\d+(?:[.,]\d+)?)\s*(cm|mm|m)(?![a-z])/);
+  if(e){
+    var v=parseFloat(e[1].replace(',','.'));
+    if(isFinite(v)&&v>0) out.espacamento=(e[2]==='cm')?v/100:((e[2]==='mm')?v/1000:v);
+  }
+  /* Contagem: o numero colado em "bico"; senao, o primeiro inteiro que nao faz
+     parte do espacamento ja lido. */
+  var b=s.match(/(\d+)\s*bico/);
+  if(b) out.bicos=parseInt(b[1],10);
+  else{
+    var span=e?[e.index,e.index+e[0].length]:null;
+    var re=/\d+(?:[.,]\d+)?/g, m;
+    while((m=re.exec(s))){
+      if(span && m.index>=span[0] && m.index<span[1]) continue;
+      if(/[.,]/.test(m[0])) continue;          /* decimal solto nao e contagem de bico */
+      var n=parseInt(m[0],10);
+      if(n>0&&n<=200){ out.bicos=n; break; }
+      break;
+    }
+  }
+  return (out.bicos||out.espacamento)?out:null;
+}
+
+/* Equipamento escrito por extenso na planilha -> chave do motor. So classifica o que
+   esta seccao sabe calibrar; drone, atomizador e Torre de Potter existem no motor mas
+   ainda nao tem interface aqui, e dizer isso e melhor que trata-los como trator. */
+function _calcBarraEquip(txt){
+  var s=String(txt||'').toLowerCase();
+  if(!s.trim()) return {chave:null};
+  if(/drone|agras|vant|aeronave/.test(s))            return {chave:null, naoSuportado:'drone'};
+  if(/potter|torre|bancada|laborat/.test(s))         return {chave:null, naoSuportado:'Torre de Potter'};
+  if(/atomizad/.test(s))                             return {chave:null, naoSuportado:'atomizador'};
+  if(/co\s*2|co₂|pressuriz|costal/.test(s))          return {chave:'co2'};
+  if(/trator|sider|barra|tratoriz|pulveriz/.test(s)) return {chave:'tractor'};
+  return {chave:null};
+}
+
+/* O que o protocolo do estudo ja sabe sobre a maquina. A planilha foi preenchida uma
+   vez; pedir de novo na calculadora seria o operador redigitar o que o app tem. */
+function _calcBarraProto(){
+  var st=null; try{ st=(typeof _calcStudy==='function')?_calcStudy():null; }catch(e){}
+  var p=(st&&st.protocolo)||{};
+  var eq=_calcBarraEquip(p.equipamento);
+  var bic=_parseBicos(p.bicos);
+  return {
+    equipamento:eq.chave, naoSuportado:eq.naoSuportado||null,
+    equipamentoTexto:(p.equipamento||''),
+    bicos:(bic&&bic.bicos)||null, espacamento:(bic&&bic.espacamento)||null,
+    /* Ponta e pressao nao entram na aritmetica, mas sao contexto obrigatorio de um
+       registro de calibracao: "4 L/min" sem dizer com que ponta e a que pressao nao
+       se reproduz. Vao para a memoria sem virar campo na tela. */
+    ponta:(p.ponta||''), pressao:(p.pressao||''), distanciaBico:(p.distanciaBico||'')
+  };
+}
+
+/* Nada de valor inventado. Um "4 bicos, 5 km/h" que ninguem corrigiu nao deixa a tela
+   vazia — produz uma taxa real PLAUSIVEL e falsa, que e muito pior. Sem o dado, o
+   campo nasce em branco e o aviso diz o que falta. O tempo de coleta e a excecao:
+   30 s e convencao de metodo, nao medida de maquina nenhuma. */
 function _calcBarraPadrao(){
-  return {equipamento:'tractor', bicos:4, espacamento:0.5, larguraManual:0,
-          velocidade:5, tempoS:30, metodo:'individual', taxaAlvo:'',
+  var pr=_calcBarraProto();
+  return {equipamento:(pr.equipamento||'tractor'),
+          bicos:(pr.bicos==null?'':pr.bicos),
+          espacamento:(pr.espacamento==null?'':pr.espacamento),
+          larguraManual:'', velocidade:'', tempoS:30,
+          metodo:'individual', taxaAlvo:'',
           tolerancia:5, cvLimite:10, leiturasBico:[], leiturasBarra:['','','']};
 }
 
@@ -7615,10 +7687,29 @@ function calcBarraHtml(){
     campo('Limite de CV (%)','cvLimite','0.5','')+
   '</div>';
 
+  /* De onde veio o que já está preenchido. Mesma regra do "✓ Parcela do protocolo"
+     lá em cima: derivar é bom, derivar sem dizer de onde é que não. */
+  var pr=_calcBarraProto(), proc=[];
+  if(pr.equipamentoTexto) proc.push(pr.equipamentoTexto);
+  if(pr.bicos!=null) proc.push(pr.bicos+' bico(s)');
+  if(pr.espacamento!=null) proc.push(f(pr.espacamento,2)+' m entre bicos');
+  if(pr.ponta) proc.push('ponta '+pr.ponta);
+  if(pr.pressao) proc.push(pr.pressao);
+  if(proc.length) h+='<div class="calc-barrahint">✓ Do protocolo: '+esc(proc.join(' · '))+' — confira e ajuste se preciso.</div>';
+  if(pr.naoSuportado) h+='<div class="calc-warn">• O protocolo diz '+esc(pr.naoSuportado)+', que este motor calcula mas esta tela ainda não expõe. O que está aqui é barra/costal — não use estes números para aquele equipamento.</div>';
+
   var alvo=(op&&op.requiredCollectionPerNozzleMl!=null&&isFinite(op.requiredCollectionPerNozzleMl))
     ? ('Meta por bico: '+f(op.requiredCollectionPerNozzleMl,1)+' mL em '+f(_calcNum(b.tempoS),0)+' s.')
     : 'Preencha bicos, espaçamento, velocidade e taxa-alvo para saber quanto cada bico deveria coletar.';
   h+='<div class="calc-barrahint">'+esc(alvo)+' Anote o que cada bico realmente coletou — inclusive o zero.</div>';
+
+  /* Sem nº de bicos declarado não se desenha a matriz. Uma linha solta convidaria a
+     medir "o bico", e a coleta entraria como se a barra tivesse um bico só. */
+  if(b.metodo!=='barra' && !(_calcNum(b.bicos)>0)){
+    h+='<div class="calc-warn">• Informe o nº de bicos para abrir a planilha de coleta.</div>'+
+       '<div id="calcBarraOut">'+calcBarraSaidaHtml()+'</div>';
+    return h;
+  }
 
   if(b.metodo==='barra'){
     h+='<div class="calc-mix"><div class="calc-mixh" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))">'+
@@ -7713,6 +7804,10 @@ function calcBarraCfg(){
     velocidadeKmH:_calcNum(b.velocidade),
     tempoColetaS:_calcNum(b.tempoS),
     metodo:(b.metodo==='barra')?'barra inteira':'bico a bico',
+    /* Ponta e pressao nao entram em conta nenhuma, mas "4 L/min" sem dizer com que
+       ponta e a que pressao nao se reproduz. Vem do protocolo, nao vira campo. */
+    ponta:(_calcBarraProto().ponta||null),
+    pressao:(_calcBarraProto().pressao||null),
     taxaAlvoLHa:calcBarraTaxa(b),
     toleranciaPct:_calcBarraTol(b), cvLimitePct:_calcBarraCv(b),
     leituras:(b.metodo==='barra')?{barra:(b.leiturasBarra||[]).slice(0,3)}:{bicos:_calcBarraLinhas(b)},
@@ -7862,7 +7957,8 @@ function calcMemoriaTexto(mem){
     L.push('');
     L.push('BARRA E CALIBRAÇÃO — '+b.equipamentoRotulo+' · '+b.metodo);
     L.push(b.bicos+' bico(s) · espaçamento '+f(b.espacamentoM,2)+' m · largura '+f(r.larguraM,2)+
-           ' m · '+f(b.velocidadeKmH,1)+' km/h · coleta de '+f(b.tempoColetaS,0)+' s');
+           ' m · '+f(b.velocidadeKmH,1)+' km/h · coleta de '+f(b.tempoColetaS,0)+' s'+
+           (b.ponta?(' · ponta '+b.ponta):'')+(b.pressao?(' · '+b.pressao):''));
     L.push('Taxa-alvo '+f(b.taxaAlvoLHa,0)+' L/ha · vazão requerida '+f(r.vazaoRequeridaLMin,3)+
            ' L/min · coleta esperada por bico '+f(r.coletaEsperadaPorBicoMl,1)+' mL');
     L.push('Vazão medida '+f(r.vazaoMedidaLMin,3)+' L/min · taxa real '+f(r.taxaRealLHa,1)+
