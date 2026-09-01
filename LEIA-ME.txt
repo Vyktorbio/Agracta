@@ -1,82 +1,125 @@
-AGRACTA — 3a publicacao                    11/08/2026
+AGRACTA — 4a publicacao                    01/09/2026
 =====================================================
 
-Leva pequena: 4 arquivos, TODOS na raiz.
+Leva: 6 arquivos.
+  RAIZ:  app.js  ui-campo.js  sw.js  index.html  ndvi-proxy.py
+         test_solo.js  test_solo_proxy.py   (testes novos, opcionais no upload)
 
-Desta vez NAO tem o app.js do BioEstat, entao nao existe o risco de
-trocar um app.js pelo outro. Pasta plana, simples.
+O ndvi-proxy.py MUDOU nesta leva. Ele vai junto (ver DEPOIS DE PUBLICAR).
 
 
 COMO SUBIR
 ----------
 1. Abra  https://github.com/Vyktorbio/Agracta
 2. "Add file" -> "Upload files"
-3. Abra ESTA pasta, selecione os 4 arquivos e arraste.
+3. Abra ESTA pasta, selecione os arquivos e arraste.
    (Nao arraste a pasta. Nao arraste o LEIA-ME.)
-4. Commit: "Seletor de quadra agrupado por localidade"
+4. Commit: "Classe de solo automatica por quadra (Embrapa/SiBCS)"
 5. "Commit changes"
-
-
-AINDA FALTA APAGAR O test_runtime.js
-------------------------------------
-Ficou pendente da vez passada. O upload do GitHub nao apaga arquivo,
-so adiciona e substitui.
-
-Agora isso ATRAPALHA: o "Conferir antes de publicar" roda todos os
-test_*.js, esse falha (ele lia um caminho de outra maquina e de outro
-projeto), e o veredito vira NAO SUBA. Se voce clonar o repositorio em
-outro computador, vai levar o teste quebrado junto.
-
-Como apagar:
-1. No GitHub, na raiz, clique em  test_runtime.js
-2. Botao da lixeira, no canto superior direito do arquivo
-3. Commit: "Remove teste morto (lia outro projeto)"
-
-Aqui na sua pasta local ele ja esta removido.
 
 
 O QUE MUDOU
 -----------
-Voce achou: na hora de amarrar cada tratamento a uma quadra, no ensaio
-em faixas, a lista nao separava por localidade.
+O solo era o unico dado de caracterizacao que continuava sendo digitado
+a mao, protocolo por protocolo, como "solo argiloso". Sem procedencia e
+sem poder cruzar com resultado nenhum.
 
-O problema era real e sutil: nome de quadra REPETE entre locais de
-proposito — existe A1 em Iracemapolis e A1 em Anapolis. A lista mostrava
-duas linhas "A1" iguais, sem dizer qual era qual. Amarrar na errada
-significaria estudo apontando para outro municipio.
+Pior: no relatorio, a celula "Classe de Solo:" tinha o rotulo mas nunca
+recebia valor. Saia vazia em toda exportacao, desde sempre.
 
-Agora a lista vem agrupada por local, com o local ativo primeiro e
-marcado "(aqui)":
+Agora, quando voce fecha o desenho de uma quadra, o Agracta consulta os
+levantamentos pedologicos oficiais da Embrapa a partir do proprio
+poligono e preenche sozinho:
 
-    Bosqueiro (aqui)
-      Bosqueiro 1
-      Bosqueiro 2
-      Bosqueiro 3
-    Anapolis
-      A1 · Anapolis
-      C9
-    Iracemapolis
-      A1 · Iracemapolis
-      B2
+    SOLO                                    [Reconsultar]
+    ● LATOSSOLO VERMELHO Eutroferrico
+    Ordem Latossolo   Unidade LVef   Escala 1:250.000   SiBCS 2006   [Embrapa]
+    Consultado em 01/09/2026   Fonte Mapa de solos do estado do Parana
 
-Repare que so os nomes REPETIDOS levam o local no texto. C9 e B2 sao
-unicos e ficaram curtos. Isso porque, com a lista fechada, o campo mostra
-so o texto da opcao — o cabecalho do grupo some, e "A1" sozinho voltaria
-a nao dizer de onde e.
+Tres cuidados que valem explicar, porque o dado e cartografico:
 
-Quadra de laboratorio nao aparece: nao se aplica produto num laboratorio.
+1) A ESCALA E DITA, SEMPRE.
+   Nao existe 1:250.000 para o Brasil inteiro — isso so existe em alguns
+   estados. O mapa nacional e 1:5.000.000, que diz a regiao e nao o
+   talhao. Entao a consulta tenta primeiro o levantamento estadual e so
+   depois cai para o nacional, e a ficha mostra a escala REAL da resposta.
+   Quando ela e grosseira, aparece o aviso:
+
+     ATENCAO Escala 1:5.000.000 — indicativo regional, nao caracterizacao
+     de talhao. Confirme por analise de campo.
+
+   Preferi isso a exibir uma classe com ar de verdade medida.
+
+2) QUADRA A CAVALEIRO DE DUAS UNIDADES AVISA.
+   Se o poligono atravessa mais de uma unidade pedologica, a ficha diz
+   quais e quanto de cada uma:
+
+     ATENCAO A quadra atravessa 2 unidades pedologicas.
+     A media do ensaio vai misturar solos diferentes.
+       78%  LVef · LATOSSOLO VERMELHO Eutroferrico
+       22%  PVA · ARGISSOLO VERMELHO-AMARELO
+
+   Experimentalmente isso vale mais que preencher "argiloso" no protocolo.
+
+3) O MAPA NUNCA APAGA O QUE VOCE VIU EM CAMPO.
+   O registro tem duas metades separadas: `cartografico` (do mapa,
+   reconsultavel a vontade) e `observado` (analise de campo, ainda a
+   preencher na proxima etapa). E no relatorio manda quem tem mais
+   autoridade: o que foi DIGITADO no protocolo vence tudo; depois o
+   observado; o automatico so ocupa a celula que hoje sai vazia.
+
+Tambem entrou uma camada "Mapa de solos" na gaveta do mapa, ao lado dos
+indices de vegetacao.
+
+Falha de rede nao esconde nada: a ficha diz "Solo indisponivel" com o
+motivo e um botao de tentar de novo — a licao do chip do clima.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-FECHE E REABRA o Agracta no Mac. Cache foi de v107 para v108.
+1. FECHE E REABRA o Agracta no Mac. Cache foi de v149 para v150
+   (registro do sw.js de v107 para v108).
 
-O Render redeploya sozinho, mas nesta leva o ndvi-proxy.py nao mudou,
-entao nao ha nada a esperar dele.
+2. ESPERE O RENDER. O ndvi-proxy.py mudou nesta leva: ganhou a rota
+   /solo. Ate o redeploy terminar (~2 min), a ficha vai dizer "Solo
+   indisponivel" — e so esperar e tocar em "Tentar de novo".
+
+
+UMA COISA PARA CONFERIR NA PRIMEIRA QUADRA
+------------------------------------------
+Os nomes das camadas da Embrapa foram escritos a partir do catalogo
+publico, mas nao deu para confirmar um a um contra o servidor durante o
+desenvolvimento (a maquina de trabalho nao tinha saida para o site da
+Embrapa). Se alguma camada tiver sido renomeada la, ela simplesmente cai
+fora da cascata e a consulta segue para a proxima — nao quebra nada, mas
+a escala pode vir pior do que precisava.
+
+Se a primeira quadra que voce consultar responder com 1:5.000.000 num
+estado que TEM levantamento (PR, SC, MG), vale conferir os nomes em:
+  https://geoinfo.dados.embrapa.br/geoserver/ows?service=WFS&version=1.0.0&request=GetCapabilities
+Eles ficam todos juntos na lista SOLO_CAMADAS, no topo da secao de solo
+do ndvi-proxy.py.
+
+
+AINDA FALTA APAGAR O test_runtime.js
+------------------------------------
+Continua pendente das vezes passadas (o upload do GitHub nao apaga
+arquivo, so adiciona e substitui). Hoje ele passa porque se auto-pula
+quando o jsdom nao esta instalado, entao nao esta mais atrapalhando o
+veredito — mas segue sendo teste morto.
 
 
 ANTES DA PROXIMA VEZ
 --------------------
-Duplo clique em  Conferir antes de publicar.command  na pasta do projeto
-(~/Desktop/Code/Agracta). Ele ja esta verde para esta leva: 16 suites,
-sintaxe limpa, cache v107 -> v108.
+Duplo clique em  Conferir antes de publicar.command.
+
+Nesta leva os testes novos passam (53 verificacoes no test_solo.js, 36 no
+test_solo_proxy.py) e a sintaxe esta limpa.
+
+TRES SUITES JA ESTAVAM VERMELHAS ANTES DESTA LEVA e continuam:
+  test_clima_chip.js     (_climaMapCoord nao definido)
+  test_coord_estacao.js  (_coordPlausivel nao e funcao)
+  test_mapa_padrao.js    (1 verificacao sobre alerta de GPS)
+Conferi: falham igual no codigo antigo, sem as mudancas desta leva. Nao
+sao desta entrega — mas vao segurar o veredito em NAO SUBA ate serem
+arrumadas. Vale uma leva so para elas.

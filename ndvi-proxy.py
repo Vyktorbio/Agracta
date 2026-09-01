@@ -21,6 +21,8 @@ Endpoints (uso interno do app):
   GET /dates?bbox=w,s,e,n&from=YYYY-MM-DD&to=YYYY-MM-DD
   GET /index?index=NDVI|NDRE|GNDVI&date=YYYY-MM-DD&bbox=w,s,e,n&width=1024
   GET /stats?index=NDVI&from=YYYY-MM-DD&to=YYYY-MM-DD&geom=<GeoJSON urlencoded>
+  GET /solo?lat=..&lng=..            (classe de solo no ponto — Embrapa GeoInfo)
+  GET /solo?geom=<GeoJSON urlencoded> (unidades sob a quadra, com % de area de cada)
 """
 import json, os, time, urllib.request, urllib.parse, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -567,6 +569,275 @@ def do_clima_history(mac, date, hora=None):
         "time": None,
     }
 
+# ---------------------------------------------------------------- Solo (Embrapa GeoInfo / SiBCS)
+# Classificacao pedologica oficial a partir da geometria que o app ja conhece.
+#
+# Duas decisoes que valem explicacao:
+#
+# 1) A escala NAO e uniforme no Brasil. O mapa nacional da Embrapa e 1:5.000.000 —
+#    serve para dizer a regiao, nao para caracterizar um talhao. Levantamento de
+#    1:250.000 so existe em alguns estados. Por isso a consulta e uma CASCATA: tenta
+#    a camada de melhor escala que cobre o ponto e so entao cai para a nacional. A
+#    resposta sempre carrega a escala REAL daquela camada, para a ficha poder avisar
+#    quando o dado e grosseiro demais. Mentir a escala aqui seria pior que nao ter o dado.
+#
+# 2) Consultamos por BBOX, nao por CQL_FILTER. O filtro CQL exigiria saber o nome do
+#    campo de geometria de cada levantamento (the_geom / geom / shape — varia), e o
+#    nome do campo da classe tambem varia. Pedindo por bbox (parametro padrao do WFS,
+#    sem nome de campo) e resolvendo a geometria aqui dentro, a consulta funciona sem
+#    depender do schema de cada camada. WFS 1.0.0 porque nele o bbox e lon,lat —
+#    no 1.1.0 o EPSG:4326 inverte para lat,lon e a consulta silenciosamente erra o lugar.
+GEOINFO_WFS = "https://geoinfo.dados.embrapa.br/geoserver/ows"
+SOLO_TTL = 30 * 24 * 3600          # solo nao muda; so o catalogo muda, e raramente
+SOLO_AMOSTRAS = 40                 # grade 40x40 para estimar % de area por unidade
+
+# As 13 ordens do SiBCS. Usadas para extrair a ordem do nome completo da unidade
+# ("LATOSSOLO VERMELHO Eutroferrico" -> "Latossolo") e para colorir a legenda no app.
+SOLO_ORDENS = ["Argissolo", "Cambissolo", "Chernossolo", "Espodossolo", "Gleissolo",
+               "Latossolo", "Luvissolo", "Neossolo", "Nitossolo", "Organossolo",
+               "Planossolo", "Plintossolo", "Vertissolo"]
+
+# Catalogo, do levantamento mais detalhado para o mais grosseiro. `bbox` e so um
+# pre-filtro barato (evita bater na camada do Parana para um ponto no Ceara); quem
+# decide de verdade e o WFS. Camada sem bbox e sempre tentada.
+# ATENCAO: confira os typeName contra o GetCapabilities antes de confiar —
+#   https://geoinfo.dados.embrapa.br/geoserver/ows?service=WFS&version=1.0.0&request=GetCapabilities
+# Uma camada renomeada no servidor apenas cai fora da cascata (o proxy segue para a
+# proxima); nao derruba a consulta.
+SOLO_CAMADAS = [
+    {"typeName": "geonode:parana_solos_20201105",
+     "titulo": "Mapa de solos do estado do Parana", "escala": 250000, "sibcs": "2006",
+     "bbox": (-54.7, -26.8, -48.0, -22.4)},
+    {"typeName": "geonode:lev_sc_estado_solos_lat_long_wgs84",
+     "titulo": "Mapa de solos do estado de Santa Catarina", "escala": 250000, "sibcs": "1999",
+     "bbox": (-53.9, -29.5, -48.3, -25.9)},
+    {"typeName": "geonode:lev_mg_estado_solos_lat_long_wgs84_vt",
+     "titulo": "Mapa de solos do estado de Minas Gerais", "escala": 500000, "sibcs": "1999",
+     "bbox": (-51.1, -22.9, -39.8, -14.2)},
+    {"typeName": "geonode:solos_amazonia",
+     "titulo": "Classificacao dos solos do Bioma Amazonia", "escala": 1000000, "sibcs": "2006",
+     "bbox": (-74.0, -12.0, -44.0, 5.3)},
+    {"typeName": "geonode:class_solo_semiarido_2022",
+     "titulo": "Classificacao dos solos do Semiarido Brasileiro", "escala": 1000000, "sibcs": "2013",
+     "bbox": (-47.0, -18.0, -35.0, -2.5)},
+    {"typeName": "geonode:brasil_solos_5m_20201104",
+     "titulo": "Mapa de solos do Brasil", "escala": 5000000, "sibcs": "2006",
+     "bbox": None},
+]
+
+# Nomes de campo candidatos, em ordem de preferencia. Cada levantamento batiza o seu
+# de um jeito; o que nao casar cai na heuristica de _solo_classe_de().
+SOLO_CAMPOS_CLASSE = ["legenda", "classe", "sibcs", "descricao", "desc_", "unidade",
+                      "ordem", "solo", "nome", "label", "leg", "tipo_solo", "classe_sol"]
+SOLO_CAMPOS_SIGLA = ["sigla", "simbolo", "cod", "codigo", "unidade_ma", "um", "id_leg"]
+
+_solo_cache = {}   # chave -> {"ts": epoch, "val": resposta}
+
+def _solo_norm(s):
+    """Minusculas sem acento — so para casar nome de campo e nome de ordem."""
+    s = str(s or "").lower()
+    for a, b in (("á","a"),("à","a"),("â","a"),("ã","a"),("é","e"),("ê","e"),("í","i"),
+                 ("ó","o"),("ô","o"),("õ","o"),("ú","u"),("ü","u"),("ç","c")):
+        s = s.replace(a, b)
+    return s
+
+def _solo_ordem_de(txt):
+    """Ordem do SiBCS embutida no nome da unidade. Devolve None se nao reconhecer —
+    inventar uma ordem seria pior que admitir que nao sabemos."""
+    n = _solo_norm(txt)
+    for o in SOLO_ORDENS:
+        if _solo_norm(o) in n:
+            return o
+    return None
+
+def _solo_campo(props, candidatos):
+    """Primeiro campo cujo nome contem um dos candidatos e traz texto util."""
+    if not isinstance(props, dict):
+        return None
+    chaves = {k: _solo_norm(k) for k in props.keys()}
+    for c in candidatos:
+        for k, kn in chaves.items():
+            if c in kn:
+                v = props.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+    return None
+
+def _solo_classe_de(props):
+    """Nome da unidade de mapeamento. Tenta os campos conhecidos; se nenhum casar,
+    procura o texto que contenha uma ordem do SiBCS (funciona mesmo em camada com
+    schema que nunca vimos); em ultimo caso, o maior texto do registro."""
+    v = _solo_campo(props, SOLO_CAMPOS_CLASSE)
+    if v:
+        return v
+    if isinstance(props, dict):
+        textos = [x.strip() for x in props.values() if isinstance(x, str) and x.strip()]
+        for t in textos:
+            if _solo_ordem_de(t):
+                return t
+        if textos:
+            return max(textos, key=len)
+    return None
+
+def _solo_aneis(geom):
+    """GeoJSON Polygon/MultiPolygon -> lista de aneis [[(lon,lat),...], ...].
+    Buracos entram como aneis normais: a regra par-impar do ray casting ja os trata."""
+    if not isinstance(geom, dict):
+        return []
+    t, c = geom.get("type"), geom.get("coordinates")
+    aneis = []
+    try:
+        if t == "Polygon":
+            for anel in c:
+                aneis.append([(float(p[0]), float(p[1])) for p in anel])
+        elif t == "MultiPolygon":
+            for poly in c:
+                for anel in poly:
+                    aneis.append([(float(p[0]), float(p[1])) for p in anel])
+    except Exception:
+        return []
+    return aneis
+
+def _solo_contem(aneis, lon, lat):
+    """Ray casting par-impar sobre todos os aneis."""
+    dentro = False
+    for anel in aneis:
+        n = len(anel)
+        if n < 3:
+            continue
+        j = n - 1
+        for i in range(n):
+            xi, yi = anel[i]
+            xj, yj = anel[j]
+            if ((yi > lat) != (yj > lat)) and \
+               (lon < (xj - xi) * (lat - yi) / ((yj - yi) or 1e-12) + xi):
+                dentro = not dentro
+            j = i
+    return dentro
+
+def _solo_wfs(camada, bbox):
+    """GetFeature por bbox. Devolve [] se a camada nao existir mais ou nao responder —
+    a cascata segue para a proxima em vez de derrubar a consulta inteira."""
+    qs = urllib.parse.urlencode({
+        "service": "WFS", "version": "1.0.0", "request": "GetFeature",
+        "typeName": camada["typeName"], "outputFormat": "application/json",
+        "srsName": "EPSG:4326", "maxFeatures": "60",
+        "bbox": "%.6f,%.6f,%.6f,%.6f" % bbox,
+    })
+    req = urllib.request.Request(GEOINFO_WFS + "?" + qs, headers={"User-Agent": "agracta-app"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        return []
+    return d.get("features") or [] if isinstance(d, dict) else []
+
+def _solo_resposta(camada, props):
+    classe = _solo_classe_de(props)
+    return {
+        "fonte": "embrapa-wfs",
+        "camada": camada["typeName"],
+        "titulo": camada["titulo"],
+        "classe": classe,
+        "ordem": _solo_ordem_de(classe),
+        "sigla": _solo_campo(props, SOLO_CAMPOS_SIGLA),
+        "escala": "1:" + format(camada["escala"], ",d").replace(",", "."),
+        "escalaN": camada["escala"],
+        "sibcs": camada["sibcs"],
+    }
+
+def _solo_bbox_do_poligono(anel):
+    lons = [p[0] for p in anel]
+    lats = [p[1] for p in anel]
+    return (min(lons), min(lats), max(lons), max(lats))
+
+def do_solo(lat=None, lng=None, geometry=None):
+    """Classe de solo no ponto, ou composicao das unidades sob um poligono.
+
+    Com `geometry`, devolve a unidade dominante em `classe` e a lista completa em
+    `unidades` com o percentual de cada uma — e o app avisa quando a quadra esta a
+    cavaleiro de mais de uma unidade, que e justamente o caso em que a media do
+    ensaio mistura solos diferentes."""
+    anel = None
+    if geometry:
+        aneis = _solo_aneis(geometry)
+        if not aneis:
+            raise RuntimeError("SOLO:geometria invalida (esperado Polygon ou MultiPolygon).")
+        anel = aneis[0]
+        w, s, e, n = _solo_bbox_do_poligono(anel)
+        lng, lat = (w + e) / 2.0, (s + n) / 2.0
+    else:
+        if lat is None or lng is None:
+            raise RuntimeError("SOLO:informe lat/lng ou geom.")
+        d = 0.0005                      # ~50 m: bbox minimo, o WFS nao aceita area zero
+        w, s, e, n = lng - d, lat - d, lng + d, lat + d
+
+    chave = "%s|%.4f|%.4f" % ("p" if geometry else "c", lat, lng)
+    hit = _solo_cache.get(chave)
+    if hit and (time.time() - hit["ts"]) < SOLO_TTL:
+        return hit["val"]
+
+    out = {"fonte": "embrapa-wfs", "semCobertura": True,
+           "consultadoEm": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    for camada in SOLO_CAMADAS:
+        cb = camada.get("bbox")
+        if cb and (lng < cb[0] or lng > cb[2] or lat < cb[1] or lat > cb[3]):
+            continue
+        feats = _solo_wfs(camada, (w, s, e, n))
+        if not feats:
+            continue
+
+        # Sem poligono: a unidade que contem o ponto (o bbox traz vizinhas junto).
+        if not anel:
+            achou = None
+            for f in feats:
+                if _solo_contem(_solo_aneis(f.get("geometry")), lng, lat):
+                    achou = f
+                    break
+            if not achou:
+                continue
+            out = _solo_resposta(camada, achou.get("properties"))
+            out["unidades"] = [dict(_solo_resposta(camada, achou.get("properties")), pct=100)]
+            break
+
+        # Com poligono: amostragem em grade. Interseccao exata de poligonos em Python
+        # puro seria muito codigo para ganho nenhum — a unidade pedologica e ordens de
+        # grandeza maior que a quadra, e o que importa e o percentual aproximado.
+        pw, ps, pe, pn = _solo_bbox_do_poligono(anel)
+        cand = [(f, _solo_aneis(f.get("geometry"))) for f in feats]
+        cont, dentro_total = {}, 0
+        for i in range(SOLO_AMOSTRAS):
+            py = ps + (pn - ps) * (i + 0.5) / SOLO_AMOSTRAS
+            for j in range(SOLO_AMOSTRAS):
+                px = pw + (pe - pw) * (j + 0.5) / SOLO_AMOSTRAS
+                if not _solo_contem([anel], px, py):
+                    continue
+                dentro_total += 1
+                for f, aneis_f in cand:
+                    if _solo_contem(aneis_f, px, py):
+                        nome = _solo_classe_de(f.get("properties")) or "(sem nome)"
+                        if nome not in cont:
+                            cont[nome] = {"n": 0, "props": f.get("properties")}
+                        cont[nome]["n"] += 1
+                        break
+        if not dentro_total or not cont:
+            continue
+
+        ordenadas = sorted(cont.items(), key=lambda kv: -kv[1]["n"])
+        unidades = []
+        for nome, info in ordenadas:
+            u = _solo_resposta(camada, info["props"])
+            u["pct"] = int(round(100.0 * info["n"] / dentro_total))
+            unidades.append(u)
+        out = _solo_resposta(camada, ordenadas[0][1]["props"])
+        out["unidades"] = unidades
+        out["metodo"] = "amostragem-grade-%d" % SOLO_AMOSTRAS
+        break
+
+    out["consultadoEm"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _solo_cache[chave] = {"ts": time.time(), "val": out}
+    return out
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -637,6 +908,11 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_stats(q.get("index", "NDVI"), q["from"], q["to"], geometry))
             if u.path == "/point":
                 return self._json(do_point(float(q["lat"]), float(q["lng"]), q["date"]))
+            if u.path == "/solo":
+                geometry = json.loads(q["geom"]) if q.get("geom") else None
+                lat = float(q["lat"]) if q.get("lat") else None
+                lng = float(q["lng"]) if q.get("lng") else None
+                return self._json(do_solo(lat, lng, geometry))
             self._json({"error": "rota desconhecida"}, 404)
         except RuntimeError as e:
             msg = str(e)
@@ -646,6 +922,8 @@ class H(BaseHTTPRequestHandler):
                 self._json({"error": "Sem credencial Ecowitt no servidor (defina ECOWITT_APP_KEY e ECOWITT_API_KEY)."}, 400)
             elif msg.startswith("ECOWITT:"):
                 self._json({"error": "Ecowitt: " + msg[len("ECOWITT:"):]}, 502)
+            elif msg.startswith("SOLO:"):
+                self._json({"error": "Solo: " + msg[len("SOLO:"):]}, 400)
             else:
                 self._json({"error": msg}, 500)
         except urllib.error.HTTPError as e:
