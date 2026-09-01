@@ -1,0 +1,68 @@
+{
+  "_leia": "MODELO DO FORMATO — os numeros aqui sao INVENTADOS, so para mostrar a estrutura. Copie este arquivo para solo-tabelas.json (que o .gitignore mantem fora do repositorio), preencha com a tabela que voce tem licenciada e carregue pelo botao 'Carregar tabelas' na ficha da quadra.",
+  "nome": "Exemplo (numeros ficticios)",
+  "fonte": "Modelo de formato do Agracta — nao e recomendacao agronomica",
+  "versao": "0",
+
+  "_como": {
+    "V2": "saturacao por bases desejada para a cultura. Escolher a cultura na ficha ja preenche a calagem com este valor.",
+    "faixas": "avaliadas em ordem; usa a primeira cujo 'ate' cobre o teor medido. A ultima pode vir sem 'ate' — e o 'acima de tudo'.",
+    "doses": "escolhe a linha da MENOR produtividade que atende a esperada. Acima da ultima linha, usa a ultima e a trilha avisa que extrapolou.",
+    "criterio": "qual campo do laudo classifica a faixa (P, K, Ca, Mg, S, B, Cu, Fe, Mn, Zn). Se omitido, usa o proprio nutriente.",
+    "micro": "aplica quando o teor medido estiver ABAIXO de 'abaixoDe'."
+  },
+
+  "culturas": [
+    {
+      "nome": "Cultura de exemplo",
+      "finalidade": "grao",
+      "V2": 70,
+      "unidadeProdutividade": "t/ha",
+
+      "N": {
+        "unidade": "kg/ha",
+        "plantio": 30,
+        "cobertura": [
+          { "produtividade": 6, "dose": 60 },
+          { "produtividade": 8, "dose": 90 },
+          { "produtividade": 10, "dose": 120 }
+        ]
+      },
+
+      "P2O5": {
+        "criterio": "P",
+        "unidade": "kg/ha",
+        "faixas": [
+          { "ate": 6,  "classe": "muito baixo",
+            "doses": [ { "produtividade": 6, "dose": 90 }, { "produtividade": 8, "dose": 110 }, { "produtividade": 10, "dose": 130 } ] },
+          { "ate": 15, "classe": "baixo",
+            "doses": [ { "produtividade": 6, "dose": 70 }, { "produtividade": 8, "dose": 90 }, { "produtividade": 10, "dose": 110 } ] },
+          { "ate": 40, "classe": "medio",
+            "doses": [ { "produtividade": 6, "dose": 50 }, { "produtividade": 8, "dose": 60 }, { "produtividade": 10, "dose": 80 } ] },
+          { "classe": "alto",
+            "doses": [ { "produtividade": 6, "dose": 20 }, { "produtividade": 8, "dose": 30 }, { "produtividade": 10, "dose": 40 } ] }
+        ]
+      },
+
+      "K2O": {
+        "criterio": "K",
+        "unidade": "kg/ha",
+        "faixas": [
+          { "ate": 0.7, "classe": "muito baixo",
+            "doses": [ { "produtividade": 6, "dose": 80 }, { "produtividade": 8, "dose": 100 }, { "produtividade": 10, "dose": 120 } ] },
+          { "ate": 1.5, "classe": "baixo",
+            "doses": [ { "produtividade": 6, "dose": 60 }, { "produtividade": 8, "dose": 80 }, { "produtividade": 10, "dose": 100 } ] },
+          { "ate": 3.0, "classe": "medio",
+            "doses": [ { "produtividade": 6, "dose": 40 }, { "produtividade": 8, "dose": 55 }, { "produtividade": 10, "dose": 70 } ] },
+          { "classe": "alto",
+            "doses": [ { "produtividade": 6, "dose": 20 }, { "produtividade": 8, "dose": 30 }, { "produtividade": 10, "dose": 40 } ] }
+        ]
+      },
+
+      "micro": [
+        { "nutriente": "Zn", "criterio": "Zn", "abaixoDe": 0.6, "dose": 4, "unidade": "kg/ha" },
+        { "nutriente": "B",  "criterio": "B",  "abaixoDe": 0.21, "dose": 1, "unidade": "kg/ha" }
+      ]
+    }
+  ]
+}

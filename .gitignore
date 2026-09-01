@@ -9,6 +9,9 @@ ecowitt-credenciais.json
 # distribuicao publica, e nao mais uso pessoal do exemplar adquirido.
 solo-tabelas.json
 solo-tabelas-*.json
+# ...mas o MODELO do formato precisa ser versionado: ele nao tem tabela nenhuma,
+# so numeros inventados mostrando a estrutura.
+!modelos/solo-tabelas-exemplo.json
 
 # Segredos / ambiente em geral
 .env
