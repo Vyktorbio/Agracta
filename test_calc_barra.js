@@ -62,20 +62,29 @@ var ctx={
   esc:function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){
         return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]; }); },
   studyTestemunha:function(st){ return (st.tratamentos||[]).filter(function(t){return t.testemunha;}).map(function(t){return t.id;})[0]||null; },
+  isQuadraLab:function(){ return false; },   /* estudo de campo */
+  tratMetodo:function(){ return 'co2'; },
   _currentUserName:function(){ return 'Daria'; }
 };
 ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
 
 var ESTUDO={id:'s1', codigo:'EST-26148',
+  protocolo:{equipamento:'Pulverizador costal pressurizado a CO2', bicos:'4 bicos x 0,5 m',
+             ponta:'XR11002', pressao:'2 bar', volumeCalda:'200'},
   tratamentos:[{id:'T1',produto:'Testemunha',dose:'0',testemunha:true},
                {id:'T2',produto:'Produto A',dose:'1,5 L/ha'}]};
 ctx._calcStudy=function(){ return ESTUDO; };
 
 vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
-  'var CALC_BARRA_EQUIP='+JSON.stringify({tractor:'Trator / barra tratorizada', co2:'Costal pressurizado a CO₂'})+';',
+  'var CALC_BARRA_EQUIP='+JSON.stringify({tractor:'Trator — sider', co2:'Costal pressurizado a CO₂'})+';',
+  'var APLIC_METODOS='+JSON.stringify({tractor:'Trator — sider',co2:'Costal pressurizado a CO₂',drone:'Drone',atomizer:'Atomizador costal motorizado',lab:'Torre de Potter — bancada'})+';',
+  "var _CALC_BARRA_FORA={drone:'drone', atomizer:'atomizador', lab:'Torre de Potter'};",
+  pega('aplicMetodosDe'), pega('aplicMetodoValido'), pega('aplicMetodoDoTexto'),
+  pega('studyMetodo'), pega('_calcBarraMetodo'),
   'var _calcBarra=null, _calcBarraAberta=false;',
+  pega('_parseBicos'), pega('_calcBarraEquip'), pega('_calcBarraProto'),
   pega('_calcBarraPadrao'), pega('_calcBarraChave'), pega('_calcBarraEstado'),
   pega('_calcBarraSalvar'), pega('_calcBarraReset'), pega('_calcBarraLinhas'),
   pega('calcBarraTaxa'), pega('calcBarraOperacao'),
@@ -88,13 +97,19 @@ vm.runInContext([
 /* Monta a barra do zero em cada cenário. As leituras chegam como STRING porque é
    assim que saem de um <input>: se o motor deixasse de aceitar texto, a tela pararia
    de calibrar e nenhum teste que passasse número perceberia. */
+/* O padrao agora NASCE EM BRANCO no que e medida (velocidade, e bicos/espacamento
+   quando o protocolo nao diz). Os cenarios abaixo declaram o que precisam, que e como
+   o operador declara na tela. */
 function barra(extra){
   ctx._calcBarra=null; store={};
   var b=ctx._calcBarraEstado();
+  b.bicos=4; b.espacamento=0.5; b.velocidade=5; b.larguraManual=0;
   for(var k in extra) b[k]=extra[k];
   return b;
 }
 function coletas(vals){ return vals.map(function(v){ return [String(v),String(v),String(v)]; }); }
+/* calcBarraCfg le o estado corrente, entao o cenario precisa estar instalado. */
+function cfgSider(b){ ctx._calcBarra=b; return ctx.calcBarraCfg(); }
 
 /* ============================================================================== */
 console.log('\n--- GOLDEN TEST: 4 bicos × 0,5 m, 5 km/h, 500 mL em 30 s, meta 240 L/ha ---');
@@ -241,13 +256,127 @@ perto(res.barra.taxaRealLHa,240,1e-9,'e reporta a taxa real medida');
 eq(vm.runInContext('('+pega('aplicacaoMemoriaResumo')+')', ctx)({memoriaCalculo:memSem}).barra,null,
    'sem calibração, o resumo diz null em vez de fingir que houve');
 
+console.log('\n--- A maquina vem do protocolo, nao do teclado ---');
+/* A planilha de protocolo tem UMA celula para bicos e espacamento, entao ela chega
+   como texto livre. Pedir de novo o que ela ja diz e o que "poluir a interface"
+   significa na pratica. */
+eq(JSON.stringify(ctx._parseBicos('4 bicos x 0,5 m')),'{"bicos":4,"espacamento":0.5}','"4 bicos x 0,5 m"');
+eq(JSON.stringify(ctx._parseBicos('6 bicos espacados 50 cm')),'{"bicos":6,"espacamento":0.5}','cm vira m');
+eq(JSON.stringify(ctx._parseBicos('4 x 0,5 m')),'{"bicos":4,"espacamento":0.5}','sem a palavra "bico"');
+eq(ctx._parseBicos('4').bicos,4,'so a contagem');
+eq(ctx._parseBicos('4').espacamento,null,'sem espacamento declarado nao se inventa um');
+eq(ctx._parseBicos('0,5 m').espacamento,0.5,'so o espacamento');
+eq(ctx._parseBicos('0,5 m').bicos,null,'0,5 nao vira "0 bicos" nem "5 bicos"');
+eq(ctx._parseBicos(''),null,'celula vazia nao vira configuracao');
+eq(ctx._parseBicos('a definir'),null,'texto sem numero nao vira configuracao');
+eq(JSON.stringify(ctx._parseBicos('11 bicos, 0,5 m, ponta XR11002')),'{"bicos":11,"espacamento":0.5}',
+   'o numero do modelo da ponta nao contamina a leitura');
+
+eq(ctx._calcBarraEquip('Pulverizador costal pressurizado a CO2').chave,'co2','costal a CO2');
+eq(ctx._calcBarraEquip('Trator — sider').chave,'tractor','sider fica: o calculo dele e o usual');
+eq(ctx._calcBarraEquip('Trator com barra').chave,'tractor','"trator" no protocolo e o sider');
+/* Drone, atomizador e Potter o motor calcula, mas esta tela nao expoe. Trata-los como
+   barra daria largura e taxa plausiveis para maquina que nao tem barra. */
+eq(ctx._calcBarraEquip('Drone DJI Agras T25P').chave,null,'drone nao vira barra em silencio');
+eq(ctx._calcBarraEquip('Drone DJI Agras T25P').naoSuportado,'drone','e a tela diz por que');
+eq(ctx._calcBarraEquip('Torre de Potter').naoSuportado,'Torre de Potter','bancada idem');
+/* O metodo DECLARADO manda sobre a frase do protocolo: um estudo declarado de drone
+   nao pode continuar sendo calibrado como barra porque a planilha escreveu
+   "pulverizador". */
+var GUARDAM=ESTUDO.metodoAplicacao;
+ESTUDO.metodoAplicacao='drone'; ctx._calcBarra=null; store={};
+eq(ctx._calcBarraProto().naoSuportado,'drone','o metodo declarado vence o texto do protocolo');
+ESTUDO.metodoAplicacao=GUARDAM; ctx._calcBarra=null; store={};
+eq(ctx._calcBarraEquip('Costal CO2 sobre o sider').chave,'co2','costal vence quando as duas palavras aparecem');
+
+ctx._calcBarra=null; store={};
+var bproto=ctx._calcBarraEstado();
+eq(bproto.equipamento,'co2','equipamento herdado do protocolo');
+eq(bproto.bicos,4,'nº de bicos herdado');
+eq(bproto.espacamento,0.5,'espacamento herdado');
+eq(ctx._calcBarraProto().ponta,'XR11002','ponta lida do protocolo');
+eq(ctx._calcBarraProto().pressao,'2 bar','pressao lida do protocolo');
+
+console.log('\n--- O que e MEDIDA nasce em branco, nao com um palpite ---');
+/* Um "5 km/h" chumbado que ninguem corrigiu nao deixa a tela vazia: produz uma taxa
+   real plausivel e FALSA. Em branco, o aviso diz o que falta. */
+eq(bproto.velocidade,'','velocidade nasce em branco — ninguem sabe a velocidade do trator');
+eq(bproto.tempoS,30,'tempo de coleta 30 s permanece: e convencao de metodo, nao medida');
+var oproto=ctx.calcBarraOperacao(bproto);
+eq(oproto.actualRate,null,'sem velocidade nao existe taxa real');
+ck(ctx.calcBarraAvisos(oproto,bproto).some(function(a){ return /velocidade/i.test(a.t); }),'e o aviso cobra a velocidade');
+
+/* Estudo sem protocolo importado: nada e inventado. */
+var GUARDA=ESTUDO.protocolo; ESTUDO.protocolo=null;
+ctx._calcBarra=null; store={};
+var bsem=ctx._calcBarraEstado();
+eq(bsem.bicos,'','sem protocolo, nº de bicos em branco — nao "4"');
+eq(bsem.espacamento,'','sem protocolo, espacamento em branco — nao "0,5"');
+eq(ctx.calcBarraOperacao(bsem).actualRate,null,'e nenhuma taxa e produzida do nada');
+ctx._calcBarraAberta=true;
+ck(/Informe o nº de bicos/.test(ctx.calcBarraHtml()),'a planilha de coleta nem abre sem bicos declarados');
+ctx._calcBarraAberta=false;
+ESTUDO.protocolo=GUARDA; ctx._calcBarra=null; store={};
+
+console.log('\n--- Ponta e pressao entram no registro sem virar campo ---');
+/* "4 L/min" sem dizer com que ponta e a que pressao nao se reproduz. */
+barra({taxaAlvo:'240', leiturasBico:coletas([500,500,500,500])});
+var cfgP=ctx._calcConfigAtual();
+eq(cfgP.barra.equipamento,'co2','o registro grava a maquina');
+eq(cfgP.barra.equipamentoRotulo,'Costal pressurizado a CO₂','com o rotulo por extenso');
+eq(cfgP.barra.ponta,'XR11002','ponta gravada na memoria');
+eq(cfgP.barra.pressao,'2 bar','pressao gravada na memoria');
+ck(/XR11002/.test(ctx.calcMemoriaTexto(ctx.calcMemoria(ESTUDO,cfgP))),'e sai no texto copiado');
+
+console.log('\n--- O sider nao se coleta bico a bico ---');
+/* O costal a CO2 e o pulverizador de pesquisa: cada bico vai para um copo. O sider e a
+   maquina usual de campo — ninguem coleta bico a bico nela. O calculo dela e o de
+   sempre, e a barra inteira se confere em tres coletas. */
+var bs=barra({equipamento:'tractor', taxaAlvo:'240', metodo:'individual',
+              leiturasBarra:['2000','2000','2000']});
+eq(ctx._calcBarraMetodo(bs),'barra','no sider o metodo nao e escolha: e consequencia da maquina');
+var os=ctx.calcBarraOperacao(bs);
+eq(os.calibration.requiredInputs,3,'tres coletas da barra, nao 12');
+perto(os.measuredFlow,4,1e-9,'vazao medida 4,000 L/min');
+perto(os.actualRate,240,1e-9,'e o calculo usual entrega os mesmos 240 L/ha');
+perto(os.requiredFlow,4,1e-9,'com a vazao requerida que se ajusta na maquina');
+eq(cfgSider(bs).metodo,'barra inteira','o registro grava o metodo real, nao o que estava guardado');
+eq(cfgSider(bs).equipamentoRotulo,'Trator — sider','e a maquina certa');
+
+/* O MESMO numero com dois significados. Entre bicos o CV mede uniformidade da faixa;
+   entre repeticoes mede repetibilidade da maquina. Chamar os dois de "CV das coletas"
+   faria o sider parecer uniforme sem que ninguem tivesse medido uniformidade. */
+var bsCv=barra({equipamento:'tractor', taxaAlvo:'240', leiturasBarra:['1600','2000','2400']});
+var osCv=ctx.calcBarraOperacao(bsCv);
+perto(osCv.calibration.cv,20,1e-9,'CV de 20% entre as tres coletas');
+var aCv=ctx.calcBarraAvisos(osCv,bsCv);
+ck(aCv.some(function(a){ return a.k==='erro' && /nao repetiu|não repetiu/.test(a.t); }),
+   'no sider o CV alto fala de repetibilidade da maquina');
+ck(!aCv.some(function(a){ return /faixa/.test(a.t); }),
+   'e NAO fala de uniformidade de faixa, que ninguem mediu');
+var bcCv=barra({taxaAlvo:'240', leiturasBico:coletas([300,500,500,700])});
+ck(ctx.calcBarraAvisos(ctx.calcBarraOperacao(bcCv),bcCv).some(function(a){ return /faixa/.test(a.t); }),
+   'no costal, sim: ai a faixa foi medida bico a bico');
+
+ctx._calcBarraAberta=true;
+ctx._calcBarra=bs;
+var hs=ctx.calcBarraHtml();
+ck(!/Método de coleta/.test(hs),'no sider nao se oferece a escolha de metodo');
+ck(/CV entre repetições/.test(hs),'e o rotulo do CV diz o que ele mede');
+ctx._calcBarra=bcCv;
+ck(/CV entre bicos/.test(ctx.calcBarraHtml()),'no costal o rotulo muda junto');
+ctx._calcBarraAberta=false;
+
 console.log('\n--- A tela desenha sem quebrar nos dois métodos ---');
 ctx._calcBarraAberta=true;
 barra({taxaAlvo:'240', leiturasBico:coletas([500,500,500,500])});
 var h=ctx.calcBarraHtml();
 ck(/calcBarraOut/.test(h),'o HTML aberto tem onde pendurar a saída');
 ck(/_calcBarraLeitura\(3,2,/.test(h),'a matriz liga a última célula do último bico');
+ck(/Método de coleta/.test(h),'no costal, o método de coleta é escolha');
 ck(/Meta por bico/.test(h),'a meta por bico aparece antes da coleta, que é quando serve');
+ck(/Do protocolo/.test(h),'a tela diz de onde veio o que ja esta preenchido');
+ck(/XR11002/.test(h),'inclusive a ponta, que nao e campo mas e contexto');
 barra({taxaAlvo:'240', metodo:'barra', leiturasBarra:['2000','2000','2000']});
 ck(/_calcBarraLeitura\(0,2,/.test(ctx.calcBarraHtml()),'barra inteira liga as três coletas');
 ctx._calcBarraAberta=false;

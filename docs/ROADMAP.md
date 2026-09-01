@@ -122,11 +122,11 @@ relatório reconstrói a versão usada.
 ## 7. Fase 2 — Motor universal de aplicação · **P0**
 
 - **7.1** Motor sem HTML: `calcularAplicacao(config)`.
-- **7.2** `tratamento.aplicacao = {metodo, taxa, volumeMorto, sobraTecnica, configuracao}` — T1 e T2 drone, T3 trator, T4 Torre de Potter no mesmo estudo.
-- **7.3** `equipmentProfiles` — Drone DJI Agras T25, Barra CO₂, Atomizador, Sider 600 L, Torre Potter 01. Cada perfil guarda sua calibração habitual.
+- **7.2** ✅ (01/09/2026) `tratamento.aplicacao.metodo` — T1 e T2 drone, T3 trator no mesmo estudo. Os cinco métodos do catálogo, com a **regra de categoria**: bancada só tem Potter, campo não tem Potter.
+- **7.3** ✅ (01/09/2026) Perfil de equipamento **aprendido**, sem tela de cadastro: toda calibração válida gravada vira a configuração habitual daquela máquina, e a calculadora oferece reusá-la, datada. **Devolve configuração, nunca leitura** — pré-preencher coleta seria forjar medição.
 - **7.4** A aplicação **herda** do estudo: tratamentos, doses, parcelas, área, repetições, equipamentos. O operador não redigita.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
-- **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ barra/CO₂ na tela (01/09/2026); drone e Torre de Potter pendentes.
+- **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
 - **7.8** Laboratório vira **submodo** do mesmo motor: PPM, preparação inversa, campo→bancada, ajuste de i.a., série de doses, testemunha automática, alertas de pipetagem/massa mínima.
 - **7.9** A tela mostra o essencial e esconde o resto atrás de *"Ver cálculo completo"*.
 
@@ -139,12 +139,21 @@ estudo do Agracta.
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
 > - ✅ **7.4** parcialmente: já pré-preenche dose/volume dos tratamentos do estudo.
 > - ✅ **7.6** feito (01/09/2026): `aplicacao.memoriaCalculo` grava entradas, resultado por componente, avisos, autoria e a versão do motor. Regravar preserva o anterior em `memoriasAnteriores`. Coberto por `test_memoria_calculo.js` (63 verificações, com golden test).
-> - ✅ **7.7** feito (01/09/2026): **barra e calibração na calculadora do Agracta.**
+> - ✅ **7.7** feito (01/09/2026): **barra e calibração na calculadora.**
 >   Seção própria dentro de `openCalcAplicacao`, fechada por padrão — a calculadora de
 >   calda continua sendo o assunto principal da tela. Coleta bico a bico ou da barra
 >   inteira, e devolve largura de trabalho, vazão requerida, **coleta esperada por bico**
 >   (o número que se leva para o campo), vazão medida, taxa real em L/ha, desvio,
->   velocidade ideal e CV entre bicos. Tolerância de taxa e limite de CV são editáveis,
+>   velocidade ideal e CV entre bicos.
+>   **Duas máquinas, e elas não fazem a mesma coisa.** O costal a CO₂ é o pulverizador
+>   de pesquisa: cada bico vai para um copo, e daí sai o CV **entre bicos**, que é a
+>   uniformidade da faixa. O sider é a máquina usual de campo — ninguém coleta bico a
+>   bico nela; o cálculo é o de sempre, e a barra inteira se confere em três coletas,
+>   cujo CV mede **repetibilidade da máquina**, não uniformidade. O mesmo número com
+>   dois significados, e a tela nomeia cada um pelo que ele é.
+>   A máquina vem do protocolo do estudo (equipamento, nº de bicos,
+>   espaçamento, ponta, pressão), não do teclado; o que é **medida** (velocidade) nasce
+>   em branco, porque default chumbado produz taxa plausível e falsa. Tolerância de taxa e limite de CV são editáveis,
 >   porque o critério é do protocolo e não do programa. Toda a aritmética vem de
 >   `vendor/aplicacao-core.js` (`equipmentOperation`); aqui não se recalcula nada.
 >   A calibração entra na `memoriaCalculo` da aplicação em campo próprio, com leituras
@@ -159,9 +168,41 @@ estudo do Agracta.
 >   método por tratamento na tela (7.2) e os perfis de equipamento salvos (7.3) — a
 >   calibração da barra já está exposta, drone e Torre de Potter ainda não.
 >
+> - ✅ **7.2 e 7.3** feitos (01/09/2026). Duas regras governam o método na tela:
+>   **(1) categoria** — numa quadra de laboratório o único método é a Torre de Potter;
+>   numa quadra de campo a Potter não existe. Oferecer sider numa bancada é a §7-bis
+>   vista do outro lado. **(2) divergência é que é informação** — enquanto todos os
+>   tratamentos usam o método do estudo, ele não vira tinta em lugar nenhum; quando um
+>   diverge, todos passam a mostrar o seu. É a regra do `volsVariam` levada ao método.
+>   O override é **declarado**: sem a chave "métodos diferentes por tratamento", um
+>   método guardado num tratamento numa edição anterior não volta a valer sozinho.
+>   Coberto por `test_metodo_aplicacao.js` (47 verificações).
+>
 > Ou seja: **os Pacotes 1 e 2 da §31 estão essencialmente prontos.** O trabalho da
 > Release B é o Pacote 3 (aplicação do estudo) mais persistência, método por tratamento
 > e perfis de equipamento.
+
+## 7-bis. Revisão da categoria LABORATÓRIO · ✅ **feito (01/09/2026)**
+
+A quadra de laboratório (`data[qid].tipo==='lab'`) já está bem separada em vários
+pontos — o cartão da quadra troca cultura/DAP/BBCH pela especialidade, a programação
+de avaliações conta em HAT em vez de "a cada X dias", a dose pode ser em ppm, e a
+calculadora que abre é a de bancada. Mas **ainda sobra campo dentro do laboratório**.
+Auditoria de 01/09/2026:
+
+| Onde | O que vaza | Por que é errado |
+|---|---|---|
+| `openStudyEditV2`, passo 4 | `1ª aplicação` · `Nº aplicações` · `Intervalo (dias)` — sem guarda de lab | Mais abaixo o mesmo formulário já chama de **"Dia do tratamento"**. Ficam duas noções concorrentes de quando o tratamento aconteceu, no mesmo formulário. |
+| `openStudyEditV2`, "Desenho do ensaio" | `Como os tratamentos estão no campo`, com a opção **Faixas** e o texto sobre solo, declive e bordadura | Não existe faixa numa bancada. O aviso inteiro fala de gradiente de terreno. |
+| Editor de aplicação e de avaliação | `Estádio BBCH no momento` | Guardado **por acidente**: só não aparece porque `getBBCHList(studyCultura(...))` devolve vazio quando não há cultura. Uma quadra convertida de campo para lab que tenha mantido `data[qid].cultura` volta a mostrar fenologia de planta num ensaio de placa. |
+
+**Resolvido**, pelo padrão que a seção de avaliações já seguia: **ramificar por
+`isQuadraLab`, não esconder por ausência de dado.** A linha de aplicações some na
+bancada (com uma frase dizendo que o momento é o "Dia do tratamento"), faixas nem é
+oferecido — e um estudo de bancada que tenha herdado `desenho:'faixas'` de uma edição
+antiga é **corrigido ao salvar**, porque o campo sumiu da tela mas o dado errado não
+some sozinho. O BBCH passou por `bbchListDaQuadra(qid, cultura)`, que pergunta pela
+quadra; nenhum ponto da tela chama `getBBCHList` direto, e há teste cobrando isso.
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 

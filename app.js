@@ -5697,6 +5697,15 @@ var BBCH_MAP = {
   Object.keys(add).forEach(function(sc){ add[sc].forEach(function(n){ if(!BBCH_MAP[n]) BBCH_MAP[n]=sc; }); });
 })();
 
+/* §7-bis. O BBCH estava guardado POR ACIDENTE: só não aparecia no laboratório porque
+   getBBCHList vinha vazio sem cultura. Uma quadra convertida de campo que tivesse
+   mantido data[qid].cultura voltava a mostrar fenologia de planta num ensaio de placa.
+   Guarda acidental é guarda que volta a falhar quando o dado reaparece — então a
+   pergunta passa a ser explícita: existe planta aqui? */
+function bbchListDaQuadra(qid, cultura){
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return null;
+  return getBBCHList(cultura);
+}
 function getBBCHList(cultura){
   var k=BBCH_MAP[cultura];
   return k?BBCH[k]:null;
@@ -5813,6 +5822,11 @@ function newStudy(){
        valer. `faixas[]` amarra tratamento -> quadra; o treço entra como a
        "repetição" de sempre na grade de notas (T1R1, T1R2...), então o motor
        estatístico não muda. Quem decide se há análise é estudoTemReplicacao(). */
+    /* Método de aplicação (§7.2). Vazio = deriva do protocolo/categoria; ver
+       studyMetodo(). metodoPorTratamento é a DECLARAÇÃO de que os tratamentos
+       divergem — sem ela, um método guardado num tratamento não volta a valer. */
+    metodoAplicacao:'',
+    metodoPorTratamento:false,
     desenho:'dbc',        /* dbc | faixas */
     faixas:[],            /* [{tratId, qid, areaHa}] — só em desenho 'faixas' */
     testemunha:'',
@@ -5931,6 +5945,8 @@ function normalizeStudy(s){
      que os tratamentos já escreveram — se todos concordam, é ela. Assim um
      estudo velho todo em mL/ha não passa a se anunciar como L/ha. A unidade do
      estudo é só o padrão: dose que traz a própria unidade continua mandando. */
+  if(!APLIC_METODOS[s.metodoAplicacao]) s.metodoAplicacao='';
+  s.metodoPorTratamento=!!s.metodoPorTratamento;
   /* Desenho: estudo antigo não declarou nada e é DBC, que é o que sempre foi. */
   if(s.desenho!=='faixas' && s.desenho!=='dbc') s.desenho='dbc';
   if(!Array.isArray(s.faixas)) s.faixas=[];
@@ -6732,6 +6748,16 @@ function _seFaixasLer(){
   });
   workingStudy.faixas=out;
 }
+/* Ligar/desligar a chave muda a ESTRUTURA da lista (aparecem ou somem os selects),
+   então redesenha — depois de ler o que já estava digitado, para não perder nada. */
+function _seMetodoSync(){
+  try{ syncTratInputs(); }catch(e){}
+  var sel=document.getElementById('seMetodo');
+  if(sel && workingStudy && APLIC_METODOS[sel.value]) workingStudy.metodoAplicacao=sel.value;
+  var ck=document.getElementById('seMetodoPorTrat');
+  if(ck && workingStudy) workingStudy.metodoPorTratamento=!!ck.checked;
+  renderStudyEditModal();
+}
 function _seDesenhoSync(){
   var sel=document.getElementById('seDesenho'); if(!sel) return;
   var faixas=(sel.value==='faixas');
@@ -6794,7 +6820,9 @@ function _calcCss(){
    '.calc-barrares{font-size:10px;letter-spacing:0;color:#7f8e84;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
    '.calc-barrahint{font-size:10.5px;color:#7f8e84;line-height:1.5;margin:6px 0}'+
    '.calc-barrainp{padding:5px 6px;font-size:12px;text-align:right}'+
-   '.calc-ok{color:#7ca88a;font-size:10px;margin-top:4px}';
+   '.calc-ok{color:#7ca88a;font-size:10px;margin-top:4px}'+
+   '.calc-perfil{background:rgba(120,170,215,.14);border:1px solid rgba(120,170,215,.34);color:#a8cbe8;border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit}'+
+   '.calc-met{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8fb6d8;background:rgba(120,170,215,.13);border:1px solid rgba(120,170,215,.3);border-radius:5px;padding:1px 5px;margin-left:4px}';
   document.head.appendChild(s);
 }
 function openCalcAplicacao(qid,sid){
@@ -7322,12 +7350,18 @@ function _calcCompute(){
   var bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1);
   var cap=_calcNum(_calcVal('calcCap'));
   function f(v,p){ return BC.formatBR(v,p==null?2:p); }
+  var _metVariam=false;
+  try{ _metVariam=studyMetodosVariam(study,(_calcSel||{}).qid); }catch(e){}
   var html='';
+  if(_metVariam) html+='<div class="calc-warn" style="margin-bottom:6px">• Este estudo usa mais de um método de aplicação. Cada tratamento mostra o seu; a calibração da barra abaixo vale só para os de barra.</div>';
   (study.tratamentos||[]).forEach(function(t){
     var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
     var vol=t.volume?_calcNum(t.volume):volDef;
-    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
+    /* §7.2 — o método só entra no cartão quando os tratamentos DIVERGEM. Repetir
+       "costal CO₂" em cinco cartões idênticos não informa nada; a diferença, sim. */
+    var _met=(_metVariam && typeof tratMetodo==='function')?tratMetodo(study,(_calcSel||{}).qid,t):null;
+    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+(_met?' <span class="calc-met">'+esc(APLIC_METODOS_CURTO[_met]||_met)+'</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
     if(_isWitness && !(dval>0)){
       html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>não preparar</b><span>Produto / calda</span><b>0 / 0</b></div><div class="calc-warn" style="color:#7ca88a">Testemunha sem aplicação: nenhuma calda é necessária.</div></div>';
       return;
@@ -7387,6 +7421,169 @@ function _calcCopy(){
   else { try{ navigator.clipboard.writeText(txt); alert('Copiado.'); }catch(e){ alert(txt); } }
 }
 
+
+/* ===================== MÉTODO DE APLICAÇÃO (roadmap §7.2) =========================
+   Até aqui o método era uma frase solta no protocolo ("Pulverizador costal a CO2")
+   que só a seção de barra lia. Um estudo que aplica T1 e T2 de drone e T3 de trator
+   não tinha como dizer isso — e o cálculo de todos saía como se fossem a mesma
+   máquina.
+
+   Duas regras governam este catálogo:
+
+   1. CATEGORIA. Bancada e campo não compartilham método. Numa quadra de laboratório
+      o único método é a Torre de Potter; numa quadra de campo a Potter não existe.
+      Oferecer sider numa bancada é o mesmo erro que oferecer BBCH num ensaio de
+      placa — é a §7-bis vista do outro lado.
+
+   2. DIVERGÊNCIA É QUE É INFORMAÇÃO. Enquanto todos os tratamentos usam o método do
+      estudo, o método não vira tinta em lugar nenhum: repetir cinco vezes o mesmo
+      rótulo não informa nada. Quando um tratamento diverge, TODOS passam a mostrar o
+      seu, porque aí a diferença é o dado. É a mesma regra que o campo de volume da
+      calculadora já seguia (volsVariam), levada ao método. ============================ */
+
+var APLIC_METODOS={
+  tractor:'Trator — sider',
+  co2:'Costal pressurizado a CO₂',
+  drone:'Drone',
+  atomizer:'Atomizador costal motorizado',
+  lab:'Torre de Potter — bancada'
+};
+/* Rótulo curto, para caber no cartão do tratamento sem empurrar o resto. */
+var APLIC_METODOS_CURTO={tractor:'sider', co2:'costal CO₂', drone:'drone', atomizer:'atomizador', lab:'Potter'};
+
+/* A regra de categoria, num lugar só. */
+/* A ORDEM importa: o primeiro da lista é o que vale quando ninguém declarou nada. Num
+   app de P&D o pulverizador de pesquisa é o costal a CO₂ — é nele que se coleta bico a
+   bico e é ele que aparece na maioria dos protocolos. Começar pelo sider faria o
+   estudo sem protocolo nascer sem a planilha de coleta, calado. */
+function aplicMetodosDe(qid){
+  return (typeof isQuadraLab==='function' && isQuadraLab(qid)) ? ['lab'] : ['co2','tractor','drone','atomizer'];
+}
+function aplicMetodoValido(qid, m){ return aplicMetodosDe(qid).indexOf(m)>=0; }
+
+/* O que a planilha escreveu por extenso -> chave do método. Devolve null quando não
+   dá para dizer: chutar aqui faria um estudo de drone ser calculado como barra. */
+function aplicMetodoDoTexto(txt){
+  var s=String(txt||'').toLowerCase();
+  if(!s.trim()) return null;
+  if(/drone|agras|vant|aeronave/.test(s))    return 'drone';
+  if(/potter|torre|bancada|laborat/.test(s)) return 'lab';
+  if(/atomizad/.test(s))                     return 'atomizer';
+  /* CO2 antes de sider: "costal CO2 sobre o sider" é costal. */
+  if(/co\s*2|co₂|costal|pressuriz/.test(s))  return 'co2';
+  if(/sider|trator|tratoriz|barra/.test(s))  return 'tractor';
+  return null;
+}
+
+/* Método do ESTUDO. Ordem: o que foi declarado > o que o protocolo escreveu > o
+   primeiro válido da categoria. A quadra de laboratório não negocia: é Potter. */
+function studyMetodo(study, qid){
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return 'lab';
+  if(study && aplicMetodoValido(qid, study.metodoAplicacao)) return study.metodoAplicacao;
+  var doProto=aplicMetodoDoTexto((study&&study.protocolo&&study.protocolo.equipamento)||'');
+  if(doProto && aplicMetodoValido(qid, doProto)) return doProto;
+  return aplicMetodosDe(qid)[0];
+}
+
+/* Método de UM tratamento. O override só vale se tiver sido declarado — ligar a chave
+   "métodos diferentes por tratamento" é a declaração. Sem ela, um método guardado numa
+   edição anterior não pode voltar a valer sozinho. */
+function tratMetodo(study, qid, t){
+  var padrao=studyMetodo(study, qid);
+  if(!study || !study.metodoPorTratamento) return padrao;
+  var m=t&&t.aplicacao&&t.aplicacao.metodo;
+  return aplicMetodoValido(qid, m)?m:padrao;
+}
+
+/* Os tratamentos divergem entre si? É esta pergunta, e não a chave ligada, que decide
+   se o método aparece na tela. Quem ligou a chave e deixou tudo igual não ganha cinco
+   rótulos repetidos. */
+function studyMetodosVariam(study, qid){
+  if(!study || !study.metodoPorTratamento) return false;
+  var vistos={}, n=0;
+  (study.tratamentos||[]).forEach(function(t){
+    var m=tratMetodo(study, qid, t);
+    if(!vistos[m]){ vistos[m]=1; n++; }
+  });
+  return n>1;
+}
+
+
+/* ===================== PERFIS DE EQUIPAMENTO (roadmap §7.3) =======================
+   Nenhuma tela de cadastro. O perfil é APRENDIDO: toda calibração válida gravada numa
+   aplicação vira a configuração habitual daquele equipamento, e o estudo seguinte com
+   a mesma máquina recebe a oferta de reusá-la.
+
+   UMA LINHA DURA: o perfil devolve CONFIGURAÇÃO — bicos, espaçamento, largura, tempo
+   de coleta, critérios. NUNCA as leituras. Pré-preencher coleta seria forjar medição:
+   apareceriam na tela números que ninguém coletou, com cara de que alguém coletou. A
+   configuração se herda; a medida se faz.
+
+   E a oferta é datada e explícita. "Usar a configuração de 12/08" é uma escolha
+   registrada; um preenchimento silencioso seria o mesmo default chumbado que já se
+   corrigiu uma vez nesta calculadora. ============================================= */
+
+var PERFIL_EQUIP_KEY='agracta-perfil-equip-v1';
+
+function _perfisEquip(){
+  try{ return JSON.parse(localStorage.getItem(PERFIL_EQUIP_KEY)||'{}')||{}; }catch(e){ return {}; }
+}
+function perfilEquipDe(metodo){
+  var p=_perfisEquip()[metodo];
+  return (p&&typeof p==='object')?p:null;
+}
+/* Grava o perfil a partir de uma calibração VÁLIDA já registrada. Só configuração. */
+function perfilEquipGravar(barra){
+  if(!barra || !barra.equipamento) return null;
+  var todos=_perfisEquip();
+  todos[barra.equipamento]={
+    bicos:barra.bicos, espacamentoM:barra.espacamentoM, larguraManualM:barra.larguraManualM,
+    velocidadeKmH:barra.velocidadeKmH, tempoColetaS:barra.tempoColetaS,
+    metodo:barra.metodo, toleranciaPct:barra.toleranciaPct, cvLimitePct:barra.cvLimitePct,
+    ponta:barra.ponta||null, pressao:barra.pressao||null,
+    /* Guardado só para a oferta poder se datar e o operador julgar se ainda vale. */
+    em:Date.now(),
+    cvPct:((barra.resultado||{}).cvPct!=null?barra.resultado.cvPct:null)
+  };
+  try{ localStorage.setItem(PERFIL_EQUIP_KEY, JSON.stringify(todos)); }catch(e){}
+  return todos[barra.equipamento];
+}
+/* Aplica o perfil na barra corrente. As LEITURAS ficam onde estão — intocadas. */
+function perfilEquipUsar(){
+  var b=_calcBarraEstado();
+  var p=perfilEquipDe((b.equipamento==='tractor')?'tractor':'co2');
+  if(!p){ if(typeof _stxToast==='function') _stxToast('Sem calibração anterior deste equipamento.'); return; }
+  if(p.bicos!=null) b.bicos=p.bicos;
+  if(p.espacamentoM!=null) b.espacamento=p.espacamentoM;
+  if(p.larguraManualM!=null) b.larguraManual=p.larguraManualM;
+  if(p.velocidadeKmH!=null) b.velocidade=p.velocidadeKmH;
+  if(p.tempoColetaS!=null) b.tempoS=p.tempoColetaS;
+  if(p.toleranciaPct!=null) b.tolerancia=p.toleranciaPct;
+  if(p.cvLimitePct!=null) b.cvLimite=p.cvLimitePct;
+  _calcBarraSalvar();
+  _calcBarraSync();
+  if(typeof _stxToast==='function') _stxToast('✓ Configuração da última calibração');
+}
+/* A oferta. Só aparece quando há perfil E a coleta ainda não começou: oferecer
+   configuração no meio de uma calibração em andamento seria convidar a apagá-la. */
+function perfilEquipOfertaHtml(b){
+  b=b||_calcBarraEstado();
+  var p=perfilEquipDe((b.equipamento==='tractor')?'tractor':'co2');
+  if(!p) return '';
+  var op=calcBarraOperacao(b);
+  if(op && op.calibration && (op.calibration.completed||0)>0) return '';
+  var quando=''; try{ quando=new Date(p.em).toLocaleDateString('pt-BR'); }catch(e){}
+  var det=[];
+  if(p.bicos!=null) det.push(p.bicos+' bico(s)');
+  if(p.espacamentoM) det.push(String(p.espacamentoM).replace('.',',')+' m');
+  if(p.velocidadeKmH) det.push(String(p.velocidadeKmH).replace('.',',')+' km/h');
+  if(p.tempoColetaS) det.push(p.tempoColetaS+' s');
+  return '<div class="calc-barrahint">Última calibração deste equipamento'+(quando?(' em '+esc(quando)):'')+
+         (det.length?(' — '+esc(det.join(' · '))):'')+
+         ' <button type="button" class="calc-perfil" onclick="perfilEquipUsar()">usar esta configuração</button>'+
+         '<br>Só a configuração. As coletas continuam sendo medidas agora.</div>';
+}
+
 /* ===================== BARRA E CALIBRAÇÃO ========================================
    A calculadora acima responde metade da pergunta: quanta calda preparar e quanto
    produto pôr em cada frasco. A outra metade é a que o auditor faz depois — a
@@ -7412,15 +7609,108 @@ function _calcCopy(){
    cálculo da aplicação, junto com a calda. Calda sem a calibração da máquina que a
    aplicou é meio registro. ======================================================== */
 
-var CALC_BARRA_EQUIP={tractor:'Trator / barra tratorizada', co2:'Costal pressurizado a CO₂'};
+/* Duas maquinas, e elas nao fazem a mesma coisa.
+     - COSTAL A CO2: e o pulverizador de pesquisa. Cada bico e coletado num copo, e
+       daquilo sai o CV ENTRE BICOS, que e a uniformidade da faixa.
+     - SIDER: e a maquina usual de campo. Nao se coleta bico a bico nela; o calculo
+       que interessa e o de sempre — taxa x velocidade x largura da vazao requerida,
+       e a barra inteira se confere em tres coletas quando se quer confirmar.
+   A aritmetica do motor e a mesma para as duas (equipmentOperation trata "tractor" e
+   "co2" pelo mesmo caminho). O que muda e o que a tela OFERECE e como nomeia o
+   resultado — e e ai que mora a diferenca que importa no campo. */
+var CALC_BARRA_EQUIP={tractor:'Trator — sider', co2:'Costal pressurizado a CO₂'};
+
+/* Coleta bico a bico so existe no costal. No sider a leitura e sempre da barra
+   inteira, entao o metodo nao e escolha: e consequencia da maquina. */
+function _calcBarraMetodo(b){
+  b=b||_calcBarraEstado();
+  if(b.equipamento==='tractor') return 'barra';
+  return (b.metodo==='barra')?'barra':'individual';
+}
 var _calcBarra=null;         /* configuração corrente, por estudo */
 /* Nasce fechada: quem abre a calculadora quer a calda. A calibração é ato separado,
    feito na máquina, e não deve empurrar os tratamentos para fora da tela. */
 var _calcBarraAberta=false;
 
+/* Le "4 bicos x 0,5 m", "6 bicos espacados 50 cm", "4 x 0,5 m" ou so "4".
+   A planilha de protocolo tem UMA celula para bicos e espacamento, entao ela chega
+   como texto livre. O que for lido aparece na tela e continua editavel: derivar sem
+   mostrar a derivacao seria trocar um campo errado por um numero errado invisivel. */
+function _parseBicos(str){
+  var s=String(str||'').toLowerCase().replace(/\s+/g,' ');
+  if(!s.trim()) return null;
+  var out={bicos:null, espacamento:null};
+  /* Espacamento e o numero que vem com unidade de comprimento. */
+  var e=s.match(/(\d+(?:[.,]\d+)?)\s*(cm|mm|m)(?![a-z])/);
+  if(e){
+    var v=parseFloat(e[1].replace(',','.'));
+    if(isFinite(v)&&v>0) out.espacamento=(e[2]==='cm')?v/100:((e[2]==='mm')?v/1000:v);
+  }
+  /* Contagem: o numero colado em "bico"; senao, o primeiro inteiro que nao faz
+     parte do espacamento ja lido. */
+  var b=s.match(/(\d+)\s*bico/);
+  if(b) out.bicos=parseInt(b[1],10);
+  else{
+    var span=e?[e.index,e.index+e[0].length]:null;
+    var re=/\d+(?:[.,]\d+)?/g, m;
+    while((m=re.exec(s))){
+      if(span && m.index>=span[0] && m.index<span[1]) continue;
+      if(/[.,]/.test(m[0])) continue;          /* decimal solto nao e contagem de bico */
+      var n=parseInt(m[0],10);
+      if(n>0&&n<=200){ out.bicos=n; break; }
+      break;
+    }
+  }
+  return (out.bicos||out.espacamento)?out:null;
+}
+
+/* A CLASSIFICACAO e do catalogo de metodos (aplicMetodoDoTexto); aqui so se decide o
+   que ESTA TELA sabe calibrar. Sider e costal passam; drone, atomizador e Potter viram
+   aviso nominal — calcular calado uma largura de barra para uma maquina que nao tem
+   barra daria numero plausivel e sem uso. */
+var _CALC_BARRA_FORA={drone:'drone', atomizer:'atomizador', lab:'Torre de Potter'};
+function _calcBarraEquip(txt){
+  var m=aplicMetodoDoTexto(txt);
+  if(m==='tractor'||m==='co2') return {chave:m};
+  if(m) return {chave:null, naoSuportado:_CALC_BARRA_FORA[m]};
+  return {chave:null};
+}
+
+/* O que o protocolo do estudo ja sabe sobre a maquina. A planilha foi preenchida uma
+   vez; pedir de novo na calculadora seria o operador redigitar o que o app tem. */
+function _calcBarraProto(){
+  var st=null; try{ st=(typeof _calcStudy==='function')?_calcStudy():null; }catch(e){}
+  var p=(st&&st.protocolo)||{};
+  /* O metodo DECLARADO manda sobre a frase do protocolo: se o operador disse que o
+     estudo e de drone, a barra nao pode continuar achando que e trator porque a
+     planilha escreveu "pulverizador". */
+  var qid=null; try{ qid=(typeof _calcSel!=='undefined'&&_calcSel)?_calcSel.qid:null; }catch(e){}
+  var decl=(st&&typeof studyMetodo==='function')?studyMetodo(st, qid):null;
+  var eq=decl?((decl==='tractor'||decl==='co2')?{chave:decl}:{chave:null, naoSuportado:_CALC_BARRA_FORA[decl]})
+            :_calcBarraEquip(p.equipamento);
+  var bic=_parseBicos(p.bicos);
+  return {
+    equipamento:eq.chave, naoSuportado:eq.naoSuportado||null,
+    equipamentoTexto:(p.equipamento||''),
+    bicos:(bic&&bic.bicos)||null, espacamento:(bic&&bic.espacamento)||null,
+    /* Ponta e pressao nao entram na aritmetica, mas sao contexto obrigatorio de um
+       registro de calibracao: "4 L/min" sem dizer com que ponta e a que pressao nao
+       se reproduz. Vao para a memoria sem virar campo na tela. */
+    ponta:(p.ponta||''), pressao:(p.pressao||''), distanciaBico:(p.distanciaBico||'')
+  };
+}
+
+/* Nada de valor inventado. Um "4 bicos, 5 km/h" que ninguem corrigiu nao deixa a tela
+   vazia — produz uma taxa real PLAUSIVEL e falsa, que e muito pior. Sem o dado, o
+   campo nasce em branco e o aviso diz o que falta. O tempo de coleta e a excecao:
+   30 s e convencao de metodo, nao medida de maquina nenhuma. */
 function _calcBarraPadrao(){
-  return {equipamento:'tractor', bicos:4, espacamento:0.5, larguraManual:0,
-          velocidade:5, tempoS:30, metodo:'individual', taxaAlvo:'',
+  var pr=_calcBarraProto();
+  return {equipamento:(pr.equipamento||'co2'),
+          bicos:(pr.bicos==null?'':pr.bicos),
+          espacamento:(pr.espacamento==null?'':pr.espacamento),
+          larguraManual:'', velocidade:'', tempoS:30,
+          metodo:'individual', taxaAlvo:'',
           tolerancia:5, cvLimite:10, leiturasBico:[], leiturasBarra:['','','']};
 }
 
@@ -7479,7 +7769,7 @@ function calcBarraTaxa(b){
 function calcBarraOperacao(b){
   var AC=window.AplicacaoCore; if(!AC) return null;
   b=b||_calcBarraEstado();
-  var eq=(b.equipamento==='co2')?'co2':'tractor';
+  var eq=(b.equipamento==='tractor')?'tractor':'co2';
   var st={equipment:eq, prep:{targetRate:calcBarraTaxa(b)}};
   st[eq]={
     nozzles:Math.max(1,Math.round(_calcNum(b.bicos))||1),
@@ -7487,7 +7777,7 @@ function calcBarraOperacao(b){
     manualWidth:_calcNum(b.larguraManual),
     speed:_calcNum(b.velocidade),
     sampleSeconds:_calcNum(b.tempoS),
-    method:(b.metodo==='barra')?'whole':'individual',
+    method:(_calcBarraMetodo(b)==='barra')?'whole':'individual',
     calibration:{individual:_calcBarraLinhas(b), whole:(b.leiturasBarra||['','',''])}
   };
   try{ return AC.equipmentOperation(st); }catch(e){ return null; }
@@ -7518,9 +7808,17 @@ function calcBarraAvisos(op, b){
   else if(!(cal.totalFlow>0))
     A.push({k:'erro', t:'Todas as leituras são zero: não há vazão medida. Verifique pressão, bomba e registro antes de aplicar.'});
 
+  /* O CV entre BICOS e o CV entre REPETICOES sao o mesmo calculo medindo coisas
+     diferentes. Dizer "CV das coletas" nos dois casos faria o sider parecer uniforme
+     quando ninguem mediu uniformidade nenhuma nele. */
+  var porBico=(_calcBarraMetodo(b)!=='barra');
   if(cal.valid && cal.cv!=null){
-    if(cal.cv<=cvLim) A.push({k:'ok', t:'CV de '+f(cal.cv,1)+'% entre as coletas (limite '+f(cvLim,1)+'%).'});
-    else A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'%, acima do limite de '+f(cvLim,1)+'%. A média pode fechar e a faixa não: parte da parcela recebe mais que a dose e parte recebe menos. Revise bicos, pressão e coleta.'});
+    if(cal.cv<=cvLim)
+      A.push({k:'ok', t:'CV de '+f(cal.cv,1)+'% '+(porBico?'entre os bicos':'entre as três coletas da barra')+' (limite '+f(cvLim,1)+'%).'});
+    else if(porBico)
+      A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'% entre os bicos, acima do limite de '+f(cvLim,1)+'%. A média pode fechar e a faixa não: parte da parcela recebe mais que a dose e parte recebe menos. Revise bicos, pressão e coleta.'});
+    else
+      A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'% entre as três coletas, acima do limite de '+f(cvLim,1)+'%. A máquina não repetiu a mesma vazão de uma passada para a outra. Revise pressão, bomba e a própria coleta antes de confiar na taxa.'});
   }
   if(op.deviationPct!=null){
     var ab=Math.abs(op.deviationPct);
@@ -7571,8 +7869,15 @@ function calcBarraSaidaHtml(){
     '<span>Taxa real</span><b>'+ou(op.actualRate, f(op.actualRate,1)+' L/ha')+'</b>'+
     '<span>Desvio da meta</span><b>'+ou(op.deviationPct, f(op.deviationPct,1)+' %')+'</b>'+
     '<span>Velocidade ideal</span><b>'+ou(op.idealSpeed, f(op.idealSpeed,2)+' km/h')+'</b>'+
-    '<span>CV entre coletas</span><b>'+ou(cal.cv, f(cal.cv,1)+' %')+'</b>'+
+    '<span>'+(_calcBarraMetodo(b)==='barra'?'CV entre repetições':'CV entre bicos')+'</span><b>'+ou(cal.cv, f(cal.cv,1)+' %')+'</b>'+
   '</div>';
+  /* O mesmo número com dois significados. Entre bicos, o CV mede UNIFORMIDADE DA
+     FAIXA: alto quer dizer que parte da parcela recebe mais dose que a outra. Entre
+     repetições da barra inteira, mede REPETIBILIDADE da máquina: alto quer dizer que a
+     mesma máquina entregou diferente a cada passada. Chamar os dois de "CV das
+     coletas" faria o sider parecer uniforme quando ninguém mediu uniformidade. */
+  if(_calcBarraMetodo(b)==='barra' && cal.cv!=null)
+    h+='<div class="calc-barrahint">Este CV é entre as três coletas da barra inteira — mede a repetibilidade da máquina, <b>não</b> a uniformidade entre bicos. Para uniformidade, é preciso coletar bico a bico.</div>';
   if(op.idealSpeed!=null && isFinite(op.idealSpeed))
     h+='<div class="calc-barrahint">Velocidade ideal = a que entrega a taxa-alvo COM A VAZÃO QUE A MÁQUINA TEM. É o ajuste que não exige trocar bico.</div>';
   calcBarraAvisos(op,b).forEach(function(a){
@@ -7602,9 +7907,12 @@ function calcBarraHtml(){
     '<div class="calc-f"><span class="calc-lab">Equipamento</span>'+
       '<select class="calc-sel" onchange="_calcBarraCampo(\'equipamento\',this.value,1)">'+
       Object.keys(CALC_BARRA_EQUIP).map(function(k){ return opt(k,CALC_BARRA_EQUIP[k],b.equipamento); }).join('')+'</select></div>'+
-    '<div class="calc-f"><span class="calc-lab">Método de coleta</span>'+
+    /* O sider não escolhe método: nele não se coleta bico a bico. Oferecer a escolha
+       seria oferecer uma medição que ninguém faz nessa máquina. */
+    (b.equipamento==='tractor' ? '' :
+      '<div class="calc-f"><span class="calc-lab">Método de coleta</span>'+
       '<select class="calc-sel" onchange="_calcBarraCampo(\'metodo\',this.value,1)">'+
-      opt('individual','Bico a bico',b.metodo)+opt('barra','Barra inteira',b.metodo)+'</select></div>'+
+      opt('individual','Bico a bico',_calcBarraMetodo(b))+opt('barra','Barra inteira',_calcBarraMetodo(b))+'</select></div>')+
     campo('Nº de bicos','bicos','1','min="1"',true)+
     campo('Espaçamento entre bicos (m)','espacamento','0.01','')+
     campo('Largura da barra (m)','larguraManual','0.01','placeholder="0 = bicos × espaçamento"')+
@@ -7615,12 +7923,32 @@ function calcBarraHtml(){
     campo('Limite de CV (%)','cvLimite','0.5','')+
   '</div>';
 
+  /* De onde veio o que já está preenchido. Mesma regra do "✓ Parcela do protocolo"
+     lá em cima: derivar é bom, derivar sem dizer de onde é que não. */
+  var pr=_calcBarraProto(), proc=[];
+  if(pr.equipamentoTexto) proc.push(pr.equipamentoTexto);
+  if(pr.bicos!=null) proc.push(pr.bicos+' bico(s)');
+  if(pr.espacamento!=null) proc.push(f(pr.espacamento,2)+' m entre bicos');
+  if(pr.ponta) proc.push('ponta '+pr.ponta);
+  if(pr.pressao) proc.push(pr.pressao);
+  if(proc.length) h+='<div class="calc-barrahint">✓ Do protocolo: '+esc(proc.join(' · '))+' — confira e ajuste se preciso.</div>';
+  try{ h+=perfilEquipOfertaHtml(b); }catch(e){}
+  if(pr.naoSuportado) h+='<div class="calc-warn">• O protocolo diz '+esc(pr.naoSuportado)+', que este motor calcula mas esta tela ainda não expõe. O que está aqui é barra/costal — não use estes números para aquele equipamento.</div>';
+
   var alvo=(op&&op.requiredCollectionPerNozzleMl!=null&&isFinite(op.requiredCollectionPerNozzleMl))
     ? ('Meta por bico: '+f(op.requiredCollectionPerNozzleMl,1)+' mL em '+f(_calcNum(b.tempoS),0)+' s.')
     : 'Preencha bicos, espaçamento, velocidade e taxa-alvo para saber quanto cada bico deveria coletar.';
   h+='<div class="calc-barrahint">'+esc(alvo)+' Anote o que cada bico realmente coletou — inclusive o zero.</div>';
 
-  if(b.metodo==='barra'){
+  /* Sem nº de bicos declarado não se desenha a matriz. Uma linha solta convidaria a
+     medir "o bico", e a coleta entraria como se a barra tivesse um bico só. */
+  if(_calcBarraMetodo(b)!=='barra' && !(_calcNum(b.bicos)>0)){
+    h+='<div class="calc-warn">• Informe o nº de bicos para abrir a planilha de coleta.</div>'+
+       '<div id="calcBarraOut">'+calcBarraSaidaHtml()+'</div>';
+    return h;
+  }
+
+  if(_calcBarraMetodo(b)==='barra'){
     h+='<div class="calc-mix"><div class="calc-mixh" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))">'+
        '<span>Barra inteira</span><span>1ª (mL)</span><span>2ª (mL)</span><span>3ª (mL)</span></div>'+
        '<div class="calc-mixr" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))"><span>Coleta</span>'+
@@ -7673,7 +8001,7 @@ function _calcBarraCampo(chave, valor, estrutural){
 }
 function _calcBarraLeitura(i, j, valor){
   var b=_calcBarraEstado();
-  if(b.metodo==='barra'){
+  if(_calcBarraMetodo(b)==='barra'){
     if(!Array.isArray(b.leiturasBarra)) b.leiturasBarra=['','',''];
     b.leiturasBarra[j]=valor;
   }else{
@@ -7686,7 +8014,7 @@ function _calcBarraLeitura(i, j, valor){
   _calcBarraOutSync();
   /* A média do bico fica na mesma linha da leitura: recalcular sem repintá-la
      deixaria um número velho ao lado do valor novo. */
-  if(b.metodo!=='barra'){
+  if(_calcBarraMetodo(b)!=='barra'){
     var op=calcBarraOperacao(b), AC=window.AplicacaoCore;
     var med=op&&op.calibration&&(op.calibration.means||[])[i];
     var linha=document.querySelectorAll('#calcBarraBox .calc-mix .calc-mixr')[i];
@@ -7706,16 +8034,21 @@ function calcBarraCfg(){
   var cal=op.calibration;
   return {
     motor:'AplicacaoCore', motorVersao:(AC&&AC.VERSION)||'?',
-    equipamento:b.equipamento, equipamentoRotulo:(CALC_BARRA_EQUIP[b.equipamento]||b.equipamento),
+    equipamento:((b.equipamento==='tractor')?'tractor':'co2'),
+    equipamentoRotulo:(CALC_BARRA_EQUIP[b.equipamento]||CALC_BARRA_EQUIP.co2),
     bicos:Math.max(1,Math.round(_calcNum(b.bicos))||1),
     espacamentoM:_calcNum(b.espacamento),
     larguraManualM:_calcNum(b.larguraManual),
     velocidadeKmH:_calcNum(b.velocidade),
     tempoColetaS:_calcNum(b.tempoS),
-    metodo:(b.metodo==='barra')?'barra inteira':'bico a bico',
+    metodo:(_calcBarraMetodo(b)==='barra')?'barra inteira':'bico a bico',
+    /* Ponta e pressao nao entram em conta nenhuma, mas "4 L/min" sem dizer com que
+       ponta e a que pressao nao se reproduz. Vem do protocolo, nao vira campo. */
+    ponta:(_calcBarraProto().ponta||null),
+    pressao:(_calcBarraProto().pressao||null),
     taxaAlvoLHa:calcBarraTaxa(b),
     toleranciaPct:_calcBarraTol(b), cvLimitePct:_calcBarraCv(b),
-    leituras:(b.metodo==='barra')?{barra:(b.leiturasBarra||[]).slice(0,3)}:{bicos:_calcBarraLinhas(b)},
+    leituras:(_calcBarraMetodo(b)==='barra')?{barra:(b.leiturasBarra||[]).slice(0,3)}:{bicos:_calcBarraLinhas(b)},
     resultado:{
       larguraM:op.width, velocidadeKmH:op.speed,
       vazaoMedidaLMin:op.measuredFlow, vazaoRequeridaLMin:op.requiredFlow,
@@ -7756,6 +8089,8 @@ function _calcConfigAtual(){
     volumeMortoMl:_calcNum(_calcVal('calcDead')),
     frascos:Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1),
     capacidadeFrascoL:_calcNum(_calcVal('calcCap')),
+    /* A quadra vai junto porque o metodo depende da categoria dela (campo/bancada). */
+    qid:((typeof _calcSel!=='undefined'&&_calcSel)?_calcSel.qid:null),
     /* A barra entra na configuracao so quando foi de fato calibrada; sem leituras
        validas calcBarraCfg devolve null. O typeof guarda quem consome esta funcao
        fora do app inteiro (os testes extraem funcao por funcao). */
@@ -7794,6 +8129,10 @@ function calcMemoria(study, cfg){
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
     var vol=t.volume?_calcNum(t.volume):cfg.volumeCaldaLHa;
     var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
+             /* O metodo vai gravado SEMPRE, divirja ou nao. Na tela ele so aparece
+                quando informa; no registro, um calculo sem dizer com que maquina
+                seria irreproduzivel tres anos depois. */
+             metodo:((typeof tratMetodo==='function')?tratMetodo(study,(cfg.qid||null),t):null),
              doseUnidade:dunit, volumeCaldaLHa:vol, testemunha:testemunha,
              componentes:[], veiculo:null, caldaTotalL:null, avisos:[]};
 
@@ -7862,7 +8201,8 @@ function calcMemoriaTexto(mem){
     L.push('');
     L.push('BARRA E CALIBRAÇÃO — '+b.equipamentoRotulo+' · '+b.metodo);
     L.push(b.bicos+' bico(s) · espaçamento '+f(b.espacamentoM,2)+' m · largura '+f(r.larguraM,2)+
-           ' m · '+f(b.velocidadeKmH,1)+' km/h · coleta de '+f(b.tempoColetaS,0)+' s');
+           ' m · '+f(b.velocidadeKmH,1)+' km/h · coleta de '+f(b.tempoColetaS,0)+' s'+
+           (b.ponta?(' · ponta '+b.ponta):'')+(b.pressao?(' · '+b.pressao):''));
     L.push('Taxa-alvo '+f(b.taxaAlvoLHa,0)+' L/ha · vazão requerida '+f(r.vazaoRequeridaLMin,3)+
            ' L/min · coleta esperada por bico '+f(r.coletaEsperadaPorBicoMl,1)+' mL');
     L.push('Vazão medida '+f(r.vazaoMedidaLMin,3)+' L/min · taxa real '+f(r.taxaRealLHa,1)+
@@ -7920,6 +8260,9 @@ function calcGravarMemoria(){
   }
   ap.memoriaCalculo=mem;
   ap._ts=Date.now();
+  /* §7.3 — o perfil se APRENDE aqui, de uma calibração que já foi julgada boa o
+     bastante para ser gravada. Só a configuração; as leituras nunca. */
+  try{ if(mem.barra) perfilEquipGravar(mem.barra); }catch(e){}
 
   try{ save(); }catch(e){}
   try{
@@ -8971,7 +9314,7 @@ function openStudyDetail(qid,sid){
   study=normalizeStudy(study);
 
   var studyCrop=studyCultura(study,q), studyVar=studyVariedade(study,q);
-  var bbchList=getBBCHList(studyCrop);
+  var bbchList=bbchListDaQuadra(qid, studyCrop);
   var ne=nextEventV2(study);
 
   /* Estudo finalizado é somente-leitura: o que escreve some da tela, e o que
@@ -9696,7 +10039,7 @@ function _seTrocaContagem(){
 function renderStudyEditModal(){
   var s=workingStudy;
   var q=data[curV]||{};
-  var bbchList=getBBCHList(studyCultura(s,q));
+  var bbchList=bbchListDaQuadra(curV, studyCultura(s,q));
 
   var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()" aria-label="Fechar formulário do estudo" title="Fechar">×</button></div>';
 
@@ -9768,11 +10111,19 @@ function renderStudyEditModal(){
      ((_q0.cultura||_q0.cultivar||_q0.plantio)?(' — hoje: '+[_q0.cultura,_q0.cultivar,_q0.plantio].filter(Boolean).join(' · ')):'')+
      '. Preencha aqui só quando este estudo for diferente da quadra, ou quando a quadra estiver vazia.</div>';
 
-  h+='<div class="se-row">';
-  h+='<div class="se-field"><label>1ª aplicação</label><input type="date" id="seDataInicio" value="'+esc(s.dataInicio)+'"></div>';
-  h+='<div class="se-field"><label>Nº aplicações</label><input type="number" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
-  h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
-  h+='</div>';
+  /* §7-bis. Na bancada isto não existe: o momento do tratamento é o "Dia do
+     tratamento" logo abaixo, e deixar os dois no mesmo formulário criava duas
+     noções concorrentes de quando o tratamento aconteceu. Os campos somem em vez
+     de virem vazios — saveStudyV2 lê com if(x), então some é preserva. */
+  if(isQuadraLab(curV)){
+    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Bancada: o momento do tratamento é o <b>Dia do tratamento</b>, na programação de avaliações abaixo. Não há série de aplicações com intervalo em dias.</div>';
+  }else{
+    h+='<div class="se-row">';
+    h+='<div class="se-field"><label>1ª aplicação</label><input type="date" id="seDataInicio" value="'+esc(s.dataInicio)+'"></div>';
+    h+='<div class="se-field"><label>Nº aplicações</label><input type="number" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
+    h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
+    h+='</div>';
+  }
   h+='</div><div class="se-step'+(studyEditStep===4?' is-active':'')+'" data-step="4">';
 
   /* Quadra de laboratório troca "Preparo de calda" por "Preparo no laboratório":
@@ -9857,7 +10208,10 @@ function renderStudyEditModal(){
 
   /* Desenho experimental. Em faixas cada tratamento ocupa uma área própria,
      possivelmente em outra quadra — e aí a "repetição" passa a ser o treço. */
-  var _des=(s.desenho==='faixas')?'faixas':'dbc';
+  /* §7-bis. Faixa é arranjo de TERRENO: o aviso inteiro fala de solo, declive e
+     bordadura. Não existe faixa numa bancada, então nem a pergunta se faz. */
+  var _des=(isQuadraLab(curV)?'dbc':((s.desenho==='faixas')?'faixas':'dbc'));
+  if(!isQuadraLab(curV)){
   h+='<div class="se-section-title">Desenho do ensaio</div>';
   h+='<div class="se-field"><label>Como os tratamentos estão no campo</label><select id="seDesenho" onchange="_seDesenhoSync()">'+
      '<option value="dbc"'+(_des==='dbc'?' selected':'')+'>Blocos ao acaso, tudo nesta quadra</option>'+
@@ -9877,11 +10231,31 @@ function renderStudyEditModal(){
   h+='<div style="font-size:11px;color:#9a8;margin:4px 0 8px">A quadra de cada tratamento é onde ele foi aplicado. A área serve para o relatório — não entra na estatística de severidade e mortalidade, que são proporções.</div>';
   h+='</div>';
   window._seQuadraOpts=_qOpts;
+  }else{ window._seQuadraOpts=[]; }
 
   h+='<div class="se-section-title">Tratamentos</div>';
   var _lblRep=(_des==='faixas')?'Treços por faixa (blocos)':'Repetições por tratamento';
   h+='<div class="se-field"><label id="seRepsLbl">'+_lblRep+'</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
+
+  /* §7.2 — MÉTODO DE APLICAÇÃO.
+     Uma linha quando o estudo é de uma máquina só, que é o caso normal. A chave
+     "métodos diferentes por tratamento" é a DECLARAÇÃO do override: sem ela, os
+     selects por tratamento nem existem, e um método guardado numa edição anterior
+     não volta a valer sozinho.
+     Na bancada não há escolha nenhuma — Torre de Potter é o único método, então
+     vira frase e não campo. */
+  var _mets=aplicMetodosDe(curV), _metStudy=studyMetodo(s, curV);
+  h+='<div class="se-section-title">Método de aplicação</div>';
+  if(_mets.length===1){
+    h+='<div class="e-hint" style="margin:2px 0 9px">Bancada: <b>'+esc(APLIC_METODOS[_mets[0]])+'</b>. É o único método do laboratório — sider e drone são de campo e não aparecem aqui.</div>';
+  }else{
+    h+='<div class="se-field"><label>Como o estudo é aplicado</label><select id="seMetodo" onchange="_seMetodoSync()">'+
+       _mets.map(function(k){ return '<option value="'+esc(k)+'"'+(k===_metStudy?' selected':'')+'>'+esc(APLIC_METODOS[k])+'</option>'; }).join('')+
+       '</select></div>';
+    h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seMetodoPorTrat" '+(s.metodoPorTratamento?'checked':'')+' onchange="_seMetodoSync()" style="width:auto"> Métodos diferentes por tratamento</label>'+
+       '<div class="e-hint">Ligue só quando for verdade — ex.: T1 e T2 de drone, T3 de trator no mesmo estudo. Desligado, todos usam o método acima e a tela não repete o rótulo em cada tratamento.</div></div>';
+  }
 
   h+='<div class="e-hint" style="margin:2px 0 9px">Marque <b>Testemunha</b> nos tratamentos-controle abaixo (pode mais de uma: ex. testemunha + padrão). A <b>1ª marcada</b> é a base do % de controle e da AUDPC — use a sem aplicação.</div>';
   h+='<div id="seTratList">';
@@ -9898,6 +10272,13 @@ function renderStudyEditModal(){
          continua significando água, então nada muda em estudo antigo. */
       h+='<input type="text" placeholder="Veículo — completa a calda (vazio = Água)" data-f="veiculo" list="seVeiculos" value="'+esc(t.veiculo||'')+'">';
       h+='<input type="text" placeholder="Observações (opcional)" data-f="obs" value="'+esc(t.obs)+'">';
+      /* O select por tratamento só existe depois de declarado. Cinco selects
+         mostrando o mesmo valor não seriam configuração: seriam ruído. */
+      if(s.metodoPorTratamento && _mets.length>1){
+        h+='<select data-f="metodo" style="margin-top:4px">'+
+           _mets.map(function(k){ return '<option value="'+esc(k)+'"'+(k===tratMetodo(s,curV,t)?' selected':'')+'>'+esc(APLIC_METODOS[k])+'</option>'; }).join('')+
+           '</select>';
+      }
       h+='<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#a8c4b0;text-transform:none;letter-spacing:0;margin-top:3px;cursor:pointer"><input type="checkbox" data-f="testemunha" '+(t.testemunha?'checked':'')+' style="width:auto"> Testemunha / check</label>';
       h+='</div>';
     });
@@ -10039,7 +10420,12 @@ function syncStudyInputs(){
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
   x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
   x=el("seLabDens"); if(x) workingStudy.labDensidade=x.value.trim();
+  x=el("seMetodo"); if(x && APLIC_METODOS[x.value]) workingStudy.metodoAplicacao=x.value;
+  x=el("seMetodoPorTrat"); if(x) workingStudy.metodoPorTratamento=!!x.checked;
   x=el("seDesenho"); if(x) workingStudy.desenho=(x.value==='faixas')?'faixas':'dbc';
+  /* §7-bis. Estudo de bancada que tenha herdado 'faixas' de uma edição antiga é
+     corrigido aqui: o campo sumiu da tela, mas o dado errado não some sozinho. */
+  if(isQuadraLab(curV)){ workingStudy.desenho='dbc'; workingStudy.faixas=[]; }
   _seFaixasLer();
   x=el("seDoseModo"); if(x) workingStudy.doseModo=(x.value==='ppm')?'ppm':'campo';
   x=el("seDoseUnid"); if(x && ['L/ha','mL/ha','g/ha','kg/ha'].indexOf(x.value)>=0) workingStudy.doseUnidade=x.value;
@@ -10067,6 +10453,13 @@ function syncTratInputs(){
     el.querySelectorAll("input").forEach(function(inp){
       var f=inp.getAttribute("data-f");
       if(f)t[f]=(inp.type==='checkbox')?inp.checked:inp.value;
+    });
+    /* O método é <select>, não <input>: sem isto ele seria perdido a cada
+       redesenho da lista, calado — que é a classe de bug que este arquivo já
+       cansou de ver em saveE. Ele mora em t.aplicacao, não solto em t. */
+    el.querySelectorAll("select[data-f='metodo']").forEach(function(sel){
+      t.aplicacao=t.aplicacao||{};
+      t.aplicacao.metodo=sel.value;
     });
   });
 }
@@ -10314,7 +10707,7 @@ function openStudyEditAplicacao(aid){
     ap=study.aplicacoes.find(function(a){return a.id===aid});
   }
   if(!ap)return;
-  var bbchList=getBBCHList(studyCultura(study,q));
+  var bbchList=bbchListDaQuadra(curV, studyCultura(study,q));
 
   var h='<div class="se-head"><h3>Aplicação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()" aria-label="Fechar aplicação" title="Fechar">×</button></div>';
   /* Data E hora. Sem a hora, uma aplicação de ontem só podia receber a MÉDIA do
@@ -11925,7 +12318,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   };
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
-  var bbchList=getBBCHList(studyCultura(study,q));
+  var bbchList=bbchListDaQuadra(curV, studyCultura(study,q));
 
   var signed=!!(av.carimbo && av.carimbo.rubrica);
   var reopened=!!(_avReopen && _avReopen.avid===av.id);
