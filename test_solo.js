@@ -85,7 +85,11 @@ var fontes=['soloDaQuadra','soloObservado','_soloGeom','_soloChaveCoord','_soloL
   'soloCarregarMapa','soloOnMove','soloBindMove','toggleSoloLayer',
   '_soloSet','soloAnalises','soloAnaliseAtual','soloIndices','soloCalagem','soloCalagemTrilha',
   'soloAnaliseHtml','soloSalvarAnalise','soloApagarAnalise','soloCancelarAnalise',
-  'soloCalagemHtml','soloCalagemSaidaHtml','soloCalcular','soloToggleCalculo'];
+  'soloCalagemHtml','soloCalagemSaidaHtml','soloCalcular','soloToggleCalculo',
+  'soloPacote','soloPacoteNome','soloPacoteValidar','soloPacoteCarregar','soloPacoteRemover',
+  'soloPacoteCulturas','_soloPacoteCultura','_soloFaixa','_soloDose','soloRecomendar',
+  'soloRecomendacaoHtml','soloRecSaidaHtml','soloRecalcular','soloToggleRec',
+  'soloAbrirPacote','soloPacoteApagar'];
 var codigo=fontes.map(pega).join('\n');
 /* Constantes da seção SOLO, extraídas da própria fonte para o teste não divergir
    dela. Precisa contar chaves: SOLO_CORES ocupa várias linhas. */
@@ -103,7 +107,8 @@ function pegaVar(pref){
 }
 ['var SOLO_PROXY=','var SOLO_CACHE_KEY=','var _soloSeq=','var SOLO_CORES=','var SOLO_WMS=',
  'var _soloPropSeq=','var SOLO_TEXTURAS=','var _soloLayer=','var _soloMapaSeq=',
- 'var SOLO_ANALISE_CAMPOS=','var _soloAnEdit=','var _soloCalMostra=']
+ 'var SOLO_ANALISE_CAMPOS=','var _soloAnEdit=','var _soloCalMostra=',
+ 'var SOLO_PACOTE_KEY=','var _soloPacote=','var _soloRecMostra=']
   .forEach(function(pref){ codigo+='\n'+pegaVar(pref); });
 vm.runInContext(codigo, ctx);
 
@@ -627,6 +632,95 @@ console.log('\n--- Apagar análise ---');
 ctx.soloApagarAnalise('Q1','a1');
 eq(ctx.soloAnalises('Q1').length,1,'análise removida');
 ck(!!ctx.data.Q1.solo.cartografico,'apagar análise não mexe no resto do registro');
+
+console.log('\n--- Pacote de tabelas: validação antes de aceitar ---');
+/* Pacote malformado que entra em silêncio vira recomendação errada, que é pior
+   que recomendação nenhuma. */
+var fs2=require('fs');
+var PACOTE=JSON.parse(fs2.readFileSync('modelos/solo-tabelas-exemplo.json','utf8'));
+ck(!!ctx.soloPacoteValidar(null),'null é recusado');
+ck(!!ctx.soloPacoteValidar({}),'objeto sem culturas é recusado');
+ck(!!ctx.soloPacoteValidar({culturas:[]}),'lista de culturas vazia é recusada');
+ck(!!ctx.soloPacoteValidar({culturas:[{}]}),'cultura sem nome é recusada');
+ck(!!ctx.soloPacoteValidar({culturas:[{nome:'X',V2:150}]}),'V2 acima de 100 é recusado');
+eq(ctx.soloPacoteValidar(PACOTE),null,'o modelo de exemplo passa na validação');
+
+ck(!!ctx.soloPacoteCarregar('isso nao e json'),'texto que não é JSON devolve erro legível');
+eq(ctx.soloPacoteCarregar(JSON.stringify(PACOTE)),null,'pacote válido carrega');
+ck(!!store[ctx.SOLO_PACOTE_KEY],'e fica guardado só neste aparelho');
+eq(ctx.soloPacoteCulturas().length,1,'as culturas ficam disponíveis para escolha');
+
+console.log('\n--- Classificação da faixa pelo teor medido ---');
+var faixas=[{ate:6,classe:'muito baixo'},{ate:15,classe:'baixo'},{ate:40,classe:'medio'},{classe:'alto'}];
+eq(ctx._soloFaixa(faixas,3).classe,'muito baixo','teor 3 cai em muito baixo');
+eq(ctx._soloFaixa(faixas,6).classe,'muito baixo','o limite pertence à própria faixa');
+eq(ctx._soloFaixa(faixas,7).classe,'baixo','logo acima do limite sobe de faixa');
+eq(ctx._soloFaixa(faixas,120).classe,'alto','acima de tudo cai na última faixa');
+eq(ctx._soloFaixa(faixas,null),null,'sem teor não classifica');
+
+console.log('\n--- Dose pela produtividade esperada ---');
+var linhas=[{produtividade:6,dose:90},{produtividade:8,dose:110},{produtividade:10,dose:130}];
+eq(ctx._soloDose(linhas,6).dose,90,'produtividade exata usa a própria linha');
+eq(ctx._soloDose(linhas,7).dose,110,'entre linhas, usa a que ATENDE (a de cima)');
+eq(ctx._soloDose(linhas,12).dose,130,'acima da tabela usa a última linha');
+ck(ctx._soloDose(linhas,12).extrapolou===true,'e marca que extrapolou — não pode passar calado');
+ck(ctx._soloDose(linhas,null).semProdutividade===true,'sem produtividade, diz que usou a primeira linha');
+
+console.log('\n--- Recomendação de ponta a ponta ---');
+/* Laudo com P baixo (12) e K médio (3,0) — as duas faixas do meio da tabela. */
+var an={resultados:{pH:5.2,MO:28,P:12,K:3.0,Ca:25,Mg:8,HAl:28,Al:2,Zn:0.4,B:0.3},profundidade:20};
+var rec=ctx.soloRecomendar(an,'Cultura de exemplo','grao',8);
+ck(!rec.erro,'a recomendação sai sem erro');
+function item(n){ return rec.itens.filter(function(i){return i.nutriente===n;})[0]; }
+eq(item('P2O5').dose,90,'P 12 → faixa "baixo" → 8 t/ha → 90 kg/ha de P2O5');
+eq(item('P2O5').classe,'baixo','e a classe vai junto do número');
+eq(item('K2O').dose,55,'K 3,0 → faixa "medio" → 8 t/ha → 55 kg/ha de K2O');
+eq(item('N').dose,120,'N = plantio 30 + cobertura 90 = 120 kg/ha');
+eq(item('Zn').dose,4,'Zn 0,4 abaixo de 0,6 → aplica 4 kg/ha');
+ck(!item('B'),'B 0,3 acima do limite 0,21 → não entra na lista');
+eq(rec.V2,70,'o V2 da cultura vem do pacote');
+
+console.log('\n--- A trilha explica cada número ---');
+var t2=rec.trilha.join(' | ');
+ck(t2.indexOf('P 12')>0 || t2.indexOf('P medido 12')>0,'a trilha diz qual teor foi lido');
+ck(t2.indexOf('baixo')>0,'e em que classe ele caiu');
+ck(t2.indexOf('90')>0,'e a dose resultante');
+ck(/N .*(nao|não) (e|é) estimado pela an/i.test(t2),
+   'e diz em voz alta que o N não sai da análise de solo');
+ck(t2.indexOf('suficiente')>0,'micronutriente suficiente também é registrado, não some');
+ck(t2.indexOf('Exemplo')>0,'a trilha nomeia o pacote de onde vieram as tabelas');
+
+console.log('\n--- Recusas do motor ---');
+ck(!!ctx.soloRecomendar(an,'Inexistente','',8).erro,'cultura fora do pacote recusa');
+ck(!!ctx.soloRecomendar(null,'Cultura de exemplo','grao',8).erro,'sem análise recusa');
+var semP=ctx.soloRecomendar({resultados:{K:3.0}},'Cultura de exemplo','grao',8);
+ck(!semP.itens.filter(function(i){return i.nutriente==='P2O5';}).length,'sem P no laudo, não recomenda P2O5');
+ck(semP.trilha.join(' ').indexOf('sem P')>0,'e a trilha diz por quê');
+ctx.soloPacoteRemover();
+ck(!!ctx.soloRecomendar(an,'Cultura de exemplo','grao',8).erro,'sem pacote carregado recusa');
+ctx.soloPacoteCarregar(JSON.stringify(PACOTE));
+
+console.log('\n--- Escolher a cultura preenche a calagem ---');
+/* É o que torna a coisa automática: sem isso o V2 teria de ser copiado à mão da
+   tabela para o campo, que é justamente o passo que se queria eliminar. */
+ctx.data.Q1.solo={cartografico:{classe:'LATOSSOLO'},analises:[{id:'a1',data:'2026-08-12',
+  resultados:an.resultados,profundidade:20}]};
+campos.soloRecProd='8';
+ctx.document.getElementById=function(id){
+  if(id==='soloRecCult') return {value:'Cultura de exemplo|grao'};
+  if(id==='soloRecOut'||id==='soloCalOut'||id==='soloPacForm'||id==='soloAnForm'||id==='soloAnHist') return {innerHTML:'',style:{}};
+  if(id==='soloCalV2') return {value:''};
+  if(campos[id]!==undefined) return {value:campos[id]};
+  return null;
+};
+ctx.soloRecalcular('Q1');
+eq(ctx.data.Q1.solo.calagem.V2,70,'escolher a cultura já preenche o V2 da calagem');
+eq(ctx.data.Q1.solo.calagem.V2De,'Exemplo (numeros ficticios)','e registra de qual pacote ele veio');
+eq(ctx.data.Q1.solo.rec.produtividade,8,'a produtividade esperada fica guardada na quadra');
+ck(!!ctx.data.Q1.solo.cartografico,'e nada disso apaga o cartográfico');
+
+var cal2=ctx.soloCalagem(an.resultados,ctx.data.Q1.solo.calagem.V2,85,20);
+eq(cal2.nc,1.05,'a calagem calcula com o V2 vindo da tabela, sem digitação');
 
 console.log('\n'+p+' ok, '+f+' falha(s)');
 process.exit(f?1:0);

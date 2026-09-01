@@ -1,9 +1,10 @@
 AGRACTA — 5a publicacao                    01/09/2026
 =====================================================
 
-Leva: 5 arquivos de codigo + 2 de teste.
-  CODIGO:  app.js  ui-campo.js  sw.js  index.html  ndvi-proxy.py
+Leva: 6 arquivos de codigo + 2 de teste + 1 modelo.
+  CODIGO:  app.js  ui-campo.js  sw.js  index.html  ndvi-proxy.py  .gitignore
   TESTES:  test_solo.js  test_solo_proxy.py
+  MODELO:  modelos/solo-tabelas-exemplo.json
 
 O ndvi-proxy.py MUDOU de novo (ver DEPOIS DE PUBLICAR).
 
@@ -14,7 +15,7 @@ COMO SUBIR
 2. "Add file" -> "Upload files"
 3. Abra ESTA pasta, selecione os arquivos e arraste.
    (Nao arraste a pasta. Nao arraste o LEIA-ME.)
-4. Commit: "Solo apenas nas quadras, analise de solo e calagem"
+4. Commit: "Solo nas quadras, analise, calagem e recomendacao"
 5. "Commit changes"
 
 
@@ -83,32 +84,48 @@ trilha, para ninguem aplicar dose de 40 cm achando que e a padrao.
 Se o V% ja estiver no alvo, a dose e zero e ele diz por que.
 
 
-SOBRE O BOLETIM 100 — O QUE FALTA, E POR QUE
---------------------------------------------
-O motor de calagem esta pronto e funciona. O que ele NAO tras embutido e a
-tabela que diz qual V% desejar para cada cultura — por isso o V2 e informado
-na tela.
+4) RECOMENDACAO — MOTOR PRONTO, TABELAS SAO SUAS
+------------------------------------------------
+Abaixo da calagem entrou "RECOMENDACAO". Escolhe a cultura e a produtividade
+esperada, e sai N, P2O5, K2O e micros, com "Mostrar calculo" mostrando de
+qual faixa e de qual linha da tabela cada numero saiu.
 
-Isso e de proposito, e e a sua propria ressalva. A formula da saturacao por
-bases e metodo publicado, reproduzido ha decadas em material de extensao:
-implementa-la e implementar um procedimento. Ja as tabelas por cultura
-(classe de P-resina x produtividade esperada -> kg/ha) sao o trabalho
-editorial do IAC, vendido pela FUNDAG. Embutir o conjunto delas num sistema
-distribuido comercialmente e o que eu nao faria sem autorizacao.
+Escolher a cultura JA PREENCHE o V2 da calagem, puxado do pacote. Era esse o
+passo que faltava para a coisa ser automatica de verdade: sem isso o numero
+teria de ser copiado a mao da tabela para o campo.
 
-O desenho que resolve isso e o mesmo que deixa o modulo melhor: MOTOR
-SEPARADO DOS DADOS. O Agracta traz o motor; as regras vem de um pacote de
-tabelas carregavel. Quem tem a publicacao licenciada carrega o pacote. E o
-mesmo motor passa a atender CQFS-RS/SC ou a 5a Aproximacao de Minas so
-trocando o pacote, em vez de assumir Sao Paulo como universal.
+AS TABELAS FICAM NUM ARQUIVO SEU, FORA DO REPOSITORIO.
 
-Falta decidir isso antes de eu montar o pacote do B100.
+Voce disse que comprou o B100 e vai usar no Agracta para uso pessoal — e e
+seu direito. Mas ha um detalhe concreto que muda a conta: ESTE REPOSITORIO E
+PUBLICO e o site sai dele. Tabela colada dentro do app.js seria publicada
+para o mundo junto com o codigo — isso deixa de ser uso pessoal e vira
+distribuicao, independente de quem comprou o exemplar.
+
+Por isso fiz igual as credenciais do Copernicus e da Ecowitt, que ja seguem
+essa regra neste projeto: o app usa, o repositorio nao versiona. O
+.gitignore ganhou solo-tabelas.json e solo-tabelas-*.json.
+
+COMO CARREGAR:
+1. Copie  modelos/solo-tabelas-exemplo.json  para  solo-tabelas.json
+   (os numeros do exemplo sao INVENTADOS, so mostram o formato)
+2. Preencha com a tabela do seu exemplar
+3. No painel da quadra: RECOMENDACAO -> "Carregar tabelas" -> escolha o
+   arquivo. Ele fica so naquele aparelho.
+
+O formato esta documentado dentro do proprio arquivo de exemplo, no campo
+"_como". Trocando o pacote, o mesmo motor atende CQFS-RS/SC ou a 5a
+Aproximacao de Minas — em vez de assumir Sao Paulo como universal.
+
+Se quiser, eu ajudo a transcrever as culturas que voce mais usa para o
+formato — o trabalho e seu exemplar virar JSON, e ele nao sai do seu
+computador.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-1. FECHE E REABRA o Agracta no Mac. Cache foi de v151 para v152
-   (registro do sw.js de v109 para v110).
+1. FECHE E REABRA o Agracta no Mac. Cache foi de v151 para v153
+   (registro do sw.js de v109 para v111).
 
 2. ESPERE O RENDER (~2 min). O proxy ganhou a rota /solo/mapa; ate o
    redeploy terminar, ligar "Mapa de solos" nao vai pintar nada.
@@ -120,7 +137,7 @@ Duplo clique em  Conferir antes de publicar.command.
 
 Nesta leva TODAS as suites passam: 32 em JavaScript e 2 em Python, sintaxe
 limpa, versoes de cache casando entre index.html e sw.js. O test_solo.js
-esta com 161 verificacoes e o test_solo_proxy.py com 79.
+esta com 205 verificacoes e o test_solo_proxy.py com 79.
 
 Como na leva passada, o unico trecho do conferidor que nao rodou aqui foi o
 curl que compara o sw.js publicado com o local — falta de saida de rede na

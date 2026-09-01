@@ -13308,10 +13308,10 @@ function soloBlocoHtml(id){
   if(est==='buscando') return h+'<div class="solo-est">Consultando solo…</div></div>';
   if(est&&est.erro) return h+'<div class="solo-est">Solo indisponível — '+esc(est.erro)+
     ' <button class="solo-rf" onclick="soloAtualizar(\''+esc(id)+'\')">Tentar de novo</button></div></div>';
-  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+'</div>';
+  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+soloRecomendacaoHtml(id)+'</div>';
   if(s.semCobertura) return h+'<div class="solo-est">Sem cobertura pedológica mapeada para esta coordenada.</div>'+
     '<div class="solo-meta"><span>Consultado em <b>'+esc(_soloQuando(s))+'</b></span></div>'+
-    soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+'</div>';
+    soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+soloRecomendacaoHtml(id)+'</div>';
 
   h+='<div class="solo-cl"><span class="solo-dot" style="background:'+soloCor(s.ordem)+'"></span>'+esc(s.classe||'—')+'</div>';
   h+='<div class="solo-meta">';
@@ -13347,6 +13347,7 @@ function soloBlocoHtml(id){
   h+=soloObsHtml(id);
   h+=soloAnaliseHtml(id);
   h+=soloCalagemHtml(id);
+  h+=soloRecomendacaoHtml(id);
   return h+'</div>';
 }
 function _soloQuando(s){
@@ -13820,6 +13821,312 @@ function soloToggleCalculo(id){
   _soloCalMostra[id]=!_soloCalMostra[id];
   var out=document.getElementById('soloCalOut');
   if(out) out.innerHTML=soloCalagemSaidaHtml(id);
+}
+
+/* ----- Pacote de tabelas de recomendação -----
+   O motor é do Agracta; as TABELAS não. Elas ficam num arquivo separado que o app
+   carrega e que nunca é versionado — exatamente como ndvi-credenciais.json e
+   ecowitt-credenciais.json já fazem neste projeto.
+
+   A razão é concreta, não jurídica: este repositório é PÚBLICO e o site sai dele.
+   Tabela colada dentro do app.js seria publicada para o mundo junto com o código.
+   Num arquivo à parte, fora do versionamento, o exemplar comprado continua sendo
+   uso pessoal de quem o comprou.
+
+   Efeito colateral bom: trocando o pacote, o mesmo motor atende CQFS-RS/SC ou a 5ª
+   Aproximação de Minas, em vez de assumir São Paulo como universal. */
+var SOLO_PACOTE_KEY='agracta-solo-tabelas-v1';
+var _soloPacote=null;
+
+function soloPacote(){
+  if(_soloPacote) return _soloPacote;
+  try{
+    var t=localStorage.getItem(SOLO_PACOTE_KEY);
+    if(t) _soloPacote=JSON.parse(t);
+  }catch(e){ _soloPacote=null; }
+  return _soloPacote;
+}
+function soloPacoteNome(){ var p=soloPacote(); return p?(p.nome||'pacote sem nome'):null; }
+
+/* Valida antes de aceitar: pacote malformado que entra em silêncio vira
+   recomendação errada, que é pior que recomendação nenhuma. */
+function soloPacoteValidar(obj){
+  if(!obj||typeof obj!=='object') return 'Arquivo não é um pacote de tabelas.';
+  if(!Array.isArray(obj.culturas)||!obj.culturas.length) return 'O pacote não traz nenhuma cultura.';
+  for(var i=0;i<obj.culturas.length;i++){
+    var c=obj.culturas[i];
+    if(!c||!c.nome) return 'Cultura sem nome na posição '+(i+1)+'.';
+    if(c.V2!=null&&(!isFinite(Number(c.V2))||Number(c.V2)<=0||Number(c.V2)>100))
+      return 'V2 inválido em "'+c.nome+'" (esperado 1 a 100).';
+  }
+  return null;
+}
+function soloPacoteCarregar(texto){
+  var obj;
+  try{ obj=JSON.parse(texto); }catch(e){ return 'Não consegui ler o arquivo como JSON: '+(e&&e.message||e); }
+  var erro=soloPacoteValidar(obj);
+  if(erro) return erro;
+  _soloPacote=obj;
+  try{ localStorage.setItem(SOLO_PACOTE_KEY, JSON.stringify(obj)); }catch(e){
+    return 'O pacote é válido, mas não coube no armazenamento deste aparelho.';
+  }
+  return null;
+}
+function soloPacoteRemover(){
+  _soloPacote=null;
+  try{ localStorage.removeItem(SOLO_PACOTE_KEY); }catch(e){}
+}
+function soloPacoteCulturas(){
+  var p=soloPacote(); if(!p) return [];
+  return p.culturas.map(function(c){
+    return {nome:c.nome, finalidade:c.finalidade||'', rotulo:c.nome+(c.finalidade?' · '+c.finalidade:'')};
+  });
+}
+function _soloPacoteCultura(nome, finalidade){
+  var p=soloPacote(); if(!p) return null;
+  var achou=p.culturas.filter(function(c){
+    return c.nome===nome && (!finalidade || (c.finalidade||'')===finalidade);
+  })[0];
+  return achou||null;
+}
+
+/* ----- Motor de recomendação -----
+   Classifica o teor do laudo na faixa da tabela, escolhe a dose pela produtividade
+   esperada e devolve TUDO com a trilha: qual faixa, por que, qual linha da tabela.
+   Sem a trilha o número não é conferível, e num ensaio sob BPL isso não vale. */
+
+/* Faixa: a primeira cujo 'ate' cobre o valor. A última pode vir sem 'ate' — é o
+   "acima de tudo". */
+function _soloFaixa(faixas, valor){
+  if(!Array.isArray(faixas)||valor==null||!isFinite(valor)) return null;
+  for(var i=0;i<faixas.length;i++){
+    var f=faixas[i];
+    if(f.ate==null) return f;
+    if(valor<=Number(f.ate)) return f;
+  }
+  return faixas[faixas.length-1]||null;
+}
+/* Dose: a linha da menor produtividade que ATENDE a esperada. Acima da última
+   linha da tabela, usa a última — e a trilha diz que extrapolou, porque
+   extrapolar tabela de adubação em silêncio é o tipo de coisa que vira erro caro. */
+function _soloDose(linhas, produtividade){
+  if(!Array.isArray(linhas)||!linhas.length) return null;
+  /* null e '' viram 0 no Number(), e 0 é finito: sem esta guarda, "não informei a
+     produtividade" passaria como "produtividade zero" e pegaria calada a menor dose
+     da tabela, sem avisar ninguém. */
+  var alvo=(produtividade===''||produtividade==null)?NaN:Number(produtividade);
+  if(!isFinite(alvo)||alvo<=0) return {dose:linhas[0].dose, linha:linhas[0], semProdutividade:true};
+  var ordenadas=linhas.slice().sort(function(a,b){ return Number(a.produtividade)-Number(b.produtividade); });
+  for(var i=0;i<ordenadas.length;i++){
+    if(alvo<=Number(ordenadas[i].produtividade)) return {dose:ordenadas[i].dose, linha:ordenadas[i]};
+  }
+  var ult=ordenadas[ordenadas.length-1];
+  return {dose:ult.dose, linha:ult, extrapolou:true};
+}
+
+function soloRecomendar(analise, cultura, finalidade, produtividade){
+  var pac=soloPacote();
+  if(!pac) return {erro:'Nenhum pacote de tabelas carregado.'};
+  var c=_soloPacoteCultura(cultura, finalidade);
+  if(!c) return {erro:'A cultura "'+cultura+'" não está no pacote carregado.'};
+  if(!analise||!analise.resultados) return {erro:'Sem análise de solo lançada.'};
+
+  var r=analise.resultados, out={cultura:c.nome, finalidade:c.finalidade||'', 
+        produtividade:produtividade, pacote:(pac.nome||''), fonte:(pac.fonte||''),
+        itens:[], trilha:[], V2:(c.V2!=null?Number(c.V2):null)};
+
+  out.trilha.push('Pacote: '+(pac.nome||'sem nome')+(pac.versao?(' ('+pac.versao+')'):''));
+  out.trilha.push('Cultura: '+c.nome+(c.finalidade?(' · '+c.finalidade):''));
+  if(produtividade!=null&&produtividade!=='') out.trilha.push('Produtividade esperada: '+produtividade+' '+(c.unidadeProdutividade||'t/ha'));
+
+  /* Nitrogênio: não sai da análise de solo. Vem de produtividade esperada e do
+     histórico — por isso é tratado à parte, e a trilha diz isso em voz alta. */
+  if(c.N){
+    var linhasN=c.N.cobertura||[];
+    var dN=_soloDose(linhasN, produtividade);
+    var totalN=(Number(c.N.plantio)||0)+(dN?Number(dN.dose)||0:0);
+    if(totalN>0){
+      out.itens.push({nutriente:'N', dose:totalN, unidade:(c.N.unidade||'kg/ha'),
+                      detalhe:(c.N.plantio?('plantio '+c.N.plantio+' + cobertura '+(dN?dN.dose:0)):null)});
+      out.trilha.push('N — não é estimado pela análise de solo; vem da produtividade esperada e do histórico da gleba.');
+      if(c.N.plantio) out.trilha.push('   plantio '+c.N.plantio+' + cobertura '+(dN?dN.dose:0)+' = '+totalN+' kg/ha de N');
+      if(dN&&dN.extrapolou) out.trilha.push('   ATENÇÃO: produtividade acima da última linha da tabela — dose extrapolada.');
+    }
+  }
+
+  /* P e K saem do teor medido, classificado na faixa da tabela. */
+  [['P2O5','P'],['K2O','K']].forEach(function(par){
+    var chave=par[0], bloco=c[chave];
+    if(!bloco) return;
+    var criterio=bloco.criterio||par[1];
+    var valor=(r[criterio]!=null&&r[criterio]!=='')?Number(r[criterio]):null;
+    if(valor==null){
+      out.trilha.push(chave+' — sem '+criterio+' no laudo; não calculado.');
+      return;
+    }
+    var f=_soloFaixa(bloco.faixas, valor);
+    if(!f){ out.trilha.push(chave+' — o teor de '+criterio+' não caiu em nenhuma faixa da tabela.'); return; }
+    var d=_soloDose(f.doses, produtividade);
+    if(!d){ out.trilha.push(chave+' — a faixa "'+(f.classe||'')+'" não traz dose.'); return; }
+    out.itens.push({nutriente:chave, dose:Number(d.dose), unidade:(bloco.unidade||'kg/ha'),
+                    classe:(f.classe||null), teor:valor, criterio:criterio});
+    out.trilha.push(chave+' — '+criterio+' medido '+valor+' → classe "'+(f.classe||'—')+'"'+
+                    (f.ate!=null?(' (até '+f.ate+')'):' (acima da última faixa)')+
+                    ' → '+d.dose+' '+(bloco.unidade||'kg/ha'));
+    if(d.extrapolou) out.trilha.push('   ATENÇÃO: produtividade acima da última linha — dose extrapolada.');
+    if(d.semProdutividade) out.trilha.push('   Sem produtividade esperada informada: usada a primeira linha da tabela.');
+  });
+
+  /* Micronutrientes: aplicam quando o teor está ABAIXO do limite da tabela. */
+  (c.micro||[]).forEach(function(mi){
+    var crit=mi.criterio||mi.nutriente;
+    var valor=(r[crit]!=null&&r[crit]!=='')?Number(r[crit]):null;
+    if(valor==null) return;
+    if(valor<Number(mi.abaixoDe)){
+      out.itens.push({nutriente:mi.nutriente, dose:Number(mi.dose), unidade:(mi.unidade||'kg/ha'), micro:true});
+      out.trilha.push(mi.nutriente+' — teor '+valor+' abaixo de '+mi.abaixoDe+' → '+mi.dose+' '+(mi.unidade||'kg/ha'));
+    }else{
+      out.trilha.push(mi.nutriente+' — teor '+valor+' suficiente (limite '+mi.abaixoDe+'); sem aplicação.');
+    }
+  });
+
+  if(out.V2!=null) out.trilha.push('V% desejada para esta cultura, segundo o pacote: '+out.V2+'%');
+  return out;
+}
+
+/* ----- Recomendação na ficha da quadra ----- */
+var _soloRecMostra={};
+
+function soloRecomendacaoHtml(id){
+  var a=soloAnaliseAtual(id);
+  var h='<div class="solo-sub"><div class="solo-h"><b>RECOMENDAÇÃO</b>'+
+        '<button class="solo-rf" onclick="soloAbrirPacote()">'+(soloPacote()?'Trocar tabelas':'Carregar tabelas')+'</button></div>';
+
+  if(!soloPacote()){
+    h+='<div class="solo-est">Nenhum pacote de tabelas carregado. O Agracta traz o motor; as tabelas de recomendação ficam num arquivo seu, fora do repositório.</div>';
+    return h+'<div id="soloPacForm" class="solo-form" style="display:none"></div></div>';
+  }
+  if(!a){
+    h+='<div class="solo-est">Lance uma análise de solo — é ela que embasa a recomendação, não o mapa.</div>';
+    return h+'<div id="soloPacForm" class="solo-form" style="display:none"></div></div>';
+  }
+
+  var cfg=(data[id].solo&&data[id].solo.rec)||{};
+  var culturas=soloPacoteCulturas();
+  var opts='<option value="">—</option>'+culturas.map(function(c){
+    var v=c.nome+'|'+c.finalidade;
+    return '<option value="'+esc(v)+'"'+(cfg.chave===v?' selected':'')+'>'+esc(c.rotulo)+'</option>';
+  }).join('');
+
+  h+='<div class="solo-grid">'+
+     '<div class="solo-f" style="margin:0"><label>CULTURA</label><select id="soloRecCult" onchange="soloRecalcular(\''+esc(id)+'\')">'+opts+'</select></div>'+
+     '<div class="solo-f" style="margin:0"><label>PRODUTIVIDADE ESPERADA</label><input id="soloRecProd" type="number" step="0.5" inputmode="decimal" value="'+esc(cfg.produtividade!=null?cfg.produtividade:'')+'" oninput="soloRecalcular(\''+esc(id)+'\')"></div>'+
+     '</div>';
+  h+='<div id="soloRecOut">'+soloRecSaidaHtml(id)+'</div>';
+  h+='<div class="solo-meta" style="margin-top:6px"><span>Tabelas <b>'+esc(soloPacoteNome())+'</b></span></div>';
+  h+='<div id="soloPacForm" class="solo-form" style="display:none"></div>';
+  return h+'</div>';
+}
+
+function soloRecSaidaHtml(id){
+  var cfg=(data[id].solo&&data[id].solo.rec)||{};
+  if(!cfg.chave) return '<div class="solo-est">Escolha a cultura para calcular.</div>';
+  var partes=String(cfg.chave).split('|');
+  var rec=soloRecomendar(soloAnaliseAtual(id), partes[0], partes[1], cfg.produtividade);
+  if(rec.erro) return '<div class="solo-est">'+esc(rec.erro)+'</div>';
+  var h='';
+  if(rec.itens.length){
+    h+='<div class="solo-grid">';
+    rec.itens.forEach(function(it){
+      h+='<div class="solo-card"><div class="lab">'+esc(it.nutriente)+
+         (it.classe?' <span style="opacity:.7">'+esc(it.classe)+'</span>':'')+'</div>'+
+         '<div class="val">'+esc(String(it.dose).replace('.',','))+' <small>'+esc(it.unidade)+'</small></div>'+
+         (it.detalhe?'<div class="der">'+esc(it.detalhe)+'</div>':'')+'</div>';
+    });
+    h+='</div>';
+  }else{
+    h+='<div class="solo-est">A tabela não devolveu dose para esta combinação.</div>';
+  }
+  h+='<div class="solo-fb" style="margin-top:6px"><button class="solo-rf" onclick="soloToggleRec(\''+esc(id)+'\')">'+
+     (_soloRecMostra[id]?'Ocultar cálculo':'Mostrar cálculo')+'</button></div>';
+  if(_soloRecMostra[id]){
+    h+='<div class="solo-av mix" style="font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.6">'+
+       rec.trilha.map(function(l){ return esc(l); }).join('<br>')+'</div>';
+  }
+  /* Recomendação de tabela não é ordem de serviço: a tabela é média regional, e a
+     área tem histórico que ela não conhece. */
+  h+='<div class="solo-av grossa">⚠ Recomendação calculada a partir do pacote de tabelas e da análise informada. '+
+     'Confira contra o histórico da área antes de aplicar.</div>';
+  return h;
+}
+
+function soloRecalcular(id){
+  if(!data[id]) return;
+  var el=document.getElementById('soloRecCult');
+  var prod=_soloVal('soloRecProd');
+  var cfg={chave:(el?el.value:''), produtividade:(prod!==''?Number(prod):null)};
+  _soloSet(id, {rec:cfg});
+
+  /* O V2 da cultura vem do pacote: escolher a cultura já preenche a calagem. É o
+     que torna a coisa automática — sem isso o número teria de ser copiado à mão da
+     tabela para o campo, que é justamente o passo que se queria eliminar. */
+  if(cfg.chave){
+    var partes=String(cfg.chave).split('|');
+    var c=_soloPacoteCultura(partes[0], partes[1]);
+    if(c&&c.V2!=null){
+      var cal=(data[id].solo&&data[id].solo.calagem)||{};
+      if(cal.V2!==Number(c.V2)){
+        cal.V2=Number(c.V2);
+        cal.V2De=(soloPacoteNome()||'pacote');   /* de onde veio, para a trilha */
+        _soloSet(id, {calagem:cal});
+        var elV2=document.getElementById('soloCalV2'); if(elV2) elV2.value=c.V2;
+        var outCal=document.getElementById('soloCalOut'); if(outCal) outCal.innerHTML=soloCalagemSaidaHtml(id);
+      }
+    }
+  }
+  var out=document.getElementById('soloRecOut');
+  if(out) out.innerHTML=soloRecSaidaHtml(id);
+}
+function soloToggleRec(id){
+  _soloRecMostra[id]=!_soloRecMostra[id];
+  var out=document.getElementById('soloRecOut');
+  if(out) out.innerHTML=soloRecSaidaHtml(id);
+}
+
+/* Carregar o pacote: arquivo ou colar. Nada vai para o repositório. */
+function soloAbrirPacote(){
+  var alvo=document.getElementById('soloPacForm'); if(!alvo) return;
+  if(alvo.style.display==='block'){ alvo.style.display='none'; alvo.innerHTML=''; return; }
+  alvo.innerHTML=
+    '<div class="solo-f"><label>ARQUIVO DE TABELAS (.json)</label>'+
+    '<input id="soloPacFile" type="file" accept=".json,application/json" onchange="soloPacoteDoArquivo(this)"></div>'+
+    '<div class="solo-f"><label>OU COLE O CONTEÚDO</label>'+
+    '<input id="soloPacTexto" type="text" placeholder=\'{"nome":"...","culturas":[...]}\'></div>'+
+    '<div class="solo-fb"><button class="solo-ok" onclick="soloPacoteDoTexto()">Carregar</button>'+
+    '<button class="solo-rf" onclick="soloAbrirPacote()">Fechar</button>'+
+    (soloPacote()?'<button class="solo-rf" onclick="soloPacoteApagar()">Remover</button>':'')+'</div>'+
+    '<div class="solo-est" style="margin-top:6px">O pacote fica só neste aparelho. Não é enviado nem versionado.</div>';
+  alvo.style.display='block';
+}
+function soloPacoteDoArquivo(input){
+  var f=input&&input.files&&input.files[0]; if(!f) return;
+  var fr=new FileReader();
+  fr.onload=function(){ _soloPacoteAplica(String(fr.result||'')); };
+  fr.onerror=function(){ alert('Não consegui ler o arquivo.'); };
+  fr.readAsText(f);
+}
+function soloPacoteDoTexto(){ _soloPacoteAplica(_soloVal('soloPacTexto')); }
+function _soloPacoteAplica(texto){
+  if(!texto){ alert('Escolha um arquivo ou cole o conteúdo.'); return; }
+  var erro=soloPacoteCarregar(texto);
+  if(erro){ alert(erro); return; }
+  try{ if(typeof _stxToast==='function') _stxToast('Tabelas carregadas: '+soloPacoteNome()); }catch(e){}
+  try{ if(curV && typeof showD==='function') showD(curV); }catch(e){}
+}
+function soloPacoteApagar(){
+  if(!confirm('Remover o pacote de tabelas deste aparelho?')) return;
+  soloPacoteRemover();
+  try{ if(curV && typeof showD==='function') showD(curV); }catch(e){}
 }
 
 /* ----- Camada Solo no mapa -----
