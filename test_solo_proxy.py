@@ -224,6 +224,63 @@ try:
 except RuntimeError as e:
     check(str(e).startswith('SOLO:'), 'sem lat/lng vira erro legivel')
 
+print('\nMapa pedologico como imagem (para o recorte pelas quadras)')
+# Recortar exige ler pixel num canvas, e canvas que recebeu imagem de outro dominio
+# nao pode ser exportado. Por isso a imagem vem pelo proxy, e nao como tile direto.
+import urllib.request as _ur
+_chamadas = []
+class _Resp:
+    def __init__(self, d, c): self.d = d; self.headers = {'Content-Type': c}
+    def read(self): return self.d
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+_original_urlopen = _ur.urlopen
+def _fake(req, timeout=None):
+    _chamadas.append(req.full_url)
+    return _Resp(b'\x89PNG_fake', 'image/png')
+_ur.urlopen = _fake
+
+img, ctype, camada = m.do_solo_mapa([-50.2, -23.5, -50.0, -23.4], 1024)
+u = _chamadas[0]
+eq(camada, CAMADA_PR, 'o desenho usa a MESMA cascata da consulta por ponto')
+check('request=GetMap' in u, 'pede GetMap ao WMS')
+check('version=1.1.1' in u, 'WMS 1.1.1 — no 1.3.0 o EPSG:4326 inverteria o bbox')
+check('bbox=-50.200000%2C-23.500000%2C-50.000000%2C-23.400000' in u, 'bbox sai em lon,lat')
+check('transparent=true' in u, 'fundo transparente, para o satelite aparecer por baixo')
+eq(img, b'\x89PNG_fake', 'devolve os bytes da imagem')
+eq(ctype, 'image/png', 'com o tipo certo')
+
+_chamadas.clear()
+m.do_solo_mapa([-50.2, -23.5, -50.0, -23.3], 1000)   # bbox quadrada
+check('width=1000' in _chamadas[0] and 'height=1000' in _chamadas[0],
+      'altura proporcional ao bbox — imagem esticada desalinharia do mapa')
+
+# O GeoServer responde erro como XML COM STATUS 200. Repassar isso como imagem
+# pintaria lixo no mapa em vez de dizer o que houve.
+_ur.urlopen = lambda req, timeout=None: _Resp(b'<ServiceException/>', 'application/vnd.ogc.se_xml')
+try:
+    m.do_solo_mapa([-50.2, -23.5, -50.0, -23.4], 1024)
+    falhas[0] += 1; print('  FALHA XML de erro virou imagem')
+except RuntimeError as e:
+    check(str(e).startswith('SOLO:'), 'XML de erro do GeoServer vira erro legivel, nao imagem')
+
+_ur.urlopen = _fake
+try:
+    m.do_solo_mapa([-50.0, -23.5, -50.0, -23.4], 1024)
+    falhas[0] += 1; print('  FALHA bbox degenerada aceita')
+except RuntimeError as e:
+    check(str(e).startswith('SOLO:'), 'bbox sem area e recusada (dividiria por zero)')
+
+_salvas = m.SOLO_CAMADAS[:]
+m.SOLO_CAMADAS = [c for c in _salvas if c.get('bbox')]
+try:
+    m.do_solo_mapa([10.0, 10.0, 10.1, 10.1], 1024)
+    falhas[0] += 1; print('  FALHA area sem cobertura aceita')
+except RuntimeError as e:
+    check(str(e).startswith('SOLO:'), 'area sem levantamento diz isso, em vez de imagem em branco')
+m.SOLO_CAMADAS = _salvas
+_ur.urlopen = _original_urlopen
+
 print('\n%s' % ('%d verificações, nenhuma falha.' % passes[0] if falhas[0] == 0
       else '%d FALHA(S) em %d verificações.' % (falhas[0], passes[0] + falhas[0])))
 sys.exit(0 if falhas[0] == 0 else 1)

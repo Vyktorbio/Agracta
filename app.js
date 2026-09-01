@@ -13173,17 +13173,21 @@ function _soloGravarCache(k,val){
   }catch(e){}
 }
 
-/* Grava a resposta preservando as OUTRAS metades do registro. Mesma armadilha do
-   saveE(): montar o objeto do zero e esquecer de carregar adiante o que não veio
-   desta consulta apaga dado alheio em silêncio. */
-function _soloGravar(id, cart){
+/* PONTO ÚNICO DE ESCRITA do registro de solo.
+   Três vezes neste módulo o objeto foi montado do zero e apagou em silêncio a
+   metade que não vinha daquela operação — a mesma armadilha do saveE(). Em vez de
+   lembrar de carregar tudo adiante em cada lugar, só se aplica o pedaço que mudou:
+   o que não veio no patch permanece por construção. */
+function _soloSet(id, patch){
   if(!data[id]) return;
-  var ant=data[id].solo||{};
-  data[id].solo={cartografico:cart, observado:(ant.observado||null), propriedades:(ant.propriedades||null)};
+  var solo=data[id].solo||{};
+  for(var k in patch){ if(Object.prototype.hasOwnProperty.call(patch,k)) solo[k]=patch[k]; }
+  data[id].solo=solo;
   data[id]._ts=Date.now();
   try{ save(); }catch(e){}
   try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
 }
+function _soloGravar(id, cart){ _soloSet(id, {cartografico:cart}); }
 
 /* Consulta a classe pedológica da quadra. Molde do _carimboNdvi: pede, valida os
    dois níveis (r.ok e d.error) e chama de volta — nunca falha em silêncio. */
@@ -13304,10 +13308,10 @@ function soloBlocoHtml(id){
   if(est==='buscando') return h+'<div class="solo-est">Consultando solo…</div></div>';
   if(est&&est.erro) return h+'<div class="solo-est">Solo indisponível — '+esc(est.erro)+
     ' <button class="solo-rf" onclick="soloAtualizar(\''+esc(id)+'\')">Tentar de novo</button></div></div>';
-  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloPropHtml(id)+soloObsHtml(id)+'</div>';
+  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+'</div>';
   if(s.semCobertura) return h+'<div class="solo-est">Sem cobertura pedológica mapeada para esta coordenada.</div>'+
     '<div class="solo-meta"><span>Consultado em <b>'+esc(_soloQuando(s))+'</b></span></div>'+
-    soloPropHtml(id)+soloObsHtml(id)+'</div>';
+    soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+'</div>';
 
   h+='<div class="solo-cl"><span class="solo-dot" style="background:'+soloCor(s.ordem)+'"></span>'+esc(s.classe||'—')+'</div>';
   h+='<div class="solo-meta">';
@@ -13341,6 +13345,8 @@ function soloBlocoHtml(id){
 
   h+=soloPropHtml(id);
   h+=soloObsHtml(id);
+  h+=soloAnaliseHtml(id);
+  h+=soloCalagemHtml(id);
   return h+'</div>';
 }
 function _soloQuando(s){
@@ -13398,13 +13404,7 @@ function consultarSoloPropriedades(id, cb, forcar){
         ts:Date.now(), iso:new Date().toISOString(), app:(typeof APP_VER!=='undefined'?APP_VER:null)
       };
       _soloPropEstado[id]=null;
-      if(data[id]){
-        var ant=data[id].solo||{};
-        data[id].solo={cartografico:(ant.cartografico||null), observado:(ant.observado||null), propriedades:pr};
-        data[id]._ts=Date.now();
-        try{ save(); }catch(e){}
-        try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
-      }
+      _soloSet(id, {propriedades:pr});
       try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
       cb(pr);
     })
@@ -13490,10 +13490,7 @@ function soloSalvarObservado(id){
     app:(typeof APP_VER!=='undefined'?APP_VER:null)
   };
   if(obAnt.ts) ob.revisadoEm=Date.now();
-  data[id].solo={cartografico:(ant.cartografico||null), observado:(classe?ob:null), propriedades:(ant.propriedades||null)};
-  data[id]._ts=Date.now();
-  try{ save(); }catch(e){}
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
+  _soloSet(id, {observado:(classe?ob:null)});
   soloCancelarObservado();
   try{ if(typeof _stxToast==='function') _stxToast(classe?'Solo observado salvo':'Solo observado removido'); }catch(e){}
   try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
@@ -13538,27 +13535,400 @@ function _soloOrdemDe(txt){
   return null;
 }
 
-/* ----- Camada Solo no mapa (tiles WMS da Embrapa) -----
-   Tile é <img>, não passa por CORS — pode vir direto, sem proxy. Só as consultas
-   JSON precisam do proxy. */
-var _soloLayer=null;
+/* ===================== ANÁLISE DE SOLO E RECOMENDAÇÃO ==============================
+   O solo cartográfico diz a CLASSE (Latossolo, Argissolo…). Ele não serve para
+   recomendar adubação: é interpolação de mapa, não medição. Quem recomenda é a
+   análise de fertilidade do laboratório. Por isso as duas coisas vivem separadas,
+   e só a análise alimenta o cálculo.
+
+   A análise pertence a um EVENTO DATADO, não à quadra: `analises` é uma lista, cada
+   entrada com data, laboratório e profundidade. Assim dá para ver a evolução de pH,
+   V% e P ao longo dos anos, e a recomendação sempre diz de qual análise saiu.
+
+   Os índices derivados (SB, CTC, V%, m%) são CALCULADOS, nunca digitados. Um laudo
+   pode trazê-los, mas se a pessoa digitar Ca, Mg, K e também um V% que não fecha com
+   eles, o app teria dois números discordando sem saber qual vale. Calcular sempre
+   elimina a dúvida — e a trilha mostra a conta. ===== */
+
+/* Unidade de cada entrada do laudo. Fixa a unidade na tela e nos testes: laudo em
+   mmolc/dm³ e laudo em cmolc/dm³ diferem por um fator 10, e trocar isso em silêncio
+   erra a calagem por dez vezes. */
+var SOLO_ANALISE_CAMPOS=[
+  {k:'pH',  rot:'pH (CaCl₂)', un:'',           passo:'0.1'},
+  {k:'MO',  rot:'Matéria orgânica', un:'g/dm³',passo:'1'},
+  {k:'P',   rot:'P (resina)', un:'mg/dm³',     passo:'1'},
+  {k:'K',   rot:'K',          un:'mmolc/dm³',  passo:'0.1'},
+  {k:'Ca',  rot:'Ca',         un:'mmolc/dm³',  passo:'1'},
+  {k:'Mg',  rot:'Mg',         un:'mmolc/dm³',  passo:'1'},
+  {k:'HAl', rot:'H+Al',       un:'mmolc/dm³',  passo:'1'},
+  {k:'Al',  rot:'Al',         un:'mmolc/dm³',  passo:'0.1'},
+  {k:'S',   rot:'S',          un:'mg/dm³',     passo:'1'},
+  {k:'B',   rot:'B',          un:'mg/dm³',     passo:'0.01'},
+  {k:'Cu',  rot:'Cu',         un:'mg/dm³',     passo:'0.1'},
+  {k:'Fe',  rot:'Fe',         un:'mg/dm³',     passo:'1'},
+  {k:'Mn',  rot:'Mn',         un:'mg/dm³',     passo:'0.1'},
+  {k:'Zn',  rot:'Zn',         un:'mg/dm³',     passo:'0.1'}
+];
+
+function soloAnalises(id){
+  var d=(typeof data!=='undefined'&&data[id])||{};
+  var a=(d.solo&&d.solo.analises)||[];
+  /* Mais recente primeiro: é a que vale para recomendar. */
+  return a.slice().sort(function(x,y){ return String(y.data||'').localeCompare(String(x.data||'')); });
+}
+function soloAnaliseAtual(id){ var a=soloAnalises(id); return a.length?a[0]:null; }
+
+/* Índices derivados. Definições universais de química de solo, não tabela de
+   recomendação: SB é a soma das bases, T a CTC a pH 7, V% a saturação por bases e
+   m% a saturação por alumínio. */
+function soloIndices(res){
+  res=res||{};
+  function n(k){ var v=res[k]; v=(v===''||v==null)?null:Number(v); return (v==null||!isFinite(v))?null:v; }
+  var Ca=n('Ca'), Mg=n('Mg'), K=n('K'), HAl=n('HAl'), Al=n('Al');
+  var out={SB:null, T:null, V:null, m:null};
+  if(Ca!=null&&Mg!=null&&K!=null){ out.SB=Math.round((Ca+Mg+K)*10)/10; }
+  if(out.SB!=null&&HAl!=null){ out.T=Math.round((out.SB+HAl)*10)/10; }
+  if(out.SB!=null&&out.T){ out.V=Math.round(100*out.SB/out.T); }
+  if(out.SB!=null&&Al!=null&&(out.SB+Al)>0){ out.m=Math.round(100*Al/(out.SB+Al)); }
+  return out;
+}
+
+/* ----- Calagem pelo método da saturação por bases -----
+   NC (t/ha) = (V2 − V1) × T / (10 × PRNT%)
+   Fórmula agronômica publicada e reproduzida há décadas em material de extensão.
+   O V2 (saturação desejada) depende da cultura e vem de tabela de recomendação —
+   por isso ele é INFORMADO, não embutido: assim o cálculo funciona sem depender de
+   nenhuma publicação, e quem tem a tabela licenciada usa o valor dela. */
+function soloCalagem(res, V2, PRNT, profundidadeCm){
+  var ind=soloIndices(res);
+  V2=Number(V2); PRNT=Number(PRNT);
+  if(ind.T==null||ind.V==null) return {erro:'Faltam Ca, Mg, K ou H+Al para calcular a CTC.'};
+  if(!isFinite(V2)||V2<=0||V2>100) return {erro:'Informe a saturação por bases desejada (V2), de 1 a 100%.'};
+  if(!isFinite(PRNT)||PRNT<=0||PRNT>100) return {erro:'Informe o PRNT do calcário, de 1 a 100%.'};
+  if(V2<=ind.V) return {nc:0, V1:ind.V, V2:V2, T:ind.T, PRNT:PRNT,
+                        nota:'A saturação atual já está em ou acima da desejada — não há necessidade de calagem.'};
+  var nc=(V2-ind.V)*ind.T/(10*PRNT);
+  /* A fórmula é para 0-20 cm. Outra profundidade escala proporcionalmente — e o
+     ajuste vai dito na trilha, para ninguém aplicar dose de 40 cm achando que é padrão. */
+  var prof=Number(profundidadeCm);
+  var fator=(isFinite(prof)&&prof>0)?(prof/20):1;
+  return {nc:Math.round(nc*fator*100)/100, ncBase:Math.round(nc*100)/100,
+          V1:ind.V, V2:V2, T:ind.T, PRNT:PRNT,
+          profundidade:(isFinite(prof)&&prof>0)?prof:20, fator:fator};
+}
+
+/* A trilha não é enfeite: é o que separa "o Agracta mandou passar 2,3 t/ha" de uma
+   conta conferível. Sem ela o número não tem como ser auditado, e num ensaio sob BPL
+   número sem origem não vale. */
+function soloCalagemTrilha(c){
+  if(!c||c.erro) return [];
+  var L=[];
+  L.push('Método da saturação por bases');
+  L.push('NC (t/ha) = (V2 − V1) × T ÷ (10 × PRNT)');
+  L.push('V1 (atual) = '+c.V1+'%   ·   V2 (desejada) = '+c.V2+'%');
+  L.push('T (CTC a pH 7) = '+c.T+' mmolc/dm³   ·   PRNT = '+c.PRNT+'%');
+  if(c.nc===0){ L.push(c.nota||'Sem necessidade de calagem.'); return L; }
+  L.push('NC = ('+c.V2+' − '+c.V1+') × '+c.T+' ÷ (10 × '+c.PRNT+') = '+c.ncBase+' t/ha  (0–20 cm)');
+  if(c.fator!==1) L.push('Ajuste para '+c.profundidade+' cm: '+c.ncBase+' × '+(Math.round(c.fator*100)/100)+' = '+c.nc+' t/ha');
+  return L;
+}
+
+/* ----- Análise de solo na ficha da quadra ----- */
+var _soloAnEdit=null;   /* id da análise em edição, ou 'nova' */
+
+function soloAnaliseHtml(id){
+  var lista=soloAnalises(id), atual=lista[0]||null;
+  var h='<div class="solo-sub"><div class="solo-h"><b>ANÁLISE DE SOLO</b>'+
+        '<button class="solo-rf" onclick="soloNovaAnalise(\''+esc(id)+'\')">+ Lançar</button></div>';
+
+  if(!lista.length){
+    h+='<div class="solo-est">Nenhuma análise lançada. É ela — e não o mapa — que embasa recomendação de adubação.</div>';
+    return h+'<div id="soloAnForm" class="solo-form" style="display:none"></div></div>';
+  }
+
+  var ind=soloIndices(atual.resultados);
+  h+='<div class="solo-meta"><span>Coleta <b>'+esc(_soloDataBR(atual.data))+'</b></span>';
+  if(atual.laboratorio) h+='<span>Lab <b>'+esc(atual.laboratorio)+'</b></span>';
+  if(atual.profundidade) h+='<span>Prof. <b>'+esc(atual.profundidade)+' cm</b></span>';
+  h+='<span class="solo-src ok">laudo</span></div>';
+
+  h+='<div class="solo-grid">';
+  SOLO_ANALISE_CAMPOS.forEach(function(c){
+    var v=atual.resultados&&atual.resultados[c.k];
+    if(v===''||v==null) return;
+    h+='<div class="solo-card"><div class="lab">'+esc(c.rot)+'</div><div class="val">'+
+       esc(String(v).replace('.',','))+(c.un?' <small>'+esc(c.un)+'</small>':'')+'</div></div>';
+  });
+  /* Derivados aparecem separados dos medidos: são conta, não leitura de laboratório. */
+  [['SB',ind.SB,'mmolc/dm³'],['CTC (T)',ind.T,'mmolc/dm³'],['V%',ind.V,'%'],['m%',ind.m,'%']].forEach(function(x){
+    if(x[1]==null) return;
+    h+='<div class="solo-card" style="border-style:dashed"><div class="lab">'+esc(x[0])+'</div><div class="val">'+
+       esc(String(x[1]).replace('.',','))+' <small>'+esc(x[2])+'</small></div><div class="der">calculado</div></div>';
+  });
+  h+='</div>';
+
+  h+='<div class="solo-fb" style="margin-top:8px">'+
+     '<button class="solo-rf" onclick="soloEditarAnalise(\''+esc(id)+'\',\''+esc(atual.id)+'\')">Editar</button>';
+  if(lista.length>1) h+='<button class="solo-rf" onclick="soloHistoricoAnalises(\''+esc(id)+'\')">Histórico ('+lista.length+')</button>';
+  h+='</div>';
+  h+='<div id="soloAnHist"></div>';
+  h+='<div id="soloAnForm" class="solo-form" style="display:none"></div>';
+  return h+'</div>';
+}
+
+function soloNovaAnalise(id){ _soloAnEdit='nova'; _soloAnFormPinta(id, null); }
+function soloEditarAnalise(id, aid){
+  var a=soloAnalises(id).filter(function(x){return x.id===aid;})[0]||null;
+  _soloAnEdit=aid; _soloAnFormPinta(id, a);
+}
+function soloCancelarAnalise(){
+  _soloAnEdit=null;
+  var el=document.getElementById('soloAnForm');
+  if(el){ el.style.display='none'; el.innerHTML=''; }
+}
+
+function _soloAnFormPinta(id, a){
+  var alvo=document.getElementById('soloAnForm'); if(!alvo) return;
+  a=a||{};
+  var r=a.resultados||{};
+  var h='<div class="solo-f"><label>DATA DA COLETA</label><input id="soloAnData" type="date" value="'+esc(a.data||'')+'"></div>'+
+        '<div class="solo-f"><label>LABORATÓRIO</label><input id="soloAnLab" type="text" value="'+esc(a.laboratorio||'')+'"></div>'+
+        '<div class="solo-f"><label>PROFUNDIDADE (CM)</label><input id="soloAnProf" type="number" step="1" placeholder="20" value="'+esc(a.profundidade||'')+'"></div>'+
+        '<div class="solo-grid">';
+  SOLO_ANALISE_CAMPOS.forEach(function(c){
+    h+='<div class="solo-f" style="margin:0"><label>'+esc(c.rot)+(c.un?' ('+esc(c.un)+')':'')+'</label>'+
+       '<input id="soloAn_'+esc(c.k)+'" type="number" step="'+esc(c.passo)+'" inputmode="decimal" value="'+esc(r[c.k]!=null?r[c.k]:'')+'"></div>';
+  });
+  h+='</div><div class="solo-fb"><button class="solo-ok" onclick="soloSalvarAnalise(\''+esc(id)+'\')">Salvar</button>'+
+     '<button class="solo-rf" onclick="soloCancelarAnalise()">Cancelar</button>';
+  if(a.id) h+='<button class="solo-rf" onclick="soloApagarAnalise(\''+esc(id)+'\',\''+esc(a.id)+'\')">Apagar</button>';
+  h+='</div>';
+  alvo.innerHTML=h; alvo.style.display='block';
+}
+
+function soloSalvarAnalise(id){
+  if(!data[id]) return;
+  var dataColeta=_soloVal('soloAnData');
+  if(!dataColeta){ alert('Informe a data da coleta — sem ela a análise não entra no histórico nem serve de procedência.'); return; }
+  var res={}, algum=false;
+  SOLO_ANALISE_CAMPOS.forEach(function(c){
+    var v=_soloVal('soloAn_'+c.k);
+    if(v!==''){ res[c.k]=Number(v); algum=true; }
+  });
+  if(!algum){ alert('Preencha ao menos um resultado do laudo.'); return; }
+
+  var lista=((data[id].solo||{}).analises||[]).slice();
+  var antiga=lista.filter(function(x){ return x.id===_soloAnEdit; })[0]||null;
+  var reg={
+    id:(antiga?antiga.id:(typeof uid==='function'?uid():'a'+Date.now())),
+    data:dataColeta, laboratorio:_soloVal('soloAnLab'),
+    profundidade:(_soloVal('soloAnProf')?Number(_soloVal('soloAnProf')):20),
+    resultados:res, fonte:'laudo',
+    user:(typeof _currentUserName==='function'?(_currentUserName()||'Não identificado'):'Não identificado'),
+    ts:(antiga?antiga.ts:Date.now()), iso:(antiga?antiga.iso:new Date().toISOString()),
+    app:(typeof APP_VER!=='undefined'?APP_VER:null)
+  };
+  if(antiga) reg.revisadoEm=Date.now();
+  lista=lista.filter(function(x){ return x.id!==reg.id; });
+  lista.push(reg);
+  _soloSet(id, {analises:lista});
+  soloCancelarAnalise();
+  try{ if(typeof _stxToast==='function') _stxToast('Análise salva'); }catch(e){}
+  try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
+}
+
+function soloApagarAnalise(id, aid){
+  if(!data[id]) return;
+  if(!confirm('Apagar esta análise? O histórico dela é perdido.')) return;
+  var lista=((data[id].solo||{}).analises||[]).filter(function(x){ return x.id!==aid; });
+  _soloSet(id, {analises:lista});
+  soloCancelarAnalise();
+  try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
+}
+
+/* Evolução: o valor de hoje só significa alguma coisa comparado com o de antes. */
+function soloHistoricoAnalises(id){
+  var alvo=document.getElementById('soloAnHist'); if(!alvo) return;
+  if(alvo.innerHTML){ alvo.innerHTML=''; return; }
+  var lista=soloAnalises(id);
+  var h='<div style="margin-top:8px;overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;white-space:nowrap">'+
+        '<tr><th style="text-align:left;padding:3px 8px 3px 0;color:var(--gp-text-3,#727c75)">Coleta</th>';
+  ['pH','MO','P','K','V%'].forEach(function(t){
+    h+='<th style="text-align:right;padding:3px 8px;color:var(--gp-text-3,#727c75)">'+esc(t)+'</th>';
+  });
+  h+='</tr>';
+  lista.forEach(function(a){
+    var ind=soloIndices(a.resultados), r=a.resultados||{};
+    function cel(v){ return '<td style="text-align:right;padding:3px 8px;color:var(--gp-text,#e9ede9)">'+
+      (v==null||v===''?'—':esc(String(v).replace('.',',')))+'</td>'; }
+    h+='<tr><td style="padding:3px 8px 3px 0;color:var(--gp-text-2,#a8b3aa)">'+esc(_soloDataBR(a.data))+'</td>'+
+       cel(r.pH)+cel(r.MO)+cel(r.P)+cel(r.K)+cel(ind.V)+'</tr>';
+  });
+  alvo.innerHTML=h+'</table></div>';
+}
+
+/* ----- Calagem na ficha ----- */
+var _soloCalMostra={};
+function soloCalagemHtml(id){
+  var a=soloAnaliseAtual(id);
+  if(!a) return '';
+  var ind=soloIndices(a.resultados);
+  var h='<div class="solo-sub"><div class="solo-h"><b>CALAGEM</b></div>';
+  if(ind.T==null||ind.V==null){
+    return h+'<div class="solo-est">Faltam Ca, Mg, K ou H+Al no laudo para calcular a CTC.</div></div>';
+  }
+  var cfg=(data[id].solo&&data[id].solo.calagem)||{};
+  h+='<div class="solo-grid">'+
+     '<div class="solo-f" style="margin:0"><label>V% DESEJADA</label><input id="soloCalV2" type="number" step="1" inputmode="numeric" value="'+esc(cfg.V2!=null?cfg.V2:'')+'" oninput="soloCalcular(\''+esc(id)+'\')"></div>'+
+     '<div class="solo-f" style="margin:0"><label>PRNT (%)</label><input id="soloCalPrnt" type="number" step="1" inputmode="numeric" value="'+esc(cfg.PRNT!=null?cfg.PRNT:'')+'" oninput="soloCalcular(\''+esc(id)+'\')"></div>'+
+     '</div>';
+  h+='<div id="soloCalOut">'+soloCalagemSaidaHtml(id)+'</div>';
+  /* O V2 vem da tabela da cultura, que é conteúdo de publicação. Pedir em vez de
+     embutir mantém o cálculo funcionando sem depender de nenhuma obra — e quem tem
+     a tabela licenciada usa o valor dela. */
+  h+='<div class="solo-est" style="margin-top:6px">A saturação desejada (V2) depende da cultura e vem da tabela de recomendação que você usa.</div>';
+  return h+'</div>';
+}
+
+function soloCalagemSaidaHtml(id){
+  var a=soloAnaliseAtual(id); if(!a) return '';
+  var cfg=(data[id].solo&&data[id].solo.calagem)||{};
+  if(cfg.V2==null||cfg.PRNT==null) return '<div class="solo-est">Informe V2 e PRNT para calcular.</div>';
+  var c=soloCalagem(a.resultados, cfg.V2, cfg.PRNT, a.profundidade);
+  if(c.erro) return '<div class="solo-est">'+esc(c.erro)+'</div>';
+  var h='<div class="solo-cl" style="margin-top:6px"><span class="solo-dot" style="background:#8a7f6a"></span>'+
+        (c.nc>0?('Calcário: <b>'+String(c.nc).replace('.',',')+' t/ha</b>'):'Sem necessidade de calagem')+'</div>';
+  if(c.nota) h+='<div class="solo-est">'+esc(c.nota)+'</div>';
+  h+='<div class="solo-fb" style="margin-top:6px"><button class="solo-rf" onclick="soloToggleCalculo(\''+esc(id)+'\')">'+
+     (_soloCalMostra[id]?'Ocultar cálculo':'Mostrar cálculo')+'</button></div>';
+  if(_soloCalMostra[id]){
+    h+='<div class="solo-av mix" style="font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.6">'+
+       soloCalagemTrilha(c).map(function(l){ return esc(l); }).join('<br>')+'</div>';
+  }
+  return h;
+}
+
+function soloCalcular(id){
+  if(!data[id]) return;
+  var v2=_soloVal('soloCalV2'), prnt=_soloVal('soloCalPrnt');
+  var cfg={V2:(v2!==''?Number(v2):null), PRNT:(prnt!==''?Number(prnt):null)};
+  _soloSet(id, {calagem:cfg});
+  var out=document.getElementById('soloCalOut');
+  if(out) out.innerHTML=soloCalagemSaidaHtml(id);
+}
+function soloToggleCalculo(id){
+  _soloCalMostra[id]=!_soloCalMostra[id];
+  var out=document.getElementById('soloCalOut');
+  if(out) out.innerHTML=soloCalagemSaidaHtml(id);
+}
+
+/* ----- Camada Solo no mapa -----
+   Desenhada como IMAGEM sobre o mapa, e não como tile, pelo mesmo motivo do NDVI:
+   para recortar pelas quadras é preciso ler os pixels num canvas, e canvas que
+   recebeu imagem de outro domínio fica "sujo" — o navegador proíbe exportá-lo.
+   Vindo pelo proxy a imagem é mesma-origem e o recorte funciona.
+
+   O recorte é o que torna a camada útil no dia a dia: o mapa pedológico inteiro
+   cobre tudo e some debaixo dele o satélite, que é a referência de quem olha. Com
+   "Apenas quadras" o solo aparece só onde há ensaio, sobre a imagem real. */
+var _soloLayer=null, _soloRecorte=true, _soloOpacidade=0.55;
+var _soloMapaSeq=0, _soloObjURL=null, _soloMoveT=null;
+
+function soloLayerAtiva(){ return !!_soloLayer; }
+function soloRecorteAtivo(){ return !!_soloRecorte; }
+
 function toggleSoloLayer(){
   if(!_map) initMap();
-  if(_soloLayer){ try{ _map.removeLayer(_soloLayer); }catch(e){} _soloLayer=null; }
-  else{
-    try{
-      _soloLayer=LF.tileLayer.wms(SOLO_WMS, {
-        layers:'geonode:brasil_solos_5m_20201104', format:'image/png',
-        transparent:true, version:'1.1.1', opacity:0.45,
-        attribution:'Solos © Embrapa GeoInfo'
-      }).addTo(_map);
-      _soloLayer.bringToFront();
-    }catch(e){ _soloLayer=null; }
-  }
+  soloBindMove();
+  if(_soloLayer) soloLimpar();
+  else soloCarregarMapa();
   try{ if(typeof _stxToast==='function') _stxToast(_soloLayer?'Camada de solo ligada':'Camada de solo desligada'); }catch(e){}
   return !!_soloLayer;
 }
-function soloLayerAtiva(){ return !!_soloLayer; }
+
+function soloLimpar(){
+  _soloMapaSeq++;
+  if(_soloLayer){ try{ _map.removeLayer(_soloLayer); }catch(e){} _soloLayer=null; }
+  if(_soloObjURL){ try{ URL.revokeObjectURL(_soloObjURL); }catch(e){} _soloObjURL=null; }
+  try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
+}
+
+/* Liga/desliga o recorte. Se a camada está no mapa, redesenha na hora. */
+function soloSetRecorte(v){
+  _soloRecorte=!!v;
+  if(_soloLayer) soloCarregarMapa();
+}
+function soloSetOpacidade(v){
+  _soloOpacidade=parseFloat(v);
+  if(_soloLayer) _soloLayer.setOpacity(_soloOpacidade);
+}
+
+function soloCarregarMapa(){
+  if(!_map) initMap();
+  var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
+  var seq=++_soloMapaSeq;
+  fetch(SOLO_PROXY+'/solo/mapa?bbox='+bb.join(',')+'&width='+ndviPx(bb))
+    .then(function(r){
+      if(r.ok) return r.blob();
+      return r.json().then(function(j){ throw new Error(j.error||('o servidor respondeu '+r.status)); });
+    })
+    .then(function(blob){
+      if(seq!==_soloMapaSeq) return;               /* já pediram outro pedaço do mapa */
+      var bu=URL.createObjectURL(blob), img=new Image();
+      img.onerror=function(){
+        try{ URL.revokeObjectURL(bu); }catch(er){}
+        if(seq===_soloMapaSeq && typeof _stxToast==='function') _stxToast('Não consegui carregar o mapa de solo.');
+      };
+      img.onload=function(){
+        if(seq!==_soloMapaSeq){ try{ URL.revokeObjectURL(bu); }catch(er){} return; }
+        var iw=img.naturalWidth||1024, ih=img.naturalHeight||1024, url=bu;
+        if(_soloRecorte){
+          try{
+            var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
+            var ctx=cv.getContext('2d'); ctx.beginPath();
+            var houve=false;
+            quadrasAtivas().forEach(function(id){
+              var pp=QGEO[id]; if(!pp||pp.length<3) return;
+              houve=true;
+              pp.forEach(function(pt,i){
+                var px=(pt[1]-w)/(e-w)*iw, py=(n-pt[0])/(n-s)*ih;
+                if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+              });
+              ctx.closePath();
+            });
+            /* Sem quadra nenhuma o clip vazio apagaria a imagem inteira e pareceria
+               que a consulta falhou. Melhor mostrar o mapa inteiro. */
+            if(houve){ ctx.clip(); ctx.drawImage(img,0,0); url=cv.toDataURL('image/png'); }
+          }catch(err){ url=bu; }
+        }
+        if(_soloLayer){ try{ _map.removeLayer(_soloLayer); }catch(er){} }
+        if(_soloObjURL){ try{ URL.revokeObjectURL(_soloObjURL); }catch(er){} _soloObjURL=null; }
+        _soloLayer=LF.imageOverlay(url,[[s,w],[n,e]],{opacity:_soloOpacidade,
+                     attribution:'Solos © Embrapa GeoInfo'}).addTo(_map);
+        _soloLayer.bringToFront();
+        if(url===bu) _soloObjURL=bu; else { try{ URL.revokeObjectURL(bu); }catch(er){} }
+        try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(er){}
+      };
+      img.src=bu;
+    })
+    .catch(function(err){
+      if(seq!==_soloMapaSeq) return;
+      try{ if(typeof _stxToast==='function') _stxToast('Solo: '+((err&&err.message)||err)); }catch(e){}
+    });
+}
+
+/* Recarrega ao mover o mapa, como o NDVI faz — a imagem cobre só o que está
+   visível, então sem isto ela ficaria "presa" no enquadramento antigo. */
+function soloOnMove(){
+  if(!_soloLayer) return;
+  clearTimeout(_soloMoveT);
+  _soloMoveT=setTimeout(function(){ if(_soloLayer) soloCarregarMapa(); }, 700);
+}
+/* Amarra uma vez só, no mesmo molde do NDVI — sem a trava, cada abertura da
+   camada empilharia mais um ouvinte e o mapa recarregaria N vezes por arrasto. */
+function soloBindMove(){
+  if(_map && !_map.__soloMove){ _map.__soloMove=true; _map.on('moveend', soloOnMove); }
+}
 
 /* Fallback triplo: garante init() mesmo se img.onload nao disparar */
 if(document.readyState==='loading'){
