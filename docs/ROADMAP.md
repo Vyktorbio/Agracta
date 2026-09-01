@@ -126,7 +126,7 @@ relatório reconstrói a versão usada.
 - **7.3** `equipmentProfiles` — Drone DJI Agras T25, Barra CO₂, Atomizador, Sider 600 L, Torre Potter 01. Cada perfil guarda sua calibração habitual.
 - **7.4** A aplicação **herda** do estudo: tratamentos, doses, parcelas, área, repetições, equipamentos. O operador não redigita.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
-- **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ barra/CO₂ na tela (01/09/2026); drone e Torre de Potter pendentes.
+- **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
 - **7.8** Laboratório vira **submodo** do mesmo motor: PPM, preparação inversa, campo→bancada, ajuste de i.a., série de doses, testemunha automática, alertas de pipetagem/massa mínima.
 - **7.9** A tela mostra o essencial e esconde o resto atrás de *"Ver cálculo completo"*.
 
@@ -139,12 +139,21 @@ estudo do Agracta.
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
 > - ✅ **7.4** parcialmente: já pré-preenche dose/volume dos tratamentos do estudo.
 > - ✅ **7.6** feito (01/09/2026): `aplicacao.memoriaCalculo` grava entradas, resultado por componente, avisos, autoria e a versão do motor. Regravar preserva o anterior em `memoriasAnteriores`. Coberto por `test_memoria_calculo.js` (63 verificações, com golden test).
-> - ✅ **7.7** feito (01/09/2026): **barra e calibração na calculadora do Agracta.**
+> - ✅ **7.7** feito (01/09/2026): **barra e calibração na calculadora.**
 >   Seção própria dentro de `openCalcAplicacao`, fechada por padrão — a calculadora de
 >   calda continua sendo o assunto principal da tela. Coleta bico a bico ou da barra
 >   inteira, e devolve largura de trabalho, vazão requerida, **coleta esperada por bico**
 >   (o número que se leva para o campo), vazão medida, taxa real em L/ha, desvio,
->   velocidade ideal e CV entre bicos. Tolerância de taxa e limite de CV são editáveis,
+>   velocidade ideal e CV entre bicos.
+>   **Duas máquinas, e elas não fazem a mesma coisa.** O costal a CO₂ é o pulverizador
+>   de pesquisa: cada bico vai para um copo, e daí sai o CV **entre bicos**, que é a
+>   uniformidade da faixa. O sider é a máquina usual de campo — ninguém coleta bico a
+>   bico nela; o cálculo é o de sempre, e a barra inteira se confere em três coletas,
+>   cujo CV mede **repetibilidade da máquina**, não uniformidade. O mesmo número com
+>   dois significados, e a tela nomeia cada um pelo que ele é.
+>   A máquina vem do protocolo do estudo (equipamento, nº de bicos,
+>   espaçamento, ponta, pressão), não do teclado; o que é **medida** (velocidade) nasce
+>   em branco, porque default chumbado produz taxa plausível e falsa. Tolerância de taxa e limite de CV são editáveis,
 >   porque o critério é do protocolo e não do programa. Toda a aritmética vem de
 >   `vendor/aplicacao-core.js` (`equipmentOperation`); aqui não se recalcula nada.
 >   A calibração entra na `memoriaCalculo` da aplicação em campo próprio, com leituras

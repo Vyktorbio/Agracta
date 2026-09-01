@@ -76,7 +76,8 @@ ctx._calcStudy=function(){ return ESTUDO; };
 
 vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
-  'var CALC_BARRA_EQUIP='+JSON.stringify({tractor:'Trator / barra tratorizada', co2:'Costal pressurizado a CO₂'})+';',
+  'var CALC_BARRA_EQUIP='+JSON.stringify({tractor:'Trator — sider', co2:'Costal pressurizado a CO₂'})+';',
+  pega('_calcBarraMetodo'),
   'var _calcBarra=null, _calcBarraAberta=false;',
   pega('_parseBicos'), pega('_calcBarraEquip'), pega('_calcBarraProto'),
   pega('_calcBarraPadrao'), pega('_calcBarraChave'), pega('_calcBarraEstado'),
@@ -102,6 +103,8 @@ function barra(extra){
   return b;
 }
 function coletas(vals){ return vals.map(function(v){ return [String(v),String(v),String(v)]; }); }
+/* calcBarraCfg le o estado corrente, entao o cenario precisa estar instalado. */
+function cfgSider(b){ ctx._calcBarra=b; return ctx.calcBarraCfg(); }
 
 /* ============================================================================== */
 console.log('\n--- GOLDEN TEST: 4 bicos × 0,5 m, 5 km/h, 500 mL em 30 s, meta 240 L/ha ---');
@@ -265,12 +268,14 @@ eq(JSON.stringify(ctx._parseBicos('11 bicos, 0,5 m, ponta XR11002')),'{"bicos":1
    'o numero do modelo da ponta nao contamina a leitura');
 
 eq(ctx._calcBarraEquip('Pulverizador costal pressurizado a CO2').chave,'co2','costal a CO2');
-eq(ctx._calcBarraEquip('Trator com barra').chave,'tractor','trator');
-/* Tratar drone como trator daria largura de barra e taxa plausiveis para uma maquina
-   que nao tem barra nenhuma. Melhor recusar e dizer. */
-eq(ctx._calcBarraEquip('Drone DJI Agras T25P').chave,null,'drone nao vira trator em silencio');
+eq(ctx._calcBarraEquip('Trator — sider').chave,'tractor','sider fica: o calculo dele e o usual');
+eq(ctx._calcBarraEquip('Trator com barra').chave,'tractor','"trator" no protocolo e o sider');
+/* Drone, atomizador e Potter o motor calcula, mas esta tela nao expoe. Trata-los como
+   barra daria largura e taxa plausiveis para maquina que nao tem barra. */
+eq(ctx._calcBarraEquip('Drone DJI Agras T25P').chave,null,'drone nao vira barra em silencio');
 eq(ctx._calcBarraEquip('Drone DJI Agras T25P').naoSuportado,'drone','e a tela diz por que');
 eq(ctx._calcBarraEquip('Torre de Potter').naoSuportado,'Torre de Potter','bancada idem');
+eq(ctx._calcBarraEquip('Costal CO2 sobre o sider').chave,'co2','costal vence quando as duas palavras aparecem');
 
 ctx._calcBarra=null; store={};
 var bproto=ctx._calcBarraEstado();
@@ -305,9 +310,50 @@ console.log('\n--- Ponta e pressao entram no registro sem virar campo ---');
 /* "4 L/min" sem dizer com que ponta e a que pressao nao se reproduz. */
 barra({taxaAlvo:'240', leiturasBico:coletas([500,500,500,500])});
 var cfgP=ctx._calcConfigAtual();
+eq(cfgP.barra.equipamento,'co2','o registro grava a maquina');
+eq(cfgP.barra.equipamentoRotulo,'Costal pressurizado a CO₂','com o rotulo por extenso');
 eq(cfgP.barra.ponta,'XR11002','ponta gravada na memoria');
 eq(cfgP.barra.pressao,'2 bar','pressao gravada na memoria');
 ck(/XR11002/.test(ctx.calcMemoriaTexto(ctx.calcMemoria(ESTUDO,cfgP))),'e sai no texto copiado');
+
+console.log('\n--- O sider nao se coleta bico a bico ---');
+/* O costal a CO2 e o pulverizador de pesquisa: cada bico vai para um copo. O sider e a
+   maquina usual de campo — ninguem coleta bico a bico nela. O calculo dela e o de
+   sempre, e a barra inteira se confere em tres coletas. */
+var bs=barra({equipamento:'tractor', taxaAlvo:'240', metodo:'individual',
+              leiturasBarra:['2000','2000','2000']});
+eq(ctx._calcBarraMetodo(bs),'barra','no sider o metodo nao e escolha: e consequencia da maquina');
+var os=ctx.calcBarraOperacao(bs);
+eq(os.calibration.requiredInputs,3,'tres coletas da barra, nao 12');
+perto(os.measuredFlow,4,1e-9,'vazao medida 4,000 L/min');
+perto(os.actualRate,240,1e-9,'e o calculo usual entrega os mesmos 240 L/ha');
+perto(os.requiredFlow,4,1e-9,'com a vazao requerida que se ajusta na maquina');
+eq(cfgSider(bs).metodo,'barra inteira','o registro grava o metodo real, nao o que estava guardado');
+eq(cfgSider(bs).equipamentoRotulo,'Trator — sider','e a maquina certa');
+
+/* O MESMO numero com dois significados. Entre bicos o CV mede uniformidade da faixa;
+   entre repeticoes mede repetibilidade da maquina. Chamar os dois de "CV das coletas"
+   faria o sider parecer uniforme sem que ninguem tivesse medido uniformidade. */
+var bsCv=barra({equipamento:'tractor', taxaAlvo:'240', leiturasBarra:['1600','2000','2400']});
+var osCv=ctx.calcBarraOperacao(bsCv);
+perto(osCv.calibration.cv,20,1e-9,'CV de 20% entre as tres coletas');
+var aCv=ctx.calcBarraAvisos(osCv,bsCv);
+ck(aCv.some(function(a){ return a.k==='erro' && /nao repetiu|não repetiu/.test(a.t); }),
+   'no sider o CV alto fala de repetibilidade da maquina');
+ck(!aCv.some(function(a){ return /faixa/.test(a.t); }),
+   'e NAO fala de uniformidade de faixa, que ninguem mediu');
+var bcCv=barra({taxaAlvo:'240', leiturasBico:coletas([300,500,500,700])});
+ck(ctx.calcBarraAvisos(ctx.calcBarraOperacao(bcCv),bcCv).some(function(a){ return /faixa/.test(a.t); }),
+   'no costal, sim: ai a faixa foi medida bico a bico');
+
+ctx._calcBarraAberta=true;
+ctx._calcBarra=bs;
+var hs=ctx.calcBarraHtml();
+ck(!/Método de coleta/.test(hs),'no sider nao se oferece a escolha de metodo');
+ck(/CV entre repetições/.test(hs),'e o rotulo do CV diz o que ele mede');
+ctx._calcBarra=bcCv;
+ck(/CV entre bicos/.test(ctx.calcBarraHtml()),'no costal o rotulo muda junto');
+ctx._calcBarraAberta=false;
 
 console.log('\n--- A tela desenha sem quebrar nos dois métodos ---');
 ctx._calcBarraAberta=true;
@@ -315,6 +361,7 @@ barra({taxaAlvo:'240', leiturasBico:coletas([500,500,500,500])});
 var h=ctx.calcBarraHtml();
 ck(/calcBarraOut/.test(h),'o HTML aberto tem onde pendurar a saída');
 ck(/_calcBarraLeitura\(3,2,/.test(h),'a matriz liga a última célula do último bico');
+ck(/Método de coleta/.test(h),'no costal, o método de coleta é escolha');
 ck(/Meta por bico/.test(h),'a meta por bico aparece antes da coleta, que é quando serve');
 ck(/Do protocolo/.test(h),'a tela diz de onde veio o que ja esta preenchido');
 ck(/XR11002/.test(h),'inclusive a ponta, que nao e campo mas e contexto');

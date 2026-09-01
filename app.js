@@ -7412,7 +7412,24 @@ function _calcCopy(){
    cálculo da aplicação, junto com a calda. Calda sem a calibração da máquina que a
    aplicou é meio registro. ======================================================== */
 
-var CALC_BARRA_EQUIP={tractor:'Trator / barra tratorizada', co2:'Costal pressurizado a CO₂'};
+/* Duas maquinas, e elas nao fazem a mesma coisa.
+     - COSTAL A CO2: e o pulverizador de pesquisa. Cada bico e coletado num copo, e
+       daquilo sai o CV ENTRE BICOS, que e a uniformidade da faixa.
+     - SIDER: e a maquina usual de campo. Nao se coleta bico a bico nela; o calculo
+       que interessa e o de sempre — taxa x velocidade x largura da vazao requerida,
+       e a barra inteira se confere em tres coletas quando se quer confirmar.
+   A aritmetica do motor e a mesma para as duas (equipmentOperation trata "tractor" e
+   "co2" pelo mesmo caminho). O que muda e o que a tela OFERECE e como nomeia o
+   resultado — e e ai que mora a diferenca que importa no campo. */
+var CALC_BARRA_EQUIP={tractor:'Trator — sider', co2:'Costal pressurizado a CO₂'};
+
+/* Coleta bico a bico so existe no costal. No sider a leitura e sempre da barra
+   inteira, entao o metodo nao e escolha: e consequencia da maquina. */
+function _calcBarraMetodo(b){
+  b=b||_calcBarraEstado();
+  if(b.equipamento==='tractor') return 'barra';
+  return (b.metodo==='barra')?'barra':'individual';
+}
 var _calcBarra=null;         /* configuração corrente, por estudo */
 /* Nasce fechada: quem abre a calculadora quer a calda. A calibração é ato separado,
    feito na máquina, e não deve empurrar os tratamentos para fora da tela. */
@@ -7450,17 +7467,20 @@ function _parseBicos(str){
   return (out.bicos||out.espacamento)?out:null;
 }
 
-/* Equipamento escrito por extenso na planilha -> chave do motor. So classifica o que
-   esta seccao sabe calibrar; drone, atomizador e Torre de Potter existem no motor mas
-   ainda nao tem interface aqui, e dizer isso e melhor que trata-los como trator. */
+/* Equipamento escrito por extenso na planilha -> a maquina desta tela. Sider e costal
+   passam; drone, atomizador e Torre de Potter viram aviso nominal, porque o motor sabe
+   calcula-los mas a tela ainda nao os expoe — e calcular calado uma largura de barra
+   para uma maquina que nao tem barra daria numero plausivel e sem uso. */
 function _calcBarraEquip(txt){
   var s=String(txt||'').toLowerCase();
   if(!s.trim()) return {chave:null};
-  if(/drone|agras|vant|aeronave/.test(s))            return {chave:null, naoSuportado:'drone'};
-  if(/potter|torre|bancada|laborat/.test(s))         return {chave:null, naoSuportado:'Torre de Potter'};
-  if(/atomizad/.test(s))                             return {chave:null, naoSuportado:'atomizador'};
-  if(/co\s*2|co₂|pressuriz|costal/.test(s))          return {chave:'co2'};
-  if(/trator|sider|barra|tratoriz|pulveriz/.test(s)) return {chave:'tractor'};
+  if(/drone|agras|vant|aeronave/.test(s))     return {chave:null, naoSuportado:'drone'};
+  if(/potter|torre|bancada|laborat/.test(s))  return {chave:null, naoSuportado:'Torre de Potter'};
+  if(/atomizad/.test(s))                      return {chave:null, naoSuportado:'atomizador'};
+  /* CO2 antes de sider: "costal CO2" e o caso; "sider" cai no aviso logo abaixo. */
+  /* CO2 antes de sider: "costal CO2 sobre o sider" e costal. */
+  if(/co\s*2|co₂|costal|pressuriz/.test(s))   return {chave:'co2'};
+  if(/sider|trator|tratoriz|barra/.test(s))   return {chave:'tractor'};
   return {chave:null};
 }
 
@@ -7488,7 +7508,7 @@ function _calcBarraProto(){
    30 s e convencao de metodo, nao medida de maquina nenhuma. */
 function _calcBarraPadrao(){
   var pr=_calcBarraProto();
-  return {equipamento:(pr.equipamento||'tractor'),
+  return {equipamento:(pr.equipamento||'co2'),
           bicos:(pr.bicos==null?'':pr.bicos),
           espacamento:(pr.espacamento==null?'':pr.espacamento),
           larguraManual:'', velocidade:'', tempoS:30,
@@ -7551,7 +7571,7 @@ function calcBarraTaxa(b){
 function calcBarraOperacao(b){
   var AC=window.AplicacaoCore; if(!AC) return null;
   b=b||_calcBarraEstado();
-  var eq=(b.equipamento==='co2')?'co2':'tractor';
+  var eq=(b.equipamento==='tractor')?'tractor':'co2';
   var st={equipment:eq, prep:{targetRate:calcBarraTaxa(b)}};
   st[eq]={
     nozzles:Math.max(1,Math.round(_calcNum(b.bicos))||1),
@@ -7559,7 +7579,7 @@ function calcBarraOperacao(b){
     manualWidth:_calcNum(b.larguraManual),
     speed:_calcNum(b.velocidade),
     sampleSeconds:_calcNum(b.tempoS),
-    method:(b.metodo==='barra')?'whole':'individual',
+    method:(_calcBarraMetodo(b)==='barra')?'whole':'individual',
     calibration:{individual:_calcBarraLinhas(b), whole:(b.leiturasBarra||['','',''])}
   };
   try{ return AC.equipmentOperation(st); }catch(e){ return null; }
@@ -7590,9 +7610,17 @@ function calcBarraAvisos(op, b){
   else if(!(cal.totalFlow>0))
     A.push({k:'erro', t:'Todas as leituras são zero: não há vazão medida. Verifique pressão, bomba e registro antes de aplicar.'});
 
+  /* O CV entre BICOS e o CV entre REPETICOES sao o mesmo calculo medindo coisas
+     diferentes. Dizer "CV das coletas" nos dois casos faria o sider parecer uniforme
+     quando ninguem mediu uniformidade nenhuma nele. */
+  var porBico=(_calcBarraMetodo(b)!=='barra');
   if(cal.valid && cal.cv!=null){
-    if(cal.cv<=cvLim) A.push({k:'ok', t:'CV de '+f(cal.cv,1)+'% entre as coletas (limite '+f(cvLim,1)+'%).'});
-    else A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'%, acima do limite de '+f(cvLim,1)+'%. A média pode fechar e a faixa não: parte da parcela recebe mais que a dose e parte recebe menos. Revise bicos, pressão e coleta.'});
+    if(cal.cv<=cvLim)
+      A.push({k:'ok', t:'CV de '+f(cal.cv,1)+'% '+(porBico?'entre os bicos':'entre as três coletas da barra')+' (limite '+f(cvLim,1)+'%).'});
+    else if(porBico)
+      A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'% entre os bicos, acima do limite de '+f(cvLim,1)+'%. A média pode fechar e a faixa não: parte da parcela recebe mais que a dose e parte recebe menos. Revise bicos, pressão e coleta.'});
+    else
+      A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'% entre as três coletas, acima do limite de '+f(cvLim,1)+'%. A máquina não repetiu a mesma vazão de uma passada para a outra. Revise pressão, bomba e a própria coleta antes de confiar na taxa.'});
   }
   if(op.deviationPct!=null){
     var ab=Math.abs(op.deviationPct);
@@ -7643,8 +7671,15 @@ function calcBarraSaidaHtml(){
     '<span>Taxa real</span><b>'+ou(op.actualRate, f(op.actualRate,1)+' L/ha')+'</b>'+
     '<span>Desvio da meta</span><b>'+ou(op.deviationPct, f(op.deviationPct,1)+' %')+'</b>'+
     '<span>Velocidade ideal</span><b>'+ou(op.idealSpeed, f(op.idealSpeed,2)+' km/h')+'</b>'+
-    '<span>CV entre coletas</span><b>'+ou(cal.cv, f(cal.cv,1)+' %')+'</b>'+
+    '<span>'+(_calcBarraMetodo(b)==='barra'?'CV entre repetições':'CV entre bicos')+'</span><b>'+ou(cal.cv, f(cal.cv,1)+' %')+'</b>'+
   '</div>';
+  /* O mesmo número com dois significados. Entre bicos, o CV mede UNIFORMIDADE DA
+     FAIXA: alto quer dizer que parte da parcela recebe mais dose que a outra. Entre
+     repetições da barra inteira, mede REPETIBILIDADE da máquina: alto quer dizer que a
+     mesma máquina entregou diferente a cada passada. Chamar os dois de "CV das
+     coletas" faria o sider parecer uniforme quando ninguém mediu uniformidade. */
+  if(_calcBarraMetodo(b)==='barra' && cal.cv!=null)
+    h+='<div class="calc-barrahint">Este CV é entre as três coletas da barra inteira — mede a repetibilidade da máquina, <b>não</b> a uniformidade entre bicos. Para uniformidade, é preciso coletar bico a bico.</div>';
   if(op.idealSpeed!=null && isFinite(op.idealSpeed))
     h+='<div class="calc-barrahint">Velocidade ideal = a que entrega a taxa-alvo COM A VAZÃO QUE A MÁQUINA TEM. É o ajuste que não exige trocar bico.</div>';
   calcBarraAvisos(op,b).forEach(function(a){
@@ -7674,9 +7709,12 @@ function calcBarraHtml(){
     '<div class="calc-f"><span class="calc-lab">Equipamento</span>'+
       '<select class="calc-sel" onchange="_calcBarraCampo(\'equipamento\',this.value,1)">'+
       Object.keys(CALC_BARRA_EQUIP).map(function(k){ return opt(k,CALC_BARRA_EQUIP[k],b.equipamento); }).join('')+'</select></div>'+
-    '<div class="calc-f"><span class="calc-lab">Método de coleta</span>'+
+    /* O sider não escolhe método: nele não se coleta bico a bico. Oferecer a escolha
+       seria oferecer uma medição que ninguém faz nessa máquina. */
+    (b.equipamento==='tractor' ? '' :
+      '<div class="calc-f"><span class="calc-lab">Método de coleta</span>'+
       '<select class="calc-sel" onchange="_calcBarraCampo(\'metodo\',this.value,1)">'+
-      opt('individual','Bico a bico',b.metodo)+opt('barra','Barra inteira',b.metodo)+'</select></div>'+
+      opt('individual','Bico a bico',_calcBarraMetodo(b))+opt('barra','Barra inteira',_calcBarraMetodo(b))+'</select></div>')+
     campo('Nº de bicos','bicos','1','min="1"',true)+
     campo('Espaçamento entre bicos (m)','espacamento','0.01','')+
     campo('Largura da barra (m)','larguraManual','0.01','placeholder="0 = bicos × espaçamento"')+
@@ -7705,13 +7743,13 @@ function calcBarraHtml(){
 
   /* Sem nº de bicos declarado não se desenha a matriz. Uma linha solta convidaria a
      medir "o bico", e a coleta entraria como se a barra tivesse um bico só. */
-  if(b.metodo!=='barra' && !(_calcNum(b.bicos)>0)){
+  if(_calcBarraMetodo(b)!=='barra' && !(_calcNum(b.bicos)>0)){
     h+='<div class="calc-warn">• Informe o nº de bicos para abrir a planilha de coleta.</div>'+
        '<div id="calcBarraOut">'+calcBarraSaidaHtml()+'</div>';
     return h;
   }
 
-  if(b.metodo==='barra'){
+  if(_calcBarraMetodo(b)==='barra'){
     h+='<div class="calc-mix"><div class="calc-mixh" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))">'+
        '<span>Barra inteira</span><span>1ª (mL)</span><span>2ª (mL)</span><span>3ª (mL)</span></div>'+
        '<div class="calc-mixr" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))"><span>Coleta</span>'+
@@ -7764,7 +7802,7 @@ function _calcBarraCampo(chave, valor, estrutural){
 }
 function _calcBarraLeitura(i, j, valor){
   var b=_calcBarraEstado();
-  if(b.metodo==='barra'){
+  if(_calcBarraMetodo(b)==='barra'){
     if(!Array.isArray(b.leiturasBarra)) b.leiturasBarra=['','',''];
     b.leiturasBarra[j]=valor;
   }else{
@@ -7777,7 +7815,7 @@ function _calcBarraLeitura(i, j, valor){
   _calcBarraOutSync();
   /* A média do bico fica na mesma linha da leitura: recalcular sem repintá-la
      deixaria um número velho ao lado do valor novo. */
-  if(b.metodo!=='barra'){
+  if(_calcBarraMetodo(b)!=='barra'){
     var op=calcBarraOperacao(b), AC=window.AplicacaoCore;
     var med=op&&op.calibration&&(op.calibration.means||[])[i];
     var linha=document.querySelectorAll('#calcBarraBox .calc-mix .calc-mixr')[i];
@@ -7797,20 +7835,21 @@ function calcBarraCfg(){
   var cal=op.calibration;
   return {
     motor:'AplicacaoCore', motorVersao:(AC&&AC.VERSION)||'?',
-    equipamento:b.equipamento, equipamentoRotulo:(CALC_BARRA_EQUIP[b.equipamento]||b.equipamento),
+    equipamento:((b.equipamento==='tractor')?'tractor':'co2'),
+    equipamentoRotulo:(CALC_BARRA_EQUIP[b.equipamento]||CALC_BARRA_EQUIP.co2),
     bicos:Math.max(1,Math.round(_calcNum(b.bicos))||1),
     espacamentoM:_calcNum(b.espacamento),
     larguraManualM:_calcNum(b.larguraManual),
     velocidadeKmH:_calcNum(b.velocidade),
     tempoColetaS:_calcNum(b.tempoS),
-    metodo:(b.metodo==='barra')?'barra inteira':'bico a bico',
+    metodo:(_calcBarraMetodo(b)==='barra')?'barra inteira':'bico a bico',
     /* Ponta e pressao nao entram em conta nenhuma, mas "4 L/min" sem dizer com que
        ponta e a que pressao nao se reproduz. Vem do protocolo, nao vira campo. */
     ponta:(_calcBarraProto().ponta||null),
     pressao:(_calcBarraProto().pressao||null),
     taxaAlvoLHa:calcBarraTaxa(b),
     toleranciaPct:_calcBarraTol(b), cvLimitePct:_calcBarraCv(b),
-    leituras:(b.metodo==='barra')?{barra:(b.leiturasBarra||[]).slice(0,3)}:{bicos:_calcBarraLinhas(b)},
+    leituras:(_calcBarraMetodo(b)==='barra')?{barra:(b.leiturasBarra||[]).slice(0,3)}:{bicos:_calcBarraLinhas(b)},
     resultado:{
       larguraM:op.width, velocidadeKmH:op.speed,
       vazaoMedidaLMin:op.measuredFlow, vazaoRequeridaLMin:op.requiredFlow,
