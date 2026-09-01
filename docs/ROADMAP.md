@@ -122,8 +122,8 @@ relatório reconstrói a versão usada.
 ## 7. Fase 2 — Motor universal de aplicação · **P0**
 
 - **7.1** Motor sem HTML: `calcularAplicacao(config)`.
-- **7.2** `tratamento.aplicacao = {metodo, taxa, volumeMorto, sobraTecnica, configuracao}` — T1 e T2 drone, T3 trator, T4 Torre de Potter no mesmo estudo.
-- **7.3** `equipmentProfiles` — Drone DJI Agras T25, Barra CO₂, Atomizador, Sider 600 L, Torre Potter 01. Cada perfil guarda sua calibração habitual.
+- **7.2** `tratamento.aplicacao = {metodo, taxa, volumeMorto, sobraTecnica, configuracao}` — T1 e T2 drone, T3 trator, T4 Torre de Potter no mesmo estudo. **Os quatro métodos, não só os de barra**: drone e Potter entram junto.
+- **7.3** `equipmentProfiles` — Drone DJI Agras T25, Barra CO₂, Atomizador, Sider 600 L, Torre Potter 01. Cada perfil guarda sua calibração habitual. **A Torre de Potter é da BANCADA**: ela pertence à quadra de laboratório e é o único método que aparece lá — oferecer sider ou drone numa bancada é o mesmo erro de categoria descrito em §7-bis, na direção contrária.
 - **7.4** A aplicação **herda** do estudo: tratamentos, doses, parcelas, área, repetições, equipamentos. O operador não redigita.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
 - **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
@@ -171,6 +171,24 @@ estudo do Agracta.
 > Ou seja: **os Pacotes 1 e 2 da §31 estão essencialmente prontos.** O trabalho da
 > Release B é o Pacote 3 (aplicação do estudo) mais persistência, método por tratamento
 > e perfis de equipamento.
+
+## 7-bis. Revisão da categoria LABORATÓRIO · **P1**
+
+A quadra de laboratório (`data[qid].tipo==='lab'`) já está bem separada em vários
+pontos — o cartão da quadra troca cultura/DAP/BBCH pela especialidade, a programação
+de avaliações conta em HAT em vez de "a cada X dias", a dose pode ser em ppm, e a
+calculadora que abre é a de bancada. Mas **ainda sobra campo dentro do laboratório**.
+Auditoria de 01/09/2026:
+
+| Onde | O que vaza | Por que é errado |
+|---|---|---|
+| `openStudyEditV2`, passo 4 | `1ª aplicação` · `Nº aplicações` · `Intervalo (dias)` — sem guarda de lab | Mais abaixo o mesmo formulário já chama de **"Dia do tratamento"**. Ficam duas noções concorrentes de quando o tratamento aconteceu, no mesmo formulário. |
+| `openStudyEditV2`, "Desenho do ensaio" | `Como os tratamentos estão no campo`, com a opção **Faixas** e o texto sobre solo, declive e bordadura | Não existe faixa numa bancada. O aviso inteiro fala de gradiente de terreno. |
+| Editor de aplicação e de avaliação | `Estádio BBCH no momento` | Guardado **por acidente**: só não aparece porque `getBBCHList(studyCultura(...))` devolve vazio quando não há cultura. Uma quadra convertida de campo para lab que tenha mantido `data[qid].cultura` volta a mostrar fenologia de planta num ensaio de placa. |
+
+O padrão a seguir é o que a própria seção de avaliações já faz: **ramificar por
+`isQuadraLab`, não esconder por ausência de dado.** Guarda acidental é guarda que
+volta a falhar quando o dado reaparece.
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
