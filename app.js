@@ -6788,6 +6788,13 @@ function _calcCss(){
    '.calc-memrow button{flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:8px 13px;font-size:11.5px;font-weight:700;cursor:pointer}'+
    '.calc-memrow button:hover{background:#246a31}'+
    '.calc-memmsg{margin-top:6px;font-size:10.5px;color:#7f8e84;line-height:1.5}';
+  /* barra e calibracao */
+  s.textContent+='.calc-barra{margin-top:12px;border-top:1px solid rgba(255,255,255,.10);padding-top:10px}'+
+   '.calc-barrah{display:flex;justify-content:space-between;align-items:baseline;gap:8px;cursor:pointer;font-size:10px;letter-spacing:.8px;color:#9fb1a5;font-weight:700}'+
+   '.calc-barrares{font-size:10px;letter-spacing:0;color:#7f8e84;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+   '.calc-barrahint{font-size:10.5px;color:#7f8e84;line-height:1.5;margin:6px 0}'+
+   '.calc-barrainp{padding:5px 6px;font-size:12px;text-align:right}'+
+   '.calc-ok{color:#7ca88a;font-size:10px;margin-top:4px}';
   document.head.appendChild(s);
 }
 function openCalcAplicacao(qid,sid){
@@ -6800,6 +6807,7 @@ function openCalcAplicacao(qid,sid){
   var ov=document.getElementById('calcOvl');
   if(!ov){ ov=document.createElement('div'); ov.id='calcOvl'; ov.className='calc-ovl'; ov.onclick=function(e){ if(e.target===ov) closeCalc(); }; document.body.appendChild(ov); }
   ov.style.display='flex';
+  if(typeof _calcBarraReset==='function') _calcBarraReset();
   _calcRenderShell();
 }
 function closeCalc(){ var ov=document.getElementById('calcOvl'); if(ov) ov.style.display='none'; }
@@ -7294,12 +7302,13 @@ function _calcRenderShell(){
     '</div>'+
     '<div class="calc-sub">'+esc(refTxt)+'</div>'+
     '<div id="calcResults"></div>'+
+    '<div id="calcBarraBox" class="calc-barra"></div>'+
     '<div id="calcMemBox" class="calc-mem"></div>'+
     '<div class="calc-actions"><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
   '</div>';
   _calcCompute();
 }
-function _calcPick(v){ var p=String(v||'').split('|'); if(p.length===2){ _calcSel={qid:p[0],sid:p[1]}; _calcRenderShell(); } }
+function _calcPick(v){ var p=String(v||'').split('|'); if(p.length===2){ _calcSel={qid:p[0],sid:p[1]}; if(typeof _calcBarraReset==='function') _calcBarraReset(); _calcRenderShell(); } }
 function _calcCompute(){
   var box=document.getElementById('calcResults'); if(!box) return;
   var study=_calcStudy();
@@ -7365,6 +7374,7 @@ function _calcCompute(){
     html+='</div>';
   });
   box.innerHTML=html||'<div class="calc-empty">—</div>';
+  try{ _calcBarraSync(); }catch(e){}
   try{ _calcMemSync(); }catch(e){}
 }
 function _calcCopy(){
@@ -7375,6 +7385,349 @@ function _calcCopy(){
   if(!txt){ if(typeof _stxToast==='function') _stxToast('Nada a copiar.'); return; }
   if(typeof _stxCopy==='function'){ _stxCopy(txt).then(function(ok){ if(typeof _stxToast==='function') _stxToast(ok?'✓ Copiado':'Não consegui copiar'); }); }
   else { try{ navigator.clipboard.writeText(txt); alert('Copiado.'); }catch(e){ alert(txt); } }
+}
+
+/* ===================== BARRA E CALIBRAÇÃO ========================================
+   A calculadora acima responde metade da pergunta: quanta calda preparar e quanto
+   produto pôr em cada frasco. A outra metade é a que o auditor faz depois — a
+   máquina que saiu com essa calda entregou mesmo a taxa escrita no protocolo?
+
+   Isso não se responde de cabeça: mede-se. Coleta-se o que cada bico despeja num
+   tempo cronometrado e daí saem, por álgebra fechada, a vazão real, a taxa real em
+   L/ha, o desvio contra a meta, a velocidade que fecharia a meta com a vazão que a
+   máquina de fato tem, e o CV entre bicos.
+
+   O CV é o número que a média esconde. Quatro bicos coletando 300, 500, 500 e 700 mL
+   dão a mesma média de 500 do conjunto perfeito — e a mesma taxa "certa" em L/ha.
+   Mas um terço da faixa recebeu 40% menos que a dose e outro terço recebeu 40% mais.
+   O ensaio inteiro passa a medir dose que ninguém aplicou.
+
+   A aritmética inteira vem de vendor/aplicacao-core.js (equipmentOperation, que por
+   sua vez chama calculateCalibration). Aqui não se recalcula nada: monta-se o estado
+   mínimo que o motor pede, lê-se o resultado e traduz-se para a linguagem visual do
+   Agracta. Motor duplicado é motor livre para divergir — foi exatamente esse o erro
+   que a memória de cálculo veio corrigir em _calcCopy.
+
+   O que fica guardado: configuração, leituras e resultado entram na memória de
+   cálculo da aplicação, junto com a calda. Calda sem a calibração da máquina que a
+   aplicou é meio registro. ======================================================== */
+
+var CALC_BARRA_EQUIP={tractor:'Trator / barra tratorizada', co2:'Costal pressurizado a CO₂'};
+var _calcBarra=null;         /* configuração corrente, por estudo */
+/* Nasce fechada: quem abre a calculadora quer a calda. A calibração é ato separado,
+   feito na máquina, e não deve empurrar os tratamentos para fora da tela. */
+var _calcBarraAberta=false;
+
+function _calcBarraPadrao(){
+  return {equipamento:'tractor', bicos:4, espacamento:0.5, larguraManual:0,
+          velocidade:5, tempoS:30, metodo:'individual', taxaAlvo:'',
+          tolerancia:5, cvLimite:10, leiturasBico:[], leiturasBarra:['','','']};
+}
+
+/* Chave por estudo: calibração é da máquina naquele ensaio. Misturar a coleta de um
+   estudo com a de outro seria pior que não guardar nada. */
+function _calcBarraChave(){
+  var s=null; try{ s=(typeof _calcStudy==='function')?_calcStudy():null; }catch(e){}
+  return 'agracta-calc-barra-'+((s&&s.id)||'geral');
+}
+
+function _calcBarraEstado(){
+  if(_calcBarra) return _calcBarra;
+  var b=_calcBarraPadrao();
+  try{
+    var raw=localStorage.getItem(_calcBarraChave());
+    if(raw){ var o=JSON.parse(raw)||{}; for(var k in b){ if(o[k]!==undefined && o[k]!==null) b[k]=o[k]; } }
+  }catch(e){}
+  _calcBarra=b;
+  return b;
+}
+function _calcBarraSalvar(){
+  try{ localStorage.setItem(_calcBarraChave(), JSON.stringify(_calcBarraEstado())); }catch(e){}
+}
+/* Trocar de estudo tem de largar a barra do anterior, senão a coleta de um ensaio
+   apareceria calibrando outro. */
+function _calcBarraReset(){ _calcBarra=null; }
+
+/* A matriz mostrada acompanha o nº de bicos SEM truncar o que já foi digitado: quem
+   errou o número de bicos e corrigiu de volta reencontra a coleta que fez. Só as n
+   primeiras linhas são exibidas e entram no cálculo; o resto fica dormindo. */
+function _calcBarraLinhas(b){
+  b=b||_calcBarraEstado();
+  var n=Math.max(1,Math.round(_calcNum(b.bicos))||1);
+  var m=Array.isArray(b.leiturasBico)?b.leiturasBico:[];
+  var out=[];
+  for(var i=0;i<n;i++){
+    var r=m[i]||[];
+    out.push([r[0]==null?'':String(r[0]), r[1]==null?'':String(r[1]), r[2]==null?'':String(r[2])]);
+  }
+  return out;
+}
+
+/* Taxa-alvo: o campo próprio manda; vazio, cai no volume de calda padrão da
+   calculadora — que é onde o protocolo já foi digitado uma vez. Repetir o número em
+   dois lugares é convidar os dois a divergirem. */
+function calcBarraTaxa(b){
+  b=b||_calcBarraEstado();
+  var t=_calcNum(b.taxaAlvo);
+  if(t>0) return t;
+  var v=0; try{ v=_calcNum(_calcVal('calcVol')); }catch(e){}
+  return v>0?v:0;
+}
+
+/* Estado mínimo que equipmentOperation pede. Só o equipamento escolhido é montado:
+   o motor lê state[state.equipment] e mais nada. */
+function calcBarraOperacao(b){
+  var AC=window.AplicacaoCore; if(!AC) return null;
+  b=b||_calcBarraEstado();
+  var eq=(b.equipamento==='co2')?'co2':'tractor';
+  var st={equipment:eq, prep:{targetRate:calcBarraTaxa(b)}};
+  st[eq]={
+    nozzles:Math.max(1,Math.round(_calcNum(b.bicos))||1),
+    spacing:_calcNum(b.espacamento),
+    manualWidth:_calcNum(b.larguraManual),
+    speed:_calcNum(b.velocidade),
+    sampleSeconds:_calcNum(b.tempoS),
+    method:(b.metodo==='barra')?'whole':'individual',
+    calibration:{individual:_calcBarraLinhas(b), whole:(b.leiturasBarra||['','',''])}
+  };
+  try{ return AC.equipmentOperation(st); }catch(e){ return null; }
+}
+
+/* Os limites de aceitação são do protocolo, não do programa: ficam editáveis e
+   ficam gravados. Um "±5%" que o Agracta escolheu sozinho não é critério de ensaio. */
+function _calcBarraTol(b){ var v=_calcNum(b.tolerancia); return v>0?v:5; }
+function _calcBarraCv(b){ var v=_calcNum(b.cvLimite); return v>0?v:10; }
+
+function calcBarraAvisos(op, b){
+  var A=[]; if(!op) return A;
+  b=b||_calcBarraEstado();
+  var AC=window.AplicacaoCore;
+  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  var cal=op.calibration||{};
+  var tol=_calcBarraTol(b), cvLim=_calcBarraCv(b);
+
+  if(cal.negativeCount>0)
+    A.push({k:'erro', t:cal.negativeCount+' leitura(s) de coleta com valor negativo. Leitura negativa não entra na média e bloqueia a calibração — corrija o valor.'});
+  /* Zero é MEDIDA, não célula vazia: bico entupido tem coleta zero e essa é a
+     informação. Por isso ele entra na média, na vazão e no CV — e vira erro, não
+     "leitura faltando". */
+  if((cal.zeroNozzles||[]).length)
+    A.push({k:'erro', t:'Bico(s) '+cal.zeroNozzles.join(', ')+' coletaram 0 mL — sem vazão. Verifique entupimento, filtro e registro antes de aplicar.'});
+  if(!cal.valid)
+    A.push({k:'aviso', t:'Calibração incompleta: '+(cal.completed||0)+' de '+(cal.requiredInputs||0)+' leituras preenchidas. A taxa real ainda não pode ser confirmada.'});
+  else if(!(cal.totalFlow>0))
+    A.push({k:'erro', t:'Todas as leituras são zero: não há vazão medida. Verifique pressão, bomba e registro antes de aplicar.'});
+
+  if(cal.valid && cal.cv!=null){
+    if(cal.cv<=cvLim) A.push({k:'ok', t:'CV de '+f(cal.cv,1)+'% entre as coletas (limite '+f(cvLim,1)+'%).'});
+    else A.push({k:'erro', t:'CV de '+f(cal.cv,1)+'%, acima do limite de '+f(cvLim,1)+'%. A média pode fechar e a faixa não: parte da parcela recebe mais que a dose e parte recebe menos. Revise bicos, pressão e coleta.'});
+  }
+  if(op.deviationPct!=null){
+    var ab=Math.abs(op.deviationPct);
+    if(ab<=tol) A.push({k:'ok', t:'Taxa real a '+f(op.deviationPct,1)+'% da meta (tolerância ±'+f(tol,1)+'%).'});
+    else if(ab<=tol*2) A.push({k:'aviso', t:'Desvio de taxa de '+f(op.deviationPct,1)+'%, acima da tolerância de ±'+f(tol,1)+'%. Ajuste a velocidade ou a vazão.'});
+    else A.push({k:'erro', t:'Desvio de taxa de '+f(op.deviationPct,1)+'%, acima do dobro da tolerância. Não liberar sem recalibrar.'});
+  }
+  if(!(op.width>0)) A.push({k:'aviso', t:'Largura de trabalho zero: informe bicos e espaçamento, ou a largura da barra.'});
+  if(!(op.speed>0)) A.push({k:'aviso', t:'Sem velocidade não há taxa em L/ha — a vazão sozinha não diz quanto o alvo recebe.'});
+  if(!(calcBarraTaxa(b)>0)) A.push({k:'aviso', t:'Sem taxa-alvo (L/ha) não há contra o que comparar a vazão medida.'});
+  return A;
+}
+
+/* Uma linha para o cabeçalho fechado — o estado da calibração tem de ser legível
+   sem abrir a seção, senão ninguém lembra de conferir. */
+function calcBarraResumo(op, b){
+  b=b||_calcBarraEstado();
+  op=op||calcBarraOperacao(b);
+  if(!op) return 'motor não carregado';
+  var AC=window.AplicacaoCore;
+  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  var cal=op.calibration||{};
+  if(!cal.valid) return 'não calibrada — '+(cal.completed||0)+'/'+(cal.requiredInputs||0)+' leituras';
+  var avisos=calcBarraAvisos(op,b);
+  var pior=avisos.some(function(a){return a.k==='erro';})?'⚠ ':(avisos.some(function(a){return a.k==='aviso';})?'• ':'✓ ');
+  var p=[];
+  if(op.actualRate!=null) p.push(f(op.actualRate,0)+' L/ha');
+  if(op.deviationPct!=null) p.push('desvio '+f(op.deviationPct,1)+'%');
+  if(cal.cv!=null) p.push('CV '+f(cal.cv,1)+'%');
+  return pior+p.join(' · ');
+}
+
+function calcBarraSaidaHtml(){
+  var b=_calcBarraEstado();
+  var op=calcBarraOperacao(b);
+  if(!op) return '<div class="calc-terr">⚠ O motor de aplicação (AplicacaoCore) não carregou. Recarregue o app.</div>';
+  var AC=window.AplicacaoCore;
+  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  function ou(v,fmt){ return (v==null||!isFinite(v))?'—':fmt; }
+  var cal=op.calibration||{};
+  var h='<div class="calc-kv">'+
+    '<span>Largura de trabalho</span><b>'+ou(op.width, f(op.width,2)+' m')+'</b>'+
+    '<span>Vazão requerida</span><b>'+(op.requiredFlow>0?f(op.requiredFlow,3)+' L/min':'—')+'</b>'+
+    '<span>Coleta esperada / bico</span><b>'+ou(op.requiredCollectionPerNozzleMl, f(op.requiredCollectionPerNozzleMl,1)+' mL')+'</b>'+
+    '<span>Coleta esperada / barra</span><b>'+ou(op.requiredCollectionTotalMl, f(op.requiredCollectionTotalMl,1)+' mL')+'</b>'+
+    '<span>Vazão medida</span><b>'+(op.measuredFlow>0?f(op.measuredFlow,3)+' L/min':'—')+'</b>'+
+    '<span>Vazão por bico</span><b>'+(cal.perNozzleFlow>0?f(cal.perNozzleFlow,3)+' L/min':'—')+'</b>'+
+    '<span>Taxa real</span><b>'+ou(op.actualRate, f(op.actualRate,1)+' L/ha')+'</b>'+
+    '<span>Desvio da meta</span><b>'+ou(op.deviationPct, f(op.deviationPct,1)+' %')+'</b>'+
+    '<span>Velocidade ideal</span><b>'+ou(op.idealSpeed, f(op.idealSpeed,2)+' km/h')+'</b>'+
+    '<span>CV entre coletas</span><b>'+ou(cal.cv, f(cal.cv,1)+' %')+'</b>'+
+  '</div>';
+  if(op.idealSpeed!=null && isFinite(op.idealSpeed))
+    h+='<div class="calc-barrahint">Velocidade ideal = a que entrega a taxa-alvo COM A VAZÃO QUE A MÁQUINA TEM. É o ajuste que não exige trocar bico.</div>';
+  calcBarraAvisos(op,b).forEach(function(a){
+    h+='<div class="'+(a.k==='erro'?'calc-terr':(a.k==='ok'?'calc-ok':'calc-warn'))+'">'+
+       (a.k==='erro'?'⚠ ':(a.k==='ok'?'✓ ':'• '))+esc(a.t)+'</div>';
+  });
+  return h;
+}
+
+function calcBarraHtml(){
+  var b=_calcBarraEstado();
+  var op=calcBarraOperacao(b);
+  var AC=window.AplicacaoCore;
+  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  var h='<div class="calc-barrah" onclick="_calcBarraToggle()">'+
+        '<span>'+(_calcBarraAberta?'▾':'▸')+' 🚜 BARRA E CALIBRAÇÃO</span>'+
+        '<span class="calc-barrares">'+esc(calcBarraResumo(op,b))+'</span></div>';
+  if(!_calcBarraAberta) return h;
+
+  function opt(v,rot,atual){ return '<option value="'+esc(v)+'"'+(String(atual)===String(v)?' selected':'')+'>'+esc(rot)+'</option>'; }
+  function campo(rot,chave,step,extra,estr){
+    return '<div class="calc-f"><span class="calc-lab">'+esc(rot)+'</span>'+
+      '<input class="calc-inp" type="number" step="'+step+'" value="'+esc(b[chave])+'" '+(extra||'')+
+      ' on'+(estr?'change':'input')+'="_calcBarraCampo(\''+chave+'\',this.value'+(estr?',1':'')+')"></div>';
+  }
+  h+='<div class="calc-grid">'+
+    '<div class="calc-f"><span class="calc-lab">Equipamento</span>'+
+      '<select class="calc-sel" onchange="_calcBarraCampo(\'equipamento\',this.value,1)">'+
+      Object.keys(CALC_BARRA_EQUIP).map(function(k){ return opt(k,CALC_BARRA_EQUIP[k],b.equipamento); }).join('')+'</select></div>'+
+    '<div class="calc-f"><span class="calc-lab">Método de coleta</span>'+
+      '<select class="calc-sel" onchange="_calcBarraCampo(\'metodo\',this.value,1)">'+
+      opt('individual','Bico a bico',b.metodo)+opt('barra','Barra inteira',b.metodo)+'</select></div>'+
+    campo('Nº de bicos','bicos','1','min="1"',true)+
+    campo('Espaçamento entre bicos (m)','espacamento','0.01','')+
+    campo('Largura da barra (m)','larguraManual','0.01','placeholder="0 = bicos × espaçamento"')+
+    campo('Velocidade (km/h)','velocidade','0.1','')+
+    campo('Tempo de coleta (s)','tempoS','1','')+
+    campo('Taxa-alvo (L/ha)','taxaAlvo','1','placeholder="vazio = volume padrão"')+
+    campo('Tolerância de taxa (±%)','tolerancia','0.5','')+
+    campo('Limite de CV (%)','cvLimite','0.5','')+
+  '</div>';
+
+  var alvo=(op&&op.requiredCollectionPerNozzleMl!=null&&isFinite(op.requiredCollectionPerNozzleMl))
+    ? ('Meta por bico: '+f(op.requiredCollectionPerNozzleMl,1)+' mL em '+f(_calcNum(b.tempoS),0)+' s.')
+    : 'Preencha bicos, espaçamento, velocidade e taxa-alvo para saber quanto cada bico deveria coletar.';
+  h+='<div class="calc-barrahint">'+esc(alvo)+' Anote o que cada bico realmente coletou — inclusive o zero.</div>';
+
+  if(b.metodo==='barra'){
+    h+='<div class="calc-mix"><div class="calc-mixh" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))">'+
+       '<span>Barra inteira</span><span>1ª (mL)</span><span>2ª (mL)</span><span>3ª (mL)</span></div>'+
+       '<div class="calc-mixr" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))"><span>Coleta</span>'+
+       [0,1,2].map(function(j){
+         return '<input class="calc-inp calc-barrainp" type="number" step="0.1" value="'+esc((b.leiturasBarra||[])[j]||'')+
+                '" oninput="_calcBarraLeitura(0,'+j+',this.value)">';
+       }).join('')+'</div></div>';
+  }else{
+    var linhas=_calcBarraLinhas(b);
+    h+='<div class="calc-mix"><div class="calc-mixh" style="grid-template-columns:minmax(0,.7fr) repeat(3,minmax(0,1fr)) minmax(0,.8fr)">'+
+       '<span>Bico</span><span>1ª (mL)</span><span>2ª (mL)</span><span>3ª (mL)</span><span>Média</span></div>';
+    linhas.forEach(function(r,i){
+      var med=(op&&op.calibration&&(op.calibration.means||[])[i]);
+      h+='<div class="calc-mixr" style="grid-template-columns:minmax(0,.7fr) repeat(3,minmax(0,1fr)) minmax(0,.8fr)">'+
+         '<span>'+(i+1)+'</span>'+
+         [0,1,2].map(function(j){
+           return '<input class="calc-inp calc-barrainp" type="number" step="0.1" value="'+esc(r[j])+
+                  '" oninput="_calcBarraLeitura('+i+','+j+',this.value)">';
+         }).join('')+
+         '<b>'+((med==null)?'—':f(med,1))+'</b></div>';
+    });
+    h+='</div>';
+  }
+
+  h+='<div id="calcBarraOut">'+calcBarraSaidaHtml()+'</div>';
+  return h;
+}
+
+/* Duas sincronizações, de propósito. A seção inteira só é redesenhada quando muda a
+   ESTRUTURA (nº de bicos, método, equipamento); digitar uma leitura redesenha apenas
+   a saída, senão o campo perderia o foco a cada tecla. */
+function _calcBarraSync(){
+  var box=document.getElementById('calcBarraBox'); if(!box) return;
+  box.innerHTML=calcBarraHtml();
+}
+function _calcBarraOutSync(){
+  var out=document.getElementById('calcBarraOut');
+  if(out) out.innerHTML=calcBarraSaidaHtml();
+  var res=document.querySelector('#calcBarraBox .calc-barrares');
+  if(res) res.textContent=calcBarraResumo();
+  try{ _calcMemSync(); }catch(e){}
+}
+function _calcBarraToggle(){ _calcBarraAberta=!_calcBarraAberta; _calcBarraSync(); }
+
+function _calcBarraCampo(chave, valor, estrutural){
+  var b=_calcBarraEstado();
+  b[chave]=valor;
+  _calcBarraSalvar();
+  if(estrutural) _calcBarraSync(); else _calcBarraOutSync();
+}
+function _calcBarraLeitura(i, j, valor){
+  var b=_calcBarraEstado();
+  if(b.metodo==='barra'){
+    if(!Array.isArray(b.leiturasBarra)) b.leiturasBarra=['','',''];
+    b.leiturasBarra[j]=valor;
+  }else{
+    if(!Array.isArray(b.leiturasBico)) b.leiturasBico=[];
+    while(b.leiturasBico.length<=i) b.leiturasBico.push(['','','']);
+    if(!Array.isArray(b.leiturasBico[i])) b.leiturasBico[i]=['','',''];
+    b.leiturasBico[i][j]=valor;
+  }
+  _calcBarraSalvar();
+  _calcBarraOutSync();
+  /* A média do bico fica na mesma linha da leitura: recalcular sem repintá-la
+     deixaria um número velho ao lado do valor novo. */
+  if(b.metodo!=='barra'){
+    var op=calcBarraOperacao(b), AC=window.AplicacaoCore;
+    var med=op&&op.calibration&&(op.calibration.means||[])[i];
+    var linha=document.querySelectorAll('#calcBarraBox .calc-mix .calc-mixr')[i];
+    var alvo=linha?linha.querySelector('b'):null;
+    if(alvo) alvo.textContent=(med==null)?'—':(AC?AC.formatNumber(med,1):String(med));
+  }
+}
+
+/* O que vai para a memória de cálculo. Só entra barra que foi de fato calibrada:
+   bloco vazio num registro BPL sugere calibração que não houve, e sugerir isso é
+   pior do que omitir. */
+function calcBarraCfg(){
+  var b=_calcBarraEstado();
+  var op=calcBarraOperacao(b);
+  if(!op||!op.calibration||!op.calibration.valid) return null;
+  var AC=window.AplicacaoCore;
+  var cal=op.calibration;
+  return {
+    motor:'AplicacaoCore', motorVersao:(AC&&AC.VERSION)||'?',
+    equipamento:b.equipamento, equipamentoRotulo:(CALC_BARRA_EQUIP[b.equipamento]||b.equipamento),
+    bicos:Math.max(1,Math.round(_calcNum(b.bicos))||1),
+    espacamentoM:_calcNum(b.espacamento),
+    larguraManualM:_calcNum(b.larguraManual),
+    velocidadeKmH:_calcNum(b.velocidade),
+    tempoColetaS:_calcNum(b.tempoS),
+    metodo:(b.metodo==='barra')?'barra inteira':'bico a bico',
+    taxaAlvoLHa:calcBarraTaxa(b),
+    toleranciaPct:_calcBarraTol(b), cvLimitePct:_calcBarraCv(b),
+    leituras:(b.metodo==='barra')?{barra:(b.leiturasBarra||[]).slice(0,3)}:{bicos:_calcBarraLinhas(b)},
+    resultado:{
+      larguraM:op.width, velocidadeKmH:op.speed,
+      vazaoMedidaLMin:op.measuredFlow, vazaoRequeridaLMin:op.requiredFlow,
+      vazaoPorBicoLMin:cal.perNozzleFlow,
+      coletaEsperadaBarraMl:op.requiredCollectionTotalMl,
+      coletaEsperadaPorBicoMl:op.requiredCollectionPerNozzleMl,
+      taxaRealLHa:op.actualRate, desvioPct:op.deviationPct,
+      velocidadeIdealKmH:op.idealSpeed, cvPct:cal.cv,
+      mediasPorBicoMl:(cal.means||[]).slice()
+    },
+    avisos:calcBarraAvisos(op,b).map(function(a){ return a.k+': '+a.t; })
+  };
 }
 
 /* ===================== MEMÓRIA DE CÁLCULO DA APLICAÇÃO ============================
@@ -7402,7 +7755,11 @@ function _calcConfigAtual(){
     volumeCaldaLHa:_calcNum(_calcVal('calcVol')),
     volumeMortoMl:_calcNum(_calcVal('calcDead')),
     frascos:Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1),
-    capacidadeFrascoL:_calcNum(_calcVal('calcCap'))
+    capacidadeFrascoL:_calcNum(_calcVal('calcCap')),
+    /* A barra entra na configuracao so quando foi de fato calibrada; sem leituras
+       validas calcBarraCfg devolve null. O typeof guarda quem consome esta funcao
+       fora do app inteiro (os testes extraem funcao por funcao). */
+    barra:(typeof calcBarraCfg==='function'?calcBarraCfg():null)
   };
 }
 
@@ -7412,6 +7769,13 @@ function calcMemoria(study, cfg){
   if(!study||!(study.tratamentos||[]).length) return {erro:'Estudo sem tratamentos cadastrados.'};
   cfg=cfg||{};
 
+  /* A calibração da barra não é entrada do cálculo de calda — é registro paralelo, do
+     equipamento, e carrega resultado além de entrada. Fica em campo próprio para que
+     quem ler a memória não confunda "com que parcela calculei" com "que máquina medi". */
+  var barra=cfg.barra||null;
+  var entradas={};
+  for(var ck in cfg){ if(ck!=='barra' && Object.prototype.hasOwnProperty.call(cfg,ck)) entradas[ck]=cfg[ck]; }
+
   var mem={
     motor:'BioCalculoCampo',
     motorVersao:(BC.VERSION||'?'),
@@ -7420,7 +7784,8 @@ function calcMemoria(study, cfg){
     iso:new Date().toISOString(),
     user:(typeof _currentUserName==='function'?(_currentUserName()||'Não identificado'):'Não identificado'),
     estudo:{id:study.id, codigo:(study.codigo||null), nome:(study.nome||null)},
-    entradas:cfg,
+    entradas:entradas,
+    barra:barra,
     tratamentos:[]
   };
 
@@ -7492,6 +7857,29 @@ function calcMemoriaTexto(mem){
     if(t.veiculo) L.push('\t'+t.veiculo.nome+'\tcompleta\t'+f(t.veiculo.perFrasco)+' mL\t'+f(t.veiculo.total)+' mL\t');
     (t.avisos||[]).forEach(function(w){ L.push('\t⚠ '+w); });
   });
+  if(mem.barra){
+    var b=mem.barra, r=b.resultado||{};
+    L.push('');
+    L.push('BARRA E CALIBRAÇÃO — '+b.equipamentoRotulo+' · '+b.metodo);
+    L.push(b.bicos+' bico(s) · espaçamento '+f(b.espacamentoM,2)+' m · largura '+f(r.larguraM,2)+
+           ' m · '+f(b.velocidadeKmH,1)+' km/h · coleta de '+f(b.tempoColetaS,0)+' s');
+    L.push('Taxa-alvo '+f(b.taxaAlvoLHa,0)+' L/ha · vazão requerida '+f(r.vazaoRequeridaLMin,3)+
+           ' L/min · coleta esperada por bico '+f(r.coletaEsperadaPorBicoMl,1)+' mL');
+    L.push('Vazão medida '+f(r.vazaoMedidaLMin,3)+' L/min · taxa real '+f(r.taxaRealLHa,1)+
+           ' L/ha · desvio '+f(r.desvioPct,1)+'% · CV '+f(r.cvPct,1)+
+           '% · velocidade ideal '+f(r.velocidadeIdealKmH,2)+' km/h');
+    if(b.leituras&&b.leituras.bicos){
+      L.push('Bico\t1ª(mL)\t2ª(mL)\t3ª(mL)\tMédia(mL)');
+      b.leituras.bicos.forEach(function(lin,i){
+        L.push((i+1)+'\t'+lin.join('\t')+'\t'+f((r.mediasPorBicoMl||[])[i],1));
+      });
+    }else if(b.leituras&&b.leituras.barra){
+      L.push('Coleta da barra\t'+b.leituras.barra.join('\t'));
+    }
+    L.push('Critérios: tolerância de taxa ±'+f(b.toleranciaPct,1)+'% · limite de CV '+f(b.cvLimitePct,1)+'%');
+    (b.avisos||[]).forEach(function(a){ L.push('  '+a); });
+    L.push('Motor da calibração: '+b.motor+' '+b.motorVersao);
+  }
   L.push('');
   L.push('Motor '+mem.motor+' '+mem.motorVersao+' · gerado em '+
          (function(){ try{ return new Date(mem.geradoEm).toLocaleString('pt-BR'); }catch(_){ return mem.iso; } })()+
@@ -7580,7 +7968,13 @@ function aplicacaoMemoriaResumo(ap){
   if(!m) return null;
   var n=(m.tratamentos||[]).filter(function(t){ return !t.semPreparo && !t.erro; }).length;
   return {quando:m.iso, user:m.user, motor:m.motor+' '+m.motorVersao,
-          tratamentos:n, refeito:((ap.memoriasAnteriores||[]).length||0)};
+          tratamentos:n, refeito:((ap.memoriasAnteriores||[]).length||0),
+          /* Calda gravada sem calibração é meio registro — a ficha da aplicação
+             precisa poder dizer qual das duas está ali. */
+          barra:(m.barra?{equipamento:m.barra.equipamentoRotulo,
+                          taxaRealLHa:(m.barra.resultado||{}).taxaRealLHa,
+                          desvioPct:(m.barra.resultado||{}).desvioPct,
+                          cvPct:(m.barra.resultado||{}).cvPct}:null)};
 }
 
 /* ===================== ANÁLISE ESTATÍSTICA (BioEstat embutido em estatistica/) =====================

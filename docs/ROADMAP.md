@@ -2,9 +2,18 @@
 
 Evolução para uma plataforma completa de P&D agrícola **sem ruptura da usabilidade atual**.
 
-> Documento de referência fixa. As notas em blocos `Estado (data)` foram verificadas
-> contra o código e existem para o roadmap não virar lista de desejos — quando um
-> item já estiver pronto, a nota diz onde ele mora.
+> **Este documento diz em que ORDEM construir e ONDE cada coisa mora na tela.**
+> O que o Agracta deve ser, e por quê, está em [`ARQUITETURA.md`](ARQUITETURA.md) —
+> a especificação-mãe. Os dois se complementam e devem ser lidos juntos.
+>
+> Divergências entre os dois estão registradas em **Decisões em aberto**, no fim do
+> `ARQUITETURA.md`. Uma delas afeta este arquivo: a §12.7 aqui recusa o "score
+> 96/100" que a especificação propõe. Enquanto não houver decisão, vale o que está
+> escrito aqui — contagem e classificação, não score.
+>
+> As notas em blocos `Estado (data)` foram verificadas contra o código e existem para
+> o roadmap não virar lista de desejos — quando um item já estiver pronto, a nota diz
+> onde ele mora.
 
 ---
 
@@ -42,8 +51,9 @@ modular**.
 Agracta
 ├── app.js                  coordenação da interface
 ├── vendor/ (core)
-│   ├── biocalc-campo-core.js      ← existe
-│   ├── biocalc-lab-core.js        ← existe
+│   ├── biocalc-campo-core.js      ← existe (mistura de calda)
+│   ├── biocalc-lab-core.js        ← existe (bancada: ppm, série, ajuste i.a.)
+│   ├── aplicacao-core.js          ← existe (operação: equipamento + calibração)
 │   ├── protocolo-core.js
 │   ├── fertilidade-core.js
 │   ├── fenotipagem-core.js
@@ -116,7 +126,7 @@ relatório reconstrói a versão usada.
 - **7.3** `equipmentProfiles` — Drone DJI Agras T25, Barra CO₂, Atomizador, Sider 600 L, Torre Potter 01. Cada perfil guarda sua calibração habitual.
 - **7.4** A aplicação **herda** do estudo: tratamentos, doses, parcelas, área, repetições, equipamentos. O operador não redigita.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
-- **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional).
+- **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ barra/CO₂ na tela (01/09/2026); drone e Torre de Potter pendentes.
 - **7.8** Laboratório vira **submodo** do mesmo motor: PPM, preparação inversa, campo→bancada, ajuste de i.a., série de doses, testemunha automática, alertas de pipetagem/massa mínima.
 - **7.9** A tela mostra o essencial e esconde o resto atrás de *"Ver cálculo completo"*.
 
@@ -128,9 +138,26 @@ estudo do Agracta.
 > - ✅ **7.8** parcialmente: `biocalc-lab-core.js` já traz `calcPPM`, `calcPPMInverso`, `calcCampo`, `calcAjusteIA`, `calcSerie`, `alertaPipeta`, `alertaMassa`.
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
 > - ✅ **7.4** parcialmente: já pré-preenche dose/volume dos tratamentos do estudo.
-> - ❌ **7.6** — `memoriaCalculo` não existe em lugar nenhum. O cálculo vive num overlay e **morre ao fechar**. A aplicação guarda só `data`, `bbch`, `obs`, `carimbo`.
-> - ❌ **7.2** — não há método por tratamento.
-> - ❌ **7.3** — não há `equipmentProfiles`.
+> - ✅ **7.6** feito (01/09/2026): `aplicacao.memoriaCalculo` grava entradas, resultado por componente, avisos, autoria e a versão do motor. Regravar preserva o anterior em `memoriasAnteriores`. Coberto por `test_memoria_calculo.js` (63 verificações, com golden test).
+> - ✅ **7.7** feito (01/09/2026): **barra e calibração na calculadora do Agracta.**
+>   Seção própria dentro de `openCalcAplicacao`, fechada por padrão — a calculadora de
+>   calda continua sendo o assunto principal da tela. Coleta bico a bico ou da barra
+>   inteira, e devolve largura de trabalho, vazão requerida, **coleta esperada por bico**
+>   (o número que se leva para o campo), vazão medida, taxa real em L/ha, desvio,
+>   velocidade ideal e CV entre bicos. Tolerância de taxa e limite de CV são editáveis,
+>   porque o critério é do protocolo e não do programa. Toda a aritmética vem de
+>   `vendor/aplicacao-core.js` (`equipmentOperation`); aqui não se recalcula nada.
+>   A calibração entra na `memoriaCalculo` da aplicação em campo próprio, com leituras
+>   brutas e versão do motor — e **só quando é válida**: bloco vazio num registro BPL
+>   sugeriria calibração que não houve. Coberto por `test_calc_barra.js` (74
+>   verificações, golden tests conferidos à mão).
+> - 🔶 **7.2 e 7.3** — o MOTOR chegou (01/09/2026): `vendor/aplicacao-core.js`, extraído
+>   da Calculadora Universal, já traz método por tratamento (`resolveTreatmentApplication`,
+>   com override declarado por tratamento) e calibração por equipamento — trator/sider,
+>   drone, CO₂, atomizador e Torre de Potter. Coberto por `test_aplicacao_core.js`
+>   (67 verificações, com golden tests conferidos à mão). **Falta**, destes dois: o
+>   método por tratamento na tela (7.2) e os perfis de equipamento salvos (7.3) — a
+>   calibração da barra já está exposta, drone e Torre de Potter ainda não.
 >
 > Ou seja: **os Pacotes 1 e 2 da §31 estão essencialmente prontos.** O trabalho da
 > Release B é o Pacote 3 (aplicação do estudo) mais persistência, método por tratamento
