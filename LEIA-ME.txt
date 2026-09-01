@@ -1,11 +1,13 @@
-AGRACTA — 6a publicacao                    01/09/2026
+AGRACTA — 7a publicacao                     01/09/2026
 =====================================================
 
-Leva: 4 arquivos de codigo + 1 de teste.
-  CODIGO:  app.js  vendor/biocalc-campo-core.js  sw.js  index.html
-  TESTE:   test_memoria_calculo.js  (novo)
+Leva: 3 arquivos de codigo + 1 motor novo + 1 arquivo de teste.
+  CODIGO:  app.js  sw.js  index.html
+  MOTOR:   vendor/aplicacao-core.js  (novo)
+  TESTE:   test_calc_barra.js  (novo)
+  DOCS:    docs/ROADMAP.md  docs/ARQUITETURA.md
 
-Primeira entrega da Release B do roadmap (docs/ROADMAP.md).
+Continuacao da Release B do roadmap (docs/ROADMAP.md), secao 7.7.
 
 
 COMO SUBIR
@@ -13,74 +15,107 @@ COMO SUBIR
 1. Abra  https://github.com/Vyktorbio/Agracta
 2. "Add file" -> "Upload files"
 3. Selecione os arquivos e arraste.
-   ATENCAO: o biocalc-campo-core.js fica dentro de vendor/ — arraste ele
-   para dentro dessa pasta no GitHub, nao para a raiz.
-4. Commit: "Memoria de calculo gravada na aplicacao"
+   ATENCAO: o aplicacao-core.js fica dentro de vendor/ — arraste ele para
+   dentro dessa pasta no GitHub, nao para a raiz.
+4. Commit: "Barra e calibracao na calculadora de aplicacao"
 5. "Commit changes"
 
 
 O QUE MUDOU
 -----------
-O calculo da calda vivia so na tela. Era lido, copiado para a area de
-transferencia e MORRIA ao fechar. A aplicacao guardava data, BBCH,
-observacao e carimbo — nada do que foi efetivamente preparado.
+A calculadora de aplicacao respondia metade da pergunta: quanta calda
+preparar e quanto produto por em cada frasco. Voce mesmo disse que essa
+metade ja estava boa. Faltava a outra — a barra e a calibracao.
 
-Isso e um buraco de rastreabilidade. Num ensaio sob BPL, calculo que nao
-fica registrado e calculo que nao aconteceu: quem conferir o estudo daqui a
-tres anos nao tem como saber com que parcela, que volume morto e que dose a
-calda foi feita.
+E a metade que o auditor cobra, porque e a unica que liga o numero escrito
+no protocolo ao liquido que caiu na parcela. Nao se responde de cabeca: se
+mede. Coleta-se o que cada bico despeja num tempo cronometrado, e daquilo
+sai tudo o mais por algebra fechada.
 
-Agora a calculadora tem, no rodape:
+Agora a calculadora tem, entre os tratamentos e a memoria de calculo:
 
-    MEMORIA DE CALCULO
-    [ 20/08/2026 · BBCH 65  v ]  [Gravar nesta aplicacao]
-    Fica guardado o que foi calculado, com quem calculou e a versao do motor.
+    > BARRA E CALIBRACAO                    nao calibrada — 0/12 leituras
 
-Grava ESTRUTURA, nao texto: entradas (parcela, numero de parcelas, volume de
-calda, volume morto, frascos, capacidade), o resultado componente a
-componente, os avisos, quem calculou, quando, e a VERSAO DO MOTOR.
+Fechada por padrao, porque a calda continua sendo o assunto principal da
+tela. O resumo a direita diz o estado sem precisar abrir. Aberta, ela pede
+equipamento (trator/barra ou costal a CO2), numero de bicos, espacamento,
+largura da barra, velocidade, tempo de coleta e taxa-alvo — e mostra ANTES
+da coleta a meta por bico:
 
-A versao do motor importa: sem ela, um numero guardado hoje nao teria como
-ser reconferido depois que a formula mudasse. O biocalc-campo-core.js passou
-a declarar VERSION = "1.0.0", e ela sobe sempre que o calculo mudar de
-resultado.
+    Meta por bico: 500,0 mL em 30 s.
 
-REGRAVAR NAO APAGA O ANTERIOR. O calculo antigo vira historico em
-memoriasAnteriores. Refazer a conta depois de mudar a parcela e informacao,
-nao correcao silenciosa. A gravacao tambem entra na trilha de auditoria do
-estudo.
+Que e o numero que se leva para o campo. Depois entram as leituras, tres por
+bico, e saem:
 
-De quebra, o botao "Copiar" parou de ser um SEGUNDO calculo. Antes havia
-tres lacos calculando a mesma coisa (a tela, a copia e agora a gravacao),
-livres para divergir entre si. Agora a copia deriva da mesma memoria que a
-tela mostra e que o banco grava.
+    Largura de trabalho      2,00 m
+    Vazao requerida          4,000 L/min
+    Coleta esperada / bico   500,0 mL
+    Vazao medida             4,000 L/min
+    Taxa real                240,0 L/ha
+    Desvio da meta           0,0 %
+    Velocidade ideal         5,00 km/h
+    CV entre coletas         0,0 %
+
+A velocidade ideal e a que entrega a taxa-alvo COM A VAZAO QUE A MAQUINA
+TEM. E o ajuste que nao exige trocar bico.
 
 
-SOBRE O ROADMAP
----------------
-Ao conferir o codigo antes de comecar, achei que boa parte da Release B ja
-estava pronta:
+O CV E O NUMERO QUE A MEDIA ESCONDE
+-----------------------------------
+Quatro bicos coletando 300, 500, 500 e 700 mL dao a MESMA media de 500 do
+conjunto perfeito. A taxa fecha nos mesmos 240 L/ha e o desvio da zero. O
+painel inteiro tranquiliza.
 
-  - os Pacotes 1 e 2 (extrair o motor das calculadoras) JA ESTAVAM FEITOS:
-    vendor/biocalc-campo-core.js e vendor/biocalc-lab-core.js sao motores
-    puros, sem DOM, cobertos por 135 verificacoes;
-  - a secao 32 tambem ja estava resolvida: a calculadora e tela nativa do
-    Agracta, nao um iframe da Calculadora Universal.
+E um terco da faixa recebeu 40% menos que a dose, e outro terco recebeu 40%
+mais. O ensaio passa a medir uma dose que ninguem aplicou.
 
-O que faltava de verdade era outra coisa, e e o que esta nesta leva (a
-memoria) mais duas que continuam pendentes:
+Por isso o CV desses quatro bicos (32,66%) aparece como ERRO, ao lado do
+desvio de taxa que continua sendo reportado como ok. As duas verdades
+convivem na tela; nenhuma cobre a outra.
 
-  - metodo por tratamento (T1 drone, T3 trator no mesmo estudo);
-  - perfis de equipamento com calibracao habitual.
+Pela mesma razao, coleta ZERO e tratada como MEDIDA e nao como celula vazia.
+Bico entupido tem vazao zero, e essa e a informacao: o zero entra na media,
+derruba a vazao total, derruba a taxa e vira erro com o numero do bico. Nao
+some.
 
-O roadmap em docs/ROADMAP.md ficou anotado com esse estado real, para nao
-virar lista de desejos.
+A tolerancia de taxa (padrao +-5%) e o limite de CV (padrao 10%) ficam
+EDITAVEIS. O criterio de aceitacao e do protocolo, nao do programa: um
+"+-5%" que o Agracta escolhesse sozinho nao seria criterio de ensaio.
+
+
+ONDE ISSO FICA GUARDADO
+-----------------------
+Na memoria de calculo da aplicacao, em campo proprio, junto com a calda —
+com as leituras BRUTAS, os criterios declarados e a versao do motor.
+Resultado sem dado bruto nao se audita.
+
+E so quando a calibracao e VALIDA. Calibracao pela metade grava barra:null,
+ausencia explicita. Bloco vazio num registro BPL sugere calibracao que nao
+houve, e sugerir e pior do que omitir.
+
+O botao "Copiar" ja traz a secao junto, porque deriva da mesma memoria.
+
+
+O MOTOR
+-------
+A aritmetica inteira vem de vendor/aplicacao-core.js — o motor da
+Calculadora Universal de Aplicacao, extraido para dentro do Agracta sem uma
+linha de conta alterada. Aqui nao se recalcula nada: monta-se o estado
+minimo que o motor pede, le-se o resultado e traduz-se para a linguagem
+visual do Agracta.
+
+Motor duplicado e motor livre para divergir — foi exatamente esse o erro que
+a memoria de calculo veio corrigir na leva passada.
+
+Esse mesmo motor ja traz drone, atomizador e Torre de Potter, e metodo por
+tratamento. Nao foram expostos na tela: voce pediu barra e calibracao, e e
+isso que esta aqui. Eles ficam disponiveis para quando fizer sentido.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-FECHE E REABRA o Agracta no Mac. Cache foi de v153 para v154 (registro do
-sw.js de v111 para v112).
+FECHE E REABRA o Agracta no Mac. Cache foi de v154 para v155 (registro do
+sw.js de v112 para v113).
 
 O ndvi-proxy.py NAO mudou nesta leva — nao ha nada a esperar do Render.
 
@@ -89,14 +124,17 @@ ANTES DA PROXIMA VEZ
 --------------------
 Duplo clique em  Conferir antes de publicar.command.
 
-Todas as suites passam: 33 em JavaScript e 2 em Python. O
-test_memoria_calculo.js novo tem 63 verificacoes, entre elas um GOLDEN TEST
+Todas as suites passam: 34 em JavaScript e 2 em Python. O
+test_calc_barra.js novo tem 74 verificacoes, entre elas um GOLDEN TEST
 conferido a mao:
 
-  parcela 5x2 m, 4 parcelas, 200 L/ha, volume morto 300 mL
-  -> area 40 m2 = 0,004 ha
-  -> calda 0,8 L + 0,3 L = 1,1 L
-  -> T2 a 1,5 L/ha = 8,25 mL de produto
+  4 bicos x 0,5 m, 5 km/h, coleta de 500 mL em 30 s, meta 240 L/ha
+  -> largura 4 x 0,5 = 2 m
+  -> vazao requerida 240 x 5 x 2 / 600 = 4,000 L/min
+  -> coleta esperada 4 x 1000 x 30 / 60 = 2000 mL na barra, 500 mL por bico
+  -> vazao medida 4,000 L/min -> taxa real 600 x 4 / (5 x 2) = 240 L/ha
+  -> desvio 0%, velocidade ideal 5,00 km/h
 
-Se uma alteracao futura mudar esse numero, o teste FALHA. E proposital:
-mudanca de resultado em motor de dose tem de ser decisao, nunca acidente.
+E um segundo golden test para o caso perigoso, o dos bicos 300/500/500/700:
+media identica, taxa identica, CV 32,66%. Se uma alteracao futura fizer esse
+CV desaparecer, o teste FALHA. E proposital.
