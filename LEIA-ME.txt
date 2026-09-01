@@ -1,9 +1,11 @@
 AGRACTA — 4a publicacao                    01/09/2026
 =====================================================
 
-Leva: 7 arquivos.
-  RAIZ:  app.js  ui-campo.js  croqui.html  sw.js  index.html  ndvi-proxy.py
-         test_solo.js  test_solo_proxy.py   (testes novos, opcionais no upload)
+Leva: 7 arquivos de codigo + 5 de teste.
+  CODIGO:  app.js  ui-campo.js  croqui.html  sw.js  index.html  ndvi-proxy.py
+  TESTES:  test_solo.js  test_solo_proxy.py        (novos)
+           test_clima_chip.js  test_coord_estacao.js  test_mapa_padrao.js
+                                                     (destravados, ver abaixo)
 
 O ndvi-proxy.py MUDOU nesta leva. Ele vai junto (ver DEPOIS DE PUBLICAR).
 
@@ -182,13 +184,44 @@ ANTES DA PROXIMA VEZ
 --------------------
 Duplo clique em  Conferir antes de publicar.command.
 
-Nesta leva os testes novos passam (99 verificacoes no test_solo.js, 68 no
-test_solo_proxy.py) e a sintaxe esta limpa.
+Nesta leva TODAS as suites passam: 32 em JavaScript e 2 em Python, com a
+sintaxe limpa e as versoes de cache casando entre index.html e sw.js.
+Os testes novos somam 99 verificacoes no test_solo.js e 68 no
+test_solo_proxy.py.
 
-TRES SUITES JA ESTAVAM VERMELHAS ANTES DESTA LEVA e continuam:
-  test_clima_chip.js     (_climaMapCoord nao definido)
-  test_coord_estacao.js  (_coordPlausivel nao e funcao)
-  test_mapa_padrao.js    (1 verificacao sobre alerta de GPS)
-Conferi: falham igual no codigo antigo, sem as mudancas desta leva. Nao
-sao desta entrega — mas vao segurar o veredito em NAO SUBA ate serem
-arrumadas. Vale uma leva so para elas.
+A unica parte do conferidor que nao deu para rodar aqui foi o curl que
+compara o sw.js publicado com o local — a maquina de trabalho nao tinha
+saida para www.agracta.com.br. Ele confere se o nome do cache mudou
+(v149 -> v151, mudou), e volta a rodar normalmente no seu Mac.
+
+As TRES SUITES QUE ESTAVAM VERMELHAS foram destravadas nesta leva (elas
+seguravam o veredito em NAO SUBA, e nao eram deste trabalho). Em nenhuma
+das tres o app estava errado — os testes e que tinham ficado para tras:
+
+  test_mapa_padrao.js
+    Casava o trecho do alerta de GPS letra a letra e quebrou quando uma
+    linha foi acrescentada dentro do if, sem mudanca de comportamento.
+    Agora verifica a GUARDA (o alerta so aparece se a pessoa PEDIU a
+    posicao), tolerando formatacao. Conferi que ainda reprova se a guarda
+    for removida de verdade.
+
+  test_clima_chip.js
+    Faltavam funcoes na extracao: o chip passou a seguir o CENTRO DO MAPA
+    e a cadeia ficou maior. E ele exigia que o titulo trouxesse o NOME do
+    Local, quando hoje traz a COORDENADA. Atualizado para o desenho atual,
+    checando as duas coordenadas — mais forte que o nome, porque pega
+    tambem o caso de pintar o valor certo com a procedencia errada.
+
+  test_coord_estacao.js
+    Este guardava um desenho que foi SUBSTITUIDO DE PROPOSITO. Ele cobrava
+    _coordPlausivel e _coordSuspeita, que julgavam a coordenada da Ecowitt
+    e avisavam quando estava errada. Esse aviso nao tinha como sumir (quem
+    esta em campo nao administra a conta Ecowitt) e virava alerta
+    permanente para quem nao podia resolver. Hoje o Agracta usa a
+    coordenada do PROPRIO MAPA quando existe Local correspondente, e a da
+    Ecowitt e so ultima reserva, aceita apenas dentro do Brasil — entao
+    estacao no padrao de fabrica nao desloca nada e nao gera alerta nenhum.
+    Reescrito para guardar o desenho atual, com os mesmos dois casos reais
+    do incidente (Cleveland a 7.259 km e a capital a 138 km).
+
+Nenhum teste foi apagado nem afrouxado para ficar verde.
