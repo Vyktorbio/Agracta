@@ -1,13 +1,12 @@
-AGRACTA — 4a publicacao                    01/09/2026
+AGRACTA — 5a publicacao                    01/09/2026
 =====================================================
 
-Leva: 7 arquivos de codigo + 5 de teste.
-  CODIGO:  app.js  ui-campo.js  croqui.html  sw.js  index.html  ndvi-proxy.py
-  TESTES:  test_solo.js  test_solo_proxy.py        (novos)
-           test_clima_chip.js  test_coord_estacao.js  test_mapa_padrao.js
-                                                     (destravados, ver abaixo)
+Leva: 6 arquivos de codigo + 2 de teste + 1 modelo.
+  CODIGO:  app.js  ui-campo.js  sw.js  index.html  ndvi-proxy.py  .gitignore
+  TESTES:  test_solo.js  test_solo_proxy.py
+  MODELO:  modelos/solo-tabelas-exemplo.json
 
-O ndvi-proxy.py MUDOU nesta leva. Ele vai junto (ver DEPOIS DE PUBLICAR).
+O ndvi-proxy.py MUDOU de novo (ver DEPOIS DE PUBLICAR).
 
 
 COMO SUBIR
@@ -16,212 +15,130 @@ COMO SUBIR
 2. "Add file" -> "Upload files"
 3. Abra ESTA pasta, selecione os arquivos e arraste.
    (Nao arraste a pasta. Nao arraste o LEIA-ME.)
-4. Commit: "Classe de solo automatica por quadra (Embrapa/SiBCS)"
+4. Commit: "Solo nas quadras, analise, calagem e recomendacao"
 5. "Commit changes"
 
 
-O QUE MUDOU
------------
-O solo era o unico dado de caracterizacao que continuava sendo digitado
-a mao, protocolo por protocolo, como "solo argiloso". Sem procedencia e
-sem poder cruzar com resultado nenhum.
+1) MAPA DE SOLOS AGORA RECORTA PELAS QUADRAS
+--------------------------------------------
+Como voce pediu: mesma opcao que o NDVI ja tinha. Na gaveta do mapa entrou
+"Solo apenas nas quadras", ao lado de "Mapa de solos".
 
-Pior: no relatorio, a celula "Classe de Solo:" tinha o rotulo mas nunca
-recebia valor. Saia vazia em toda exportacao, desde sempre.
+Com o recorte ligado (que e o padrao), o solo aparece SO dentro dos
+poligonos, sobre a imagem de satelite. Sem ele, cobre a area visivel
+inteira — e ai o satelite some por baixo, que era o incomodo.
 
-Agora, quando voce fecha o desenho de uma quadra, o Agracta consulta os
-levantamentos pedologicos oficiais da Embrapa a partir do proprio
-poligono e preenche sozinho:
+Uma mudanca por baixo do pano: a camada deixou de ser "tile" e passou a ser
+imagem, igual ao NDVI. Motivo: recortar exige ler os pixels num canvas, e
+canvas que recebeu imagem de outro dominio fica "sujo" — o navegador
+proibe exporta-lo. Vindo pelo proxy a imagem e da mesma origem e o recorte
+funciona. Por isso o proxy ganhou a rota /solo/mapa.
 
-    SOLO                                    [Reconsultar]
-    ● LATOSSOLO VERMELHO Eutroferrico
-    Ordem Latossolo   Unidade LVef   Escala 1:250.000   SiBCS 2006   [Embrapa]
-    Consultado em 01/09/2026   Fonte Mapa de solos do estado do Parana
-
-Tres cuidados que valem explicar, porque o dado e cartografico:
-
-1) A ESCALA E DITA, SEMPRE.
-   Nao existe 1:250.000 para o Brasil inteiro — isso so existe em alguns
-   estados. O mapa nacional e 1:5.000.000, que diz a regiao e nao o
-   talhao. Entao a consulta tenta primeiro o levantamento estadual e so
-   depois cai para o nacional, e a ficha mostra a escala REAL da resposta.
-   Quando ela e grosseira, aparece o aviso:
-
-     ATENCAO Escala 1:5.000.000 — indicativo regional, nao caracterizacao
-     de talhao. Confirme por analise de campo.
-
-   Preferi isso a exibir uma classe com ar de verdade medida.
-
-2) QUADRA A CAVALEIRO DE DUAS UNIDADES AVISA.
-   Se o poligono atravessa mais de uma unidade pedologica, a ficha diz
-   quais e quanto de cada uma:
-
-     ATENCAO A quadra atravessa 2 unidades pedologicas.
-     A media do ensaio vai misturar solos diferentes.
-       78%  LVef · LATOSSOLO VERMELHO Eutroferrico
-       22%  PVA · ARGISSOLO VERMELHO-AMARELO
-
-   Experimentalmente isso vale mais que preencher "argiloso" no protocolo.
-
-3) O MAPA NUNCA APAGA O QUE VOCE VIU EM CAMPO.
-   O registro tem duas metades separadas: `cartografico` (do mapa,
-   reconsultavel a vontade) e `observado` (analise de campo, ainda a
-   preencher na proxima etapa). E no relatorio manda quem tem mais
-   autoridade: o que foi DIGITADO no protocolo vence tudo; depois o
-   observado; o automatico so ocupa a celula que hoje sai vazia.
-
-Tambem entrou uma camada "Mapa de solos" na gaveta do mapa, ao lado dos
-indices de vegetacao.
+Detalhe pensado: sem NENHUMA quadra desenhada, o recorte nao apaga o mapa —
+mostra inteiro. Recorte vazio deixaria a tela em branco e pareceria que a
+consulta falhou.
 
 
-PROPRIEDADES ESTIMADAS (SoilGrids)
-----------------------------------
-Abaixo da classe, a ficha agora traz argila, areia, silte, pH, carbono
-organico, materia organica, CTC e densidade, com a textura deduzida das
-tres fracoes:
+2) ANALISE DE SOLO NA QUADRA
+----------------------------
+No painel da quadra, logo abaixo do solo, entrou "ANALISE DE SOLO", com o
+botao "+ Lancar". Ela fica junto dos botoes de consultar solo, como voce
+pediu — no mesmo lugar onde ja se ve a escala BBCH.
 
-    PROPRIEDADES ESTIMADAS                  [Consultar]
-    Argila 58 %   Areia 24 %   Silte 18 %   pH 5,8
-    Carbono organico 28 g/kg   Materia organica 48,27 g/kg
-    CTC 12 cmolc/kg   Densidade 1,3 kg/dm3
-    Textura argilosa
-    ATENCAO Estimativa de modelo global (SoilGrids 2.0 / ISRIC, 0-30 cm) —
-    NAO SUBSTITUI ANALISE DE SOLO e nao deve embasar recomendacao de adubacao.
+Campos do laudo: pH, MO, P-resina, K, Ca, Mg, H+Al, Al, S, B, Cu, Fe, Mn, Zn.
+Cada um com a UNIDADE escrita na tela. Isso nao e detalhe: laudo em
+mmolc/dm3 e laudo em cmolc/dm3 diferem por dez, e trocar isso em silencio
+erra a calagem por dez vezes.
 
-Esse aviso nao e enfeite. Sao numeros com cara de laudo, e sem o aviso eles
-voltariam num relatorio como se fossem analise.
+SB, CTC (T), V% e m% NAO sao digitados — sao calculados e aparecem com
+borda tracejada e a palavra "calculado". Um laudo pode trazer V% junto com
+Ca/Mg/K que nao fecham; se os dois fossem digitados, haveria dois numeros
+discordando e ninguem saberia qual vale.
 
-Dois cuidados nas unidades, que sao a parte mais facil de errar:
-
-  - o SoilGrids publica INTEIRO ESCALONADO. Argila vem "580" e pH vem "58".
-    A conversao acontece uma unica vez, no proxy, e tem teste so para ela —
-    exibir o numero cru daria "pH 58" num solo de pH 5,8.
-  - a CTC sai em cmolc/kg, que e a unidade do SoilGrids, e NAO em mmolc/dm3
-    do laudo brasileiro. Converter entre as duas exige a densidade da amostra;
-    preferi mostrar a unidade verdadeira a fazer uma conta que pareceria
-    comparavel com o laboratorio e nao seria.
-  - materia organica nao e medida: e o carbono organico vezes 1,724 (Van
-    Bemmelen). Vai marcada como derivada na propria tela.
+A analise pertence a um EVENTO DATADO, nao a quadra: e uma lista. Com duas
+ou mais, aparece o botao "Historico", com pH, MO, P, K e V% ano a ano.
 
 
-OBSERVADO EM CAMPO
-------------------
-A ultima secao da ficha e um formulario: classe observada, textura, data,
-observacao. O que voce anotar ali VENCE o mapa — na ficha, no croqui e no
-relatorio. Quem abriu uma trincheira sabe mais que o levantamento.
+3) CALAGEM, COM A CONTA A VISTA
+-------------------------------
+Abaixo da analise, quando ha laudo suficiente:
 
-Fica registrado quem observou e quando. Editar depois nao reescreve o
-carimbo original; marca revisao, do mesmo jeito que o carimbo dos eventos.
+    CALAGEM
+    V% desejada [ 70 ]    PRNT (%) [ 85 ]
+    * Calcario: 1,05 t/ha
+    [Mostrar calculo]
 
-A analise completa de fertilidade (P, K, Ca, Mg, V%...) NAO entra aqui —
-ela e o proximo modulo, com historico e grafico de evolucao.
+O "Mostrar calculo" abre a trilha inteira:
+
+    Metodo da saturacao por bases
+    NC (t/ha) = (V2 - V1) x T / (10 x PRNT)
+    V1 (atual) = 56%   ·   V2 (desejada) = 70%
+    T (CTC a pH 7) = 64 mmolc/dm3   ·   PRNT = 85%
+    NC = (70 - 56) x 64 / (10 x 85) = 1.05 t/ha  (0-20 cm)
+
+Deixei a trilha SEMPRE disponivel, nao opcional. Num ensaio sob BPL, numero
+sem origem nao vale — e "o Agracta mandou passar 1,05 t/ha" nao e resposta.
+
+Se a analise for de outra profundidade, a dose escala e o ajuste vai dito na
+trilha, para ninguem aplicar dose de 40 cm achando que e a padrao.
+Se o V% ja estiver no alvo, a dose e zero e ele diz por que.
 
 
-CROQUI: "POR UNIDADE DE SOLO"
------------------------------
-A barra do croqui ganhou um quarto modo de pintura, ao lado de NDVI. Ele
-colore as quadras pela ordem do SiBCS e monta a composicao pedologica da
-AREA na legenda:
+4) RECOMENDACAO — MOTOR PRONTO, TABELAS SAO SUAS
+------------------------------------------------
+Abaixo da calagem entrou "RECOMENDACAO". Escolhe a cultura e a produtividade
+esperada, e sai N, P2O5, K2O e micros, com "Mostrar calculo" mostrando de
+qual faixa e de qual linha da tabela cada numero saiu.
 
-    UNIDADES PEDOLOGICAS
-    ▪ LVef — 83%
-      LATOSSOLO VERMELHO Eutroferrico
-    ▪ PVA — 17%
-      ARGISSOLO VERMELHO-AMARELO
-    Embrapa · 1:250.000
+Escolher a cultura JA PREENCHE o V2 da calagem, puxado do pacote. Era esse o
+passo que faltava para a coisa ser automatica de verdade: sem isso o numero
+teria de ser copiado a mao da tabela para o campo.
 
-O percentual pondera por AREA, nao por numero de quadras: uma quadra de 9 ha
-pesa nove vezes mais que uma de 1 ha. Quadra ainda nao consultada fica
-neutra e aparece como "sem consulta" — no croqui, cor e afirmacao, e pintar
-solo que ninguem consultou seria afirmar o que nao se sabe.
+AS TABELAS FICAM NUM ARQUIVO SEU, FORA DO REPOSITORIO.
 
-A escala do levantamento vai impressa na folha. Sem ela, o croqui circularia
-por ai como se a classe tivesse precisao de talhao.
+Voce disse que comprou o B100 e vai usar no Agracta para uso pessoal — e e
+seu direito. Mas ha um detalhe concreto que muda a conta: ESTE REPOSITORIO E
+PUBLICO e o site sai dele. Tabela colada dentro do app.js seria publicada
+para o mundo junto com o codigo — isso deixa de ser uso pessoal e vira
+distribuicao, independente de quem comprou o exemplar.
 
-Falha de rede nao esconde nada: a ficha diz "Solo indisponivel" com o
-motivo e um botao de tentar de novo — a licao do chip do clima.
+Por isso fiz igual as credenciais do Copernicus e da Ecowitt, que ja seguem
+essa regra neste projeto: o app usa, o repositorio nao versiona. O
+.gitignore ganhou solo-tabelas.json e solo-tabelas-*.json.
+
+COMO CARREGAR:
+1. Copie  modelos/solo-tabelas-exemplo.json  para  solo-tabelas.json
+   (os numeros do exemplo sao INVENTADOS, so mostram o formato)
+2. Preencha com a tabela do seu exemplar
+3. No painel da quadra: RECOMENDACAO -> "Carregar tabelas" -> escolha o
+   arquivo. Ele fica so naquele aparelho.
+
+O formato esta documentado dentro do proprio arquivo de exemplo, no campo
+"_como". Trocando o pacote, o mesmo motor atende CQFS-RS/SC ou a 5a
+Aproximacao de Minas — em vez de assumir Sao Paulo como universal.
+
+Se quiser, eu ajudo a transcrever as culturas que voce mais usa para o
+formato — o trabalho e seu exemplar virar JSON, e ele nao sai do seu
+computador.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-1. FECHE E REABRA o Agracta no Mac. Cache foi de v149 para v151
-   (registro do sw.js de v107 para v109).
+1. FECHE E REABRA o Agracta no Mac. Cache foi de v151 para v153
+   (registro do sw.js de v109 para v111).
 
-2. ESPERE O RENDER. O ndvi-proxy.py mudou nesta leva: ganhou as rotas
-   /solo e /solo/propriedades. Ate o redeploy terminar (~2 min), a ficha
-   vai dizer "Solo indisponivel" — e so esperar e tocar em "Tentar de novo".
-
-   A primeira consulta de propriedades demora mais que a de classe: sao
-   varias leituras no servidor do ISRIC, feitas em paralelo. Depois disso
-   fica em cache por 30 dias, no proxy e no aparelho.
-
-
-UMA COISA PARA CONFERIR NA PRIMEIRA QUADRA
-------------------------------------------
-Os nomes das camadas da Embrapa foram escritos a partir do catalogo
-publico, mas nao deu para confirmar um a um contra o servidor durante o
-desenvolvimento (a maquina de trabalho nao tinha saida para o site da
-Embrapa). Se alguma camada tiver sido renomeada la, ela simplesmente cai
-fora da cascata e a consulta segue para a proxima — nao quebra nada, mas
-a escala pode vir pior do que precisava.
-
-Se a primeira quadra que voce consultar responder com 1:5.000.000 num
-estado que TEM levantamento (PR, SC, MG), vale conferir os nomes em:
-  https://geoinfo.dados.embrapa.br/geoserver/ows?service=WFS&version=1.0.0&request=GetCapabilities
-Eles ficam todos juntos na lista SOLO_CAMADAS, no topo da secao de solo
-do ndvi-proxy.py.
-
-
-AINDA FALTA APAGAR O test_runtime.js
-------------------------------------
-Continua pendente das vezes passadas (o upload do GitHub nao apaga
-arquivo, so adiciona e substitui). Hoje ele passa porque se auto-pula
-quando o jsdom nao esta instalado, entao nao esta mais atrapalhando o
-veredito — mas segue sendo teste morto.
+2. ESPERE O RENDER (~2 min). O proxy ganhou a rota /solo/mapa; ate o
+   redeploy terminar, ligar "Mapa de solos" nao vai pintar nada.
 
 
 ANTES DA PROXIMA VEZ
 --------------------
 Duplo clique em  Conferir antes de publicar.command.
 
-Nesta leva TODAS as suites passam: 32 em JavaScript e 2 em Python, com a
-sintaxe limpa e as versoes de cache casando entre index.html e sw.js.
-Os testes novos somam 99 verificacoes no test_solo.js e 68 no
-test_solo_proxy.py.
+Nesta leva TODAS as suites passam: 32 em JavaScript e 2 em Python, sintaxe
+limpa, versoes de cache casando entre index.html e sw.js. O test_solo.js
+esta com 205 verificacoes e o test_solo_proxy.py com 79.
 
-A unica parte do conferidor que nao deu para rodar aqui foi o curl que
-compara o sw.js publicado com o local — a maquina de trabalho nao tinha
-saida para www.agracta.com.br. Ele confere se o nome do cache mudou
-(v149 -> v151, mudou), e volta a rodar normalmente no seu Mac.
-
-As TRES SUITES QUE ESTAVAM VERMELHAS foram destravadas nesta leva (elas
-seguravam o veredito em NAO SUBA, e nao eram deste trabalho). Em nenhuma
-das tres o app estava errado — os testes e que tinham ficado para tras:
-
-  test_mapa_padrao.js
-    Casava o trecho do alerta de GPS letra a letra e quebrou quando uma
-    linha foi acrescentada dentro do if, sem mudanca de comportamento.
-    Agora verifica a GUARDA (o alerta so aparece se a pessoa PEDIU a
-    posicao), tolerando formatacao. Conferi que ainda reprova se a guarda
-    for removida de verdade.
-
-  test_clima_chip.js
-    Faltavam funcoes na extracao: o chip passou a seguir o CENTRO DO MAPA
-    e a cadeia ficou maior. E ele exigia que o titulo trouxesse o NOME do
-    Local, quando hoje traz a COORDENADA. Atualizado para o desenho atual,
-    checando as duas coordenadas — mais forte que o nome, porque pega
-    tambem o caso de pintar o valor certo com a procedencia errada.
-
-  test_coord_estacao.js
-    Este guardava um desenho que foi SUBSTITUIDO DE PROPOSITO. Ele cobrava
-    _coordPlausivel e _coordSuspeita, que julgavam a coordenada da Ecowitt
-    e avisavam quando estava errada. Esse aviso nao tinha como sumir (quem
-    esta em campo nao administra a conta Ecowitt) e virava alerta
-    permanente para quem nao podia resolver. Hoje o Agracta usa a
-    coordenada do PROPRIO MAPA quando existe Local correspondente, e a da
-    Ecowitt e so ultima reserva, aceita apenas dentro do Brasil — entao
-    estacao no padrao de fabrica nao desloca nada e nao gera alerta nenhum.
-    Reescrito para guardar o desenho atual, com os mesmos dois casos reais
-    do incidente (Cleveland a 7.259 km e a capital a 138 km).
-
-Nenhum teste foi apagado nem afrouxado para ficar verde.
+Como na leva passada, o unico trecho do conferidor que nao rodou aqui foi o
+curl que compara o sw.js publicado com o local — falta de saida de rede na
+maquina de trabalho. Ele volta a rodar normalmente no seu Mac.

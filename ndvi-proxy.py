@@ -24,6 +24,7 @@ Endpoints (uso interno do app):
   GET /solo?lat=..&lng=..            (classe de solo no ponto — Embrapa GeoInfo)
   GET /solo?geom=<GeoJSON urlencoded> (unidades sob a quadra, com % de area de cada)
   GET /solo/propriedades?lat=..&lng=..  (argila/areia/silte/pH/COS/CTC — SoilGrids)
+  GET /solo/mapa?bbox=w,s,e,n&width=1024 (PNG do mapa pedologico, para recortar no app)
 """
 import json, os, re, time, urllib.request, urllib.parse, urllib.error
 from concurrent.futures import ThreadPoolExecutor
@@ -991,6 +992,51 @@ def do_solo_propriedades(lat, lng):
     _solo_props_cache[chave] = {"ts": time.time(), "val": out}
     return out
 
+def do_solo_mapa(bbox, width):
+    """Recorte do mapa pedologico como PNG, para o app desenhar por cima do satelite.
+
+    Por que passar pelo proxy em vez de usar tile direto: o app precisa RECORTAR a
+    imagem pelos poligonos das quadras, e recortar exige ler os pixels num canvas.
+    Ler pixel de imagem de outro dominio suja o canvas e o navegador proibe
+    exporta-lo; tile como <img> so serve para exibir inteiro. Vindo pelo proxy, a
+    imagem e mesma-origem e o recorte funciona — igual ao NDVI ja faz.
+
+    A camada escolhida segue a mesma cascata da consulta por ponto, para o desenho
+    e a ficha nunca discordarem sobre qual levantamento esta valendo."""
+    w, s, e, n = bbox
+    if e == w or n == s:
+        raise RuntimeError("SOLO:area de mapa invalida.")
+    width = max(64, min(2000, int(width or 1024)))
+    height = max(64, min(2000, int(round(width * (n - s) / (e - w)))))
+    lon, lat = (w + e) / 2.0, (s + n) / 2.0
+
+    escolhida = None
+    for camada in SOLO_CAMADAS:
+        cb = camada.get("bbox")
+        if cb and (lon < cb[0] or lon > cb[2] or lat < cb[1] or lat > cb[3]):
+            continue
+        escolhida = camada
+        break
+    if not escolhida:
+        raise RuntimeError("SOLO:sem levantamento pedologico para esta area.")
+
+    qs = urllib.parse.urlencode({
+        "service": "WMS", "version": "1.1.1", "request": "GetMap",
+        "layers": escolhida["typeName"], "styles": "",
+        "srs": "EPSG:4326", "format": "image/png", "transparent": "true",
+        "width": str(width), "height": str(height),
+        "bbox": "%.6f,%.6f,%.6f,%.6f" % (w, s, e, n),   # WMS 1.1.1: lon,lat
+    })
+    req = urllib.request.Request(GEOINFO_WFS + "?" + qs, headers={"User-Agent": "agracta-app"})
+    with urllib.request.urlopen(req, timeout=45) as r:
+        dados = r.read()
+        ctype = r.headers.get("Content-Type", "image/png")
+    # O GeoServer responde erro como XML com status 200. Devolver isso como se fosse
+    # imagem pintaria lixo no mapa em vez de dizer o que houve.
+    if "image" not in (ctype or ""):
+        raise RuntimeError("SOLO:o servidor da Embrapa nao devolveu imagem (%s)." % (ctype or "sem tipo"))
+    return dados, ctype, escolhida["typeName"]
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -1068,6 +1114,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_solo(lat, lng, geometry))
             if u.path == "/solo/propriedades":
                 return self._json(do_solo_propriedades(float(q["lat"]), float(q["lng"])))
+            if u.path == "/solo/mapa":
+                bbox = [float(x) for x in q["bbox"].split(",")]
+                img, ctype, camada = do_solo_mapa(bbox, q.get("width", 1024))
+                self.send_response(200); self._cors()
+                self.send_header("Content-Type", ctype or "image/png")
+                self.send_header("X-Solo-Camada", camada)   # qual levantamento pintou
+                self.end_headers()
+                return self.wfile.write(img)
             self._json({"error": "rota desconhecida"}, 404)
         except RuntimeError as e:
             msg = str(e)

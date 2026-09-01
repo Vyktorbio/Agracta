@@ -117,6 +117,8 @@
                 'Zonamento a partir do índice ativo', 'agZonas()', true)+
           linha('agRowSolo', IC.solo, 'Mapa de solos',
                 'Levantamento pedológico da Embrapa', 'agAcao(\'toggleSoloLayer\')', true)+
+          linha('agRowSoloRec', IC.quadrado, 'Solo apenas nas quadras',
+                'Recorta o mapa pedológico pelos polígonos', 'agSoloRecorte()', true)+
         '</div>'+
         '<div class="ag-sec">'+
           '<div class="ag-sec-t">Campo</div>'+
@@ -155,9 +157,26 @@
     if(g) g.classList.toggle('on', document.body.classList.contains('gps-manual-visible'));
     var so = $('agRowSolo');
     if(so) so.classList.toggle('on', typeof window.soloLayerAtiva === 'function' && window.soloLayerAtiva());
+    var sr = $('agRowSoloRec');
+    if(sr){
+      sr.classList.toggle('on', typeof window.soloRecorteAtivo === 'function' && window.soloRecorteAtivo());
+      /* Sem a camada ligada o recorte não tem o que recortar: fica visível, mas
+         apagado, para a opção não parecer quebrada quando nada acontece. */
+      var temSolo = typeof window.soloLayerAtiva === 'function' && window.soloLayerAtiva();
+      sr.style.opacity = temSolo ? '' : '0.45';
+    }
     var b = $('agToolsBtn');
     if(b) b.classList.toggle('layer-on', ligado());
   }
+
+  /* Alterna o recorte SEM fechar a gaveta: é ajuste fino de visualização, e
+     fechar a cada toque obrigaria a reabrir para comparar com e sem recorte. */
+  window.agSoloRecorte = function(){
+    if(typeof window.soloSetRecorte !== 'function') return;
+    var novo = !(typeof window.soloRecorteAtivo === 'function' && window.soloRecorteAtivo());
+    window.soloSetRecorte(novo);
+    sincronizarGaveta();
+  };
 
   window.agAcao = function(nome){
     abrirGaveta(false);

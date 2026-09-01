@@ -3,6 +3,16 @@ ndvi-credenciais.json
 # NUNCA versionar a credencial da Ecowitt (Application Key + API Key)
 ecowitt-credenciais.json
 
+# NUNCA versionar as tabelas de recomendacao (Boletim 100 e afins).
+# O motor e do Agracta; as tabelas sao conteudo de publicacao comprada. Este
+# repositorio e PUBLICO e o site sai dele — tabela versionada aqui vira
+# distribuicao publica, e nao mais uso pessoal do exemplar adquirido.
+solo-tabelas.json
+solo-tabelas-*.json
+# ...mas o MODELO do formato precisa ser versionado: ele nao tem tabela nenhuma,
+# so numeros inventados mostrando a estrutura.
+!modelos/solo-tabelas-exemplo.json
+
 # Segredos / ambiente em geral
 .env
 .env.*
