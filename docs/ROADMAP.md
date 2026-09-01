@@ -51,8 +51,9 @@ modular**.
 Agracta
 ├── app.js                  coordenação da interface
 ├── vendor/ (core)
-│   ├── biocalc-campo-core.js      ← existe
-│   ├── biocalc-lab-core.js        ← existe
+│   ├── biocalc-campo-core.js      ← existe (mistura de calda)
+│   ├── biocalc-lab-core.js        ← existe (bancada: ppm, série, ajuste i.a.)
+│   ├── aplicacao-core.js          ← existe (operação: equipamento + calibração)
 │   ├── protocolo-core.js
 │   ├── fertilidade-core.js
 │   ├── fenotipagem-core.js
@@ -138,8 +139,12 @@ estudo do Agracta.
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
 > - ✅ **7.4** parcialmente: já pré-preenche dose/volume dos tratamentos do estudo.
 > - ✅ **7.6** feito (01/09/2026): `aplicacao.memoriaCalculo` grava entradas, resultado por componente, avisos, autoria e a versão do motor. Regravar preserva o anterior em `memoriasAnteriores`. Coberto por `test_memoria_calculo.js` (63 verificações, com golden test).
-> - ❌ **7.2** — não há método por tratamento.
-> - ❌ **7.3** — não há `equipmentProfiles`.
+> - 🔶 **7.2 e 7.3** — o MOTOR chegou (01/09/2026): `vendor/aplicacao-core.js`, extraído
+>   da Calculadora Universal, já traz método por tratamento (`resolveTreatmentApplication`,
+>   com override declarado por tratamento) e calibração por equipamento — trator/sider,
+>   drone, CO₂, atomizador e Torre de Potter. Coberto por `test_aplicacao_core.js`
+>   (67 verificações, com golden tests conferidos à mão). **Falta** a interface: expor
+>   barra e calibração na calculadora do Agracta.
 >
 > Ou seja: **os Pacotes 1 e 2 da §31 estão essencialmente prontos.** O trabalho da
 > Release B é o Pacote 3 (aplicação do estudo) mais persistência, método por tratamento

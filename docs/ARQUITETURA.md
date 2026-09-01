@@ -276,11 +276,10 @@ anteriores"*.
 ```
 ORGANIZAÇÃO
 └── LOCALIDADE
-     └── ÁREA                    ← ver Decisão em aberto nº 1
+     └── QUADRA                  ← ÁREA nao foi criada; ver Decisao 1 (decidida)
           ├── SOLO · RELEVO · CLIMA · HISTÓRICO
-          └── QUADRA
-               ├── CULTURA · BBCH · FERTILIDADE · SENSORIAMENTO
-               └── ESTUDO
+          ├── CULTURA · BBCH · FERTILIDADE · SENSORIAMENTO
+          └── ESTUDO
                     ├── PROTOCOLO · TRATAMENTOS · PARCELAS
                     ├── APLICAÇÕES · AVALIAÇÕES · AMOSTRAS
                     ├── RESULTADOS · ESTATÍSTICA
@@ -328,7 +327,16 @@ execução, evidência, interpretação e memória científica**.
 Pontos onde esta especificação e o `ROADMAP.md` divergem, ou onde ela diverge do código
 atual. **Nenhum foi resolvido unilateralmente** — ficam aqui até haver decisão.
 
-### 1. Existe a entidade ÁREA entre Localidade e Quadra?
+### 1. ~~Existe a entidade ÁREA entre Localidade e Quadra?~~ — DECIDIDO (01/09/2026)
+
+> **Fica na quadra.** Decisão do autor. Solo, fertilidade, propriedades e ambiente
+> continuam pendurados na quadra, que é quem tem o polígono. A entidade ÁREA do §16
+> não será criada; o modelo conceitual daquela seção deve ser lido como
+> `LOCALIDADE → QUADRA`. Se um dia várias quadras precisarem compartilhar a mesma
+> caracterização, a decisão se reabre — mas aí com um caso real na mão.
+
+<details><summary>Registro da discussão</summary>
+
 
 - **Esta especificação (§16)** propõe `LOCALIDADE → ÁREA → QUADRA`, com solo, relevo, clima e histórico na ÁREA.
 - **O código hoje** tem `LOCALIDADE → QUADRA` direto (`QLOCAL[qid]` liga uma à outra; não existe entidade ÁREA). `area` é um número — hectares da quadra.
@@ -337,6 +345,8 @@ atual. **Nenhum foi resolvido unilateralmente** — ficam aqui até haver decis�
 Criar ÁREA agora significa migrar o que já existe e responder o que acontece quando uma
 quadra atravessa duas áreas. **Recomendação:** manter na quadra até aparecer um caso real
 em que várias quadras precisem compartilhar a mesma caracterização — aí ÁREA se paga.
+
+</details>
 
 ### 2. Score de integridade: número ou contagem?
 
