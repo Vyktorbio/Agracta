@@ -1,144 +1,102 @@
-AGRACTA — 5a publicacao                    01/09/2026
+AGRACTA — 6a publicacao                    01/09/2026
 =====================================================
 
-Leva: 6 arquivos de codigo + 2 de teste + 1 modelo.
-  CODIGO:  app.js  ui-campo.js  sw.js  index.html  ndvi-proxy.py  .gitignore
-  TESTES:  test_solo.js  test_solo_proxy.py
-  MODELO:  modelos/solo-tabelas-exemplo.json
+Leva: 4 arquivos de codigo + 1 de teste.
+  CODIGO:  app.js  vendor/biocalc-campo-core.js  sw.js  index.html
+  TESTE:   test_memoria_calculo.js  (novo)
 
-O ndvi-proxy.py MUDOU de novo (ver DEPOIS DE PUBLICAR).
+Primeira entrega da Release B do roadmap (docs/ROADMAP.md).
 
 
 COMO SUBIR
 ----------
 1. Abra  https://github.com/Vyktorbio/Agracta
 2. "Add file" -> "Upload files"
-3. Abra ESTA pasta, selecione os arquivos e arraste.
-   (Nao arraste a pasta. Nao arraste o LEIA-ME.)
-4. Commit: "Solo nas quadras, analise, calagem e recomendacao"
+3. Selecione os arquivos e arraste.
+   ATENCAO: o biocalc-campo-core.js fica dentro de vendor/ — arraste ele
+   para dentro dessa pasta no GitHub, nao para a raiz.
+4. Commit: "Memoria de calculo gravada na aplicacao"
 5. "Commit changes"
 
 
-1) MAPA DE SOLOS AGORA RECORTA PELAS QUADRAS
---------------------------------------------
-Como voce pediu: mesma opcao que o NDVI ja tinha. Na gaveta do mapa entrou
-"Solo apenas nas quadras", ao lado de "Mapa de solos".
+O QUE MUDOU
+-----------
+O calculo da calda vivia so na tela. Era lido, copiado para a area de
+transferencia e MORRIA ao fechar. A aplicacao guardava data, BBCH,
+observacao e carimbo — nada do que foi efetivamente preparado.
 
-Com o recorte ligado (que e o padrao), o solo aparece SO dentro dos
-poligonos, sobre a imagem de satelite. Sem ele, cobre a area visivel
-inteira — e ai o satelite some por baixo, que era o incomodo.
+Isso e um buraco de rastreabilidade. Num ensaio sob BPL, calculo que nao
+fica registrado e calculo que nao aconteceu: quem conferir o estudo daqui a
+tres anos nao tem como saber com que parcela, que volume morto e que dose a
+calda foi feita.
 
-Uma mudanca por baixo do pano: a camada deixou de ser "tile" e passou a ser
-imagem, igual ao NDVI. Motivo: recortar exige ler os pixels num canvas, e
-canvas que recebeu imagem de outro dominio fica "sujo" — o navegador
-proibe exporta-lo. Vindo pelo proxy a imagem e da mesma origem e o recorte
-funciona. Por isso o proxy ganhou a rota /solo/mapa.
+Agora a calculadora tem, no rodape:
 
-Detalhe pensado: sem NENHUMA quadra desenhada, o recorte nao apaga o mapa —
-mostra inteiro. Recorte vazio deixaria a tela em branco e pareceria que a
-consulta falhou.
+    MEMORIA DE CALCULO
+    [ 20/08/2026 · BBCH 65  v ]  [Gravar nesta aplicacao]
+    Fica guardado o que foi calculado, com quem calculou e a versao do motor.
 
+Grava ESTRUTURA, nao texto: entradas (parcela, numero de parcelas, volume de
+calda, volume morto, frascos, capacidade), o resultado componente a
+componente, os avisos, quem calculou, quando, e a VERSAO DO MOTOR.
 
-2) ANALISE DE SOLO NA QUADRA
-----------------------------
-No painel da quadra, logo abaixo do solo, entrou "ANALISE DE SOLO", com o
-botao "+ Lancar". Ela fica junto dos botoes de consultar solo, como voce
-pediu — no mesmo lugar onde ja se ve a escala BBCH.
+A versao do motor importa: sem ela, um numero guardado hoje nao teria como
+ser reconferido depois que a formula mudasse. O biocalc-campo-core.js passou
+a declarar VERSION = "1.0.0", e ela sobe sempre que o calculo mudar de
+resultado.
 
-Campos do laudo: pH, MO, P-resina, K, Ca, Mg, H+Al, Al, S, B, Cu, Fe, Mn, Zn.
-Cada um com a UNIDADE escrita na tela. Isso nao e detalhe: laudo em
-mmolc/dm3 e laudo em cmolc/dm3 diferem por dez, e trocar isso em silencio
-erra a calagem por dez vezes.
+REGRAVAR NAO APAGA O ANTERIOR. O calculo antigo vira historico em
+memoriasAnteriores. Refazer a conta depois de mudar a parcela e informacao,
+nao correcao silenciosa. A gravacao tambem entra na trilha de auditoria do
+estudo.
 
-SB, CTC (T), V% e m% NAO sao digitados — sao calculados e aparecem com
-borda tracejada e a palavra "calculado". Um laudo pode trazer V% junto com
-Ca/Mg/K que nao fecham; se os dois fossem digitados, haveria dois numeros
-discordando e ninguem saberia qual vale.
-
-A analise pertence a um EVENTO DATADO, nao a quadra: e uma lista. Com duas
-ou mais, aparece o botao "Historico", com pH, MO, P, K e V% ano a ano.
+De quebra, o botao "Copiar" parou de ser um SEGUNDO calculo. Antes havia
+tres lacos calculando a mesma coisa (a tela, a copia e agora a gravacao),
+livres para divergir entre si. Agora a copia deriva da mesma memoria que a
+tela mostra e que o banco grava.
 
 
-3) CALAGEM, COM A CONTA A VISTA
--------------------------------
-Abaixo da analise, quando ha laudo suficiente:
+SOBRE O ROADMAP
+---------------
+Ao conferir o codigo antes de comecar, achei que boa parte da Release B ja
+estava pronta:
 
-    CALAGEM
-    V% desejada [ 70 ]    PRNT (%) [ 85 ]
-    * Calcario: 1,05 t/ha
-    [Mostrar calculo]
+  - os Pacotes 1 e 2 (extrair o motor das calculadoras) JA ESTAVAM FEITOS:
+    vendor/biocalc-campo-core.js e vendor/biocalc-lab-core.js sao motores
+    puros, sem DOM, cobertos por 135 verificacoes;
+  - a secao 32 tambem ja estava resolvida: a calculadora e tela nativa do
+    Agracta, nao um iframe da Calculadora Universal.
 
-O "Mostrar calculo" abre a trilha inteira:
+O que faltava de verdade era outra coisa, e e o que esta nesta leva (a
+memoria) mais duas que continuam pendentes:
 
-    Metodo da saturacao por bases
-    NC (t/ha) = (V2 - V1) x T / (10 x PRNT)
-    V1 (atual) = 56%   ·   V2 (desejada) = 70%
-    T (CTC a pH 7) = 64 mmolc/dm3   ·   PRNT = 85%
-    NC = (70 - 56) x 64 / (10 x 85) = 1.05 t/ha  (0-20 cm)
+  - metodo por tratamento (T1 drone, T3 trator no mesmo estudo);
+  - perfis de equipamento com calibracao habitual.
 
-Deixei a trilha SEMPRE disponivel, nao opcional. Num ensaio sob BPL, numero
-sem origem nao vale — e "o Agracta mandou passar 1,05 t/ha" nao e resposta.
-
-Se a analise for de outra profundidade, a dose escala e o ajuste vai dito na
-trilha, para ninguem aplicar dose de 40 cm achando que e a padrao.
-Se o V% ja estiver no alvo, a dose e zero e ele diz por que.
-
-
-4) RECOMENDACAO — MOTOR PRONTO, TABELAS SAO SUAS
-------------------------------------------------
-Abaixo da calagem entrou "RECOMENDACAO". Escolhe a cultura e a produtividade
-esperada, e sai N, P2O5, K2O e micros, com "Mostrar calculo" mostrando de
-qual faixa e de qual linha da tabela cada numero saiu.
-
-Escolher a cultura JA PREENCHE o V2 da calagem, puxado do pacote. Era esse o
-passo que faltava para a coisa ser automatica de verdade: sem isso o numero
-teria de ser copiado a mao da tabela para o campo.
-
-AS TABELAS FICAM NUM ARQUIVO SEU, FORA DO REPOSITORIO.
-
-Voce disse que comprou o B100 e vai usar no Agracta para uso pessoal — e e
-seu direito. Mas ha um detalhe concreto que muda a conta: ESTE REPOSITORIO E
-PUBLICO e o site sai dele. Tabela colada dentro do app.js seria publicada
-para o mundo junto com o codigo — isso deixa de ser uso pessoal e vira
-distribuicao, independente de quem comprou o exemplar.
-
-Por isso fiz igual as credenciais do Copernicus e da Ecowitt, que ja seguem
-essa regra neste projeto: o app usa, o repositorio nao versiona. O
-.gitignore ganhou solo-tabelas.json e solo-tabelas-*.json.
-
-COMO CARREGAR:
-1. Copie  modelos/solo-tabelas-exemplo.json  para  solo-tabelas.json
-   (os numeros do exemplo sao INVENTADOS, so mostram o formato)
-2. Preencha com a tabela do seu exemplar
-3. No painel da quadra: RECOMENDACAO -> "Carregar tabelas" -> escolha o
-   arquivo. Ele fica so naquele aparelho.
-
-O formato esta documentado dentro do proprio arquivo de exemplo, no campo
-"_como". Trocando o pacote, o mesmo motor atende CQFS-RS/SC ou a 5a
-Aproximacao de Minas — em vez de assumir Sao Paulo como universal.
-
-Se quiser, eu ajudo a transcrever as culturas que voce mais usa para o
-formato — o trabalho e seu exemplar virar JSON, e ele nao sai do seu
-computador.
+O roadmap em docs/ROADMAP.md ficou anotado com esse estado real, para nao
+virar lista de desejos.
 
 
 DEPOIS DE PUBLICAR
 ------------------
-1. FECHE E REABRA o Agracta no Mac. Cache foi de v151 para v153
-   (registro do sw.js de v109 para v111).
+FECHE E REABRA o Agracta no Mac. Cache foi de v153 para v154 (registro do
+sw.js de v111 para v112).
 
-2. ESPERE O RENDER (~2 min). O proxy ganhou a rota /solo/mapa; ate o
-   redeploy terminar, ligar "Mapa de solos" nao vai pintar nada.
+O ndvi-proxy.py NAO mudou nesta leva — nao ha nada a esperar do Render.
 
 
 ANTES DA PROXIMA VEZ
 --------------------
 Duplo clique em  Conferir antes de publicar.command.
 
-Nesta leva TODAS as suites passam: 32 em JavaScript e 2 em Python, sintaxe
-limpa, versoes de cache casando entre index.html e sw.js. O test_solo.js
-esta com 205 verificacoes e o test_solo_proxy.py com 79.
+Todas as suites passam: 33 em JavaScript e 2 em Python. O
+test_memoria_calculo.js novo tem 63 verificacoes, entre elas um GOLDEN TEST
+conferido a mao:
 
-Como na leva passada, o unico trecho do conferidor que nao rodou aqui foi o
-curl que compara o sw.js publicado com o local — falta de saida de rede na
-maquina de trabalho. Ele volta a rodar normalmente no seu Mac.
+  parcela 5x2 m, 4 parcelas, 200 L/ha, volume morto 300 mL
+  -> area 40 m2 = 0,004 ha
+  -> calda 0,8 L + 0,3 L = 1,1 L
+  -> T2 a 1,5 L/ha = 8,25 mL de produto
+
+Se uma alteracao futura mudar esse numero, o teste FALHA. E proposital:
+mudanca de resultado em motor de dose tem de ser decisao, nunca acidente.
