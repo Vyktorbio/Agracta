@@ -41,6 +41,11 @@ function fetchFake(url){
 function resposta(obj){ return {ok:true,json:function(){return Promise.resolve(obj);}}; }
 function gira(){ return new Promise(function(r){setImmediate(r);}); }
 
+/* A aritmetica de calagem e recomendacao mudou de casa: mora em
+   vendor/nutricao-core.js, e o app.js so delega. O teste continua exercitando as
+   MESMAS funcoes pelos MESMOS nomes — que e o ponto de a ponte existir. */
+var NutricaoCore=require('./vendor/nutricao-core.js');
+
 var salvou=0, upserts=[];
 var store={};
 var ctx={
@@ -48,6 +53,7 @@ var ctx={
   JSON:JSON,isFinite:isFinite,Object:Object,
   fetch:fetchFake,
   NDVI_PROXY:'https://proxy.test',
+  NutricaoCore:NutricaoCore,
   APP_VER:'teste',
   localStorage:{
     getItem:function(k){return Object.prototype.hasOwnProperty.call(store,k)?store[k]:null;},
@@ -83,7 +89,8 @@ var fontes=['soloDaQuadra','soloObservado','_soloGeom','_soloChaveCoord','_soloL
   '_soloOrdemDe','_croquiSolo',
   'soloLayerAtiva','soloRecorteAtivo','soloSetRecorte','soloSetOpacidade','soloLimpar',
   'soloCarregarMapa','soloOnMove','soloBindMove','toggleSoloLayer',
-  '_soloSet','soloAnalises','soloAnaliseAtual','soloIndices','soloCalagem','soloCalagemTrilha',
+  '_soloSet','soloAnalises','soloAnaliseAtual',
+  '_nucleoNutricao','soloIndices','soloCalagem','soloCalagemTrilha',
   'soloAnaliseHtml','soloSalvarAnalise','soloApagarAnalise','soloCancelarAnalise',
   'soloCalagemHtml','soloCalagemSaidaHtml','soloCalcular','soloToggleCalculo',
   'soloPacote','soloPacoteNome','soloPacoteValidar','soloPacoteCarregar','soloPacoteRemover',

@@ -246,8 +246,20 @@ nutrientes simultaneamente.
 > **Estado (01/09/2026):** entregue em boa parte no PR #2 — banco temporal de análises,
 > derivados calculados, separação cartográfico/estimado/observado, motor de calagem e de
 > recomendação com pacote de tabelas carregável e trilha de cálculo.
-> **Falta:** nomear o motor `nutricao-core.js` e movê-lo do `app.js` para `vendor/`;
-> ligar a recomendação à agenda por BBCH; camada de fertilidade no croqui.
+> **Estado (02/09/2026):** ✅ motor extraído para `vendor/nutricao-core.js`, puro e sem
+> DOM, com `VERSION`. O `app.js` guarda só a ponte — ler o pacote do aparelho e pintar
+> a tela — e delega toda a aritmética; reimplementar a conta ali seria criar um segundo
+> motor livre para divergir do primeiro. A única mudança de contrato na extração:
+> `recomendar()` recebe o **pacote** como argumento em vez de lê-lo do `localStorage`,
+> que era o que impedia o código de rodar fora do navegador e de ser testado sem
+> simular armazenamento. Coberto por `test_nutricao_core.js` (72 verificações, com
+> golden tests conferidos à mão) — e as 205 do `test_solo.js` seguem passando contra
+> o motor extraído, pelos mesmos nomes.
+> Há teste cobrando que o motor **não carregue tabela nenhuma**: sem faixas, sem V2 de
+> cultura, sem limite de micronutriente, sem referência a publicação. É checagem que
+> protege o repositório, não o cálculo — o repositório é público e o site sai dele.
+>
+> **Falta:** ligar a recomendação à agenda por BBCH; camada de fertilidade no croqui.
 > **Nota:** as tabelas ficam em `solo-tabelas.json`, fora do versionamento — o
 > repositório é público e o site sai dele.
 
