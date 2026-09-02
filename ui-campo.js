@@ -739,6 +739,9 @@
       '</div>'+
       '<div class="ag-sec">'+
         '<div class="ag-sec-t">Dados</div>'+
+        /* O banco de itens e da ORGANIZACAO, nao de uma quadra: por isso mora aqui,
+           e nao dentro de um estudo. */
+        linha(I.caixa, 'Banco de itens', 'Produtos e doses usados nos protocolos', 'agMenuAcao(\'abrirItens\')')+
         linha(I.baixar, 'Backup em arquivo', 'Baixa tudo para o aparelho', 'agMenuAcao(\'exportData\')')+
         linha(I.subir, 'Importar arquivo', 'Restaura de um backup .json', 'agImportar()')+
         linha(I.caixa, 'Backups (restaurar)', 'Pontos de restauração guardados', 'agMenuAcao(\'openBackups\')')+

@@ -224,6 +224,39 @@ antiga é **corrigido ao salvar**, porque o campo sumiu da tela mas o dado errad
 some sozinho. O BBCH passou por `bbchListDaQuadra(qid, cultura)`, que pergunta pela
 quadra; nenhum ponto da tela chama `getBBCHList` direto, e há teste cobrando isso.
 
+## 7-ter. Banco de itens e doses · **P0** — 🔶 base feita (02/09/2026)
+
+O produto de um tratamento era uma **string digitada**. "Sankari", "sankari",
+"SANKARI 500 SC" e "Sankari (lote novo)" eram quatro produtos diferentes para o app,
+e nenhum se ligava a nada — nem ao registro, nem à bula, nem ao mesmo produto num
+outro ensaio. *"Onde mais este item foi testado?"* só se respondia com um humano
+lembrando que os quatro textos eram a mesma coisa.
+
+**Três coisas são diferentes, e confundi-las é o erro que este módulo evita:**
+
+| | Representa | Regra |
+|---|---|---|
+| **Item** | a identidade — o que o produto É | cadastra-se uma vez, vale em qualquer protocolo |
+| **Dose** | quanto usar, **para qual cultura e alvo** | dose solta não é informação |
+| **Lote** | o material físico | **fora do escopo por decisão do autor** — a cadeia de custódia não entra |
+
+**Feito:** catálogo global (entra em `cloudState()` como `LOCAIS`, com mapa de
+timestamps e lápides), tela do banco, doses qualificadas por cultura/alvo com origem
+declarada, seletor no tratamento com o texto livre preservado, aviso de duplicata,
+código cego, e `itemOndeFoiUsado()`.
+
+**A dose vai CONGELADA no tratamento** (`t.doseRef`), não referenciada: se a bula
+mudar no ano que vem, o ensaio antigo tem de continuar dizendo o que ele realmente
+usou. Referência viva reescreveria a história.
+
+**Dose fora da faixa registrada é permitida e marcada.** Ensaio experimental existe
+para sair da bula; bloquear seria inútil e calar seria pior.
+
+**Falta:** documentos anexados ao item (bula, FDS, certificado de análise);
+importação de bula do Agrofit com revisão humana; e a base entre ensaios usando
+`item_id` como chave. A cadeia de custódia (lotes, recipientes, livro-razão) fica
+registrada como desenho no histórico da conversa, **não** como pendência.
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,
