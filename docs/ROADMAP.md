@@ -128,10 +128,10 @@ relatório reconstrói a versão usada.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
 - **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
 - **7.8** ✅ (02/09/2026) Laboratório no **mesmo pipeline**: a aplicação de bancada passou a ter memória de cálculo, derivada do cadastro do estudo, com a mesma marcação de origem e a mesma regra de nunca gravar por cima. Dois motores, um pipeline — a categoria da quadra escolhe qual.
-- **7.9** A tela mostra o essencial e esconde o resto atrás de *"Ver cálculo completo"*.
+- **7.9** ✅ (02/09/2026) A tela mostra o essencial — **quanto pôr no frasco** — e esconde a conferência atrás de *"Ver cálculo completo"*. A escolha é lembrada, e o padrão é o essencial. **Aviso nunca se esconde**: erro, alerta e problema de mistura aparecem nos dois modos, sem exceção.
 
 **Concluída quando:** nenhum operador precisa abrir calculadora externa para executar um
-estudo do Agracta.
+estudo do Agracta. — ✅ **FASE 2 FECHADA em 02/09/2026** (7.1 a 7.9 + 7-bis).
 
 > **Estado (01/09/2026) — gap real desta fase:**
 > - ✅ **7.1** feito: os dois motores puros já existem e são testados.
