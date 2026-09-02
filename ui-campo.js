@@ -749,7 +749,7 @@
         '<div class="ag-sec-t">Este aparelho</div>'+
         linha(I.lua, escuro?'Tema escuro':'Tema claro', 'Alterna o visual', 'agMenuAcao(\'toggleTheme\')')+
         linha(I.lapis, 'Meu nome e assinatura', 'Como você assina na trilha BPL', 'agMenuAcao(\'definirMeuNome\')')+
-        linha(I.recarregar, 'Buscar versão nova', 'Força a atualização do app', 'agMenuAcao(\'forcarAtualizacao\')')+
+        linha(I.recarregar, 'Atualizar Agracta', 'Busca e instala a versão nova', 'agMenuAcao(\'forcarAtualizacao\')')+
         (instalar ? linha(I.celular, 'Instalar o app', 'Fica como aplicativo na tela inicial', 'agMenuAcao(\'installApp\')') : '')+
       '</div>'+
       (adm ? '<div class="ag-sec">'+

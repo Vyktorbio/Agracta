@@ -1912,7 +1912,10 @@ function cloudBadge(kind,txt){
   }
   var el=document.getElementById('cloudBadge');
   if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{ if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
-  var L={saving:'↻ salvando na nuvem…', error:'⚠ não subiu — toque p/ salvar', offline:'⌁ salvo no aparelho · sem internet', idle:''};
+  /* "sem internet" era impreciso e assustava sem razão: clima, NDVI e solo seguem
+     consultando a rede normalmente nesse estado. O que está parado é a SINCRONIZAÇÃO
+     com a nuvem — e é isso que o selo deve dizer. */
+  var L={saving:'↻ salvando na nuvem…', error:'⚠ não subiu — toque p/ salvar', offline:'⌁ sessão local · sem sincronização', idle:''};
   kind=kind||'idle';
   clearTimeout(window._cbHideT); clearTimeout(window._cbShowT);
   function _paint(){ el.className='cloud-badge cb-'+kind; el.textContent=(L[kind]||'')+(txt?(' '+txt):''); el.style.display='block'; el.style.opacity='1'; }
@@ -2266,6 +2269,19 @@ function buildAuthGate(){
   var p=document.getElementById('authPass'); if(p) p.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); doLogin(); } };
   var em=document.getElementById('authEmail'); if(em) em.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); var pp=document.getElementById('authPass'); if(pp) pp.focus(); } };
 }
+/* Mensagem no portão. Um portão que aparece sem dizer por que parece defeito — e
+   defeito é o que faz alguém procurar a porta dos fundos. */
+function authGateAviso(msg){
+  var g=document.getElementById('authGate'); if(!g) return;
+  var el=g.querySelector('#authGateAviso');
+  if(!el){
+    el=document.createElement('div'); el.id='authGateAviso';
+    el.style.cssText='margin-top:10px;font:600 12px/1.5 system-ui,sans-serif;color:#dccd8c;background:rgba(220,205,140,.10);border:1px solid rgba(220,205,140,.32);border-radius:9px;padding:9px 11px';
+    var box=g.querySelector('.auth-box')||g.firstElementChild||g;
+    box.appendChild(el);
+  }
+  el.textContent=msg||'';
+}
 function showAuthGate(){ buildAuthGate(); var g=document.getElementById('authGate'); if(g) g.classList.add('on'); setTimeout(function(){ var em=document.getElementById('authEmail'); if(em&&!em.value) em.focus(); },60); }
 function hideAuthGate(){ var g=document.getElementById('authGate'); if(g) g.classList.remove('on'); }
 function doLogin(){
@@ -2320,6 +2336,45 @@ function enforceAccess(){
   return;
 }
 
+/* ===================== APARELHO AUTORIZADO ========================================
+   O modo offline existe para quem JÁ ENTROU: o técnico que autenticou de manhã no
+   escritório e passa o dia no talhão sem sinal. Ele não existe como porta lateral
+   para quem nunca entrou.
+
+   E era isso que estava acontecendo. authInit() abria o app sem portão nenhum quando
+   cloudInit() falhava — e cloudInit() falha justamente quando não há rede. Resultado:
+   abrir o app offline num aparelho qualquer mostrava as quadras, culturas, plantios e
+   coordenadas de todo mundo, sem senha.
+
+   A marca abaixo é o que separa os dois casos. Ela é gravada quando uma autenticação
+   REAL acontece, e apagada no logout. Sem ela, offline mostra a tela de login e diz
+   por quê — nunca o app.
+
+   O QUE ISTO NÃO RESOLVE, e é honesto dizer: os dados continuam em localStorage, em
+   claro. Quem tiver o aparelho desbloqueado e abrir o inspetor do navegador lê tudo,
+   com ou sem portão. Fechar isso exige cifrar o armazenamento local, que é outra
+   decisão — e o portão precisava existir de todo jeito. ========================== */
+var AUTH_DISPOSITIVO_KEY='agracta-aparelho-autorizado';
+
+function authAparelhoMarcar(user){
+  if(!user) return;
+  try{
+    localStorage.setItem(AUTH_DISPOSITIVO_KEY, JSON.stringify({
+      uid:(user.uid||user.id||null), email:(user.email||null), em:Date.now()
+    }));
+  }catch(e){}
+}
+function authAparelhoAutorizado(){
+  try{
+    var o=JSON.parse(localStorage.getItem(AUTH_DISPOSITIVO_KEY)||'null');
+    return !!(o && (o.uid||o.email));
+  }catch(e){ return false; }
+}
+function authAparelhoQuem(){
+  try{ return (JSON.parse(localStorage.getItem(AUTH_DISPOSITIVO_KEY)||'null')||{}).email||null; }catch(e){ return null; }
+}
+function authAparelhoLimpar(){ try{ localStorage.removeItem(AUTH_DISPOSITIVO_KEY); }catch(e){} }
+
 function doLogout(){
   if(typeof closeMainMenu==='function') closeMainMenu();
   /* NUNCA trava o usuário: se houver pendência, dispara a gravação e PERGUNTA — mas sempre deixa sair. */
@@ -2328,10 +2383,14 @@ function doLogout(){
     if(!confirm('Pode haver dados ainda subindo pra nuvem. Sair mesmo assim?\n\n(Recomendado: toque em Cancelar, espere o selo "salvo na nuvem" e saia de novo.)')) return;
   }
   clearLocalStorageData();
+  /* Sair desautoriza o APARELHO, não só a sessão: senão o próximo a abrir offline
+     entraria pela porta que este logout deveria ter fechado. */
+  authAparelhoLimpar();
   if(SB){ try{ SB.auth.signOut(); }catch(e){} }
 }
 function onAuthed(user){
   _authUser=user; hideAuthGate();
+  authAparelhoMarcar(user);   /* daqui em diante este aparelho pode abrir offline */
   if(!_appStarted){ _appStarted=true; cloudStart(); }
   else if(typeof cloudResync==='function'){ cloudResync(); }
   /* NÃO chama enforceAccess aqui: ele roda dentro do cloudApply, DEPOIS de ler a nuvem.
@@ -2340,12 +2399,34 @@ function onAuthed(user){
 /* Gate de login: só libera o app (e a leitura/escrita na nuvem) após autenticar.
    A sessão persiste no navegador (supabase) -> funciona offline no campo depois do 1º login. */
 function authInit(){
-  if(!cloudInit()){ if(!_appStarted){ _appStarted=true; if(typeof cloudStart==='function') cloudStart(); } return; }
+  /* Sem cliente de nuvem — sem rede, ou o SDK não carregou. Isso NÃO é autorização.
+     Só abre quem já autenticou NESTE aparelho; os demais veem a tela de login com o
+     motivo, porque "não consegui verificar" não pode virar "pode entrar". */
+  if(!cloudInit()){
+    if(!authAparelhoAutorizado()){
+      buildAuthGate();
+      showAuthGate();
+      authGateAviso('Sem conexão e sem sessão neste aparelho. Entre uma vez com internet — depois disso o Agracta funciona offline aqui.');
+      return;
+    }
+    if(!_appStarted){ _appStarted=true; if(typeof cloudStart==='function') cloudStart(); }
+    return;
+  }
   buildAuthGate();
   SB.auth.getSession().then(function(res){
     var session = res && res.data && res.data.session;
-    if(session && session.user){ onAuthed(session.user); } else { showAuthGate(); }
-  }, function(){ showAuthGate(); });
+    if(session && session.user){ onAuthed(session.user); }
+    else { showAuthGate(); }
+  }, function(){
+    /* Falhou LER a sessão: pode ser rede. Mesmo critério — aparelho autorizado
+       trabalha offline; aparelho novo não entra. */
+    if(authAparelhoAutorizado()){
+      if(!_appStarted){ _appStarted=true; if(typeof cloudStart==='function') cloudStart(); }
+    }else{
+      showAuthGate();
+      authGateAviso('Não consegui verificar a sessão e este aparelho ainda não entrou nenhuma vez. Conecte-se e entre com sua conta.');
+    }
+  });
   SB.auth.onAuthStateChange(function(event, session){
     if(session && session.user){ onAuthed(session.user); }
     else { _authUser=null; showAuthGate(); }
@@ -2852,7 +2933,9 @@ function renderAgenda(){
   var _nDisp=_agTotalDispensados();
   var h='<div class="ag-title">AGENDA (30 DIAS)<button class="ag-close" onclick="toggleAgenda()">×</button></div>';
   h+='<div class="ag-acoes">';
-  h+='<button class="ag-acao" onclick="agLimparTudo()">Limpar lembretes</button>';
+  /* Botão que não tem o que limpar é botão que só ensina a desconfiar do app. */
+  var _pend30=allUpcomingEvents(30).filter(function(e){ return !e.dispensado; }).length;
+  if(_pend30) h+='<button class="ag-acao" onclick="agLimparTudo()">Limpar lembretes ('+_pend30+')</button>';
   if(_nDisp) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nDisp+')</button>';
   h+='</div>';
 
@@ -13581,7 +13664,8 @@ function renderToday(){
 
   var _nD=_agTotalDispensados();
   h+='<div class="ag-acoes" style="margin:2px 0 12px">';
-  h+='<button class="ag-acao" onclick="agLimparHoje()">Limpar lembretes</button>';
+  var _pendHoje=collectTodayEvents(3).filter(function(e){ return !e.dispensado; }).length;
+  if(_pendHoje) h+='<button class="ag-acao" onclick="agLimparHoje()">Limpar lembretes ('+_pendHoje+')</button>';
   if(_nD) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nD+')</button>';
   h+='</div>';
 
@@ -13702,6 +13786,10 @@ function renderSearchResults(query){
   var q=normStr((query||"").trim());
   var results=[];
   Object.keys(data).sort().forEach(function(qid){
+    /* __config guarda preferências do aparelho, não uma quadra. Sem esta linha ele
+       aparecia entre os resultados — e uma busca sem filtro listava 33 "quadras"
+       onde existem 32. */
+    if(qid==='__config') return;
     var d=data[qid]||{};
     var score=0;
     var matches=[];
@@ -14973,6 +15061,109 @@ function janelaBuscar(qid, sid, avid, forcar){
     if(r&&r.erro && typeof _stxToast==='function') _stxToast(r.erro);
     try{ openStudyDetail(qid,sid); }catch(e){}
   });
+}
+
+
+/* ===================== DOIS AVALIADORES (roadmap §10) ============================
+   Severidade de doença, nota de fitotoxicidade, escala de dano: são leituras humanas,
+   e leitura humana varia. Dois avaliadores olhando a mesma parcela dão números
+   diferentes — e a pergunta de um ensaio sob BPL não é "qual dos dois está certo", é
+   "o quanto eles concordam, e o que isso faz com o resultado".
+
+   A LEITURA É CEGA, DE VERDADE. Enquanto A avalia, os valores de B não são
+   escurecidos nem escondidos por CSS: eles não são renderizados. Cegamento que se
+   derrota rolando a tela ou abrindo o inspetor não é cegamento — é um enfeite que faz
+   o estudo parecer mais rigoroso do que é, que é pior que não ter.
+
+   O VALOR CONSOLIDADO É A MÉDIA DOS DOIS, e vai marcado como derivado. Ele é o que
+   alimenta a estatística, o gráfico e a AACPD; as duas leituras originais ficam
+   guardadas, porque é delas que sai a concordância e é a elas que se volta quando
+   alguém contesta um número três anos depois. ==================================== */
+
+var AV_AVALIADORES=['A','B'];
+
+function avDupla(av){ return !!(av && av.duplaLeitura); }
+function avAvaliadores(av){
+  if(!av) return null;
+  if(!av.avaliadores) av.avaliadores={};
+  AV_AVALIADORES.forEach(function(k){
+    if(!av.avaliadores[k]) av.avaliadores[k]={nome:'', notas:{}};
+    if(!av.avaliadores[k].notas) av.avaliadores[k].notas={};
+  });
+  return av.avaliadores;
+}
+/* Quem está com a prancheta agora. Vazio = visão consolidada, que só se abre depois
+   de as duas leituras existirem. */
+var _avQuem=null;
+function avQuemAtivo(){ return _avQuem; }
+function avSetQuem(k){ _avQuem=(AV_AVALIADORES.indexOf(k)>=0)?k:null; }
+
+/* O mapa de notas que a grade deve mostrar E escrever. Com um avaliador ativo, é o
+   dele e só o dele — é aqui que o cegamento acontece, na origem do dado, não na
+   pintura. */
+function avNotasVisiveis(av){
+  if(!avDupla(av)) return (av&&av.notas)||{};
+  var q=avQuemAtivo();
+  if(!q) return (av&&av.notas)||{};
+  return avAvaliadores(av)[q].notas;
+}
+
+/* Consolidação: média das duas leituras, parcela a parcela, variável a variável.
+   Parcela que só um avaliou fica com o valor dele — descartá-la perderia dado real,
+   e inventar a segunda leitura seria muito pior. O que ficou com uma leitura só vai
+   contado, para o relatório poder dizer. */
+function avConsolidar(av){
+  if(!avDupla(av)) return null;
+  var A=avAvaliadores(av).A.notas, B=avAvaliadores(av).B.notas;
+  var out={}, so=0, dois=0;
+  var chaves={};
+  [A,B].forEach(function(m){ for(var k in m) chaves[k]=1; });
+  for(var k in chaves){
+    var ra=A[k]||{}, rb=B[k]||{}, vars={}, linha={};
+    for(var v in ra) vars[v]=1;
+    for(var v2 in rb) vars[v2]=1;
+    for(var v3 in vars){
+      var a=_avNum(ra[v3]), b=_avNum(rb[v3]);
+      if(a!=null&&b!=null){ linha[v3]=Math.round(((a+b)/2)*1000)/1000; dois++; }
+      else if(a!=null){ linha[v3]=a; so++; }
+      else if(b!=null){ linha[v3]=b; so++; }
+    }
+    if(Object.keys(linha).length) out[k]=linha;
+  }
+  av.notas=out;
+  av.notasOrigem={tipo:'media-dois-avaliadores', comDuas:dois, comUma:so, em:Date.now()};
+  return av.notasOrigem;
+}
+function _avNum(v){
+  if(v===''||v==null) return null;
+  var n=(typeof v==='number')?v:Number(String(v).replace(',','.'));
+  return isFinite(n)?n:null;
+}
+
+/* Escala da variável, do tipo que o estudo já declarou. Nota de classe é ORDINAL e
+   pede kappa; severidade em % e contagem são contínuas e pedem ICC. Adivinhar isso
+   pelos valores daria kappa em severidade, que não significa nada. */
+function avEscalaDaVariavel(av, v){
+  var t=(av&&av.tipos&&av.tipos[v])||'pct';
+  return (t==='escala')?'ordinal':'continua';
+}
+
+/* A concordância de uma variável. Delegada ao motor puro; aqui só se junta o que a
+   avaliação sabe. */
+function avConcordancia(study, av, v){
+  var C=(typeof window!=='undefined')?window.ConcordanciaCore:null;
+  if(!C) return {erro:'O motor de concordância não carregou. Recarregue o app.'};
+  if(!avDupla(av)) return {erro:'Esta avaliação não está em leitura dupla.'};
+  var ad=avAvaliadores(av);
+  var linhas=(typeof _avRowsForStudy==='function')?_avRowsForStudy(study,false):[];
+  var chaves=linhas.map(function(r){ return r.key; });
+  function so(mapa){ var o={}; chaves.forEach(function(k){ o[k]=(mapa[k]||{})[v]; }); return o; }
+  var r=C.concordancia(so(ad.A.notas), so(ad.B.notas), chaves,
+                       {escala:avEscalaDaVariavel(av,v)});
+  r.variavel=v;
+  r.nomeA=(ad.A.nome||'Avaliador A');
+  r.nomeB=(ad.B.nome||'Avaliador B');
+  return r;
 }
 
 /* ===================== JANELA AMBIENTAL (roadmap §9) =============================
