@@ -15860,6 +15860,124 @@ function tratEquivalenteIA(t){
   return (r&&!r.erro)?r:null;
 }
 
+
+/* ---- Migração: os estudos existentes não são recriados ----
+   Trinta e tantos estudos já existem com o produto digitado à mão. Recriá-los para
+   "modernizar" seria destruir dado real; deixá-los de fora seria fazer o relatório
+   Item × Dose nascer vazio, porque o vínculo só existiria nos ensaios novos.
+
+   Então: o Agracta VARRE o que foi digitado, agrupa os nomes iguais e PROPÕE ligar.
+   Quem liga é a pessoa. Ligar sozinho seria adivinhar que "Sankari" e "Sankari 500"
+   são o mesmo produto — e às vezes não são, porque uma formulação nova entra com o
+   mesmo nome de campo.
+
+   ESTUDO FINALIZADO NÃO SE TOCA. Ele foi congelado com assinatura e data; acrescentar
+   identidade a um tratamento dele agora reescreveria um registro fechado. Eles
+   aparecem contados, para ninguém achar que foram esquecidos, e ficam de fora. */
+
+/* Um nome digitado, com tudo o que se sabe sobre ele. Mistura vira DOIS candidatos:
+   "Sankari + Silwet" são dois produtos, e tratá-los como um perderia o adjuvante. */
+function migracaoCandidatos(){
+  ensureItens();
+  var mapa={}, finalizados=0;
+  if(typeof data==='undefined'||!data) return {candidatos:[], finalizados:0};
+  Object.keys(data).forEach(function(qid){
+    if(qid==='__config') return;
+    ((data[qid]||{}).estudos||[]).forEach(function(st){
+      var fin=(typeof estudoFinalizado==='function')?estudoFinalizado(st):false;
+      (st.tratamentos||[]).forEach(function(t){
+        if(!t) return;
+        if(t.itemId || tratTemReceita(t)) return;          /* já tem identidade */
+        if(t.testemunha) return;                            /* testemunha não é item */
+        var txt=String(t.produto||'').trim();
+        if(!txt) return;
+        /* Mesma separação que o motor de calda usa, para o que o app já sabe partir
+           não ser agrupado de outro jeito aqui. */
+        var partes=txt.split(/\s*\+\s*/).map(function(x){ return x.trim(); }).filter(Boolean);
+        /* Um nome dentro de uma mistura conta separado do nome sozinho. Vincular
+           "Sankari" quando o tratamento diz "Sankari + Silwet" trocaria uma mistura
+           de dois produtos por um item so, perdendo o adjuvante: isso e trabalho do
+           compositor de receita, nao de uma varredura. Contar junto faria a tela
+           prometer "12 usos" e ligar 3 — o numero precisa ser honesto antes do clique. */
+        var mistura=partes.length>1;
+        partes.forEach(function(nome){
+          if(fin){ finalizados++; return; }
+          var k=_itemChave(nome);
+          if(!k) return;
+          if(!mapa[k]) mapa[k]={chave:k, nome:nome, variantes:{}, ocorrencias:0, simples:0, emMistura:0, estudos:{}, exemplos:[]};
+          var c=mapa[k];
+          c.variantes[nome]=(c.variantes[nome]||0)+1;
+          c.ocorrencias++;
+          if(mistura) c.emMistura++; else c.simples++;
+          c.estudos[st.id]=1;
+          if(c.exemplos.length<3) c.exemplos.push({qid:qid, estudo:(st.codigo||st.nome||st.id), trat:t.id, dose:(t.dose||''), mistura:mistura});
+        });
+      });
+    });
+  });
+  var out=Object.keys(mapa).map(function(k){
+    var c=mapa[k];
+    /* A grafia mais usada vira o nome proposto: é a que a equipe escreve de verdade. */
+    var vs=Object.keys(c.variantes).sort(function(a,b){ return c.variantes[b]-c.variantes[a]; });
+    c.nome=vs[0];
+    c.grafias=vs;
+    c.nEstudos=Object.keys(c.estudos).length;
+    c.sugestoes=itemPossiveisDuplicatas(c.nome, null);
+    return c;
+  }).sort(function(a,b){
+    /* O que da para ligar agora vem primeiro; o resto e leitura, nao trabalho. */
+    var la=(a.simples>0?1:0), lb=(b.simples>0?1:0);
+    if(la!==lb) return lb-la;
+    return b.ocorrencias-a.ocorrencias;
+  });
+  return {candidatos:out, finalizados:finalizados,
+          ligaveis:out.filter(function(c){ return c.simples>0; }).length};
+}
+
+/* Liga TODOS os tratamentos cujo produto bate com esta chave. Não mexe em finalizado,
+   não mexe em quem já tem identidade, e guarda o texto original. */
+function migracaoLigar(chave, itemId){
+  var it=itemPorId(itemId); if(!it) return {erro:'Item não encontrado.'};
+  var n=0, estudosTocados={};
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config') return;
+    ((data[qid]||{}).estudos||[]).forEach(function(st){
+      if(typeof estudoFinalizado==='function' && estudoFinalizado(st)) return;
+      (st.tratamentos||[]).forEach(function(t){
+        if(!t || t.itemId || tratTemReceita(t) || t.testemunha) return;
+        var partes=String(t.produto||'').split(/\s*\+\s*/).map(function(x){ return x.trim(); }).filter(Boolean);
+        if(partes.length!==1) return;      /* mistura vira receita, não vínculo simples */
+        if(_itemChave(partes[0])!==chave) return;
+        tratLigarItem(t, it.id, null);
+        /* A migração vai marcada: um vínculo criado por varredura não é a mesma coisa
+           que um escolhido na hora de montar o protocolo. */
+        t.itemMigrado={em:Date.now(), de:(t.produtoOriginal||partes[0]),
+                       por:(typeof _currentUserName==='function'?(_currentUserName()||''):'')};
+        n++; estudosTocados[st.id]=st;
+      });
+    });
+  });
+  Object.keys(estudosTocados).forEach(function(sid){
+    try{
+      if(typeof logStudyAuditInObject==='function')
+        logStudyAuditInObject(estudosTocados[sid],'tratamento.item',
+          'Produto digitado vinculado ao item "'+(it.nome||it.id)+'" do banco',
+          {itemId:it.id, origem:'migracao'});
+    }catch(e){}
+  });
+  try{ save(); }catch(e){}
+  return {ligados:n, estudos:Object.keys(estudosTocados).length, item:it};
+}
+
+/* Cria o item a partir do que foi digitado e liga na mesma passada. É o caminho
+   normal: quase todo nome digitado ainda não existe no banco. */
+function migracaoCriarELigar(chave, nome, extra){
+  var it=itemNovo(Object.assign({nome:nome}, extra||{}));
+  var r=migracaoLigar(chave, it.id);
+  r.criado=true;
+  return r;
+}
+
 /* ---- Telas ----
    A regra de tela é uma só: cadastrar um item tem de ser MAIS RÁPIDO que digitar o
    nome à mão. No instante em que não for, o pesquisador digita à mão e o catálogo
@@ -15896,17 +16014,21 @@ function _itOvl(){
     o.onclick=function(e){ if(e.target===o) fecharItens(); }; document.body.appendChild(o); }
   return o;
 }
-function fecharItens(){ var o=document.getElementById('itensOvl'); if(o) o.style.display='none'; _itemAberto=null; }
+function fecharItens(){ var o=document.getElementById('itensOvl'); if(o) o.style.display='none'; _itemAberto=null; _migAberta=false; }
 
 function abrirItens(){
   if(typeof closeMainMenu==='function') closeMainMenu();
-  ensureItens(); _itemAberto=null;
+  ensureItens(); _itemAberto=null; _migAberta=false;
+  /* Varre uma vez, na abertura. _itensPinta() roda a cada tecla da busca e a
+     varredura passa por todos os estudos — refazer a cada letra seria desperdicio. */
+  try{ _migPendentes=migracaoCandidatos().ligaveis; }catch(e){ _migPendentes=0; }
   var o=_itOvl(); o.style.display='flex'; _itensPinta();
 }
 function _itensBusca(v){ _itemBusca=v||''; _itensPinta(); }
 
 function _itensPinta(){
   var o=document.getElementById('itensOvl'); if(!o) return;
+  if(_migAberta){ o.innerHTML=_migracaoHtml(); return; }
   if(_itemAberto){ o.innerHTML=_itemFichaHtml(_itemAberto); return; }
   var q=normStr(_itemBusca), lista=itensLista().filter(function(it){
     if(!q) return true;
@@ -15917,6 +16039,12 @@ function _itensPinta(){
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
   h+='<input class="it-busca" placeholder="Buscar por nome, código, cliente ou ingrediente ativo" value="'+esc(_itemBusca)+'" oninput="_itensBusca(this.value)">';
   h+='<button class="it-btn" onclick="itemAbrirNovo()">+ Cadastrar item</button>';
+  /* So aparece quando ha o que migrar. Um botao permanente para uma fila vazia e
+     exatamente o tipo de ruido que a tela nao deve ter. */
+  if(_migPendentes>0){
+    h+='<button class="it-btn alt" onclick="migracaoAbrir()">🔗 '+_migPendentes+' produto'+(_migPendentes===1?'':'s')+
+       ' ja digitado'+(_migPendentes===1?'':'s')+' esperando cadastro</button>';
+  }
   h+='<div style="margin-top:12px">';
   if(!lista.length){
     h+='<div class="it-vazio">'+(_itemBusca?'Nenhum item com esse termo.':'Nenhum item cadastrado ainda. Cadastre uma vez e ele fica disponível em todos os protocolos.')+'</div>';
@@ -15940,6 +16068,153 @@ function itemAbrirNovo(){
   var it=itemNovo({nome:''});
   _itemAberto=it.id; _itensPinta();
   setTimeout(function(){ var i=document.getElementById('itNome'); if(i) i.focus(); },50);
+}
+
+/* ---- Migracao: os produtos que ja foram digitados ----
+   Um banco de itens que comeca vazio, com estudos ja digitados atras, nao e
+   identidade: e uma segunda planilha. O catalogo so vale se reconhecer o passado.
+
+   A varredura PROPOE e a pessoa confirma. Ligar sozinho seria adivinhar que
+   "Sankari" e "Sankari 500" sao o mesmo produto — e quando erra, erra calado,
+   dentro de um estudo que ja foi a campo. */
+var _migAberta=false, _migResumo=null, _migPendentes=0;
+
+function migracaoAbrir(){
+  _migAberta=true; _itemAberto=null; _migResumo=migracaoCandidatos();
+  var o=_itOvl(); o.style.display='flex'; _itensPinta();
+}
+function migracaoVoltar(){ _migAberta=false; _migResumo=null; _itensPinta(); }
+function _migracaoRecarrega(){
+  _migResumo=migracaoCandidatos();
+  _migPendentes=_migResumo.ligaveis;
+  _itensPinta();
+}
+
+function migracaoAcaoCriar(chave){
+  var c=((_migResumo||{}).candidatos||[]).filter(function(x){ return x.chave===chave; })[0];
+  if(!c) return;
+  var r=migracaoCriarELigar(chave, c.nome, {});
+  _migracaoRecarrega();
+  if(typeof _stxToast==='function') _stxToast('✓ "'+c.nome+'" cadastrado e ligado em '+r.ligados+' tratamento'+(r.ligados===1?'':'s'));
+}
+function migracaoAcaoLigar(chave, sel){
+  var itemId=(sel&&sel.value)||'';
+  if(!itemId) return;
+  var r=migracaoLigar(chave, itemId);
+  if(r.erro){ alert(r.erro); return; }
+  _migracaoRecarrega();
+  if(typeof _stxToast==='function') _stxToast('✓ ligado em '+r.ligados+' tratamento'+(r.ligados===1?'':'s'));
+}
+
+function _migracaoHtml(){
+  var r=_migResumo||{candidatos:[], finalizados:0, ligaveis:0};
+  var h='<div class="it-box"><div class="it-top"><div class="it-t">🔗 Produtos ja digitados</div>'+
+        '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">&times;</button></div>';
+  h+='<button class="it-btn alt" onclick="migracaoVoltar()">&lsaquo; Banco de itens</button><div style="height:10px"></div>';
+
+  if(!r.candidatos.length){
+    h+='<div class="it-vazio">Nenhum produto digitado solto: todos os tratamentos ja tem item ou receita.'+
+       (r.finalizados?(' '+r.finalizados+' esta'+(r.finalizados===1?'':'o')+' em estudo finalizado e nao se toca.'):'')+
+       '</div></div>';
+    return h;
+  }
+
+  h+='<div class="it-dup" style="border-color:rgba(120,170,215,.3);color:#cfe0ef">'+
+     'Estes nomes foram digitados a mao nos estudos. Cadastrar cada um <b>uma vez</b> faz o'+
+     ' produto virar identidade: a partir dai a dose, o registro e o historico andam junto com ele.'+
+     ' Nada e ligado sozinho — voce confirma cada um.'+
+     (r.finalizados?('<br><br>'+r.finalizados+' ocorrencia'+(r.finalizados===1?'':'s')+
+       ' ficou de fora por estar em estudo finalizado: aquele registro foi fechado com assinatura e data, e nao se reescreve.'):'')+
+     '</div>';
+
+  var outros=(typeof itensLista==='function')?itensLista():[];
+
+  r.candidatos.forEach(function(c){
+    var pode=c.simples>0;
+    h+='<div class="it-lin" style="display:block;cursor:default">';
+    h+='<div class="it-nome">'+esc(c.nome)+'</div>';
+
+    var uso=c.ocorrencias+' uso'+(c.ocorrencias===1?'':'s')+' em '+c.nEstudos+' estudo'+(c.nEstudos===1?'':'s');
+    h+='<div class="it-sub">'+esc(uso)+
+       (c.grafias.length>1?(' &middot; escrito tambem como '+esc(c.grafias.slice(1).join(', '))):'')+'</div>';
+
+    /* O numero precisa ser honesto ANTES do clique: o que esta dentro de mistura
+       nao vai ser ligado por aqui, e prometer o contrario seria mentir na tela. */
+    if(c.emMistura){
+      h+='<div class="it-sub" style="color:#d8b26a">'+c.emMistura+' desse'+(c.emMistura===1?'':'s')+
+         ' uso'+(c.emMistura===1?'':'s')+' esta dentro de uma mistura (ex.: "A + B"). '+
+         (pode?('Serao ligados '+c.simples+', e a mistura continua como esta ate virar receita.')
+              :'Nenhum pode ser ligado por aqui: monte a receita no tratamento, para o adjuvante nao se perder.')+
+         '</div>';
+    }
+
+    if(c.sugestoes && c.sugestoes.length){
+      h+='<div class="it-sub" style="color:#8fb6d8">Ja existe algo parecido no banco: '+
+         esc(c.sugestoes.map(function(x){ return x.nome; }).join(', '))+'</div>';
+    }
+
+    if(pode){
+      h+='<div class="it-row" style="margin-top:8px;align-items:center">'+
+         '<button class="it-btn" onclick="migracaoAcaoCriar(\''+esc(c.chave)+'\')">+ Cadastrar &quot;'+esc(c.nome)+'&quot; e ligar</button>';
+      if(outros.length){
+        h+='<select class="it-busca" style="margin:0" onchange="migracaoAcaoLigar(\''+esc(c.chave)+'\',this)">'+
+           '<option value="">ou ligar a um item existente…</option>';
+        outros.forEach(function(it){
+          h+='<option value="'+esc(it.id)+'">'+esc(it.nome||'(sem nome)')+(it.codigo?(' · '+esc(it.codigo)):'')+'</option>';
+        });
+        h+='</select>';
+      }
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+
+  h+='</div>';
+  return h;
+}
+
+/* A matriz na tela. Ela vem ANTES da lista de usos porque responde a pergunta que
+   se faz primeiro: "em que doses isso ja foi testado?". A lista continua embaixo,
+   porque as vezes a pergunta e "em qual estudo, mesmo?". */
+function _itemMatrizHtml(itemId){
+  var m=itemMatrizDose(itemId);
+  if(!m.blocos.length && !m.naoLidas.length) return '';
+  var h='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Doses ja testadas</div>';
+
+  /* Duas familias de dose no mesmo item nao formam uma escada. Dizer isso e o ponto
+     do relatorio: sem o aviso, alguem le "0,4 a 1000" como uma faixa. */
+  if(!m.comparavel){
+    h+='<div class="it-dup">Este item foi usado em <b>escalas diferentes</b> ('+
+       esc(m.blocos.map(function(b){ return b.rotulo; }).join(' e '))+
+       '). Elas nao se convertem uma na outra sem um numero que aqui nao existe, entao'+
+       ' aparecem separadas — comparar dose entre elas seria inventar uma serie que nao existe.</div>';
+  }
+
+  m.blocos.forEach(function(b){
+    if(m.blocos.length>1) h+='<div class="it-sub" style="margin:8px 0 4px;font-weight:800;color:#8fb6d8">Dose '+esc(b.rotulo)+'</div>';
+    b.linhas.forEach(function(ln){
+      var det=[ln.nEstudos+' estudo'+(ln.nEstudos===1?'':'s')];
+      if(ln.culturasLista.length) det.push(ln.culturasLista.join(', '));
+      if(ln.finalizados) det.push(ln.finalizados+' finalizado'+(ln.finalizados===1?'':'s'));
+      h+='<div class="it-dose"><div><b>'+esc(ln.texto)+'</b>'+
+         /* Grafias diferentes da MESMA dose ficam visiveis: e assim que se descobre
+            que a equipe escreve "0,4 L/ha" e "400 mL/ha" para a mesma coisa. */
+         (ln.grafiasLista.length>1?(' <span style="opacity:.6;font-weight:600">tambem escrita '+esc(ln.grafiasLista.slice(1).join(', '))+'</span>'):'')+
+         '<div class="it-sub">'+esc(det.join(' · '))+'</div></div>'+
+         '<span class="it-tag">'+ln.nUsos+'&times;</span></div>';
+    });
+  });
+
+  if(m.naoLidas.length){
+    /* Nunca some com o que nao foi lido: um numero que desaparece do relatorio e
+       pior do que um numero que aparece marcado como ilegivel. */
+    var motivos={};
+    m.naoLidas.forEach(function(x){ motivos[x.motivo]=(motivos[x.motivo]||0)+1; });
+    h+='<div class="it-sub" style="margin-top:8px;color:#d8b26a">'+m.naoLidas.length+' uso'+
+       (m.naoLidas.length===1?'':'s')+' fora da matriz: '+
+       esc(Object.keys(motivos).map(function(k){ return motivos[k]+' com '+k; }).join('; '))+'.</div>';
+  }
+  return h;
 }
 
 function _itemFichaHtml(id){
@@ -16009,6 +16284,7 @@ function _itemFichaHtml(id){
   /* Onde este item já foi usado — a pergunta que o catálogo veio permitir. */
   var usos=itemOndeFoiUsado(it.id);
   if(usos.length){
+    h+=_itemMatrizHtml(it.id);
     h+='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Onde já foi usado ('+usos.length+')</div>';
     usos.forEach(function(u){
       h+='<div class="it-sub" style="padding:3px 0">'+esc(u.estudo+' · '+u.quadra+(u.cultura?(' · '+u.cultura):'')+' · '+u.tratamento+(u.dose?(' · '+u.dose):''))+
@@ -16106,6 +16382,101 @@ function tratDoseForaDaBula(t){
 /* Onde mais este item foi testado. É a pergunta que o catálogo veio permitir, e ela
    só é respondível porque o item tem ID — com texto livre, "Sankari" e "SANKARI
    500 SC" nunca se encontrariam. */
+/* ---- Matriz Item x Dose ----
+   "Onde foi usado" e uma lista; a pergunta de pesquisa e outra: EM QUE DOSES este
+   item ja foi testado, e quantas vezes cada uma. So da para responder isso agora
+   porque o item virou identidade — antes, "Sankari" e "sankari" eram dois produtos.
+
+   A regra dura vem do motor de doses: 0,4 L/ha e 400 mL/ha sao a MESMA dose e tem
+   de cair na mesma linha; 0,4 L/ha e 2 mL/L NAO sao comparaveis e nao podem cair na
+   mesma escada. Empilhar as duas num grafico bonito seria inventar uma serie que
+   nao existe. */
+
+/* Le a dose como ela foi ESCRITA. _calcDoseUnit() forca tudo para unidade por area
+   — o que serve ao calculo de calda de campo, mas aqui leria "2 mL/L" (concentracao
+   na calda) como "2 mL/ha" (dose por hectare): coisas diferentes por tres ordens de
+   grandeza. Aqui "nao sei qual e a unidade" e uma resposta valida, e melhor do que
+   um palpite. */
+function _doseLer(raw){
+  var DC=window.DoseCore; if(!DC) return null;
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return null;
+  var val=_calcNum(s);
+  if(!(val>0)) return null;
+  var norm=s.toLowerCase().replace(/\s+/g,'');
+  /* Da unidade mais longa para a mais curta: senao "mL/ha" seria capturado por
+     "L/ha" e "% v/v" viraria outra coisa. */
+  var us=DC.unidades().slice().sort(function(a,b){ return b.length-a.length; });
+  var achada=null;
+  for(var i=0;i<us.length;i++){
+    if(norm.indexOf(us[i].toLowerCase().replace(/\s+/g,''))>=0){ achada=us[i]; break; }
+  }
+  if(!achada) return null;
+  var c=DC.canonico(val, achada);
+  if(!c) return null;
+  return {valor:val, unidade:achada, canonico:c, alvo:(DC.UNIDADES[achada].alvo||null)};
+}
+
+/* Por que uma dose nao entrou na matriz. Dizer "nao entendi" e pior do que dizer o
+   que falta: com o motivo, a pessoa corrige o dado. */
+function _doseMotivo(raw){
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return 'sem dose registrada';
+  if(!(_calcNum(s)>0)) return 'sem numero legivel';
+  if(/%/.test(s)) return '"%" sozinho nao diz se e v/v (volume) ou m/v (massa) — sao doses diferentes';
+  return 'unidade nao reconhecida';
+}
+
+function itemMatrizDose(itemId){
+  var DC=window.DoseCore;
+  var usos=(typeof itemOndeFoiUsado==='function')?itemOndeFoiUsado(itemId):[];
+  var blocos={}, naoLidas=[];
+
+  usos.forEach(function(u){
+    var d=DC?_doseLer(u.dose):null;
+    if(!d){ naoLidas.push({uso:u, motivo:_doseMotivo(u.dose)}); return; }
+    /* "planta", "placa" e "vaso" compartilham a base mL/alvo, mas uma planta nao e
+       uma placa: o alvo entra na chave, senao dose de casa de vegetacao se somaria
+       com dose de bancada. */
+    var bk=d.canonico.unidade+'@'+(d.alvo||'-');
+    if(!blocos[bk]) blocos[bk]={chave:bk, familia:d.canonico.familia, base:d.canonico.unidade,
+                                alvo:d.alvo, linhas:{}, usos:0};
+    var b=blocos[bk];
+    b.usos++;
+    var lk=d.canonico.valor.toFixed(6);
+    if(!b.linhas[lk]) b.linhas[lk]={valor:d.canonico.valor, base:d.canonico.unidade,
+                                    grafias:{}, usos:[], estudos:{}, culturas:{}, finalizados:0};
+    var ln=b.linhas[lk];
+    ln.grafias[String(u.dose||'').trim()]=(ln.grafias[String(u.dose||'').trim()]||0)+1;
+    ln.usos.push(u);
+    ln.estudos[u.estudoId]=1;
+    if(u.cultura) ln.culturas[u.cultura]=1;
+    if(u.finalizado) ln.finalizados++;
+  });
+
+  var out=Object.keys(blocos).map(function(bk){
+    var b=blocos[bk];
+    b.linhas=Object.keys(b.linhas).map(function(lk){
+      var ln=b.linhas[lk];
+      var gs=Object.keys(ln.grafias).sort(function(a,c){ return ln.grafias[c]-ln.grafias[a]; });
+      ln.texto=gs[0]||DC.formatar(ln.valor, ln.base);
+      ln.grafiasLista=gs;
+      ln.nUsos=ln.usos.length;
+      ln.nEstudos=Object.keys(ln.estudos).length;
+      ln.culturasLista=Object.keys(ln.culturas);
+      return ln;
+    }).sort(function(a,c){ return a.valor-c.valor; });   /* a escada, de baixo para cima */
+    b.rotulo=(b.alvo?('por '+b.alvo):(b.familia==='area'?'por area':(b.familia==='calda'?'na calda':b.familia)));
+    return b;
+  }).sort(function(a,c){ return c.usos-a.usos; });
+
+  return {blocos:out, naoLidas:naoLidas,
+          /* Mais de um bloco significa que NAO existe uma escada unica. Quem ler o
+             relatorio precisa saber disso antes de comparar dose com dose. */
+          comparavel:(out.length<=1),
+          nUsos:usos.length};
+}
+
 function itemOndeFoiUsado(itemId){
   var out=[];
   if(typeof data==='undefined'||!data) return out;
