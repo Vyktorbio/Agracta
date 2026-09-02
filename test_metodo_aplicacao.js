@@ -71,11 +71,12 @@ LAB['LAB1']=true;   /* quadra de laboratório */
 
 /* ============================================================================== */
 console.log('\n--- CATEGORIA: bancada e campo não compartilham método ---');
-eq(JSON.stringify(ctx.aplicMetodosDe('Q1')),'["co2","tractor","drone","atomizer"]','campo oferece as quatro máquinas');
-/* O primeiro da lista é o default de quem não declarou nada. Num app de P&D é o
-   costal, que é o pulverizador de pesquisa — começar pelo sider faria o estudo sem
-   protocolo nascer sem a planilha de coleta bico a bico. */
-eq(ctx.aplicMetodosDe('Q1')[0],'co2','e o costal é o primeiro, que é quem vale por omissão');
+eq(JSON.stringify(ctx.aplicMetodosDe('Q1')),'["tractor","co2","drone","atomizer"]','campo oferece as quatro máquinas');
+/* O primeiro da lista é o default de quem não declarou nada, e nesta operação é o
+   SIDER. Consequência: estudo sem protocolo nasce com leitura de barra inteira e sem
+   a matriz bico a bico — o que é correto, porque no sider não se coleta bico a bico.
+   Quem usa costal declara o costal (test_calc_barra.js cobre esse lado). */
+eq(ctx.aplicMetodosDe('Q1')[0],'tractor','e o sider é o primeiro, que é quem vale por omissão');
 eq(JSON.stringify(ctx.aplicMetodosDe('LAB1')),'["lab"]','bancada oferece só a Torre de Potter');
 eq(ctx.aplicMetodoValido('Q1','lab'),false,'Potter NÃO existe em quadra de campo');
 eq(ctx.aplicMetodoValido('LAB1','tractor'),false,'sider NÃO existe em bancada');
@@ -103,7 +104,7 @@ eq(ctx.studyMetodo(CAMPO,'Q1'),'co2','declarado vence o protocolo');
 CAMPO.metodoAplicacao='drone';
 eq(ctx.studyMetodo(CAMPO,'LAB1'),'lab','em bancada o método é Potter, dê no que der');
 var SEM={id:'s2', tratamentos:[]};
-eq(ctx.studyMetodo(SEM,'Q1'),'co2','sem nada, o primeiro válido da categoria');
+eq(ctx.studyMetodo(SEM,'Q1'),'tractor','sem nada, o primeiro válido da categoria');
 eq(ctx.studyMetodo(SEM,'LAB1'),'lab','e na bancada, Potter');
 
 console.log('\n--- O override é DECLARADO, não herdado em silêncio ---');

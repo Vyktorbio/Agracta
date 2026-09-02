@@ -6821,6 +6821,9 @@ function _calcCss(){
    '.calc-barrahint{font-size:10.5px;color:#7f8e84;line-height:1.5;margin:6px 0}'+
    '.calc-barrainp{padding:5px 6px;font-size:12px;text-align:right}'+
    '.calc-ok{color:#7ca88a;font-size:10px;margin-top:4px}'+
+   '.ap-her{border:1px solid var(--gp-line,rgba(255,255,255,.10));border-radius:9px;overflow:hidden;margin:2px 0 8px}'+
+   '.ap-her-r{display:flex;justify-content:space-between;gap:10px;padding:6px 9px;font-size:12px;color:#c8d8c8;border-top:1px solid rgba(255,255,255,.06)}'+
+   '.ap-her-r:first-child{border-top:0}'+
    '.calc-perfil{background:rgba(120,170,215,.14);border:1px solid rgba(120,170,215,.34);color:#a8cbe8;border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit}'+
    '.calc-met{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8fb6d8;background:rgba(120,170,215,.13);border:1px solid rgba(120,170,215,.3);border-radius:5px;padding:1px 5px;margin-left:4px}';
   document.head.appendChild(s);
@@ -7452,12 +7455,13 @@ var APLIC_METODOS={
 var APLIC_METODOS_CURTO={tractor:'sider', co2:'costal CO₂', drone:'drone', atomizer:'atomizador', lab:'Potter'};
 
 /* A regra de categoria, num lugar só. */
-/* A ORDEM importa: o primeiro da lista é o que vale quando ninguém declarou nada. Num
-   app de P&D o pulverizador de pesquisa é o costal a CO₂ — é nele que se coleta bico a
-   bico e é ele que aparece na maioria dos protocolos. Começar pelo sider faria o
-   estudo sem protocolo nascer sem a planilha de coleta, calado. */
+/* A ORDEM importa: o primeiro da lista é o que vale quando ninguém declarou nada, e
+   nesta operação o padrão é o SIDER. Consequência a conhecer: no sider não se coleta
+   bico a bico, então um estudo sem protocolo nasce com a leitura de barra inteira e
+   sem a matriz por bico. É correto — quem usa costal declara o costal, e aí a matriz
+   aparece. O que não pode é o app escolher a máquina errada e calcular calado. */
 function aplicMetodosDe(qid){
-  return (typeof isQuadraLab==='function' && isQuadraLab(qid)) ? ['lab'] : ['co2','tractor','drone','atomizer'];
+  return (typeof isQuadraLab==='function' && isQuadraLab(qid)) ? ['lab'] : ['tractor','co2','drone','atomizer'];
 }
 function aplicMetodoValido(qid, m){ return aplicMetodosDe(qid).indexOf(m)>=0; }
 
@@ -8098,6 +8102,116 @@ function _calcConfigAtual(){
   };
 }
 
+/* O que a aplicação já sabe sem ninguém digitar nada. Somente leitura: tudo aqui é
+   reflexo do estudo, e editar por cima criaria uma segunda verdade sobre a mesma
+   aplicação. Quem quiser mudar muda no estudo, que é onde o dado mora. */
+function aplicacaoHerancaHtml(study, qid, ap){
+  if(!study) return '';
+  /* As classes deste bloco moram na folha da calculadora, que só é injetada quando a
+     calculadora abre. Aqui ela pode nunca ter aberto — _calcCss é idempotente. */
+  try{ _calcCss(); }catch(e){}
+  var cfg=calcConfigDoEstudo(study, qid);
+  var trats=(study.tratamentos||[]);
+  if(!trats.length) return '<div class="e-hint" style="margin:2px 0 9px">Este estudo ainda não tem tratamentos. A aplicação vai ficar sem registro do que foi preparado.</div>';
+  var BC=window.BioCalculoCampo;
+  function f(v,p){ return BC?BC.formatBR(v,p==null?2:p):String(v); }
+  var met=(typeof studyMetodo==='function')?studyMetodo(study,qid):null;
+  var variam=(typeof studyMetodosVariam==='function')?studyMetodosVariam(study,qid):false;
+
+  var h='<div class="se-section-title">O que vai ser aplicado</div>';
+  var linha=[];
+  linha.push(trats.length+' tratamento(s)');
+  linha.push(Math.max(1,parseInt(study.numRepeticoes)||1)+' parcela(s) cada');
+  if(cfg.parcelaComprimento>0&&cfg.parcelaLargura>0) linha.push('parcela '+f(cfg.parcelaComprimento,1)+'×'+f(cfg.parcelaLargura,1)+' m');
+  if(cfg.volumeCaldaLHa>0) linha.push(f(cfg.volumeCaldaLHa,0)+' L/ha');
+  if(met && !variam && APLIC_METODOS[met]) linha.push(APLIC_METODOS[met]);
+  h+='<div class="e-hint" style="margin:2px 0 6px">'+esc(linha.join(' · '))+
+     (variam?' · <b>métodos diferentes por tratamento</b>':'')+'</div>';
+
+  h+='<div class="ap-her">';
+  trats.forEach(function(t){
+    var tm=(variam&&typeof tratMetodo==='function')?tratMetodo(study,qid,t):null;
+    h+='<div class="ap-her-r"><span>'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+
+       (tm?' <span class="calc-met">'+esc(APLIC_METODOS_CURTO[tm]||tm)+'</span>':'')+'</span>'+
+       '<b>'+esc(t.dose||'—')+'</b></div>';
+  });
+  h+='</div>';
+
+  /* Sem parcela ou sem volume não há como transformar dose/ha em mililitro de frasco.
+     Dizer isso aqui é melhor que gravar depois uma memória de zeros. */
+  if(!calcConfigCompleta(cfg)){
+    h+='<div class="calc-warn">⚠ Falta '+
+       esc([(cfg.parcelaComprimento>0&&cfg.parcelaLargura>0)?null:'o tamanho da parcela',
+            (cfg.volumeCaldaLHa>0)?null:'o volume de calda'].filter(Boolean).join(' e '))+
+       ' no protocolo do estudo. Sem isso a aplicação é salva, mas sem memória de cálculo.</div>';
+  }else if(ap && ap.memoriaCalculo){
+    h+='<div class="calc-ok">✓ Esta aplicação já tem memória de cálculo'+
+       ((ap.memoriaCalculo.origem==='conferida')?' conferida na calculadora':' derivada do estudo')+'.</div>';
+  }else{
+    h+='<div class="e-hint" style="margin:2px 0 0">Ao salvar, a memória de cálculo é gravada automaticamente a partir destes dados. Abrir a 🧪 calculadora e gravar por lá substitui por uma <b>conferida</b>.</div>';
+  }
+  return h;
+}
+
+/* ===================== §7.4 — A APLICAÇÃO HERDA DO ESTUDO =========================
+   Até aqui a memória de cálculo só existia se alguém abrisse a calculadora e
+   apertasse "Gravar nesta aplicação". Quem registrasse a aplicação direto — que é o
+   caminho normal de quem está no campo com o celular — deixava a aplicação sem
+   nenhum registro do que foi preparado.
+
+   O buraco não é de interface: é que a configuração de preparo só existia na TELA.
+   Esta função a deriva do ESTUDO, com a mesma ordem de preferência que a calculadora
+   usa (protocolo primeiro, cadastro do estudo depois), e sem tocar no DOM. Com ela a
+   memória passa a ser calculável sem a calculadora estar aberta — que é exatamente o
+   que "o operador não redigita" quer dizer.
+
+   A origem vai marcada. Memória DERIVADA é conta que o app fez sozinho a partir do que
+   estava declarado; memória CONFERIDA é a que alguém olhou na calculadora e mandou
+   gravar. As duas valem, mas não são a mesma coisa, e um registro BPL que não
+   distinguisse as duas estaria afirmando uma conferência que não houve. ============= */
+function calcConfigDoEstudo(study, qid){
+  if(!study) return null;
+  var p=(typeof _parseParcelaDim==='function')?_parseParcelaDim((study.protocolo||{}).tamanhoParcela):null;
+  /* Volume padrão: protocolo primeiro; senão, só se TODOS os tratamentos concordarem.
+     Se divergem, fica 0 — cada tratamento já usa o seu, e um "padrão" inventado aqui
+     seria aplicado justamente a quem não declarou nada. */
+  var vols=(study.tratamentos||[]).map(function(t){ return _calcNum(t.volume); }).filter(function(n){ return n>0; });
+  var uniforme=vols.length>0 && vols.every(function(n){ return n===vols[0]; });
+  var pv=_calcNum((study.protocolo||{}).volumeCalda);
+  return {
+    parcelaComprimento:(p?p.comprimento:0),
+    parcelaLargura:(p?p.largura:0),
+    parcelas:Math.max(1,parseInt(study.numRepeticoes)||1),
+    volumeCaldaLHa:(pv>0?pv:(uniforme?vols[0]:0)),
+    volumeMortoMl:Math.max(0,_numBR(study.volumeMorto,0)),
+    frascos:Math.max(1,Math.round(_numBR(study.numFrascos,1))||1),
+    capacidadeFrascoL:Math.max(0,_numBR(study.capacidadeFrasco,0)),
+    qid:(qid||null),
+    origem:'estudo'
+  };
+}
+
+/* Dá para calcular a partir do que está declarado? Sem parcela ou sem volume não dá:
+   a área da parcela é o que transforma dose/ha em mililitro de frasco. Recusar aqui é
+   melhor que gravar uma memória de zeros com cara de registro. */
+function calcConfigCompleta(cfg){
+  return !!(cfg && cfg.parcelaComprimento>0 && cfg.parcelaLargura>0 && cfg.volumeCaldaLHa>0);
+}
+
+/* A memória automática da aplicação. Derivada do estudo, marcada como derivada, e
+   gravada só quando ainda não existe nenhuma — jamais por cima de uma conferida. */
+function aplicacaoMemoriaAuto(study, qid, ap){
+  if(!study || !ap) return null;
+  if(ap.memoriaCalculo) return null;              /* já há registro: não se sobrescreve */
+  var cfg=calcConfigDoEstudo(study, qid);
+  if(!calcConfigCompleta(cfg)) return null;       /* faltou dado declarado: não se inventa */
+  var mem=calcMemoria(study, cfg);
+  if(!mem || mem.erro) return null;
+  mem.origem='derivada';
+  mem.derivadaDe='protocolo e cadastro do estudo';
+  return mem;
+}
+
 function calcMemoria(study, cfg){
   var BC=window.BioCalculoCampo;
   if(!BC) return {erro:'O motor de cálculo não carregou.'};
@@ -8258,6 +8372,9 @@ function calcGravarMemoria(){
     ap.memoriasAnteriores=(ap.memoriasAnteriores||[]);
     ap.memoriasAnteriores.push(ap.memoriaCalculo);
   }
+  /* Gravada pela calculadora: alguém olhou os números e mandou gravar. É o que
+     distingue esta da memória derivada automaticamente ao salvar a aplicação. */
+  mem.origem='conferida';
   ap.memoriaCalculo=mem;
   ap._ts=Date.now();
   /* §7.3 — o perfil se APRENDE aqui, de uma calibração que já foi julgada boa o
@@ -10725,6 +10842,8 @@ function openStudyEditAplicacao(aid){
     });
     h+='</select></div>';
   }
+  /* §7.4 — o que a aplicação já sabe do estudo, sem ninguém redigitar. */
+  try{ h+=aplicacaoHerancaHtml(study, curV, ap); }catch(e){}
   var weatherHtml = '<div id="aeWeatherAlert" style="margin-bottom:12px;padding:10px;border-radius:10px;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);font-size:12px;line-height:1.45">' +
     'Obtendo condições meteorológicas atuais para janela BPL…' +
     '</div>';
@@ -11023,6 +11142,18 @@ function saveAplicacao(){
     study.aplicacoes.push(ap);
     draftAp=null;
   }
+  /* §7.4 — a memória se deriva do estudo ao salvar, para que registrar a aplicação no
+     campo não deixe a aplicação sem nenhum registro do que foi preparado. Só quando
+     ainda não há nenhuma: nunca por cima de uma conferida na calculadora. */
+  try{
+    var _memAuto=aplicacaoMemoriaAuto(study, curV, ap);
+    if(_memAuto){
+      ap.memoriaCalculo=_memAuto;
+      logStudyAuditInObject(study,'aplicacao.memoriaCalculo',
+        'Memória de cálculo derivada do estudo ao salvar a aplicação '+(ap.data||ap.id),
+        {aplicacao:ap.id, origem:'derivada', motor:_memAuto.motor, motorVersao:_memAuto.motorVersao});
+    }
+  }catch(e){}
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   else _recarimbaEvento(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
