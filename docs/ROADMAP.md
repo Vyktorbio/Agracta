@@ -127,7 +127,7 @@ relatório reconstrói a versão usada.
 - **7.4** ✅ (01/09/2026) A aplicação **herda** do estudo: tratamentos, doses, parcelas, repetições, método. O operador não redigita — e ao salvar, a memória de cálculo é **derivada** do estudo sozinha.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
 - **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
-- **7.8** Laboratório vira **submodo** do mesmo motor: PPM, preparação inversa, campo→bancada, ajuste de i.a., série de doses, testemunha automática, alertas de pipetagem/massa mínima.
+- **7.8** ✅ (02/09/2026) Laboratório no **mesmo pipeline**: a aplicação de bancada passou a ter memória de cálculo, derivada do cadastro do estudo, com a mesma marcação de origem e a mesma regra de nunca gravar por cima. Dois motores, um pipeline — a categoria da quadra escolhe qual.
 - **7.9** A tela mostra o essencial e esconde o resto atrás de *"Ver cálculo completo"*.
 
 **Concluída quando:** nenhum operador precisa abrir calculadora externa para executar um
@@ -135,7 +135,16 @@ estudo do Agracta.
 
 > **Estado (01/09/2026) — gap real desta fase:**
 > - ✅ **7.1** feito: os dois motores puros já existem e são testados.
-> - ✅ **7.8** parcialmente: `biocalc-lab-core.js` já traz `calcPPM`, `calcPPMInverso`, `calcCampo`, `calcAjusteIA`, `calcSerie`, `alertaPipeta`, `alertaMassa`.
+> - ✅ **7.8** feito (02/09/2026). O motor já existia e já era puro; o que faltava era
+>   a bancada **entrar na memória de cálculo** — a aplicação de um estudo de bancada
+>   ficava sem registro nenhum do que foi preparado, enquanto a de campo ganhava o seu.
+>   `calcMemoriaLab` produz a mesma forma de memória a partir de `BioCalculoLab`, e
+>   `aplicacaoMemoriaAuto` ramifica pela categoria da quadra.
+>   **Achado no caminho:** a herança da §7.4 nasceu cega para a categoria e pedia
+>   "tamanho da parcela" e "volume de calda" numa bancada. Era a §7-bis reaparecendo
+>   dentro do código recém-escrito — o que diz bem por que a fronteira precisa ser
+>   perguntada e não presumida. Coberto por `test_bancada_memoria.js` (45 verificações,
+>   com golden tests nos dois modos de dose).
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
 > - ✅ **7.4** feito (01/09/2026). O buraco não era de interface: a configuração de
 >   preparo só existia na TELA, então quem registrasse a aplicação direto — o caminho

@@ -8105,8 +8105,54 @@ function _calcConfigAtual(){
 /* O que a aplicação já sabe sem ninguém digitar nada. Somente leitura: tudo aqui é
    reflexo do estudo, e editar por cima criaria uma segunda verdade sobre a mesma
    aplicação. Quem quiser mudar muda no estudo, que é onde o dado mora. */
+/* Bloco herdado da BANCADA. Não existe parcela nem calda aqui: o que a aplicação
+   precisa saber é o pote, a fonte do produto e a dose de cada tratamento. */
+function aplicacaoHerancaLabHtml(study, qid, ap){
+  var LB=window.BioCalculoLab;
+  var cfg=calcConfigDoEstudoLab(study, qid);
+  var trats=(study.tratamentos||[]);
+  if(!trats.length) return '<div class="e-hint" style="margin:2px 0 9px">Este estudo ainda não tem tratamentos. A aplicação vai ficar sem registro do que foi preparado.</div>';
+  function f(v,p){ return LB?LB.formatBR(v,p==null?2:p):String(v); }
+
+  var h='<div class="se-section-title">O que vai ser preparado</div>';
+  var linha=[];
+  if(cfg.volumeMl>0) linha.push('pote de '+f(cfg.volumeMl,0)+' mL');
+  linha.push((LB&&LB.FONTES[cfg.fonteTipo]?LB.FONTES[cfg.fonteTipo].rotulo:cfg.fonteTipo)+
+             (cfg.fonteTipo!=='puro'&&cfg.fonteValor?(' '+cfg.fonteValor):''));
+  if(_calcNum(cfg.pureza)>0) linha.push('pureza '+cfg.pureza+'%');
+  linha.push(cfg.doseModo==='ppm'?'dose em ppm':'dose de campo convertida para o pote');
+  linha.push('Torre de Potter');
+  h+='<div class="e-hint" style="margin:2px 0 6px">'+esc(linha.join(' · '))+'</div>';
+
+  h+='<div class="ap-her">';
+  trats.forEach(function(t){
+    h+='<div class="ap-her-r"><span>'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+'</span>'+
+       '<b>'+esc(t.dose||'—')+(cfg.doseModo==='ppm'&&t.dose?' ppm':'')+'</b></div>';
+  });
+  h+='</div>';
+
+  var falta=calcConfigLabFaltando(cfg);
+  if(falta.length){
+    h+='<div class="calc-warn">⚠ Falta '+esc(falta.join(' e '))+
+       ' no cadastro do estudo. Sem isso a aplicação é salva, mas sem memória de cálculo.</div>';
+  }else if(ap && ap.memoriaCalculo){
+    h+='<div class="calc-ok">✓ Esta aplicação já tem memória de cálculo'+
+       ((ap.memoriaCalculo.origem==='conferida')?' conferida na calculadora':' derivada do estudo')+'.</div>';
+  }else{
+    h+='<div class="e-hint" style="margin:2px 0 0">Ao salvar, a memória de cálculo é gravada automaticamente a partir destes dados — quanto pipetar ou pesar em cada pote.</div>';
+  }
+  return h;
+}
+
 function aplicacaoHerancaHtml(study, qid, ap){
   if(!study) return '';
+  /* §7.8/§7-bis. A herança nasceu cega para a categoria e pedia "parcela" e "volume de
+     calda" numa bancada — não existe parcela numa placa de Petri. A pergunta vem
+     primeiro, como em todo o resto do app. */
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)){
+    try{ _calcCss(); }catch(e){}
+    return aplicacaoHerancaLabHtml(study, qid, ap);
+  }
   /* As classes deste bloco moram na folha da calculadora, que só é injetada quando a
      calculadora abre. Aqui ela pode nunca ter aberto — _calcCss é idempotente. */
   try{ _calcCss(); }catch(e){}
@@ -8151,6 +8197,121 @@ function aplicacaoHerancaHtml(study, qid, ap){
     h+='<div class="e-hint" style="margin:2px 0 0">Ao salvar, a memória de cálculo é gravada automaticamente a partir destes dados. Abrir a 🧪 calculadora e gravar por lá substitui por uma <b>conferida</b>.</div>';
   }
   return h;
+}
+
+
+/* ===================== §7.8 — A BANCADA NO MESMO PIPELINE ========================
+   A calculadora de laboratório já existia e já usava um motor puro. O que ela NÃO
+   fazia era entrar na memória de cálculo: a aplicação de um estudo de bancada ficava
+   sem registro nenhum do que foi preparado, enquanto a de campo ganhava o seu.
+
+   Pior: a herança da §7.4 nasceu cega para a categoria. Numa quadra de laboratório
+   ela pedia "tamanho da parcela" e "volume de calda" — não existe parcela numa placa
+   de Petri. Era a §7-bis reaparecendo dentro do código que eu tinha acabado de
+   escrever, o que diz bem por que a fronteira precisa ser explícita em vez de
+   presumida.
+
+   Agora são dois motores no MESMO pipeline: mesma forma de memória, mesma marcação de
+   origem (derivada/conferida), mesma regra de nunca gravar por cima. O que muda é a
+   receita — pote e pipeta em vez de parcela e frasco — e o motor que a calcula. ==== */
+
+function calcConfigDoEstudoLab(study, qid){
+  if(!study) return null;
+  return {
+    volumeMl:Math.max(0,_numBR(study.labVolumeMl,0)),
+    fonteTipo:(['gL','gkg','mae','puro'].indexOf(study.labFonteTipo)>=0?study.labFonteTipo:'gL'),
+    fonteValor:(study.labFonteValor||''),
+    pureza:(study.labPureza||''),
+    densidade:(study.labDensidade||''),
+    /* 'ppm' é dose de bancada; 'campo' é dose de campo convertida para o pote, e aí a
+       vazão do protocolo é indispensável — é ela que diz quanto produto há em cada
+       mililitro de calda. */
+    doseModo:(study.doseModo==='ppm'?'ppm':'campo'),
+    vazaoLHa:_calcNum((study.protocolo||{}).volumeCalda),
+    qid:(qid||null),
+    origem:'estudo'
+  };
+}
+
+function calcConfigLabCompleta(cfg){
+  if(!cfg || !(cfg.volumeMl>0)) return false;
+  /* Reagente puro é 100% por definição e não tem "valor de rótulo"; os outros sem o
+     valor da fonte dividiriam por zero e a receita sairia em silêncio, sem número. */
+  if(cfg.fonteTipo!=='puro' && !(_calcNum(cfg.fonteValor)>0)) return false;
+  if(cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) return false;
+  return true;
+}
+
+/* O que falta, em português, para a tela poder dizer onde preencher. */
+function calcConfigLabFaltando(cfg){
+  var f=[];
+  if(!cfg || !(cfg.volumeMl>0)) f.push('o volume do pote');
+  if(cfg && cfg.fonteTipo!=='puro' && !(_calcNum(cfg.fonteValor)>0)) f.push('o valor da fonte do produto');
+  if(cfg && cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) f.push('o volume de calda do protocolo (a dose é de campo)');
+  return f;
+}
+
+function calcMemoriaLab(study, cfg){
+  var LB=window.BioCalculoLab;
+  if(!LB) return {erro:'O motor de cálculo do laboratório não carregou.'};
+  if(!study||!(study.tratamentos||[]).length) return {erro:'Estudo sem tratamentos cadastrados.'};
+  cfg=cfg||{};
+
+  var mem={
+    motor:'BioCalculoLab',
+    motorVersao:(LB.VERSION||'?'),
+    contexto:'laboratorio',
+    app:(typeof APP_VER!=='undefined'?APP_VER:null),
+    geradoEm:Date.now(),
+    iso:new Date().toISOString(),
+    user:(typeof _currentUserName==='function'?(_currentUserName()||'Não identificado'):'Não identificado'),
+    estudo:{id:study.id, codigo:(study.codigo||null), nome:(study.nome||null)},
+    entradas:cfg,
+    barra:null,          /* não há barra numa bancada */
+    tratamentos:[]
+  };
+
+  (study.tratamentos||[]).forEach(function(t){
+    var testemunha=!!t.testemunha || (typeof studyTestemunha==='function' && studyTestemunha(study)===t.id);
+    var dval=_calcNum(t.dose);
+    var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
+             doseModo:cfg.doseModo, volumePoteMl:cfg.volumeMl, testemunha:testemunha, avisos:[]};
+
+    /* Testemunha sem dose não gera preparo — e isso é resultado, não falta de dado. */
+    if(testemunha && !(dval>0)){ reg.semPreparo=true; mem.tratamentos.push(reg); return; }
+
+    var r;
+    try{
+      r=(cfg.doseModo==='ppm')
+        ? LB.calcPPM({alvoPpm:dval, volumeMl:cfg.volumeMl, fonteTipo:cfg.fonteTipo,
+                      fonteValor:cfg.fonteValor, pureza:cfg.pureza, densidade:cfg.densidade})
+        : LB.calcCampo({dose:dval, unidade:_calcDoseUnit(t.dose), vazao:cfg.vazaoLHa,
+                        volumeMl:cfg.volumeMl, base:'formulado',
+                        pureza:cfg.pureza, densidade:cfg.densidade});
+    }catch(e){
+      reg.erro=(e&&e.message)||String(e);
+      mem.tratamentos.push(reg);
+      return;
+    }
+
+    /* Pipetar ou pesar é a diferença que vai para a bancada: uma pede micropipeta, a
+       outra pede balança. Guardar as duas num campo "quantidade" perderia isso. */
+    reg.acao=r.acao||null;
+    if(r.produtoMl!=null){ reg.produtoMl=r.produtoMl; reg.produtoUl=r.produtoUl; }
+    if(r.massaMg!=null) reg.massaMg=r.massaMg;
+    if(r.solventeMl!=null) reg.solventeMl=r.solventeMl;
+    if(r.concentracaoPpm!=null) reg.concentracaoPpm=r.concentracaoPpm;
+    if(r.concentracaoPct!=null) reg.concentracaoPct=r.concentracaoPct;
+    if(r.alvoPpm!=null) reg.alvoPpm=r.alvoPpm;
+    if(r.impossivel) reg.impossivel=true;
+    /* A sugestão de solução-mãe é o que salva um volume impipetável: sem ela, o alerta
+       de pipeta diria "não dá" e pararia aí. */
+    if(r.sugestaoMae) reg.sugestaoMae={fator:r.sugestaoMae.fator, msg:r.sugestaoMae.msg};
+    (r.avisos||[]).forEach(function(a){ reg.avisos.push((a&&a.msg)||String(a)); });
+
+    mem.tratamentos.push(reg);
+  });
+  return mem;
 }
 
 /* ===================== §7.4 — A APLICAÇÃO HERDA DO ESTUDO =========================
@@ -8203,9 +8364,12 @@ function calcConfigCompleta(cfg){
 function aplicacaoMemoriaAuto(study, qid, ap){
   if(!study || !ap) return null;
   if(ap.memoriaCalculo) return null;              /* já há registro: não se sobrescreve */
-  var cfg=calcConfigDoEstudo(study, qid);
-  if(!calcConfigCompleta(cfg)) return null;       /* faltou dado declarado: não se inventa */
-  var mem=calcMemoria(study, cfg);
+  /* §7.8 — dois motores, um pipeline. A categoria da quadra escolhe qual. */
+  var ehLab=(typeof isQuadraLab==='function' && isQuadraLab(qid));
+  var cfg=ehLab?calcConfigDoEstudoLab(study, qid):calcConfigDoEstudo(study, qid);
+  var completa=ehLab?calcConfigLabCompleta(cfg):calcConfigCompleta(cfg);
+  if(!completa) return null;                      /* faltou dado declarado: não se inventa */
+  var mem=ehLab?calcMemoriaLab(study, cfg):calcMemoria(study, cfg);
   if(!mem || mem.erro) return null;
   mem.origem='derivada';
   mem.derivadaDe='protocolo e cadastro do estudo';
@@ -8289,6 +8453,9 @@ function calcMemoria(study, cfg){
 /* Texto para a área de transferência, derivado da memória — não um segundo cálculo. */
 function calcMemoriaTexto(mem){
   if(!mem||mem.erro) return (mem&&mem.erro)||'';
+  /* §7.8 — a memória de bancada tem outra receita (pote e pipeta, não parcela e
+     frasco), então tem o seu próprio texto. A forma do registro é a mesma. */
+  if(mem.contexto==='laboratorio') return calcMemoriaLabTexto(mem);
   var BC=window.BioCalculoCampo;
   function f(v,p){ return BC?BC.formatBR(v,p==null?2:p):String(v); }
   var e=mem.entradas||{};
@@ -8334,6 +8501,39 @@ function calcMemoriaTexto(mem){
     (b.avisos||[]).forEach(function(a){ L.push('  '+a); });
     L.push('Motor da calibração: '+b.motor+' '+b.motorVersao);
   }
+  L.push('');
+  L.push('Motor '+mem.motor+' '+mem.motorVersao+' · gerado em '+
+         (function(){ try{ return new Date(mem.geradoEm).toLocaleString('pt-BR'); }catch(_){ return mem.iso; } })()+
+         ' por '+mem.user);
+  return L.join('\n');
+}
+
+function calcMemoriaLabTexto(mem){
+  if(!mem||mem.erro) return (mem&&mem.erro)||'';
+  var LB=window.BioCalculoLab;
+  function f(v,p){ return LB?LB.formatBR(v,p==null?2:p):String(v); }
+  var e=mem.entradas||{};
+  var L=['CALCULADORA DE BANCADA — '+(mem.estudo.codigo||mem.estudo.nome||mem.estudo.id),
+    'Pote '+f(e.volumeMl,0)+' mL · '+(LB&&LB.FONTES[e.fonteTipo]?LB.FONTES[e.fonteTipo].rotulo:e.fonteTipo)+
+      (e.fonteTipo!=='puro'&&e.fonteValor?(' '+e.fonteValor):'')+
+      (e.pureza?(' · pureza '+e.pureza+'%'):'')+
+      (e.densidade?(' · d '+e.densidade+' g/mL'):'')+
+      ' · '+(e.doseModo==='ppm'?'dose em ppm':('dose de campo · vazão '+f(e.vazaoLHa,0)+' L/ha')),
+    'Trat\tProduto\tDose\tAção\tQuanto\tSolvente(mL)\tConcentração'];
+  mem.tratamentos.forEach(function(t){
+    if(t.semPreparo){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\tnão preparar\t0\t0\t0'); return; }
+    if(t.erro){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro) '+t.erro); return; }
+    /* Pipetar em µL e pesar em mg: a unidade que a bancada usa de verdade. */
+    var quanto=(t.acao==='pesar')
+      ? (f(t.massaMg,3)+' mg')
+      : (t.produtoUl!=null?(f(t.produtoUl,2)+' µL'):'—');
+    var conc=(t.concentracaoPpm!=null?(f(t.concentracaoPpm,2)+' ppm')
+             :(t.alvoPpm!=null?(f(t.alvoPpm,2)+' ppm'):''));
+    L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.acao||'')+'\t'+quanto+
+           '\t'+(t.solventeMl!=null?f(t.solventeMl,3):'')+'\t'+conc);
+    if(t.sugestaoMae) L.push('\t→ '+t.sugestaoMae.msg);
+    (t.avisos||[]).forEach(function(w){ L.push('\t⚠ '+w); });
+  });
   L.push('');
   L.push('Motor '+mem.motor+' '+mem.motorVersao+' · gerado em '+
          (function(){ try{ return new Date(mem.geradoEm).toLocaleString('pt-BR'); }catch(_){ return mem.iso; } })()+
