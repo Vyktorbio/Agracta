@@ -1,9 +1,11 @@
 /* Agracta — adaptador Firebase + operação local-first.
  *
  * O estado ativo continua sendo gravado imediatamente no aparelho. O Firestore
- * recebe uma versão normalizada por entidade, sincroniza entre aparelhos e
- * mantém sua própria fila offline. O Supabase antigo fica dormente para permitir
- * rollback durante a migração.
+ * recebe uma versão normalizada por entidade e sincroniza entre aparelhos.
+ * O cofre offline e a fila de alterações pertencem ao próprio Agracta: não
+ * ativamos o IndexedDB interno do Firestore, que pode quebrar ao retomar uma
+ * aba suspensa. O Supabase antigo fica dormente para permitir rollback durante
+ * a migração.
  */
 (function(){
   'use strict';
@@ -11,8 +13,9 @@
   var CFG=window.AGRACTA_FIREBASE_CONFIG||{};
   var FB={
     app:null,auth:null,db:null,user:null,unsub:null,
-    ready:false,pulling:false,pushing:false,remoteFlat:null,
-    lastRev:0,timer:null,checkpointTimer:null,pendingWrites:0
+    ready:false,pulling:false,pushing:false,resyncing:false,remoteFlat:null,
+    lastRev:0,timer:null,checkpointTimer:null,checkpointPending:null,
+    checkpointWaiters:[],checkpointChain:Promise.resolve(),pendingWrites:0
   };
   var ROOT='workspaces/agracta';
   var ADMIN_EMAILS={
@@ -21,6 +24,8 @@
   };
   var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','config','media'];
   var CHECKPOINT_DB='agracta-local-first',CHECKPOINT_STORE='snapshots',CHECKPOINT_KEY='active';
+  var LOCAL_STATE_TS_KEY='agracta-local-state-ts';
+  var TRUST_KEY='agracta-trusted-device',TRUST_VERSION=2;
 
   function configured(){
     return !!(CFG.apiKey&&CFG.authDomain&&CFG.projectId&&CFG.appId&&window.firebase);
@@ -116,17 +121,52 @@
       req.onerror=function(){reject(req.error);};
     });
   }
-  function checkpointPut(st){
-    if(!st)return;
+  function checkpointWrite(record){
+    return checkpointOpen().then(function(db){
+      return new Promise(function(resolve,reject){
+        var done=false;
+        function close(){try{db.close();}catch(e){}}
+        try{
+          var tx=db.transaction(CHECKPOINT_STORE,'readwrite');
+          tx.objectStore(CHECKPOINT_STORE).put(record,CHECKPOINT_KEY);
+          tx.oncomplete=function(){
+            if(done)return;done=true;close();
+            /* O carimbo do localStorage só acompanha o checkpoint quando a
+               última gravação síncrona do estado ativo não falhou. Se ela
+               falhou por quota, deixar o carimbo antigo é proposital: na
+               próxima abertura o checkpoint mais novo será restaurado. */
+            if(window._agractaLocalSaveOk!==false){
+              try{localStorage.setItem(LOCAL_STATE_TS_KEY,String(record.savedAt));}catch(e){}
+            }
+            resolve(true);
+          };
+          tx.onerror=function(){if(done)return;done=true;var e=tx.error||new Error('Falha ao gravar o cofre offline.');close();reject(e);};
+          tx.onabort=function(){if(done)return;done=true;var e=tx.error||new Error('Gravação offline interrompida.');close();reject(e);};
+        }catch(e){close();reject(e);}
+      });
+    });
+  }
+  function checkpointFlush(){
+    clearTimeout(FB.checkpointTimer);FB.checkpointTimer=null;
+    var pending=FB.checkpointPending;
+    if(!pending)return FB.checkpointChain;
+    FB.checkpointPending=null;
+    var waiters=FB.checkpointWaiters.splice(0,FB.checkpointWaiters.length);
+    /* Serializa as transações: um checkpoint antigo nunca pode terminar depois
+       do novo e sobrescrevê-lo. */
+    var run=FB.checkpointChain.catch(function(){}).then(function(){return checkpointWrite(pending);});
+    FB.checkpointChain=run;
+    run.then(function(v){waiters.forEach(function(w){w.resolve(v);});},function(e){waiters.forEach(function(w){w.reject(e);});});
+    return run;
+  }
+  function checkpointPut(st,immediate){
+    if(!st)return Promise.resolve(false);
+    FB.checkpointPending={savedAt:Date.now(),state:clean(st)};
+    var promise=new Promise(function(resolve,reject){FB.checkpointWaiters.push({resolve:resolve,reject:reject});});
     clearTimeout(FB.checkpointTimer);
-    FB.checkpointTimer=setTimeout(function(){
-      checkpointOpen().then(function(db){
-        var tx=db.transaction(CHECKPOINT_STORE,'readwrite');
-        tx.objectStore(CHECKPOINT_STORE).put({savedAt:Date.now(),state:clean(st)},CHECKPOINT_KEY);
-        tx.oncomplete=function(){db.close();};
-        tx.onerror=function(){db.close();};
-      }).catch(function(){});
-    },120);
+    if(immediate)checkpointFlush();
+    else FB.checkpointTimer=setTimeout(checkpointFlush,90);
+    return promise;
   }
   function checkpointGet(){
     return checkpointOpen().then(function(db){
@@ -138,9 +178,13 @@
       });
     }).catch(function(){return null;});
   }
-  function restoreCheckpointToLocal(st){
-    if(!st)return;
+  function restoreCheckpointToLocal(st,savedAt){
+    if(!st)return false;
     try{
+      /* Backups completos repetidos são a causa mais comum de quota cheia.
+         O checkpoint já é o backup de recuperação mais novo; abre espaço antes
+         de tentar devolver o estado ativo ao armazenamento síncrono. */
+      try{localStorage.removeItem('iracema-safety');}catch(e){}
       if(st.data)localStorage.setItem('iracema-v7',JSON.stringify(st.data));
       if(st.qgeo)localStorage.setItem('iracema-qgeo-v1',JSON.stringify(st.qgeo));
       if(st.qgeots)localStorage.setItem('iracema-qgeots-v1',JSON.stringify(st.qgeots));
@@ -149,20 +193,37 @@
       if(st.locais)localStorage.setItem('iracema-locais-v1',JSON.stringify(st.locais));
       if(st.qlocal)localStorage.setItem('iracema-qlocal-v1',JSON.stringify(st.qlocal));
       if(st.qnome)localStorage.setItem('iracema-qnome-v1',JSON.stringify(st.qnome));
+      if(st.qnomets)localStorage.setItem('iracema-qnomets-v1',JSON.stringify(st.qnomets));
+      if(st.qlocalts)localStorage.setItem('iracema-qlocalts-v1',JSON.stringify(st.qlocalts));
+      if(st.locaists)localStorage.setItem('iracema-locaists-v1',JSON.stringify(st.locaists));
       if(st.randomizacoes)localStorage.setItem('iracema-randomizacoes-v1',JSON.stringify(st.randomizacoes));
       if(st.notas_campo)localStorage.setItem('iracema-notas-v1',JSON.stringify(st.notas_campo));
       if(st._deletedQuadras)localStorage.setItem('iracema-delq-v1',JSON.stringify(st._deletedQuadras));
       if(st._deletedLocais)localStorage.setItem('iracema-dell-v1',JSON.stringify(st._deletedLocais));
       if(st._deletedNotas)localStorage.setItem('iracema-deln-v1',JSON.stringify(st._deletedNotas));
-    }catch(e){}
+      localStorage.setItem('iracema-unsaved','true');
+      localStorage.setItem(LOCAL_STATE_TS_KEY,String(savedAt||Date.now()));
+      window._agractaLocalSaveOk=true;
+      return true;
+    }catch(e){window._agractaLocalSaveOk=false;return false;}
   }
   try{
-    if(!localStorage.getItem('iracema-v7')&&sessionStorage.getItem('agracta-idb-restored')!=='1'){
+    if(sessionStorage.getItem('agracta-idb-restored')!=='1'){
       checkpointGet().then(function(snap){
         if(snap&&snap.state&&meaningful(snap.state)){
-          restoreCheckpointToLocal(snap.state);
-          sessionStorage.setItem('agracta-idb-restored','1');
-          location.reload();
+          var temLocal=!!localStorage.getItem('iracema-v7');
+          var localTs=parseInt(localStorage.getItem(LOCAL_STATE_TS_KEY)||'0',10)||0;
+          var atual=localState(),iguais=false;
+          try{iguais=stable(clean(atual))===stable(clean(snap.state));}catch(e){}
+          if(iguais){
+            try{localStorage.setItem(LOCAL_STATE_TS_KEY,String(snap.savedAt||localTs||Date.now()));}catch(e){}
+            sessionStorage.setItem('agracta-idb-restored','1');
+            return;
+          }
+          if((!temLocal || (snap.savedAt||0)>localTs) && restoreCheckpointToLocal(snap.state,snap.savedAt)){
+            sessionStorage.setItem('agracta-idb-restored','1');
+            location.reload();
+          }
         }
       });
     }
@@ -172,7 +233,7 @@
   if(typeof originalSave==='function'){
     window.save=function(){
       var out=originalSave.apply(this,arguments);
-      checkpointPut(localState());
+      checkpointPut(localState()).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
       return out;
     };
   }
@@ -185,7 +246,12 @@
       FB.auth=window.firebase.auth();
       FB.db=window.firebase.firestore();
       try{FB.db.settings({ignoreUndefinedProperties:true,merge:true});}catch(e){}
-      try{FB.db.enablePersistence({synchronizeTabs:true}).catch(function(){});}catch(e){}
+      /* Não habilitar enablePersistence() aqui. O SDK do Firestore mantém outra
+         base IndexedDB e outra fila além do cofre local do Agracta. Em Chrome /
+         WebKit essa persistência pode ficar inválida depois que a aba volta do
+         segundo plano (INTERNAL ASSERTION FAILED: Unexpected state). Com o cache
+         padrão em memória, uma tentativa sem rede continua marcada como pendente
+         pelo Agracta e é reenviada a partir do checkpoint quando a conexão volta. */
       try{FB.auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);}catch(e){}
       FB.ready=true;
       return FB;
@@ -194,18 +260,47 @@
       return null;
     }
   }
+  function trustedDevice(){
+    try{
+      var t=JSON.parse(localStorage.getItem(TRUST_KEY)||'null');
+      if(!t||t.v!==TRUST_VERSION||!t.uid||!t.email||!t.authenticatedAt)return null;
+      return t;
+    }catch(e){return null;}
+  }
+  function rememberTrustedUser(user,nome){
+    if(!user||!user.uid||!user.email)return null;
+    var old=trustedDevice()||{};
+    var t={
+      v:TRUST_VERSION,uid:String(user.uid),email:String(user.email).trim().toLowerCase(),
+      name:String(nome||user.displayName||old.name||'').trim(),authenticatedAt:Date.now()
+    };
+    try{localStorage.setItem(TRUST_KEY,JSON.stringify(t));}catch(e){return null;}
+    return t;
+  }
+  function trustedForUser(user){
+    var t=trustedDevice();
+    return !!(t&&user&&String(t.uid)===String(user.uid)&&t.email===String(user.email||'').trim().toLowerCase());
+  }
+  function offlineAccessAllowed(){return !!(trustedDevice()&&hasLocalRecords());}
   function startLocal(txt){
     if(!window._appStarted)window._appStarted=true;
     window._cloudInitDone=true;
     try{hideAuthGate();}catch(e){}
-    try{cloudBadge('offline',txt||'— dados protegidos neste aparelho');}catch(e){}
-    checkpointPut(localState());
+    try{cloudBadge('offline','=↻ salvando neste aparelho…');}catch(e){}
+    checkpointPut(localState(),true).then(function(){
+      try{cloudBadge('offline',txt||'=⌁ sessão local · sem sincronização');}catch(e){}
+    }).catch(function(e){
+      try{cloudBadge('error','— falha ao salvar neste aparelho');}catch(_e){}
+      console.error('[Agracta offline] checkpoint:',e);
+    });
   }
   function hasLocalRecords(){return meaningful(localState());}
   function addOfflineButton(){
     var box=document.querySelector('.auth-box');
-    if(!box||document.getElementById('authOfflineBtn')||!hasLocalRecords())return;
-    var nome='';try{if(typeof window._currentUserName==='function')nome=String(window._currentUserName()||'').trim();}catch(e){}
+    var trust=trustedDevice();
+    if(!box||document.getElementById('authOfflineBtn')||!trust||!hasLocalRecords())return;
+    var nome=String(trust.name||'').trim();
+    try{if(!nome&&typeof window._currentUserName==='function')nome=String(window._currentUserName()||'').trim();}catch(e){}
     var nomeWrap=null;
     if(!nome){
       nomeWrap=document.createElement('label');
@@ -216,14 +311,16 @@
     var b=document.createElement('button');
     b.id='authOfflineBtn';b.type='button';b.className='auth-btn';
     b.style.cssText='margin-top:9px;background:#eef2ee;color:#35443b;border:1px solid #cfd8d1';
-    b.textContent='Continuar offline neste aparelho';
+    b.textContent='Entrar sem conexão neste aparelho';
     b.onclick=function(){
       var n=nome;
       if(!n){var inp=document.getElementById('authOfflineName');n=String((inp&&inp.value)||'').trim();}
       if(!n||n.length<3){try{authErr('Informe o nome da pessoa responsável antes de continuar offline.');}catch(e){}var el=document.getElementById('authOfflineName');if(el)el.focus();return;}
+      window._authUser={id:trust.uid,uid:trust.uid,email:trust.email,email_verified:true,
+        displayName:n,name:n,offline:true};
       try{if(typeof window._gravarNomeAssinatura==='function')window._gravarNomeAssinatura(n);}catch(e){}
-      try{localStorage.setItem('agracta-trusted-device','1');}catch(e){}
-      startLocal('— modo offline · '+n);
+      rememberTrustedUser({uid:trust.uid,email:trust.email,displayName:n},n);
+      startLocal('— sessão local · sem sincronização');
     };
     var foot=box.querySelector('.auth-foot');
     if(nomeWrap)box.insertBefore(nomeWrap,foot||null);
@@ -247,8 +344,11 @@
       displayName:user.displayName||'',name:user.displayName||''
     }:null;
     if(user){
-      try{localStorage.setItem('agracta-trusted-device','1');}catch(e){}
-      try{hideAuthGate();}catch(e){}
+      if(trustedForUser(user)){
+        try{hideAuthGate();}catch(e){}
+      }else{
+        try{buildAuthGate();showAuthGate();authErr('Verificando permissão de acesso…');authBusy(true);}catch(e){}
+      }
       if(!window._appStarted)window._appStarted=true;
       /* Carrega o nome administrado no roster mesmo para usuários que nunca
          abriram o Painel Admin. Assim a primeira avaliação da sessão já é
@@ -279,7 +379,13 @@
     }).catch(function(){return false;});
   };
   window.authInit=function(){
-    if(!firebaseInit()){startLocal('— Firebase ainda não configurado');return;}
+    if(!firebaseInit()){
+      buildAuthGate();showAuthGate();
+      try{authErr(offlineAccessAllowed()
+        ? 'Sem conexão com o login. Use a entrada offline deste aparelho.'
+        : 'Sem conexão com o login. Este aparelho precisa entrar online ao menos uma vez.');}catch(e){}
+      return;
+    }
     buildAuthGate();
     FB.auth.onAuthStateChanged(function(user){
       if(user)onFirebaseUser(user);
@@ -308,8 +414,8 @@
   };
   window.doLogout=function(){
     if(typeof closeMainMenu==='function')closeMainMenu();
-    checkpointPut(localState());
-    try{localStorage.removeItem('agracta-trusted-device');}catch(e){}
+    checkpointPut(localState(),true).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
+    try{localStorage.removeItem(TRUST_KEY);}catch(e){}
     if(FB.auth)FB.auth.signOut();
     FB.user=null;window._authUser=null;
     showAuthGate();
@@ -522,7 +628,12 @@
     return ops;
   }
   function commitState(st){
-    if(!firebaseInit()||!FB.user){cloudBadge('offline','— salvo neste aparelho');return Promise.resolve(false);}
+    if(!firebaseInit()||!FB.user){
+      cloudBadge('offline','=↻ salvando neste aparelho…');
+      return checkpointPut(st,true).then(function(){cloudBadge('offline','=⌁ sessão local · sem sincronização');return false;},function(e){
+        cloudBadge('error','— falha ao salvar neste aparelho');throw e;
+      });
+    }
     if(FB.pushing){
       clearTimeout(FB.timer);FB.timer=setTimeout(function(){commitState(localState());},500);
       return Promise.resolve(false);
@@ -548,13 +659,14 @@
     var watchdog=setTimeout(function(){
       if(FB.pushing){
         FB.pushing=false;window._cloudSavingActive=false;
-        cloudBadge('offline','— '+FB.pendingWrites+' aguardando envio');
+        cloudBadge('offline','=⌁ '+FB.pendingWrites+' alterações aguardando envio');
       }
     },15000);
     all.then(function(){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
-      window._cloudRev=newRev;setUnsavedChanges(false);cloudBadge('saved');checkpointPut(st);
+      window._cloudRev=newRev;setUnsavedChanges(false);cloudBadge('saved');
+      checkpointPut(st).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
     }).catch(function(e){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
       cloudBadge('error','— salvo localmente');
@@ -565,9 +677,17 @@
 
   window.cloudInit=function(){return firebaseInit();};
   window.cloudSaveSoon=function(){
-    setUnsavedChanges(true);checkpointPut(localState());
-    if(!FB.user){cloudBadge('offline','— salvo neste aparelho');return;}
+    setUnsavedChanges(true);
+    var localPromise=checkpointPut(localState());
+    if(!FB.user){
+      cloudBadge('offline','=↻ salvando neste aparelho…');
+      localPromise.then(function(){cloudBadge('offline','=⌁ sessão local · sem sincronização');},function(e){
+        cloudBadge('error','— falha ao salvar neste aparelho');console.error('[Agracta offline] checkpoint:',e);
+      });
+      return localPromise;
+    }
     clearTimeout(FB.timer);FB.timer=setTimeout(function(){cloudSave();},700);
+    return localPromise;
   };
   window.cloudSave=function(){
     clearTimeout(FB.timer);
@@ -593,21 +713,34 @@
     if(!FB.user){showAuthGate();return Promise.resolve(false);}
     cloudBadge('saving');
     return readRemote().then(function(r){
+      /* Só um login que também conseguiu ler o workspace autoriza a futura
+         entrada offline. Conta inativa/sem permissão não transforma o aparelho
+         em confiável apenas por existir no Firebase Auth. */
+      rememberTrustedUser(FB.user,(window._authUser&&window._authUser.displayName)||'');
       window._cloudInitDone=true;
       if(meaningful(r.state)){
         var merged=(typeof cloudMerge==='function')?cloudMerge(localState(),r.state):r.state;
-        cloudApply(merged);checkpointPut(merged);
+        cloudApply(merged);
+        checkpointPut(merged).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
         if(stable(splitState(merged))!==stable(r.flat))commitState(merged);
         else cloudBadge('saved');
       }else if(meaningful(localState()))commitState(localState());
       else cloudBadge('saved');
       try{syncAllowedUsersToMembers();}catch(e){}
+      try{authBusy(false);authErr('');hideAuthGate();}catch(e){}
       return true;
     }).catch(function(e){
-      cloudBadge('offline','— usando dados do aparelho');
+      cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');
       console.error('[Agracta Firebase] leitura:',e);
       if(e && (e.code==='permission-denied' || /permission|insufficient/i.test(String((e&&e.message)||e)))){
-        try{ _agractaAcessoBanner((FB.user&&FB.user.email)||''); }catch(_e){}
+        try{
+          localStorage.removeItem(TRUST_KEY);
+          showAuthGate();authBusy(false);
+          authErr('Este acesso não está liberado para os dados do Agracta. Fale com o administrador.');
+          _agractaAcessoBanner((FB.user&&FB.user.email)||'');
+        }catch(_e){}
+      }else if(!trustedForUser(FB.user)){
+        try{showAuthGate();authBusy(false);authErr('Não foi possível validar este aparelho. Conecte-se à internet e tente novamente.');}catch(_e){}
       }
       return false;
     });
@@ -619,13 +752,16 @@
   window.cloudResync=function(){
     if(!FB.user){showAuthGate();return;}
     if(window._unsavedChanges){cloudSave();return;}
-    if(!FB.db){return;}
+    if(!FB.db||FB.resyncing){return;}
+    FB.resyncing=true;
     FB.db.doc(ROOT).get().then(function(snap){
+      FB.resyncing=false;
       var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
       if(rev>FB.lastRev)cloudPull();
       else cloudBadge('saved');
     }).catch(function(e){
-      cloudBadge('offline','— usando dados do aparelho');
+      FB.resyncing=false;
+      cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');
       console.error('[Agracta Firebase] resync:',e);
     });
   };
@@ -638,7 +774,7 @@
       if(rev>FB.lastRev&&!FB.pushing){
         FB.lastRev=rev;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
       }
-    },function(){cloudBadge('offline','— usando dados do aparelho');});
+    },function(){cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');});
   };
   window.cloudStart=function(){
     if(!FB.user){startLocal('— entre para sincronizar');return;}
@@ -646,12 +782,12 @@
     if(!window.__firebaseNet){
       window.__firebaseNet=true;
       window.addEventListener('online',function(){cloudResync();});
-      window.addEventListener('offline',function(){cloudBadge('offline','— salvo neste aparelho');});
+      window.addEventListener('offline',function(){cloudBadge('offline','=⌁ salvo no aparelho · aguardando conexão');});
       document.addEventListener('visibilitychange',function(){
         if(document.visibilityState==='visible')cloudResync();
-        else if(window._unsavedChanges)cloudSave();
+        else {checkpointPut(localState(),true).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});if(window._unsavedChanges)cloudSave();}
       });
-      window.addEventListener('pagehide',function(){checkpointPut(localState());if(window._unsavedChanges)cloudSave();});
+      window.addEventListener('pagehide',function(){checkpointPut(localState(),true).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});if(window._unsavedChanges)cloudSave();});
     }
   };
   window.cloudApplyPending=function(){
@@ -966,6 +1102,8 @@
     configured:configured,
     status:function(){return {configured:configured(),user:FB.user&&FB.user.email,ready:FB.ready,rev:FB.lastRev,pendingWrites:FB.pendingWrites};},
     pull:cloudPull,push:cloudSave,checkpoint:checkpointGet,
+    flushLocal:function(){return checkpointPut(localState(),true);},
+    offlineAccessAllowed:offlineAccessAllowed,trustedDevice:trustedDevice,
     splitState:splitState,buildState:buildState
   };
 })();

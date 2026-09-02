@@ -84,10 +84,12 @@ vm.createContext(ctx);
 var fontes=['soloDaQuadra','soloObservado','_soloGeom','_soloChaveCoord','_soloLerCache',
   '_soloGravarCache','_soloGravar','consultarSolo','soloAtualizar','soloRevisar',
   '_soloCss','soloBlocoHtml','_soloQuando','soloTexto','soloClasseRelatorio','soloCor',
-  'soloPropriedades','consultarSoloPropriedades','soloPropAtualizar','soloPropHtml',
+  '_soloPropValidar','soloPropriedades','consultarSoloPropriedades','soloPropAtualizar','soloPropHtml',
   'soloObsHtml','soloSalvarObservado','soloCancelarObservado','_soloVal','_soloDataBR',
   '_soloOrdemDe','_croquiSolo',
-  'soloLayerAtiva','soloRecorteAtivo','soloSetRecorte','soloSetOpacidade','soloLimpar',
+  '_soloRecorteInicial','soloLayerAtiva','soloRecorteAtivo','soloSetRecorte','soloSetOpacidade','soloLimpar',
+  '_soloMapaFalhou','_soloMapaLegendaCss','soloMapaLegendaAlternar',
+  'soloMapaLegendaEsconder','soloMapaLegendaMostrar',
   'soloCarregarMapa','soloOnMove','soloBindMove','toggleSoloLayer',
   '_soloSet','soloAnalises','soloAnaliseAtual',
   '_nucleoNutricao','soloIndices','soloCalagem','soloCalagemTrilha',
@@ -113,7 +115,8 @@ function pegaVar(pref){
   throw new Error('não terminou '+pref);
 }
 ['var SOLO_PROXY=','var SOLO_CACHE_KEY=','var _soloSeq=','var SOLO_CORES=','var SOLO_WMS=',
- 'var _soloPropSeq=','var SOLO_TEXTURAS=','var _soloLayer=','var _soloMapaSeq=',
+   'var _soloPropSeq=','var SOLO_TEXTURAS=','var _soloLayer=','var _soloMapaSeq=',
+   'var SOLO_RECORTE_PREF_KEY=',
  'var SOLO_ANALISE_CAMPOS=','var _soloAnEdit=','var _soloCalMostra=',
  'var SOLO_PACOTE_KEY=','var _soloPacote=','var _soloRecMostra=']
   .forEach(function(pref){ codigo+='\n'+pegaVar(pref); });
@@ -321,12 +324,24 @@ eq(ctx.data.Q1.solo.propriedades.estimativa,true,'marcada como estimativa');
 ck(ctx.data.Q1.solo.cartografico!==null,'consultar propriedades NÃO apaga o cartográfico');
 
 var hp=ctx.soloBlocoHtml('Q1');
-ck(hp.indexOf('58')>0 && hp.indexOf('Argila')>0,'ficha mostra argila');
-ck(hp.indexOf('5,8')>0,'pH sai com vírgula decimal (pt-BR)');
-ck(hp.indexOf('não substitui análise de solo')>0,
-   'a ficha diz que é estimativa e não substitui análise — o aviso não é opcional');
-ck(hp.indexOf('soc x 1,724')>0,'MO mostra que é derivada, não medida');
-ck(hp.indexOf('argilosa')>0,'textura aparece');
+ck(hp.indexOf('PROPRIEDADES ESTIMADAS')<0 && hp.indexOf('Argila')<0,
+   'a ficha da quadra não oferece nem exibe propriedades estimadas');
+
+console.log('\n--- Propriedades corrompidas são recusadas ---');
+var propsBoas=ctx.data.Q1.solo.propriedades, cbRuim='não chamado';
+pedidos.length=0;
+ctx.consultarSoloPropriedades('Q1',function(r){cbRuim=r;},true);
+pedidos[0].resolve(resposta({fonte:'soilgrids',propriedades:{
+  clay:{valor:0.1},sand:{valor:0.1},silt:{valor:0.1},phh2o:{valor:0.1},bdod:{valor:0.01}
+}}));
+await gira(); await gira();
+eq(cbRuim,null,'resposta impossível não é aceita como estimativa');
+eq(ctx.data.Q1.solo.propriedades,propsBoas,'e não sobrescreve a estimativa válida anterior');
+ctx.data.Q1.solo.propriedades={fonte:'soilgrids',propriedades:{
+  clay:{valor:0.1},sand:{valor:0.1},silt:{valor:0.1},phh2o:{valor:0.1},bdod:{valor:0.01}
+}};
+eq(ctx.soloPropriedades('Q1'),null,'registro inválido de versão antiga também fica oculto');
+ctx.data.Q1.solo.propriedades=propsBoas;
 
 console.log('\n--- Reconsultar o mapa não apaga as propriedades ---');
 pedidos.length=0; ctx._soloEstado={};
@@ -336,11 +351,11 @@ await gira(); await gira();
 ck(!!ctx.data.Q1.solo.propriedades,'propriedades sobrevivem à reconsulta do cartográfico');
 eq(ctx.data.Q1.solo.cartografico.classe,'NITOSSOLO VERMELHO','e o cartográfico foi atualizado');
 
-console.log('\n--- Estados das propriedades ---');
+console.log('\n--- Estados internos das propriedades não reaparecem na quadra ---');
 ctx._soloPropEstado.Q1='buscando';
-ck(ctx.soloBlocoHtml('Q1').indexOf('Consultando propriedades')>0,'estado "buscando" visível');
+ck(ctx.soloBlocoHtml('Q1').indexOf('Consultando propriedades')<0,'estado "buscando" fica oculto');
 ctx._soloPropEstado.Q1={erro:'timeout'};
-ck(ctx.soloBlocoHtml('Q1').indexOf('Propriedades indisponíveis')>0,'falha é dita');
+ck(ctx.soloBlocoHtml('Q1').indexOf('Propriedades indisponíveis')<0,'falha da estimativa não polui a ficha');
 ctx._soloPropEstado.Q1=null;
 
 console.log('\n--- Solo observado ---');
@@ -419,7 +434,7 @@ console.log('\n--- Camada de solo no mapa: recorte pelas quadras ---');
    satélite, que é a referência de quem olha. Estes testes guardam o pedido e as
    duas armadilhas — imagem de outro domínio não pode ser recortada, e clip vazio
    apagaria tudo. */
-var camadas=[], removidas=[], desenhos=[];
+var camadas=[], removidas=[], desenhos=[], domSolo={};
 ctx.LF={ imageOverlay:function(url,bounds,opts){
   var o={url:url,bounds:bounds,opts:opts,
          addTo:function(){ camadas.push(o); return o; },
@@ -443,8 +458,10 @@ function ctxCanvas(){
           closePath:function(){}, clip:function(){reg.clip++;}, drawImage:function(){reg.draw++;}};
 }
 var ultimoCanvas=null;
+ctx.document.getElementById=function(id){ return domSolo[id]||null; };
+ctx.document.body={appendChild:function(el){domSolo[el.id]=el;}};
 ctx.document.createElement=function(t){
-  if(t!=='canvas') return {};
+  if(t!=='canvas') return {remove:function(){if(this.id)delete domSolo[this.id];}};
   var c2=ctxCanvas(); ultimoCanvas=c2;
   return {width:0,height:0,getContext:function(){return c2;},toDataURL:function(){return 'data:recortado';}};
 };
@@ -462,28 +479,38 @@ function entregarImagem(){
   im.onload();
 }
 
-eq(ctx.soloRecorteAtivo(),true,'o recorte vem ligado por padrão');
+eq(ctx.soloRecorteAtivo(),false,'o mapa inteiro vem ligado por padrão; recorte é opção');
 eq(ctx.soloLayerAtiva(),false,'e a camada começa desligada');
 
 var ped=pedirMapa();
 ck(ped.url.indexOf('/solo/mapa?bbox=')>0,'pede a imagem ao proxy, não tile direto');
 ck(ped.url.indexOf('-50.2,-23.5,-50,-23.4')>0,'com a caixa visível do mapa');
-ped.resolve({ok:true,blob:function(){return Promise.resolve('blob');}});
+eq(ctx.soloLayerAtiva(),true,'o controle fica ligado também durante o carregamento');
+ped.resolve({ok:true,headers:{get:function(k){return k==='X-Solo-Camada'?'geonode:parana_solos_20201105':null;}},blob:function(){return Promise.resolve('blob');}});
 await gira(); await gira();
 entregarImagem();
 eq(camadas.length,1,'a imagem entra como camada no mapa');
-ck(ultimoCanvas && ultimoCanvas.reg.clip===1,'com recorte ligado, recorta antes de desenhar');
-ck(ultimoCanvas.reg.moveTo===1 && ultimoCanvas.reg.lineTo===3,'usa os vértices da quadra no recorte');
-eq(camadas[0].url,'data:recortado','a camada recebe a imagem recortada');
+eq(ctx._soloCamadaMapa,'geonode:parana_solos_20201105','guarda qual camada foi desenhada para a legenda correta');
+eq(camadas[0].url,'blob:solo','sem escolher recorte, mostra o levantamento inteiro');
+ck(!!domSolo.soloMapaLegenda,'a legenda oficial aparece junto com o mapa');
+ck(domSolo.soloMapaLegenda.className.indexOf('collapsed')<0,'a legenda abre visível na primeira vez');
+ck(domSolo.soloMapaLegenda.innerHTML.indexOf('/solo/legenda?camada=')>0,'a legenda corresponde à camada desenhada');
 
-ctx.soloSetRecorte(false);
-eq(ctx.soloRecorteAtivo(),false,'desligar o recorte fica registrado');
+ctx.soloLimpar();
+ctx.soloSetRecorte(true);
+eq(ctx.soloRecorteAtivo(),true,'recorte pode ser ligado como opção');
+eq(store[ctx.SOLO_RECORTE_PREF_KEY],'1','e a preferência fica salva neste aparelho');
 ped=pedirMapa();
-ped.resolve({ok:true,blob:function(){return Promise.resolve('blob');}});
+ped.resolve({ok:true,headers:{get:function(){return 'geonode:parana_solos_20201105';}},blob:function(){return Promise.resolve('blob');}});
 await gira(); await gira();
 entregarImagem();
-eq(camadas[camadas.length-1].url,'blob:solo','sem recorte, usa a imagem inteira');
-ctx.soloSetRecorte(true);
+ck(ultimoCanvas && ultimoCanvas.reg.clip===1,'com a opção ligada, recorta antes de desenhar');
+ck(ultimoCanvas.reg.moveTo===1 && ultimoCanvas.reg.lineTo===3,'usa os vértices da quadra no recorte');
+eq(camadas[camadas.length-1].url,'data:recortado','a camada recebe a imagem recortada');
+
+ctx.soloLimpar();
+ctx.soloSetRecorte(false);
+eq(store[ctx.SOLO_RECORTE_PREF_KEY],'0','desligar o recorte também fica registrado');
 
 console.log('\n--- Sem quadra desenhada, não apaga o mapa ---');
 ctx.quadrasAtivas=function(){ return []; };
@@ -508,11 +535,13 @@ velhaImagem.naturalWidth=1024; velhaImagem.naturalHeight=512; velhaImagem.onload
 eq(camadas.length,antes,'imagem atrasada do enquadramento anterior é descartada');
 
 console.log('\n--- Erro do proxy não deixa camada quebrada ---');
+ctx.soloLimpar();
 pedidos.length=0; camadas.length=0;
 ctx.soloCarregarMapa();
 pedidos[0].resolve({ok:false,json:function(){return Promise.resolve({error:'Solo: sem levantamento'});}});
 await gira(); await gira();
 eq(camadas.length,0,'falha não adiciona camada nenhuma');
+eq(ctx.soloLayerAtiva(),false,'e o controle volta para desligado quando não havia mapa anterior');
 
 console.log('\n--- Ligar e desligar ---');
 pedidos.length=0; camadas.length=0; removidas.length=0;

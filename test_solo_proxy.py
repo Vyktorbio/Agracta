@@ -29,6 +29,7 @@ def poly(w, s, e, n):
     return {'type': 'Polygon', 'coordinates': [[[w, s], [w, n], [e, n], [e, s], [w, s]]]}
 
 CAMADA_PR = 'geonode:parana_solos_20201105'
+CAMADA_MG = 'geonode:lev_mg_estado_solos_lat_long_wgs84_vt'
 CAMADA_BR = 'geonode:brasil_solos_5m_20201104'
 
 print('\nRay casting (quem cai em qual unidade)')
@@ -153,6 +154,7 @@ print('\nSoilGrids: conversao das unidades escalonadas')
 # solo de pH 5,8 e "580" de argila num solo com 58%. Estes fatores sao a coisa mais
 # facil de errar em silencio deste modulo inteiro.
 CRU = {'clay': 580, 'sand': 240, 'silt': 180, 'phh2o': 58, 'soc': 280, 'cec': 120, 'bdod': 130}
+_sg_valor_real = m._sg_valor
 m._sg_valor = lambda prop, prof, lon, lat: CRU.get(prop)
 m._solo_props_cache.clear()
 r = m.do_solo_propriedades(-22.658, -47.521)
@@ -203,6 +205,7 @@ print('\nCaixa admite, DADO confirma')
 # Iracemapolis, que e Sao Paulo. A cascata parava em MG, o GetMap saia 100%
 # transparente, e a camada de solo simplesmente nao aparecia — sem erro na tela.
 chamadas = []
+_solo_tem_feicao_real = m._solo_tem_feicao
 m._solo_tem_feicao = lambda cam, bb: (chamadas.append(cam['typeName']) or
                                       cam['typeName'].startswith('geonode:brasil_solos'))
 capt = {}
@@ -229,9 +232,8 @@ check('geonode:lev_mg_estado_solos_lat_long_wgs84_vt' in chamadas,
 check('lev_mg' not in cam, 'mas o dado recusou, e a cascata seguiu')
 check('layers=geonode%3Abrasil_solos_5m_20201104' in capt.get('url', ''),
       'e o GetMap foi pedido para a camada certa')
-# Restaura o padrao para os testes seguintes: no servidor real, camada cuja caixa
-# admite o ponto normalmente TEM dado ali — Minas sobre Iracemapolis e a excecao.
-m._solo_tem_feicao = lambda cam, bb: True
+# Restaura a confirmação geométrica real para os testes seguintes.
+m._solo_tem_feicao = _solo_tem_feicao_real
 
 print('\nDocumento de ERRO nunca vira medida')
 # O bug de campo: a requisicao falhava, o MapServer respondia um
@@ -277,13 +279,43 @@ check(z2.get('semCobertura') is None, 'a resposta nao se declara vazia: houve da
 
 print('\nLeitura do GetFeatureInfo')
 eq(m._sg_extrai('{"features":[{"properties":{"value_0":"580"}}]}'), 580.0, 'GeoJSON do MapServer')
+eq(m._sg_extrai('{"features":[{"properties":{"id":7,"pixel_value":417}}]}'), 417.0,
+   'pixel_value vence metadado numerico anterior')
 eq(m._sg_extrai("Layer 'clay_0-5cm_mean'\n  Feature 0:\n    value_0 = '580'\n"), 580.0,
    'texto do MapServer')
 eq(m._sg_extrai('Band 1 value: 580'), 580.0,
    'o "1" de "Band 1" nao pode vencer o valor de verdade')
+eq(m._sg_extrai('<?xml version="1.0"?><ServiceExceptionReport><ServiceException>estilo ausente</ServiceException></ServiceExceptionReport>'), None,
+   'ServiceException XML nao vira valor 1,0')
 eq(m._sg_extrai('{"features":[{"properties":{"v":"-32768"}}]}'), None, 'nodata vira None')
 eq(m._sg_extrai(''), None, 'resposta vazia vira None')
 eq(m._sg_extrai('sem numero nenhum'), None, 'texto sem numero vira None')
+
+print('\nGetFeatureInfo pede o formato que o SoilGrids realmente suporta')
+import urllib.request as _ur_sg
+_sg_urls = []
+class _SgResp:
+    def read(self): return b'{"features":[{"properties":{"pixel_value":417}}]}'
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+_sg_original = _ur_sg.urlopen
+_ur_sg.urlopen = lambda req, timeout=None: (_sg_urls.append(req.full_url) or _SgResp())
+try:
+    eq(_sg_valor_real('clay', '0-5cm', -47.52, -22.65), 417.0, 'le o pixel GeoJSON')
+    check('styles=default' in _sg_urls[0], 'envia o estilo obrigatorio')
+    check('info_format=application%2Fgeo%2Bjson' in _sg_urls[0], 'pede application/geo+json')
+finally:
+    _ur_sg.urlopen = _sg_original
+
+print('\nValores fisicamente inconsistentes ficam indisponiveis')
+m._solo_props_cache.clear()
+m._sg_valor = lambda prop, prof, lon, lat: 1
+ruim = m.do_solo_propriedades(-22.658, -47.521)
+check('phh2o' not in ruim['propriedades'], 'pH 0,1 e recusado')
+check('bdod' not in ruim['propriedades'], 'densidade 0,01 e recusada')
+check(all(k not in ruim['propriedades'] for k in ('clay', 'sand', 'silt')),
+      'fracoes que somam 0,3% sao recusadas em conjunto')
+check('textura' not in ruim, 'nao classifica textura com fracoes corrompidas')
 
 print('\nPropriedades tambem tem cache')
 n2 = [0]
@@ -318,6 +350,8 @@ def _fake(req, timeout=None):
     return _Resp(b'\x89PNG_fake', 'image/png')
 _ur.urlopen = _fake
 
+m._solo_wfs = lambda c, b: UNI_PR if c['typeName'] == CAMADA_PR else []
+
 img, ctype, camada = m.do_solo_mapa([-50.2, -23.5, -50.0, -23.4], 1024)
 u = _chamadas[0]
 eq(camada, CAMADA_PR, 'o desenho usa a MESMA cascata da consulta por ponto')
@@ -333,8 +367,44 @@ m.do_solo_mapa([-50.2, -23.5, -50.0, -23.3], 1000)   # bbox quadrada
 check('width=1000' in _chamadas[0] and 'height=1000' in _chamadas[0],
       'altura proporcional ao bbox — imagem esticada desalinharia do mapa')
 
+print('\nMapa confirma cobertura real, nao apenas o bbox do catalogo')
+UNI_MG_FORA = [{'properties': {'legenda': 'LATOSSOLO VERMELHO'},
+                'geometry': poly(-47.0, -22.4, -46.8, -22.2)}]
+def _iracemapolis(c, b):
+    if c['typeName'] == CAMADA_MG: return UNI_MG_FORA
+    if c['typeName'] == CAMADA_BR: return UNI_BR
+    return []
+m._solo_wfs = _iracemapolis
+_chamadas.clear()
+img, ctype, camada = m.do_solo_mapa([-47.528, -22.664, -47.519, -22.658], 1024)
+eq(camada, CAMADA_BR, 'Iracemapolis pula a camada mineira transparente e usa a nacional')
+check(('layers=' + CAMADA_BR.replace(':', '%3A')) in _chamadas[0],
+      'o GetMap pede a camada nacional que realmente cobre o ponto')
+
+print('\nLegenda oficial da camada desenhada')
+_chamadas.clear()
+leg, legtype = m.do_solo_legenda(CAMADA_BR)
+check('request=GetLegendGraphic' in _chamadas[0], 'pede GetLegendGraphic ao GeoServer')
+check(('layer=' + CAMADA_BR.replace(':', '%3A')) in _chamadas[0], 'pede a legenda da camada exata')
+eq(leg, b'\x89PNG_fake', 'devolve a imagem da legenda')
+try:
+    m.do_solo_legenda('geonode:camada_inventada')
+    falhas[0] += 1; print('  FALHA legenda aceitou camada nao autorizada')
+except RuntimeError as e:
+    check(str(e).startswith('SOLO:'), 'legenda recusa nome de camada arbitrario')
+
+print('\nCORS expoe a camada para o navegador pedir a legenda')
+_headers_cors = []
+_h = object.__new__(m.H)
+_h.headers = {'Origin': 'https://agracta.com.br'}
+_h.send_header = lambda k, v: _headers_cors.append((k, v))
+_h._cors()
+check(('Access-Control-Expose-Headers', 'X-Solo-Camada') in _headers_cors,
+      'navegador pode ler X-Solo-Camada fora da origem do proxy')
+
 # O GeoServer responde erro como XML COM STATUS 200. Repassar isso como imagem
 # pintaria lixo no mapa em vez de dizer o que houve.
+m._solo_wfs = lambda c, b: UNI_PR if c['typeName'] == CAMADA_PR else []
 _ur.urlopen = lambda req, timeout=None: _Resp(b'<ServiceException/>', 'application/vnd.ogc.se_xml')
 try:
     m.do_solo_mapa([-50.2, -23.5, -50.0, -23.4], 1024)

@@ -57,39 +57,10 @@ Object.keys(_NEWC).forEach(function(g){ _NEWC[g].forEach(function(name){
   if(!CC[name]) CC[name]=_GRPCOR[g]||"#66bb6a";
   if(CL.indexOf(name)<0) CL.push(name);
 }); });
-var DD={
-A1:{cultura:"Café",cultivar:"Catuaí vermelho",plantio:"15/03/2011",area:0.56,estudos:[]},
-A2:{cultura:"Algodão",cultivar:"FM 944 GL",plantio:"01/06/2026",area:0.98,estudos:[]},
-A3:{cultura:"Soja",cultivar:"BMX Nexus I2X",plantio:"22/10/2025",area:1.0,estudos:[]},
-A4:{cultura:"Soja",cultivar:"57K58RSF CE (VÊNUS)",plantio:"28/10/2025",area:0.91,estudos:[]},
-A5:{cultura:"Algodão",cultivar:"DP1949B3RF",plantio:"27/10/2025",area:0.8,estudos:[]},
-B1:{cultura:"Soja",cultivar:"TMG 1155 RR",plantio:"26/12/2025",area:1.0,estudos:[]},
-B2:{cultura:"Soja",cultivar:"Torque",plantio:"19/11/2025",area:0.93,estudos:[]},
-B3:{cultura:"Soja",cultivar:"Coliseu",plantio:"15/11/2025",area:0.44,estudos:[]},
-B4:{cultura:"Cana de açúcar",cultivar:"RB 72 454",plantio:"20/01/2026",area:1.78,estudos:[]},
-C1:{cultura:"Soja",cultivar:"Venus Enlist",plantio:"23/12/2025",area:0.44,estudos:[]},
-C2:{cultura:"Soja",cultivar:"BMX Nexus I2X",plantio:"22/10/2025",area:1.0,estudos:[]},
-C3:{cultura:"Algodão",cultivar:"FM 945 STP",plantio:"18/02/2026",area:0.8,estudos:[]},
-C4:{cultura:"Soja",cultivar:"Zeus",plantio:"12/02/2025",area:0.7,estudos:[]},
-C5:{cultura:"Algodão",cultivar:"FM 974 GLT",plantio:"22/12/2025",area:0.8,estudos:[]},
-C6:{cultura:"Algodão",cultivar:"FM 974 GLT",plantio:"01/07/2026",area:0.6,estudos:[]},
-D1:{cultura:"Soja",cultivar:"Zeus",plantio:"12/10/2025",area:1.0,estudos:[]},
-D2:{cultura:"Soja",cultivar:"Zeus",plantio:"15/12/2025",area:1.0,estudos:[]},
-D3:{cultura:"Soja",cultivar:"Fibra",plantio:"26/11/2025",area:1.8,estudos:[]},
-D4:{cultura:"Algodão",cultivar:"Deltapine 1949",plantio:"01/10/2025",area:1.8,estudos:[]},
-E2:{cultura:"Soja",cultivar:"57K58RSF CE (VÊNUS)",plantio:"24/09/2025",area:0.5,estudos:[]},
-E3:{cultura:"Soja",cultivar:"57K58RSF CE (VÊNUS)",plantio:"15/10/2025",area:0.68,estudos:[]},
-E4:{cultura:"Soja",cultivar:"Nexus",plantio:"05/11/2025",area:0.65,estudos:[]},
-E5:{cultura:"Milho",cultivar:"K7510VIP3",plantio:"04/07/2025",area:0.7,estudos:[]},
-E6:{cultura:"Algodão",cultivar:"FM 974GLT",plantio:"01/05/2026",area:0.6,estudos:[]},
-E7:{cultura:"Soja",cultivar:"Nexus",plantio:"11/11/2025",area:0.6,estudos:[]},
-F1:{cultura:"Feijão",cultivar:"IAC 1850",plantio:"17/03/2026",area:1.8,estudos:[]},
-F2:{cultura:"Soja",cultivar:"Zeus",plantio:"26/12/2025",area:0.65,estudos:[]},
-G1:{cultura:"Pastagem",cultivar:"Brachiaria Decumbens",plantio:"07/07/2013",area:0.7,estudos:[]},
-H1:{cultura:"Morango",cultivar:"San Andreas",plantio:"03/02/2026",area:null,estudos:[]},
-H2:{cultura:"Tomate",cultivar:"HM 2798",plantio:"27/01/2026",area:1.2,estudos:[]},
-H3:{cultura:"Melão",cultivar:"Gaucho",plantio:"29/01/2026",area:0.65,estudos:[]}
-};
+/* Dados operacionais não pertencem ao pacote público. Aparelhos existentes
+   continuam lendo seu armazenamento local; aparelhos novos recebem quadras,
+   culturas e estudos somente depois da leitura autenticada do workspace. */
+var DD={};
 
 /* ============ DATE / STAGE UTILS ============ */
 function pD(d){
@@ -353,7 +324,12 @@ function load(){
         if(!data[k])data[k]=parsed[k];
       });
       ensureConfig();
-      save(); // persiste a limpeza
+      /* A limpeza de compatibilidade acontece durante a inicialização. Ela não
+         pode fingir que o localStorage acabou de receber uma edição do usuário:
+         o adaptador offline usa esse carimbo para decidir se um checkpoint mais
+         novo do IndexedDB precisa ser restaurado. */
+      window._agractaBootLoad=true;
+      try{ save(); }finally{ window._agractaBootLoad=false; }
       return;
     }
   }catch(e){}
@@ -365,14 +341,18 @@ function load(){
   ensureConfig();
 }
 var _saveErrAlerted=false;
+var AGR_LOCAL_STATE_TS_KEY='agracta-local-state-ts';
 function save(){
+  var ok=false, savedAt=Date.now(), err=null;
   try{
     localStorage.setItem("iracema-v7",JSON.stringify(data));
+    ok=true;
     _saveErrAlerted=false;
   }catch(e){
+    err=e;
     /* Sem espaço? Sacrifica os backups LOCAIS (a nuvem + Histórico da nuvem cobrem recuperação)
        e tenta gravar o estado ativo de novo ANTES de alertar — preservar o dado atual é prioridade. */
-    var ok=false;
+    ok=false;
     try{
       var bk=JSON.parse(localStorage.getItem('iracema-safety')||'[]');
       while(!ok && bk.length){ bk.shift(); try{ localStorage.setItem('iracema-safety',JSON.stringify(bk)); }catch(e2){} try{ localStorage.setItem("iracema-v7",JSON.stringify(data)); ok=true; }catch(e3){} }
@@ -381,10 +361,18 @@ function save(){
     if(ok){ _saveErrAlerted=false; }
     else if(!_saveErrAlerted){
       _saveErrAlerted=true;
-      alert("⚠ Falha ao salvar localmente.\n\n"+e.message+"\n\nSuas edições não estão sendo persistidas. Faça BACKUP agora (💾) e recarregue o app.");
+      alert("⚠ O armazenamento rápido deste navegador ficou sem espaço.\n\n"+
+        ((err&&err.message)||'Não foi possível gravar no localStorage.')+
+        "\n\nO Agracta ainda tentará guardar a edição no cofre offline. Aguarde a confirmação na tela antes de fechar o app.");
     }
   }
+  window._agractaLocalSaveOk=!!ok;
+  if(ok && !window._agractaBootLoad){
+    window._agractaLocalSavedAt=savedAt;
+    try{ localStorage.setItem(AGR_LOCAL_STATE_TS_KEY,String(savedAt)); }catch(e){}
+  }
   if(typeof cloudSaveSoon==='function') cloudSaveSoon();
+  return ok;
 }
 
 /* ============ STUDY UTILS ============ */
@@ -1924,7 +1912,14 @@ function cloudBadge(kind,txt){
   var L={saving:'↻ salvando na nuvem…', error:'⚠ não subiu — toque p/ salvar', offline:'⌁ sessão local · sem sincronização', idle:''};
   kind=kind||'idle';
   clearTimeout(window._cbHideT); clearTimeout(window._cbShowT);
-  function _paint(){ el.className='cloud-badge cb-'+kind; el.textContent=(L[kind]||'')+(txt?(' '+txt):''); el.style.display='block'; el.style.opacity='1'; }
+  function _paint(){
+    var msg=(L[kind]||'');
+    /* Prefixo '=' permite ao sincronizador fornecer uma mensagem completa sem
+       repetir "sessão local" ou "sem sincronização" duas vezes. */
+    if(txt&&String(txt).charAt(0)==='=') msg=String(txt).slice(1);
+    else if(txt) msg+=' '+txt;
+    el.className='cloud-badge cb-'+kind; el.textContent=msg; el.style.display='block'; el.style.opacity='1';
+  }
   if(kind==='error' || kind==='offline'){
     _paint(); /* SÓ problema real fica visível (tocável p/ tentar salvar). Nada de "salvando/salvo". */
   } else {
@@ -2929,6 +2924,7 @@ function toggleAgenda(){
 }
 function renderAgenda(){
   var events=allUpcomingEvents(30, agVerDispensados);
+  var activeEvents=allUpcomingEvents(30, false);
   var today=today0();
 
   var groups={overdue:[],today:[],soon:[],week:[],month:[]};
@@ -4459,7 +4455,16 @@ function quadraDims(id){
 
 /* ===================== EXPORTAR ESTUDO p/ planilha + NDVI do período ===================== */
 var _stxText='';
-function _isoShift(iso,days){ var d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso; d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function _isoShift(iso,days){
+  /* Data agronômica é data de calendário, não instante. Construir meia-noite no
+     fuso local e depois chamar toISOString recuava um dia em fusos a leste de
+     Greenwich (01/07 virava 30/06). A conta inteira fica em UTC para preservar
+     o AAAA-MM-DD em qualquer aparelho. */
+  var d=new Date(String(iso||'')+'T00:00:00Z');
+  if(isNaN(d)) return iso;
+  d.setUTCDate(d.getUTCDate()+(parseInt(days)||0));
+  return d.toISOString().slice(0,10);
+}
 function _stxCopyFallback(text){ try{ var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=document.execCommand('copy'); document.body.removeChild(ta); return ok; }catch(e){ return false; } }
 function _stxCopy(text){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function(){return true;},function(){return _stxCopyFallback(text);}); }catch(e){} return Promise.resolve(_stxCopyFallback(text)); }
 function _stxToast(msg){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:#1f5a2a;color:#eafaea;padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt); window._stxTt=setTimeout(function(){t.style.opacity='0';},1900); }
@@ -4804,6 +4809,263 @@ function copyStudyDados(qid,sid){
     _stxCopy(tsv).then(function(ok){ _stxToast(ok?'✓ Só os dados copiados — no Excel: Colar Especial → Pular vazios, em A1 do seu modelo':'Selecione e copie'); });
   }catch(e){ _stxToast('Erro: '+e.message); }
 }
+
+/* ===== SEGUNDO MODELO DE PROTOCOLO — SINERGISTA ==========================
+   O modelo Agracta acima continua sendo a saída completa (clima, avaliações,
+   Estatística e Forense). Este é OUTRO documento: o protocolo enxuto, em
+   inglês, recebido do usuário. Os dois leem o mesmo estudo, mas não dividem
+   posições de célula nem limites — mudar um não pode deslocar o outro. */
+function _sinergistaStaticCells(){
+  var c={
+    B2:'PROTOCOL',B5:'CROP',H5:'PRODUCT',J5:'RET',B6:'TARGET',J6:'VAL',
+    B7:'TRIAL PERFORMED BY',H7:'CLASS',J7:'RET PHASE',B8:'OBJECTIVE',
+    B9:1,B10:2,B11:3,B12:'DESCRIPTION OF TREATMENTS',B23:'METHODOLOGY',
+    B24:'STATISTICAL DESIGN:',G24:'PLOT SIZE:',J24:'REPLICATIONS',
+    B25:'TIME OF FIRST APPLICATION:',B26:'MODE OF APPLICATION:',
+    B27:'ASSESSMENTS',G27:'PARAMETERS ASSESSMENT',B28:'N°',
+    C28:'Days after application',G28:'Efficiency',I28:'Phytotoxicity',K28:'Productivity'
+  };
+  ['N°','TREATMENTS','ACTIVE INGREDIENT','CONCENTRATION  (g/kg) (g/l)',
+   'DOSAGE (ml, g/ha)','APPLICATION RATE  (g i.a./ha)',
+   'NUMBER OF CONSECUTIVE APPLICATIONS','INTERVALS OF APPLICATIONS (Days)',
+   'SPRAY VOLUME (L/ha)','Adjuvant'].forEach(function(v,i){c[String.fromCharCode(66+i)+'13']=v;});
+  return c;
+}
+function _sinergistaNorm(v){
+  var s=String(v==null?'':v).toLowerCase();
+  try{s=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');}catch(e){}
+  return s;
+}
+function _sinergistaObjectiveLines(v){
+  var txt=String(v||'').replace(/[\t\r\n]+/g,' ').replace(/\s+/g,' ').trim(), out=[];
+  /* As três linhas são físicas no modelo. Quebrar só as duas primeiras mantém
+     TODO o objetivo: a primeira é mais curta porque C9 termina em H; C10 e C11
+     vão até K. Se for longo, o restante fica na terceira célula com wrap. */
+  var limites=[82,122];
+  while(txt && out.length<2 && txt.length>limites[out.length]){
+    var lim=limites[out.length],cut=txt.lastIndexOf(' ',lim); if(cut<45)cut=lim;
+    out.push(txt.slice(0,cut).trim()); txt=txt.slice(cut).trim();
+  }
+  if(txt)out.push(txt);
+  return out.slice(0,3);
+}
+function _sinergistaTreatmentItems(t){
+  var out=[];
+  function add(it){if(it&&!out.some(function(x){return x.id===it.id;}))out.push(it);}
+  try{if(typeof tratItem==='function')add(tratItem(t));}catch(e){}
+  var comps=[];try{comps=(typeof tratComponentes==='function')?tratComponentes(t):(t.componentes||[]);}catch(e){comps=t.componentes||[];}
+  (comps||[]).forEach(function(cp){try{if(typeof itemPorId==='function')add(itemPorId(cp.itemId));}catch(e){}});
+  return out;
+}
+function _sinergistaStudyItem(s){
+  var test=(typeof studyTestemunha==='function')?studyTestemunha(s):s.testemunha;
+  var linked=[], fallback=null;
+  (s.tratamentos||[]).forEach(function(t){
+    if(!t || t.id===test || t.testemunha)return;
+    if(!fallback)fallback={trat:t,item:null};
+    _sinergistaTreatmentItems(t).forEach(function(it){linked.push({trat:t,item:it});});
+  });
+  return linked.filter(function(x){return x.item.tipo==='teste';})[0] || linked[0] || fallback || {trat:null,item:null};
+}
+function _sinergistaDesign(s){
+  if(s.desenho==='faixas')return 'Strip design';
+  var p=s.protocolo||{}, raw=String(s.delineamento||p.delineamento||'DBC').trim(), n=_sinergistaNorm(raw);
+  if(/\bdic\b|completely randomized|inteiramente casualiz/.test(n))return 'Completely Randomized Design';
+  if(/\bdbc\b|rcbd|blocos|randomized complete block/.test(n))return 'Randomized Complete Block Design';
+  if(/faixa|strip/.test(n))return 'Strip design';
+  return raw;
+}
+function _sinergistaMethod(s,qid){
+  var en={tractor:'Tractor-mounted sprayer',co2:'CO₂-pressurized backpack sprayer',
+    drone:'Drone',atomizer:'Motorized backpack atomizer',lab:'Potter Tower'};
+  var met=[];
+  try{
+    if(typeof studyMetodosVariam==='function' && studyMetodosVariam(s,qid)){
+      (s.tratamentos||[]).forEach(function(t){var m=tratMetodo(s,qid,t);if(m&&met.indexOf(m)<0)met.push(m);});
+    }else met=[studyMetodo(s,qid)];
+  }catch(e){met=[];}
+  if(!met.length){
+    var raw=(s.protocolo||{}).equipamento;
+    return raw||'';
+  }
+  return met.map(function(m){return en[m]||m;}).join(' / ');
+}
+function _sinergistaFirstApplication(s){
+  var a=(s.aplicacoes||[]).filter(function(x){return x&&x.data;}).slice()
+    .sort(function(x,y){return String(x.data).localeCompare(String(y.data));})[0];
+  var d=(a&&a.data)||s.dataInicio||'', br=d;
+  try{br=(typeof isoToBR==='function'?isoToBR(d):d)||d;}catch(e){}
+  var h=a&&((a.inicio&&a.inicio.hora)||a.hora)||'';
+  return br+(h?(' '+String(h).slice(0,5)):'');
+}
+function _sinergistaDayDiff(a,b){
+  var ma=String(a||'').match(/^(\d{4})-(\d{2})-(\d{2})/),mb=String(b||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!ma||!mb)return null;
+  var da=Date.UTC(+ma[1],+ma[2]-1,+ma[3]),db=Date.UTC(+mb[1],+mb[2]-1,+mb[3]);
+  return Math.round((db-da)/864e5);
+}
+function _sinergistaAssessments(s){
+  var apps=(s.aplicacoes||[]).filter(function(x){return x&&x.data;}).slice()
+    .sort(function(a,b){return String(a.data).localeCompare(String(b.data));});
+  var base=(apps[0]&&apps[0].data)||s.dataInicio||'', by={}, all=[];
+  (s.avaliacoes||[]).forEach(function(a){
+    if(!a)return;
+    var m=a.momento, u=m&&(m.unidade==='HAT'||m.unidade==='DAT')?m.unidade:null;
+    var v=u?parseFloat(String(m.valor).replace(',','.')):NaN, dias, label, key;
+    if(u&&isFinite(v)){
+      dias=u==='HAT'?v/24:v; label=u==='HAT'?((Math.round(v*100)/100)+' HAT'):v; key=u+':'+v;
+    }else{
+      dias=_sinergistaDayDiff(base,a.data);
+      label=dias==null?(a.data||''):dias; key=dias==null?('D:'+String(a.data||a.id||'')):('DAA:'+dias);
+    }
+    if(!key)return;
+    if(!by[key]){by[key]={key:key,dias:dias==null?999999:dias,label:label,variaveis:[]};all.push(by[key]);}
+    var vars=(a.variaveis||[]).slice();if(a.tipo)vars.push(a.tipo);
+    vars.forEach(function(x){if(x&&by[key].variaveis.indexOf(x)<0)by[key].variaveis.push(x);});
+  });
+  /* Um protocolo recém-criado pode ter a programação, mas ainda não os objetos
+     de avaliação. Nesse caso a lista de momentos também merece sair no arquivo. */
+  if(!all.length && s.avalMomentos && typeof _parseMomentos==='function'){
+    _parseMomentos(s.avalMomentos,s.avalUnidade).forEach(function(m){
+      all.push({key:m.unidade+':'+m.valor,dias:m.dias,label:m.unidade==='HAT'?((Math.round(m.valor*100)/100)+' HAT'):m.valor,variaveis:[]});
+    });
+  }
+  if(!all.length && parseInt(s.avalNum)>0){
+    var n=parseInt(s.avalNum),iv=Math.max(0,parseInt(s.avalIntervalo)||0),off=_sinergistaDayDiff(base,s.avalInicio||base)||0;
+    for(var i=0;i<n;i++)all.push({key:'PLAN:'+i,dias:off+i*iv,label:off+i*iv,variaveis:[]});
+  }
+  all.sort(function(a,b){return a.dias-b.dias || String(a.key).localeCompare(String(b.key));});
+  var txt=[];all.forEach(function(a){txt=txt.concat(a.variaveis||[]);});
+  var nrm=_sinergistaNorm(txt.join(' '));
+  return {rows:all, params:{
+    efficiency:/efic|effic|control|mortal|incid|sever|popul|praga|dano/.test(nrm),
+    phytotoxicity:/fitotox|phytotox/.test(nrm),
+    productivity:/produtiv|productiv|yield|producao|massa|peso/.test(nrm)
+  }};
+}
+function _sinergistaDynamicCells(qid,s){
+  s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
+  var q=data[qid]||{},p=s.protocolo||{},c={},i,r,col;
+  /* Começa limpando todas as posições variáveis. O arquivo recebido contém um
+     exemplo real; sem esta limpeza, um estudo curto herdaria tratamentos e datas
+     do exemplo nas linhas que não foram sobrescritas. */
+  ['C5','I5','K5','C6','K6','C7','I7','K7','C9','C10','C11','D24','I24','K24','D25','D26','G29','I29','K29']
+    .forEach(function(a){c[a]='';});
+  for(r=14;r<=22;r++)for(col=66;col<=75;col++)c[String.fromCharCode(col)+r]='';
+  for(r=29;r<=38;r++){c['B'+r]='';c['C'+r]='';}
+
+  var lead=_sinergistaStudyItem(s),it=lead.item||{},tlead=lead.trat||{};
+  c.C5=studyCultura(s,q); c.C6=s.alvo||p.alvo||q.alvo||'';
+  c.I5=it.nome||it.codigo||tlead.produto||''; c.K5=it.registro||p.ret||'';
+  c.K6=p.val||''; c.C7=p.executadoPor||p.empresa||'Plantec Laboratories';
+  c.I7=it.formulacao||p.classe||''; c.K7=p.retFase||p.retPhase||'';
+  _sinergistaObjectiveLines(s.objetivo||s.descricao||'').forEach(function(v,ix){c['C'+(9+ix)]=v;});
+
+  var tr=s.tratamentos||[],test=(typeof studyTestemunha==='function')?studyTestemunha(s):s.testemunha;
+  if(tr.length>9)throw new Error('O protocolo Sinergista possui espaço para até 9 tratamentos. Use o modelo Agracta para estudos maiores.');
+  tr.forEach(function(t,ix){
+    var row=14+ix,tits=_sinergistaTreatmentItems(t);
+    var witness=t.testemunha||t.id===test,nm='';
+    if(witness)nm='UNTREATED';
+    else try{nm=(typeof tratProdutoNome==='function'?tratProdutoNome(t,true):t.produto)||'';}catch(e){nm=t.produto||'';}
+    if(!nm)nm=tits.map(function(x){return x.nome||x.codigo||'';}).filter(Boolean).join(' + ');
+    var eq=null;try{eq=(typeof tratEquivalenteIA==='function')?tratEquivalenteIA(t):null;}catch(e){}
+    c['B'+row]=ix+1;c['C'+row]=nm;
+    c['D'+row]=t.ingredienteAtivo||t.ia||tits.map(function(x){return x.ativos||'';}).filter(Boolean).join(' + ');
+    c['E'+row]=t.concentracao||tits.map(function(x){return x.concentracao||'';}).filter(Boolean).join(' + ');
+    c['F'+row]=(typeof doseTextoDe==='function')?doseTextoDe(s,t.dose):(t.dose||'');
+    c['G'+row]=t.concentracaoAtivo||((eq&&eq.valor!=null)?Math.round(eq.valor*1000)/1000:'');
+    c['H'+row]=s.numAplicacoes||'';
+    c['I'+row]=(parseInt(s.numAplicacoes)>1)?(s.intervaloDias||''):'';
+    c['J'+row]=t.volume||p.volumeCalda||'';
+    c['K'+row]=t.adjuvante||tits.filter(function(x){return x.tipo==='adjuvante';}).map(function(x){return x.nome||x.codigo||'';}).filter(Boolean).join(' + ');
+  });
+
+  c.D24=_sinergistaDesign(s);c.I24=p.tamanhoParcela||'';c.K24=Math.max(1,parseInt(s.numRepeticoes)||1);
+  c.D25=_sinergistaFirstApplication(s);c.D26=_sinergistaMethod(s,qid);
+  var av=_sinergistaAssessments(s);
+  if(av.rows.length>10)throw new Error('O protocolo Sinergista possui espaço para até 10 avaliações. Reduza a programação ou use o modelo Agracta.');
+  av.rows.forEach(function(a,ix){var row=29+ix;c['B'+row]=ix+1;c['C'+row]=a.label;});
+  if(av.params.efficiency)c.G29='X';if(av.params.phytotoxicity)c.I29='X';if(av.params.productivity)c.K29='X';
+  return c;
+}
+function buildStudySinergista(qid,s,opts){
+  opts=opts||{};var cells=_sinergistaDynamicCells(qid,s),stat=_sinergistaStaticCells();
+  if(!opts.soDados)Object.keys(stat).forEach(function(k){cells[k]=stat[k];});
+  var out=[],last=1;
+  Object.keys(cells).forEach(function(a){if(cells[a]!==''&&cells[a]!=null){var m=a.match(/\d+$/);if(m)last=Math.max(last,+m[0]);}});
+  for(var r=1;r<=last;r++){
+    var row=[];for(var col=0;col<=10;col++){
+      var a=String.fromCharCode(65+col)+r,v=cells[a];
+      row.push(v==null?'':String(v).replace(/[\t\r\n]+/g,' '));
+    }
+    out.push(row.join('\t'));
+  }
+  return out.join('\n');
+}
+function copyStudySinergistaModelo(qid,sid){
+  try{var q=data[qid]||{},s=(q.estudos||[]).find(function(x){return x.id===sid;});if(!s)throw new Error('Estudo não encontrado.');
+    _stxCopy(buildStudySinergista(qid,s)).then(function(ok){_stxToast(ok?'✓ Protocolo Sinergista copiado — cole em A1':'Selecione e copie');});
+  }catch(e){_stxToast('Erro: '+e.message);}
+}
+function copyStudySinergistaDados(qid,sid){
+  try{var q=data[qid]||{},s=(q.estudos||[]).find(function(x){return x.id===sid;});if(!s)throw new Error('Estudo não encontrado.');
+    _stxCopy(buildStudySinergista(qid,s,{soDados:true})).then(function(ok){_stxToast(ok?'✓ Dados do Sinergista copiados — em A1, use Colar Especial → Pular vazios':'Selecione e copie');});
+  }catch(e){_stxToast('Erro: '+e.message);}
+}
+function _sinergistaXmlEscape(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _sinergistaPatchCell(xml,addr,value){
+  var re=new RegExp('<c\\b([^>]*\\br="'+addr+'"[^>]*)\\s*/>|<c\\b([^>]*\\br="'+addr+'"[^>]*)>([\\s\\S]*?)<\\/c>'),m=re.exec(xml);
+  if(!m)throw new Error('O modelo Sinergista mudou: célula '+addr+' não foi encontrada.');
+  var attrs=(m[1]||m[2]||'').replace(/\s+t=("[^"]*"|'[^']*')/g,'').replace(/\s*\/\s*$/,'');
+  var novo;
+  if(value==null||String(value)==='')novo='<c'+attrs+'/>';
+  else if(typeof value==='number'&&isFinite(value))novo='<c'+attrs+'><v>'+value+'</v></c>';
+  else novo='<c'+attrs+' t="inlineStr"><is><t xml:space="preserve">'+_sinergistaXmlEscape(value)+'</t></is></c>';
+  return xml.slice(0,m.index)+novo+xml.slice(m.index+m[0].length);
+}
+function _sinergistaPatchSheetXml(xml,cells){
+  Object.keys(cells).forEach(function(a){xml=_sinergistaPatchCell(xml,a,cells[a]);});
+  return xml;
+}
+function _sinergistaSaveBlob(blob,nome){
+  var u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nome;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(u);},60000);
+}
+async function downloadStudySinergista(qid,sid){
+  try{
+    if(!window.JSZip)throw new Error('Compactador de Excel indisponível. Recarregue o app.');
+    var q=data[qid]||{},s=(q.estudos||[]).find(function(x){return x.id===sid;});if(!s)throw new Error('Estudo não encontrado.');
+    s=normalizeStudy(s);var cells=_sinergistaDynamicCells(qid,s);
+    _stxToast('Montando o protocolo Sinergista…');
+    var resp=await fetch('modelos/protocolo-sinergista.xlsx');if(!resp.ok)throw new Error('Modelo Sinergista não encontrado.');
+    var zip=await JSZip.loadAsync(await resp.arrayBuffer()),path='xl/worksheets/sheet1.xml',entry=zip.file(path);
+    if(!entry)throw new Error('A folha do modelo Sinergista não foi encontrada.');
+    zip.file(path,_sinergistaPatchSheetXml(await entry.async('string'),cells));
+    /* Editar o XML dentro do arquivo, em vez de regravar a pasta pelo SheetJS,
+       preserva a logo, os merges, a área de impressão e todos os estilos. */
+    var blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},
+      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var nome=(s.codigo||'estudo').replace(/[^\w.-]+/g,'_')+'-Protocolo-Sinergista.xlsx';
+    _sinergistaSaveBlob(blob,nome);_stxToast('✓ Protocolo Sinergista baixado com o layout original');
+  }catch(e){console.error(e);alert('Não consegui gerar o protocolo Sinergista: '+e.message);}
+}
+function showStudyWorkbookFormats(qid,sid){
+  var q=data[qid]||{},s=(q.estudos||[]).find(function(x){return x.id===sid;});if(!s)return;
+  var m=document.getElementById('stxWorkbookModal');
+  if(!m){m=document.createElement('div');m.id='stxWorkbookModal';m.className='ndvi-modal';m.onclick=function(e){if(e.target===m)m.style.display='none';};document.body.appendChild(m);}
+  function botoes(download,modelo,dados){return '<div class="gr-btns" style="margin-top:8px;flex-wrap:wrap">'+
+    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+download+'">⬇ Baixar</button>'+
+    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+modelo+'">📋 Copiar modelo</button>'+
+    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+dados+'">📋 Só dados</button></div>';}
+  var qa="'"+qid+"','"+sid+"'";
+  m.innerHTML='<div class="ndvi-modal-box" style="max-width:620px">'+
+   '<div class="ndvi-modal-top"><b>📊 Planilhas — '+esc(s.codigo||'(sem código)')+'</b><button onclick="document.getElementById(\'stxWorkbookModal\').style.display=\'none\'">✕</button></div>'+
+   '<div style="padding:11px;border:1px solid #31513a;border-radius:10px;margin-top:8px"><b>Modelo Agracta <span style="font-size:10px;color:#9fb1a5">ATUAL</span></b><div class="ndvi-status">Planilha completa com protocolo, clima, avaliações, Estatística e Forense. Até 7 tratamentos.</div>'+botoes('downloadStudyWorkbook('+qa+')','copyStudyModelo('+qa+')','copyStudyDados('+qa+')')+'</div>'+
+   '<div style="padding:11px;border:1px solid #31513a;border-radius:10px;margin-top:10px"><b>Protocolo Sinergista <span style="font-size:10px;color:#9fb1a5">NOVO</span></b><div class="ndvi-status">Layout em inglês do arquivo enviado, com a formatação e a logo originais. Até 9 tratamentos e 10 avaliações.</div>'+botoes('downloadStudySinergista('+qa+')','copyStudySinergistaModelo('+qa+')','copyStudySinergistaDados('+qa+')')+'</div>'+
+   '<div class="gr-btns" style="margin-top:10px"><button class="gr-cancel" style="flex:1" onclick="document.getElementById(\'stxWorkbookModal\').style.display=\'none\'">Fechar</button></div></div>';
+  m.style.display='flex';
+}
 function _xlsPut(ws,r,c,v){
   if(v==null||String(v).trim()==='')return;
   var addr=XLSX.utils.encode_cell({r:r,c:c}), old=ws[addr]||{}, n=_protoNum(v), numeric=(typeof v==='number'||(n!=null&&String(v).trim().match(/^[+-]?\d+(?:[.,]\d+)?$/)));
@@ -5084,12 +5346,14 @@ function showStudyExportModal(qid,s,from,to){
   var m=document.getElementById('stxModal');
   if(!m){ m=document.createElement('div'); m.id='stxModal'; m.className='ndvi-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   var title=esc((s.codigo||'(sem codigo)')+' — '+quadraNome(qid));
-  m.innerHTML='<div class="ndvi-modal-box" style="max-width:560px">'+
+  m.innerHTML='<div class="ndvi-modal-box" style="max-width:620px">'+
     '<div class="ndvi-modal-top"><b>📄 '+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
     '<div class="ndvi-status"><b>Para a SUA planilha (modelo.xls):</b> cabeçalho, tratamentos, clima e grade (a/b/c/d/média/E%/grupo) nas células certas — <b>sem despejar rótulos nem seções extras</b>.<br>• <b>Modelo limpo</b>: cole em <b>A1</b> de uma cópia <b>em branco</b> do modelo (Excel ou Sheets).<br>• <b>Só dados</b>: no <b>Excel</b>, sobre o seu arquivo já preenchido — <b>Colar Especial → Pular células em branco</b> em A1 (preenche só os dados, não apaga nada).</div>'+
     '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:#0a110a;color:#cfe0cf;border:1px solid #2a3a2a;border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
     '<div id="stxNdvi" style="margin-top:8px"></div>'+
-    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar modelo limpo</button><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">📋 Copiar só dados (Excel)</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="downloadStudyWorkbook(\''+qid+'\',\''+s.id+'\')">⬇ Baixar planilha completa</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo (livre)</button><button class="gr-cancel" style="flex:1 1 100%" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
+    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar modelo Agracta</button><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">📋 Só dados Agracta</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+s.id+'\')">⬇ Escolher planilha</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo (livre)</button></div>'+
+    '<div style="margin-top:10px;padding:9px;border:1px solid #31513a;border-radius:9px"><b style="font-size:12px">Protocolo Sinergista</b><div class="ndvi-status">Segundo formato, em inglês, sem substituir o modelo Agracta.</div><div class="gr-btns" style="margin-top:7px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar modelo</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaDados(\''+qid+'\',\''+s.id+'\')">📋 Só dados</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="downloadStudySinergista(\''+qid+'\',\''+s.id+'\')">⬇ Baixar</button></div></div>'+
+    '<div class="gr-btns" style="margin-top:10px"><button class="gr-cancel" style="flex:1" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
   '</div>';
   m.style.display='flex';
 }
@@ -9778,7 +10042,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(quadraNome(qid))+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
-  h+='<button class="btn-sm" onclick="downloadStudyWorkbook(\''+qid+'\',\''+sid+'\')" title="Baixar o modelo.xls preenchido com protocolo, aplicações, avaliações e grupos estatísticos">'+ic('sheet',15)+' Planilha</button>';
+  h+='<button class="btn-sm" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+sid+'\')" title="Escolher entre o modelo Agracta e o protocolo Sinergista">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
   h+=isQuadraLab(qid)
     ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório: a receita de cada tratamento deste estudo, mais o ajuste de i.a.">🧪 Calc lab</button>'
@@ -10143,7 +10407,7 @@ var workingStudy=null;
 /* O cadastro completo continua usando o mesmo objeto de estudo; estas etapas só
    tornam a conversa com o usuário mais curta e legível no campo. */
 var studyEditStep=1;
-var STUDY_EDIT_STEPS=['Protocolo','Contexto','Delineamento','Programação'];
+var STUDY_EDIT_STEPS=['Protocolo','Execução','Delineamento','Programação'];
 
 function _seWizardNav(){
   var h='<nav class="se-wizard" aria-label="Etapas do cadastro do estudo">';
@@ -10483,7 +10747,7 @@ function renderStudyEditModal(){
   var q=data[curV]||{};
   var bbchList=bbchListDaQuadra(curV, studyCultura(s,q));
 
-  var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar estudo':'Novo estudo')+'</h3><button class="se-x" onclick="closeStudyEditV2()" aria-label="Fechar formulário do estudo" title="Fechar">×</button></div>';
+  var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar protocolo e execução':'Novo protocolo')+'</h3><button class="se-x" onclick="closeStudyEditV2()" aria-label="Fechar formulário do estudo" title="Fechar">×</button></div>';
 
   /* NEMATOLOGIA: o registro é só o NÚMERO DO ESTUDO. Matriz (solo/raiz) e o dia
      em DAA são da AMOSTRA, e moram na fila — não aqui. Tratamento, aplicação,
@@ -10531,6 +10795,8 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Descrição / objetivo</label>';
   h+='<textarea id="seDescricao" placeholder="Ex: Avaliação de eficácia de fungicidas sistêmicos no controle de ferrugem asiática" rows="3">'+esc(s.descricao)+'</textarea></div>';
   h+='</div><div class="se-step'+(studyEditStep===2?' is-active':'')+'" data-step="2">';
+  var _execLoc=_studyPanelLocal(curV);
+  h+='<div class="se-section-title">Primeira execução</div><div class="e-hint" style="margin:-2px 0 12px;padding:9px 10px;border:1px solid var(--gp-line,rgba(255,255,255,.09));border-radius:9px">Este protocolo será executado em <b>'+esc(_execLoc.nome)+'</b> · <b>'+esc(quadraNome(curV))+'</b>. Os campos abaixo caracterizam esta execução; o protocolo permanece identificado separadamente na etapa 1.</div>';
 
   /* IDENTIFICAÇÃO — o que aparece no rodapé de toda figura do relatório.
      Isto morava só na prancha, e ele redigitava a cada folha. É do ESTUDO:
@@ -13807,6 +14073,7 @@ function collectTodayEvents(windowDays, incluirDispensados){
 function renderToday(){
   var events=collectTodayEvents(1, agVerDispensados);
   var tomorrowEvs=collectTodayEvents(3, agVerDispensados).filter(function(e){return e.diff>1});
+  var activeToday=collectTodayEvents(3, false);
 
   var h='<div class="today-head" style="position:relative">';
   h+='<button class="panel-x-tr" onclick="closeToday()" aria-label="Fechar" title="Fechar">✕</button>';
@@ -13949,10 +14216,8 @@ function renderSearchResults(query){
   var q=normStr((query||"").trim());
   var results=[];
   Object.keys(data).sort().forEach(function(qid){
-    /* __config guarda preferências do aparelho, não uma quadra. Sem esta linha ele
-       aparecia entre os resultados — e uma busca sem filtro listava 33 "quadras"
-       onde existem 32. */
-    if(qid==='__config') return;
+    /* Chaves internas guardam configuração, auditoria e ISMS — nunca são quadras. */
+    if(String(qid).indexOf('__')===0) return;
     var d=data[qid]||{};
     var score=0;
     var matches=[];
@@ -14148,7 +14413,7 @@ function setStudiesPanelQuery(v){ _studiesPanelQuery=String(v||''); renderStudie
 function toggleStudiesNew(){ _studiesNewOpen=!_studiesNewOpen; renderStudiesPanel(); }
 function startNewStudyFromPanel(){
   var sel=document.getElementById('studiesNewQuadra'), qid=sel&&sel.value;
-  if(!qid){ if(typeof _stxToast==='function')_stxToast('Selecione uma quadra ou laboratório.'); return; }
+  if(!qid){ if(typeof _stxToast==='function')_stxToast('Selecione a área da primeira execução.'); return; }
   closeStudiesPanel(); openNewStudy(qid);
 }
 function openStudyFromPanel(qid,sid){ closeStudiesPanel(); openStudyDetail(qid,sid); }
@@ -14176,10 +14441,10 @@ function renderStudiesPanel(){
   function summary(key,cls,value,label){return '<button type="button" class="study-summary-card '+(cls||'')+(_studiesPanelFilter===key?' active':'')+'" onclick="setStudiesPanelFilter(\''+key+'\')"><b>'+value+'</b><span>'+label+'</span></button>';}
   var grupos=_studyPanelQuadraGroups(), opt='';
   grupos.forEach(function(g){ opt+='<optgroup label="'+esc(g.nome)+'">'; g.quadras.forEach(function(q){ var tipo=q.lab?(' · Laboratório'+(q.labTipo?' de '+q.labTipo:'')):''; opt+='<option value="'+esc(q.id)+'">'+esc(q.nome+tipo)+'</option>'; }); opt+='</optgroup>'; });
-  var h='<div class="studies-dashboard-head"><div><div class="studies-dashboard-kicker">Gestão de estudos</div><div class="studies-dashboard-title">Ensaios</div><div class="studies-dashboard-sub">Visão de todos os estudos, localidades e próximas atividades.</div></div><div class="studies-dashboard-actions"><button type="button" class="studies-dashboard-new" onclick="toggleStudiesNew()">+ Novo estudo</button><button type="button" class="studies-dashboard-close" onclick="closeStudiesPanel()">Fechar ×</button></div></div>';
+  var h='<div class="studies-dashboard-head"><div><div class="studies-dashboard-kicker">Gestão de estudos</div><div class="studies-dashboard-title">Ensaios</div><div class="studies-dashboard-sub">Protocolos, locais de execução e próximas atividades.</div></div><div class="studies-dashboard-actions"><button type="button" class="studies-dashboard-new" onclick="toggleStudiesNew()">+ Novo protocolo</button><button type="button" class="studies-dashboard-close" onclick="closeStudiesPanel()">Fechar ×</button></div></div>';
   if(_studiesNewOpen){
-    h+='<div class="studies-new-study"><div class="studies-new-copy"><b>Novo estudo</b><span>Onde este estudo será executado?</span></div>';
-    if(opt)h+='<select id="studiesNewQuadra" aria-label="Localidade e quadra do novo estudo">'+opt+'</select><button type="button" class="studies-new-continue" onclick="startNewStudyFromPanel()">Continuar</button>';
+    h+='<div class="studies-new-study"><div class="studies-new-copy"><b>1 · Protocolo</b><span>Defina o ensaio no formulário. 2 · Primeira execução: escolha a área.</span></div>';
+    if(opt)h+='<select id="studiesNewQuadra" aria-label="Localidade e quadra da primeira execução">'+opt+'</select><button type="button" class="studies-new-continue" onclick="startNewStudyFromPanel()">Criar protocolo</button>';
     else h+='<span class="studies-new-empty">Cadastre uma quadra ou laboratório antes de criar o estudo.</span>';
     h+='<button type="button" class="studies-new-cancel" onclick="toggleStudiesNew()">Cancelar</button></div>';
   }
@@ -14188,7 +14453,7 @@ function renderStudiesPanel(){
   h+='<div class="studies-dashboard-list">';
   if(!visible.length){
     h+=!all.length
-      ? '<div class="studies-dashboard-empty studies-dashboard-empty-start"><span class="empty-mark">01</span><b>Comece pelo protocolo</b><small>Crie o primeiro estudo e o Agracta monta o delineamento, a calculadora, a agenda e a trilha operacional.</small><button type="button" onclick="toggleStudiesNew()">Criar primeiro estudo</button></div>'
+      ? '<div class="studies-dashboard-empty studies-dashboard-empty-start"><span class="empty-mark">01</span><b>Comece pelo protocolo</b><small>Defina o ensaio e vincule a primeira execução a uma quadra ou laboratório. O Agracta monta o delineamento, a calculadora, a agenda e a trilha operacional.</small><button type="button" onclick="toggleStudiesNew()">Criar primeiro protocolo</button></div>'
       : '<div class="studies-dashboard-empty"><b>Nenhum estudo neste filtro</b><small>Tente outro status ou limpe a busca.</small></div>';
   }
   else visible.forEach(function(x){
@@ -14903,10 +15168,10 @@ function soloBlocoHtml(id){
   if(est==='buscando') return h+'<div class="solo-est">Consultando solo…</div></div>';
   if(est&&est.erro) return h+'<div class="solo-est">Solo indisponível — '+esc(est.erro)+
     ' <button class="solo-rf" onclick="soloAtualizar(\''+esc(id)+'\')">Tentar de novo</button></div></div>';
-  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+soloRecomendacaoHtml(id)+'</div>';
+  if(!s) return h+'<div class="solo-est">Ainda não consultado.</div>'+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+soloRecomendacaoHtml(id)+'</div>';
   if(s.semCobertura) return h+'<div class="solo-est">Sem cobertura pedológica mapeada para esta coordenada.</div>'+
     '<div class="solo-meta"><span>Consultado em <b>'+esc(_soloQuando(s))+'</b></span></div>'+
-    soloPropHtml(id)+soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+soloRecomendacaoHtml(id)+'</div>';
+    soloObsHtml(id)+soloAnaliseHtml(id)+soloCalagemHtml(id)+soloRecomendacaoHtml(id)+'</div>';
 
   h+='<div class="solo-cl"><span class="solo-dot" style="background:'+soloCor(s.ordem)+'"></span>'+esc(s.classe||'—')+'</div>';
   h+='<div class="solo-meta">';
@@ -14938,7 +15203,6 @@ function soloBlocoHtml(id){
   if(s.revisadoEm) h+='<span>Revisado após edição do polígono</span>';
   h+='</div>';
 
-  h+=soloPropHtml(id);
   h+=soloObsHtml(id);
   h+=soloAnaliseHtml(id);
   h+=soloCalagemHtml(id);
@@ -14974,7 +15238,32 @@ function soloClasseRelatorio(id, proto){
    volta como conclusão errada num relatório. Servem para caracterizar o ambiente
    do ensaio — nunca para embasar recomendação de adubação. */
 var _soloPropSeq=0, _soloPropEstado={};
-function soloPropriedades(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return (d.solo&&d.solo.propriedades)||null; }
+function _soloPropValidar(pr){
+  if(!pr||typeof pr!=='object') return false;
+  if(pr.semCobertura) return true;
+  var p=pr.propriedades;
+  if(!p||typeof p!=='object') return false;
+  var lim={clay:[0,100],sand:[0,100],silt:[0,100],phh2o:[2,12],soc:[0,1000],mo:[0,1724],cec:[0,200],bdod:[0.2,2.5]};
+  var algum=false, invalido=false;
+  Object.keys(lim).forEach(function(k){
+    if(!p[k])return;
+    var n=Number(p[k].valor), r=lim[k];
+    if(!isFinite(n)||n<r[0]||n>r[1]) invalido=true;
+    else algum=true;
+  });
+  var frac=['clay','sand','silt'];
+  if(frac.every(function(k){return p[k]&&isFinite(Number(p[k].valor));})){
+    var soma=frac.reduce(function(a,k){return a+Number(p[k].valor);},0);
+    if(soma<85||soma>115) invalido=true;
+  }
+  return algum&&!invalido;
+}
+function soloPropriedades(id){
+  var d=(typeof data!=='undefined'&&data[id])||{}, pr=(d.solo&&d.solo.propriedades)||null;
+  /* Versões antigas aceitaram o índice da banda WMS como valor (0,1% para
+     argila/areia/silte). Nunca volta a mostrar nem reutilizar esse registro. */
+  return _soloPropValidar(pr)?pr:null;
+}
 
 function consultarSoloPropriedades(id, cb, forcar){
   cb=cb||function(){};
@@ -14999,6 +15288,7 @@ function consultarSoloPropriedades(id, cb, forcar){
         semCobertura:!!d.semCobertura,
         ts:Date.now(), iso:new Date().toISOString(), app:(typeof APP_VER!=='undefined'?APP_VER:null)
       };
+      if(!_soloPropValidar(pr)) throw new Error('a estimativa recebida é inconsistente; tente novamente');
       _soloPropEstado[id]=null;
       _soloSet(id, {propriedades:pr});
       try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
@@ -16690,48 +16980,91 @@ function soloPacoteApagar(){
    recebeu imagem de outro domínio fica "sujo" — o navegador proíbe exportá-lo.
    Vindo pelo proxy a imagem é mesma-origem e o recorte funciona.
 
-   O recorte é o que torna a camada útil no dia a dia: o mapa pedológico inteiro
-   cobre tudo e some debaixo dele o satélite, que é a referência de quem olha. Com
-   "Apenas quadras" o solo aparece só onde há ensaio, sobre a imagem real. */
-var _soloLayer=null, _soloRecorte=true, _soloOpacidade=0.55;
-var _soloMapaSeq=0, _soloObjURL=null, _soloMoveT=null;
+   O mapa inteiro é a leitura padrão. O recorte pelas quadras é uma escolha de
+   visualização e não pode ligar sozinho: do contrário a pessoa pede "mapa de
+   solos" e recebe somente manchas dentro dos polígonos, como se não existisse
+   levantamento ao redor. A preferência fica neste aparelho. */
+var SOLO_RECORTE_PREF_KEY='agracta-solo-recorte';
+function _soloRecorteInicial(){
+  try{ return localStorage.getItem(SOLO_RECORTE_PREF_KEY)==='1'; }catch(e){ return false; }
+}
+var _soloLayer=null, _soloRecorte=_soloRecorteInicial(), _soloOpacidade=0.55, _soloMapaLigada=false;
+var _soloMapaSeq=0, _soloObjURL=null, _soloMoveT=null, _soloCamadaMapa=null;
 
-function soloLayerAtiva(){ return !!_soloLayer; }
+function soloLayerAtiva(){ return !!_soloMapaLigada; }
 function soloRecorteAtivo(){ return !!_soloRecorte; }
 
 function toggleSoloLayer(){
   if(!_map) initMap();
   soloBindMove();
-  if(_soloLayer) soloLimpar();
-  else soloCarregarMapa();
-  try{ if(typeof _stxToast==='function') _stxToast(_soloLayer?'Camada de solo ligada':'Camada de solo desligada'); }catch(e){}
-  return !!_soloLayer;
+  if(_soloMapaLigada){
+    soloLimpar();
+    try{ if(typeof _stxToast==='function') _stxToast('Camada de solo desligada'); }catch(e){}
+  }else soloCarregarMapa(false);
+  return !!_soloMapaLigada;
 }
 
 function soloLimpar(){
+  _soloMapaLigada=false;
   _soloMapaSeq++;
   if(_soloLayer){ try{ _map.removeLayer(_soloLayer); }catch(e){} _soloLayer=null; }
   if(_soloObjURL){ try{ URL.revokeObjectURL(_soloObjURL); }catch(e){} _soloObjURL=null; }
+  _soloCamadaMapa=null;
+  try{ soloMapaLegendaEsconder(); }catch(e){}
   try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
 }
 
 /* Liga/desliga o recorte. Se a camada está no mapa, redesenha na hora. */
 function soloSetRecorte(v){
   _soloRecorte=!!v;
-  if(_soloLayer) soloCarregarMapa();
+  try{ localStorage.setItem(SOLO_RECORTE_PREF_KEY,_soloRecorte?'1':'0'); }catch(e){}
+  if(_soloMapaLigada) soloCarregarMapa(true);
 }
 function soloSetOpacidade(v){
   _soloOpacidade=parseFloat(v);
   if(_soloLayer) _soloLayer.setOpacity(_soloOpacidade);
 }
 
-function soloCarregarMapa(){
+function _soloMapaFalhou(msg,seq){
+  if(seq!==_soloMapaSeq)return;
+  if(!_soloLayer){_soloMapaLigada=false;try{soloMapaLegendaEsconder();}catch(e){}}
+  try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
+  try{ if(typeof _stxToast==='function') _stxToast('Solo: '+msg); }catch(e){}
+}
+function _soloMapaLegendaCss(){
+  if(document.getElementById('soloMapaLegendaCss'))return;
+  var s=document.createElement('style');s.id='soloMapaLegendaCss';
+  s.textContent='.solo-map-legend{position:fixed;right:12px;bottom:82px;z-index:880;width:min(270px,72vw);border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(15,21,18,.94);color:#e8efe9;box-shadow:0 10px 32px rgba(0,0,0,.42);font:600 11px/1.35 system-ui,sans-serif;overflow:hidden;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}'+
+   '.solo-map-legend button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;color:inherit;padding:9px 11px;font:800 11px system-ui;cursor:pointer;text-align:left}.solo-map-legend button small{font-size:9px;color:#9eaaa2;font-weight:650}'+
+   '.solo-map-legend-body{max-height:38vh;overflow:auto;padding:0 8px 8px;background:#fff}.solo-map-legend-body img{display:block;width:100%;height:auto}.solo-map-legend.collapsed .solo-map-legend-body{display:none}@media(max-width:620px){.solo-map-legend{right:8px;bottom:76px;width:min(230px,68vw)}}';
+  document.head.appendChild(s);
+}
+function soloMapaLegendaAlternar(){var el=document.getElementById('soloMapaLegenda');if(el)el.classList.toggle('collapsed');}
+function soloMapaLegendaEsconder(){var el=document.getElementById('soloMapaLegenda');if(el)el.remove();}
+function soloMapaLegendaMostrar(camada){
+  if(!camada)return;
+  _soloMapaLegendaCss();
+  var el=document.getElementById('soloMapaLegenda');
+  /* Na primeira abertura a legenda aparece de verdade. Depois o usuário pode
+     recolhê-la; recargas ao mover o mapa preservam o estado escolhido. */
+  if(!el){el=document.createElement('aside');el.id='soloMapaLegenda';el.className='solo-map-legend';document.body.appendChild(el);}
+  var src=SOLO_PROXY+'/solo/legenda?camada='+encodeURIComponent(camada);
+  el.innerHTML='<button type="button" onclick="soloMapaLegendaAlternar()"><span>Legenda do solo</span><small>Embrapa · abrir/fechar</small></button><div class="solo-map-legend-body"><img src="'+esc(src)+'" alt="Legenda oficial da camada pedológica da Embrapa"></div>';
+}
+
+function soloCarregarMapa(silencioso){
   if(!_map) initMap();
+  _soloMapaLigada=true;
+  try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
+  if(!silencioso){try{if(typeof _stxToast==='function')_stxToast('Carregando mapa de solos…');}catch(e){}}
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   var seq=++_soloMapaSeq;
   fetch(SOLO_PROXY+'/solo/mapa?bbox='+bb.join(',')+'&width='+ndviPx(bb))
     .then(function(r){
-      if(r.ok) return r.blob();
+      if(r.ok){
+        try{_soloCamadaMapa=r.headers&&r.headers.get?r.headers.get('X-Solo-Camada'):null;}catch(e){_soloCamadaMapa=null;}
+        return r.blob();
+      }
       return r.json().then(function(j){ throw new Error(j.error||('o servidor respondeu '+r.status)); });
     })
     .then(function(blob){
@@ -16739,10 +17072,10 @@ function soloCarregarMapa(){
       var bu=URL.createObjectURL(blob), img=new Image();
       img.onerror=function(){
         try{ URL.revokeObjectURL(bu); }catch(er){}
-        if(seq===_soloMapaSeq && typeof _stxToast==='function') _stxToast('Não consegui carregar o mapa de solo.');
+        _soloMapaFalhou('não consegui ler a imagem do mapa.',seq);
       };
       img.onload=function(){
-        if(seq!==_soloMapaSeq){ try{ URL.revokeObjectURL(bu); }catch(er){} return; }
+        if(seq!==_soloMapaSeq||!_soloMapaLigada){ try{ URL.revokeObjectURL(bu); }catch(er){} return; }
         var iw=img.naturalWidth||1024, ih=img.naturalHeight||1024, url=bu;
         if(_soloRecorte){
           try{
@@ -16769,22 +17102,24 @@ function soloCarregarMapa(){
                      attribution:'Solos © Embrapa GeoInfo'}).addTo(_map);
         _soloLayer.bringToFront();
         if(url===bu) _soloObjURL=bu; else { try{ URL.revokeObjectURL(bu); }catch(er){} }
+        try{ soloMapaLegendaMostrar(_soloCamadaMapa); }catch(er){}
+        if(!silencioso){try{if(typeof _stxToast==='function')_stxToast('Camada de solo ligada');}catch(er){}}
         try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(er){}
       };
       img.src=bu;
     })
     .catch(function(err){
       if(seq!==_soloMapaSeq) return;
-      try{ if(typeof _stxToast==='function') _stxToast('Solo: '+((err&&err.message)||err)); }catch(e){}
+      _soloMapaFalhou((err&&err.message)||String(err),seq);
     });
 }
 
 /* Recarrega ao mover o mapa, como o NDVI faz — a imagem cobre só o que está
    visível, então sem isto ela ficaria "presa" no enquadramento antigo. */
 function soloOnMove(){
-  if(!_soloLayer) return;
+  if(!_soloMapaLigada||!_soloLayer) return;
   clearTimeout(_soloMoveT);
-  _soloMoveT=setTimeout(function(){ if(_soloLayer) soloCarregarMapa(); }, 700);
+  _soloMoveT=setTimeout(function(){ if(_soloMapaLigada) soloCarregarMapa(true); }, 700);
 }
 /* Amarra uma vez só, no mesmo molde do NDVI — sem a trava, cada abertura da
    camada empilharia mais um ouvinte e o mapa recarregaria N vezes por arrasto. */

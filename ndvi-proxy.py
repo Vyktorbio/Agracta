@@ -26,7 +26,7 @@ Endpoints (uso interno do app):
   GET /solo/propriedades?lat=..&lng=..  (argila/areia/silte/pH/COS/CTC — SoilGrids)
   GET /solo/mapa?bbox=w,s,e,n&width=1024 (PNG do mapa pedologico, para recortar no app)
 """
-import json, os, re, time, urllib.request, urllib.parse, urllib.error
+import json, math, os, re, time, urllib.request, urllib.parse, urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -736,27 +736,18 @@ def _solo_wfs(camada, bbox):
     return d.get("features") or [] if isinstance(d, dict) else []
 
 def _solo_tem_feicao(camada, bbox):
-    """A camada tem MESMO dado nesta area? Uma feicao ja responde.
+    """Confirma que a camada realmente cobre o centro da area visivel.
 
     A caixa declarada de um levantamento estadual e um RETANGULO, e estado nao e
     retangulo: o canto sudoeste da caixa de Minas Gerais cobre Iracemapolis, que e
     Sao Paulo. O pre-filtro por caixa admitia MG, o GetMap saia 100% transparente e a
     cascata parava ali — a camada de solo simplesmente nao aparecia, sem erro nenhum
-    na tela. Caixa e pre-filtro barato; quem decide e o dado."""
-    qs = urllib.parse.urlencode({
-        "service": "WFS", "version": "1.0.0", "request": "GetFeature",
-        "typeName": camada["typeName"], "outputFormat": "application/json",
-        "srsName": "EPSG:4326", "maxFeatures": "1",
-        "propertyName": "",          # so a contagem interessa; geometria seria desperdicio
-        "bbox": "%.6f,%.6f,%.6f,%.6f" % bbox,
-    })
-    req = urllib.request.Request(GEOINFO_WFS + "?" + qs, headers={"User-Agent": "agracta-app"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            d = json.loads(r.read().decode("utf-8", "replace"))
-    except Exception:
-        return False
-    return bool(isinstance(d, dict) and (d.get("features") or []))
+    na tela. Caixa e so o pre-filtro; o poligono do WFS e quem decide."""
+    w, s, e, n = bbox
+    lon, lat = (w + e) / 2.0, (s + n) / 2.0
+    d = 0.0005
+    feats = _solo_wfs(camada, (lon - d, lat - d, lon + d, lat + d))
+    return any(_solo_contem(_solo_aneis(f.get("geometry")), lon, lat) for f in feats)
 
 
 def _solo_resposta(camada, props):
@@ -925,9 +916,11 @@ def _sg_valor(prop, prof, lon, lat):
         "map": "/map/%s.map" % prop,
         "service": "WMS", "version": "1.1.1", "request": "GetFeatureInfo",
         "layers": camada, "query_layers": camada,
-        # MapServer 8 exige STYLES; sem ele a resposta e um ServiceExceptionReport.
-        "styles": "", "format": "image/png",
-        "srs": "EPSG:4326", "info_format": "application/json",
+        # O MapServer do SoilGrids exige um estilo e anuncia GeoJSON com este MIME.
+        # Sem os dois ele devolve ServiceException XML com HTTP 200; a versao do
+        # XML ("1.0") era então confundida com o valor do pixel.
+        "styles": "default", "srs": "EPSG:4326",
+        "info_format": "application/geo+json",
         "bbox": "%.6f,%.6f,%.6f,%.6f" % (lon - d, lat - d, lon + d, lat + d),
         "width": "3", "height": "3", "x": "1", "y": "1",
     })
@@ -951,13 +944,25 @@ def _sg_extrai(bruto):
     Numeros impossiveis, apresentados com a mesma cara de numeros bons.
 
     Documento de erro nao e dado. Ele sai daqui como None, sempre."""
-    t = (bruto or "")
-    if "ServiceException" in t or "<!DOCTYPE html" in t or "no results" in t.lower():
+    texto = bruto or ""
+    baixo = texto.lower()
+    if ("serviceexception" in baixo or "exceptionreport" in baixo or
+            "<html" in baixo or "<!doctype html" in baixo or
+            "no results" in baixo):
         return None
     try:
-        d = json.loads(bruto)
+        d = json.loads(texto)
         for f in (d.get("features") or []):
-            for v in (f.get("properties") or {}).values():
+            props = f.get("properties") or {}
+            # Nao dependa da ordem do JSON: alguns servidores incluem IDs ou
+            # metadados numericos antes do pixel propriamente dito.
+            candidatos = []
+            for k in ("pixel_value", "value_0", "value", "band_1"):
+                if k in props:
+                    candidatos.append(props[k])
+            if not candidatos:
+                candidatos = list(props.values())
+            for v in candidatos:
                 try:
                     n = float(v)
                 except (TypeError, ValueError):
@@ -966,10 +971,12 @@ def _sg_extrai(bruto):
                     return n
     except Exception:
         pass
-    # Texto do MapServer: "  value_0 = '580'". Procurar o numero depois do '=' e
-    # importante — pegar o primeiro numero solto acharia o "1" de "Band 1 value".
-    for padrao in (r"=\s*'?(-?\d+\.?\d*)'?", r"value[^-\d]{0,12}(-?\d+\.?\d*)"):
-        for x in re.findall(padrao, bruto or "", re.I):
+    # Fallback para a resposta text/plain do MapServer. Os nomes de campo são
+    # deliberadamente exigidos: um '=' genérico também casaria com version="1.0".
+    for padrao in (r"(?:pixel_value|value_0|band_1)\s*=\s*'?(-?\d+\.?\d*)'?",
+                   r"(?:pixel_value|value_0|band_1)\s*:\s*'?(-?\d+\.?\d*)'?",
+                   r"band\s+\d+\s+value\s*[:=]\s*'?(-?\d+\.?\d*)'?"):
+        for x in re.findall(padrao, texto, re.I):
             try:
                 n = float(x)
             except ValueError:
@@ -1014,7 +1021,7 @@ def do_solo_propriedades(lat, lng):
             conv = v / float(fator)
             # Fora da faixa fisicamente possivel: a camada e DESCARTADA, nao exibida.
             # Um pH de 0,1 nao e uma estimativa ruim — e uma falha com cara de dado.
-            if not (lo <= conv <= hi):
+            if not math.isfinite(conv) or not (lo <= conv <= hi):
                 fora += 1
                 continue
             perfil[prof] = round(conv, 2)
@@ -1031,6 +1038,16 @@ def do_solo_propriedades(lat, lng):
         # Dito em voz alta: quem chama precisa poder mostrar "indisponivel" em vez de
         # um espaco em branco que parece "ainda carregando".
         out["recusadas"] = sorted(recusadas)
+
+    # As tres fracoes granulometricas devem fechar aproximadamente 100%. Se o
+    # conjunto nao fecha, nao exponha uma textura com aparencia de laudo: uma das
+    # bandas veio inconsistente e as tres ficam indisponiveis para nova tentativa.
+    fracoes = [out["propriedades"].get(k) for k in ("clay", "sand", "silt")]
+    if all(fracoes):
+        total = sum(x["valor"] for x in fracoes)
+        if total < 85 or total > 115:
+            for k in ("clay", "sand", "silt"):
+                out["propriedades"].pop(k, None)
 
     # Materia organica nao e medida pelo SoilGrids: e o carbono organico vezes o
     # fator de Van Bemmelen. Vai marcada como derivada para ninguem confundir com
@@ -1231,7 +1248,24 @@ def do_clima_janela(mac, de, ate):
     _janela_cache[chave] = (time.time(), out)
     return out
 
-
+def do_solo_legenda(camada_nome):
+    """Legenda oficial da exata camada que o recorte WMS desenhou."""
+    escolhida = next((c for c in SOLO_CAMADAS if c["typeName"] == camada_nome), None)
+    if not escolhida:
+        raise RuntimeError("SOLO:camada de legenda invalida.")
+    qs = urllib.parse.urlencode({
+        "service": "WMS", "version": "1.1.1", "request": "GetLegendGraphic",
+        "layer": escolhida["typeName"], "style": "", "format": "image/png",
+        "transparent": "false",
+    })
+    req = urllib.request.Request(GEOINFO_WFS + "?" + qs, headers={"User-Agent": "agracta-app"})
+    with urllib.request.urlopen(req, timeout=35) as r:
+        dados = r.read()
+        ctype = r.headers.get("Content-Type", "image/png")
+    if "image" not in (ctype or ""):
+        raise RuntimeError("SOLO:o servidor da Embrapa nao devolveu a legenda (%s)." %
+                           (ctype or "sem tipo"))
+    return dados, ctype
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -1242,6 +1276,10 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Headers", "*")
             self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+            # O mapa informa qual levantamento foi desenhado para o navegador
+            # pedir a legenda correspondente. Header customizado só fica legível
+            # fora da origem do proxy quando é exposto explicitamente pelo CORS.
+            self.send_header("Access-Control-Expose-Headers", "X-Solo-Camada")
     def _json(self, obj, code=200):
         b = json.dumps(obj).encode()
         self.send_response(code); self._cors()
@@ -1317,6 +1355,13 @@ class H(BaseHTTPRequestHandler):
                 self.send_response(200); self._cors()
                 self.send_header("Content-Type", ctype or "image/png")
                 self.send_header("X-Solo-Camada", camada)   # qual levantamento pintou
+                self.end_headers()
+                return self.wfile.write(img)
+            if u.path == "/solo/legenda":
+                img, ctype = do_solo_legenda(q.get("camada", ""))
+                self.send_response(200); self._cors()
+                self.send_header("Content-Type", ctype or "image/png")
+                self.send_header("Cache-Control", "public, max-age=2592000")
                 self.end_headers()
                 return self.wfile.write(img)
             self._json({"error": "rota desconhecida"}, 404)

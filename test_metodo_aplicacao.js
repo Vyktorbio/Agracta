@@ -148,7 +148,14 @@ eq(perf.ponta,'XR11002','a ponta');
 eq(perf.cvLimitePct,10,'e os critérios de aceitação');
 /* A LINHA DURA. Leitura no perfil apareceria na tela como coleta que ninguém fez. */
 eq(perf.leituras,undefined,'o perfil NÃO guarda as leituras');
-eq(JSON.stringify(perf).indexOf('500'),-1,'nenhum valor de coleta sobrevive no perfil');
+/* Não procure "500" no JSON inteiro: o carimbo Date.now() pode conter essa
+   sequência e tornar o teste aleatório. Procure o valor de leitura, de fato. */
+function contemValor(o, alvo){
+  if(o===null||o===undefined) return false;
+  if(typeof o!=='object') return String(o)===String(alvo);
+  return Object.keys(o).some(function(k){ return contemValor(o[k],alvo); });
+}
+eq(contemValor(perf,'500'),false,'nenhum valor de coleta sobrevive no perfil');
 ck(perf.em>0,'e ele se data, para a oferta poder dizer de quando é');
 
 eq(ctx.perfilEquipDe('co2').bicos,4,'o perfil é lido de volta pelo equipamento');

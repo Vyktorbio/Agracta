@@ -24,6 +24,8 @@ solo-tabelas-*.json
 !estatistica/pyodide/python_stdlib.zip
 !estatistica/pyodide/openblas-0.3.26.zip
 *.xlsx
+# Template público do segundo formato de protocolo (sem dados de estudo do Agracta).
+!modelos/protocolo-sinergista.xlsx
 backups/
 exports/
 iracemapolis-*.json

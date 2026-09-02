@@ -117,8 +117,8 @@
                 'Zonamento a partir do índice ativo', 'agZonas()', true)+
           linha('agRowSolo', IC.solo, 'Mapa de solos',
                 'Levantamento pedológico da Embrapa', 'agAcao(\'toggleSoloLayer\')', true)+
-          linha('agRowSoloRec', IC.quadrado, 'Solo apenas nas quadras',
-                'Recorta o mapa pedológico pelos polígonos', 'agSoloRecorte()', true)+
+          linha('agRowSoloRec', IC.quadrado, 'Recortar pelas quadras',
+                'Opcional · começa desligado e mostra solo só nos polígonos', 'agSoloRecorte()', true)+
         '</div>'+
         '<div class="ag-sec">'+
           '<div class="ag-sec-t">Campo</div>'+
@@ -752,7 +752,7 @@
         '<div class="ag-sec-t">Este aparelho</div>'+
         linha(I.lua, escuro?'Tema escuro':'Tema claro', 'Alterna o visual', 'agMenuAcao(\'toggleTheme\')')+
         linha(I.lapis, 'Meu nome e assinatura', 'Como você assina na trilha BPL', 'agMenuAcao(\'definirMeuNome\')')+
-        linha(I.recarregar, 'Atualizar Agracta', 'Busca e instala a versão nova', 'agMenuAcao(\'forcarAtualizacao\')')+
+        linha(I.recarregar, 'Atualizar Agracta', 'Baixa e abre a versão mais recente', 'agMenuAcao(\'forcarAtualizacao\')')+
         (instalar ? linha(I.celular, 'Instalar o app', 'Fica como aplicativo na tela inicial', 'agMenuAcao(\'installApp\')') : '')+
       '</div>'+
       (adm ? '<div class="ag-sec">'+

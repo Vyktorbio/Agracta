@@ -20,7 +20,7 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
   expediente, com aviso e sincronização antes) e a porta de entrada: nada do app
   é pintado antes de autenticar.
 - `vendor/` — Leaflet e plugins (offline).
-- `quadras-default.js` (em `vendor/`) — alinhamento + geometria das quadras (gerado de backup).
+- `quadras-default.js` (em `vendor/`) — reserva vazia para instalações novas; a geometria operacional vem do armazenamento autenticado ou do próprio aparelho.
 - `ndvi-proxy.py` — proxy local que conversa com o Sentinel Hub (Copernicus).
 - `manifest.webmanifest`, `sw.js`, `icon-*.png` — PWA (instalável/offline).
 
@@ -53,8 +53,11 @@ O Agracta salva primeiro no aparelho e usa a nuvem como sincronização:
 2. um checkpoint completo adicional é mantido no IndexedDB;
 3. o Firestore recebe documentos separados por local, quadra, estudo,
    aplicação, avaliação e lançamento;
-4. alterações feitas sem internet entram na fila persistente do SDK;
+4. alterações feitas sem internet ficam marcadas no checkpoint do Agracta;
 5. quando a conexão volta, o aplicativo reconcilia e envia as pendências.
+
+O IndexedDB interno do Firestore permanece desativado. O Agracta já possui seu
+próprio cofre durável, evitando duas filas offline concorrentes no navegador.
 
 Se Firebase ou internet estiverem indisponíveis, o trabalho de campo continua.
 O selo mostra `salvo neste aparelho` até a sincronização voltar.
