@@ -9829,6 +9829,8 @@ function openStudyDetail(qid,sid){
         h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(infoE?' · '+esc(infoE.fase):'')+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
+      /* §9 — o que aconteceu entre a aplicação e esta leitura. */
+      try{ h+=janelaBlocoHtml(qid, sid, a); }catch(e){}
       h+=avGridHtml(a);
       h+=avResultHtml(study,a);
       h+=carimboHtml(a.carimbo,a.data,a.hora);
@@ -14924,6 +14926,163 @@ function soloAnaliseAtual(id){ var a=soloAnalises(id); return a.length?a[0]:null
 /* Índices derivados. Definições universais de química de solo, não tabela de
    recomendação: SB é a soma das bases, T a CTC a pH 7, V% a saturação por bases e
    m% a saturação por alumínio. */
+
+/* Bloco da janela no cartão da avaliação. Nasce fechado como um resumo de uma linha:
+   a leitura de relance é "14 dias, 72 mm, média 24,6" — o resto se abre. */
+function janelaBlocoHtml(qid, sid, av){
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  if(!study) return '';
+  var j=janelaDaAvaliacao(av);
+  var chave=_janelaChave(qid,sid,av.id);
+  var estado=_janelaEstado[chave];
+
+  if(!j){
+    var ap=janelaAplicacaoAnterior(study, av);
+    if(!ap || ap.data===av.data) return '';   /* sem intervalo, não há o que oferecer */
+    if(estado==='buscando') return '<div class="jan-linha">Montando a janela ambiental…</div>';
+    return '<div class="jan-linha">'+
+      '<button class="jan-btn" onclick="janelaBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(av.id)+'\')">'+
+      '🌦 Ambiente desde a aplicação de '+esc(isoToBR(ap.data)||ap.data)+'</button>'+
+      (estado==='erro'?'<span class="jan-erro">não consegui na última tentativa</span>':'')+'</div>';
+  }
+
+  var h='<div class="jan-bloco"><div class="jan-t">AMBIENTE ENTRE A APLICAÇÃO DE '+
+        esc(isoToBR(j.de)||j.de)+' E ESTA AVALIAÇÃO</div>'+
+        '<div class="jan-resumo">'+esc(janelaResumo(j))+'</div>';
+  var det=[];
+  if(j.tempMin!=null) det.push('mín '+String(j.tempMin).replace('.',',')+' °C');
+  if(j.urMedia!=null) det.push('UR média '+String(j.urMedia).replace('.',',')+'%');
+  if(j.rajadaMax!=null) det.push('rajada máx '+String(j.rajadaMax).replace('.',',')+' km/h');
+  if(j.radiacaoMedia!=null) det.push('radiação média '+String(j.radiacaoMedia).replace('.',',')+' W/m²');
+  if(det.length) h+='<div class="jan-det">'+esc(det.join(' · '))+'</div>';
+  var cob=janelaCobertura(j);
+  if(cob) h+='<div class="jan-cob">⚠ '+esc(cob)+'</div>';
+  h+='<div class="jan-pe">'+esc((j.fonte==='ecowitt-historico'?'Estação ':'')+'· lido em '+
+     (function(){ try{ return new Date(j.ts).toLocaleString('pt-BR'); }catch(e){ return j.iso; } })())+
+     '<button class="jan-btn mini" onclick="janelaBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(av.id)+'\',1)">reconsultar</button></div>';
+  return h+'</div>';
+}
+
+function janelaBuscar(qid, sid, avid, forcar){
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  var av=study&&(study.avaliacoes||[]).filter(function(a){return a.id===avid;})[0];
+  if(!av) return;
+  _janelaEstado[_janelaChave(qid,sid,avid)]='buscando';
+  try{ openStudyDetail(qid,sid); }catch(e){}
+  consultarJanela(qid, sid, av, !!forcar, function(r){
+    if(r&&r.erro && typeof _stxToast==='function') _stxToast(r.erro);
+    try{ openStudyDetail(qid,sid); }catch(e){}
+  });
+}
+
+/* ===================== JANELA AMBIENTAL (roadmap §9) =============================
+   O carimbo guarda o INSTANTE de cada evento: fazia 26 °C e 60% de UR quando se
+   aplicou. Isso responde "em que condição foi aplicado" e não responde a outra
+   pergunta, que é a que explica o resultado do ensaio:
+
+       o que aconteceu ENTRE a aplicação e esta avaliação?
+
+   Choveu 72 mm dois dias depois da aplicação? Passou de 31 °C na semana do
+   florescimento? Ficou quinze dias sem chuva? É isso que separa "o produto não
+   funcionou" de "o produto foi lavado", e nenhum instante isolado diz.
+
+   A janela vai GRAVADA na avaliação, não recalculada a cada abertura. Duas razões:
+   a leitura de uma estação pode mudar quando a Ecowitt reprocessa, e o que vale num
+   registro BPL é o que foi lido quando se registrou; e a avaliação precisa poder ser
+   lida offline, no campo, sem rede.
+
+   COBERTURA VAI JUNTO, SEMPRE. Uma média de 11 dias apresentada como "os 14 dias da
+   janela" é mentira — e é o tipo de mentira que passa despercebida porque o número
+   parece limpo. ================================================================== */
+
+var _janelaSeq=0, _janelaEstado={};   /* chave -> 'buscando' | 'erro' | null */
+
+/* A aplicação que precede esta avaliação. É dela que a janela parte: o intervalo que
+   interessa é o que o tratamento passou exposto, não o calendário inteiro do estudo. */
+function janelaAplicacaoAnterior(study, av){
+  if(!study||!av||!av.data) return null;
+  var antes=(study.aplicacoes||[]).filter(function(a){ return a.data && a.data<=av.data; })
+    .sort(function(a,b){ return String(a.data).localeCompare(String(b.data)); });
+  return antes.length?antes[antes.length-1]:null;
+}
+
+function janelaDaAvaliacao(av){ return (av&&av.janela)||null; }
+function _janelaChave(qid, sid, avid){ return qid+'|'+sid+'|'+avid; }
+
+/* Busca e grava. Só grava se ainda não houver — uma janela regravada depois mudaria
+   o registro do que foi lido no dia, que é justamente o que ele existe para guardar.
+   `forcar` é para o botão de reconsultar, e aí a anterior vira histórico. */
+function consultarJanela(qid, sid, av, forcar, cb){
+  cb=cb||function(){};
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  if(!study||!av||!av.data){ cb(null); return; }
+  if(av.janela && !forcar){ cb(av.janela); return; }
+
+  var ap=janelaAplicacaoAnterior(study, av);
+  if(!ap){ cb({erro:'Esta avaliação não tem aplicação anterior no estudo — sem ponto de partida para a janela.'}); return; }
+  if(ap.data===av.data){ cb({erro:'A avaliação é do mesmo dia da aplicação: não há intervalo a resumir.'}); return; }
+
+  var mac=(typeof _stationMacForQuadra==='function')?_stationMacForQuadra(qid):null;
+  if(!mac){ cb({erro:'Esta quadra não tem estação meteorológica associada.'}); return; }
+
+  var chave=_janelaChave(qid,sid,av.id), seq=++_janelaSeq;
+  _janelaEstado[chave]='buscando';
+  var url=NDVI_PROXY+'/clima/janela?mac='+encodeURIComponent(mac)+
+          '&de='+encodeURIComponent(ap.data)+'&ate='+encodeURIComponent(av.data);
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if(seq!==_janelaSeq && _janelaEstado[chave]!=='buscando') return;
+    if(!d || d.error){ _janelaEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui montar a janela.'}); return; }
+    _janelaEstado[chave]=null;
+    var j={
+      de:ap.data, ate:av.data, aplicacao:ap.id,
+      dias:d.dias, diasComLeitura:d.dias_com_leitura, coberturaPct:d.cobertura_pct,
+      diasSemLeitura:(d.dias_sem_leitura||[]),
+      chuvaMm:d.chuva_mm, diasComChuva:d.dias_com_chuva,
+      tempMedia:d.temp_media, tempMax:d.temp_max, tempMin:d.temp_min,
+      urMedia:d.ur_media, ventoMedio:d.vento_medio, rajadaMax:d.rajada_max,
+      radiacaoMedia:d.radiacao_media,
+      fonte:d.fonte, mac:mac, ts:Date.now(), iso:new Date().toISOString(),
+      app:(typeof APP_VER!=='undefined'?APP_VER:null)
+    };
+    /* Reconsultar não apaga: a leitura anterior vira histórico, como a memória de
+       cálculo já faz. Uma janela refeita depois de a estação reprocessar é
+       informação, não correção silenciosa. */
+    if(av.janela){ av.janelasAnteriores=(av.janelasAnteriores||[]); av.janelasAnteriores.push(av.janela); }
+    av.janela=j;
+    av._ts=Date.now();
+    try{ save(); }catch(e){}
+    try{ if(typeof dbUpsertAvaliacao==='function') dbUpsertAvaliacao(qid,sid,av); }catch(e){}
+    cb(j);
+  }).catch(function(){
+    _janelaEstado[chave]='erro';
+    cb({erro:'Não consegui falar com o servidor de clima.'});
+  });
+}
+
+/* Uma linha, do jeito que se lê em voz alta: "14 dias, 72 mm, média 24,6 °C..." */
+function janelaResumo(j){
+  if(!j||j.erro) return (j&&j.erro)||'';
+  function n(v,d){ return (v==null||!isFinite(v))?null:String(Number(v).toFixed(d==null?1:d)).replace('.',','); }
+  var p=[];
+  p.push(j.dias+' dia'+(j.dias===1?'':'s'));
+  if(n(j.chuvaMm)!=null) p.push(n(j.chuvaMm)+' mm');
+  if(n(j.tempMedia)!=null) p.push('média '+n(j.tempMedia)+' °C');
+  if(n(j.tempMax)!=null) p.push('máx '+n(j.tempMax)+' °C');
+  if(j.diasComChuva!=null) p.push(j.diasComChuva+' dia'+(j.diasComChuva===1?'':'s')+' com chuva');
+  return p.join(' · ');
+}
+
+/* A cobertura não é rodapé: quando a estação faltou, isso muda como se lê o número
+   de cima. Por isso ela sai como frase, e não como percentual solto. */
+function janelaCobertura(j){
+  if(!j||j.erro) return '';
+  if(j.coberturaPct>=100) return '';
+  if(!j.diasComLeitura) return 'A estação não tinha leitura em nenhum dia desta janela — os valores acima não puderam ser calculados.';
+  return 'Atenção: '+j.diasComLeitura+' de '+j.dias+' dias com leitura ('+j.coberturaPct+'%). '+
+         'Os números acima descrevem só esses dias — a chuva dos '+(j.dias-j.diasComLeitura)+
+         ' dias sem leitura não entra no total.';
+}
+
 /* ===================== NUTRIÇÃO — PONTE PARA O MOTOR ==============================
    A aritmética de calagem e recomendação mora em vendor/nutricao-core.js, extraída
    daqui sem uma linha alterada. O que ficou no app é o que depende do aparelho: ler o

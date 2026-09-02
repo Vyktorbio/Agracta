@@ -1037,6 +1037,123 @@ def do_solo_mapa(bbox, width):
         raise RuntimeError("SOLO:o servidor da Embrapa nao devolveu imagem (%s)." % (ctype or "sem tipo"))
     return dados, ctype, escolhida["typeName"]
 
+# ------------------------------------------------- Janela ambiental (secao 9)
+# "O que aconteceu entre a aplicacao e a avaliacao" e a pergunta que explica o
+# resultado de um ensaio, e ate aqui nao havia como responde-la: o carimbo guarda o
+# INSTANTE de cada evento, e instante nao diz se choveu 72 mm no intervalo.
+#
+# A janela agrega os resumos diarios que /clima/historico ja produz. Mora no proxy,
+# e nao no app, por tres razoes: sao N chamadas a Ecowitt (uma por dia) e o fan-out
+# paralelo pertence a quem ja faz isso em /solo/propriedades; a agregacao e a mesma
+# para todo mundo; e o cache aproveita entre estudos da mesma estacao.
+JANELA_MAX_DIAS = 180      # janela maior que isso e erro de digitacao, nao pedido
+JANELA_TTL = 6 * 3600      # dia fechado nao muda; o de hoje ainda muda, dai TTL curto
+JANELA_CHUVA_MIN = 0.2     # mm: abaixo disso e orvalho no pluviometro, nao "dia com chuva"
+_janela_cache = {}
+
+
+def _dias_entre(de, ate):
+    """Lista de YYYY-MM-DD de `de` ate `ate`, inclusive nas duas pontas."""
+    try:
+        t0 = time.strptime(de, "%Y-%m-%d")
+        t1 = time.strptime(ate, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        raise RuntimeError("CLIMA:datas invalidas (esperado AAAA-MM-DD).")
+    e0, e1 = int(time.mktime(t0)), int(time.mktime(t1))
+    if e1 < e0:
+        raise RuntimeError("CLIMA:a data final e anterior a inicial.")
+    dias, passo = [], e0
+    while passo <= e1:
+        dias.append(time.strftime("%Y-%m-%d", time.localtime(passo)))
+        if len(dias) > JANELA_MAX_DIAS:
+            raise RuntimeError("CLIMA:janela de mais de %d dias." % JANELA_MAX_DIAS)
+        passo += 86400
+    return dias
+
+
+def do_clima_janela(mac, de, ate):
+    if not mac:
+        raise RuntimeError("CLIMA:informe a estacao (mac).")
+    dias = _dias_entre(de, ate)
+
+    chave = "%s|%s|%s" % (mac, de, ate)
+    hit = _janela_cache.get(chave)
+    if hit and (time.time() - hit[0]) < JANELA_TTL:
+        return hit[1]
+
+    def um(dia):
+        # Um dia que falha nao derruba a janela: entra como ausente e a cobertura
+        # cai. Melhor uma janela que se declara parcial do que uma que some inteira
+        # porque a estacao piscou numa terca-feira.
+        try:
+            return dia, (do_clima_history(mac, dia) or {})
+        except (RuntimeError, urllib.error.URLError, ValueError, KeyError, TypeError):
+            return dia, None
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        resultados = dict(ex.map(um, dias))
+
+    temps, tmaxs, tmins, hums, ventos, rajadas, solares = [], [], [], [], [], [], []
+    chuva_total = 0.0
+    dias_com_chuva = 0
+    dias_com_leitura = 0
+    faltantes = []
+
+    for dia in dias:
+        resumo = ((resultados.get(dia) or {}).get("dia")) or {}
+        if not resumo:
+            faltantes.append(dia)
+            continue
+        tem = False
+        for origem, destino in (("temp", temps), ("temp_max", tmaxs), ("temp_min", tmins),
+                                ("humidity", hums), ("wind_speed", ventos),
+                                ("wind_gust", rajadas), ("solar", solares)):
+            v = resumo.get(origem)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                destino.append(float(v))
+                tem = True
+        ch = resumo.get("rain_day")
+        if isinstance(ch, (int, float)) and not isinstance(ch, bool):
+            chuva_total += float(ch)
+            if float(ch) >= JANELA_CHUVA_MIN:
+                dias_com_chuva += 1
+            tem = True
+        if tem:
+            dias_com_leitura += 1
+        else:
+            faltantes.append(dia)
+
+    def media(v):
+        return round(sum(v) / len(v), 1) if v else None
+
+    total = len(dias)
+    out = {
+        "mac": mac, "de": de, "ate": ate,
+        "dias": total,
+        # COBERTURA e o campo mais importante deste retorno. Uma media de 11 dias
+        # apresentada como "os 14 dias da janela" e mentira, e o app precisa poder
+        # dizer isso na tela em vez de exibir um numero limpo e falso.
+        "dias_com_leitura": dias_com_leitura,
+        "cobertura_pct": (round(100.0 * dias_com_leitura / total) if total else 0),
+        "dias_sem_leitura": faltantes,
+        "chuva_mm": (round(chuva_total, 1) if dias_com_leitura else None),
+        "dias_com_chuva": (dias_com_chuva if dias_com_leitura else None),
+        "temp_media": media(temps),
+        # Maxima da janela e o MAIOR pico do periodo, nao a media das maximas: o que
+        # queima uma cultura e o dia que passou de 31, nao a media dos dias quentes.
+        "temp_max": (round(max(tmaxs), 1) if tmaxs else None),
+        "temp_min": (round(min(tmins), 1) if tmins else None),
+        "ur_media": media(hums),
+        "vento_medio": media(ventos),
+        "rajada_max": (round(max(rajadas), 1) if rajadas else None),
+        "radiacao_media": media(solares),
+        "fonte": "ecowitt-historico",
+        "ts": int(time.time() * 1000),
+    }
+    _janela_cache[chave] = (time.time(), out)
+    return out
+
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -1093,6 +1210,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_clima(q["mac"]))
             if u.path == "/clima/historico":
                 return self._json(do_clima_history(q["mac"], q["date"], q.get("hora")))
+            if u.path == "/clima/janela":
+                return self._json(do_clima_janela(q.get("mac"), q.get("de"), q.get("ate")))
             if u.path == "/dates":
                 bbox = [float(x) for x in q["bbox"].split(",")]
                 return self._json(do_dates(bbox, q["from"], q["to"]))
@@ -1133,6 +1252,8 @@ class H(BaseHTTPRequestHandler):
                 self._json({"error": "Ecowitt: " + msg[len("ECOWITT:"):]}, 502)
             elif msg.startswith("SOLO:"):
                 self._json({"error": "Solo: " + msg[len("SOLO:"):]}, 400)
+            elif msg.startswith("CLIMA:"):
+                self._json({"error": "Clima: " + msg[len("CLIMA:"):]}, 400)
             else:
                 self._json({"error": msg}, 500)
         except urllib.error.HTTPError as e:
