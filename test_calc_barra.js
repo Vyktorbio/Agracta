@@ -313,8 +313,16 @@ var bsem=ctx._calcBarraEstado();
 eq(bsem.bicos,'','sem protocolo, nº de bicos em branco — nao "4"');
 eq(bsem.espacamento,'','sem protocolo, espacamento em branco — nao "0,5"');
 eq(ctx.calcBarraOperacao(bsem).actualRate,null,'e nenhuma taxa e produzida do nada');
+/* CONSEQUENCIA DO PADRAO SER O SIDER: sem protocolo, o metodo e barra inteira, e nao
+   ha matriz bico a bico — porque no sider nao se coleta bico a bico. E correto, e
+   precisa continuar assim. */
+eq(bsem.equipamento,'tractor','sem protocolo, o padrao da operacao e o sider');
+eq(ctx._calcBarraMetodo(bsem),'barra','e no sider a leitura e da barra inteira');
 ctx._calcBarraAberta=true;
-ck(/Informe o nº de bicos/.test(ctx.calcBarraHtml()),'a planilha de coleta nem abre sem bicos declarados');
+ck(!/Método de coleta/.test(ctx.calcBarraHtml()),'sem escolha de metodo, porque nao ha o que escolher');
+/* Ja quem DECLARA o costal recebe a matriz — e ela nao abre sem os bicos. */
+bsem.equipamento='co2'; ctx._calcBarra=bsem;
+ck(/Informe o nº de bicos/.test(ctx.calcBarraHtml()),'no costal, a planilha de coleta nao abre sem bicos declarados');
 ctx._calcBarraAberta=false;
 ESTUDO.protocolo=GUARDA; ctx._calcBarra=null; store={};
 

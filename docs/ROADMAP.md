@@ -124,7 +124,7 @@ relatório reconstrói a versão usada.
 - **7.1** Motor sem HTML: `calcularAplicacao(config)`.
 - **7.2** ✅ (01/09/2026) `tratamento.aplicacao.metodo` — T1 e T2 drone, T3 trator no mesmo estudo. Os cinco métodos do catálogo, com a **regra de categoria**: bancada só tem Potter, campo não tem Potter.
 - **7.3** ✅ (01/09/2026) Perfil de equipamento **aprendido**, sem tela de cadastro: toda calibração válida gravada vira a configuração habitual daquela máquina, e a calculadora oferece reusá-la, datada. **Devolve configuração, nunca leitura** — pré-preencher coleta seria forjar medição.
-- **7.4** A aplicação **herda** do estudo: tratamentos, doses, parcelas, área, repetições, equipamentos. O operador não redigita.
+- **7.4** ✅ (01/09/2026) A aplicação **herda** do estudo: tratamentos, doses, parcelas, repetições, método. O operador não redigita — e ao salvar, a memória de cálculo é **derivada** do estudo sozinha.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
 - **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
 - **7.8** Laboratório vira **submodo** do mesmo motor: PPM, preparação inversa, campo→bancada, ajuste de i.a., série de doses, testemunha automática, alertas de pipetagem/massa mínima.
@@ -137,7 +137,18 @@ estudo do Agracta.
 > - ✅ **7.1** feito: os dois motores puros já existem e são testados.
 > - ✅ **7.8** parcialmente: `biocalc-lab-core.js` já traz `calcPPM`, `calcPPMInverso`, `calcCampo`, `calcAjusteIA`, `calcSerie`, `alertaPipeta`, `alertaMassa`.
 > - ✅ **§32** resolvido: a calculadora **já é tela nativa** (`openCalcAplicacao`, `app.js:6786`), não iframe.
-> - ✅ **7.4** parcialmente: já pré-preenche dose/volume dos tratamentos do estudo.
+> - ✅ **7.4** feito (01/09/2026). O buraco não era de interface: a configuração de
+>   preparo só existia na TELA, então quem registrasse a aplicação direto — o caminho
+>   normal de quem está no campo com o celular — deixava a aplicação sem nenhum
+>   registro do que foi preparado. `calcConfigDoEstudo(study, qid)` deriva a
+>   configuração do estudo sem tocar no DOM, com a mesma ordem de preferência da
+>   calculadora, e `aplicacaoMemoriaAuto` grava a memória ao salvar a aplicação.
+>   **Derivada e conferida não são a mesma coisa**: memória derivada é conta que o app
+>   fez sozinho a partir do que estava declarado; conferida é a que alguém olhou na
+>   calculadora e mandou gravar. A origem vai marcada, e a derivada **nunca** grava por
+>   cima de nada. Faltando parcela ou volume de calda, não grava — melhor sem memória
+>   que com uma de zeros com cara de registro. Coberto por `test_aplicacao_herda.js`
+>   (28 verificações, com golden test).
 > - ✅ **7.6** feito (01/09/2026): `aplicacao.memoriaCalculo` grava entradas, resultado por componente, avisos, autoria e a versão do motor. Regravar preserva o anterior em `memoriasAnteriores`. Coberto por `test_memoria_calculo.js` (63 verificações, com golden test).
 > - ✅ **7.7** feito (01/09/2026): **barra e calibração na calculadora.**
 >   Seção própria dentro de `openCalcAplicacao`, fechada por padrão — a calculadora de
