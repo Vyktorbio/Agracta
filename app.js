@@ -7270,6 +7270,29 @@ function _labCompute(){
     box.innerHTML='<span style="color:#ff9a8a">⚠ '+esc(e.message||String(e))+'</span>';
   }
 }
+/* ===================== §7.9 — O ESSENCIAL, E O RESTO ATRÁS DE UM BOTÃO ===========
+   A tela despejava tudo de uma vez: dose escrita, dose relida na outra unidade, por
+   frasco, total, calda por parcela, calda total, concentração, calda por frasco. Tudo
+   correto e tudo útil — para conferir. Para EXECUTAR, no meio da lavoura, com o
+   celular numa mão, o que se lê é uma coisa só: quanto pôr no frasco.
+
+   Então o padrão passa a ser o essencial, e o resto fica atrás de "Ver cálculo
+   completo". A escolha é lembrada, porque quem confere confere sempre e quem aplica
+   aplica sempre.
+
+   UMA COISA NUNCA SE ESCONDE: aviso. Esconder alerta atrás de um botão é o oposto de
+   simplificar — é deixar o operador confiante e errado. Erro, aviso e problema de
+   mistura aparecem nos dois modos, sem exceção. ==================================== */
+var CALC_DETALHE_KEY='agracta-calc-detalhe';
+var _calcDetalhe=(function(){
+  try{ return localStorage.getItem(CALC_DETALHE_KEY)==='1'; }catch(e){ return false; }
+})();
+function calcToggleDetalhe(){
+  _calcDetalhe=!_calcDetalhe;
+  try{ localStorage.setItem(CALC_DETALHE_KEY, _calcDetalhe?'1':'0'); }catch(e){}
+  _calcRenderShell();
+}
+
 function _calcStudy(){
   var sel=_calcSel; if(!sel) return null;
   var q=data[sel.qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sel.sid;});
@@ -7335,7 +7358,7 @@ function _calcRenderShell(){
     '<div id="calcResults"></div>'+
     '<div id="calcBarraBox" class="calc-barra"></div>'+
     '<div id="calcMemBox" class="calc-mem"></div>'+
-    '<div class="calc-actions"><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
+    '<div class="calc-actions"><button class="calc-copy" onclick="calcToggleDetalhe()">'+(_calcDetalhe?'👁 Ver só o essencial':'🔍 Ver cálculo completo')+'</button><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
   '</div>';
   _calcCompute();
 }
@@ -7381,27 +7404,34 @@ function _calcCompute(){
 
     /* Receita de preparo: uma linha por componente + o veículo fechando o volume.
        É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
-    html+='<div class="calc-mix"><div class="calc-mixh"><span>Componente</span><span>Dose</span><span>Por frasco</span><span>Total</span></div>';
+    /* No essencial a tabela tem duas colunas: o que pôr e quanto. A dose escrita, a
+       dose relida na outra unidade e o total são conferência, não execução. */
+    var _gc=_calcDetalhe?'':' style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"';
+    html+='<div class="calc-mix"><div class="calc-mixh"'+_gc+'><span>Componente</span>'+
+      (_calcDetalhe?'<span>Dose</span>':'')+'<span>Por frasco</span>'+(_calcDetalhe?'<span>Total</span>':'')+'</div>';
     res.components.forEach(function(c){
       /* A dose escrita e a mesma dose lida do outro jeito. % só vira quantidade
          depois do volume — e é aí que 3 L/ha e 150 L/ha se separam 50×. */
       var eq='';
       if(c.unidade==='%') eq=f(c.perHa,2)+' '+c.unit+'/ha';
       else if(c.pctCalda!=null) eq=f(c.pctCalda,3)+' %';
-      html+='<div class="calc-mixr"><span>'+esc(c.nome)+'</span>'+
-        '<span>'+f(c.dose,c.unidade==='%'?3:2)+' '+esc(c.unidade)+
-          (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>'+
+      html+='<div class="calc-mixr"'+_gc+'><span>'+esc(c.nome)+'</span>'+
+        (_calcDetalhe?('<span>'+f(c.dose,c.unidade==='%'?3:2)+' '+esc(c.unidade)+
+          (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>'):'')+
         '<b>'+f(c.perBottle)+' '+c.unit+'</b>'+
-        '<b>'+f(c.total)+' '+c.unit+'</b></div>';
+        (_calcDetalhe?('<b>'+f(c.total)+' '+c.unit+'</b>'):'')+'</div>';
     });
-    html+='<div class="calc-mixr carrier"><span>'+esc(res.carrier.nome)+'</span>'+
-      '<span>completa</span><b>'+f(res.carrier.perBottle)+' mL</b><b>'+f(res.carrier.total)+' mL</b></div>';
+    /* O veículo fica nos dois modos: "água completa até X mL" é execução, não
+       conferência — sem ela a receita não fecha o volume. */
+    html+='<div class="calc-mixr carrier"'+_gc+'><span>'+esc(res.carrier.nome)+'</span>'+
+      (_calcDetalhe?'<span>completa</span>':'')+'<b>'+f(res.carrier.perBottle)+' mL</b>'+
+      (_calcDetalhe?('<b>'+f(res.carrier.total)+' mL</b>'):'')+'</div>';
     html+='</div>';
 
     html+='<div class="calc-kv">'+
-      '<span>Calda / parcela</span><b>'+f(res.sprayPerPlotMl/1000)+' L</b>'+
+      (_calcDetalhe?('<span>Calda / parcela</span><b>'+f(res.sprayPerPlotMl/1000)+' L</b>'):'')+
       '<span>Calda total</span><b>'+f(res.sprayTotalMl/1000)+' L</b>'+
-      '<span>Concentração</span><b>'+res.components.map(function(c){return f(c.concentration)+' '+c.concentrationUnit;}).join(' · ')+'</b>'+
+      (_calcDetalhe?('<span>Concentração</span><b>'+res.components.map(function(c){return f(c.concentration)+' '+c.concentrationUnit;}).join(' · ')+'</b>'):'')+
       '<span>Calda / frasco</span><b>'+f(res.sprayPerBottleMl/1000)+' L</b>'+
     '</div>';
     /* Nada de erro silencioso: se produto e dose não casam, isso aparece. */
