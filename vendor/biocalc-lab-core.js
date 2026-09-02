@@ -61,6 +61,11 @@
     return formatBR(v,6);
   }
 
+  /* Versao do motor. Vai gravada na memoria de calculo: sem ela, um numero guardado
+     hoje nao teria como ser reconferido depois que a formula mudasse. Sobe sempre que
+     o calculo mudar de RESULTADO. */
+  var VERSION="1.0.0";
+
   var FONTES={
     gL:  {rotulo:"Rótulo (g/L)",        campo:"Valor do rótulo (g/L)"},
     gkg: {rotulo:"Rótulo (g/kg)",       campo:"Valor do rótulo (g/kg)"},
@@ -450,6 +455,7 @@
   }
 
   return{
+    VERSION:VERSION,
     FONTES:FONTES,
     parseNum:parseNum, parseOpt:parseOpt, formatBR:formatBR, fmtVivo:fmtVivo, round:round,
     fontePpm:fontePpm, concToPpm:concToPpm, volToMl:volToMl,
