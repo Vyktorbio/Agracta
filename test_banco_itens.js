@@ -205,5 +205,57 @@ console.log('\n--- Os seletores auxiliares não viram campo do tratamento ---');
 ck(/delete t\.__item; delete t\.__dose;/.test(src),
    'syncTratInputs descarta __item e __dose');
 
+console.log('\n--- O tratamento vira RECEITA ---');
+/* "Sankari + Silwet" morava numa string. O motor de calda sabia parti-la, mas nada
+   mais entendia: o catálogo não via dois itens, e "onde este adjuvante foi usado" não
+   tinha resposta. */
+ctx.DoseCore=require('./vendor/dose-core.js');
+vm.runInContext([
+  pega('tratComponentes'), pega('tratTemReceita'), pega('tratCompAdicionar'),
+  pega('tratCompRemover'), pega('_tratSincronizaTexto'), pega('_tratProximoId'),
+  pega('tratEscadaCriar'), pega('_calcDoseUnit')
+].join('\n'), ctx);
+var ADJ=ctx.itemNovo({nome:'Silwet', tipo:'adjuvante'});
+var Tr={id:'T6', produto:'', dose:''};
+ctx.tratCompAdicionar(Tr, A.id, '0,8', 'L/ha');
+ctx.tratCompAdicionar(Tr, ADJ.id, '0,1', '% v/v');
+eq(ctx.tratComponentes(Tr).length,2,'dois componentes na receita');
+eq(ctx.tratTemReceita(Tr),true,'o tratamento se declara receita');
+/* O motor de calda lê t.produto e t.dose como TEXTO. Mantê-los em dia é o que permite
+   a receita existir sem reescrever o motor — e sem tela e cálculo discordarem. */
+eq(Tr.produto,'Produto A + Silwet','o texto do produto acompanha a receita');
+eq(Tr.dose,'0,8 L/ha + 0,1 % v/v','e o texto da dose também');
+eq(ctx.tratComponentes(Tr)[1].itemId,ADJ.id,'o adjuvante entra COM identidade, não como texto');
+ctx.tratCompRemover(Tr, ctx.tratComponentes(Tr)[1].id);
+eq(ctx.tratComponentes(Tr).length,1,'remover componente funciona');
+eq(Tr.produto,'Produto A','e o texto se atualiza junto');
+
+console.log('\n--- Escada de doses cria os tratamentos ---');
+var EST={id:'sx', tratamentos:[]};
+var r=ctx.tratEscadaCriar(EST, A.id, 0.8, 'L/ha', [0.25,0.5,1,2], {comTestemunha:true});
+ck(!r.erro,'a escada é criada');
+eq(EST.tratamentos.length,5,'testemunha + quatro degraus');
+/* A testemunha é o ZERO da escada: sem ela um ensaio de dose-resposta não tem de
+   onde partir. E ela NÃO é um item do banco — cadastrar "testemunha" como produto
+   inventaria um produto que não existe. */
+eq(EST.tratamentos[0].testemunha,true,'a testemunha entra primeiro');
+eq(EST.tratamentos[0].itemId,undefined,'e NÃO é um item do banco');
+eq(EST.tratamentos[1].id,'T2','os IDs seguem em sequência');
+eq(EST.tratamentos[4].id,'T5','até o último');
+eq(ctx.tratComponentes(EST.tratamentos[1])[0].valor,0.2,'0,25× de 0,8 = 0,2');
+eq(ctx.tratComponentes(EST.tratamentos[4])[0].valor,1.6,'2× = 1,6');
+eq(EST.tratamentos[4].escada.multiplo,2,'e cada degrau lembra seu multiplicador');
+eq(EST.tratamentos[4].escada.referencia,0.8,'e a referência de onde saiu');
+/* ID não pode colidir com o que já existe no estudo. */
+var EST2={id:'sy', tratamentos:[{id:'T1'},{id:'T2'}]};
+ctx.tratEscadaCriar(EST2, A.id, 1, 'L/ha', [1], {});
+eq(EST2.tratamentos[2].id,'T3','a escada não repete ID já usado');
+
+console.log('\n--- Justificativa de dose fora da bula é campo próprio ---');
+/* Escondê-la em "observações" seria o mesmo que não pedir. */
+ck(/data-f="justificativaDose"/.test(src),'há campo de justificativa no tratamento');
+ck(/obrigatório para dose fora da bula/.test(src),'que se declara obrigatório');
+ck(/tratDoseForaDaBula\(t\)\)\{/.test(src),'e ele só aparece quando a dose sai da faixa');
+
 console.log('\n'+(f?('FALHA: '+f+' de '+(f+p)+' checagens'):('todas as '+p+' checagens passaram')));
 process.exit(f?1:0);

@@ -252,10 +252,31 @@ usou. Referência viva reescreveria a história.
 **Dose fora da faixa registrada é permitida e marcada.** Ensaio experimental existe
 para sair da bula; bloquear seria inútil e calar seria pior.
 
+**Segunda leva (02/09/2026)** — fecha o "fazer primeiro" da lista do autor:
+
+- **`vendor/dose-core.js`** — motor universal de unidades. Três famílias: por **área**
+  (L/ha, mL/ha, kg/ha, g/ha), por **concentração na calda** (mL/L, g/L, % v/v, % m/v,
+  ppm, mg/L) e por **unidade-alvo** (planta, parcela, placa, vaso, kg de semente).
+  Dentro da família converter é aritmética; **entre famílias é recusado** com o nome do
+  que falta — mL/L→L/ha exige a vazão, por planta→por hectare exige a população.
+  Chutar 200 L/ha porque é comum produziria dose errada com cara de dose certa.
+  **Equivalente em i.a.**: duas formulações a 1 L/ha não são a mesma dose se uma tem
+  250 g/L e a outra 500. A fase tem de casar — g/L é líquido, g/kg é sólido — e o
+  cruzamento é recusado, porque sem densidade não existe.
+- **Tratamento como receita** (`t.componentes[]`) — "Produto A + adjuvante" deixa de
+  ser string. O adjuvante entra **com identidade**, e "onde este adjuvante foi usado"
+  ganha resposta. `t.produto`/`t.dose` seguem sincronizados, para o motor de calda
+  continuar funcionando sem reescrita.
+- **Escada de doses** — 0,25× · 0,5× · 1× · 2× viram tratamentos prontos, com a
+  testemunha como zero da escada. Ela **não** é item do banco: cadastrar "testemunha"
+  como produto inventaria um produto que não existe.
+- **Justificativa de dose fora da bula** em campo próprio, não escondida em observações.
+
 **Falta:** documentos anexados ao item (bula, FDS, certificado de análise);
-importação de bula do Agrofit com revisão humana; e a base entre ensaios usando
-`item_id` como chave. A cadeia de custódia (lotes, recipientes, livro-razão) fica
-registrada como desenho no histórico da conversa, **não** como pendência.
+importação de bula do Agrofit com revisão humana; **programas de aplicação**;
+**cálculo automático de quantidade**; **verificação do protocolo**; **dossiê do item**;
+e o relatório **Item × Dose** entre ensaios. A cadeia de custódia (lotes, recipientes,
+livro-razão) fica registrada como desenho, **não** como pendência.
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
