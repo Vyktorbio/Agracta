@@ -10730,7 +10730,17 @@ function renderStudyEditModal(){
              '</select>';
         }
         if(t.doseRef) h+='<div class="e-hint" style="margin:2px 0 0">Dose de: <b>'+esc(doseOrigemRotulo(t.doseRef.origem))+'</b>'+(t.doseRef.documento?(' · '+esc(t.doseRef.documento)):'')+'</div>';
-        if(tratDoseForaDaBula(t)) h+='<div class="calc-warn">⚠ Dose fora da faixa registrada nesta indicação — uso experimental. Descreva o motivo nas observações do tratamento.</div>';
+        /* Equivalente em i.a.: duas formulações a 1 L/ha não são a mesma dose se uma
+           tem 250 g/L e a outra 500. */
+        var _ia=null; try{ _ia=tratEquivalenteIA(t); }catch(e){}
+        if(_ia) h+='<div class="e-hint" style="margin:2px 0 0">Equivalente: <b>'+esc((window.DoseCore?DoseCore.formatar(_ia.valor,''):_ia.valor))+' g i.a./ha</b></div>';
+        /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
+           PEDE a justificativa, e o campo fica ali mesmo, não escondido em obs. */
+        if(tratDoseForaDaBula(t)){
+          h+='<div class="calc-warn">⚠ Dose fora da faixa registrada — uso experimental.</div>'+
+             '<input type="text" data-f="justificativaDose" placeholder="Por que esta dose? (obrigatório para dose fora da bula)" value="'+esc(t.justificativaDose||'')+'"'+
+             (t.justificativaDose?'':' style="border-color:#6b531b"')+'>';
+        }
       }
       h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1"><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
       /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
@@ -10738,6 +10748,21 @@ function renderStudyEditModal(){
          continua significando água, então nada muda em estudo antigo. */
       h+='<input type="text" placeholder="Veículo — completa a calda (vazio = Água)" data-f="veiculo" list="seVeiculos" value="'+esc(t.veiculo||'')+'">';
       h+='<input type="text" placeholder="Observações (opcional)" data-f="obs" value="'+esc(t.obs)+'">';
+      /* RECEITA: um tratamento raramente é um produto só. Cada componente vira uma
+         linha própria — o catálogo passa a ver dois itens, e "onde este adjuvante foi
+         usado" ganha resposta. */
+      var _cps=tratComponentes(t);
+      if(_cps.length){
+        h+='<div class="tr-rec">';
+        _cps.forEach(function(c){
+          h+='<div class="tr-cp"><span>'+esc(c.nome||'(sem nome)')+'</span>'+
+             '<b>'+esc((c.valor!=null?String(c.valor).replace('.',','):'')+(c.unidade?(' '+c.unidade):''))+'</b>'+
+             '<button type="button" class="tr-x" onclick="seTratCompRemover('+i+',\''+esc(c.id)+'\')" title="Remover componente">×</button></div>';
+        });
+        h+='</div>';
+      }
+      h+='<button type="button" class="se-add-trat" style="margin:2px 0 4px;padding:6px 9px;font-size:11.5px" onclick="seTratCompNovo('+i+')">+ Componente (mistura)</button>';
+
       /* O select por tratamento só existe depois de declarado. Cinco selects
          mostrando o mesmo valor não seriam configuração: seriam ruído. */
       if(s.metodoPorTratamento && _mets.length>1){
@@ -10752,6 +10777,9 @@ function renderStudyEditModal(){
   h+='</div>';
   h+='<datalist id="seVeiculos"><option value="Água"><option value="Óleo de soja"><option value="Óleo mineral"><option value="Óleo vegetal"></datalist>';
   h+='<button class="se-add-trat" onclick="addTrat()">+ Adicionar tratamento</button>';
+  /* Ensaio de dose-resposta é quatro tratamentos que só diferem no multiplicador.
+     Fazer as quatro contas à mão é onde se erra uma. */
+  h+='<button class="se-add-trat" onclick="seEscadaAbrir()">⤢ Escada de doses</button>';
   h+='</div>';
 
   if(studyEditStep===4) h+=_seWizardSummary(s);
@@ -10907,6 +10935,65 @@ function syncStudyInputs(){
   if(el("seAvalNum")) workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
   syncTratInputs();
   var _ft=(workingStudy.tratamentos||[]).find(function(t){return t&&t.testemunha;}); workingStudy.testemunha=_ft?_ft.id:''; /* legado s.testemunha reflete os checkboxes (não ressuscita T1) */
+}
+
+function seTratCompNovo(idx){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
+  if(!t) return;
+  var lista=itensLista();
+  if(!lista.length){ alert('Cadastre um item no banco antes de montar uma mistura.\n\nMenu → Dados → Banco de itens.'); return; }
+  /* O primeiro componente herda o que já estava digitado: quem tinha um produto
+     escrito não perde nada ao transformar o tratamento em receita. */
+  if(!tratComponentes(t).length && (t.produto||t.dose)){
+    tratCompAdicionar(t, (t.itemId||t.produto), _calcNum(t.dose)||null, _calcDoseUnit(t.dose)||'L/ha', null);
+  }
+  var nome=prompt('Componente — qual item?\n\n'+lista.map(function(x,n){ return (n+1)+'. '+(x.nome||x.id); }).join('\n'));
+  if(nome==null) return;
+  var esc1=parseInt(String(nome).trim(),10);
+  var it=(esc1>=1&&esc1<=lista.length)?lista[esc1-1]:null;
+  if(!it){ alert('Não reconheci a escolha. Digite o número do item da lista.'); return; }
+  var dv=prompt('Dose de '+(it.nome||it.id)+'?\n\nEx.: 0,1 % v/v   ·   0,8 L/ha   ·   50 ppm');
+  if(dv==null) return;
+  var v=_calcNum(dv), u=String(dv).replace(/[\d.,\s]/g,'').trim()||_calcDoseUnit(dv)||'L/ha';
+  var UN=(window.DoseCore&&DoseCore.UNIDADES)||{};
+  if(!UN[u]){
+    var achou=Object.keys(UN).filter(function(k){ return normStr(k).replace(/\s/g,'')===normStr(u).replace(/\s/g,''); })[0];
+    u=achou||'L/ha';
+  }
+  tratCompAdicionar(t, it.id, v, u, null);
+  renderStudyEditModal();
+}
+function seTratCompRemover(idx, compId){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
+  if(!t) return;
+  tratCompRemover(t, compId);
+  renderStudyEditModal();
+}
+
+function seEscadaAbrir(){
+  try{ syncTratInputs(); }catch(e){}
+  var lista=itensLista();
+  if(!lista.length){ alert('Cadastre um item no banco antes de montar a escada.\n\nMenu → Dados → Banco de itens.'); return; }
+  var q=prompt('Escada de doses — qual item?\n\n'+lista.map(function(x,n){ return (n+1)+'. '+(x.nome||x.id); }).join('\n'));
+  if(q==null) return;
+  var n=parseInt(String(q).trim(),10);
+  var it=(n>=1&&n<=lista.length)?lista[n-1]:null;
+  if(!it){ alert('Digite o número do item da lista.'); return; }
+  var ref=prompt('Dose de referência (o 1×)?\n\nEx.: 0,8 L/ha');
+  if(ref==null) return;
+  var v=_calcNum(ref), u=String(ref).replace(/[\d.,\s]/g,'').trim()||'L/ha';
+  var UN=(window.DoseCore&&DoseCore.UNIDADES)||{};
+  if(!UN[u]) u='L/ha';
+  var ms=prompt('Múltiplos, separados por vírgula.\n\nPadrão: 0,25 · 0,5 · 1 · 2','0.25, 0.5, 1, 2');
+  if(ms==null) return;
+  var mult=String(ms).split(/[;,]/).map(function(x){ return Number(String(x).trim().replace(',','.')); }).filter(function(x){ return isFinite(x)&&x>0; });
+  var comT=confirm('Incluir testemunha sem aplicação?\n\nEla é o zero da escada — um ensaio de dose-resposta sem o zero não tem de onde partir.');
+  var r=tratEscadaCriar(workingStudy, it.id, v, u, mult, {comTestemunha:comT});
+  if(r.erro){ alert(r.erro); return; }
+  if(typeof _stxToast==='function') _stxToast('✓ '+r.criados.length+' tratamento(s) criados');
+  renderStudyEditModal();
 }
 
 /* Ligar/desligar o item do tratamento. Redesenha porque a lista de doses muda com o
@@ -15362,6 +15449,126 @@ function doseTexto(d){
 }
 
 
+
+
+/* ---- Tratamento como RECEITA (compositor) ----
+   Um tratamento raramente é um produto só: "Produto A + adjuvante" é o caso comum, e
+   programa sequencial é o caso difícil. Até aqui isso morava numa string —
+   "Sankari + Silwet" — que o motor de calda sabia partir, mas que nada mais entendia:
+   o catálogo não via dois itens, a estatística não via dois componentes, e "onde este
+   adjuvante foi usado" não tinha resposta.
+
+   t.componentes[] é a receita estruturada. t.produto e t.dose continuam existindo e
+   continuam mandando quando não há componentes — de novo, migrar sem migração.
+
+   A TESTEMUNHA NÃO É UM ITEM. Cadastrar "testemunha" como produto no banco seria
+   inventar um produto que não existe, e ele apareceria em "onde foi usado" como se
+   alguém o tivesse aplicado. Ela continua sendo o que sempre foi: uma marca no
+   tratamento. */
+
+function tratComponentes(t){
+  if(!t) return [];
+  if(!Array.isArray(t.componentes)) t.componentes=[];
+  return t.componentes;
+}
+function tratTemReceita(t){ return tratComponentes(t).length>0; }
+
+function tratCompAdicionar(t, itemId, valor, unidade, doseId){
+  if(!t) return null;
+  var it=itemPorId(itemId);
+  var c={
+    id:('cp'+uid().slice(1)),
+    itemId:(it?it.id:null),
+    nome:(it?(it.nome||''):String(itemId||'').trim()),   /* texto livre continua aceito */
+    valor:(valor===''||valor==null)?null:Number(String(valor).replace(',','.')),
+    unidade:String(unidade||'L/ha').trim(),
+    doseRef:null
+  };
+  if(it && doseId){
+    var d=(itemDoses(it.id)||[]).filter(function(x){ return x.id===doseId; })[0];
+    if(d){
+      c.valor=(d.valor!=null?d.valor:c.valor);
+      c.unidade=(d.unidade||c.unidade);
+      /* Mesmo congelamento da dose do tratamento: cópia, não referência. */
+      c.doseRef={itemId:it.id, doseId:d.id, cultura:d.cultura, alvo:d.alvo,
+                 valor:d.valor, valorMax:d.valorMax, unidade:d.unidade,
+                 origem:d.origem, documento:d.documento, congeladoEm:Date.now()};
+    }
+  }
+  tratComponentes(t).push(c);
+  _tratSincronizaTexto(t);
+  return c;
+}
+function tratCompRemover(t, compId){
+  var cs=tratComponentes(t);
+  var i=cs.map(function(c){return c.id;}).indexOf(compId);
+  if(i<0) return false;
+  cs.splice(i,1);
+  _tratSincronizaTexto(t);
+  return true;
+}
+/* O motor de calda (BioCalculoCampo.parseComponents) lê t.produto e t.dose como
+   texto. Manter os dois em dia com a receita é o que permite a receita existir sem
+   reescrever o motor — e sem que a tela e o cálculo discordem. */
+function _tratSincronizaTexto(t){
+  var cs=tratComponentes(t);
+  if(!cs.length) return;
+  t.produto=cs.map(function(c){ return c.nome||''; }).filter(Boolean).join(' + ');
+  t.dose=cs.map(function(c){
+    return (c.valor!=null?String(c.valor).replace('.',','):'')+(c.unidade?(' '+c.unidade):'');
+  }).join(' + ');
+}
+
+/* ---- Escada de doses ----
+   Ensaio de dose-resposta é quatro tratamentos que só diferem no multiplicador. Fazer
+   as quatro contas à mão é onde se erra uma. */
+function tratEscadaCriar(study, itemId, doseRef, unidade, multiplos, opts){
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  if(!D) return {erro:'O motor de doses não carregou. Recarregue o app.'};
+  if(!study) return {erro:'Sem estudo.'};
+  opts=opts||{};
+  var e=D.escada(doseRef, unidade, multiplos);
+  if(e.erro) return e;
+  var it=itemPorId(itemId);
+  if(!it) return {erro:'Escolha um item do banco para montar a escada.'};
+
+  if(!Array.isArray(study.tratamentos)) study.tratamentos=[];
+  var criados=[];
+  /* A testemunha entra PRIMEIRO e sem dose: ela é o zero da escada, e um ensaio de
+     dose-resposta sem o zero não tem de onde partir. */
+  if(opts.comTestemunha && !(study.tratamentos||[]).some(function(t){ return t.testemunha; })){
+    var t0={id:_tratProximoId(study), produto:'Testemunha', dose:'0', testemunha:true, obs:''};
+    study.tratamentos.push(t0); criados.push(t0);
+  }
+  e.degraus.forEach(function(g){
+    var t={id:_tratProximoId(study), produto:'', dose:'', obs:'', componentes:[]};
+    study.tratamentos.push(t);
+    tratCompAdicionar(t, it.id, g.valor, g.unidade, null);
+    t.escada={referencia:e.referencia, multiplo:g.multiplo, unidade:g.unidade, itemId:it.id};
+    criados.push(t);
+  });
+  return {criados:criados, degraus:e.degraus};
+}
+/* T1, T2, T3… sem repetir o que já existe. */
+function _tratProximoId(study){
+  var usados={}; (study.tratamentos||[]).forEach(function(t){ if(t&&t.id) usados[String(t.id).toUpperCase()]=1; });
+  for(var i=1;i<200;i++){ var c='T'+i; if(!usados[c]) return c; }
+  return 'T'+((study.tratamentos||[]).length+1);
+}
+
+/* Equivalente em i.a. de um tratamento, quando o item declara concentração. Duas
+   formulações a 1 L/ha não são a mesma dose se uma tem 250 g/L e a outra 500. */
+function tratEquivalenteIA(t){
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  if(!D) return null;
+  var it=tratItem(t); if(!it || !it.concentracao) return null;
+  var m=String(it.concentracao).match(/([\d.,]+)\s*(g\/L|g\/kg|%)/i);
+  if(!m) return null;
+  var v=_calcNum(t.dose), u=_calcDoseUnit(t.dose);
+  if(!(v>0)) return null;
+  var r=D.equivalenteIA(v, u, m[1].replace(',','.'), m[2].toLowerCase().replace('g/l','g/L').replace('g/kg','g/kg'));
+  return (r&&!r.erro)?r:null;
+}
 
 /* ---- Telas ----
    A regra de tela é uma só: cadastrar um item tem de ser MAIS RÁPIDO que digitar o
