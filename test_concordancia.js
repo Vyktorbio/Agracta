@@ -208,5 +208,31 @@ eq(r.nomeA,'Ana','com o nome de quem avaliou');
 eq(r.nomeB,'Bruno','dos dois');
 eq(r.escala,'continua','e a escala derivada do tipo da variável');
 
+console.log('\n--- A leitura dupla existe DE VERDADE na tela ---');
+/* Motor e modelo prontos, sem nada que os chame, é código morto que parece pronto.
+   Estas checagens cobram a ligação de ponta a ponta. */
+ck(/try\{ h\+=avDuplaHtml\(study, av\); \}catch/.test(src),
+   'o bloco de leitura dupla é montado na tela da avaliação');
+ck(/onchange="avToggleDupla\(\)"/.test(src),'há como LIGAR a leitura dupla');
+ck(/onclick="avTrocarQuem/.test(src),'e como passar a prancheta de um avaliador ao outro');
+ck(/onchange="avNomeAvaliador/.test(src),'com o nome de quem leu');
+/* A grade tem de carregar a leitura de quem está com a prancheta — é onde o
+   cegamento acontece de fato. */
+ck(/avNotasVisiveis\(av\)[\s\S]{0,240}notas:JSON\.parse\(JSON\.stringify\(_notasDaVez/.test(src),
+   'a grade carrega a leitura do avaliador ativo, não av.notas');
+/* E o save tem de devolver para o avaliador certo. Gravar em av.notas apagaria a
+   leitura do outro — seria perder dado de campo em silêncio. */
+ck(/avAvaliadores\(av\)\[_quem\]\.notas=_avGrid\.notas;\s*\n\s*avConsolidar\(av\)/.test(src),
+   'salvar devolve para o avaliador ativo e consolida');
+ck(/avTrocarQuem[\s\S]{0,400}_avSyncInputs/.test(src),
+   'e trocar de prancheta salva o que estava na tela ANTES de trocar');
+/* Desligar a chave não pode apagar leitura de campo. */
+var tg=src.slice(src.indexOf('function avToggleDupla('));
+tg=tg.slice(0,tg.indexOf('\n}\n'));
+ck(!/delete av\.avaliadores|avaliadores=\{\}|\.notas=\{\}/.test(tg),
+   'desligar a leitura dupla NÃO apaga o que os dois já leram');
+/* O quadro de concordância só aparece com as duas leituras. */
+ck(/temA && temB/.test(src),'a concordância só aparece quando os DOIS leram');
+
 console.log('\n'+(f?('FALHA: '+f+' de '+(f+p)+' checagens'):('todas as '+p+' checagens passaram')));
 process.exit(f?1:0);
