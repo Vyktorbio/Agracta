@@ -197,6 +197,84 @@ check(z.get('semCobertura') is True, 'sem valor nenhum: semCobertura')
 eq(z['propriedades'], {}, 'e nenhuma propriedade inventada')
 check('textura' not in z, 'sem fracoes nao deduz textura')
 
+print('\nCaixa admite, DADO confirma')
+# O bug de campo: a caixa declarada de um levantamento estadual e um RETANGULO, e
+# estado nao e retangulo. O canto sudoeste da caixa de Minas Gerais cobre
+# Iracemapolis, que e Sao Paulo. A cascata parava em MG, o GetMap saia 100%
+# transparente, e a camada de solo simplesmente nao aparecia — sem erro na tela.
+chamadas = []
+m._solo_tem_feicao = lambda cam, bb: (chamadas.append(cam['typeName']) or
+                                      cam['typeName'].startswith('geonode:brasil_solos'))
+capt = {}
+def _getmap_falso(bbox, width):
+    return None
+_orig_url = m.urllib.request.urlopen
+class _Resp:
+    headers = {'Content-Type': 'image/png'}
+    def read(self): return b'PNG-falso'
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+def _urlopen(req, timeout=None):
+    capt['url'] = req.full_url if hasattr(req, 'full_url') else str(req)
+    return _Resp()
+m.urllib.request.urlopen = _urlopen
+try:
+    img, ct, cam = m.do_solo_mapa([-47.55, -22.60, -47.50, -22.56], 512)
+finally:
+    m.urllib.request.urlopen = _orig_url
+eq(cam, 'geonode:brasil_solos_5m_20201104',
+   'Iracemapolis (SP) cai no levantamento NACIONAL, nao no de Minas')
+check('geonode:lev_mg_estado_solos_lat_long_wgs84_vt' in chamadas,
+      'a caixa de MG admitiu o ponto (e por isso o bug existia)')
+check('lev_mg' not in cam, 'mas o dado recusou, e a cascata seguiu')
+check('layers=geonode%3Abrasil_solos_5m_20201104' in capt.get('url', ''),
+      'e o GetMap foi pedido para a camada certa')
+# Restaura o padrao para os testes seguintes: no servidor real, camada cuja caixa
+# admite o ponto normalmente TEM dado ali — Minas sobre Iracemapolis e a excecao.
+m._solo_tem_feicao = lambda cam, bb: True
+
+print('\nDocumento de ERRO nunca vira medida')
+# O bug de campo: a requisicao falhava, o MapServer respondia um
+# ServiceExceptionReport, e o padrao "numero depois do =" casava com o version='1.0'
+# do cabecalho XML. A FALHA virava a MEDIDA: 1.0 / 10 = argila 0,1%, pH 0,1;
+# 1.0 / 100 = densidade 0,01. Impossiveis, com a mesma cara de numeros bons.
+erro_xml = ("<?xml version='1.0' encoding=\"UTF-8\" standalone=\"no\" ?>"
+            "<ServiceExceptionReport version=\"1.1.1\"><ServiceException "
+            "code=\"MissingParameterValue\">Missing required parameter STYLES"
+            "</ServiceException></ServiceExceptionReport>")
+eq(m._sg_extrai(erro_xml), None, 'ServiceExceptionReport nao rende numero nenhum')
+eq(m._sg_extrai("<!DOCTYPE html><html><body></body></html>"), None, 'HTML vazio idem')
+eq(m._sg_extrai("GetFeatureInfo results:\n\n  Search returned no results.\n"), None,
+   '"no results" idem')
+# E o que e dado continua sendo lido.
+eq(m._sg_extrai('{"features":[{"properties":{"value_0":"580"}}]}'), 580.0,
+   'GeoJSON de verdade continua sendo lido')
+eq(m._sg_extrai("Layer 'clay'\n  Feature 0:\n    value_0 = '580'\n"), 580.0,
+   'texto do MapServer com valor tambem')
+
+print('\nValor impossivel e RECUSADO, nao exibido')
+# Um modelo global erra; ele nao entrega pH 0,1 nem densidade 0,01. Valor fora da
+# faixa fisica e falha disfarcada, e apresenta-la e pior que dizer "indisponivel" —
+# porque quem le acredita.
+m._solo_props_cache.clear()
+m._sg_valor = lambda prop, prof, lon, lat: 1.0     # o bug de campo, exatamente
+z = m.do_solo_propriedades(-22.0, -47.0)
+eq(z['propriedades'], {}, 'nenhuma propriedade impossivel chega a tela')
+check(z.get('semCobertura') is True, 'e a resposta se declara sem estimativa')
+check('impossíveis' in (z.get('motivo') or ''), 'dizendo que foi RECUSA, nao falta de cobertura')
+check('textura' not in z, 'e nenhuma textura e deduzida de valor recusado')
+
+# A recusa e por propriedade: o que for plausivel continua vindo.
+m._solo_props_cache.clear()
+BOM = {'clay': 580, 'sand': 200, 'silt': 220, 'phh2o': 1, 'bdod': 1}
+m._sg_valor = lambda prop, prof, lon, lat: BOM.get(prop)
+z2 = m.do_solo_propriedades(-22.0, -47.0)
+eq(z2['propriedades']['clay']['valor'], 58.0, 'argila plausivel passa')
+check('phh2o' not in z2['propriedades'], 'pH 0,1 e recusado')
+check('bdod' not in z2['propriedades'], 'densidade 0,01 tambem')
+eq(z2.get('recusadas'), ['Densidade', 'pH (H2O)'], 'e as recusadas vao NOMEADAS')
+check(z2.get('semCobertura') is None, 'a resposta nao se declara vazia: houve dado bom')
+
 print('\nLeitura do GetFeatureInfo')
 eq(m._sg_extrai('{"features":[{"properties":{"value_0":"580"}}]}'), 580.0, 'GeoJSON do MapServer')
 eq(m._sg_extrai("Layer 'clay_0-5cm_mean'\n  Feature 0:\n    value_0 = '580'\n"), 580.0,

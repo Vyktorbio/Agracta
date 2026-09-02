@@ -735,6 +735,30 @@ def _solo_wfs(camada, bbox):
         return []
     return d.get("features") or [] if isinstance(d, dict) else []
 
+def _solo_tem_feicao(camada, bbox):
+    """A camada tem MESMO dado nesta area? Uma feicao ja responde.
+
+    A caixa declarada de um levantamento estadual e um RETANGULO, e estado nao e
+    retangulo: o canto sudoeste da caixa de Minas Gerais cobre Iracemapolis, que e
+    Sao Paulo. O pre-filtro por caixa admitia MG, o GetMap saia 100% transparente e a
+    cascata parava ali — a camada de solo simplesmente nao aparecia, sem erro nenhum
+    na tela. Caixa e pre-filtro barato; quem decide e o dado."""
+    qs = urllib.parse.urlencode({
+        "service": "WFS", "version": "1.0.0", "request": "GetFeature",
+        "typeName": camada["typeName"], "outputFormat": "application/json",
+        "srsName": "EPSG:4326", "maxFeatures": "1",
+        "propertyName": "",          # so a contagem interessa; geometria seria desperdicio
+        "bbox": "%.6f,%.6f,%.6f,%.6f" % bbox,
+    })
+    req = urllib.request.Request(GEOINFO_WFS + "?" + qs, headers={"User-Agent": "agracta-app"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        return False
+    return bool(isinstance(d, dict) and (d.get("features") or []))
+
+
 def _solo_resposta(camada, props):
     classe = _solo_classe_de(props)
     return {
@@ -856,6 +880,23 @@ def do_solo(lat=None, lng=None, geometry=None):
 SOILGRIDS_WMS = "https://maps.isric.org/mapserv"
 
 # code: (fator, unidade convencional, rotulo)
+# Faixa fisicamente possivel de cada propriedade, JA na unidade final. Serve para
+# recusar o que nao pode existir: argila de 0,1%, pH de 0,1, densidade de 0,01 kg/dm3.
+# Um modelo global erra; ele nao entrega pH 0,1. Valor fora daqui e falha disfarcada,
+# e apresenta-lo e pior que dizer "indisponivel" — porque quem le acredita.
+SOLO_FAIXAS = {
+    "clay":  (1.0, 100.0),     # %
+    "sand":  (1.0, 100.0),     # %
+    "silt":  (0.5, 100.0),     # %
+    "phh2o": (3.0, 10.0),      # pH em agua: fora disso nao e solo agricola
+    # Limite de baixo importa tanto quanto o de cima. Carbono organico de 0,1 g/kg
+    # seria 0,01% de materia organica: nao existe em solo agricola, nem no pior
+    # areial. CTC de 0,1 cmolc/kg idem — quartzo puro ja da mais que isso.
+    "soc":   (1.0, 600.0),     # g/kg
+    "cec":   (1.0, 200.0),     # cmolc/kg
+    "bdod":  (0.5, 2.2),       # kg/dm3
+}
+
 SOLO_PROPS = {
     "clay":     (10,  "%",         "Argila"),
     "sand":     (10,  "%",         "Areia"),
@@ -884,6 +925,8 @@ def _sg_valor(prop, prof, lon, lat):
         "map": "/map/%s.map" % prop,
         "service": "WMS", "version": "1.1.1", "request": "GetFeatureInfo",
         "layers": camada, "query_layers": camada,
+        # MapServer 8 exige STYLES; sem ele a resposta e um ServiceExceptionReport.
+        "styles": "", "format": "image/png",
         "srs": "EPSG:4326", "info_format": "application/json",
         "bbox": "%.6f,%.6f,%.6f,%.6f" % (lon - d, lat - d, lon + d, lat + d),
         "width": "3", "height": "3", "x": "1", "y": "1",
@@ -899,7 +942,18 @@ def _sg_valor(prop, prof, lon, lat):
 def _sg_extrai(bruto):
     """O MapServer devolve GeoJSON quando entende info_format e texto quando nao.
     Tentamos os dois: primeiro o numero dentro das properties, depois um numero
-    solto no texto. Sem valor plausivel, devolve None em vez de chutar."""
+    solto no texto. Sem valor plausivel, devolve None em vez de chutar.
+
+    A GUARDA MAIS IMPORTANTE ESTA NO COMECO. Quando a requisicao falha, o MapServer
+    responde um ServiceExceptionReport — e o XML dele comeca com version='1.0'. O
+    padrao "numero depois do =" casava com esse 1.0, e a FALHA virava a MEDIDA: 1.0
+    dividido pelo fator da propriedade dava argila 0,1%, pH 0,1 e densidade 0,01.
+    Numeros impossiveis, apresentados com a mesma cara de numeros bons.
+
+    Documento de erro nao e dado. Ele sai daqui como None, sempre."""
+    t = (bruto or "")
+    if "ServiceException" in t or "<!DOCTYPE html" in t or "no results" in t.lower():
+        return None
     try:
         d = json.loads(bruto)
         for f in (d.get("features") or []):
@@ -947,22 +1001,36 @@ def do_solo_propriedades(lat, lng):
            "propriedades": {},
            "consultadoEm": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
+    recusadas = []
     for prop, (fator, unidade, rotulo) in SOLO_PROPS.items():
         soma = pesos = 0.0
         perfil = {}
+        lo, hi = SOLO_FAIXAS.get(prop, (float("-inf"), float("inf")))
+        fora = 0
         for prof, esp in SOLO_PROFS:
             v = cru.get((prop, prof))
             if v is None:
                 continue
             conv = v / float(fator)
+            # Fora da faixa fisicamente possivel: a camada e DESCARTADA, nao exibida.
+            # Um pH de 0,1 nao e uma estimativa ruim — e uma falha com cara de dado.
+            if not (lo <= conv <= hi):
+                fora += 1
+                continue
             perfil[prof] = round(conv, 2)
             soma += conv * esp; pesos += esp
         if not pesos:
+            if fora:
+                recusadas.append(rotulo)
             continue
         out["propriedades"][prop] = {
             "rotulo": rotulo, "unidade": unidade,
             "valor": round(soma / pesos, 2), "perfil": perfil,
         }
+    if recusadas:
+        # Dito em voz alta: quem chama precisa poder mostrar "indisponivel" em vez de
+        # um espaco em branco que parece "ainda carregando".
+        out["recusadas"] = sorted(recusadas)
 
     # Materia organica nao e medida pelo SoilGrids: e o carbono organico vezes o
     # fator de Van Bemmelen. Vai marcada como derivada para ninguem confundir com
@@ -976,6 +1044,12 @@ def do_solo_propriedades(lat, lng):
 
     if not out["propriedades"]:
         out["semCobertura"] = True
+        # Distinguir "o servico nao cobre este ponto" de "o servico respondeu coisa
+        # impossivel" importa: a primeira e geografia, a segunda e defeito, e a tela
+        # tem de poder dizer qual das duas.
+        if recusadas:
+            out["motivo"] = ("O serviço respondeu valores fisicamente impossíveis para "
+                             "todas as propriedades — a estimativa foi recusada.")
 
     # Textura pelo triangulo simplificado, so quando as tres fracoes existem.
     arg = out["propriedades"].get("clay")
@@ -1014,6 +1088,10 @@ def do_solo_mapa(bbox, width):
     for camada in SOLO_CAMADAS:
         cb = camada.get("bbox")
         if cb and (lon < cb[0] or lon > cb[2] or lat < cb[1] or lat > cb[3]):
+            continue
+        # A caixa admite; o DADO confirma. Sem esta checagem, a caixa de Minas Gerais
+        # sequestrava Iracemapolis (SP) e o mapa saia transparente, calado.
+        if cb and not _solo_tem_feicao(camada, (w, s, e, n)):
             continue
         escolhida = camada
         break
