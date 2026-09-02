@@ -14924,17 +14924,22 @@ function soloAnaliseAtual(id){ var a=soloAnalises(id); return a.length?a[0]:null
 /* Índices derivados. Definições universais de química de solo, não tabela de
    recomendação: SB é a soma das bases, T a CTC a pH 7, V% a saturação por bases e
    m% a saturação por alumínio. */
-function soloIndices(res){
-  res=res||{};
-  function n(k){ var v=res[k]; v=(v===''||v==null)?null:Number(v); return (v==null||!isFinite(v))?null:v; }
-  var Ca=n('Ca'), Mg=n('Mg'), K=n('K'), HAl=n('HAl'), Al=n('Al');
-  var out={SB:null, T:null, V:null, m:null};
-  if(Ca!=null&&Mg!=null&&K!=null){ out.SB=Math.round((Ca+Mg+K)*10)/10; }
-  if(out.SB!=null&&HAl!=null){ out.T=Math.round((out.SB+HAl)*10)/10; }
-  if(out.SB!=null&&out.T){ out.V=Math.round(100*out.SB/out.T); }
-  if(out.SB!=null&&Al!=null&&(out.SB+Al)>0){ out.m=Math.round(100*Al/(out.SB+Al)); }
-  return out;
+/* ===================== NUTRIÇÃO — PONTE PARA O MOTOR ==============================
+   A aritmética de calagem e recomendação mora em vendor/nutricao-core.js, extraída
+   daqui sem uma linha alterada. O que ficou no app é o que depende do aparelho: ler o
+   pacote de tabelas do localStorage e pintar a tela.
+
+   Estas funções continuam existindo com os mesmos nomes porque a interface inteira as
+   chama assim; elas apenas delegam. Reimplementar a conta aqui seria criar um segundo
+   motor livre para divergir do primeiro — que é exatamente o erro que a memória de
+   cálculo veio corrigir na calculadora. ============================================ */
+function _nucleoNutricao(){
+  var N=(typeof window!=='undefined')?window.NutricaoCore:null;
+  if(!N) throw new Error('O motor de nutrição (NutricaoCore) não carregou. Recarregue o app.');
+  return N;
 }
+function soloIndices(res){ return _nucleoNutricao().soloIndices(res); }
+/* O pacote é a única coisa que o motor não busca sozinho: ele mora no aparelho. */
 
 /* ----- Calagem pelo método da saturação por bases -----
    NC (t/ha) = (V2 − V1) × T / (10 × PRNT%)
@@ -15225,11 +15230,7 @@ function soloPacoteCulturas(){
   });
 }
 function _soloPacoteCultura(nome, finalidade){
-  var p=soloPacote(); if(!p) return null;
-  var achou=p.culturas.filter(function(c){
-    return c.nome===nome && (!finalidade || (c.finalidade||'')===finalidade);
-  })[0];
-  return achou||null;
+  return _nucleoNutricao().culturaDoPacote(soloPacote(), nome, finalidade);
 }
 
 /* ----- Motor de recomendação -----
