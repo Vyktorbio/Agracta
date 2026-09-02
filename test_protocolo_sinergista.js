@@ -120,7 +120,10 @@ async function arquivos(){
   ck(/function downloadStudyWorkbook\(/.test(src)&&/modelos\/modelo-protocolo\.xls/.test(src),'o modelo Agracta atual continua no código');
   ck(/function downloadStudySinergista\(/.test(src)&&/showStudyWorkbookFormats/.test(src),'o Sinergista é uma segunda opção explícita');
   ck(/protocolo-sinergista\.xlsx/.test(sw)&&/jszip\.min\.js/.test(sw),'template e compactador entram no pré-cache offline');
-  ck(html.indexOf('vendor/jszip.min.js')>=0&&html.indexOf('vendor/jszip.min.js')<html.indexOf('app.js?v=87'),'JSZip carrega antes do app');
+  /* A ordem é que importa, não o número da versão: prender o teste a "v=87" faria
+   ele quebrar a cada bump de cache, que é justamente a mudança mais rotineira. */
+var posZip=html.indexOf('vendor/jszip.min.js'), mApp=html.match(/app\.js\?v=\d+/);
+ck(posZip>=0&&!!mApp&&posZip<html.indexOf(mApp[0]),'JSZip carrega antes do app');
 }
 
 arquivos().then(function(){
