@@ -16173,6 +16173,50 @@ function _migracaoHtml(){
   return h;
 }
 
+/* A matriz na tela. Ela vem ANTES da lista de usos porque responde a pergunta que
+   se faz primeiro: "em que doses isso ja foi testado?". A lista continua embaixo,
+   porque as vezes a pergunta e "em qual estudo, mesmo?". */
+function _itemMatrizHtml(itemId){
+  var m=itemMatrizDose(itemId);
+  if(!m.blocos.length && !m.naoLidas.length) return '';
+  var h='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Doses ja testadas</div>';
+
+  /* Duas familias de dose no mesmo item nao formam uma escada. Dizer isso e o ponto
+     do relatorio: sem o aviso, alguem le "0,4 a 1000" como uma faixa. */
+  if(!m.comparavel){
+    h+='<div class="it-dup">Este item foi usado em <b>escalas diferentes</b> ('+
+       esc(m.blocos.map(function(b){ return b.rotulo; }).join(' e '))+
+       '). Elas nao se convertem uma na outra sem um numero que aqui nao existe, entao'+
+       ' aparecem separadas — comparar dose entre elas seria inventar uma serie que nao existe.</div>';
+  }
+
+  m.blocos.forEach(function(b){
+    if(m.blocos.length>1) h+='<div class="it-sub" style="margin:8px 0 4px;font-weight:800;color:#8fb6d8">Dose '+esc(b.rotulo)+'</div>';
+    b.linhas.forEach(function(ln){
+      var det=[ln.nEstudos+' estudo'+(ln.nEstudos===1?'':'s')];
+      if(ln.culturasLista.length) det.push(ln.culturasLista.join(', '));
+      if(ln.finalizados) det.push(ln.finalizados+' finalizado'+(ln.finalizados===1?'':'s'));
+      h+='<div class="it-dose"><div><b>'+esc(ln.texto)+'</b>'+
+         /* Grafias diferentes da MESMA dose ficam visiveis: e assim que se descobre
+            que a equipe escreve "0,4 L/ha" e "400 mL/ha" para a mesma coisa. */
+         (ln.grafiasLista.length>1?(' <span style="opacity:.6;font-weight:600">tambem escrita '+esc(ln.grafiasLista.slice(1).join(', '))+'</span>'):'')+
+         '<div class="it-sub">'+esc(det.join(' · '))+'</div></div>'+
+         '<span class="it-tag">'+ln.nUsos+'&times;</span></div>';
+    });
+  });
+
+  if(m.naoLidas.length){
+    /* Nunca some com o que nao foi lido: um numero que desaparece do relatorio e
+       pior do que um numero que aparece marcado como ilegivel. */
+    var motivos={};
+    m.naoLidas.forEach(function(x){ motivos[x.motivo]=(motivos[x.motivo]||0)+1; });
+    h+='<div class="it-sub" style="margin-top:8px;color:#d8b26a">'+m.naoLidas.length+' uso'+
+       (m.naoLidas.length===1?'':'s')+' fora da matriz: '+
+       esc(Object.keys(motivos).map(function(k){ return motivos[k]+' com '+k; }).join('; '))+'.</div>';
+  }
+  return h;
+}
+
 function _itemFichaHtml(id){
   var it=itemPorId(id);
   if(!it) return '<div class="it-box"><div class="it-vazio">Item não encontrado.</div><button class="it-btn alt" onclick="itemVoltar()">Voltar</button></div>';
@@ -16240,6 +16284,7 @@ function _itemFichaHtml(id){
   /* Onde este item já foi usado — a pergunta que o catálogo veio permitir. */
   var usos=itemOndeFoiUsado(it.id);
   if(usos.length){
+    h+=_itemMatrizHtml(it.id);
     h+='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Onde já foi usado ('+usos.length+')</div>';
     usos.forEach(function(u){
       h+='<div class="it-sub" style="padding:3px 0">'+esc(u.estudo+' · '+u.quadra+(u.cultura?(' · '+u.cultura):'')+' · '+u.tratamento+(u.dose?(' · '+u.dose):''))+
@@ -16337,6 +16382,101 @@ function tratDoseForaDaBula(t){
 /* Onde mais este item foi testado. É a pergunta que o catálogo veio permitir, e ela
    só é respondível porque o item tem ID — com texto livre, "Sankari" e "SANKARI
    500 SC" nunca se encontrariam. */
+/* ---- Matriz Item x Dose ----
+   "Onde foi usado" e uma lista; a pergunta de pesquisa e outra: EM QUE DOSES este
+   item ja foi testado, e quantas vezes cada uma. So da para responder isso agora
+   porque o item virou identidade — antes, "Sankari" e "sankari" eram dois produtos.
+
+   A regra dura vem do motor de doses: 0,4 L/ha e 400 mL/ha sao a MESMA dose e tem
+   de cair na mesma linha; 0,4 L/ha e 2 mL/L NAO sao comparaveis e nao podem cair na
+   mesma escada. Empilhar as duas num grafico bonito seria inventar uma serie que
+   nao existe. */
+
+/* Le a dose como ela foi ESCRITA. _calcDoseUnit() forca tudo para unidade por area
+   — o que serve ao calculo de calda de campo, mas aqui leria "2 mL/L" (concentracao
+   na calda) como "2 mL/ha" (dose por hectare): coisas diferentes por tres ordens de
+   grandeza. Aqui "nao sei qual e a unidade" e uma resposta valida, e melhor do que
+   um palpite. */
+function _doseLer(raw){
+  var DC=window.DoseCore; if(!DC) return null;
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return null;
+  var val=_calcNum(s);
+  if(!(val>0)) return null;
+  var norm=s.toLowerCase().replace(/\s+/g,'');
+  /* Da unidade mais longa para a mais curta: senao "mL/ha" seria capturado por
+     "L/ha" e "% v/v" viraria outra coisa. */
+  var us=DC.unidades().slice().sort(function(a,b){ return b.length-a.length; });
+  var achada=null;
+  for(var i=0;i<us.length;i++){
+    if(norm.indexOf(us[i].toLowerCase().replace(/\s+/g,''))>=0){ achada=us[i]; break; }
+  }
+  if(!achada) return null;
+  var c=DC.canonico(val, achada);
+  if(!c) return null;
+  return {valor:val, unidade:achada, canonico:c, alvo:(DC.UNIDADES[achada].alvo||null)};
+}
+
+/* Por que uma dose nao entrou na matriz. Dizer "nao entendi" e pior do que dizer o
+   que falta: com o motivo, a pessoa corrige o dado. */
+function _doseMotivo(raw){
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return 'sem dose registrada';
+  if(!(_calcNum(s)>0)) return 'sem numero legivel';
+  if(/%/.test(s)) return '"%" sozinho nao diz se e v/v (volume) ou m/v (massa) — sao doses diferentes';
+  return 'unidade nao reconhecida';
+}
+
+function itemMatrizDose(itemId){
+  var DC=window.DoseCore;
+  var usos=(typeof itemOndeFoiUsado==='function')?itemOndeFoiUsado(itemId):[];
+  var blocos={}, naoLidas=[];
+
+  usos.forEach(function(u){
+    var d=DC?_doseLer(u.dose):null;
+    if(!d){ naoLidas.push({uso:u, motivo:_doseMotivo(u.dose)}); return; }
+    /* "planta", "placa" e "vaso" compartilham a base mL/alvo, mas uma planta nao e
+       uma placa: o alvo entra na chave, senao dose de casa de vegetacao se somaria
+       com dose de bancada. */
+    var bk=d.canonico.unidade+'@'+(d.alvo||'-');
+    if(!blocos[bk]) blocos[bk]={chave:bk, familia:d.canonico.familia, base:d.canonico.unidade,
+                                alvo:d.alvo, linhas:{}, usos:0};
+    var b=blocos[bk];
+    b.usos++;
+    var lk=d.canonico.valor.toFixed(6);
+    if(!b.linhas[lk]) b.linhas[lk]={valor:d.canonico.valor, base:d.canonico.unidade,
+                                    grafias:{}, usos:[], estudos:{}, culturas:{}, finalizados:0};
+    var ln=b.linhas[lk];
+    ln.grafias[String(u.dose||'').trim()]=(ln.grafias[String(u.dose||'').trim()]||0)+1;
+    ln.usos.push(u);
+    ln.estudos[u.estudoId]=1;
+    if(u.cultura) ln.culturas[u.cultura]=1;
+    if(u.finalizado) ln.finalizados++;
+  });
+
+  var out=Object.keys(blocos).map(function(bk){
+    var b=blocos[bk];
+    b.linhas=Object.keys(b.linhas).map(function(lk){
+      var ln=b.linhas[lk];
+      var gs=Object.keys(ln.grafias).sort(function(a,c){ return ln.grafias[c]-ln.grafias[a]; });
+      ln.texto=gs[0]||DC.formatar(ln.valor, ln.base);
+      ln.grafiasLista=gs;
+      ln.nUsos=ln.usos.length;
+      ln.nEstudos=Object.keys(ln.estudos).length;
+      ln.culturasLista=Object.keys(ln.culturas);
+      return ln;
+    }).sort(function(a,c){ return a.valor-c.valor; });   /* a escada, de baixo para cima */
+    b.rotulo=(b.alvo?('por '+b.alvo):(b.familia==='area'?'por area':(b.familia==='calda'?'na calda':b.familia)));
+    return b;
+  }).sort(function(a,c){ return c.usos-a.usos; });
+
+  return {blocos:out, naoLidas:naoLidas,
+          /* Mais de um bloco significa que NAO existe uma escada unica. Quem ler o
+             relatorio precisa saber disso antes de comparar dose com dose. */
+          comparavel:(out.length<=1),
+          nUsos:usos.length};
+}
+
 function itemOndeFoiUsado(itemId){
   var out=[];
   if(typeof data==='undefined'||!data) return out;
