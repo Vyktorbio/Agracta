@@ -111,6 +111,37 @@ else
   else avisar "index.html pede '$JS_HTML' mas o sw.js pré-carrega '$JS_SW' — corrija a lista ASSETS do sw.js"; fi
 fi
 
+
+# Todo arquivo pre-carregado precisa existir. O sw.js usa cache.addAll(), que e
+# tudo-ou-nada: um unico 404 na lista faz a instalacao inteira falhar, o Service
+# Worker novo nunca ativa e o aparelho fica servindo a versao velha para sempre.
+# Nao aparece erro em lugar nenhum — o app so "nao atualiza".
+if command -v node >/dev/null 2>&1; then
+  SUMIDOS=$(node -e '
+    var fs=require("fs"), falta=[];
+    function confere(lista){ lista.forEach(function(u){
+      var p=String(u).replace(/^\.\//,"").replace(/[?#].*$/,"");
+      if(!p || /^(https?:)?\/\//.test(p)) return;
+      if(!fs.existsSync(p) && falta.indexOf(p)<0) falta.push(p);
+    }); }
+    var sw=fs.readFileSync("sw.js","utf8");
+    var m=sw.match(/var ASSETS\s*=\s*\[([\s\S]*?)\];/);
+    if(m) confere((m[1].match(/'"'"'[^'"'"']+'"'"'/g)||[]).map(function(s){return s.slice(1,-1);}));
+    var html=fs.readFileSync("index.html","utf8"), r=/(?:src|href)="([^"]+)"/g, x;
+    while((x=r.exec(html))) confere([x[1]]);
+    console.log(falta.join("\n"));
+  ' 2>/dev/null)
+  if [ -z "$SUMIDOS" ]; then
+    ok "todo arquivo pré-carregado existe mesmo"
+  else
+    echo "$SUMIDOS" | while IFS= read -r arq; do
+      [ -n "$arq" ] && avisar "'$arq' é pedido pelo sw.js/index.html mas NÃO existe — com um 404 na lista o Service Worker inteiro não instala e ninguém recebe a versão nova"
+    done
+    # o subshell do while nao propaga a contagem; reconta aqui
+    PROBLEMAS=$(( PROBLEMAS + $(echo "$SUMIDOS" | grep -c .) ))
+  fi
+fi
+
 # O CACHE precisa ser diferente do que já está no ar, senão o SW não troca nada.
 if [ -z "$CACHE" ]; then
   avisar "não achei o nome do CACHE no sw.js"
