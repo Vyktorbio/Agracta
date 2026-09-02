@@ -219,7 +219,6 @@ function saveRZLib(){
   RZLIB=normalizeRZLib(RZLIB);
   try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){}
   if(typeof cloudSaveSoon==='function') cloudSaveSoon();
-  if(typeof dbUpsertRZAll==='function') dbUpsertRZAll(); /* Etapa 3 */
 }
 RZLIB=loadRZLib();
 
@@ -586,7 +585,7 @@ function loadGeoref(){
     return g.H?g:null;
   }catch(e){ return null; }
 }
-function saveGeoref(g){ try{ localStorage.setItem(GEOREF_KEY, JSON.stringify(g)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); if(typeof dbUpsertConfig==='function') dbUpsertConfig(); /* Etapa 3: georef vai no config */ }
+function saveGeoref(g){ try{ localStorage.setItem(GEOREF_KEY, JSON.stringify(g)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); /* Etapa 3: georef vai no config */ }
 function pxToLL(x,y){ var H=_geo.H, w=H[6]*x+H[7]*y+H[8];
   return [ (H[3]*x+H[4]*y+H[5])/w, (H[0]*x+H[1]*y+H[2])/w ]; }
 function geoBounds(g){ return LF.latLngBounds(g.corners); }
@@ -1073,7 +1072,7 @@ function hideGrPanel(){ var p=document.getElementById('grPanel'); if(p)p.style.d
 /* ===== Geometria das quadras em lat/lng (editavel) + EDITOR ===== */
 var QGEO_KEY="iracema-qgeo-v1", QGEO=null;
 function loadQGEO(){ try{ var s=localStorage.getItem(QGEO_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-function saveQGEO(){ try{ localStorage.setItem(QGEO_KEY, JSON.stringify(QGEO)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); try{ if(typeof dbUpsertQuadra==='function' && typeof editId!=='undefined' && editId) dbUpsertQuadra(editId); }catch(e){} /* Etapa 3: geometria da quadra em edição */ }
+function saveQGEO(){ try{ localStorage.setItem(QGEO_KEY, JSON.stringify(QGEO)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 /* CARIMBO DE TEMPO por quadra (e do georef): no merge, "vale o mais recente". Carimba SÓ em edição real
    (desenhar / mover vértice / alinhar) — NUNCA ao carregar o padrão nem ao aplicar a nuvem — pra um aparelho
    zerado nunca "ganhar". Empate (ex.: dados antigos sem carimbo) => a NUVEM vence (não perde o mapa que já existe). */
@@ -1143,7 +1142,7 @@ function _touchQNome(id){ ensureCfgTS(); QNOME_TS[id]=Date.now(); saveCfgTS(); }
 function _touchQLocal(id){ ensureCfgTS(); QLOCAL_TS[id]=Date.now(); saveCfgTS(); }
 function _touchLocal(id){ ensureCfgTS(); LOCAIS_TS[id]=Date.now(); saveCfgTS(); }
 function loadLocais(){ try{ var s=localStorage.getItem(LOCAIS_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-function saveLocais(){ try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); if(typeof dbUpsertLocaisAll==='function') dbUpsertLocaisAll(); /* Etapa 3 */ }
+function saveLocais(){ try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); /* Etapa 3 */ }
 function loadQLocal(){ try{ var s=localStorage.getItem(QLOCAL_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveQLocal(){ try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 /* Nome de exibição da quadra (permite mesmo nome em locais diferentes; o id interno é único) */
@@ -1181,7 +1180,6 @@ function setQuadraLabTipo(id,tipo){
   if(data[id].labTipo===tipo) return true;
   data[id].labTipo=tipo;
   _touchQGEO(id); saveQGEO(); save();
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
   return true;
 }
 function quadraPonto(id){
@@ -1208,7 +1206,6 @@ function setQuadraTipo(id,tipo){
     delete data[id].tipo; delete data[id].ponto;
   }
   _touchQGEO(id); saveQGEO(); save();
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
   return true;
 }
 function ensureLocais(){
@@ -1399,10 +1396,9 @@ function excluirLocal(id){
   var qs=quadrasDoLocal(id), nome=LOCAIS[id].nome;
   requireDeletePassword('Excluir o local "'+nome+'"'+(qs.length?(' e suas '+qs.length+' quadra(s).'):'.'), function(){
     safetyBackup('antes de excluir local '+nome);
-    qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; if(QNOME) delete QNOME[q]; _delQuadras[q]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('quadras',q); }catch(e){} });
+    qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; if(QNOME) delete QNOME[q]; _delQuadras[q]=Date.now();});
     delete LOCAIS[id];
-    _delLocais[id]=Date.now(); saveDelTombs(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('locais',id); }catch(e){} /* Etapa 3 */
-    var resto=Object.keys(LOCAIS);
+    _delLocais[id]=Date.now(); saveDelTombs();    var resto=Object.keys(LOCAIS);
     if(localAtivo===id) localAtivo=resto[0];
     _cloudAllowShrink=true; /* exclusão intencional (merge preserva adições de outros aparelhos) */
     saveQGEO(); save(); saveLocais(); saveQLocal(); saveQNome();
@@ -1747,7 +1743,6 @@ function labFinalizar(ponto, origem){
             tipo:'lab', labTipo:p.labTipo, ponto:ponto};
   _touchQGEO(id); /* carimbo: quadra nova vence aparelho zerado no merge */
   saveQGEO(); saveQLocal(); saveQNome(); save();
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
   endDraw(); editId=id; render(); buildEditPanel();
   /* leva o mapa até ele: nasceu longe da tela, ninguém vê */
   try{ if(_map) _map.setView(ponto, Math.max(_map.getZoom()||16, 17)); }catch(e){}
@@ -1799,8 +1794,7 @@ function deleteQuadra(){
     safetyBackup('antes de excluir quadra '+nome);
     delete QGEO[id]; if(data[id]) delete data[id];
     ensureLocais(); delete QLOCAL[id]; if(QNOME) delete QNOME[id];
-    _delQuadras[id]=Date.now(); saveDelTombs(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('quadras',id); }catch(e){} /* tombstone + Etapa 3 soft-delete */
-    _cloudAllowShrink=true; /* exclusão intencional (merge preserva o que outro aparelho adicionou) */
+    _delQuadras[id]=Date.now(); saveDelTombs();    _cloudAllowShrink=true; /* exclusão intencional (merge preserva o que outro aparelho adicionou) */
     saveQLocal(); saveQNome();
     saveQGEO(); save(); editId=null; render(); buildEditPanel(); updateAgendaBadge();
   });
@@ -1848,16 +1842,29 @@ function buildEditPanel(){
   p.innerHTML=html; p.style.display='block';
 }
 
-/* ===== Nuvem (Supabase): dados compartilhados + tempo real ===== */
-/* Supabase DESATIVADO — o app migrou para Firebase/Firestore. O firebase-sync.js sobrescreve
-   cloudInit/doLogin/save/sync/admin, e _dwOn() (dual-write) é forçado false. As credenciais foram
-   ZERADAS de propósito: a camada Supabase do index.html é código morto, e zerar a URL impede que,
-   se o firebase-sync.js falhar ao carregar, o cloudInit caia silenciosamente no banco Supabase
-   ANTIGO (split-brain — sincronizaria os dados para o lugar errado). Limpeza completa do código
-   morto SB.* fica para uma refatoração dedicada. */
-var SUPABASE_URL='';
-var SUPABASE_ANON='';
-var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=false, _cloudPending=null;
+/* ===== Nuvem: dados compartilhados + tempo real =====================================
+   A nuvem do Agracta e o Firebase/Firestore, e quem fala com ela e o firebase-sync.js.
+   O Supabase saiu daqui por inteiro: o cliente, as credenciais, a escrita dupla, a
+   leitura por-linha e as funcoes de administracao de tecnicos.
+
+   O QUE SOBROU NESTE ARQUIVO, E POR QUE. O firebase-sync.js sobrescreve todas as
+   funcoes abaixo (cloudInit, cloudSave, cloudPull, authInit, doLogin, admin...) antes
+   de qualquer clique. As versoes daqui so rodam num caso: o firebase-sync.js NAO
+   carregar. Isso nao e hipotese de manual — em setembro/2026 um arquivo de vendor
+   faltando derrubou a instalacao inteira do Service Worker. Entao elas continuam
+   existindo como REDE DE SEGURANCA, dizendo o que houve, em vez de sumirem e deixarem
+   o app estourar ReferenceError no meio do campo.
+
+   O que NAO sobrou de proposito: nenhum caminho que escreva em outro banco. Um
+   fallback que "quase funciona" sincronizaria dados para o lugar errado (split-brain),
+   e um dado de ensaio no banco errado e pior do que um app que avisa que esta fora. */
+var _MSG_SEM_SYNC='A sincronização não carregou. Feche e abra o Agracta; se continuar, use "Atualizar Agracta" no menu.';
+/* Nao inventa reconexao nem fila: so marca o selo e conta a verdade. */
+function _semNuvem(msg){
+  try{ if(typeof cloudBadge==='function') cloudBadge('offline'); }catch(e){}
+  try{ if(typeof _stxToast==='function') _stxToast(msg||_MSG_SEM_SYNC); }catch(e){}
+}
+var _cloudApplying=false, _cloudTimer=null, _cloudPending=null;
 /* _cloudRev: revisão monotônica do documento (evita aplicar/empurrar estado mais antigo).
    _cloudInitDone: só permite ESCREVER na nuvem DEPOIS de ter LIDO ela uma vez
    (impede que um cliente recém-aberto, com dados velhos, atropele a nuvem). */
@@ -1868,7 +1875,7 @@ function setUnsavedChanges(val){
   _unsavedChanges=val;
   try{ localStorage.setItem('iracema-unsaved', val?'true':'false'); }catch(e){}
 }
-function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
+function cloudInit(){ return null; }
 function cloudState(){
   ensureQGEO(); ensureLocais(); ensureNotas(); ensureCfgTS();
   try{ ensureItens(); }catch(e){}
@@ -2140,101 +2147,21 @@ function cloudMerge(local,cloud){
   });
   return out;
 }
-function cloudSave(){
-  if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
-  if(window._cloudSavingActive){
-    clearTimeout(_cloudTimer);
-    _cloudTimer=setTimeout(cloudSave, 500);
-    return;
-  }
-  cloudBadge('saving');
-  var allowShrink=_cloudAllowShrink; _cloudAllowShrink=false;
-  var replace=_cloudReplace; _cloudReplace=false;
-  _cloudSaveAttempt(allowShrink, replace, 0);
-}
+function cloudSave(){ _semNuvem(); }
 /* Gravação com RETRY (concorrência otimista): relê a nuvem, faz MERGE preservando o local e grava.
    Se o banco RECUSA (revisão já avançou em outro aparelho), RE-TENTA — relê, re-merge e regrava —
    sem perder o que foi digitado aqui. Só desiste após várias falhas (aí puxa a versão boa).
    - allowShrink (exclusão de quadra/local): TAMBÉM faz merge (com tombstones); só sinaliza ao banco que pode encolher.
    - replace (restauração/import): grava o estado como está, sem merge. */
-function _cloudSaveAttempt(allowShrink, replace, tries){
-  if(!cloudInit()){ cloudBadge('error'); window._cloudSavingActive=false; return; }
-  var localState=cloudState();
-  window._cloudSavingActive=true;
-  /* WATCHDOG: se a requisição travar (sinal cai no campo e a conexão estola sem resolver nem rejeitar),
-     destrava sozinho em ~15s em vez de deixar o botão Salvar morto pra sempre. Os dados continuam no
-     aparelho (localStorage); isto só liberta o checkpoint pra nuvem. Cada etapa de rede renova a janela. */
-  function _armWd(){ clearTimeout(_cloudWatchdog); _cloudWatchdog=setTimeout(function(){ if(window._cloudSavingActive){ window._cloudSavingActive=false; cloudBadge('error','— toque p/ tentar'); } }, (window._cloudWdMs||15000)); }
-  _armWd();
-  try{
-    SB.from('app_state').select('state').eq('id',1).single().then(function(res){
-      _armWd(); /* select voltou: renova a janela p/ a etapa de update */
-      var cs = res && res.data && res.data.state;
-      var cRev = (cs && cs.rev!=null) ? cs.rev : 0;
-      var toSave = (replace || !cs) ? localState : cloudMerge(localState, cs);
-      var newRev = (cRev||0)+1; toSave.rev=newRev;
-      if(allowShrink || replace) toSave._allowShrink=true; /* avisa o banco: encolhimento é intencional */
-      if(cs){ try{ cloudApply(toSave); }catch(e){} } /* reflete o estado a gravar e mantém o local p/ a próxima tentativa */
-      SB.from('app_state').update({ state: toSave, updated_at:new Date().toISOString() }).eq('id',1)
-        .then(function(r2){
-          if(r2 && r2.error){
-            /* banco RECUSOU (rev velha/conflito) -> re-tenta do zero (relê+merge+regrava), preservando o local */
-            if(tries<4){ cloudBadge('saving'); setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 250+tries*300); }
-            else { window._cloudSavingActive=false; cloudBadge('error','— toque p/ tentar'); setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 800); }
-          } else { window._cloudSavingActive=false; _cloudRev=newRev; setUnsavedChanges(false); cloudBadge('saved'); }
-        }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 400+tries*300); } else { window._cloudSavingActive=false; cloudBadge('error'); } });
-    }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 500); } else { window._cloudSavingActive=false; cloudBadge('error'); } });
-  }catch(e){ window._cloudSavingActive=false; cloudBadge('error'); }
-}
 function cloudSaveSoon(){ setUnsavedChanges(true); if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
 function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }
 /* Puxa o estado atual da nuvem e aplica (não sobrescreve edição em andamento). */
-function cloudPull(){
-  if(!cloudInit()) return;
-  cloudBadge('saving');
-  try{
-    SB.from('app_state').select('state').eq('id',1).single().then(function(res){
-      var st = res && res.data && res.data.state;
-      _cloudInitDone=true; /* já lemos a nuvem -> a partir de agora pode escrever */
-      if(st && st.data && Object.keys(st.data).length){
-        if(_unsavedChanges){
-          var merged=cloudMerge(cloudState(), st);
-          cloudApply(merged);
-          cloudSaveSoon();
-        } else {
-          cloudApply(st);
-          cloudBadge('saved');
-        }
-      } else {
-        cloudBadge('saved');
-      }
-    }, function(){ cloudBadge('offline'); });
-  }catch(e){ cloudBadge('offline'); }
-}
+function cloudPull(){ _semNuvem(); }
 /* Reconciliação ao voltar o foco / reconectar: se há mudança local pendente, empurra (ela vence);
    senão, puxa o mais recente da nuvem. E garante o realtime vivo. */
-function cloudResync(){
-  if(!cloudInit()) return;
-  if(_rrOn()){ cloudReadRows().then(function(ok){ if(ok) cloudSubscribeRows(); }); return; } /* modo-linhas: relê das tabelas */
-  if(!_cloudInitDone){ cloudPull(); cloudSubscribe(); return; } /* ainda não leu a nuvem -> só puxa */
-  if(_cloudTimer){ cloudSyncNow(); }
-  else { cloudPull(); }
-  cloudSubscribe();
-}
-function cloudSubscribe(){
-  if(!SB) return;
-  try{
-    if(_cloudCh){ try{ SB.removeChannel(_cloudCh); }catch(e){} _cloudCh=null; }
-    _cloudCh=SB.channel('app_state_rt').on('postgres_changes', {event:'UPDATE', schema:'public', table:'app_state'}, function(p){
-      if(p && p.new && p.new.state) cloudApply(p.new.state);
-      else cloudPull(); /* estado grande demais p/ o payload do realtime: puxa por REST (senão o aparelho fica para trás em silêncio) */
-    }).subscribe(function(status){
-      if(status==='SUBSCRIBED'){ _cloudReady=true; cloudBadge('saved'); }
-      else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED'){ _cloudReady=false; cloudBadge('offline'); clearTimeout(window._cloudReTimer); window._cloudReTimer=setTimeout(cloudSubscribe, 4000); }
-    });
-  }catch(e){ cloudBadge('offline'); }
-}
-/* ===================== LOGIN (Supabase Auth) ===================== */
+function cloudResync(){ _semNuvem(); }
+function cloudSubscribe(){ /* o tempo real e do firebase-sync.js */ }
+/* ===================== LOGIN ===================== */
 var _authUser=null, _appStarted=false;
 function authBusy(b){ var btn=document.getElementById('authBtn'); if(btn){ btn.disabled=!!b; btn.textContent=b?'Entrando…':'Entrar'; } }
 function authErr(msg){ var e=document.getElementById('authErr'); if(e){ e.textContent=msg||''; e.style.display=msg?'block':'none'; } }
@@ -2289,17 +2216,7 @@ function authGateAviso(msg){
 }
 function showAuthGate(){ buildAuthGate(); var g=document.getElementById('authGate'); if(g) g.classList.add('on'); setTimeout(function(){ var em=document.getElementById('authEmail'); if(em&&!em.value) em.focus(); },60); }
 function hideAuthGate(){ var g=document.getElementById('authGate'); if(g) g.classList.remove('on'); }
-function doLogin(){
-  if(!cloudInit()){ authErr('Sem conexão com o servidor.'); return; }
-  var email=((document.getElementById('authEmail')||{}).value||'').trim();
-  var pass=(document.getElementById('authPass')||{}).value||'';
-  if(!email||!pass){ authErr('Preencha e-mail e senha.'); return; }
-  authErr(''); authBusy(true);
-  SB.auth.signInWithPassword({email:email, password:pass}).then(function(res){
-    authBusy(false);
-    if(res && res.error){ authErr(traduzAuthErro(res.error.message)); }
-  }, function(){ authBusy(false); authErr('Falha de conexão.'); });
-}
+function doLogin(){ authErr(_MSG_SEM_SYNC); }
 function clearLocalStorageData(){
   var keys = [
     'iracema-v7', 'iracema-safety', 'iracema-unsaved',
@@ -2391,7 +2308,6 @@ function doLogout(){
   /* Sair desautoriza o APARELHO, não só a sessão: senão o próximo a abrir offline
      entraria pela porta que este logout deveria ter fechado. */
   authAparelhoLimpar();
-  if(SB){ try{ SB.auth.signOut(); }catch(e){} }
 }
 function onAuthed(user){
   _authUser=user; hideAuthGate();
@@ -2402,7 +2318,7 @@ function onAuthed(user){
      Chamar aqui (síncrono) deslogaria um técnico recém-autorizado com a lista local ainda velha. */
 }
 /* Gate de login: só libera o app (e a leitura/escrita na nuvem) após autenticar.
-   A sessão persiste no navegador (supabase) -> funciona offline no campo depois do 1º login. */
+   A sessão persiste no navegador -> funciona offline no campo depois do 1º login. */
 function authInit(){
   /* Sem cliente de nuvem — sem rede, ou o SDK não carregou. Isso NÃO é autorização.
      Só abre quem já autenticou NESTE aparelho; os demais veem a tela de login com o
@@ -2417,25 +2333,6 @@ function authInit(){
     if(!_appStarted){ _appStarted=true; if(typeof cloudStart==='function') cloudStart(); }
     return;
   }
-  buildAuthGate();
-  SB.auth.getSession().then(function(res){
-    var session = res && res.data && res.data.session;
-    if(session && session.user){ onAuthed(session.user); }
-    else { showAuthGate(); }
-  }, function(){
-    /* Falhou LER a sessão: pode ser rede. Mesmo critério — aparelho autorizado
-       trabalha offline; aparelho novo não entra. */
-    if(authAparelhoAutorizado()){
-      if(!_appStarted){ _appStarted=true; if(typeof cloudStart==='function') cloudStart(); }
-    }else{
-      showAuthGate();
-      authGateAviso('Não consegui verificar a sessão e este aparelho ainda não entrou nenhuma vez. Conecte-se e entre com sua conta.');
-    }
-  });
-  SB.auth.onAuthStateChange(function(event, session){
-    if(session && session.user){ onAuthed(session.user); }
-    else { _authUser=null; showAuthGate(); }
-  });
 }
 var _deletePwdCb=null;
 function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return; var s=document.createElement('style'); s.id='deletePwdCss';
@@ -2448,7 +2345,7 @@ function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return;
 function requireDeletePassword(label, cb, opts){
   opts=opts||{}; window._delPwdOkText=opts.ok||'Excluir';
   /* Firebase: o gate de confirmação depende só da identidade logada (_authUser),
-     não mais do cliente Supabase (SB fica null após a migração). */
+     não mais de um cliente de nuvem próprio deste arquivo. */
   if(!cloudInit()||!_authUser||!_authUser.email){ alert('Para confirmar, entre com sua conta e digite a senha.'); return; }
   deletePasswordCss(); _deletePwdCb=cb;
   var m=document.getElementById('deletePwdModal');
@@ -2469,7 +2366,7 @@ function deletePasswordConfirm(){
   var pass=(document.getElementById('deletePwdInput')||{}).value||'', err=document.getElementById('deletePwdErr');
   if(!pass){ if(err)err.textContent='Digite a senha.'; return; }
   deletePasswordBusy(true); if(err)err.textContent='';
-  /* Reautentica no FIREBASE (o app migrou de Supabase). reauthenticateWithCredential confirma a
+  /* Reautentica no FIREBASE. reauthenticateWithCredential confirma a
      senha sem derrubar a sessão; só então libera o callback de exclusão. */
   var ok=function(){ deletePasswordBusy(false); var cb=_deletePwdCb; deletePasswordClose(); if(typeof cb==='function') cb(); };
   var fail=function(e){ deletePasswordBusy(false);
@@ -2486,348 +2383,7 @@ function deletePasswordConfirm(){
     u.reauthenticateWithCredential(cred).then(ok, fail);
   }catch(e){ fail(e); }
 }
-function cloudStart(){
-  if(!cloudInit()){ return; }
-  cloudBadge('saving');
-  if(_rrOn()){
-    /* Etapa 3 Fase C: fonte da verdade = tabelas por-linha (escrita segue dupla; blob = backup).
-       Leitura inicial com RE-TENTATIVA (rede instável não pode deixar o app travado/vazio). */
-    window._rrInitTries=0;
-    (function _rrInit(){
-      if(_cloudInitDone || !_rrOn()) return;
-      function _retry(){ window._rrInitTries++; cloudBadge('offline'); if(window._rrInitTries<=30){ clearTimeout(window._rrInitT); window._rrInitT=setTimeout(_rrInit, Math.min(15000, 1200*window._rrInitTries)); } }
-      try{ cloudReadRows().then(function(ok){ if(ok){ cloudSubscribeRows(); } else { _retry(); } }, function(){ _retry(); }); }catch(e){ _retry(); }
-    })();
-  } else {
-  /* Leitura inicial do blob com RE-TENTATIVA: se a rede instável faz a leitura falhar
-     (rejeição OU res.error tipo 'cannot coerce'/0 linhas transitório), NÃO inicializa e
-     NÃO semeia (semear sobre leitura falha empurraria os 32 padrões — o trigger do servidor
-     bloqueia, mas a tela ficava errada e travada). Re-tenta sozinha até conseguir, e assina
-     o realtime mesmo offline p/ pegar quando voltar. */
-  window._cloudInitTries=0;
-  function _cloudInitRead(){
-    if(_cloudInitDone || _rrOn()) return;
-    function _retry(){ _cloudInitTries++; cloudBadge('offline'); cloudSubscribe(); if(_cloudInitTries<=30){ clearTimeout(window._cloudInitT); window._cloudInitT=setTimeout(_cloudInitRead, Math.min(15000, 1200*_cloudInitTries)); } }
-    try{
-      SB.from('app_state').select('state').eq('id',1).single().then(function(res){
-        if(res && res.error){ _retry(); return; }            /* leitura falhou -> re-tenta, sem semear */
-        var st = res && res.data && res.data.state;
-        if(st && st.data && Object.keys(st.data).length){
-          _cloudInitDone=true;
-          if(_unsavedChanges){ var merged=cloudMerge(cloudState(), st); cloudApply(merged); cloudSaveSoon(); }
-          else { cloudApply(st); cloudBadge('saved'); }
-          cloudSubscribe();
-        } else {
-          /* leitura OK porém nuvem GENUINAMENTE vazia: só semeia se há dados locais REAIS
-             (evita semear os 32 padrões de um aparelho zerado). */
-          var nLocal=0; try{ nLocal=Object.keys((typeof data!=='undefined'?data:{})).filter(function(k){return k!=='__config';}).length; }catch(e){}
-          if(nLocal>0 && _unsavedChanges){ _cloudInitDone=true; cloudSave(); cloudSubscribe(); }
-          else { _retry(); } /* nuvem vazia + local sem mudança real -> não escreve; re-tenta (provável leitura ruim) */
-        }
-      }, function(){ _retry(); });                            /* rejeição de rede -> re-tenta */
-    }catch(e){ _retry(); }
-  }
-  _cloudInitRead();
-  }
-  if(!window.__cloudNet){ window.__cloudNet=true;
-    window.addEventListener('online', function(){ cloudBadge('saving'); cloudResync(); });
-    window.addEventListener('offline', function(){ cloudBadge('offline'); });
-  }
-  /* Re-sincroniza ao voltar pra aba (realtime pode ter caído com o sleep/rede) */
-  if(!window.__cloudFocus){ window.__cloudFocus=true;
-    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') cloudResync(); });
-    window.addEventListener('focus', function(){ cloudResync(); });
-    /* FLUSH ao esconder: no campo, salva-se a nota e a tela trava/troca de app ANTES do
-       debounce de 900ms disparar -> o push ficava pendente até a próxima abertura.
-       Agora, ao esconder a aba/app, qualquer pendência sobe NA HORA. */
-    function _flushHidden(){ try{ if(_unsavedChanges && _cloudInitDone && !_cloudApplying){ clearTimeout(_cloudTimer); cloudSave(); } }catch(e){} }
-    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') _flushHidden(); });
-    window.addEventListener('pagehide', _flushHidden);
-  }
-}
-
-/* ===================== ETAPA 3 — FASE A: leitura por-linha + sombra =====================
-   SÓ LEITURA. Lê as tabelas normalizadas (Fase 4), reconstrói o estado no MESMO formato
-   do blob e COMPARA com o estado atual, sem tocar em nada que grava. Roda apenas quando
-   chamado de propósito (window.shadowSync()) — nunca no fluxo normal do usuário.
-   Objetivo: provar que as tabelas reproduzem 100% o estado antes de qualquer corte. */
-function _dbReadAll(){
-  if(!cloudInit()||!SB) return Promise.reject('sem conexão');
-  function all(tab, cols){ // pagina de 1000 em 1000 (lancamentos pode passar disso)
-    return new Promise(function(res){
-      var out=[], from=0, page=1000;
-      (function next(){
-        SB.from(tab).select(cols).range(from, from+page-1).then(function(r){
-          if(r.error){ res({error:r.error.message, rows:out}); return; }
-          out=out.concat(r.data||[]);
-          if((r.data||[]).length===page){ from+=page; next(); } else res({rows:out});
-        }, function(e){ res({error:String(e), rows:out}); });
-      })();
-    });
-  }
-  return Promise.all([
-    all('locais','*'), all('quadras','*'), all('estudos','*'),
-    all('aplicacoes','*'), all('avaliacoes','*'),
-    all('lancamentos','avaliacao_id,parcela,variavel,valor,client_ts'),
-    all('notas_campo','*'), all('randomizacoes','*'), all('config','*')
-  ]).then(function(a){
-    return { locais:a[0], quadras:a[1], estudos:a[2], aplicacoes:a[3],
-             avaliacoes:a[4], lancamentos:a[5], notas_campo:a[6], randomizacoes:a[7], config:a[8] };
-  });
-}
-/* reconstrói o estado (formato do blob) a partir das linhas das tabelas */
-function _dbBuildState(R){
-  var S={ data:{}, qgeo:{}, qgeots:{}, qnome:{}, qlocal:{}, locais:{}, locaists:{},
-          randomizacoes:[], notas_campo:[], georef:null };
-  (R.locais.rows||[]).forEach(function(r){ if(r.deleted_at) return; S.locais[r.id]=Object.assign({}, r.extras||{}, {nome:r.nome, centro:r.centro, zoom:(r.zoom!=null?Number(r.zoom):undefined)}); if(r.client_ts!=null)S.locaists[r.id]=Number(r.client_ts); });
-  (R.quadras.rows||[]).forEach(function(r){
-    if(r.deleted_at) return;
-    S.qgeo[r.id]=r.geo; if(r.client_ts!=null)S.qgeots[r.id]=Number(r.client_ts);
-    S.qnome[r.id]=r.nome; S.qlocal[r.id]=r.local_id;
-    var d=Object.assign({}, r.extras||{}); d.culturas=r.culturas||[];
-    if(d.area==null && r.area_ha!=null) d.area=r.area_ha; d.estudos=[]; S.data[r.id]=d;
-  });
-  var estById={};
-  (R.estudos.rows||[]).forEach(function(e){
-    if(e.deleted_at) return;
-    var est=Object.assign({}, e.extras||{}, { id:e.id, codigo:e.codigo, nome:e.nome, descricao:e.descricao,
-      dataInicio:e.data_inicio, numAplicacoes:e.num_aplicacoes, intervaloDias:e.intervalo_dias,
-      numRepeticoes:e.num_repeticoes, tratamentos:e.tratamentos||[], randomizacao:e.randomizacao,
-      auditLog:e.audit||[], _ts:(e.client_ts!=null?Number(e.client_ts):undefined), aplicacoes:[], avaliacoes:[] });
-    estById[e.id]=est; if(S.data[e.quadra_id]) S.data[e.quadra_id].estudos.push(est);
-  });
-  (R.aplicacoes.rows||[]).forEach(function(a){ if(a.deleted_at) return; var e=estById[a.estudo_id]; if(!e)return;
-    e.aplicacoes.push(Object.assign({}, a.extras||{}, {id:a.id, data:a.data, bbch:a.bbch, obs:a.obs, carimbo:a.carimbo, _ts:(a.client_ts!=null?Number(a.client_ts):undefined)})); });
-  var avById={};
-  (R.avaliacoes.rows||[]).forEach(function(av){ if(av.deleted_at) return; var e=estById[av.estudo_id]; if(!e)return;
-    var id=av.id; if(id&&id.indexOf(av.estudo_id+':auto_')===0) id=id.slice(av.estudo_id.length+1);
-    var a=Object.assign({}, av.extras||{}, {id:id, data:av.data, tipo:av.tipo, bbch:av.bbch, obs:av.obs,
-      auto:av.auto, variaveis:av.variaveis||[], tipos:av.tipos||{}, carimbo:av.carimbo,
-      _ts:(av.client_ts!=null?Number(av.client_ts):undefined), notas:{}, notasMeta:{}});
-    e.avaliacoes.push(a); avById[av.id]=a; });
-  (R.lancamentos.rows||[]).forEach(function(l){ var a=avById[l.avaliacao_id]; if(!a)return;
-    (a.notas[l.parcela]=a.notas[l.parcela]||{})[l.variavel]=l.valor;
-    (a.notasMeta[l.parcela]=a.notasMeta[l.parcela]||{})[l.variavel]={ts:(l.client_ts!=null?Number(l.client_ts):0)}; });
-  S.notas_campo=(R.notas_campo.rows||[]).filter(function(r){return !r.deleted_at;}).map(function(r){ return Object.assign({}, r.extras||{}, {id:r.id, localId:r.local_id, quadraId:r.quadra_id, lat:r.lat, lng:r.lng, titulo:r.titulo, categoria:r.categoria, severidade:r.severidade, recomendacao:r.recomendacao, descricao:r.descricao, foto:r.foto_b64, criadoEm:r.criado_em, resolvido:r.resolvido, _ts:(r.client_ts!=null?Number(r.client_ts):undefined)}); });
-  S.randomizacoes=(R.randomizacoes.rows||[]).filter(function(r){return !r.deleted_at;}).map(function(r){ return r.dados; });
-  var cfg=(R.config.rows||[]).find(function(r){return r.id===1;});
-  if(cfg&&cfg.dados){ var dd=cfg.dados;
-    if(dd._georef!==undefined || dd._georefts!==undefined){ /* corte v2: georef vem dentro do config */
-      S.georef=dd._georef||null; S.georefts=dd._georefts;
-      var cc=Object.assign({}, dd); delete cc._georef; delete cc._georefts; S.data.__config=cc;
-    } else { S.data.__config=dd; }
-  }
-  return S;
-}
-function _countCells(stateData){ var n=0; Object.keys(stateData||{}).forEach(function(k){ if(k==='__config')return; (stateData[k].estudos||[]).forEach(function(e){ (e.avaliacoes||[]).forEach(function(a){ var no=a.notas||{}; Object.keys(no).forEach(function(tr){ Object.keys(no[tr]||{}).forEach(function(v){ if(no[tr][v]!=='' && no[tr][v]!=null) n++; }); }); }); }); }); return n; }
-function _countEnt(stateData){ var e=0,ap=0,av=0; Object.keys(stateData||{}).forEach(function(k){ if(k==='__config')return; (stateData[k].estudos||[]).forEach(function(s){ e++; ap+=(s.aplicacoes||[]).length; av+=(s.avaliacoes||[]).length; }); }); return {estudos:e,aplicacoes:ap,avaliacoes:av}; }
-/* Compara tabelas (T) x blob atual (B). Loga relatório e devolve o objeto. */
-function shadowSync(){
-  console.log('[shadow] lendo tabelas por-linha…');
-  return _dbReadAll().then(function(R){
-    var errs=Object.keys(R).filter(function(k){return R[k].error;}).map(function(k){return k+': '+R[k].error;});
-    var T=_dbBuildState(R);
-    var B=(typeof cloudState==='function')?cloudState():{data:data,qgeo:QGEO,locais:LOCAIS,randomizacoes:RZLIB,notas_campo:NOTAS_CAMPO};
-    var bq=Object.keys(B.data||{}).filter(function(k){return k!=='__config';}).length;
-    var tq=Object.keys(T.data||{}).filter(function(k){return k!=='__config';}).length;
-    var bc=_countEnt(B.data), tc=_countEnt(T.data);
-    // fidelidade no overlap de avaliações (mesmo estudo+id): % de células iguais
-    var bAv={}; Object.keys(B.data||{}).forEach(function(qid){ if(qid==='__config')return; (B.data[qid].estudos||[]).forEach(function(s){ (s.avaliacoes||[]).forEach(function(a){ bAv[s.id+'|'+a.id]=a; }); }); });
-    var overlap=0, cellsBoth=0, cellsEqual=0, avDiff=[];
-    Object.keys(T.data||{}).forEach(function(qid){ if(qid==='__config')return; (T.data[qid].estudos||[]).forEach(function(s){ (s.avaliacoes||[]).forEach(function(ta){ var ba=bAv[s.id+'|'+ta.id]; if(!ba)return; overlap++; var tn=ta.notas||{}, bn=ba.notas||{}; var rows={}; Object.keys(tn).forEach(function(r){rows[r]=1;}); Object.keys(bn).forEach(function(r){rows[r]=1;}); var d=0; Object.keys(rows).forEach(function(r){ var tr=tn[r]||{}, br=bn[r]||{}; var cols={}; Object.keys(tr).forEach(function(c){cols[c]=1;}); Object.keys(br).forEach(function(c){cols[c]=1;}); Object.keys(cols).forEach(function(c){ var tv=tr[c], bv=br[c]; if(tv!=null&&tv!==''||bv!=null&&bv!==''){ cellsBoth++; if(String(tv==null?'':tv)===String(bv==null?'':bv)) cellsEqual++; else d++; } }); }); if(d) avDiff.push(s.id+'|'+ta.id+' ('+d+' células diferentes)'); }); }); });
-    var rep={
-      erros_leitura: errs,
-      contagens:{ quadras:{blob:bq, tabelas:tq}, estudos:{blob:bc.estudos, tabelas:tc.estudos}, aplicacoes:{blob:bc.aplicacoes, tabelas:tc.aplicacoes}, avaliacoes:{blob:bc.avaliacoes, tabelas:tc.avaliacoes}, celulas:{blob:_countCells(B.data), tabelas:_countCells(T.data)}, locais:{blob:Object.keys(B.locais||{}).length, tabelas:Object.keys(T.locais||{}).length}, notas_campo:{blob:(B.notas_campo||[]).length, tabelas:(T.notas_campo||[]).length}, randomizacoes:{blob:(B.randomizacoes||[]).length, tabelas:(T.randomizacoes||[]).length} },
-      georef:{ blob_tem: !!(B.georef||(typeof _geo!=='undefined'&&_geo)), tabelas_tem: !!T.georef },
-      fidelidade_avaliacoes_no_overlap:{ avaliacoes_em_ambos:overlap, celulas_comparadas:cellsBoth, celulas_iguais:cellsEqual, pct: cellsBoth?(Math.round(cellsEqual/cellsBoth*1000)/10+'%'):'n/a', avaliacoes_com_diferenca:avDiff.slice(0,20) }
-    };
-    console.log('[shadow] RELATÓRIO', rep);
-    window._shadowRep=rep; window._shadowT=T;
-    return rep;
-  });
-}
-
-/* ===================== ETAPA 3 — FASE B: escrita dupla + outbox =====================
-   Grava no blob (verdade atual) E, EM PARALELO, nas tabelas por-linha. SÓ roda com a
-   flag _dualWrite LIGADA (padrão DESLIGADA → dormente p/ o usuário). Best-effort: NUNCA
-   quebra o salvar do blob (tudo em try/catch). Fila offline (IndexedDB) sobe quando há rede. */
-/* LIGADA por padrão (warming de produção). Kill-switch: setDualWrite(false) grava '0'. */
-function _dwOn(){ try{ if(window._dualWrite===false) return false; return localStorage.getItem('agracta-dualwrite')!=='0'; }catch(e){ return window._dualWrite!==false; } }
-function setDualWrite(on){ window._dualWrite=!!on; try{ localStorage.setItem('agracta-dualwrite', on?'1':'0'); }catch(e){} if(on) outboxFlush(); return _dwOn(); }
-function _f4date(t){ if(!t) return null; t=String(t); if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10); var m=t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(m) return m[3]+'-'+m[2]+'-'+m[1]; return null; }
-function _f4int(x){ if(x===''||x==null) return null; var n=parseInt(x,10); return isNaN(n)?null:n; }
-var _OB_DB='agracta-outbox', _OB_STORE='ops';
-function _obOpen(){ return new Promise(function(res,rej){ try{ if(!window.indexedDB){rej('sem idb');return;} var rq=indexedDB.open(_OB_DB,1); rq.onupgradeneeded=function(e){ var db=e.target.result; if(!db.objectStoreNames.contains(_OB_STORE)){ db.createObjectStore(_OB_STORE,{keyPath:'k',autoIncrement:true}); } }; rq.onsuccess=function(){res(rq.result);}; rq.onerror=function(){rej(rq.error);}; }catch(e){rej(e);} }); }
-function outboxAdd(ops){ if(!ops||!ops.length) return; try{ _obOpen().then(function(db){ try{ var tx=db.transaction(_OB_STORE,'readwrite'), os=tx.objectStore(_OB_STORE); ops.forEach(function(o){ os.add(o); }); tx.oncomplete=function(){ try{db.close();}catch(_){} if(navigator.onLine) outboxFlush(); }; tx.onerror=function(){ try{db.close();}catch(_){} }; }catch(_){ try{db.close();}catch(__){} } }, function(){}); }catch(e){} }
-var _obFlushing=false;
-function outboxFlush(){
-  if(_obFlushing) return; if(!cloudInit()||!SB||!navigator.onLine) return; _obFlushing=true;
-  _obOpen().then(function(db){
-    var all=[]; try{ var tx=db.transaction(_OB_STORE,'readonly'), cur=tx.objectStore(_OB_STORE).openCursor();
-      cur.onsuccess=function(e){ var c=e.target.result; if(c){ var v=c.value; v.k=c.key; all.push(v); c.continue(); } else { _obProcess(db, all); } };
-      cur.onerror=function(){ try{db.close();}catch(_){} _obFlushing=false; };
-    }catch(_){ try{db.close();}catch(__){} _obFlushing=false; }
-  }, function(){ _obFlushing=false; });
-}
-function _obProcess(db, ops){
-  var i=0;
-  function del(k){ try{ var tx=db.transaction(_OB_STORE,'readwrite'); tx.objectStore(_OB_STORE).delete(k); }catch(e){} }
-  function step(){
-    if(i>=ops.length){ try{db.close();}catch(_){} _obFlushing=false; return; }
-    var o=ops[i++]; if(!o||!o.table){ del(o&&o.k); return step(); }
-    var q;
-    try{
-      if(o.update){ q=SB.from(o.table).update(o.update).eq(o.eqCol||'id', o.eqVal); } /* soft-delete: deleted_at */
-      else { q=SB.from(o.table).upsert(o.row, {onConflict:o.onConflict||'id'}); }
-    }
-    catch(e){ return step(); }
-    q.then(function(r){ if(r&&r.error){ /* mantém p/ retry (ex.: FK ainda não chegou) */ } else { del(o.k); } step(); }, function(){ step(); });
-  }
-  step();
-}
-/* monta as linhas (revertendo o mapeamento da migração) */
-function _rowQuadra(qid){ var d=(typeof data!=='undefined'&&data[qid])||{}; var ex={}; for(var k in d){ if(k!=='estudos'&&k!=='culturas'&&k!=='_deletedStudies') ex[k]=d[k]; } return { id:qid, local_id:((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis'), nome:((typeof QNOME!=='undefined'&&QNOME[qid])||qid), geo:((typeof QGEO!=='undefined'&&QGEO[qid])||null), area_ha:(d.area!=null&&d.area!==''?Number(d.area):null), culturas:(d.culturas||[]), extras:ex, client_ts:((typeof QGEO_TS!=='undefined'&&QGEO_TS[qid])||Date.now()) }; }
-function _rowLocal(lid){ var L=(typeof LOCAIS!=='undefined'&&LOCAIS[lid])||{}; return { id:lid, nome:(L.nome||lid), centro:(L.centro||null), zoom:(L.zoom!=null?Number(L.zoom):null), client_ts:((typeof LOCAIS_TS!=='undefined'&&LOCAIS_TS[lid])||Date.now()) }; }
-function _rowEstudo(qid, est){ var skip={aplicacoes:1,avaliacoes:1,tratamentos:1,randomizacao:1,audit:1,auditLog:1,id:1,codigo:1,nome:1,descricao:1,dataInicio:1,numAplicacoes:1,intervaloDias:1,numRepeticoes:1,_deletedStudies:1}; var ex={}; for(var k in est){ if(!skip[k]) ex[k]=est[k]; } return { id:est.id, quadra_id:qid, codigo:est.codigo||null, nome:est.nome||null, descricao:est.descricao||null, data_inicio:_f4date(est.dataInicio), num_aplicacoes:_f4int(est.numAplicacoes), intervalo_dias:_f4int(est.intervaloDias), num_repeticoes:_f4int(est.numRepeticoes), tratamentos:est.tratamentos||[], randomizacao:est.randomizacao||null, audit:est.audit||est.auditLog||[], extras:ex, client_ts:est._ts||Date.now() }; }
-function _avTableId(sid, av){ return (av.id&&av.id.indexOf('auto_')===0)?(sid+':'+av.id):av.id; }
-function _rowAval(sid, av){ var skip={id:1,data:1,tipo:1,bbch:1,obs:1,auto:1,variaveis:1,tipos:1,carimbo:1,notas:1,notasMeta:1}; var ex={}; for(var k in av){ if(!skip[k]) ex[k]=av[k]; } return { id:_avTableId(sid,av), estudo_id:sid, data:_f4date(av.data), tipo:av.tipo||null, bbch:av.bbch||null, obs:av.obs||null, auto:!!av.auto, variaveis:av.variaveis||[], tipos:av.tipos||{}, carimbo:av.carimbo||null, extras:ex, client_ts:av._ts||Date.now() }; }
-/* hook do saveAvaliacao: enfileira a cadeia (local→quadra→estudo→avaliação→lançamentos) na ordem dos FKs */
-function dbUpsertAvaliacao(qid, sid, av){
-  if(!_dwOn()) return;
-  try{
-    var est=((typeof data!=='undefined'&&data[qid]&&(data[qid].estudos||[]).find(function(s){return s.id===sid;}))||{id:sid});
-    var avid=_avTableId(sid, av);
-    var ops=[];
-    ops.push({table:'locais', row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')});
-    ops.push({table:'quadras', row:_rowQuadra(qid)});
-    ops.push({table:'estudos', row:_rowEstudo(qid, est)});
-    ops.push({table:'avaliacoes', row:_rowAval(sid, av)});
-    var notas=av.notas||{}, meta=av.notasMeta||{};
-    Object.keys(notas).forEach(function(parc){ Object.keys(notas[parc]||{}).forEach(function(vari){
-      var val=notas[parc][vari]; var ts=(meta[parc]&&meta[parc][vari]&&meta[parc][vari].ts)||av._ts||Date.now();
-      ops.push({table:'lancamentos', onConflict:'avaliacao_id,parcela,variavel', row:{avaliacao_id:avid, parcela:parc, variavel:vari, valor:(val===''?null:val), client_ts:ts}});
-    }); });
-    outboxAdd(ops);
-  }catch(e){}
-}
-function _rowAplicacao(sid, ap){ var skip={id:1,data:1,bbch:1,obs:1,carimbo:1}; var ex={}; for(var k in ap){ if(!skip[k]) ex[k]=ap[k]; } return { id:ap.id, estudo_id:sid, data:_f4date(ap.data), bbch:ap.bbch||null, obs:ap.obs||null, carimbo:ap.carimbo||null, extras:ex, client_ts:ap._ts||Date.now() }; }
-function dbUpsertQuadra(qid){ if(!_dwOn()||!qid||qid==='__config') return; try{ outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)}]); }catch(e){} }
-function dbUpsertEstudo(qid, est){ if(!_dwOn()||!est||!est.id) return; try{ outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)},{table:'estudos',row:_rowEstudo(qid,est)}]); }catch(e){} }
-function dbUpsertAplicacao(qid, sid, ap){ if(!_dwOn()||!ap||!ap.id) return; try{ var est=((typeof data!=='undefined'&&data[qid]&&(data[qid].estudos||[]).find(function(s){return s.id===sid;}))||{id:sid}); outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)},{table:'estudos',row:_rowEstudo(qid,est)},{table:'aplicacoes',row:_rowAplicacao(sid,ap)}]); }catch(e){} }
-/* --- builders restantes p/ cobertura COMPLETA da escrita-dupla (Etapa 3) --- */
-function _rowNota(n){ var skip={id:1,localId:1,quadraId:1,lat:1,lng:1,titulo:1,categoria:1,severidade:1,recomendacao:1,descricao:1,foto:1,criadoEm:1,resolvido:1}; var ex={}; for(var k in n){ if(!skip[k]) ex[k]=n[k]; } return { id:n.id, local_id:n.localId||null, quadra_id:n.quadraId||null, lat:(n.lat!=null&&n.lat!==''?Number(n.lat):null), lng:(n.lng!=null&&n.lng!==''?Number(n.lng):null), titulo:n.titulo||null, categoria:n.categoria||null, severidade:n.severidade||null, recomendacao:n.recomendacao||null, descricao:n.descricao||null, foto_b64:n.foto||null, criado_em:_f4date(n.criadoEm), resolvido:!!n.resolvido, extras:ex, client_ts:n._ts||Date.now() }; }
-function dbUpsertNotasAll(){ if(!_dwOn()) return; try{ if(typeof ensureNotas==='function') ensureNotas(); var ops=(NOTAS_CAMPO||[]).filter(function(n){return n&&n.id;}).map(function(n){ return {table:'notas_campo', row:_rowNota(n)}; }); if(ops.length) outboxAdd(ops); }catch(e){} }
-function dbUpsertConfig(){ if(!_dwOn()) return; try{ ensureConfig(); var dados=Object.assign({}, data.__config||{}); dados._georef=(typeof _geo!=='undefined'?_geo:null); dados._georefts=(typeof GEOREF_TS!=='undefined'?GEOREF_TS:null); outboxAdd([{table:'config', onConflict:'id', row:{id:1, dados:dados, client_ts:Date.now()}}]); }catch(e){} }
-function dbUpsertLocaisAll(){ if(!_dwOn()) return; try{ if(typeof ensureLocais==='function') ensureLocais(); var ops=Object.keys(LOCAIS||{}).map(function(lid){ return {table:'locais', row:_rowLocal(lid)}; }); if(ops.length) outboxAdd(ops); }catch(e){} }
-function dbUpsertRZAll(){ if(!_dwOn()) return; try{ var ops=(RZLIB||[]).filter(function(r){return r&&r.id;}).map(function(r){ return {table:'randomizacoes', row:{id:r.id, nome:(r.nome||null), dados:r, client_ts:Date.now()}}; }); if(ops.length) outboxAdd(ops); }catch(e){} }
-/* soft-delete: marca deleted_at (não apaga) — leitura por-linha filtra deleted_at IS NULL */
-function dbSoftDelete(table, id){ if(!_dwOn()||!table||!id) return; try{ outboxAdd([{table:table, update:{deleted_at:new Date().toISOString()}, eqCol:'id', eqVal:id}]); }catch(e){} }
-function dbSoftDeleteAval(sid, avid){ if(!avid) return; var id=(String(avid).indexOf('auto_')===0)?(sid+':'+avid):avid; dbSoftDelete('avaliacoes', id); }
-if(!window.__obNet){ window.__obNet=true; try{ window.addEventListener('online', function(){ try{outboxFlush();}catch(e){} }); document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible'){ try{outboxFlush();}catch(e){} } }); }catch(e){} }
-
-/* ===================== ETAPA 3 — FASE C (cliente): LER das tabelas por-linha =====================
-   Atrás da flag _readRows (padrão DESLIGADA → comportamento idêntico ao de hoje). Quando LIGADA,
-   o app carrega o estado das TABELAS (não do blob) e reage ao realtime POR LINHA. As escritas
-   seguem duplas (tabelas + blob), então o blob fica como BACKUP QUENTE → rollback instantâneo
-   com setReadRows(false). Validar ao vivo (shadow 100%) ANTES de ligar pra equipe. */
-/* RE-CORTE: realtime por-linha CONFIRMADO ao vivo (assinei `quadras`, regravei 1 linha e o
-   evento CHEGOU). Logo, Realtime está habilitado e as tabelas estão na publicação. Leitura
-   por-linha LIGADA por padrão → dado passa entre aparelhos na hora (≠ blob 634KB, cujo evento
-   o realtime descarta por tamanho). Cobertura de escrita-dupla completa + soft-delete + merge
-   + retry. Kill-switch/rollback: setReadRows(false) grava '0'. */
-/* CONFIABILIDADE PRIMEIRO: leitura volta ao BLOB por padrão. No modo por-linha, uma
-   releitura em 2º plano podia sobrepor um pin/avaliação recém-criado antes de subir
-   (corrida em conexão lenta → "não fica"). No blob o registro fica firme na tela e sobe
-   quando há rede. Real-time por-linha fica p/ quando a conexão do projeto for estável +
-   o merge-com-pendente estiver pronto. Re-liga explícito: setReadRows(true)/localStorage '1'. */
-function _rrOn(){ try{ if(window._readRows===true) return true; if(window._readRows===false) return false; return localStorage.getItem('agracta-readrows')==='1'; }catch(e){ return window._readRows===true; } }
-function setReadRows(on){ window._readRows=!!on; try{ localStorage.setItem('agracta-readrows', on?'1':'0'); }catch(e){} if(on){ cloudReadRows().then(function(ok){ if(ok) cloudSubscribeRows(); }); } return _rrOn(); }
-function _applyRowsState(S){
-  _cloudApplying=true;
-  try{
-    if(S.data){ data=S.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
-    if(S.qgeo){ QGEO=S.qgeo; saveQGEO(); }
-    if(S.qgeots){ QGEO_TS=S.qgeots; saveQGEOTS(); }
-    if(S.georef){ _geo=S.georef; saveGeoref(_geo); }
-    if(S.georefts!=null){ GEOREF_TS=S.georefts; saveGeorefTS(); }
-    if(S.locais){ LOCAIS=S.locais; try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} }
-    if(S.qlocal){ QLOCAL=S.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
-    if(S.qnome){ QNOME=S.qnome; try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)); }catch(e){} }
-    if(Array.isArray(S.randomizacoes)){ RZLIB=(typeof normalizeRZLib==='function'?normalizeRZLib(S.randomizacoes):S.randomizacoes); try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){} }
-    if(Array.isArray(S.notas_campo)){ NOTAS_CAMPO=S.notas_campo; try{ localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO)); }catch(e){} }
-    if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
-    ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
-    render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
-    if(typeof enforceAccess==='function') enforceAccess();
-  }catch(e){}
-  _cloudApplying=false;
-}
-var _rrPending=null, _rrCh=null, _rrTimer=null;
-function cloudReadRows(){
-  if(!cloudInit()) return Promise.resolve(false);
-  return _dbReadAll().then(function(R){
-    if(Object.keys(R).some(function(k){return R[k].error;})){ cloudBadge('offline'); return false; }
-    var S=_dbBuildState(R);
-    if(window._qEditing||window._avEditing){ _rrPending=S; return true; } /* não atropela edição em curso */
-    /* não atropela edição local NÃO-SALVA: mescla (como o caminho do blob) e empurra o local */
-    if(_unsavedChanges){ try{ S=cloudMerge(cloudState(), S); }catch(e){} setTimeout(function(){ try{ if(_unsavedChanges) cloudSaveSoon(); }catch(e){} }, 50); }
-    _applyRowsState(S); _cloudInitDone=true; cloudBadge('saved'); return true;
-  }, function(){ cloudBadge('offline'); return false; });
-}
-function cloudReadRowsApplyPending(){ if(_rrPending && !window._qEditing && !window._avEditing){ var s=_rrPending; _rrPending=null; _applyRowsState(s); } }
-function _rrSoon(){ clearTimeout(_rrTimer); _rrTimer=setTimeout(function(){ if(window._qEditing||window._avEditing){ _rrSoon(); return; } cloudReadRows(); }, 400); }
-/* re-render debounced (sem reler a nuvem) após aplicar um delta */
-function _rrRenderSoon(){ clearTimeout(window._rrRenderT); window._rrRenderT=setTimeout(function(){ try{ render(); if(typeof updateAgendaBadge==='function')updateAgendaBadge(); if(typeof updateTodayBadge==='function')updateTodayBadge(); }catch(e){} }, 120); }
-/* acha uma avaliação em memória pelo id da TABELA (lida com namespace de auto_) */
-function _rrFindAvByTableId(tid){
-  if(!tid) return null; var out=null;
-  Object.keys(data||{}).some(function(qid){ if(qid==='__config')return false; return (data[qid].estudos||[]).some(function(s){ return (s.avaliacoes||[]).some(function(a){ if(_avTableId(s.id,a)===tid){ out={qid:qid,sid:s.id,av:a}; return true; } return false; }); }); });
-  return out;
-}
-/* APLICA o delta de UM evento de realtime direto na memória (instantâneo, sem reler tudo).
-   Cobre o caso comum (lancamentos = células, e avaliacoes); estrutural cai no _rrSoon. */
-function _rrEvent(table, p){
-  try{
-    if(!_rrOn()) return;
-    if(window._qEditing || window._avEditing){ _rrSoon(); return; } /* não atropela edição em curso */
-    var nw=(p&&p.new)||{}, od=(p&&p.old)||{}, ev=(p&&p.eventType)||'';
-    if(table==='lancamentos'){
-      var avid=nw.avaliacao_id||od.avaliacao_id, parc=nw.parcela||od.parcela, vari=nw.variavel||od.variavel;
-      var loc=_rrFindAvByTableId(avid);
-      if(!loc||!parc||!vari){ _rrSoon(); return; } /* avaliação não em memória → re-lê */
-      var a=loc.av; a.notas=a.notas||{}; a.notasMeta=a.notasMeta||{};
-      if(ev==='DELETE'){ if(a.notas[parc]) delete a.notas[parc][vari]; }
-      else { var val=nw.valor; (a.notas[parc]=a.notas[parc]||{})[vari]=(val==null?'':val); (a.notasMeta[parc]=a.notasMeta[parc]||{})[vari]={ts:(nw.client_ts!=null?Number(nw.client_ts):Date.now())}; }
-      try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){}
-      _rrRenderSoon(); return;
-    }
-    if(table==='avaliacoes'){
-      var estId=nw.estudo_id||od.estudo_id, tid=nw.id||od.id; if(!estId||!tid){ _rrSoon(); return; }
-      var est=null; Object.keys(data||{}).some(function(k){ if(k==='__config')return false; var s=(data[k].estudos||[]).find(function(x){return x.id===estId;}); if(s){est=s;return true;} return false; });
-      if(!est){ _rrSoon(); return; } /* estudo não em memória → re-lê */
-      var realId=(tid.indexOf(estId+':auto_')===0)?tid.slice(estId.length+1):tid;
-      est.avaliacoes=est.avaliacoes||[];
-      var a=est.avaliacoes.find(function(x){return x.id===realId;});
-      if(ev==='DELETE' || nw.deleted_at){ if(a) est.avaliacoes=est.avaliacoes.filter(function(x){return x.id!==realId;}); _rrRenderSoon(); return; }
-      if(!a){ a={id:realId,notas:{},notasMeta:{}}; est.avaliacoes.push(a); }
-      a.data=nw.data; a.tipo=nw.tipo; a.bbch=nw.bbch; a.obs=nw.obs; a.auto=nw.auto; if(nw.variaveis)a.variaveis=nw.variaveis; if(nw.tipos)a.tipos=nw.tipos; if(nw.carimbo)a.carimbo=nw.carimbo;
-      try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){}
-      _rrRenderSoon(); return;
-    }
-    _rrSoon(); /* quadras/estudos/locais/notas/randomizações/config: re-leitura leve (raras) */
-  }catch(e){ _rrSoon(); }
-}
-function cloudSubscribeRows(){
-  if(!SB) return;
-  try{
-    if(_rrCh){ try{ SB.removeChannel(_rrCh); }catch(e){} _rrCh=null; }
-    _rrCh=SB.channel('agracta_rows_rt');
-    ['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','config'].forEach(function(t){
-      _rrCh.on('postgres_changes',{event:'*',schema:'public',table:t}, function(p){ _rrEvent(t, p); });
-    });
-    _rrCh.subscribe(function(status){ if(status==='SUBSCRIBED'){ _cloudReady=true; cloudBadge('saved'); } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){ _cloudReady=false; clearTimeout(window._rrReTimer); window._rrReTimer=setTimeout(cloudSubscribeRows, 4000); } });
-  }catch(e){}
-}
+function cloudStart(){ _semNuvem(); }
 
 /* Quadra de laboratório no mapa: marcador 🧪 em vez de polígono. Sem geometria
    não há área nem NDVI, mas o toque é o mesmo (showD) e em modo de edição o
@@ -2851,7 +2407,6 @@ function renderQuadraLab(id){
     var p=e.target.getLatLng();
     if(!data[id]) return;
     data[id].ponto=[p.lat,p.lng]; _touchQGEO(id); saveQGEO(); save();
-    try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e2){}
   });
 }
 function render(){
@@ -3327,8 +2882,7 @@ function deleteQuadraFromEdit(){
     safetyBackup('antes de excluir quadra '+nome);
     delete QGEO[id]; if(data[id]) delete data[id];
     ensureLocais(); delete QLOCAL[id]; if(QNOME) delete QNOME[id];
-    _delQuadras[id]=Date.now(); saveDelTombs(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('quadras',id); }catch(e){} /* Etapa 3 */
-    _cloudAllowShrink=true;
+    _delQuadras[id]=Date.now(); saveDelTombs();    _cloudAllowShrink=true;
     saveQLocal(); saveQNome();
     saveQGEO(); save();
     closeEdit();
@@ -3365,7 +2919,6 @@ function saveNotas(){
     localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas));
   }catch(e){}
   if(typeof cloudSaveSoon==='function') cloudSaveSoon();
-  if(typeof dbUpsertNotasAll==='function') dbUpsertNotasAll(); /* Etapa 3: observações de campo */
 }
 
 function ensureNotas(){
@@ -3861,8 +3414,7 @@ function deleteNote(noteId){
     }
   }
   if(idx!==-1){
-    _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
-    NOTAS_CAMPO.splice(idx,1);
+    _delNotas[noteId]=Date.now();    NOTAS_CAMPO.splice(idx,1);
     saveNotas();
     try{ _map.closePopup(); }catch(e){}
     renderNotas(true);
@@ -5598,7 +5150,6 @@ function saveE(){
     data[curE].labTipo=(LAB_TIPOS.indexOf(novoLT)>=0)?novoLT:prev.labTipo;
   }
   save();
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(curE); }catch(e){} /* Etapa 3 Fase B */
   closeEdit();render();renderLeg();updateAgendaBadge();
   if(curV)showD(curV);
 }
@@ -5746,7 +5297,6 @@ function saveStudy(){
   if(idx>=0)q.estudos[idx]=s; else q.estudos.push(s);
   data[curS]=q;
   save();
-  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(curS, s); }catch(e){} /* Etapa 3 Fase B */
   _stxToast('✓ Estudo salvo!');
   var qid=curS;
   closeStudyEdit();
@@ -5758,8 +5308,7 @@ function deleteStudy(qid,sid,skipConfirm){
   requireDeletePassword('Excluir este estudo e seus resultados.', function(){
     safetyBackup('antes de excluir estudo');
     var q=data[qid];if(!q||!q.estudos)return;
-    _markDeleted(q,'_deletedStudies',sid); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('estudos',sid); }catch(e){} /* Etapa 3 */
-    q.estudos=q.estudos.filter(function(s){return s.id!==sid});
+    _markDeleted(q,'_deletedStudies',sid);    q.estudos=q.estudos.filter(function(s){return s.id!==sid});
     save();
     if(document.getElementById("sOvl").classList.contains("open")){
       closeStudyEdit();
@@ -7285,7 +6834,6 @@ function _nemSalvar(){
   var est=_nemEstudo(); if(!est) return;
   est._ts=Date.now();
   save();
-  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(_nemSel.qid,est); }catch(e){}
   if(typeof render==='function') render();
 }
 function _nemRender(){
@@ -8975,7 +8523,6 @@ function calcGravarMemoria(){
         'Cálculo de calda gravado na aplicação '+(ap.data||aid),
         {aplicacao:aid, motor:mem.motor, motorVersao:mem.motorVersao});
   }catch(e){}
-  try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(_calcSel&&_calcSel.qid, st.id, ap); }catch(e){}
   try{ if(typeof _stxToast==='function') _stxToast('✓ Cálculo gravado na aplicação'); }catch(e){}
   _calcMemSync();
 }
@@ -10003,7 +9550,6 @@ function _impCriar(){
   /* cultura na quadra, se vazia */
   if(f.cultura && !data[qid].cultura){ data[qid].cultura=f.cultura; if(f.cultivar) data[qid].cultivar=f.cultivar; }
   save();
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(qid); }catch(e){}
   try{ render&&render(); renderLeg&&renderLeg(); updateAgendaBadge&&updateAgendaBadge(); }catch(e){}
   closeImport();
   if(typeof openStudyDetail==='function') openStudyDetail(qid, s.id);
@@ -10327,8 +9873,7 @@ function deleteRandomizacaoLibrary(){
   var sel=document.getElementById('rzLibSelect'), id=sel&&sel.value, item=RZLIB.find(function(x){return x.id===id;});
   if(!item)return;
   requireDeletePassword('Excluir a randomização salva "'+item.nome+'".', function(){
-    RZLIB=RZLIB.filter(function(x){return x.id!==id;}); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('randomizacoes',id); }catch(e){} /* Etapa 3 */
-    saveRZLib();
+    RZLIB=RZLIB.filter(function(x){return x.id!==id;});    saveRZLib();
     if(_rzCtx) openRandomizacaoModal(_rzCtx.qid,_rzCtx.sid);
   });
 }
@@ -10366,8 +9911,7 @@ function removeAplicacao(id){
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
     var ap=study.aplicacoes.find(function(a){return a.id===id});
     var details = ap ? ('Data: ' + ap.data + (ap.bbch ? ' (BBCH ' + ap.bbch + ')' : '')) : 'ID: ' + id;
-    _markDeleted(study,'_deletedAplicacoes',id); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('aplicacoes',id); }catch(e){} /* Etapa 3 */
-    study.aplicacoes=study.aplicacoes.filter(function(a){return a.id!==id});
+    _markDeleted(study,'_deletedAplicacoes',id);    study.aplicacoes=study.aplicacoes.filter(function(a){return a.id!==id});
     logStudyAuditInObject(study, 'Remoção de Aplicação', details);
     save();
     openStudyDetail(qid,sid);
@@ -10382,8 +9926,7 @@ function removeAvaliacaoV2(id){
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
     var av=study.avaliacoes.find(function(a){return a.id===id});
     var details = av ? ('Data: ' + av.data + (av.tipo ? ' (' + av.tipo + ')' : '')) : 'ID: ' + id;
-    _markDeleted(study,'_deletedAvaliacoes',id); try{ if(typeof dbSoftDeleteAval==='function') dbSoftDeleteAval(sid,id); }catch(e){} /* Etapa 3 */
-    study.avaliacoes=study.avaliacoes.filter(function(a){return a.id!==id});
+    _markDeleted(study,'_deletedAvaliacoes',id);    study.avaliacoes=study.avaliacoes.filter(function(a){return a.id!==id});
     logStudyAuditInObject(study, 'Remoção de Avaliação', details);
     save();
     openStudyDetail(qid,sid);
@@ -10394,8 +9937,7 @@ function confirmDeleteStudy(qid,sid){
   requireDeletePassword('Excluir este estudo e seus resultados.', function(){
     safetyBackup('antes de excluir estudo');
     var q=data[qid];
-    _markDeleted(q,'_deletedStudies',sid); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('estudos',sid); }catch(e){} /* Etapa 3 */
-    q.estudos=(q.estudos||[]).filter(function(s){return s.id!==sid});
+    _markDeleted(q,'_deletedStudies',sid);    q.estudos=(q.estudos||[]).filter(function(s){return s.id!==sid});
     save();
     closeStudyDetail();
     showD(qid);
@@ -11454,7 +10996,6 @@ function saveStudyV2(){
   else q.estudos.push(s);
 
   save();
-  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(curV, s); }catch(e){} /* Etapa 3 Fase B */
   _stxToast('✓ Estudo salvo!');
   closeStudyEditV2();
   openStudyDetail(curV,s.id);
@@ -11530,7 +11071,7 @@ function aplMarcarClima(qual){
     if(btn){ btn.disabled=false; if(btn._txt)btn.textContent=btn._txt; }
     _aplRenderClimaBox();
     /* salva já (o horário/clima é dado de campo no momento — não pode depender de lembrar de Salvar) */
-    try{ if(typeof save==='function') save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSaveSoon==='function')cloudSaveSoon(); if(typeof dbUpsertAplicacao==='function'&&editingAplId!=='__new__')dbUpsertAplicacao(curV,curSid,ap); }catch(e){}
+    try{ if(typeof save==='function') save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSaveSoon==='function')cloudSaveSoon(); }catch(e){}
     if(typeof _stxToast==='function')_stxToast((qual==='inicio'?'Início':'Fim')+' registrado · '+hora+(cl&&cl.temp!=null?(' · '+cl.temp+'°C'):''));
   }
   try{ _carimboClima(curV, dia, (passado?hora:null), function(cl){ done(cl); }); }catch(e){ done(null); }
@@ -11883,7 +11424,6 @@ function saveAplicacao(){
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
-  try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(curV,curSid,ap); }catch(e){} /* Etapa 3 Fase B */
   _stxToast('✓ Aplicação salva!');
   if(typeof updateTodayBadge==='function') updateTodayBadge();
   if(typeof updateAgendaBadge==='function') updateAgendaBadge();
@@ -13358,7 +12898,6 @@ function finalizarEstudo(qid,sid){
         {rubrica:1});
       st._ts=Date.now();
       save();
-      try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
       alert('Estudo finalizado.\n\n'+st.finalizacao.nResultados+' resultado(s) de estatística congelados em '+
             _agFormatDateTime(st.finalizacao.em)+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
       try{ renderAgenda(); }catch(e){}
@@ -13389,7 +12928,6 @@ function reabrirEstudo(qid,sid){
       (fin.em?_agFormatDateTime(fin.em):'—')+' foi arquivada.');
     st._ts=Date.now();
     save();
-    try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
     try{ renderAgenda(); }catch(e){}
     openStudyDetail(qid,sid);
   }, {title:'Reabrir estudo', ok:'Reabrir'});
@@ -13618,7 +13156,6 @@ function saveAvaliacao(){
   /* rede de segurança no aparelho: registra a avaliação no diário (IndexedDB). Best-effort, nunca quebra o salvar. */
   try{ journalAval({ ts:Date.now(), who:_currentUserName(), whoEmail:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', qid:curV, quadra:(typeof quadraNome==='function'?quadraNome(curV):curV), sid:curSid, avid:av.id, data:av.data, tipo:av.tipo, bbch:av.bbch, variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), notasMeta:JSON.parse(JSON.stringify(av.notasMeta||{})), motivo:_motivo, mudancas:(_mud&&_mud.length?_mud:null) }); }catch(e){}
   /* Etapa 3 Fase B: escrita dupla nas tabelas por-linha (só com flag _dualWrite; nunca quebra o save do blob) */
-  try{ if(typeof dbUpsertAvaliacao==='function') dbUpsertAvaliacao(curV,curSid,av); }catch(e){}
   _stxToast('✓ Avaliação salva!');
   _avReopen=null;
   if(typeof updateTodayBadge==='function') updateTodayBadge();
@@ -13648,7 +13185,6 @@ function closeEventEdit(){
   draftAp=null;draftAv=null;
   window._avEditing=false;
   try{ if(typeof cloudApplyPending==='function') cloudApplyPending(); }catch(e){}
-  try{ if(typeof cloudReadRowsApplyPending==='function') cloudReadRowsApplyPending(); }catch(e){}
 }
 
 
@@ -13717,41 +13253,8 @@ function _chShell(inner){
     '<div style="margin-top:12px"><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
   '</div>';
 }
-function openCloudHistory(){
-  var m=document.getElementById('chModal');
-  if(!m){ m=document.createElement('div'); m.id='chModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
-  m.style.display='flex';
-  m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
-  if(!cloudInit()){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora — tente de novo com internet.</div>'); return; }
-  try{
-    SB.rpc('app_state_history_list', { n: 60 }).then(function(res){
-      if(res && res.error){ m.innerHTML=_chShell('<div style="border:1px solid #5a4d1f;border-radius:9px;padding:11px;margin-top:10px;color:#dccd8c;font-size:12px">O histórico precisa de um passo único no Supabase (rodar um SQL curto, uma vez). Me peça o SQL.<br><span style="color:#8aa88a">'+esc(res.error.message||'')+'</span></div>'); return; }
-      var rows=(res && res.data) || [];
-      if(!rows.length){ m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:13px;margin-top:12px">Nenhuma versão guardada ainda.</div>'); return; }
-      var html=rows.map(function(r){ var dt=new Date(r.saved_at);
-        return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-          '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+(isNaN(dt.getTime())?'?':dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}))+' <span style="color:#8aa88a;font-weight:400">· v'+(r.rev!=null?r.rev:'?')+'</span></div>'+
-          '<div style="font-size:11px;color:#8aa88a">'+(r.quadras||0)+' quadras · '+(r.locais||0)+' locais · '+(r.estudos||0)+' estudos</div></div>'+
-          '<button onclick="cloudHistoryRestore('+(+r.hid)+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
-      }).join('');
-      m.innerHTML=_chShell(html);
-    }, function(){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Não consegui ler o histórico (rede).</div>'); });
-  }catch(e){ m.innerHTML=_chShell('<div style="color:#dccd8c">Erro: '+esc(e.message)+'</div>'); }
-}
-function cloudHistoryRestore(hid){
-  requireDeletePassword('Restaurar a versão selecionada por cima do estado atual. O estado atual é guardado antes (dá pra voltar).', function(){
-    if(!cloudInit()){ alert('Sem conexão com a nuvem.'); return; }
-    SB.rpc('app_state_history_get', { h: hid }).then(function(res){
-      if(res && res.error){ alert('Erro ao ler a versão: '+res.error.message); return; }
-      var st=res && res.data;
-      if(typeof st==='string'){ try{ st=JSON.parse(st); }catch(e){} }
-      if(!st || !st.data){ alert('Versão vazia ou inválida.'); return; }
-      safetyApply(st);
-      var m=document.getElementById('chModal'); if(m) m.style.display='none';
-      alert('✓ Versão restaurada e enviada para a nuvem.');
-    }, function(){ alert('Não consegui ler a versão (rede).'); });
-  }, {title:'Confirmar restauração', ok:'Restaurar'});
-}
+function openCloudHistory(){ _semNuvem('O histórico de versões vem do Firebase.'); }
+function cloudHistoryRestore(){ _semNuvem('A restauração vem do Firebase.'); }
 /* ===================== VERIFICADOR DE INTEGRIDADE ===================== */
 function integridadeScan(){
   var out=[];
@@ -14782,7 +14285,6 @@ function saveAdminSettings(){
     data.__config.adminPassword = sha256(pass);
   }
   save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
-  if(typeof dbUpsertConfig==='function') dbUpsertConfig(); /* Etapa 3 */
   _stxToast('Configurações salvas — aguarde "salvo na nuvem".');
   renderAdminDashboard();
 }
@@ -14796,30 +14298,7 @@ function _copiarCreds(){ var ac=window._ultimoAcessoCriado; if(!ac)return; var t
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(done,function(){ window.prompt('Copie as credenciais:', t); }); } else { window.prompt('Copie as credenciais:', t); } }catch(e){ window.prompt('Copie as credenciais:', t); } }
 
 /* Chama a Edge Function 'criar-tecnico' (cria conta OU redefine senha). Segredo fica no servidor. */
-function _invocarCriarTecnico(email, nome, senha, isReset){
-  if(!cloudInit()||!SB||!SB.functions){ _adminMsg('Sem conexão com o servidor.',true); return; }
-  var btn=document.getElementById('addUsrBtn'); if(btn && !isReset){ btn.disabled=true; btn.textContent='Criando…'; }
-  if(!isReset) _adminMsg('Criando acesso…',false);
-  SB.functions.invoke('criar-tecnico',{ body:{ email:email, nome:nome, senha:senha } }).then(function(res){
-    if(btn && !isReset){ btn.disabled=false; btn.textContent='Criar acesso do técnico'; }
-    var d=res&&res.data, er=res&&res.error;
-    if(er || !d || d.error){
-      var msg=(d&&d.error) || (er&&er.message) || 'Falha ao criar acesso.';
-      if(/not found|404|Failed to send|fetch|non-2xx|Edge Function|FunctionsFetchError|FunctionsRelayError/i.test(String(msg))){
-        msg='A função "criar-tecnico" ainda não foi publicada no Supabase. (Me avise que te passo o passo de 2 min.)';
-      }
-      _adminMsg(msg,true); if(isReset && typeof _stxToast==='function')_stxToast(msg); return;
-    }
-    window._ultimoAcessoCriado={ email:d.email||email, senha:d.senha||senha, criado:!!d.criado };
-    /* espelha no roster BPL local (allowedUsers) por continuidade do registro */
-    try{ ensureConfig(); var arr=data.__config.allowedUsers||(data.__config.allowedUsers=[]);
-      var f=arr.find(function(u){return u&&u.email&&u.email.toLowerCase().trim()===(email||'').toLowerCase().trim();});
-      if(f){ if(nome)f.nome=nome; } else { arr.push({email:email,nome:nome,addedAt:Date.now()}); }
-      if(data.__config.delUsers) delete data.__config.delUsers[(email||'').toLowerCase().trim()];
-      save(); if(typeof cloudSave==='function'){try{cloudSave();}catch(_e){}} }catch(_e){}
-    renderAdminDashboard();
-  }, function(err){ if(btn&&!isReset){btn.disabled=false;btn.textContent='Criar acesso do técnico';} _adminMsg('Falha de conexão: '+((err&&err.message)||err),true); });
-}
+function _invocarCriarTecnico(){ if(typeof _adminMsg==='function') _adminMsg(_MSG_SEM_SYNC,true); }
 function criarAcessoTecnico(){
   if(!isAdmin() && !window._adminUnlocked){ alert('Destrave o Painel com a senha de administrador.'); return; }
   var email=((document.getElementById('addUsrEmail')||{}).value||'').trim().toLowerCase();
@@ -14832,23 +14311,7 @@ function criarAcessoTecnico(){
 
 /* Lista as CONTAS reais (perfis) — fonte da verdade de quem tem acesso + nome p/ auditoria.
    Status de acesso (ativo/desativado) vem do Auth via a função remover-tecnico (best-effort). */
-function _carregarPerfis(){
-  var box=document.getElementById('admPerfisList'); if(!box) return;
-  if(!cloudInit()||!SB){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Sem conexão.</div>'; return; }
-  SB.from('perfis').select('user_id,email,nome,papel').then(function(res){
-    if(res.error){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Não foi possível ler as contas: '+esc(res.error.message)+'</div>'; return; }
-    var arr=(res.data||[]).slice().sort(function(a,b){ if(a.papel!==b.papel) return a.papel==='admin'?-1:1; return (a.email||'').localeCompare(b.email||''); });
-    window._perfisCache=arr;
-    if(!arr.length){ box.innerHTML='<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Nenhuma conta ainda. Crie a primeira abaixo.</div>'; return; }
-    var done=function(set){ window._disabledSet=set||{}; _renderPerfisList(arr, window._disabledSet); };
-    try{
-      SB.functions.invoke('remover-tecnico',{body:{action:'status'}}).then(function(r){
-        var set={}; if(r&&r.data&&Array.isArray(r.data.disabled)){ r.data.disabled.forEach(function(e){ set[(e||'').toLowerCase()]=1; }); }
-        done(set);
-      }, function(){ done({}); });
-    }catch(e){ done({}); }
-  }, function(){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Falha de conexão ao ler contas.</div>'; });
-}
+function _carregarPerfis(){ var b=document.getElementById('usrList'); if(b) b.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">'+_MSG_SEM_SYNC+'</div>'; }
 function _renderPerfisList(arr, disabledSet){
   var box=document.getElementById('admPerfisList'); if(!box) return;
   box.innerHTML=arr.map(function(p,i){
@@ -14868,39 +14331,9 @@ function _renderPerfisList(arr, disabledSet){
   }).join('');
 }
 /* Desativa (bane, mantém histórico) ou reativa o acesso — via função remover-tecnico (servidor) */
-function alternarAcessoTecnico(i, isOff){
-  var p=(window._perfisCache||[])[i]; if(!p) return;
-  var acao=isOff?'enable':'disable';
-  if(!confirm((isOff?'REATIVAR':'DESATIVAR')+' o acesso de '+(p.nome||p.email)+'?\n\n'+(isOff?'Ele volta a conseguir entrar no app.':'Ele NÃO consegue mais entrar (a conta e todo o histórico são mantidos).'))) return;
-  if(!cloudInit()||!SB||!SB.functions){ if(typeof _stxToast==='function')_stxToast('Sem conexão.'); return; }
-  if(typeof _stxToast==='function')_stxToast(isOff?'Reativando…':'Desativando…');
-  SB.functions.invoke('remover-tecnico',{body:{email:p.email, action:acao}}).then(function(res){
-    var d=res&&res.data, er=res&&res.error;
-    if(er || !d || d.error){
-      var msg=(d&&d.error)||(er&&er.message)||'Falha.';
-      if(/not found|404|Failed to send|FunctionsFetchError|FunctionsRelayError|non-2xx/i.test(String(msg))) msg='A função "remover-tecnico" ainda não foi publicada no Supabase.';
-      if(typeof _stxToast==='function')_stxToast(msg); return;
-    }
-    if(typeof _stxToast==='function')_stxToast(isOff?'Acesso reativado':'Acesso desativado');
-    _carregarPerfis();
-  }, function(){ if(typeof _stxToast==='function')_stxToast('Falha de conexão.'); });
-}
+function alternarAcessoTecnico(){ if(typeof _stxToast==='function') _stxToast(_MSG_SEM_SYNC); }
 /* Salva o NOME no perfil (RLS permite admin) — sem mexer na senha, sem republicar nada */
-function salvarNomePerfil(i){
-  var p=(window._perfisCache||[])[i]; if(!p||!SB) return;
-  var inp=document.getElementById('pf_'+i); var nome=inp?inp.value.trim():'';
-  if(inp) inp.disabled=true;
-  SB.from('perfis').update({nome:nome}).eq('user_id',p.user_id).then(function(res){
-    if(inp) inp.disabled=false;
-    if(res.error){ if(typeof _stxToast==='function')_stxToast('Erro ao salvar nome: '+res.error.message); return; }
-    p.nome=nome;
-    try{ ensureConfig(); var arr=data.__config.allowedUsers||(data.__config.allowedUsers=[]);
-      var f=arr.find(function(u){return u&&u.email&&u.email.toLowerCase().trim()===(p.email||'').toLowerCase().trim();});
-      if(f){ f.nome=nome; } else { arr.push({email:p.email,nome:nome,addedAt:Date.now()}); }
-      save(); if(typeof cloudSave==='function'){try{cloudSave();}catch(_e){}} }catch(_e){}
-    if(typeof _stxToast==='function') _stxToast('Nome salvo: '+(nome||'(vazio)'));
-  }, function(){ if(inp) inp.disabled=false; if(typeof _stxToast==='function')_stxToast('Falha de conexão.'); });
-}
+function salvarNomePerfil(){ if(typeof _adminMsg==='function') _adminMsg(_MSG_SEM_SYNC,true); }
 /* Gera nova senha p/ um técnico existente (mostra para repassar) */
 function redefinirSenhaTecnico(i){
   var p=(window._perfisCache||[])[i]; if(!p) return;
@@ -14923,8 +14356,7 @@ function addAllowedUser(){
   
   try{ if(data.__config.delUsers) delete data.__config.delUsers[email.toLowerCase().trim()]; }catch(e){} /* re-adicionar: limpa lápide antiga */
   data.__config.allowedUsers.push({ email: email, nome: nome, addedAt: Date.now() });
-  save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} } if(typeof dbUpsertConfig==='function') dbUpsertConfig(); /* Etapa 3 */
-  _stxToast('Técnico ' + nome + ' autorizado — aguarde o selo "salvo na nuvem".');
+  save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }  _stxToast('Técnico ' + nome + ' autorizado — aguarde o selo "salvo na nuvem".');
   renderAdminDashboard();
 }
 
@@ -14937,8 +14369,7 @@ function removeAllowedUser(idx){
     var remEmail = (users[idx] && typeof users[idx].email==='string') ? users[idx].email.toLowerCase().trim() : '';
     if(remEmail){ if(!data.__config.delUsers||typeof data.__config.delUsers!=='object') data.__config.delUsers={}; data.__config.delUsers[remEmail]=Date.now(); } /* lápide: não ressuscita no merge */
     users.splice(idx, 1);
-    save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} } if(typeof dbUpsertConfig==='function') dbUpsertConfig(); /* Etapa 3 */
-    _stxToast('Técnico ' + nome + ' removido — aguarde "salvo na nuvem".');
+    save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }    _stxToast('Técnico ' + nome + ' removido — aguarde "salvo na nuvem".');
     renderAdminDashboard();
   }
 }
@@ -14998,7 +14429,7 @@ function soloCor(ordem){ return SOLO_CORES[ordem]||SOLO_CORES._; }
 
 /* ----- Estado guardado em data[qid].solo — sem schema novo -----
    _rowQuadra joga toda chave desconhecida de data[qid] em `extras`, e a leitura
-   devolve inteira: Supabase e Firebase sincronizam de graça, e o merge é
+   devolve inteira: o Firebase sincroniza de graça, e o merge é
    chave-a-chave. Mesmo caminho que data[qid].tipo usou. */
 function soloDaQuadra(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return (d.solo&&d.solo.cartografico)||null; }
 function soloObservado(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return (d.solo&&d.solo.observado)||null; }
@@ -15045,7 +14476,6 @@ function _soloSet(id, patch){
   data[id].solo=solo;
   data[id]._ts=Date.now();
   try{ save(); }catch(e){}
-  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e){}
 }
 function _soloGravar(id, cart){ _soloSet(id, {cartografico:cart}); }
 
@@ -16765,7 +16195,6 @@ function consultarJanela(qid, sid, av, forcar, cb){
     av.janela=j;
     av._ts=Date.now();
     try{ save(); }catch(e){}
-    try{ if(typeof dbUpsertAvaliacao==='function') dbUpsertAvaliacao(qid,sid,av); }catch(e){}
     cb(j);
   }).catch(function(){
     _janelaEstado[chave]='erro';

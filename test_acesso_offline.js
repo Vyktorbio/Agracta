@@ -112,14 +112,28 @@ c4.authInit();
 ck(!abriu(),'e depois do logout o app volta a NÃO abrir offline');
 ck(mostrouGate(),'mostrando o login');
 
-console.log('\n--- Falha ao LER a sessão usa o mesmo critério ---');
-/* Ler a sessão pode falhar por rede. Aparelho autorizado trabalha; aparelho novo
-   não entra. "Não consegui verificar" nunca pode virar "pode entrar". */
+console.log('\n--- A regra vale nas DUAS camadas, não só nesta ---');
+/* O app.js é a rede de segurança; quem manda em uso normal é o firebase-sync.js, que
+   sobrescreve authInit. A regra — "não consegui verificar" nunca vira "pode entrar" —
+   tem de valer nos dois, senão o caminho que roda de verdade fica descoberto. */
 var trecho=src.slice(src.indexOf('function authInit('));
 trecho=trecho.slice(0,trecho.indexOf('\n}\n'));
-ck(/authAparelhoAutorizado\(\)/.test(trecho),'authInit consulta a marca do aparelho');
-ck((trecho.match(/authAparelhoAutorizado\(\)/g)||[]).length>=2,
-   'nos DOIS caminhos: sem cliente de nuvem e falha ao ler a sessão');
+ck(/authAparelhoAutorizado\(\)/.test(trecho),'o fallback do app.js consulta a marca do aparelho');
+
+var fsync=require('fs').readFileSync('firebase-sync.js','utf8');
+var fAuth=fsync.slice(fsync.indexOf('window.authInit=function'));
+fAuth=fAuth.slice(0,fAuth.indexOf('\n  };'));
+ck(/offlineAccessAllowed\(\)/.test(fAuth),'e o caminho que roda de verdade consulta o seu próprio portão');
+var fGate=fsync.slice(fsync.indexOf('function offlineAccessAllowed'));
+fGate=fGate.slice(0,fGate.indexOf('\n'));
+ck(/trustedDevice\(\)/.test(fGate),'que exige aparelho confiável');
+ck(/hasLocalRecords\(\)/.test(fGate),'e dado já autorizado neste aparelho — mais estrito, não menos');
+
+console.log('\n--- O Supabase saiu, e não deixou porta dos fundos ---');
+/* Um fallback que "quase funciona" sincronizaria para o banco antigo (split-brain).
+   Dado de ensaio no banco errado é pior do que app avisando que está fora. */
+ck(!/SUPABASE_URL|createClient|SB\.auth|SB\.from/.test(src),'nenhum cliente Supabase sobrou no app.js');
+ck(/_MSG_SEM_SYNC/.test(src),'e o fallback tem uma mensagem para dizer o que houve');
 ck(!/if\(!cloudInit\(\)\)\{ if\(!_appStarted\)\{ _appStarted=true;[^}]*cloudStart\(\)[^}]*\} return; \}/.test(src),
    'e a linha que abria o app sem portão nenhum não existe mais');
 

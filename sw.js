@@ -2,17 +2,17 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v173';
+var CACHE = 'agracta-app-v174';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './', './index.html',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=25', './theme-2026.css?v=6', './ui-campo.css?v=8', './app.js?v=88', './mapa-base.jpg',
+  './styles.css?v=25', './theme-2026.css?v=6', './ui-campo.css?v=8', './app.js?v=89', './mapa-base.jpg',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
-  './vendor/quadras-default.js', './vendor/biocalc-campo-core.js', './vendor/aplicacao-core.js', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
+  './vendor/quadras-default.js', './vendor/biocalc-campo-core.js', './vendor/aplicacao-core.js', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js', './vendor/biocalc-lab-core.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=7',
   './acesso-horario.js?v=2', './ui-campo.js?v=13', './alvos-catalogo.js?v=1',
@@ -36,7 +36,7 @@ self.addEventListener('fetch', function(e){
   if(e.request.method !== 'GET') return;
   var u = new URL(e.request.url);
   /* Online sempre (sem cache): proxy NDVI, tiles do satélite e Copernicus */
-  if(u.port === '8799' || u.hostname.indexOf('onrender.com') >= 0 || u.hostname.indexOf('supabase.co') >= 0 ||
+  if(u.port === '8799' || u.hostname.indexOf('onrender.com') >= 0 ||
      u.hostname.indexOf('googleapis.com') >= 0 || u.hostname.indexOf('firebaseio.com') >= 0 ||
      u.hostname.indexOf('arcgisonline') >= 0 || u.hostname.indexOf('google.com') >= 0 || u.hostname.indexOf('dataspace') >= 0 ||
      u.hostname.indexOf('embrapa.br') >= 0) return;  /* GeoInfo: tiles e consulta de solo */

@@ -43,7 +43,7 @@ function perto(a,b,tol,n){ var ok=(a!=null&&Math.abs(a-b)<=tol);
 /* Campos que a tela da calculadora estaria mostrando. */
 var campos={calcLen:'5', calcWid:'2', calcPlots:'4', calcVol:'200',
             calcDead:'300', calcBottles:'1', calcCap:'10'};
-var salvou=0, upserts=[], toasts=[], alertas=[], auditoria=[];
+var salvou=0, empurrou=0, toasts=[], alertas=[], auditoria=[];
 
 var ctx={
   console:console, Date:Date, String:String, Number:Number, Math:Math, JSON:JSON,
@@ -59,7 +59,7 @@ var ctx={
   save:function(){ salvou++; },
   alert:function(m){ alertas.push(m); },
   _stxToast:function(m){ toasts.push(m); },
-  dbUpsertAplicacao:function(q,s,a){ upserts.push(a.id); },
+  cloudSaveSoon:function(){ empurrou++; },
   logStudyAuditInObject:function(st,acao,det,extra){ auditoria.push({acao:acao,extra:extra}); },
   _currentUserName:function(){ return 'Daria'; },
   isoToBR:function(d){ var x=String(d||'').split('-'); return x.length===3?(x[2]+'/'+x[1]+'/'+x[0]):d; },
@@ -173,7 +173,7 @@ ck(!!ap2.memoriaCalculo,'a memória é gravada na aplicação escolhida');
 eq(ap2.memoriaCalculo.estudo.codigo,'EST-26148','com o estudo certo');
 ck(!ESTUDO.aplicacoes[0].memoriaCalculo,'e não vaza para a outra aplicação');
 ck(salvou>0,'salva no aparelho');
-ck(upserts.indexOf('ap2')>=0,'e enfileira a sincronização');
+ck(salvou>0,'e o save() que leva para a nuvem foi chamado');
 eq(auditoria.length,1,'a gravação entra na trilha de auditoria do estudo');
 eq(auditoria[0].extra.motorVersao,BC.VERSION,'com a versão do motor na trilha');
 

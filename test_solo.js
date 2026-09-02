@@ -46,7 +46,7 @@ function gira(){ return new Promise(function(r){setImmediate(r);}); }
    MESMAS funcoes pelos MESMOS nomes — que e o ponto de a ponte existir. */
 var NutricaoCore=require('./vendor/nutricao-core.js');
 
-var salvou=0, upserts=[];
+var salvou=0, empurrou=0;
 var store={};
 var ctx={
   console:console,Promise:Promise,Date:Date,String:String,Number:Number,Math:Math,
@@ -64,7 +64,7 @@ var ctx={
             createElement:function(){return {};}},
   esc:function(v){return String(v==null?'':v);},
   save:function(){salvou++;},
-  dbUpsertQuadra:function(q){upserts.push(q);},
+  cloudSaveSoon:function(){empurrou++;},
   ensureQGEO:function(){},
   quadraCenter:function(id){
     var pts=ctx.QGEO[id]; if(!pts||!pts.length) return null;
@@ -163,7 +163,9 @@ eq(ctx.data.Q1.solo.cartografico.fonte,'embrapa-wfs','procedência gravada');
 eq(ctx.soloObservado('Q1'),null,'observado nasce vazio, separado do cartográfico');
 ck(ctx.data.Q1.solo.cartografico.ts>0,'carimbo de quando foi consultado');
 eq(ctx.data.Q1.solo.cartografico.app,'teste','versão do app registrada junto');
-ck(salvou>0 && upserts.indexOf('Q1')>=0,'salva local e enfileira sincronização');
+/* save() É o gatilho de sincronização: o firebase-sync.js embrulha window.save e
+   sobe o checkpoint depois de cada chamada (verificado em test_firebase_sync.js). */
+ck(salvou>0,'salva no aparelho — e é o save() que leva o dado para a nuvem');
 
 console.log('\n--- saveE não pode apagar o solo (regressão) ---');
 /* Reproduz o miolo de saveE(): o objeto é remontado do zero e só sobrevive o que

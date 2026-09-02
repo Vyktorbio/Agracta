@@ -97,4 +97,19 @@ assert(rebuilt.qgeo.Q1[1][1] === -47.51, 'geometria não voltou');
 assert(rebuilt.notas_campo[0].foto === photo, 'foto fragmentada não voltou');
 assert(JSON.stringify(flat).indexOf('[[-22.58') < 0, 'array aninhado chegou cru ao Firestore');
 
+/* ---- O save() é o gatilho de sincronização ----
+   Depois que o Supabase saiu não há mais escrita dupla nem outbox: o único caminho do
+   dado até a nuvem é o firebase-sync.js embrulhar window.save. Se esse embrulho sumir
+   num refactor, o app continua salvando no aparelho e para de sincronizar — em
+   silêncio, que é o pior jeito de quebrar. */
+var _fsrc = fs.readFileSync('firebase-sync.js', 'utf8');
+assert(/var\s+originalSave\s*=\s*window\.save/.test(_fsrc), 'o save() original não é guardado');
+assert(/window\.save\s*=\s*function/.test(_fsrc), 'window.save não é substituído pelo embrulho');
+var _w = _fsrc.slice(_fsrc.indexOf('var originalSave'));
+_w = _w.slice(0, _w.indexOf('function firebaseInit'));
+assert(/originalSave\.apply/.test(_w), 'o embrulho não chama o original — salvar local não pode depender da rede');
+assert(/checkpointPut/.test(_w), 'o embrulho não empurra o checkpoint');
+assert(/return\s+out/.test(_w), 'o embrulho não devolve o que o original devolveu');
+
 console.log('firebase-sync roundtrip: ok');
+console.log('gatilho de sincronizacao (save embrulhado): ok');

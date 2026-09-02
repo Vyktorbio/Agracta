@@ -90,7 +90,6 @@ window.LF = window.L;
 executeFile(path.join(vendorDir, 'leaflet-rotate.js'));
 executeFile(path.join(vendorDir, 'Leaflet.ImageOverlay.Rotated.js'));
 executeFile(path.join(vendorDir, 'quadras-default.js'));
-executeFile(path.join(vendorDir, 'supabase.js'));
 
 // 2. Extract and run inline script blocks from index.html
 var scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;

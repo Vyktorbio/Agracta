@@ -48,7 +48,7 @@ function responde(obj){ pendentes.shift().res({ok:true,json:function(){return Pr
 function falha(){ pendentes.shift().rej(new Error('rede')); }
 function gira(){ return new Promise(function(r){ setImmediate(function(){ setImmediate(r); }); }); }
 
-var salvou=0, upserts=[], toasts=[];
+var salvou=0, empurrou=0, toasts=[];
 var ctx={
   console:console, Promise:Promise, Date:Date, String:String, Number:Number, Math:Math,
   JSON:JSON, isFinite:isFinite, Object:Object, Array:Array, setImmediate:setImmediate,
@@ -57,7 +57,7 @@ var ctx={
   esc:function(v){ return String(v==null?'':v); },
   isoToBR:function(d){ var x=String(d||'').split('-'); return x.length===3?(x[2]+'/'+x[1]+'/'+x[0]):d; },
   save:function(){ salvou++; },
-  dbUpsertAvaliacao:function(q,s,a){ upserts.push(a.id); },
+  cloudSaveSoon:function(){ empurrou++; },
   _stxToast:function(m){ toasts.push(m); },
   _stationMacForQuadra:function(qid){ return (qid==='Q1')?'AA:BB':null; },
   openStudyDetail:function(){}
@@ -124,7 +124,7 @@ eq(av.janela.coberturaPct,71,'cobertura 71%');
 eq(av.janela.de,'2026-08-20','com o início da janela gravado');
 eq(av.janela.aplicacao,'ap2','e QUAL aplicação a começou');
 ck(salvou>0,'e foi salva');
-eq(upserts[0],'av1','e sincronizada');
+ck(salvou>0,'e o save() que leva para a nuvem foi chamado');
 
 console.log('\n--- Fica gravada: não se recalcula a cada abertura ---');
 /* A leitura de uma estação muda quando a Ecowitt reprocessa. Num registro BPL vale o
