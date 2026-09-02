@@ -1883,6 +1883,7 @@ function setUnsavedChanges(val){
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
 function cloudState(){
   ensureQGEO(); ensureLocais(); ensureNotas(); ensureCfgTS();
+  try{ ensureItens(); }catch(e){}
   return {
     data:data,
     qgeo:QGEO,
@@ -1900,6 +1901,11 @@ function cloudState(){
     _deletedLocais:_delLocais,
     notas_campo:NOTAS_CAMPO,
     _deletedNotas:_delNotas,
+    /* O catálogo é da ORGANIZAÇÃO, não de uma quadra: entra aqui pelo mesmo caminho
+       de LOCAIS, com mapa de timestamps para o merge e lápides para exclusão. */
+    itens:(typeof ITENS!=='undefined'?ITENS:null),
+    itensts:(typeof ITENS_TS!=='undefined'?ITENS_TS:null),
+    _deletedItens:(typeof _delItens!=='undefined'?_delItens:null),
     rev:(_cloudRev||0)
   };
 }
@@ -1956,6 +1962,10 @@ function cloudApply(st){
     if(st._deletedLocais && typeof st._deletedLocais==='object'){ _delLocais=_mergeObj(_delLocais, st._deletedLocais); }
     if(st.notas_campo && Array.isArray(st.notas_campo)){ NOTAS_CAMPO=st.notas_campo; try{ localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO)); }catch(e){} }
     if(st._deletedNotas && typeof st._deletedNotas==='object'){ _delNotas=_mergeObj(_delNotas, st._deletedNotas); try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(e){} }
+    if(st.itens && typeof st.itens==='object'){ ensureItens(); ITENS=st.itens; }
+    if(st.itensts && typeof st.itensts==='object'){ ITENS_TS=st.itensts; }
+    if(st._deletedItens && typeof st._deletedItens==='object'){ _delItens=_mergeObj(_delItens, st._deletedItens); }
+    try{ saveItens(); }catch(e){}
     saveDelTombs();
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
     ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
@@ -10697,7 +10707,31 @@ function renderStudyEditModal(){
     s.tratamentos.forEach(function(t,i){
       h+='<div class="se-trat" data-idx="'+i+'">';
       h+='<div class="se-trat-head"><span class="se-trat-id">'+esc(t.id)+'</span><button class="se-trat-del" onclick="removeTrat('+i+')">×</button></div>';
-      h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'">';
+      /* O produto vira SELETOR do banco, com o texto livre continuando disponível.
+         Trocar o texto por um seletor obrigatório travaria quem tem o item na mão e
+         ainda não o cadastrou — e travar quem está com pressa é como se ensina a
+         contornar o cadastro. */
+      var _itSel=tratItem(t);
+      h+='<div style="display:flex;gap:6px;align-items:stretch">'+
+         '<select data-f="__item" style="flex:1;min-width:0" onchange="seTratItem('+i+',this.value)">'+
+         '<option value="">— produto por texto livre —</option>'+
+         itensLista().map(function(x){
+           return '<option value="'+esc(x.id)+'"'+(_itSel&&_itSel.id===x.id?' selected':'')+'>'+esc(x.nome||x.id)+(x.codigo?(' · '+esc(x.codigo)):'')+'</option>';
+         }).join('')+
+         '</select>'+
+         '<button type="button" class="btn-sm" style="flex:0 0 auto" onclick="abrirItens()" title="Abrir o banco de itens">📦</button>'+
+         '</div>';
+      h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'"'+(_itSel?' readonly style="opacity:.7"':'')+'>';
+      if(_itSel){
+        var _dsc=itemDosesPara(_itSel.id, studyCultura(s,data[curV]||{}), '');
+        if(_dsc.length){
+          h+='<select data-f="__dose" onchange="seTratDose('+i+',this.value)"><option value="">— escolher dose cadastrada —</option>'+
+             _dsc.map(function(d){ return '<option value="'+esc(d.id)+'"'+((t.doseRef&&t.doseRef.doseId===d.id)?' selected':'')+'>'+esc(doseTexto(d))+' · '+esc(doseOrigemRotulo(d.origem))+'</option>'; }).join('')+
+             '</select>';
+        }
+        if(t.doseRef) h+='<div class="e-hint" style="margin:2px 0 0">Dose de: <b>'+esc(doseOrigemRotulo(t.doseRef.origem))+'</b>'+(t.doseRef.documento?(' · '+esc(t.doseRef.documento)):'')+'</div>';
+        if(tratDoseForaDaBula(t)) h+='<div class="calc-warn">⚠ Dose fora da faixa registrada nesta indicação — uso experimental. Descreva o motivo nas observações do tratamento.</div>';
+      }
       h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1"><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
       /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
          drone: metade dos tratamentos fecha o volume com óleo de soja. Vazio
@@ -10875,6 +10909,24 @@ function syncStudyInputs(){
   var _ft=(workingStudy.tratamentos||[]).find(function(t){return t&&t.testemunha;}); workingStudy.testemunha=_ft?_ft.id:''; /* legado s.testemunha reflete os checkboxes (não ressuscita T1) */
 }
 
+/* Ligar/desligar o item do tratamento. Redesenha porque a lista de doses muda com o
+   item, e mostrar dose de outro produto seria pior que não mostrar nenhuma. */
+function seTratItem(idx, itemId){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
+  if(!t) return;
+  if(itemId) tratLigarItem(t, itemId, null); else tratDesligarItem(t);
+  renderStudyEditModal();
+}
+function seTratDose(idx, doseId){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
+  if(!t||!t.itemId) return;
+  if(doseId) tratLigarItem(t, t.itemId, doseId);
+  else { delete t.doseRef; }
+  renderStudyEditModal();
+}
+
 function syncTratInputs(){
   /* Lê os valores atuais dos inputs para não perder dados ao renderizar */
   var trats=document.querySelectorAll("#seTratList .se-trat");
@@ -10893,6 +10945,10 @@ function syncTratInputs(){
       t.aplicacao=t.aplicacao||{};
       t.aplicacao.metodo=sel.value;
     });
+    /* Os seletores de item e dose têm handler próprio e NÃO devem virar campo do
+       tratamento: t.__item seria lixo persistido, e o sweep de extras o levaria
+       para o banco. */
+    delete t.__item; delete t.__dose;
   });
 }
 
@@ -15083,6 +15139,496 @@ function janelaBuscar(qid, sid, avid, forcar){
   });
 }
 
+
+
+/* ===================== BANCO DE ITENS E DOSES ====================================
+   Até aqui o produto de um tratamento era uma STRING digitada. "Sankari", "sankari",
+   "SANKARI 500 SC" e "Sankari (lote novo)" eram quatro produtos diferentes para o
+   app, e nenhum deles se ligava a nada: nem ao registro, nem à bula, nem ao mesmo
+   produto num outro ensaio. Comparar dois estudos exigia um humano lembrando que os
+   dois textos eram a mesma coisa.
+
+   O catálogo dá IDENTIDADE ao item. Cadastra-se uma vez — o item do cliente chega,
+   entra aqui — e ele passa a ser selecionável em qualquer protocolo. Daí em diante,
+   "onde mais este item foi testado" vira uma pergunta que o app pode responder.
+
+   TRÊS COISAS SÃO DIFERENTES, e confundi-las é o erro que este módulo evita:
+
+     ITEM   — a identidade. O que o produto É.
+     DOSE   — quanto se pretende usar, PARA QUAL cultura e alvo. Uma dose solta
+              ("1 L/ha") não significa nada: 1 L/ha em soja contra ferrugem e 1 L/ha
+              em milho contra lagarta são duas informações, não uma.
+     LOTE   — o material físico. Fora do escopo por decisão do autor: a cadeia de
+              custódia não entra agora. O modelo abaixo não a impede de entrar depois.
+
+   ONDE MORA: coleção GLOBAL, como LOCAIS e RZLIB — não pendurada numa quadra. Um item
+   é da organização, não de um talhão. Entra em cloudState() pelo mesmo caminho, com
+   mapa de timestamps para o merge e lápides para exclusão.
+
+   O QUE ESTE MÓDULO NÃO FAZ: recomendar. Ele guarda o que a bula diz e o que o
+   patrocinador mandou, com a origem à vista. Escolher a dose continua sendo do
+   pesquisador, e dose fora da indicação registrada é permitida — com justificativa,
+   porque ensaio experimental existe para isso. ================================== */
+
+var ITENS_KEY='agracta-itens-v1', ITENSTS_KEY='agracta-itens-ts-v1', DELITENS_KEY='agracta-itens-del-v1';
+var ITENS=null, ITENS_TS=null;
+var _delItens=(function(){ try{ return JSON.parse(localStorage.getItem(DELITENS_KEY)||'{}')||{}; }catch(e){ return {}; } })();
+
+/* Os tipos que um ensaio precisa distinguir. Não é taxonomia de gosto: o tipo muda o
+   que a tela pede e o que o relatório imprime. */
+var ITEM_TIPOS=[
+  ['teste',      'Item-teste experimental'],
+  ['referencia', 'Referência / produto registrado'],
+  ['adjuvante',  'Adjuvante'],
+  ['fertilizante','Fertilizante ou nutricional'],
+  ['biologico',  'Agente biológico'],
+  ['padrao',     'Padrão analítico'],
+  ['veiculo',    'Veículo, controle ou outro componente']
+];
+var ITEM_SITUACOES=[
+  ['registrado','Registrado'], ['experimental','Experimental'], ['ret','RET'],
+  ['cancelado','Cancelado'], ['na','Não aplicável']
+];
+/* De onde a dose veio. É o campo mais importante da dose: um número sem origem não
+   se defende numa auditoria, e "0,8 L/ha" da bula e "0,8 L/ha porque o patrocinador
+   pediu" são registros diferentes. */
+var DOSE_ORIGENS=[
+  ['bula',        'Indicação registrada (bula)'],
+  ['patrocinador','Do patrocinador'],
+  ['experimental','Hipótese experimental'],
+  ['historica',   'Usada em ensaio anterior'],
+  ['manual',      'Informada manualmente']
+];
+function itemTipoRotulo(k){ var x=ITEM_TIPOS.filter(function(t){return t[0]===k;})[0]; return x?x[1]:(k||''); }
+function doseOrigemRotulo(k){ var x=DOSE_ORIGENS.filter(function(t){return t[0]===k;})[0]; return x?x[1]:(k||''); }
+
+function ensureItens(){
+  if(!ITENS){ try{ ITENS=JSON.parse(localStorage.getItem(ITENS_KEY)||'{}')||{}; }catch(e){ ITENS={}; } }
+  if(!ITENS_TS){ try{ ITENS_TS=JSON.parse(localStorage.getItem(ITENSTS_KEY)||'{}')||{}; }catch(e){ ITENS_TS={}; } }
+  return ITENS;
+}
+function saveItens(){
+  try{ localStorage.setItem(ITENS_KEY, JSON.stringify(ITENS||{})); }catch(e){}
+  try{ localStorage.setItem(ITENSTS_KEY, JSON.stringify(ITENS_TS||{})); }catch(e){}
+  try{ localStorage.setItem(DELITENS_KEY, JSON.stringify(_delItens||{})); }catch(e){}
+}
+function _touchItem(id){ ensureItens(); ITENS_TS[id]=Date.now(); saveItens(); }
+
+/* Chave de comparação para achar duplicata. Sem isto o catálogo vira lista de
+   sinônimos em dois meses e para de ser identidade — que é a única coisa que ele
+   tinha para oferecer. */
+function _itemChave(nome){
+  return normStr(nome).replace(/[^a-z0-9]+/g,' ').trim();
+}
+/* Itens cujo nome bate com este, ignorando caixa, acento e pontuação. Não funde
+   sozinho: apenas mostra, para a pessoa decidir. Fusão automática de cadastro é
+   como se perde dado sem ninguém notar. */
+function itemPossiveisDuplicatas(nome, exceto){
+  ensureItens();
+  var k=_itemChave(nome); if(!k) return [];
+  return Object.keys(ITENS).filter(function(id){
+    if(id===exceto || _delItens[id]) return false;
+    var it=ITENS[id]||{};
+    if(_itemChave(it.nome)===k) return true;
+    return (it.sinonimos||[]).some(function(s){ return _itemChave(s)===k; });
+  }).map(function(id){ return ITENS[id]; });
+}
+
+function itensLista(){
+  ensureItens();
+  return Object.keys(ITENS).filter(function(id){ return !_delItens[id]; })
+    .map(function(id){ return ITENS[id]; })
+    .sort(function(a,b){ return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
+}
+function itemPorId(id){ ensureItens(); return (id&&!_delItens[id])?(ITENS[id]||null):null; }
+
+function itemNovo(dados){
+  ensureItens();
+  dados=dados||{};
+  var id=(dados.id||('it'+uid().slice(1)));
+  ITENS[id]={
+    id:id,
+    nome:String(dados.nome||'').trim(),
+    codigo:String(dados.codigo||'').trim(),        /* codigo experimental do patrocinador */
+    sinonimos:Array.isArray(dados.sinonimos)?dados.sinonimos.slice():[],
+    tipo:(ITEM_TIPOS.some(function(t){return t[0]===dados.tipo;})?dados.tipo:'teste'),
+    situacao:(ITEM_SITUACOES.some(function(t){return t[0]===dados.situacao;})?dados.situacao:'experimental'),
+    titular:String(dados.titular||'').trim(),      /* cliente / patrocinador / fabricante */
+    registro:String(dados.registro||'').trim(),
+    formulacao:String(dados.formulacao||'').trim(),
+    concentracao:String(dados.concentracao||'').trim(),
+    ativos:String(dados.ativos||'').trim(),
+    armazenamento:String(dados.armazenamento||'').trim(),
+    obs:String(dados.obs||'').trim(),
+    /* Código cego: em ensaio de patrocinador o executor não pode ver a identidade.
+       Guardar o campo desde o começo é barato; retroencaixá-lo depois de o item
+       aparecer em relatório e exportação é caro. */
+    codigoCego:String(dados.codigoCego||'').trim(),
+    doses:[],
+    criadoEm:Date.now(),
+    criadoPor:(typeof _currentUserName==='function'?(_currentUserName()||''):'')
+  };
+  _touchItem(id);
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return ITENS[id];
+}
+function itemAtualizar(id, patch){
+  var it=itemPorId(id); if(!it) return null;
+  for(var k in patch){ if(Object.prototype.hasOwnProperty.call(patch,k) && k!=='id' && k!=='doses') it[k]=patch[k]; }
+  it.revisadoEm=Date.now();
+  _touchItem(id);
+  return it;
+}
+/* Exclusão por lápide, como quadras e locais: sem isso um aparelho que sincroniza
+   depois ressuscita o item apagado. */
+function itemExcluir(id){
+  if(!itemPorId(id)) return false;
+  _delItens[id]=Date.now();
+  saveItens();
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return true;
+}
+
+/* ---- Doses ----
+   A dose PERTENCE ao item e é qualificada por cultura e alvo. "0,8 L/ha" sozinho não
+   é informação: precisa dizer em quê e contra o quê. Tudo o mais é opcional — um
+   cadastro que exige doze campos por dose não é preenchido, e aí o pesquisador volta
+   a digitar o nome do produto à mão, que é exatamente o que o catálogo veio acabar. */
+function itemDoses(id){ var it=itemPorId(id); return it?(it.doses||(it.doses=[])):[]; }
+
+function itemDoseAdicionar(id, d){
+  var it=itemPorId(id); if(!it) return null;
+  if(!Array.isArray(it.doses)) it.doses=[];
+  d=d||{};
+  var dose={
+    id:('ds'+uid().slice(1)),
+    cultura:String(d.cultura||'').trim(),
+    alvo:String(d.alvo||'').trim(),
+    valor:(d.valor===''||d.valor==null)?null:Number(String(d.valor).replace(',','.')),
+    valorMax:(d.valorMax===''||d.valorMax==null)?null:Number(String(d.valorMax).replace(',','.')),
+    unidade:String(d.unidade||'L/ha').trim(),
+    volumeCalda:String(d.volumeCalda||'').trim(),
+    modalidade:String(d.modalidade||'').trim(),
+    aplicacoesMax:(d.aplicacoesMax===''||d.aplicacoesMax==null)?null:parseInt(d.aplicacoesMax,10),
+    intervaloDias:(d.intervaloDias===''||d.intervaloDias==null)?null:parseInt(d.intervaloDias,10),
+    epoca:String(d.epoca||'').trim(),
+    restricoes:String(d.restricoes||'').trim(),
+    origem:(DOSE_ORIGENS.some(function(o){return o[0]===d.origem;})?d.origem:'manual'),
+    documento:String(d.documento||'').trim(),      /* bula, ficha tecnica, e-mail do cliente */
+    pagina:String(d.pagina||'').trim(),
+    consultadoEm:String(d.consultadoEm||'').trim(),
+    situacao:'ativa',
+    criadaEm:Date.now()
+  };
+  it.doses.push(dose);
+  _touchItem(id);
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return dose;
+}
+/* Dose não se apaga: ela some da escolha mas continua existindo, porque um protocolo
+   antigo pode tê-la usado e o registro daquele ensaio não pode ficar apontando para
+   o nada. */
+function itemDoseAposentar(id, doseId){
+  var d=(itemDoses(id)||[]).filter(function(x){ return x.id===doseId; })[0];
+  if(!d) return false;
+  d.situacao='substituida';
+  d.aposentadaEm=Date.now();
+  _touchItem(id);
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return true;
+}
+
+/* Doses que servem para ESTA cultura e ESTE alvo. Dose sem cultura declarada serve
+   para qualquer uma — é o caso do adjuvante, que não é específico. */
+function itemDosesPara(id, cultura, alvo){
+  var c=normStr(cultura||''), a=normStr(alvo||'');
+  return (itemDoses(id)||[]).filter(function(d){
+    if(d.situacao!=='ativa') return false;
+    if(d.cultura && c && normStr(d.cultura)!==c) return false;
+    if(d.alvo && a && normStr(d.alvo)!==a) return false;
+    return true;
+  });
+}
+/* Como a dose se lê numa linha. É este texto que vai para o seletor do protocolo. */
+function doseTexto(d){
+  if(!d) return '';
+  function n(v){ return (v==null||!isFinite(v))?'':String(v).replace('.',','); }
+  var faixa=n(d.valor)+((d.valorMax!=null&&isFinite(d.valorMax)&&d.valorMax!==d.valor)?('–'+n(d.valorMax)):'');
+  var p=[];
+  if(d.cultura) p.push(d.cultura);
+  if(d.alvo) p.push(d.alvo);
+  p.push(faixa+(d.unidade?(' '+d.unidade):''));
+  return p.join(' · ');
+}
+
+
+
+/* ---- Telas ----
+   A regra de tela é uma só: cadastrar um item tem de ser MAIS RÁPIDO que digitar o
+   nome à mão. No instante em que não for, o pesquisador digita à mão e o catálogo
+   morre. Por isso o cadastro pede quatro campos e o resto é opcional. */
+var _itemAberto=null, _itemBusca='';
+
+function _itensCss(){
+  if(document.getElementById('itensCss')) return;
+  var s=document.createElement('style'); s.id='itensCss';
+  s.textContent=
+   '.it-ovl{position:fixed;inset:0;z-index:3400;background:rgba(0,0,0,.62);display:none;align-items:flex-start;justify-content:center;padding:14px;overflow:auto;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}'+
+   '.it-box{width:100%;max-width:640px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.55);color:var(--text,#e8efe9);font-family:var(--font,system-ui);padding:16px;margin:auto}'+
+   '.it-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}'+
+   '.it-t{font-size:16px;font-weight:900}.it-x{background:none;border:0;color:var(--text-3,#7f9085);font-size:22px;cursor:pointer;line-height:1}'+
+   '.it-busca{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:var(--text,#e8efe9);padding:10px 12px;font-size:14px;outline:none;margin-bottom:10px}'+
+   '.it-lin{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;border:1px solid var(--border,#26322b);margin-bottom:6px;cursor:pointer;background:var(--surface-2,#0c1210)}'+
+   '.it-lin:hover{border-color:#7ba7d0}'+
+   '.it-nome{font-weight:800;font-size:13.5px}.it-sub{font-size:11px;color:var(--text-3,#7f9085);margin-top:2px}'+
+   '.it-tag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#8fb6d8;background:rgba(120,170,215,.13);border:1px solid rgba(120,170,215,.3);border-radius:5px;padding:1px 6px;white-space:nowrap}'+
+   '.it-f{margin-bottom:9px}.it-f label{display:block;font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--text-3,#7f9085);font-weight:800;margin-bottom:4px}'+
+   '.it-f input,.it-f select,.it-f textarea{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;color:var(--text,#e8efe9);padding:9px 10px;font-size:14px;outline:none;font-family:inherit}'+
+   '.it-row{display:flex;gap:9px}.it-row>*{flex:1;min-width:0}'+
+   '.it-btn{background:#1f7a44;color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;font-family:inherit;font-size:13px}'+
+   '.it-btn.alt{background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border:1px solid var(--border,#26322b)}'+
+   '.it-dup{background:rgba(220,205,140,.10);border:1px solid rgba(220,205,140,.32);color:#dccd8c;border-radius:9px;padding:8px 10px;font-size:11.5px;line-height:1.5;margin-bottom:9px}'+
+   '.it-dose{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 9px;border-radius:9px;border:1px solid var(--border,#26322b);margin-bottom:5px;font-size:12.5px}'+
+   '.it-dose b{font-weight:800}.it-vazio{font-size:12px;color:var(--text-3,#7f9085);font-style:italic;padding:10px 0}';
+  document.head.appendChild(s);
+}
+function _itOvl(){
+  _itensCss();
+  var o=document.getElementById('itensOvl');
+  if(!o){ o=document.createElement('div'); o.id='itensOvl'; o.className='it-ovl';
+    o.onclick=function(e){ if(e.target===o) fecharItens(); }; document.body.appendChild(o); }
+  return o;
+}
+function fecharItens(){ var o=document.getElementById('itensOvl'); if(o) o.style.display='none'; _itemAberto=null; }
+
+function abrirItens(){
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  ensureItens(); _itemAberto=null;
+  var o=_itOvl(); o.style.display='flex'; _itensPinta();
+}
+function _itensBusca(v){ _itemBusca=v||''; _itensPinta(); }
+
+function _itensPinta(){
+  var o=document.getElementById('itensOvl'); if(!o) return;
+  if(_itemAberto){ o.innerHTML=_itemFichaHtml(_itemAberto); return; }
+  var q=normStr(_itemBusca), lista=itensLista().filter(function(it){
+    if(!q) return true;
+    return normStr(it.nome).indexOf(q)>=0 || normStr(it.codigo).indexOf(q)>=0 ||
+           normStr(it.titular).indexOf(q)>=0 || normStr(it.ativos).indexOf(q)>=0;
+  });
+  var h='<div class="it-box"><div class="it-top"><div class="it-t">📦 Banco de itens</div>'+
+        '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
+  h+='<input class="it-busca" placeholder="Buscar por nome, código, cliente ou ingrediente ativo" value="'+esc(_itemBusca)+'" oninput="_itensBusca(this.value)">';
+  h+='<button class="it-btn" onclick="itemAbrirNovo()">+ Cadastrar item</button>';
+  h+='<div style="margin-top:12px">';
+  if(!lista.length){
+    h+='<div class="it-vazio">'+(_itemBusca?'Nenhum item com esse termo.':'Nenhum item cadastrado ainda. Cadastre uma vez e ele fica disponível em todos os protocolos.')+'</div>';
+  }
+  lista.forEach(function(it){
+    var nd=(it.doses||[]).filter(function(d){return d.situacao==='ativa';}).length;
+    h+='<div class="it-lin" onclick="itemAbrir(\''+esc(it.id)+'\')">'+
+       '<div><div class="it-nome">'+esc(it.nome||'(sem nome)')+(it.codigo?(' <span style="opacity:.6;font-weight:600">'+esc(it.codigo)+'</span>'):'')+'</div>'+
+       '<div class="it-sub">'+esc([itemTipoRotulo(it.tipo), it.titular, it.formulacao].filter(Boolean).join(' · '))+
+       (nd?(' · '+nd+' dose'+(nd===1?'':'s')):' · sem dose')+'</div></div>'+
+       '<span class="it-tag">'+esc(it.situacao||'')+'</span></div>';
+  });
+  h+='</div></div>';
+  o.innerHTML=h;
+}
+
+function itemAbrir(id){ _itemAberto=id; _itensPinta(); }
+function itemVoltar(){ _itemAberto=null; _itensPinta(); }
+
+function itemAbrirNovo(){
+  var it=itemNovo({nome:''});
+  _itemAberto=it.id; _itensPinta();
+  setTimeout(function(){ var i=document.getElementById('itNome'); if(i) i.focus(); },50);
+}
+
+function _itemFichaHtml(id){
+  var it=itemPorId(id);
+  if(!it) return '<div class="it-box"><div class="it-vazio">Item não encontrado.</div><button class="it-btn alt" onclick="itemVoltar()">Voltar</button></div>';
+  var dup=itemPossiveisDuplicatas(it.nome, it.id);
+  var h='<div class="it-box"><div class="it-top"><div class="it-t">'+esc(it.nome||'Novo item')+'</div>'+
+        '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
+  h+='<button class="it-btn alt" onclick="itemVoltar()">‹ Todos os itens</button><div style="height:10px"></div>';
+
+  /* Duplicata avisa, não funde. Fusão automática de cadastro é como se perde dado
+     sem ninguém notar. */
+  if(dup.length){
+    h+='<div class="it-dup">⚠ Já existe '+(dup.length===1?'um item':'itens')+' com esse nome: '+
+       esc(dup.map(function(d){return d.nome;}).join(', '))+
+       '. Um mesmo produto cadastrado duas vezes deixa de ser identidade — confira antes de continuar.</div>';
+  }
+
+  h+='<div class="it-f"><label>Nome</label><input id="itNome" value="'+esc(it.nome||'')+'" placeholder="como o cliente chama" onchange="itemCampo(\''+esc(it.id)+'\',\'nome\',this.value)"></div>';
+  h+='<div class="it-row">'+
+     '<div class="it-f"><label>Código experimental</label><input value="'+esc(it.codigo||'')+'" placeholder="ex.: XYZ-2026-01" onchange="itemCampo(\''+esc(it.id)+'\',\'codigo\',this.value)"></div>'+
+     '<div class="it-f"><label>Cliente / titular</label><input value="'+esc(it.titular||'')+'" onchange="itemCampo(\''+esc(it.id)+'\',\'titular\',this.value)"></div>'+
+     '</div>';
+  h+='<div class="it-row">'+
+     '<div class="it-f"><label>Tipo</label><select onchange="itemCampo(\''+esc(it.id)+'\',\'tipo\',this.value)">'+
+       ITEM_TIPOS.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===it.tipo?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('')+'</select></div>'+
+     '<div class="it-f"><label>Situação</label><select onchange="itemCampo(\''+esc(it.id)+'\',\'situacao\',this.value)">'+
+       ITEM_SITUACOES.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===it.situacao?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('')+'</select></div>'+
+     '</div>';
+  h+='<div class="it-row">'+
+     '<div class="it-f"><label>Formulação</label><input value="'+esc(it.formulacao||'')+'" placeholder="SC, WG, EC…" onchange="itemCampo(\''+esc(it.id)+'\',\'formulacao\',this.value)"></div>'+
+     '<div class="it-f"><label>Concentração</label><input value="'+esc(it.concentracao||'')+'" placeholder="ex.: 500 g/L" onchange="itemCampo(\''+esc(it.id)+'\',\'concentracao\',this.value)"></div>'+
+     '</div>';
+  h+='<div class="it-row">'+
+     '<div class="it-f"><label>Ingrediente(s) ativo(s)</label><input value="'+esc(it.ativos||'')+'" onchange="itemCampo(\''+esc(it.id)+'\',\'ativos\',this.value)"></div>'+
+     '<div class="it-f"><label>Registro (se houver)</label><input value="'+esc(it.registro||'')+'" onchange="itemCampo(\''+esc(it.id)+'\',\'registro\',this.value)"></div>'+
+     '</div>';
+  /* Código cego: em ensaio de patrocinador o executor não pode ver a identidade. */
+  h+='<div class="it-f"><label>Código cego <span style="text-transform:none;letter-spacing:0;font-weight:600;opacity:.7">— se preenchido, é ele que aparece no lugar do nome</span></label>'+
+     '<input value="'+esc(it.codigoCego||'')+'" placeholder="ex.: T-04" onchange="itemCampo(\''+esc(it.id)+'\',\'codigoCego\',this.value)"></div>';
+
+  /* Doses */
+  h+='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Doses</div>';
+  var ds=(it.doses||[]).filter(function(d){ return d.situacao==='ativa'; });
+  if(!ds.length) h+='<div class="it-vazio">Nenhuma dose cadastrada. Sem dose, o item ainda pode ser escolhido — a dose se digita no protocolo.</div>';
+  ds.forEach(function(d){
+    h+='<div class="it-dose"><div><b>'+esc(doseTexto(d))+'</b>'+
+       '<div class="it-sub">'+esc(doseOrigemRotulo(d.origem))+(d.documento?(' · '+esc(d.documento)):'')+'</div></div>'+
+       '<button class="it-btn alt" style="padding:5px 9px;font-size:11px" onclick="itemDoseFora(\''+esc(it.id)+'\',\''+esc(d.id)+'\')">aposentar</button></div>';
+  });
+  h+='<div class="it-row" style="margin-top:8px">'+
+     '<div class="it-f"><label>Cultura</label><input id="dsCultura" placeholder="qualquer, se em branco"></div>'+
+     '<div class="it-f"><label>Alvo</label><input id="dsAlvo" placeholder="qualquer, se em branco"></div>'+
+     '</div>';
+  h+='<div class="it-row">'+
+     '<div class="it-f"><label>Dose</label><input id="dsValor" inputmode="decimal" placeholder="0,8"></div>'+
+     '<div class="it-f"><label>até (faixa)</label><input id="dsValorMax" inputmode="decimal" placeholder="opcional"></div>'+
+     '<div class="it-f"><label>Unidade</label><input id="dsUnidade" value="L/ha"></div>'+
+     '</div>';
+  h+='<div class="it-row">'+
+     '<div class="it-f"><label>Origem</label><select id="dsOrigem">'+
+       DOSE_ORIGENS.map(function(o){ return '<option value="'+o[0]+'">'+esc(o[1])+'</option>'; }).join('')+'</select></div>'+
+     '<div class="it-f"><label>Documento</label><input id="dsDoc" placeholder="bula, ficha técnica, e-mail do cliente"></div>'+
+     '</div>';
+  h+='<button class="it-btn" onclick="itemDoseNova(\''+esc(it.id)+'\')">+ Adicionar dose</button>';
+
+  /* Onde este item já foi usado — a pergunta que o catálogo veio permitir. */
+  var usos=itemOndeFoiUsado(it.id);
+  if(usos.length){
+    h+='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Onde já foi usado ('+usos.length+')</div>';
+    usos.forEach(function(u){
+      h+='<div class="it-sub" style="padding:3px 0">'+esc(u.estudo+' · '+u.quadra+(u.cultura?(' · '+u.cultura):'')+' · '+u.tratamento+(u.dose?(' · '+u.dose):''))+
+         (u.finalizado?' <span style="color:#7ca88a">✓ finalizado</span>':'')+'</div>';
+    });
+  }
+
+  h+='<div style="margin-top:14px;display:flex;gap:8px">'+
+     '<button class="it-btn alt" onclick="itemVoltar()">Concluir</button>'+
+     '<button class="it-btn alt" style="color:#d79a8a" onclick="itemApagar(\''+esc(it.id)+'\')">Excluir item</button></div>';
+  return h+'</div>';
+}
+
+function itemCampo(id, campo, v){ itemAtualizar(id, (function(){ var o={}; o[campo]=String(v||'').trim(); return o; })()); _itensPinta(); }
+function itemDoseFora(id, doseId){ itemDoseAposentar(id, doseId); _itensPinta(); }
+function itemApagar(id){
+  var it=itemPorId(id); if(!it) return;
+  var usos=itemOndeFoiUsado(id);
+  if(usos.length){ alert('Este item está em '+usos.length+' tratamento(s) de estudo. Excluí-lo deixaria esses tratamentos sem identidade.\n\nDesligue-o desses tratamentos antes, ou marque a situação como "Cancelado".'); return; }
+  if(!confirm('Excluir "'+(it.nome||id)+'" do banco de itens?')) return;
+  itemExcluir(id); _itemAberto=null; _itensPinta();
+}
+function itemDoseNova(id){
+  function v(x){ var el=document.getElementById(x); return el?String(el.value||'').trim():''; }
+  if(!v('dsValor')){ alert('Informe a dose.'); return; }
+  itemDoseAdicionar(id, {cultura:v('dsCultura'), alvo:v('dsAlvo'), valor:v('dsValor'),
+    valorMax:v('dsValorMax'), unidade:v('dsUnidade')||'L/ha',
+    origem:v('dsOrigem')||'manual', documento:v('dsDoc')});
+  _itensPinta();
+}
+
+/* ---- Ligação com o tratamento ----
+   O tratamento continua tendo t.produto (texto) porque trinta e tantos estudos já
+   existem com ele preenchido, e apagá-los para "modernizar" seria destruir dado real.
+   O que entra é t.itemId ao lado: quando existe, MANDA; quando não, o texto continua
+   valendo exatamente como sempre valeu.
+
+   É essa convivência que permite migrar sem migração — o estudo antigo segue
+   funcionando, e o novo ganha identidade. */
+function tratItem(t){ return (t&&t.itemId)?itemPorId(t.itemId):null; }
+
+/* O nome que aparece na tela. Item ligado manda; senão, o texto digitado. E código
+   cego, quando existe, esconde a identidade de quem não deve vê-la. */
+function tratProdutoNome(t, revelar){
+  var it=tratItem(t);
+  if(!it) return (t&&t.produto)||'';
+  if(it.codigoCego && !revelar) return it.codigoCego;
+  return it.nome||((t&&t.produto)||'');
+}
+
+/* Liga um tratamento a um item do catálogo. Guarda o texto original em
+   produtoOriginal: se alguém ligou ao item errado, o que estava escrito no protocolo
+   não se perdeu. */
+function tratLigarItem(t, itemId, doseId){
+  if(!t) return null;
+  var it=itemPorId(itemId); if(!it) return null;
+  if(t.produto && !t.produtoOriginal) t.produtoOriginal=t.produto;
+  t.itemId=it.id;
+  t.produto=it.nome||t.produto;
+  if(doseId){
+    var d=(itemDoses(it.id)||[]).filter(function(x){ return x.id===doseId; })[0];
+    if(d){
+      /* SNAPSHOT. A dose vai COPIADA para o tratamento, não referenciada: se a bula
+         mudar no ano que vem, o ensaio antigo tem de continuar dizendo o que ele
+         realmente usou. Referência viva reescreveria a história. */
+      t.dose=(d.valor!=null?String(d.valor).replace('.',','):'')+(d.unidade?(' '+d.unidade):'');
+      t.doseRef={
+        itemId:it.id, doseId:d.id, cultura:d.cultura, alvo:d.alvo,
+        valor:d.valor, valorMax:d.valorMax, unidade:d.unidade,
+        origem:d.origem, documento:d.documento, pagina:d.pagina,
+        congeladoEm:Date.now()
+      };
+    }
+  }
+  return t;
+}
+function tratDesligarItem(t){
+  if(!t) return;
+  delete t.itemId; delete t.doseRef;
+  if(t.produtoOriginal){ t.produto=t.produtoOriginal; delete t.produtoOriginal; }
+}
+
+/* A dose escolhida bate com o que a bula registra? Não bloqueia — ensaio
+   experimental existe para sair da bula. Mas marca, e pede justificativa. */
+function tratDoseForaDaBula(t){
+  var r=t&&t.doseRef; if(!r || r.origem!=='bula') return false;
+  var v=_calcNum(t.dose);
+  if(!(v>0)) return false;
+  var min=(r.valor!=null&&isFinite(r.valor))?r.valor:null;
+  var max=(r.valorMax!=null&&isFinite(r.valorMax))?r.valorMax:min;
+  if(min==null) return false;
+  return (v<min-1e-9 || v>max+1e-9);
+}
+
+/* Onde mais este item foi testado. É a pergunta que o catálogo veio permitir, e ela
+   só é respondível porque o item tem ID — com texto livre, "Sankari" e "SANKARI
+   500 SC" nunca se encontrariam. */
+function itemOndeFoiUsado(itemId){
+  var out=[];
+  if(typeof data==='undefined'||!data) return out;
+  Object.keys(data).forEach(function(qid){
+    if(qid==='__config') return;
+    ((data[qid]||{}).estudos||[]).forEach(function(st){
+      (st.tratamentos||[]).forEach(function(t){
+        if(t && t.itemId===itemId){
+          out.push({qid:qid, quadra:(typeof quadraNome==='function'?quadraNome(qid):qid),
+                    estudoId:st.id, estudo:(st.codigo||st.nome||st.id),
+                    cultura:(typeof studyCultura==='function'?studyCultura(st,data[qid]||{}):''),
+                    tratamento:t.id, dose:(t.dose||''),
+                    origem:((t.doseRef&&t.doseRef.origem)||null),
+                    finalizado:(typeof estudoFinalizado==='function'?!!estudoFinalizado(st):false)});
+        }
+      });
+    });
+  });
+  return out;
+}
 
 /* ===================== DOIS AVALIADORES (roadmap §10) ============================
    Severidade de doença, nota de fitotoxicidade, escala de dano: são leituras humanas,
