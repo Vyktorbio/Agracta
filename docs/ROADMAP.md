@@ -272,7 +272,29 @@ Na aplicação: temperatura, UR, vento, chuva anterior/posterior, radiação.
 Na avaliação: chuva desde a aplicação, graus-dia, temperatura média, dias desde chuva.
 
 **Janela ambiental** — "ambiente entre a aplicação A e a avaliação X": 14 dias, 72 mm,
-24,6 °C média, 31,2 °C máxima, 6 dias com chuva.
+24,6 °C média, 31,2 °C máxima, 6 dias com chuva. ✅ **feito (02/09/2026)**
+
+> `GET /clima/janela?mac=&de=&ate=` no proxy agrega os resumos diários que
+> `/clima/historico` já produz, com fan-out paralelo (o mesmo padrão de
+> `/solo/propriedades`) e cache de 6 h. No app, a janela parte da **aplicação
+> anterior** à avaliação — o intervalo que interessa é o que o tratamento passou
+> exposto, não o calendário do estudo — e **fica gravada** em `av.janela`, não
+> recalculada: a leitura de uma estação muda quando a Ecowitt reprocessa, num registro
+> BPL vale o que foi lido quando se registrou, e a avaliação precisa abrir offline.
+> Reconsultar não apaga; a leitura anterior vira `janelasAnteriores`.
+>
+> **A cobertura vai junto, sempre.** Uma média de 11 dias apresentada como "os 14 dias
+> da janela" é mentira — e passa despercebida porque o número parece limpo. O retorno
+> traz `dias_com_leitura`, `cobertura_pct` e os dias mudos **nomeados**, e a tela avisa
+> que a chuva dos dias sem leitura não entra no total. Sem leitura nenhuma, `chuva_mm`
+> é `null` e não `0`: zero afirmaria que não choveu.
+>
+> Coberto por `test_janela_proxy.py` (28 verificações) e `test_janela_ambiental.js`
+> (44), ambos com golden tests conferidos à mão.
+
+**Falta desta fase:** `quadra.ambiente` permanente (altitude, declividade, orientação,
+posição topográfica) — depende de uma fonte de elevação que o app ainda não tem —, e o
+croqui ganhar Declividade e Altitude.
 
 Croqui ganha Declividade e Altitude, sem alterar o modo padrão.
 
