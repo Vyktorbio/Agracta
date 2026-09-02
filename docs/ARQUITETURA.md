@@ -334,6 +334,12 @@ atual. **Nenhum foi resolvido unilateralmente** — ficam aqui até haver decis�
 > não será criada; o modelo conceitual daquela seção deve ser lido como
 > `LOCALIDADE → QUADRA`. Se um dia várias quadras precisarem compartilhar a mesma
 > caracterização, a decisão se reabre — mas aí com um caso real na mão.
+>
+> **Reafirmada em 02/09/2026.** Uso de campo trouxe a proposta de reordenar o fluxo de
+> Estudos como *criar protocolo → adicionar execução → escolher localidade, área e
+> quadra*, o que exigiria a entidade ÁREA. Posta ao autor com essa consequência
+> explícita, a resposta foi **"não, eu não quero a entidade área"**. A decisão está
+> firme; a reordenação de Estudos, se vier, tem de caber em `LOCALIDADE → QUADRA`.
 
 <details><summary>Registro da discussão</summary>
 

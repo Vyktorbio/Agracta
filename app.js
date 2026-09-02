@@ -12152,7 +12152,10 @@ function _avPersistNow(){
     var vb=document.getElementById('vBBCH'); if(vb) av.bbch=vb.value;
     var vo=document.getElementById('vObs'); if(vo) av.obs=vo.value.trim();
     if(typeof _avSyncInputs==='function') _avSyncInputs();
-    av.variaveis=(_avGrid.variaveis||[]).slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+    av.variaveis=(_avGrid.variaveis||[]).slice(); av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+    var _q2=(typeof avQuemAtivo==='function')?avQuemAtivo():null;
+    if(typeof avDupla==='function' && avDupla(av) && _q2){ avAvaliadores(av)[_q2].notas=_avGrid.notas; avConsolidar(av); }
+    else av.notas=_avGrid.notas;
     av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
     av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
     try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
@@ -12754,9 +12757,13 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
     candidatos.sort(function(a,b){return String(a.av.data||'').localeCompare(String(b.av.data||''))||a.i-b.i;});
     if(candidatos.length){inheritedFrom=candidatos[candidatos.length-1].av;avVars=(inheritedFrom.variaveis||[]).slice();avTipos=JSON.parse(JSON.stringify(inheritedFrom.tipos||{}));avCfg=JSON.parse(JSON.stringify(inheritedFrom.varcfg||{}));}
   }
+  /* §10 — em leitura dupla a grade carrega a leitura de QUEM está com a prancheta.
+     É aqui que o cegamento acontece: os valores do outro avaliador nem entram no
+     rascunho, então não há o que escurecer nem o que esconder na pintura. */
+  var _notasDaVez=(typeof avNotasVisiveis==='function')?avNotasVisiveis(av):(av.notas||{});
   _avGrid={
     variaveis:avVars,
-    notas:JSON.parse(JSON.stringify(av.notas||{})),
+    notas:JSON.parse(JSON.stringify(_notasDaVez||{})),
     tipos:avTipos,
     meta:JSON.parse(JSON.stringify(av.notasMeta||{})),
     varcfg:avCfg,
@@ -12799,6 +12806,9 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
      '<button type="button" class="btn-sm" onclick="_avHoraAgora()" title="Carimbar a hora deste momento">🕐 agora</button></div></div>';
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Deixe em branco e o momento sai da data, como sempre. Preencha quando houver mais de uma leitura no MESMO dia (ex.: knockdown a 1, 2, 4 e 24 HAT) — sem isto o app guarda só a primeira.</div>';
+  /* §10 — leitura dupla: a escolha de quem está com a prancheta vem ANTES da grade,
+     porque é ela que decide qual leitura a grade carrega. */
+  try{ h+=avDuplaHtml(study, av); }catch(e){}
   h+='<div class="se-field"><label>Tipo de avaliação</label><select id="vTipo"><option value="">—</option>';
   TIPOS_AVALIACAO.forEach(function(t){
     h+='<option value="'+esc(t)+'"'+(t===av.tipo?' selected':'')+'>'+esc(t)+'</option>';
@@ -13135,7 +13145,17 @@ function saveAvaliacao(){
      reaplique aqui: a grade manual pode ter sido editada enquanto o cartão
      automático continuou aberto com um valor antigo. Regravar esse valor no
      clique de Salvar apagava silenciosamente a primeira parcela da grade. */
-  _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+  _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+  /* §10 — em leitura dupla o que foi digitado pertence a UM avaliador. Gravar em
+     av.notas apagaria a leitura do outro; av.notas passa a ser a consolidação,
+     calculada por avConsolidar e marcada como derivada. */
+  var _quem=(typeof avQuemAtivo==='function')?avQuemAtivo():null;
+  if(typeof avDupla==='function' && avDupla(av) && _quem){
+    avAvaliadores(av)[_quem].notas=_avGrid.notas;
+    avConsolidar(av);
+  }else{
+    av.notas=_avGrid.notas;
+  }
   av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
   
   var action = isNew ? 'Registro de Avaliação' : 'Edição de Avaliação';
@@ -15150,6 +15170,95 @@ function avEscalaDaVariavel(av, v){
 
 /* A concordância de uma variável. Delegada ao motor puro; aqui só se junta o que a
    avaliação sabe. */
+/* ---- Controles na tela ---- */
+
+/* Ligar/desligar a leitura dupla. Desligar NÃO apaga o que os dois já leram: o dado
+   fica guardado e volta se religar. Apagar leitura de campo por causa de um toque
+   numa chave seria imperdoável. */
+function avToggleDupla(){
+  var av=_avEditando(); if(!av) return;
+  av.duplaLeitura=!av.duplaLeitura;
+  if(av.duplaLeitura){
+    avAvaliadores(av);
+    /* A primeira leitura já feita vira a de A: ela existe e é de alguém. */
+    if(!Object.keys(av.avaliadores.A.notas).length && av.notas && Object.keys(av.notas).length){
+      av.avaliadores.A.notas=JSON.parse(JSON.stringify(av.notas));
+    }
+    avSetQuem('A');
+  }else{
+    avSetQuem(null);
+  }
+  try{ save(); }catch(e){}
+  openStudyEditAvaliacao(av.id);
+}
+function avTrocarQuem(k){
+  var av=_avEditando(); if(!av) return;
+  /* Salva o que está na tela ANTES de trocar, senão a leitura de A se perde ao
+     passar a prancheta para B. */
+  try{ _avSyncInputs(); }catch(e){}
+  var atual=avQuemAtivo();
+  if(atual && avDupla(av)){ avAvaliadores(av)[atual].notas=JSON.parse(JSON.stringify(_avGrid.notas||{})); avConsolidar(av); try{ save(); }catch(e){} }
+  avSetQuem(k);
+  openStudyEditAvaliacao(av.id);
+}
+function avNomeAvaliador(k, nome){
+  var av=_avEditando(); if(!av) return;
+  avAvaliadores(av)[k].nome=String(nome||'').trim();
+  try{ save(); }catch(e){}
+}
+function _avEditando(){
+  var q=data[curV]||{}, st=(q.estudos||[]).filter(function(s){return s.id===curSid;})[0];
+  if(!st) return null;
+  return (st.avaliacoes||[]).filter(function(a){return a.id===editingAvId;})[0]||null;
+}
+
+/* O bloco na tela da avaliação. Fora da leitura dupla é uma linha só; dentro, a
+   troca de prancheta e a concordância. */
+function avDuplaHtml(study, av){
+  if(!av) return '';
+  var h='<div class="se-section-title">Leitura</div>';
+  if(!avDupla(av)){
+    return h+'<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px">'+
+      '<input type="checkbox" onchange="avToggleDupla()" style="width:auto"> Leitura dupla (dois avaliadores)</label>'+
+      '<div class="e-hint">Dois avaliadores leem as mesmas parcelas sem ver a leitura um do outro. No fim, o app mostra o quanto concordaram e usa a média dos dois.</div></div>';
+  }
+  var ad=avAvaliadores(av), q=avQuemAtivo()||'A';
+  h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px">'+
+     '<input type="checkbox" checked onchange="avToggleDupla()" style="width:auto"> Leitura dupla (dois avaliadores)</label></div>';
+  h+='<div class="av-dupla">';
+  AV_AVALIADORES.forEach(function(k){
+    var n=Object.keys(ad[k].notas||{}).length;
+    h+='<button type="button" class="av-quem'+(k===q?' on':'')+'" onclick="avTrocarQuem(\''+k+'\')">'+
+       k+(ad[k].nome?(' · '+esc(ad[k].nome)):'')+'<i>'+(n?(n+' parcela'+(n===1?'':'s')):'sem leitura')+'</i></button>';
+  });
+  h+='</div>';
+  h+='<div class="se-row">';
+  AV_AVALIADORES.forEach(function(k){
+    h+='<div class="se-field"><label>Nome do avaliador '+k+'</label>'+
+       '<input type="text" value="'+esc(ad[k].nome||'')+'" onchange="avNomeAvaliador(\''+k+'\',this.value)" placeholder="quem leu"></div>';
+  });
+  h+='</div>';
+  h+='<div class="e-hint">A grade abaixo é a leitura de <b>'+esc(q+(ad[q].nome?(' · '+ad[q].nome):''))+'</b>. '+
+     'A leitura do outro avaliador não é carregada nesta tela — é assim que a leitura fica cega de verdade.</div>';
+
+  /* Concordância: só quando há as duas leituras. Antes disso não há o que comparar,
+     e mostrar o quadro vazio sugeriria que faltou calcular. */
+  var temA=Object.keys(ad.A.notas||{}).length, temB=Object.keys(ad.B.notas||{}).length;
+  if(temA && temB){
+    h+='<div class="av-conc"><div class="av-conc-t">CONCORDÂNCIA ENTRE OS AVALIADORES</div>';
+    (av.variaveis||[]).forEach(function(v){
+      var r=avConcordancia(study, av, v);
+      if(!r || r.erro){ h+='<div class="av-conc-l"><b>'+esc(v)+'</b> — '+esc((r&&r.erro)||'sem cálculo')+'</div>'; return; }
+      h+='<div class="av-conc-l"><b>'+esc(v)+'</b> ('+esc(r.escala)+', '+r.n+' parcela'+(r.n===1?'':'s')+')</div>';
+      (r.leitura||[]).forEach(function(t){ h+='<div class="av-conc-v">'+esc(t)+'</div>'; });
+      (r.avisos||[]).forEach(function(t){ h+='<div class="av-conc-a">⚠ '+esc(t)+'</div>'; });
+    });
+    h+='<div class="e-hint" style="margin:6px 0 0">O valor que vai para a estatística é a <b>média dos dois</b>. As duas leituras originais ficam guardadas — é delas que sai este quadro.</div>';
+    h+='</div>';
+  }
+  return h;
+}
+
 function avConcordancia(study, av, v){
   var C=(typeof window!=='undefined')?window.ConcordanciaCore:null;
   if(!C) return {erro:'O motor de concordância não carregou. Recarregue o app.'};
