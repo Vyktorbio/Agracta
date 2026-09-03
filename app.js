@@ -6164,6 +6164,78 @@ var BBCH = {
     {code:"75",label:"75 — Frutos/grãos em formação",fase:"Frutos",equiv:""},
     {code:"89",label:"89 — Maturação",fase:"Maturação",equiv:""},
     {code:"99",label:"99 — Ciclo finalizado",fase:"Colheita",equiv:""}
+  ],
+  /* ESCALA DE CEREAIS (BBCH) — trigo, cevada, aveia, centeio, triticale.
+     Existe porque estas culturas estavam na escala do MILHO, que não tem
+     perfilhamento (2) nem emborrachamento (4). São justamente os dois estádios
+     que governam o manejo de um cereal de inverno: é neles que se decide
+     regulador, fungicida de folha bandeira e herbicida de pós. Registrar um
+     ensaio de trigo sem poder dizer "emborrachamento" é registrar outra coisa. */
+  cereais:[
+    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
+    {code:"05",label:"05 — Radícula emergiu",fase:"Germinação",equiv:""},
+    {code:"07",label:"07 — Coleóptilo emergiu",fase:"Germinação",equiv:""},
+    {code:"09",label:"09 — Emergência (1ª folha rompe o coleóptilo)",fase:"Germinação",equiv:""},
+    {code:"11",label:"11 — 1ª folha desdobrada",fase:"Des. folhas",equiv:""},
+    {code:"12",label:"12 — 2ª folha desdobrada",fase:"Des. folhas",equiv:""},
+    {code:"13",label:"13 — 3ª folha desdobrada",fase:"Des. folhas",equiv:""},
+    {code:"19",label:"19 — 9 ou mais folhas desdobradas",fase:"Des. folhas",equiv:""},
+    {code:"21",label:"21 — Início do perfilhamento (1º perfilho)",fase:"Perfilhamento",equiv:""},
+    {code:"25",label:"25 — 5 perfilhos visíveis",fase:"Perfilhamento",equiv:""},
+    {code:"29",label:"29 — Fim do perfilhamento (nº máximo)",fase:"Perfilhamento",equiv:""},
+    {code:"30",label:"30 — Início da elongação do colmo",fase:"Elongação",equiv:""},
+    {code:"31",label:"31 — 1º nó detectável",fase:"Elongação",equiv:""},
+    {code:"32",label:"32 — 2º nó detectável",fase:"Elongação",equiv:""},
+    {code:"37",label:"37 — Folha bandeira apenas visível",fase:"Elongação",equiv:""},
+    {code:"39",label:"39 — Lígula da folha bandeira visível",fase:"Elongação",equiv:""},
+    {code:"41",label:"41 — Início do emborrachamento",fase:"Emborrachamento",equiv:""},
+    {code:"45",label:"45 — Emborrachamento pleno (bainha inchada)",fase:"Emborrachamento",equiv:""},
+    {code:"49",label:"49 — Primeiras aristas visíveis",fase:"Emborrachamento",equiv:""},
+    {code:"51",label:"51 — Início do espigamento",fase:"Espigamento",equiv:""},
+    {code:"55",label:"55 — Metade da espiga emergida",fase:"Espigamento",equiv:""},
+    {code:"59",label:"59 — Fim do espigamento",fase:"Espigamento",equiv:""},
+    {code:"61",label:"61 — Início da floração (antese)",fase:"Floração",equiv:""},
+    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
+    {code:"69",label:"69 — Fim da floração",fase:"Floração",equiv:""},
+    {code:"71",label:"71 — Grão aquoso",fase:"Enchimento",equiv:""},
+    {code:"75",label:"75 — Grão leitoso",fase:"Enchimento",equiv:""},
+    {code:"83",label:"83 — Massa mole (início)",fase:"Maturação",equiv:""},
+    {code:"85",label:"85 — Massa mole",fase:"Maturação",equiv:""},
+    {code:"87",label:"87 — Massa dura (ponto de maturação fisiológica)",fase:"Maturação",equiv:""},
+    {code:"89",label:"89 — Maturação plena (grão duro)",fase:"Maturação",equiv:""},
+    {code:"92",label:"92 — Sobrematuração",fase:"Senescência",equiv:""},
+    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
+  ],
+  /* ARROZ (BBCH). Também estava no milho. O arroz perfilha e emborracha como os
+     demais cereais, mas tem estádios próprios de emissão da panícula. */
+  arroz:[
+    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
+    {code:"05",label:"05 — Radícula emergiu",fase:"Germinação",equiv:""},
+    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:""},
+    {code:"11",label:"11 — 1ª folha desdobrada",fase:"Des. folhas",equiv:""},
+    {code:"13",label:"13 — 3ª folha desdobrada",fase:"Des. folhas",equiv:""},
+    {code:"19",label:"19 — 9 ou mais folhas desdobradas",fase:"Des. folhas",equiv:""},
+    {code:"21",label:"21 — Início do perfilhamento",fase:"Perfilhamento",equiv:""},
+    {code:"25",label:"25 — 5 perfilhos visíveis",fase:"Perfilhamento",equiv:""},
+    {code:"29",label:"29 — Fim do perfilhamento",fase:"Perfilhamento",equiv:""},
+    {code:"30",label:"30 — Início da elongação do colmo",fase:"Elongação",equiv:""},
+    {code:"32",label:"32 — 2º nó detectável",fase:"Elongação",equiv:""},
+    {code:"37",label:"37 — Folha bandeira apenas visível",fase:"Elongação",equiv:""},
+    {code:"41",label:"41 — Início do emborrachamento",fase:"Emborrachamento",equiv:""},
+    {code:"45",label:"45 — Emborrachamento pleno",fase:"Emborrachamento",equiv:""},
+    {code:"51",label:"51 — Início da emissão da panícula",fase:"Emissão da panícula",equiv:""},
+    {code:"55",label:"55 — Metade da panícula emergida",fase:"Emissão da panícula",equiv:""},
+    {code:"59",label:"59 — Panícula totalmente emergida",fase:"Emissão da panícula",equiv:""},
+    {code:"61",label:"61 — Início da floração",fase:"Floração",equiv:""},
+    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
+    {code:"69",label:"69 — Fim da floração",fase:"Floração",equiv:""},
+    {code:"71",label:"71 — Grão aquoso",fase:"Enchimento",equiv:""},
+    {code:"75",label:"75 — Grão leitoso",fase:"Enchimento",equiv:""},
+    {code:"83",label:"83 — Massa mole",fase:"Maturação",equiv:""},
+    {code:"87",label:"87 — Massa dura",fase:"Maturação",equiv:""},
+    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
+    {code:"92",label:"92 — Sobrematuração",fase:"Senescência",equiv:""},
+    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
   ]
 };
 
@@ -6188,17 +6260,85 @@ var BBCH_MAP = {
   "ESTUFAS":"estufa",
   "Estufa":"estufa"
 };
-/* Mapeia as culturas novas ao melhor BBCH detalhado existente (seletor de estádio na avaliação) */
+/* ===== O QUE É ESCALA PRÓPRIA E O QUE É ESCALA EMPRESTADA =====================
+   Aqui morava um defeito silencioso. Cinquenta e três culturas eram roteadas
+   para a escala de OUTRA cultura sem que nada na tela dissesse isso. Um ensaio
+   de eucalipto registrava "89 — Maturação plena (ponto colheita)", herdado do
+   citros; trigo e arroz recebiam a escala do milho, que não tem perfilhamento
+   nem emborrachamento — os dois estádios que governam o manejo de um cereal.
+
+   O código saía com cara de BBCH oficial e ia para a folha BPL. Adivinhar em
+   silêncio é o que este app proíbe em todo o resto; não podia continuar valendo
+   justamente na fenologia.
+
+   Três destinos agora, e cada um é explícito:
+
+   1. ESCALA PRÓPRIA. Trigo, cevada, aveia, centeio e triticale passaram a ter a
+      escala de cereais; arroz, a sua. Ambas com os dez estádios principais.
+   2. ESCALA EMPRESTADA, DECLARADA. Onde a aproximação é defensável — pimentão
+      pelo tomate, melancia pelo melão — a escala continua, mas a tela diz de
+      onde ela veio e o estádio guardado registra isso.
+   3. SEM ESCALA. Eucalipto, seringueira, erva-mate e chá saíram do mapa. Não
+      têm fenologia de fruto, e oferecer os estádios do citros ali não é
+      aproximação: é convite a gravar um número que não quer dizer nada.
+      Sem escala, o app simplesmente não pergunta o estádio — que é a resposta
+      honesta. ========================================================== */
+var BBCH_EMPRESTADA = {};
 (function(){
-  var add={ milho:["Trigo","Cevada","Aveia","Centeio","Triticale","Arroz","Sorgo","Milheto"],
-    feijao:["Caupi","Ervilha","Grão-de-bico","Lentilha"],
-    soja:["Girassol","Canola","Amendoim","Gergelim"],
-    tomate:["Pimentão","Pimenta","Berinjela"],
-    melao:["Melancia","Pepino","Abóbora","Abobrinha"],
-    pastagem:["Braquiária","Urochloa","Mombaça","Panicum","Tifton","Cynodon","Azevém","Alfafa","Aveia forrageira"],
-    citros:["Uva","Maçã","Pera","Pêssego","Ameixa","Banana","Manga","Abacate","Goiaba","Mamão","Maracujá","Abacaxi","Coco","Caqui","Cacau","Seringueira","Dendê","Oliveira","Erva-mate","Chá","Eucalipto"] };
-  Object.keys(add).forEach(function(sc){ add[sc].forEach(function(n){ if(!BBCH_MAP[n]) BBCH_MAP[n]=sc; }); });
+  /* Cultura -> escala PRÓPRIA. Estas não são empréstimo: a escala é da cultura. */
+  var propria={ cereais:["Trigo","Cevada","Aveia","Centeio","Triticale"],
+                arroz:["Arroz"] };
+  /* Cultura -> escala de outra cultura, com a semelhança que justifica o
+     empréstimo. O texto vai para a tela: quem registra precisa saber o que está
+     escolhendo, e quem audita depois precisa saber o que foi escolhido. */
+  var emprestada={
+    cereais:{ culturas:["Sorgo","Milheto"], base:"cereais",
+              nota:"Sorgo e milheto perfilham e emborracham como os demais cereais, mas a panícula tem estádios próprios." },
+    feijao:{ culturas:["Caupi","Ervilha","Grão-de-bico","Lentilha"], base:"feijão",
+             nota:"Leguminosas de grão com fenologia próxima à do feijão." },
+    soja:{ culturas:["Girassol","Canola","Amendoim","Gergelim"], base:"soja",
+           nota:"Os rótulos falam em folha trifoliolada, que é da soja; use o número do estádio, não o texto." },
+    tomate:{ culturas:["Pimentão","Pimenta","Berinjela"], base:"tomate",
+             nota:"Solanáceas de fruto, fenologia próxima à do tomate." },
+    melao:{ culturas:["Melancia","Pepino","Abóbora","Abobrinha"], base:"melão",
+            nota:"Cucurbitáceas, fenologia próxima à do melão." },
+    pastagem:{ culturas:["Braquiária","Urochloa","Mombaça","Panicum","Tifton","Cynodon","Azevém","Alfafa","Aveia forrageira"], base:"pastagem",
+               nota:"Escala genérica de forrageira: perfilhamento, rebrota e corte." },
+    citros:{ culturas:["Uva","Maçã","Pera","Pêssego","Ameixa","Banana","Manga","Abacate","Goiaba","Mamão","Maracujá","Abacaxi","Coco","Caqui","Cacau","Dendê","Oliveira"], base:"citros",
+             nota:"Fruteiras perenes na escala do citros. As fases batem em linhas gerais; os rótulos são de citros." }
+  };
+  Object.keys(propria).forEach(function(sc){
+    propria[sc].forEach(function(n){ BBCH_MAP[n]=sc; });
+  });
+  Object.keys(emprestada).forEach(function(sc){
+    var e=emprestada[sc];
+    e.culturas.forEach(function(n){
+      if(!BBCH_MAP[n]) BBCH_MAP[n]=sc;
+      BBCH_EMPRESTADA[n]={base:e.base, nota:e.nota};
+    });
+  });
 })();
+/* De onde vem a escala desta cultura. `propria:false` é o que a tela mostra e o
+   que a folha precisa saber para não apresentar empréstimo como se fosse BBCH
+   da cultura. */
+function getBBCHOrigem(cultura){
+  var k=BBCH_MAP[cultura];
+  if(!k) return null;
+  var e=BBCH_EMPRESTADA[cultura];
+  return e ? {escala:k, propria:false, base:e.base, nota:e.nota}
+           : {escala:k, propria:true, base:'', nota:''};
+}
+/* Aviso de empréstimo para as telas que oferecem o seletor de estádio. Devolve
+   string vazia quando a escala é da própria cultura — nada a dizer é melhor que
+   um aviso que se aprende a ignorar. */
+function bbchAvisoHtml(cultura){
+  var o=getBBCHOrigem(cultura);
+  if(!o || o.propria) return '';
+  return '<div style="margin:-4px 0 8px;padding:8px 10px;border-radius:9px;font-size:11px;line-height:1.5;'+
+    'background:#2a210c;border:1px solid #6b531b;color:#ffd98a">⚠ <b>Escala emprestada.</b> '+
+    esc(cultura)+' não tem escala BBCH própria no Agracta: os estádios abaixo são os de <b>'+
+    esc(o.base)+'</b>. '+esc(o.nota)+'</div>';
+}
 
 /* §7-bis. O BBCH estava guardado POR ACIDENTE: só não aparecia no laboratório porque
    getBBCHList vinha vazio sem cultura. Uma quadra convertida de campo que tivesse
@@ -6221,6 +6361,22 @@ function getBBCHInfo(cultura,code){
     if(list[i].code===code)return list[i];
   }
   return null;
+}
+
+/* Como um estádio GRAVADO se apresenta hoje. Existe porque a limpeza do mapa
+   deixou registros órfãos: um ensaio de eucalipto que gravou "89" o fez quando o
+   app servia a escala do citros. O código continua guardado — apagá-lo seria
+   reescrever o passado — mas ele não pode mais aparecer como se fosse
+   interpretável. Sem escala, a tela diz que não há escala; com escala emprestada,
+   diz de quem é a fase. Silêncio aqui viraria "BBCH 89" sozinho, que o leitor
+   completa sozinho e erra. */
+function bbchRotulo(cultura, code){
+  if(!code) return '';
+  var o=(typeof getBBCHOrigem==='function')?getBBCHOrigem(cultura):null;
+  if(!o) return 'BBCH '+code+' · sem escala para '+(cultura||'esta cultura');
+  var info=getBBCHInfo(cultura,code);
+  if(!info) return 'BBCH '+code+' · fora da escala de '+(o.propria?(cultura||''):o.base);
+  return 'BBCH '+code+' · '+info.fase+(o.propria?'':(' (escala de '+o.base+')'));
 }
 
 /* Identificação efetiva do ensaio. A quadra é somente o padrão geográfico;
@@ -11161,7 +11317,6 @@ function openStudyDetail(qid,sid){
   study=normalizeStudy(study);
 
   var studyCrop=studyCultura(study,q), studyVar=studyVariedade(study,q);
-  var bbchList=bbchListDaQuadra(qid, studyCrop);
   var ne=nextEventV2(study);
 
   /* Estudo finalizado é somente-leitura: o que escreve some da tela, e o que
@@ -11307,8 +11462,7 @@ function openStudyDetail(qid,sid){
       h+='<div class="evento-head"><span class="evento-tipo apl">APL '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+'</span>';
       h+='<button class="evento-del" onclick="removeAplicacao(\''+a.id+'\')" title="Excluir aplicação" aria-label="Excluir aplicação APL '+(i+1)+'">×</button></div>';
       if(a.bbch){
-        var info=getBBCHInfo(studyCrop,a.bbch);
-        h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(info?' · '+esc(info.fase):'')+'</div>';
+        h+='<div class="evento-bbch">'+esc(bbchRotulo(studyCrop,a.bbch))+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       h+=carimboHtml(a.carimbo,a.data,a.hora);
@@ -11369,8 +11523,7 @@ function openStudyDetail(qid,sid){
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
-        var infoE=getBBCHInfo(studyCrop,a.bbch);
-        h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(infoE?' · '+esc(infoE.fase):'')+'</div>';
+        h+='<div class="evento-bbch">'+esc(bbchRotulo(studyCrop,a.bbch))+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       /* §9 — o que aconteceu entre a aplicação e esta leitura. */
@@ -12013,7 +12166,6 @@ function _seCapDica(){
 function renderStudyEditModal(){
   var s=workingStudy;
   var q=data[curV]||{};
-  var bbchList=bbchListDaQuadra(curV, studyCultura(s,q));
 
   var h='<div class="se-head"><h3>'+((data[curV].estudos||[]).find(function(x){return x.id===s.id})?'Editar protocolo e execução':'Novo protocolo')+'</h3><button class="se-x" onclick="closeStudyEditV2()" aria-label="Fechar formulário do estudo" title="Fechar">×</button></div>';
 
@@ -12966,6 +13118,7 @@ function openStudyEditAplicacao(aid){
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Preencha a hora quando registrar uma aplicação de outro dia: o clima carimbado passa a ser o da estação NAQUELE horário, não a média do dia.</div>';
   if(bbchList){
+    h+=bbchAvisoHtml(studyCultura(study,q));
     h+='<div class="se-field"><label>Estádio BBCH no momento</label><select id="aeBBCH"><option value="">—</option>';
     bbchList.forEach(function(b){
       h+='<option value="'+esc(b.code)+'"'+(b.code===ap.bbch?' selected':'')+'>'+esc(b.label)+(b.equiv?' ('+esc(b.equiv)+')':'')+'</option>';
@@ -14634,6 +14787,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   });
   h+='</select></div>';
   if(bbchList){
+    h+=bbchAvisoHtml(studyCultura(study,q));
     h+='<div class="se-field"><label>Estádio BBCH no momento</label><select id="vBBCH"><option value="">—</option>';
     bbchList.forEach(function(b){
       h+='<option value="'+esc(b.code)+'"'+(b.code===av.bbch?' selected':'')+'>'+esc(b.label)+(b.equiv?' ('+esc(b.equiv)+')':'')+'</option>';
