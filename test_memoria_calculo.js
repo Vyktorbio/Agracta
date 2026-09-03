@@ -126,6 +126,21 @@ eq(T3.doseUnidade,'g/ha','dose em g/ha é reconhecida');
 perto(T3.componentes[0].total,1.65,0.01,'T3: 1,1 L × 1,5 g/L = 1,65 g');
 eq(T3.componentes[0].unidadeMassa,'g','produto sólido sai em g');
 
+console.log('\n--- Receita estruturada preserva item, lote e origem da dose ---');
+ESTUDO.tratamentos.push({id:'T4',produto:'Texto legado',dose:'99 L/ha',componentes:[
+  {id:'cp1',itemId:'adj1',nome:'Adjuvante do banco',valor:.15,unidade:'% v/v',
+   loteRef:{loteId:'lt1',codigo:'L-01'},doseRef:{origem:'bula',documento:'Bula vigente'}}
+]});
+var memEstr=ctx.calcMemoria(ESTUDO,ctx._calcConfigAtual());
+var T4=memEstr.tratamentos[3];
+eq(T4.componentes[0].nome,'Adjuvante do banco','a memória usa o componente estruturado');
+eq(T4.componentes[0].itemId,'adj1','identidade do item fica gravada');
+eq(T4.componentes[0].loteRef.codigo,'L-01','lote fica gravado');
+eq(T4.componentes[0].doseRef.origem,'bula','origem da dose fica gravada');
+perto(T4.componentes[0].total,1.65,1e-9,'0,15% de 1,1 L = 1,65 mL, não a string antiga');
+eq(T4.liberado,true,'receita válida e que cabe fica liberada para preparo');
+ESTUDO.tratamentos.pop();
+
 console.log('\n--- Testemunha sem dose não vira calda ---');
 var T1=mem.tratamentos[0];
 eq(T1.semPreparo,true,'testemunha sem dose é marcada como sem preparo');
