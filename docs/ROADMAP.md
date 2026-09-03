@@ -339,6 +339,46 @@ importação de bula do Agrofit com revisão humana; **programas de aplicação*
 **cálculo automático de quantidade**; **verificação do protocolo**; **dossiê do item**;
 e o relatório **Item × Dose** entre ensaios.
 
+## 7-quater. Onde o app abre, e o que o cofre offline lembra · ✅ **feito (03/09/2026)**
+
+Dois defeitos com a mesma consequência: o técnico abre o app num lugar que nunca
+escolheu, e conclui que o que ele digitou sumiu — quando o dado está lá, só que
+noutro lugar da lista.
+
+**O lugar ativo era decidido por acidente de ordem.** O app resolve isso duas vezes
+por abertura: na partida, com o que o aparelho guardou, e de novo quando a nuvem
+chega com os lugares de verdade. Num aparelho zerado — instalação nova,
+armazenamento limpo pelo navegador, ou logout, que apaga tudo — a primeira volta
+acontece sem lugar nenhum, então o app criava o "Local principal" e escolhia ele.
+Na segunda volta a variável já estava preenchida, e por isso **a preferência
+gravada nunca mais era consultada**: o padrão recém-criado não existia na nuvem, e
+caía-se em `Object.keys(LOCAIS)[0]` — que não é "o primeiro lugar" por critério
+nenhum, é a ordem em que as chaves entraram no objeto.
+
+A resolução agora é declarada, em `_resolveLocalAtivo`: a preferência gravada vence
+sempre que o lugar ainda existir (só o toque do usuário escreve essa chave), depois
+o ativo da sessão, depois o padrão, e só então a primeira chave — **que não grava**.
+Um palpite que persiste apaga a escolha do usuário e transforma o erro em
+permanente, que era exatamente como ele se instalava.
+
+**E o cofre offline restaurava tudo menos onde a pessoa estava.** O lugar ativo não
+entra em `cloudState()` de propósito — ele é do aparelho, e sincronizá-lo arrastaria
+a tela de quem está no escritório quando o técnico troca de talhão no celular. Só
+que ele também não entrava no checkpoint do IndexedDB. Num aparelho que restaura o
+cofre com o `localStorage` limpo (reinstalação do PWA, despejo de armazenamento
+pelo navegador), os dados voltavam inteiros e a posição não — direto para o palpite
+acima. Agora o lugar viaja junto do checkpoint, que é local, e volta na restauração
+**se ainda existir** entre os lugares restaurados.
+
+Coberto por `test_local_ativo.js` (13 verificações) e por 5 novas em
+`test_offline_local.js`.
+
+**Bônus no portão:** `conferir.sh` passou a conferir o `?v=` do registro do service
+worker, que tinha derrapado três publicações seguidas. Ele **avisa sem reprovar** —
+não quebra a atualização, porque o navegador compara o `sw.js` byte a byte; mas
+quando o número para de andar, deixa de servir para o único fim que tem, que é
+dizer qual publicação está no ar olhando o `index.html`.
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,

@@ -14,7 +14,7 @@ var ASSETS = [
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=2', './vendor/aplicacao-core.js', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js', './vendor/consumo-core.js', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
-  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=8',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=9',
   './acesso-horario.js?v=2', './ui-campo.js?v=13', './alvos-catalogo.js?v=1',
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */

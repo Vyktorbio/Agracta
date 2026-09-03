@@ -1222,10 +1222,47 @@ function ensureLocais(){
   var fallback = LOCAIS[HOME_LOCAL] ? HOME_LOCAL : Object.keys(LOCAIS)[0];
   var changed=false;
   if(QGEO && fallback){ Object.keys(QGEO).forEach(function(id){ if(!QLOCAL[id] || !LOCAIS[QLOCAL[id]]){ QLOCAL[id]=fallback; changed=true; } }); }
-  if(!localAtivo){ try{ localAtivo=localStorage.getItem(LOCAL_ATIVO_KEY)||fallback; }catch(e){ localAtivo=fallback; } }
-  if(!LOCAIS[localAtivo]) localAtivo=Object.keys(LOCAIS)[0];
+  localAtivo=_resolveLocalAtivo(localAtivo);
   if(changed) saveQLocal();
   return LOCAIS;
+}
+/* Em que lugar o app abre.
+   ------------------------------------------------------------------------------
+   Esta conta é feita DUAS vezes por abertura, e é daí que vinha o bug: uma na
+   partida, com o que o aparelho tinha guardado, e outra quando a nuvem chega com
+   os lugares de verdade. Na partida de um aparelho zerado — instalação nova,
+   armazenamento limpo pelo navegador, ou logout, que apaga tudo — os lugares
+   ainda não existem, então `ensureLocais` cria o "Local principal" e escolhe ele.
+
+   Até aqui, tudo bem. O problema era a segunda vez: como `localAtivo` já estava
+   preenchido (com aquele padrão), a preferência gravada NUNCA mais era
+   consultada, e o padrão recém-criado não existia na nuvem — então o app caía em
+   `Object.keys(LOCAIS)[0]`, que não é "o primeiro lugar" no sentido de nenhum
+   critério: é a ordem em que as chaves entraram no objeto. O usuário abria o app
+   e se via num lugar que nunca escolheu, sem explicação nenhuma na tela.
+
+   A ORDEM ABAIXO É A CORREÇÃO, e cada degrau tem uma razão:
+
+   1. A PREFERÊNCIA GRAVADA VENCE, sempre que o lugar ainda existir. Só duas
+      coisas escrevem essa chave — `setLocalAtivo`, que é o usuário tocando no
+      lugar, e o reparo de lugares duplicados. Nenhuma delas é palpite do
+      programa, e por isso ela vale mais que o que estiver na variável.
+   2. O que já está ativo na sessão, se for válido.
+   3. O lugar padrão, quando existe.
+   4. E só então a primeira chave — que é arbitrária, e está aqui apenas para o
+      app nunca abrir sem lugar nenhum. Este degrau NÃO grava a preferência: se
+      ele decidisse, a escolha do usuário seria apagada por um palpite, e o erro
+      viraria permanente. É exatamente o que acontecia antes. */
+function _localAtivoSalvo(){
+  try{ return localStorage.getItem(LOCAL_ATIVO_KEY)||''; }catch(e){ return ''; }
+}
+function _resolveLocalAtivo(atual){
+  if(!LOCAIS) return atual;
+  var salvo=_localAtivoSalvo();
+  if(salvo && LOCAIS[salvo]) return salvo;
+  if(atual && LOCAIS[atual]) return atual;
+  if(LOCAIS[HOME_LOCAL]) return HOME_LOCAL;
+  return Object.keys(LOCAIS)[0];
 }
 /* Enumera as quadras do local. Percorre QGEO (quadras de campo, que existem por
    terem geometria) E data (para alcançar as de LABORATÓRIO, que não têm polígono

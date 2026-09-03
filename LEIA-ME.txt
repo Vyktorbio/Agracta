@@ -1,14 +1,17 @@
 AGRACTA — 9a publicacao                     03/09/2026
 =====================================================
 
-Leva: 3 arquivos de codigo + 1 motor novo + 5 de teste.
-  CODIGO:  app.js  ndvi-proxy.py  styles.css  index.html  sw.js
+Leva: 7 arquivos de codigo + 1 motor novo + 6 de teste + 1 ampliado.
+  CODIGO:  app.js  ndvi-proxy.py  firebase-sync.js  styles.css
+           index.html  sw.js  conferir.sh
   MOTOR:   vendor/consumo-core.js (novo)
   TESTE:   test_consumo_lote.js         (novo)
            test_baixa_aplicacao.js      (novo)
            test_pos_aplicacao_proxy.py  (novo)
            test_pos_aplicacao.js        (novo)
            test_dose_receita.js         (novo)
+           test_local_ativo.js          (novo)
+           test_offline_local.js        (+5 verificacoes)
   DOCS:    docs/ROADMAP.md
 
 Avanca a secao 9 e fecha o buraco da cadeia de custodia da 7-ter.
@@ -95,6 +98,48 @@ virou qual. Estudo ja consistente sai byte por byte igual: salvar nao vira edica
 fantasma.
 
 
+4) O APP VOLTOU A ABRIR ONDE VOCE ESTAVA
+
+Voce relatou que ao abrir o app ele ia para o Picolini sem explicacao. Nao era
+aleatorio, e nao era o Picolini: era a ORDEM em que os lugares entraram na lista.
+
+O app decide o lugar ativo duas vezes por abertura — uma na partida, com o que o
+aparelho guardou, e outra quando a nuvem chega com os lugares de verdade. Num
+aparelho zerado (instalacao nova, armazenamento limpo pelo navegador, ou logout,
+que apaga tudo) a primeira volta acontece sem lugar nenhum: o app criava o "Local
+principal" e escolhia ele. Na segunda volta a variavel ja estava preenchida, e por
+isso a sua preferencia NUNCA mais era consultada — o padrao recem-criado nao
+existia na nuvem, e o app caia no primeiro lugar do objeto. Que calhava de ser o
+Picolini.
+
+Agora a ordem e declarada: a sua escolha vence sempre que o lugar ainda existir;
+depois o que ja estava aberto; depois o lugar padrao; e so entao o primeiro da
+lista — que NAO grava nada. Um palpite que se grava apaga a sua escolha e faz o
+erro virar permanente, que era como ele se instalava.
+
+5) O SALVAMENTO OFFLINE VOLTA COMPLETO
+
+O cofre offline (o checkpoint no IndexedDB) restaurava tudo — quadras, estudos,
+nomes, lugares — menos ONDE voce estava. Num aparelho que restaura o cofre com o
+armazenamento rapido limpo (reinstalacao do app, ou o navegador despejando dados
+por falta de espaco), os dados voltavam inteiros e a posicao nao, e voce caia
+direto no palpite do item acima. Dava a impressao de que o que foi digitado
+offline tinha sumido — quando estava tudo la, so que noutro lugar da lista.
+
+O lugar ativo continua NAO subindo para a nuvem, de proposito: ele e do aparelho.
+Se subisse, voce trocando de talhao no celular arrastaria a tela de quem esta no
+escritorio. Ele agora viaja junto do checkpoint, que e local, e volta na
+restauracao se ainda existir.
+
+6) O PORTAO CONFERE O NUMERO DO SERVICE WORKER
+
+O ?v= do registro tinha parado no 132 por tres publicacoes seguidas. Nao quebrava
+nada — o navegador compara o sw.js byte a byte e ignora o cache HTTP para ele —,
+mas quando o numero para de andar ele deixa de servir para o que existe: dizer,
+olhando o index.html, qual publicacao esta no ar. O conferir.sh agora avisa, sem
+reprovar a publicacao.
+
+
 O QUE CONFERIR DEPOIS DE SUBIR
 ------------------------------
 1. Abrir um estudo com lote vinculado, registrar uma aplicacao e ver o saldo do
@@ -104,6 +149,8 @@ O QUE CONFERIR DEPOIS DE SUBIR
    fica gravada — fechar e reabrir o estudo nao deve rebater na estacao.
 4. Abrir e salvar um estudo com receita: se a dose exibida mudar, a trilha de
    auditoria tem de mostrar a correcao.
+5. Sair, entrar de novo e conferir que o app abre no MESMO lugar em que voce
+   estava — nao no Picolini.
 
 
 TESTES
@@ -116,6 +163,8 @@ Todas as suites passando, 5 novas nesta leva:
   test_pos_aplicacao_proxy.py  43 verificacoes (novo, golden test a mao)
   test_pos_aplicacao.js        40 verificacoes (novo)
   test_dose_receita.js         16 verificacoes (novo)
+  test_local_ativo.js          13 verificacoes (novo)
+  test_offline_local.js        20 verificacoes (5 novas)
 
 Os golden tests desta leva, conferidos a mao:
 
