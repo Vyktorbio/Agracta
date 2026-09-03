@@ -78,8 +78,11 @@ ctx._calcSalvarParcela=function(){};
 
 vm.runInContext([
   'var _calcDetalhe=false;',
+  /* O volume de calda ambíguo é estado da tela: quando há um, a receita não é
+     pintada. Aqui ele nasce nulo — este teste cobre a receita, não a pergunta. */
+  'var _calcVolAmbiguo=null;',
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
-  pega('_calcCompute')
+  pega('calcVolumeAmbiguoHtml'), pega('_calcCompute')
 ].join('\n'), ctx);
 
 function pinta(detalhe){

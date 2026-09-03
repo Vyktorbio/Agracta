@@ -176,6 +176,56 @@
             base:{dose:v, doseUnidade:doseUnidade, conc:cc, concUnidade:concUnidade}};
   }
 
+  /* ---- Volume de calda escrito em texto livre ------------------------------
+     UM CAMPO DE TEXTO QUE ALIMENTA UMA CONTA E UMA CONTA QUE ACEITA QUALQUER
+     COISA. O caso real: o protocolo trazia
+
+         "1,5 L ÁGUA (TOTAL 3,0 L/ha)"
+
+     e quem lia pegava o PRIMEIRO numero — 1,5. Com 1,5 L/ha no lugar de 3, o
+     produto a 1,5 L/ha passa a ocupar 100% da calda, nao sobra espaco para agua
+     nenhuma, e a calculadora recusa preparar. O bloqueio estava certo; ele so
+     recusava por um motivo que ninguem conseguia ver na tela.
+
+     A REGRA E RECUSAR, NAO ESCOLHER. Quando ha mais de um numero, este motor NAO
+     decide sozinho: devolve `ambiguo` com os candidatos e, quando um deles esta
+     explicitamente qualificado por area (o "3,0 L/ha"), aponta esse como
+     SUGESTAO. Quem confirma e a pessoa. Escolher em silencio e exatamente o que
+     produziu o erro — trocar qual numero se escolhe em silencio nao conserta
+     nada, so muda a vitima. */
+  var RE_NUM_UN=/(\d+(?:\.\d{3})*(?:[.,]\d+)?)\s*(l\s*\/\s*ha|ml\s*\/\s*ha|l\/ha|ml\/ha|[a-zà-ú%°]+|)/gi;
+  function _n(txt){
+    /* milhar PT-BR: "1.500" e 1500, nao 1,5 */
+    var s=String(txt).replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',','.');
+    var v=Number(s); return isFinite(v)?v:null;
+  }
+  function volumeCalda(texto){
+    var s=String(texto==null?'':texto).trim();
+    if(!s) return {valor:null, vazio:true};
+    if(typeof texto==='number') return {valor:(isFinite(texto)?texto:null), unidade:'L/ha'};
+
+    var achados=[], m;
+    RE_NUM_UN.lastIndex=0;
+    while((m=RE_NUM_UN.exec(s))!==null){
+      var v=_n(m[1]); if(v==null) continue;
+      var un=String(m[2]||'').toLowerCase().replace(/\s/g,'');
+      achados.push({valor:v, unidade:un, porArea:(un==='l/ha'||un==='ml/ha'),
+                    mL:(un==='ml/ha'), texto:m[0].trim()});
+    }
+    if(!achados.length) return {valor:null, semNumero:true};
+
+    function emLha(a){ return a.mL ? a.valor/1000 : a.valor; }
+    if(achados.length===1) return {valor:emLha(achados[0]), unidade:'L/ha', numeros:1};
+
+    var porArea=achados.filter(function(a){ return a.porArea; });
+    var sug=(porArea.length===1)?emLha(porArea[0]):null;
+    return {valor:null, ambiguo:true, numeros:achados.length,
+            candidatos:achados.map(function(a){ return {valor:emLha(a.valor!=null?a.valor:0), rotulo:a.texto,
+                                                        porArea:a.porArea, emLha:emLha(a)}; }),
+            sugestao:sug,
+            motivo:'O texto tem '+achados.length+' números e não diz qual é o volume de calda.'};
+  }
+
   /* ---- Produto de MAIS DE UM ativo ----------------------------------------
      `item.concentracao` e um texto livre, e ate aqui quem o lia pegava a PRIMEIRA
      concentracao que encontrasse. Num produto de dois ativos — 2,4-D 406 g/L +
@@ -274,6 +324,7 @@
     unidadesDaFamilia:unidadesDaFamilia,
     num:num, canonico:canonico, converter:converter, converterComContexto:converterComContexto,
     equivalenteIA:equivalenteIA, ativosDe:ativosDe, equivalentesIA:equivalentesIA,
+    volumeCalda:volumeCalda,
     formatar:formatar, escada:escada
   };
 });

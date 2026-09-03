@@ -470,6 +470,37 @@ capacidade sozinho).
 absurda em relação à calda preparada) fica para depois da refinada de usabilidade em
 curso, para não colidir com ela.
 
+## 7-septies. O volume de calda deixou de ser texto · ✅ **feito (03/09/2026)**
+
+O caso foi real e caro. O protocolo trazia `1,5 L ÁGUA (TOTAL 3,0 L/ha)`, e a
+calculadora pegava o **primeiro número** — 1,5. Com 1,5 L/ha no lugar de 3, o produto
+a 1,5 L/ha passa a ocupar **100% da calda**: não sobra espaço para água nenhuma, e a
+tela mostra "NÃO PREPARE". O bloqueio estava certo — ele apenas recusava por um motivo
+invisível para quem estava na bancada, e a receita ao lado saía absurda.
+
+`DoseCore.volumeCalda` passa a **recusar em vez de escolher**. Texto com mais de um
+número não vira conta: vira pergunta, com os candidatos na tela. Quando um único
+número está qualificado por área (`3,0 L/ha`), ele é **sugerido** — e só sugerido:
+escolher outro número em silêncio não conserta o erro, só muda a vítima.
+
+Enquanto o volume não é confirmado, **nenhuma receita é pintada**. Meia conta na
+bancada é pior que conta nenhuma. O mesmo cuidado vale no volume do tratamento: o
+cartão daquele tratamento diz o que falta, e só ele.
+
+A confirmação grava um NÚMERO em `protocolo.volumeCaldaLHa`, ao lado do texto
+original, que nunca é apagado — e entra na trilha de auditoria dizendo qual texto
+virou qual número. Coberto por `test_volume_calda.js` (28 verificações, com o texto
+real como golden test).
+
+**Também nesta leva:** o verificador de desenho ganhou `testemunha-com-produto` — uma
+testemunha que carrega produto não é o zero de nada, e o % de controle sai medido
+contra um tratamento.
+
+**Falta:** o Modo Preparo pedido pelo autor — abas por tratamento, edição da receita
+dentro da calculadora, navegação anterior/próximo, linha de configuração compacta e
+seletor mL/L no frasco. É reescrita da tela, e espera a refinada de usabilidade em
+curso para não colidir com ela.
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,

@@ -102,6 +102,24 @@ var iguaisTrocado={numRepeticoes:4, tratamentos:[
 ]};
 ck(tem(P.verificar(iguaisTrocado),'tratamentos-iguais'), 'mesma mistura em ordem trocada também é duplicata');
 
+console.log('\n--- Testemunha com produto e dose ---');
+/* A testemunha é o zero do ensaio, e é contra ela que o % de controle se calcula.
+   Uma testemunha que carrega produto não é zero de nada. */
+var testProd={numRepeticoes:4, tratamentos:[
+  {id:'T1', testemunha:true, componentes:[comp('Sankari',1.5,'L/ha')]},
+  {id:'T2', componentes:[comp('Sankari',1.5,'L/ha')]}
+]};
+var rtp=doCod(P.verificar(testProd),'testemunha-com-produto');
+eq(rtp.length, 1, 'a testemunha com produto é apontada');
+eq(rtp[0].severidade, 'conferir', 'como conferir — ou a marca está errada, ou o produto');
+ck(rtp[0].texto.indexOf('Sankari')>=0, 'nomeando o produto que está nela');
+ck(rtp[0].texto.indexOf('% de controle')>=0, 'e dizendo a consequência');
+var testLimpa={numRepeticoes:4, tratamentos:[
+  {id:'T1', produto:'Testemunha', dose:'', testemunha:true},
+  {id:'T2', componentes:[comp('Sankari',1.5,'L/ha')]}
+]};
+ck(!tem(P.verificar(testLimpa),'testemunha-com-produto'), 'testemunha sem dose não é apontada');
+
 console.log('\n--- Componente que nunca é testado sozinho ---');
 var semSolo={numRepeticoes:4, tratamentos:[
   {id:'T1', produto:'Testemunha', dose:'', testemunha:true},

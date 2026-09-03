@@ -7225,6 +7225,7 @@ function openStudyParcelas(qid,sid){
    Reusa vendor/biocalc-campo-core.js (window.BioCalculoCampo). Pré-preenche dose/volume dos tratamentos
    do estudo; o usuário ajusta tamanho da parcela / frascos. Sem identidade externa — tela nativa do Agracta. */
 var _calcSel=null; /* {qid,sid} estudo selecionado na calculadora */
+var _calcVolAmbiguo=null; /* volume de calda que o texto não resolve — a tela pergunta */
 function _calcNum(v){
   if(typeof v==='number') return isFinite(v)?v:0;
   /* normaliza separador de milhar PT-BR (ponto antes de 3 dígitos seguido de não-dígito/fim) ANTES
@@ -7919,11 +7920,13 @@ function _calcRenderShell(){
     /* volume PADRÃO (fallback): nível do protocolo; senão, só se TODOS os tratamentos tiverem o
        mesmo volume. Se variam (ex.: 10/50/150 no mesmo protocolo), deixa em branco — cada
        tratamento já usa o SEU próprio volume no cálculo (_calcCompute lê t.volume). */
-    var pv=_calcNum((study.protocolo||{}).volumeCalda);
+    var _vres=calcVolumeDoEstudo(study);
     var tvs=(study.tratamentos||[]).map(function(t){return _calcNum(t.volume);}).filter(function(n){return n>0;});
     var uniforme=tvs.length>0 && tvs.every(function(n){return n===tvs[0];});
     volsVariam = tvs.length>1 && !uniforme;
-    defVol = (pv>0)?pv : (uniforme?tvs[0]:'');
+    /* Ambíguo NÃO vira número: o campo fica vazio e a tela pergunta. */
+    defVol = (_vres.valor>0)?_vres.valor:'';
+    _calcVolAmbiguo = _vres.ambiguo?_vres:null;
   }
   /* preparo de calda: vem do cadastro do estudo (editável aqui, sem gravar de volta) */
   var defDead=study?Math.max(0,_numBR(study.volumeMorto,0)):0;
@@ -7968,6 +7971,80 @@ function calcEditarReceita(){
   openStudyEditV2(sel.qid,sel.sid);
   if(workingStudy){ studyEditStep=3; renderStudyEditModal(); }
 }
+/* VOLUME DE CALDA: número, não texto.
+   ---------------------------------------------------------------------------
+   O campo do protocolo é texto livre e alimentava a conta pelo primeiro número
+   que aparecesse. O caso real foi "1,5 L ÁGUA (TOTAL 3,0 L/ha)": leu 1,5, o
+   produto a 1,5 L/ha passou a ocupar 100% da calda, não sobrou espaço para água
+   e a calculadora recusou preparar. O bloqueio estava certo — só recusava por um
+   motivo invisível na tela.
+
+   A ordem é: o volume CONFIRMADO (número), depois o texto quando ele é
+   inequívoco, depois os tratamentos. Texto com mais de um número NÃO É
+   INTERPRETADO: vira pergunta. Escolher outro número em silêncio não conserta o
+   erro, só muda a vítima. O texto original nunca é apagado — ele continua no
+   protocolo, e o número confirmado passa a viver ao lado. */
+function calcVolumeDoEstudo(study){
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  var vazio={valor:null};
+  if(!study) return vazio;
+  var proto=study.protocolo||{};
+
+  /* Já confirmado alguma vez: número manda, e não se pergunta de novo. */
+  var conf=_numBR(proto.volumeCaldaLHa, 0);
+  if(conf>0) return {valor:conf, fonte:'confirmado', texto:(proto.volumeCalda||'')};
+
+  if(D && D.volumeCalda && proto.volumeCalda!=null && String(proto.volumeCalda).trim()!==''){
+    var r=D.volumeCalda(proto.volumeCalda);
+    if(r.ambiguo) return {valor:null, ambiguo:true, texto:String(proto.volumeCalda),
+                          candidatos:r.candidatos, sugestao:r.sugestao, motivo:r.motivo, fonte:'protocolo'};
+    if(r.valor>0) return {valor:r.valor, fonte:'protocolo', texto:String(proto.volumeCalda)};
+  }
+
+  /* Sem protocolo: só vale se TODOS os tratamentos concordarem. */
+  var tvs=(study.tratamentos||[]).map(function(t){ return _calcNum(t.volume); }).filter(function(n){ return n>0; });
+  var uniforme=tvs.length>0 && tvs.every(function(n){ return n===tvs[0]; });
+  return uniforme?{valor:tvs[0], fonte:'tratamentos'}:vazio;
+}
+
+/* A pessoa confirma qual número é o volume. O texto original fica onde estava. */
+function calcConfirmarVolume(valor){
+  var st=_calcStudy(); if(!st) return;
+  var v=_numBR(valor,0); if(!(v>0)) return;
+  st.protocolo=st.protocolo||{};
+  st.protocolo.volumeCaldaLHa=v;
+  try{
+    logStudyAuditInObject(st,'Volume de calda confirmado',
+      'O texto "'+String(st.protocolo.volumeCalda||'')+'" tinha mais de um número; '+
+      'confirmado '+String(v).replace('.',',')+' L/ha como volume de calda.',
+      {origem:'confirmada'});
+  }catch(e){}
+  st._ts=Date.now();
+  try{ save(); }catch(e){}
+  try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
+  try{ _calcRenderShell(); }catch(e){}
+}
+
+/* O bloco que pergunta. Ele SUBSTITUI a receita: enquanto o volume não estiver
+   resolvido não existe conta a mostrar, e mostrar uma seria voltar ao erro. */
+function calcVolumeAmbiguoHtml(amb){
+  if(!amb||!amb.ambiguo) return '';
+  var h='<div class="calc-card"><div class="calc-prep bad"><span>CONFIRME O VOLUME</span>'+
+        '<b>'+esc(amb.texto)+'</b><small>'+esc(amb.motivo||'')+'</small></div>';
+  h+='<div class="calc-warn" style="margin:0 0 7px">Nada é calculado enquanto isto não for '+
+     'resolvido. O texto acima continua guardado no protocolo — o que se confirma aqui é '+
+     'apenas qual número é o volume de calda.</div>';
+  h+='<div class="calc-actions" style="flex-wrap:wrap">';
+  (amb.candidatos||[]).forEach(function(c){
+    var sug=(amb.sugestao!=null && Math.abs(c.emLha-amb.sugestao)<1e-9);
+    h+='<button class="'+(sug?'calc-copy':'calc-close')+'" onclick="calcConfirmarVolume('+c.emLha+')">'+
+       esc(String(c.emLha).replace('.',',')+' L/ha')+(sug?' ✓':'')+'</button>';
+  });
+  h+='</div>';
+  if(amb.sugestao!=null) h+='<div class="calc-eq" style="margin-top:6px">O ✓ marca o único número '+
+     'que o texto qualifica por área. Confira antes de confirmar.</div>';
+  return h+'</div>';
+}
 function _calcCompute(){
   var box=document.getElementById('calcResults'); if(!box) return;
   var study=_calcStudy();
@@ -7985,11 +8062,31 @@ function _calcCompute(){
   var _metVariam=false;
   try{ _metVariam=studyMetodosVariam(study,(_calcSel||{}).qid); }catch(e){}
   var html='';
+  /* Volume de calda por resolver: a receita inteira depende dele, então não se
+     mostra receita nenhuma. Meia conta na bancada é pior que conta nenhuma. */
+  if(_calcVolAmbiguo && !(volDef>0)){
+    box.innerHTML=calcVolumeAmbiguoHtml(_calcVolAmbiguo);
+    return;
+  }
   if(_metVariam) html+='<div class="calc-warn" style="margin-bottom:6px">• Este estudo usa mais de um método de aplicação. Cada tratamento mostra o seu; a calibração da barra abaixo vale só para os de barra.</div>';
   (study.tratamentos||[]).forEach(function(t){
     var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
-    var vol=t.volume?_calcNum(t.volume):volDef;
+    /* O mesmo cuidado no volume do TRATAMENTO: texto com mais de um número não
+       vira conta. O cartão daquele tratamento diz o que falta, e só ele. */
+    var _tv=(t.volume!=null && String(t.volume).trim()!=='' && window.DoseCore && DoseCore.volumeCalda)
+      ? DoseCore.volumeCalda(t.volume) : null;
+    if(_tv && _tv.ambiguo){
+      /* Cabeçalho próprio: o `head` normal ainda não existe aqui, e ele depende
+         justamente do volume que não temos. */
+      html+='<div class="calc-card"><div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+
+        (t.produto?' · '+esc(t.produto):'')+'</span></div>'+
+        '<div class="calc-terr">⚠ O volume de calda deste tratamento está escrito como "'+
+        esc(String(t.volume))+'", com mais de um número. Enquanto ele não for um número só, '+
+        'este tratamento não é calculado.</div></div>';
+      return;
+    }
+    var vol=(_tv&&_tv.valor>0)?_tv.valor:(t.volume?_calcNum(t.volume):volDef);
     /* §7.2 — o método só entra no cartão quando os tratamentos DIVERGEM. Repetir
        "costal CO₂" em cinco cartões idênticos não informa nada; a diferença, sim. */
     var _met=(_metVariam && typeof tratMetodo==='function')?tratMetodo(study,(_calcSel||{}).qid,t):null;
