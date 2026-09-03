@@ -437,6 +437,39 @@ assim que vê `_cloudInitDone`, ou seja, o retry que existe para este caso era
 desligado pelo próprio caso. O `cloudStart` sempre conferiu `res.error`; o
 `cloudPull` não conferia. Coberto por `test_sync_leitura_falha.js` (20 verificações).
 
+## 7-sexies. Duas arestas que a importação do Agrofit tornaria comuns · ✅ **feito (03/09/2026)**
+
+**O equivalente em i.a. lia só o primeiro ativo.** `tratEquivalenteIA` regexava a
+primeira concentração do texto de `item.concentracao`. Num produto de dois ativos —
+2,4-D 406 g/L + picloram 103,6 g/L — devolvia 406 e calava sobre o resto: um número
+certo apresentado como se fosse a história inteira. Enquanto a concentração era
+digitada à mão isso era raro; no catálogo do Agrofit **100% dos registros** trazem o
+i.a. com a concentração embutida, e boa parte é mistura — por isso se corrigiu antes
+de importar, não depois.
+
+`DoseCore.ativosDe` e `DoseCore.equivalentesIA` devolvem **um resultado por ativo, e
+nenhuma soma**: gramas de 2,4-D e gramas de picloram não são a mesma grandeza, e um
+total único faria parecer que são. A âncora do parser é a **concentração**, não o
+nome — foi o que permitiu atravessar parêntese aninhado no grupo químico
+(`etefom (etileno (precursor de)) (720 g/L)`), que derrubou a primeira tentativa no
+reconhecimento do Agrofit. E o formato antigo sem parênteses (`500 g/L`), que é como
+todo item já cadastrado está, continua valendo — quebrá-lo seria o oposto da
+correção. Coberto por `test_equivalente_ia.js` (32 verificações, com golden test).
+
+**"Capacidade do frasco (L)" ao lado de "Volume morto (mL)".** Num preparo de 62 mL
+saiu "frasco 200 L" numa folha real. Quem preencheu digitou 200 pensando em
+mililitros — e não sem razão: dois campos vizinhos em unidades diferentes é
+armadilha, não descuido. O campo passou a **aceitar a unidade escrita** ("200 mL" são
+0,2 L) mantendo número puro como litros, que é como todo estudo já cadastrado está
+gravado; e mostra embaixo o que entendeu, porque um campo que interpreta sem exibir o
+resultado troca uma armadilha por outra. Coberto por `test_capacidade_frasco.js`
+(21 verificações, incluindo a ida e volta — editar duas vezes não pode mudar a
+capacidade sozinho).
+
+**Falta desta dupla:** o aviso de plausibilidade na própria calculadora (capacidade
+absurda em relação à calda preparada) fica para depois da refinada de usabilidade em
+curso, para não colidir com ela.
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,

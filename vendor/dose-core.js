@@ -176,6 +176,65 @@
             base:{dose:v, doseUnidade:doseUnidade, conc:cc, concUnidade:concUnidade}};
   }
 
+  /* ---- Produto de MAIS DE UM ativo ----------------------------------------
+     `item.concentracao` e um texto livre, e ate aqui quem o lia pegava a PRIMEIRA
+     concentracao que encontrasse. Num produto de dois ativos — 2,4-D 406 g/L +
+     picloram 103,6 g/L — o equivalente em i.a. saia com um terco da historia e
+     sem avisar. Hoje isso e raro porque a concentracao e digitada a mao; com a
+     importacao do Agrofit, onde 100% dos registros trazem o i.a. com a
+     concentracao embutida, vira o caso comum.
+
+     A ANCORA E A CONCENTRACAO, NAO O NOME. Procurar "(numero unidade)" e segmentar
+     por ali atravessa parenteses aninhados no grupo quimico — `etefom (etileno
+     (precursor de)) (720 g/L)` — que quebram qualquer tentativa de casar o grupo
+     primeiro. */
+  var RE_CONC=/\(\s*([\d]+(?:[.,][\d]+)?)\s*(g\/L|g\/l|g\/kg|mg\/kg|mg\/L|mg\/l|%)\s*\)/g;
+  function ativosDe(texto){
+    var s=String(texto==null?'':texto);
+    var achados=[], m;
+    RE_CONC.lastIndex=0;
+    while((m=RE_CONC.exec(s))!==null) achados.push({ini:m.index, fim:RE_CONC.lastIndex, valor:m[1], un:m[2]});
+    if(!achados.length){
+      /* SEM PARENTESE e como o campo foi preenchido a mao desde sempre — "500 g/L",
+         "70%". Cair fora aqui apagaria o equivalente em i.a. de todo item ja
+         cadastrado, que e o oposto do que esta correcao existe para fazer. Um ativo,
+         sem nome, e o comportamento identico ao de antes. */
+      var b=s.match(/([\d]+(?:[.,][\d]+)?)\s*(g\/L|g\/l|g\/kg|mg\/kg|mg\/L|mg\/l|%)/);
+      if(!b) return [];
+      return [{ia:'', valor:num(b[1].replace(',','.')),
+               unidade:b[2].replace('g/l','g/L').replace('mg/l','mg/L')}];
+    }
+    var out=[], corte=0;
+    achados.forEach(function(a){
+      var antes=s.slice(corte, a.ini);
+      /* O nome e o que vem antes do primeiro parentese do trecho; sem parentese,
+         e o trecho inteiro. O separador " + " e o " e " ficam de fora. */
+      var nome=antes.replace(/^[\s+]+/,'').split('(')[0].trim().replace(/[,;]$/,'');
+      var un=a.un.replace('g/l','g/L').replace('mg/l','mg/L');
+      out.push({ia:nome, valor:num(a.valor.replace(',','.')), unidade:un});
+      corte=a.fim;
+    });
+    return out;
+  }
+
+  /* Equivalente em i.a. de um produto que pode ter varios ativos.
+     NAO SOMA os ativos: gramas de 2,4-D e gramas de picloram nao sao a mesma
+     grandeza, e um total unico daria a impressao de que sao. Devolve um resultado
+     por ativo, e quem le decide o que fazer com eles. */
+  function equivalentesIA(doseValor, doseUnidade, textoConcentracao){
+    var ativos=ativosDe(textoConcentracao);
+    if(!ativos.length) return {erro:'Não achei concentração no formato "(valor unidade)" — ex.: "406 g/L".'};
+    var itens=[], erro=null;
+    ativos.forEach(function(a){
+      var r=equivalenteIA(doseValor, doseUnidade, a.valor, a.unidade);
+      if(r.erro){ if(!erro) erro=r.erro; return; }
+      itens.push({ia:a.ia, valor:r.valor, unidade:r.unidade,
+                  conc:a.valor, concUnidade:a.unidade});
+    });
+    if(!itens.length) return {erro:erro||'Não foi possível calcular o equivalente.'};
+    return {itens:itens, ativos:ativos.length, parcial:(itens.length<ativos.length)};
+  }
+
   /* Como a dose se escreve. Vírgula, porque é como se escreve aqui. */
   function formatar(valor, u, casas){
     var v=num(valor);
@@ -214,6 +273,7 @@
     unidades:unidades, unidade:unidade, familia:familia, fase:fase, rotulo:rotulo,
     unidadesDaFamilia:unidadesDaFamilia,
     num:num, canonico:canonico, converter:converter, converterComContexto:converterComContexto,
-    equivalenteIA:equivalenteIA, formatar:formatar, escada:escada
+    equivalenteIA:equivalenteIA, ativosDe:ativosDe, equivalentesIA:equivalentesIA,
+    formatar:formatar, escada:escada
   };
 });
