@@ -17786,7 +17786,24 @@ function _itensCss(){
    '.it-btn.alt{background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border:1px solid var(--border,#26322b)}'+
    '.it-dup{background:rgba(220,205,140,.10);border:1px solid rgba(220,205,140,.32);color:#dccd8c;border-radius:9px;padding:8px 10px;font-size:11.5px;line-height:1.5;margin-bottom:9px}'+
    '.it-dose{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 9px;border-radius:9px;border:1px solid var(--border,#26322b);margin-bottom:5px;font-size:12.5px}'+
-   '.it-dose b{font-weight:800}.it-vazio{font-size:12px;color:var(--text-3,#7f9085);font-style:italic;padding:10px 0}';
+   '.it-dose b{font-weight:800}.it-vazio{font-size:12px;color:var(--text-3,#7f9085);font-style:italic;padding:10px 0}'+
+   /* Busca do Agrofit. A lista tem altura limitada e rola: doze resultados
+      empurrando o formulário para fora da tela seria o oposto de ajudar. */
+   '.it-hint{font-size:11px;color:var(--text-3,#7f9085);line-height:1.5;padding:6px 2px}'+
+   '.it-agf-res{max-height:230px;overflow-y:auto;margin:-4px 0 9px}'+
+   '.it-agf{display:block;width:100%;text-align:left;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px 10px;margin-bottom:5px;cursor:pointer;font-family:inherit;color:inherit}'+
+   '.it-agf:hover{border-color:#2f8f55}'+
+   '.it-agf b{display:block;font-size:13px;font-weight:800}'+
+   '.it-agf span{display:block;font-size:10.5px;color:#7fbf98;margin-top:1px}'+
+   '.it-agf small{display:block;font-size:10px;color:var(--text-3,#7f9085);margin-top:2px;line-height:1.4}'+
+   '.it-agf-sel{border:1px solid #2f6f48;background:rgba(47,111,72,.10);border-radius:11px;padding:9px 11px;margin-bottom:10px}'+
+   '.it-agf-selh{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}'+
+   '.it-agf-selh b{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:#7fbf98}'+
+   '.it-agf-selh button{background:transparent;border:0;color:var(--text-3,#7f9085);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit}'+
+   '.it-agf-sel>div{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0;border-top:1px solid rgba(47,111,72,.18)}'+
+   '.it-agf-sel>div:first-of-type{border-top:0}'+
+   '.it-agf-sel>div span{color:var(--text-3,#7f9085);flex:0 0 auto}'+
+   '.it-agf-sel>div b{font-weight:700;text-align:right;min-width:0;word-break:break-word}';
   document.head.appendChild(s);
 }
 function _itOvl(){
@@ -17850,14 +17867,122 @@ function itemAbrirNovo(){
   /* Rascunho so existe na tela. Antes, abrir este formulario ja persistia um item
      sem nome e ele podia sincronizar antes de a pessoa preencher ou cancelar. */
   _itemRascunho={tipo:'teste',situacao:'experimental'};
+  /* Formulário novo começa sem a busca anterior: reaproveitar o produto da
+     última vez faria o item nascer com registro de outro. */
+  _agrofitSel=null; _agrofitTermo=''; _agrofitErro='';
   _itemAberto='__novo__'; _itensPinta();
   setTimeout(function(){ var i=document.getElementById('itNome'); if(i) i.focus(); },50);
 }
 
+/* ================== CATÁLOGO DO AGROFIT NO CADASTRO DE ITEM ==================
+   O item cadastrado à mão erra concentração, titular e número de registro — os
+   três campos que a folha BPL leva para a auditoria. Aqui eles passam a vir da
+   fonte que o próprio MAPA publica.
+
+   O catálogo é CARREGADO SOB DEMANDA. São 520 KB: embarcar no arranque atrasaria
+   a abertura do app para todo mundo por causa de uma tela que se usa de vez em
+   quando. Depois de carregado uma vez, o service worker o guarda e ele funciona
+   offline — que é o estado normal de quem está em campo.
+
+   PREENCHE, NÃO SUBSTITUI: o que a pessoa já digitou não é sobrescrito em
+   silêncio. Escolher um produto preenche os campos e mostra o que preencheu; o
+   botão de salvar continua sendo o dela. */
+var _agrofitCat=null, _agrofitCarregando=false, _agrofitSel=null, _agrofitErro='';
+
+function _agrofitCarregar(cb){
+  if(_agrofitCat){ cb&&cb(_agrofitCat); return; }
+  if(_agrofitCarregando) return;
+  if(typeof AgrofitCore==='undefined'){ _agrofitErro='O motor do catálogo não carregou.'; _itensPinta(); return; }
+  _agrofitCarregando=true; _agrofitErro=''; _itensPinta();
+  fetch('data/agrofit.json?v=1').then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    _agrofitCat=AgrofitCore.carregar(j);
+    _agrofitCarregando=false;
+    if(!_agrofitCat) _agrofitErro='O catálogo veio num formato que não reconheço.';
+    _itensPinta(); cb&&cb(_agrofitCat);
+  }).catch(function(e){
+    _agrofitCarregando=false;
+    /* Sem rede e sem cache: dizer isso é melhor que um campo que não responde. */
+    _agrofitErro='Não consegui abrir o catálogo ('+(e&&e.message||'erro')+'). '+
+                 'Ele é baixado uma vez e depois funciona offline.';
+    _itensPinta();
+  });
+}
+function agrofitBusca(){
+  var i=document.getElementById('itAgrofitQ');
+  _agrofitTermo=i?String(i.value||''):'';
+  if(_agrofitTermo.trim().length>=2 && !_agrofitCat) _agrofitCarregar(function(){ _agrofitPintaLista(); });
+  else _agrofitPintaLista();
+}
+var _agrofitTermo='';
+/* Só a LISTA é repintada. Repintar a tela inteira a cada tecla tiraria o foco
+   do campo e perderia o cursor no meio da palavra. */
+function _agrofitPintaLista(){
+  var box=document.getElementById('itAgrofitRes'); if(!box) return;
+  box.innerHTML=_agrofitListaHtml();
+}
+function _agrofitListaHtml(){
+  if(_agrofitErro) return '<div class="it-hint" style="color:#b07d18">'+esc(_agrofitErro)+'</div>';
+  if(_agrofitCarregando) return '<div class="it-hint">Baixando o catálogo do MAPA (uma vez só)…</div>';
+  var t=String(_agrofitTermo||'').trim();
+  if(t.length<2) return '<div class="it-hint">Digite ao menos duas letras da marca, do ingrediente ativo ou o número de registro.</div>';
+  if(!_agrofitCat) return '';
+  var res=AgrofitCore.buscar(_agrofitCat,t,{limite:12});
+  if(!res.length) return '<div class="it-hint">Nada com "'+esc(t)+'" no Agrofit. Pode ser produto experimental — cadastre à mão.</div>';
+  return res.map(function(r){
+    var p=r.produto;
+    return '<button type="button" class="it-agf" onclick="agrofitEscolher('+esc(JSON.stringify(p.nr))+','+esc(JSON.stringify(r.marca))+')">'+
+      '<b>'+esc(r.marca||p.nr)+'</b>'+
+      '<span>'+esc([p.classe,p.formulacao].filter(Boolean).join(' · '))+'</span>'+
+      '<small>'+esc(p.ativos)+'</small>'+
+      '<small style="opacity:.75">reg. '+esc(p.nr)+' · '+esc(p.titular)+'</small></button>';
+  }).join('');
+}
+function agrofitEscolher(nr, marca){
+  if(!_agrofitCat) return;
+  var p=AgrofitCore.porRegistro(_agrofitCat,nr);
+  var m=AgrofitCore.paraItem(p,marca);
+  /* O motor recusa quando não dá para saber a marca. A recusa vira texto na
+     tela, não um preenchimento pela metade. */
+  if(m.erro){ _agrofitErro=m.erro; _agrofitPintaLista(); return; }
+  _agrofitSel=m;
+  function põe(id,val){ var e=document.getElementById(id); if(e&&val!=null) e.value=val; }
+  põe('itNome',m.nome); põe('itNovoTitular',m.titular);
+  var t=document.getElementById('itNovoTipo'); if(t) t.value=m.tipo;
+  var s=document.getElementById('itNovoSituacao'); if(s) s.value=m.situacao;
+  _itensPinta();
+}
+function agrofitLimpar(){ _agrofitSel=null; _agrofitTermo=''; _agrofitErro=''; _itensPinta(); }
+/* O que foi trazido do catálogo, visível antes de salvar. Um preenchimento
+   automático que não se mostra é indistinguível de um erro de digitação. */
+function _agrofitSelHtml(){
+  var m=_agrofitSel; if(!m) return '';
+  var linhas=[['Registro MAPA',m.registro],['Titular',m.titular],
+              ['Formulação',m.formulacao],['Ingrediente ativo',m.concentracao]];
+  if(m.sinonimos&&m.sinonimos.length) linhas.push(['Outras marcas do mesmo registro',m.sinonimos.join(', ')]);
+  var o=m.origem||{};
+  if(o.classe) linhas.push(['Classe',o.classe]);
+  if(o.toxicologica) linhas.push(['Classe toxicológica',o.toxicologica]);
+  if(o.ambiental) linhas.push(['Classe ambiental',o.ambiental]);
+  return '<div class="it-agf-sel"><div class="it-agf-selh"><b>Do Agrofit</b>'+
+    '<button type="button" onclick="agrofitLimpar()">descartar</button></div>'+
+    linhas.map(function(l){ return '<div><span>'+esc(l[0])+'</span><b>'+esc(l[1]||'—')+'</b></div>'; }).join('')+
+    '</div>';
+}
 function _itemNovoHtml(){
   var h='<div class="it-box"><div class="it-top"><div class="it-t">Novo item</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>'+
         '<button class="it-btn alt" onclick="itemVoltar()">‹ Cancelar</button><div style="height:10px"></div>'+
+        /* A busca vem ANTES do nome de propósito: se o produto é registrado, o
+           caminho barato é achá-lo e deixar o MAPA preencher. Quem cadastra um
+           item experimental ignora o campo e digita o nome, como sempre fez. */
+        '<div class="it-f"><label>Buscar no Agrofit <span style="font-weight:400;opacity:.7">· catálogo do MAPA</span></label>'+
+        '<input id="itAgrofitQ" placeholder="marca, ingrediente ativo ou nº de registro" '+
+        'value="'+esc(_agrofitTermo||'')+'" oninput="agrofitBusca()" autocomplete="off"></div>'+
+        '<div id="itAgrofitRes" class="it-agf-res">'+_agrofitListaHtml()+'</div>'+
+        _agrofitSelHtml()+
         '<div class="it-f"><label>Nome *</label><input id="itNome" placeholder="como o cliente chama"></div>'+
         '<div class="it-row"><div class="it-f"><label>Código experimental</label><input id="itNovoCodigo" placeholder="ex.: XYZ-2026-01"></div>'+
         '<div class="it-f"><label>Cliente / titular</label><input id="itNovoTitular"></div></div>'+
@@ -17874,9 +17999,21 @@ function itemNovoSalvar(){
   var dup=itemPossiveisDuplicatas(nome,null);
   if(dup.length && !confirm('Já existe '+(dup.length===1?'um item':'itens')+' com este nome: '+
     dup.map(function(x){return x.nome;}).join(', ')+'.\n\nCadastrar mesmo assim?')) return;
-  var it=itemNovo({nome:nome,codigo:v('itNovoCodigo'),titular:v('itNovoTitular'),
-    tipo:v('itNovoTipo')||'teste',situacao:v('itNovoSituacao')||'experimental'});
+  var dados={nome:nome,codigo:v('itNovoCodigo'),titular:v('itNovoTitular'),
+    tipo:v('itNovoTipo')||'teste',situacao:v('itNovoSituacao')||'experimental'};
+  /* O que veio do Agrofit só entra se o NOME ainda for o que o catálogo trouxe.
+     Se a pessoa reescreveu o nome, ela está cadastrando outra coisa, e herdar
+     registro e concentração de um produto que ela abandonou seria pior que não
+     preencher nada — sairia com cara de dado oficial. */
+  var m=_agrofitSel;
+  if(m && m.nome===nome){
+    dados.registro=m.registro; dados.formulacao=m.formulacao;
+    dados.concentracao=m.concentracao; dados.ativos=m.ativos;
+    dados.sinonimos=(m.sinonimos||[]).slice();
+  }
+  var it=itemNovo(dados);
   if(!it){alert('Não foi possível salvar o item.');return;}
+  _agrofitSel=null; _agrofitTermo=''; _agrofitErro='';
   _itemRascunho=null;_itemAberto=it.id;_itensPinta();
 }
 
