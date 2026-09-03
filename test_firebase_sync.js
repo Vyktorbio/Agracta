@@ -1,5 +1,6 @@
 var fs = require('fs');
 var vm = require('vm');
+var syncSrc = fs.readFileSync('firebase-sync.js', 'utf8');
 
 var store = {};
 var context = {
@@ -43,7 +44,7 @@ context.cloudPull = function(){};
 context.cloudSave = function(){};
 
 vm.createContext(context);
-vm.runInContext(fs.readFileSync('firebase-sync.js', 'utf8'), context);
+vm.runInContext(syncSrc, context);
 
 var photo = 'data:image/jpeg;base64,' + 'a'.repeat(1200100);
 var state = {
@@ -77,6 +78,14 @@ var state = {
   locaists: { L1: 5 },
   randomizacoes: [{ id: 'R1', nome: 'R', matriz: [[1, 2], [3, 4]] }],
   notas_campo: [{ id: 'N1', titulo: 'Nota', foto: photo }],
+  itens: {
+    IT1: {id:'IT1',nome:'Produto A',doses:[{id:'D1',valor:0.8,unidade:'L/ha'}],
+          lotes:[{id:'L1',codigo:'LOT-01',unidade:'mL',eventos:[{id:'EV1',tipo:'recebimento',quantidade:500,impacto:500,saldoApos:500}]}],
+          vinculosHistoricos:[{id:'VH1',qid:'Q9',estudoId:'E9',tratamentoId:'T2',dose:'400 mL/ha'}]},
+    IT_APAGADO: {id:'IT_APAGADO',nome:'Não deve voltar'}
+  },
+  itensts: {IT1:11,IT_APAGADO:5},
+  _deletedItens: {IT_APAGADO:10},
   _deletedQuadras: {},
   _deletedLocais: {},
   _deletedNotas: {},
@@ -95,6 +104,16 @@ assert(rebuilt.data.Q1.estudos[0].aplicacoes[0].id === 'P1', 'aplicação não v
 assert(rebuilt.data.Q1.estudos[0].randomizacao[1][0] === 3, 'matriz não voltou');
 assert(rebuilt.qgeo.Q1[1][1] === -47.51, 'geometria não voltou');
 assert(rebuilt.notas_campo[0].foto === photo, 'foto fragmentada não voltou');
+assert(rebuilt.itens.IT1.nome === 'Produto A', 'item não voltou');
+assert(rebuilt.itens.IT1.lotes[0].eventos[0].saldoApos === 500, 'cadeia de custódia do item não voltou');
+assert(rebuilt.itens.IT1.vinculosHistoricos[0].estudoId === 'E9', 'vínculo histórico do item não voltou');
+assert(rebuilt.itensts.IT1 === 11, 'timestamp do item não voltou');
+assert(rebuilt._deletedItens.IT_APAGADO === 10, 'lápide de item não voltou');
+assert(!rebuilt.itens.IT_APAGADO, 'item anterior à lápide ressuscitou');
+assert(Object.keys(flat.itens).length === 1, 'cada item ativo deve ocupar um documento próprio');
+assert(syncSrc.indexOf("localStorage.setItem('agracta-itens-v1'") >= 0, 'checkpoint offline não restaura itens');
+assert(syncSrc.indexOf("localStorage.setItem('agracta-itens-ts-v1'") >= 0, 'checkpoint offline não restaura timestamps dos itens');
+assert(syncSrc.indexOf("localStorage.setItem('agracta-itens-del-v1'") >= 0, 'checkpoint offline não restaura lápides dos itens');
 assert(JSON.stringify(flat).indexOf('[[-22.58') < 0, 'array aninhado chegou cru ao Firestore');
 
 console.log('firebase-sync roundtrip: ok');

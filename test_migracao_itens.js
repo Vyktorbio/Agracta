@@ -13,9 +13,8 @@
  *  1. PROPÕE, NÃO ADIVINHA. Ligar sozinho seria decidir que "Sankari" e
  *     "Sankari 500" são o mesmo produto. Quando erra, erra calado, dentro de um
  *     estudo que já foi a campo. A varredura propõe; a pessoa confirma.
- *  2. ESTUDO FINALIZADO NÃO SE TOCA. Foi congelado com assinatura e data.
- *     Acrescentar identidade a um tratamento dele agora reescreveria um registro
- *     fechado. Ele aparece CONTADO, para ninguém achar que foi esquecido.
+ *  2. ESTUDO FINALIZADO NÃO SE TOCA. Foi congelado com assinatura e data. A
+ *     identidade confirmada fica em vínculo externo, sem reescrever o registro.
  *  3. MISTURA NÃO VIRA ITEM SOZINHO. "Sankari + Silwet" são dois produtos.
  *     Vincular a um item só perderia o adjuvante — isso é trabalho do compositor
  *     de receita. E o número na tela tem de dizer isso ANTES do clique.
@@ -60,6 +59,7 @@ var ctx={
   save:function(){},
   _currentUserName:function(){ return 'Daria'; },
   studyCultura:function(s){ return s.cultura||''; },
+  quadraNome:function(q){ return q; },
   estudoFinalizado:function(s){ return !!s.finalizado; },
   logStudyAuditInObject:function(st,acao,txt,extra){ auditados.push({estudo:st.id, acao:acao, txt:txt, extra:extra}); },
   esc:function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -76,8 +76,11 @@ vm.runInContext([
   pega('_itemChave'), pega('itemPossiveisDuplicatas'),
   pega('itensLista'), pega('itemPorId'), pega('itemNovo'),
   pega('itemDoses'), pega('itemDoseAdicionar'), pega('itemDosesPara'), pega('doseTexto'),
+  pega('itemVinculosHistoricos'), pega('_vinculoHistoricoChave'), pega('itemVincularHistorico'),
+  pega('itemHistoricoJaVinculado'),
   pega('tratItem'), pega('tratComponentes'), pega('tratTemReceita'),
   pega('tratLigarItem'),
+  pega('itemOndeFoiUsado'),
   pega('migracaoCandidatos'), pega('migracaoLigar'), pega('migracaoCriarELigar'),
   "var _migAberta=false,_migResumo=null,_migPendentes=0;",
   pega('_migracaoHtml')
@@ -118,42 +121,45 @@ var r=ctx.migracaoCandidatos();
 var porNome={}; r.candidatos.forEach(function(c){ porNome[c.nome]=c; });
 ck(!!porNome['Sankari'],'"Sankari" aparece como candidato');
 ck(!!porNome['Silwet'],'"Silwet" também');
-eq(r.candidatos.length,2,'e só eles: testemunha, item já ligado e finalizado ficam fora');
+eq(r.candidatos.length,3,'e também o item que só existe em finalizado, para conciliação externa');
 ck(!porNome['Testemunha'],'testemunha NÃO é item de banco — ela é o zero da escada');
 ck(!porNome['Já ligado'],'quem já tem itemId não é proposto de novo');
-ck(!porNome['Fechado'],'o produto que só existe em estudo finalizado não é proposto');
+ck(!!porNome['Fechado'],'o produto que só existe em estudo finalizado também pode ganhar identidade');
 
 console.log('\n--- Grafias diferentes são o MESMO produto ---');
 /* Se "Sankari", "SANKARI " e "sankari" virassem três itens, o catálogo teria
    nascido com o problema que veio resolver. */
 var sk=porNome['Sankari'];
 eq(sk.chave,ctx._itemChave('sankari'),'caixa e espaço não separam: uma chave só');
-eq(sk.nEstudos,3,'reconhecido nos três estudos abertos');
+eq(sk.nEstudos,4,'reconhecido nos três estudos abertos e no finalizado');
 ck(sk.grafias.length>=3,'e as grafias ficam registradas, não descartadas');
 eq(sk.nome,'Sankari','a grafia mais usada vira o nome proposto');
 
-console.log('\n--- O estudo finalizado é CONTADO, não migrado ---');
-/* Some sem contar seria pior do que aparecer: ninguém saberia que ficou de fora. */
+console.log('\n--- O estudo finalizado é CONTADO para conciliação externa ---');
 eq(r.finalizados,2,'as 2 ocorrências do estudo fechado aparecem no total');
-ck(sk.nEstudos===3,'mas nenhuma delas entra na conta de estudos a migrar');
+eq(sk.finalizadosSimples,1,'o uso simples finalizado é separável do que pode ser editado');
 
 console.log('\n--- O número na tela é honesto ANTES do clique ---');
 /* Contar a mistura junto faria a tela prometer 4 e ligar 3. */
-eq(sk.ocorrencias,4,'"Sankari" tem 4 usos no total');
+eq(sk.ocorrencias,5,'"Sankari" tem 5 usos no total, incluindo o histórico');
 eq(sk.simples,3,'3 deles dão para ligar agora');
 eq(sk.emMistura,1,'e 1 está dentro de "Sankari + Silwet"');
-eq(sk.simples+sk.emMistura,sk.ocorrencias,'as duas contas fecham o total');
+eq(sk.simples+sk.emMistura+sk.finalizados,sk.ocorrencias,'abertos, mistura e finalizados fecham o total');
 
 console.log('\n--- Ligar de verdade ---');
 var it=ctx.itemNovo({nome:'Sankari 500 SC', codigo:'SK-500', titular:'Cliente X'});
+var fechadoAntes=JSON.stringify(ctx.data.Q2.estudos[0]);
 var lig=ctx.migracaoLigar(sk.chave, it.id);
 eq(lig.ligados,3,'liga exatamente os 3 usos simples que prometeu');
 eq(lig.estudos,3,'em 3 estudos');
+eq(lig.historicos,1,'e cria um vínculo externo para o uso finalizado');
 eq(ctx.data.Q1.estudos[0].tratamentos[1].itemId,it.id,'o tratamento passa a apontar para o item');
 eq(ctx.data.Q2.estudos[1].tratamentos[0].itemId,it.id,'inclusive o que estava com caixa trocada');
 
 console.log('\n--- O que a migração NÃO tocou ---');
-eq(ctx.data.Q2.estudos[0].tratamentos[0].itemId,undefined,'estudo finalizado continua intacto: nada de identidade nova em registro fechado');
+eq(JSON.stringify(ctx.data.Q2.estudos[0]),fechadoAntes,'estudo finalizado continua byte por byte intacto');
+eq(ctx.itemVinculosHistoricos(it.id).length,1,'a identidade histórica fica no item');
+eq(ctx.itemOndeFoiUsado(it.id).filter(function(u){return u.historico;}).length,1,'e passa a aparecer no relatório do item');
 eq(ctx.data.Q1.estudos[1].tratamentos[1].itemId,undefined,'a mistura continua como estava — ela vira receita, não vínculo simples');
 eq(ctx.data.Q1.estudos[0].tratamentos[0].itemId,undefined,'a testemunha segue sem item');
 
@@ -178,7 +184,7 @@ var r2=ctx.migracaoCandidatos();
 var sk2=r2.candidatos.filter(function(c){ return c.nome==='Sankari'; })[0];
 eq(sk2.simples,0,'"Sankari" não tem mais nenhum uso solto para ligar');
 eq(sk2.emMistura,1,'só resta a menção dentro da mistura, que não some por decreto');
-eq(r2.ligaveis,1,'e a conta do aviso cai para 1: sobrou só o "Silwet"');
+eq(r2.ligaveis,2,'e a conta do aviso cai para 2: Silwet e o histórico de Fechado');
 ck(r2.candidatos.filter(function(c){ return c.nome==='Silwet'; }).length===1,'"Silwet" continua esperando');
 
 console.log('\n--- Só sobra mistura: a tela recusa em vez de prometer ---');
@@ -189,12 +195,13 @@ ck(r2.candidatos[0].nome==='Silwet','e ele vem primeiro: o que dá para fazer fi
 
 console.log('\n--- Cadastrar e ligar numa passada só ---');
 /* É o caminho normal: quase todo nome digitado ainda não existe no banco. */
-mundo(); auditados.length=0;
+ctx.ITENS={};ctx.ITENS_TS={};ctx._delItens={};mundo(); auditados.length=0;
 var r3=ctx.migracaoCandidatos();
 var sk3=r3.candidatos.filter(function(c){ return c.nome==='Sankari'; })[0];
 var novo=ctx.migracaoCriarELigar(sk3.chave,'Sankari',{titular:'Cliente X', tipo:'teste'});
 ck(novo.criado,'o item é criado');
 eq(novo.ligados,3,'e já sai ligado nos 3 usos simples');
+eq(novo.historicos,1,'e concilia o uso finalizado sem alterá-lo');
 eq(novo.item.nome,'Sankari','com o nome que estava digitado');
 eq(novo.item.titular,'Cliente X','e o que mais foi preenchido na hora');
 ck(!!ctx.itemPorId(novo.item.id),'e o item existe no banco depois disso');
@@ -206,14 +213,14 @@ var r4=ctx.migracaoCandidatos();
 eq(r4.candidatos[0].simples>0,true,'o primeiro da lista é sempre algo que dá para ligar');
 var so=r4.candidatos.filter(function(c){ return c.nome==='SóEmMistura'; })[0];
 eq(so.simples,0,'o que só existe em mistura tem zero usos simples');
-eq(r4.ligaveis,r4.candidatos.filter(function(c){return c.simples>0;}).length,'e a contagem de "ligáveis" bate com a lista');
+eq(r4.ligaveis,r4.candidatos.filter(function(c){return (c.simples+c.finalizadosSimples)>0;}).length,'e a contagem de "ligáveis" bate com a lista');
 ck(r4.ligaveis<r4.candidatos.length,'o botão promete menos do que a lista inteira — porque nem tudo dá para ligar');
 
 console.log('\n--- A tela diz a verdade, não só o número bonito ---');
 ctx._migResumo=r4;
 var html=ctx._migracaoHtml();
 ck(html.indexOf('mistura')>=0,'a tela explica o caso da mistura em vez de escondê-lo');
-ck(html.indexOf('finalizado')>=0,'e diz que o estudo fechado ficou de fora, e por quê');
+ck(html.indexOf('vínculo histórico externo')>=0,'e explica a conciliação externa do estudo fechado');
 ck(html.indexOf('Cadastrar')>=0,'com a ação disponível para o que dá para ligar');
 /* O candidato que não dá para ligar não pode ganhar um botão que mente. */
 var trecho=html.slice(html.indexOf('SóEmMistura'));

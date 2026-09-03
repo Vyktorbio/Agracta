@@ -231,6 +231,25 @@ check(voltaRuim.notas.T1[''] === 8, 'célula com nome vazio volta íntegra');
 check(voltaRuim.notas['__soma'].sev === 9, 'parcela com prefixo reservado volta íntegra');
 check(voltaRuim.notas.T40.nota === 120, 'células normais seguem no formato agrupado');
 
+/* ---------- 6. banco de itens no merge entre aparelhos ---------- */
+console.log('\n[6] banco de itens: merge por identidade e lápide');
+function estadoItens(itens,ts,del){
+  return {data:{__config:{}},qgeo:{},qgeots:{},georef:null,georefts:0,locais:{},qlocal:{},qnome:{},
+    qnomets:{},qlocalts:{},locaists:{},randomizacoes:[],notas_campo:[],itens:itens,itensts:ts,
+    _deletedItens:del||{},_deletedQuadras:{},_deletedLocais:{},_deletedNotas:{},rev:1};
+}
+var localItens=estadoItens({
+  A:{id:'A',nome:'A local novo'}, B:{id:'B',nome:'B apagado'}
+},{A:20,B:5},{});
+var cloudItens=estadoItens({
+  A:{id:'A',nome:'A nuvem antigo'}, C:{id:'C',nome:'C só nuvem'}
+},{A:10,C:12},{B:9});
+var mergeItens=context.cloudMerge(localItens,cloudItens);
+check(mergeItens.itens.A.nome === 'A local novo', 'edição mais recente do item vence');
+check(mergeItens.itens.C.nome === 'C só nuvem', 'item criado em outro aparelho é unido');
+check(!mergeItens.itens.B, 'lápide posterior remove item antigo');
+check(mergeItens._deletedItens.B === 9, 'lápide do item atravessa o merge');
+
 /* ---------- resultado ---------- */
 console.log('\n' + passes + ' passaram, ' + falhas + ' falharam');
 if(falhas) process.exit(1);

@@ -556,7 +556,9 @@ var NS="http://www.w3.org/2000/svg";
 /* ===== Mapa real (sat\u00e9lite Esri) + georrefer\u00eancia ===== */
 var IMG_W=1280, IMG_H=889;
 var GEOREF_KEY="iracema-georef-v1";
-var ESTACAO_CENTER=[-22.65804,-47.52112], ESTACAO_ZOOM=16; /* Plantec Laboratórios, SP-147 km 128 */
+/* Reserva neutra para uma instalação ainda sem Local. A posição operacional vem
+   apenas do workspace autenticado ou do cofre do aparelho. */
+var ESTACAO_CENTER=[-14.235,-51.9253], ESTACAO_ZOOM=4;
 var SAT_MAX_ZOOM=21; /* Google chega a ~z21; Esri estica além de z19. */
 var _map=null, _qLayer=null, _notesLayer=null, _baseSat=null, _geo=null;
 var _grOverlay=null, _grHandles=null, _grOn=false;
@@ -618,7 +620,6 @@ function initMap(){
   _geo = loadGeoref();
   _map.on('zoomend', function(){ if(_map.getZoom()>SAT_MAX_ZOOM) _map.setZoom(SAT_MAX_ZOOM); });
   if(_geo){ _map.fitBounds(geoBounds(_geo)); }
-  else { setTimeout(startGeoref, 250); }
 }
 
 /* ---- R\u00e9gua de escala: refer\u00eancia de 1 hectare (quadrado 100\u00d7100 m) ---- */
@@ -1011,6 +1012,7 @@ function startGeoref(){
   if(_geo && _geo.corners){ _gr=grFromCorners4(_geo.corners); }
   else { var c=_map.getCenter(); _gr={clat:c.lat, clng:c.lng, hw:320, hh:220, ang:0}; }
   var img=document.querySelector('#mapInner img'), src=img?img.src:'';
+  if(!src){ _grOn=false; alert('Não há uma imagem-base privada carregada para alinhar. Desenhe as quadras diretamente no mapa.'); return; }
   var c0=grComputeCorners();
   _grOverlay=LF.imageOverlay.rotated(src, LF.latLng(c0.tl), LF.latLng(c0.tr), LF.latLng(c0.bl), {opacity:0.55, interactive:false}).addTo(_map);
   _grOverlay.bringToFront();
@@ -1216,7 +1218,7 @@ function ensureLocais(){
   if(!QLOCAL) QLOCAL=loadQLocal()||{};
   if(!QNOME) QNOME=loadQNome()||{};
   /* só cria o local padrão se NÃO existir NENHUM (assim dá pra excluir o de Iracemápolis) */
-  if(Object.keys(LOCAIS).length===0) LOCAIS[HOME_LOCAL]={nome:"Estação Iracemápolis", centro:_homeCentro(), zoom:17};
+  if(Object.keys(LOCAIS).length===0) LOCAIS[HOME_LOCAL]={nome:"Local principal", centro:_homeCentro(), zoom:ESTACAO_ZOOM};
   var fallback = LOCAIS[HOME_LOCAL] ? HOME_LOCAL : Object.keys(LOCAIS)[0];
   var changed=false;
   if(QGEO && fallback){ Object.keys(QGEO).forEach(function(id){ if(!QLOCAL[id] || !LOCAIS[QLOCAL[id]]){ QLOCAL[id]=fallback; changed=true; } }); }
@@ -1469,7 +1471,7 @@ function criarLocal(){
   var centro, zoom;
   if(_locPick){ centro=_locPick.centro; zoom=_locPick.zoom; }
   else if(_map){ var c=_map.getCenter(); centro=[c.lat,c.lng]; zoom=_map.getZoom(); }
-  else { centro=ESTACAO_CENTER.slice(); zoom=16; }
+  else { centro=ESTACAO_CENTER.slice(); zoom=ESTACAO_ZOOM; }
   var id=novoLocalId();
   LOCAIS[id]={nome:nome, centro:centro, zoom:zoom}; _touchLocal(id); saveLocais(); _locPick=null;
   var m=document.getElementById('locModal'); if(m) m.style.display='none';
@@ -2094,7 +2096,8 @@ function cloudMerge(local,cloud){
   var delQ=_mergeObj(local._deletedQuadras,cloud._deletedQuadras)||{};
   var delL=_mergeObj(local._deletedLocais,cloud._deletedLocais)||{};
   var delN=_mergeObj(local._deletedNotas,cloud._deletedNotas)||{};
-  out._deletedQuadras=delQ; out._deletedLocais=delL; out._deletedNotas=delN;
+  var delI=_mergeObj(local._deletedItens,cloud._deletedItens)||{};
+  out._deletedQuadras=delQ; out._deletedLocais=delL; out._deletedNotas=delN; out._deletedItens=delI;
   function strip(obj,tomb){ var o={},k; for(k in (obj||{})){ if(!tomb[k]) o[k]=obj[k]; } return o; }
   var _mq=_mergeQGEO(local.qgeo,cloud.qgeo,local.qgeots,cloud.qgeots,delQ); out.qgeo=_mq.geo; out.qgeots=_mq.ts; /* mapa: vale o mais recente por quadra */
   function qViva(id){ return !delQ[id] || ((_mq.ts[id]||0) > delQ[id]); } /* recriada DEPOIS da exclusão: viva (lápide não engole) */
@@ -2106,6 +2109,17 @@ function cloudMerge(local,cloud){
   out.qnome=stripQ(_mn.map); out.qnomets=stripQ(_mn.ts);
   out.qlocal=stripQ(_ml.map); out.qlocalts=stripQ(_ml.ts);
   out.locais=strip(_mlo.map,delL); out.locaists=strip(_mlo.ts,delL);
+  /* O item e uma entidade global, como Local. A edicao mais recente vence por ID;
+     uma lapide so apaga a versao anterior a ela, permitindo recriar conscientemente
+     o mesmo ID depois. Sem este trecho o catalogo existia em cloudState(), mas
+     desaparecia no primeiro merge entre dois aparelhos. */
+  var _mi=_mergeMapTS(local.itens,cloud.itens,local.itensts,cloud.itensts);
+  out.itens={}; out.itensts={};
+  Object.keys(_mi.map||{}).forEach(function(id){
+    if(delI[id] && ((_mi.ts[id]||0)<=delI[id])) return;
+    out.itens[id]=_mi.map[id];
+    if(_mi.ts[id]) out.itensts[id]=_mi.ts[id];
+  });
   out.randomizacoes=_mergeRZLib(local.randomizacoes,cloud.randomizacoes);
   var _lgt=local.georefts||0,_cgt=cloud.georefts||0; out.georef=(_lgt>_cgt)?(local.georef||cloud.georef):(cloud.georef||local.georef); out.georefts=Math.max(_lgt,_cgt); /* georef: mais recente vence (empate => nuvem) */
   out.notas_campo = _mergeById(local.notas_campo, cloud.notas_campo, _mergeNota, delN);
@@ -9480,11 +9494,10 @@ function _croquiPayload(){
   var cultura = (_cKeys.length===1) ? _cKeys[0] : '';
   var localNome = loc.nome||'';
 
-  /* Camadas que existem no app e podem entrar na folha:
-     - NDVI: é um imageOverlay com caixa lat/lng, então embute direto
-     - base aérea: mapa-base.jpg com 4 cantos georreferenciados (o alinhamento
-       que o usuário fez). Os tiles do Google NÃO entram: são externos e
-       licenciados, assar isso num SVG que vai pro relatório não se faz. */
+  /* Camadas que existem no app e podem entrar na folha. O NDVI é um
+     imageOverlay com caixa lat/lng e pode ser embutido. A antiga imagem aérea
+     operacional deixou de fazer parte do pacote público; a folha usa os tiles
+     autorizados abaixo quando precisa de fundo. */
   var camadaNdvi=null;
   try{
     if(typeof ndviOverlay!=='undefined' && ndviOverlay && ndviOverlay._url){
@@ -9496,10 +9509,6 @@ function _croquiPayload(){
     }
   }catch(e){ camadaNdvi=null; }
   var camadaBase=null;
-  try{
-    if(typeof _geo!=='undefined' && _geo && _geo.corners && _geo.corners.length===4)
-      camadaBase={ url:'mapa-base.jpg', cantos:_geo.corners };
-  }catch(e){ camadaBase=null; }
   /* Satélite DE VERDADE: só a FONTE dos tiles (Esri World Imagery, que serve com CORS e por
      isso pode ir ao canvas). A caixa NÃO vem daqui: o croqui troca de local e de seleção, e
      uma bbox cravada aqui traria a imagem de um lugar por cima das quadras de outro. Quem
@@ -10995,6 +11004,15 @@ function renderStudyEditModal(){
              _dsc.map(function(d){ return '<option value="'+esc(d.id)+'"'+((t.doseRef&&t.doseRef.doseId===d.id)?' selected':'')+'>'+esc(doseTexto(d))+' · '+esc(doseOrigemRotulo(d.origem))+'</option>'; }).join('')+
              '</select>';
         }
+        var _lts=itemLotes(_itSel.id).filter(function(l){ return l&&
+          (itemLoteSaldo(l)>0 || (t.loteRef&&t.loteRef.loteId===l.id)); });
+        if(_lts.length){
+          h+='<select data-f="__lote" onchange="seTratLote('+i+',this.value)"><option value="">— lote físico (opcional) —</option>'+
+             _lts.map(function(l){ var sl=itemLoteSaldo(l); return '<option value="'+esc(l.id)+'"'+
+               ((t.loteRef&&t.loteRef.loteId===l.id)?' selected':'')+'>'+esc(l.codigo)+' · saldo '+
+               esc(String(sl).replace('.',','))+' '+esc(l.unidade||'')+(sl<=0?' · esgotado':'')+'</option>'; }).join('')+
+             '</select>';
+        }
         if(t.doseRef) h+='<div class="e-hint" style="margin:2px 0 0">Dose de: <b>'+esc(doseOrigemRotulo(t.doseRef.origem))+'</b>'+(t.doseRef.documento?(' · '+esc(t.doseRef.documento)):'')+'</div>';
         /* Equivalente em i.a.: duas formulações a 1 L/ha não são a mesma dose se uma
            tem 250 g/L e a outra 500. */
@@ -11024,6 +11042,13 @@ function renderStudyEditModal(){
           h+='<div class="tr-cp"><span>'+esc(c.nome||'(sem nome)')+'</span>'+
              '<b>'+esc((c.valor!=null?String(c.valor).replace('.',','):'')+(c.unidade?(' '+c.unidade):''))+'</b>'+
              '<button type="button" class="tr-x" onclick="seTratCompRemover('+i+',\''+esc(c.id)+'\')" title="Remover componente">×</button></div>';
+          if(c.itemId){
+            var _clts=itemLotes(c.itemId).filter(function(l){return l&&(itemLoteSaldo(l)>0||(c.loteRef&&c.loteRef.loteId===l.id));});
+            if(_clts.length) h+='<select style="margin:0 0 4px" onchange="seTratCompLote('+i+',\''+esc(c.id)+'\',this.value)">'+
+              '<option value="">— lote de '+esc(c.nome||'componente')+' (opcional) —</option>'+_clts.map(function(l){
+                return '<option value="'+esc(l.id)+'"'+((c.loteRef&&c.loteRef.loteId===l.id)?' selected':'')+'>'+esc(l.codigo)+
+                  ' · saldo '+esc(String(itemLoteSaldo(l)).replace('.',','))+' '+esc(l.unidade||'')+'</option>';}).join('')+'</select>';
+          }
         });
         h+='</div>';
       }
@@ -11212,7 +11237,10 @@ function seTratCompNovo(idx){
   /* O primeiro componente herda o que já estava digitado: quem tinha um produto
      escrito não perde nada ao transformar o tratamento em receita. */
   if(!tratComponentes(t).length && (t.produto||t.dose)){
-    tratCompAdicionar(t, (t.itemId||t.produto), _calcNum(t.dose)||null, _calcDoseUnit(t.dose)||'L/ha', null);
+    var primeiro=tratCompAdicionar(t, (t.itemId||t.produto), _calcNum(t.dose)||null, _calcDoseUnit(t.dose)||'L/ha', null);
+    if(primeiro&&t.doseRef) primeiro.doseRef=JSON.parse(JSON.stringify(t.doseRef));
+    if(primeiro&&t.loteRef) primeiro.loteRef=JSON.parse(JSON.stringify(t.loteRef));
+    delete t.itemId;delete t.doseRef;delete t.loteRef;
   }
   var nome=prompt('Componente — qual item?\n\n'+lista.map(function(x,n){ return (n+1)+'. '+(x.nome||x.id); }).join('\n'));
   if(nome==null) return;
@@ -11235,6 +11263,15 @@ function seTratCompRemover(idx, compId){
   var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
   if(!t) return;
   tratCompRemover(t, compId);
+  renderStudyEditModal();
+}
+function seTratCompLote(idx,compId,loteId){
+  try{syncTratInputs();}catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];if(!t)return;
+  var c=tratComponentes(t).filter(function(x){return x&&x.id===compId;})[0];if(!c||!c.itemId)return;
+  if(!loteId){delete c.loteRef;renderStudyEditModal();return;}
+  var l=itemLotePorId(c.itemId,loteId);if(!l){alert('Lote não encontrado para este componente.');return;}
+  c.loteRef={itemId:c.itemId,loteId:l.id,codigo:l.codigo,unidade:l.unidade,selecionadoEm:Date.now()};
   renderStudyEditModal();
 }
 
@@ -11279,6 +11316,14 @@ function seTratDose(idx, doseId){
   else { delete t.doseRef; }
   renderStudyEditModal();
 }
+function seTratLote(idx,loteId){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
+  if(!t||!t.itemId) return;
+  if(loteId && !tratLigarLote(t,loteId)){ alert('Lote não encontrado para este item.'); return; }
+  if(!loteId) tratLigarLote(t,'');
+  renderStudyEditModal();
+}
 
 function syncTratInputs(){
   /* Lê os valores atuais dos inputs para não perder dados ao renderizar */
@@ -11301,7 +11346,7 @@ function syncTratInputs(){
     /* Os seletores de item e dose têm handler próprio e NÃO devem virar campo do
        tratamento: t.__item seria lixo persistido, e o sweep de extras o levaria
        para o banco. */
-    delete t.__item; delete t.__dose;
+    delete t.__item; delete t.__dose; delete t.__lote;
   });
 }
 
@@ -13657,6 +13702,7 @@ function closeEventEdit(){
 function safetySnap(){
   try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
   try{ if(typeof ensureCfgTS==='function') ensureCfgTS(); }catch(e){}
+  try{ if(typeof ensureItens==='function') ensureItens(); }catch(e){}
   return { ts:Date.now(),
     data:(typeof data!=='undefined'?data:{}),
     qgeo:(typeof QGEO!=='undefined'?QGEO:null),
@@ -13668,11 +13714,15 @@ function safetySnap(){
     qnomets:(typeof QNOME_TS!=='undefined'?QNOME_TS:null),
     qlocalts:(typeof QLOCAL_TS!=='undefined'?QLOCAL_TS:null),
     locaists:(typeof LOCAIS_TS!=='undefined'?LOCAIS_TS:null),
+    itens:(typeof ITENS!=='undefined'?ITENS:{}),
+    itensts:(typeof ITENS_TS!=='undefined'?ITENS_TS:{}),
+    _deletedItens:(typeof _delItens!=='undefined'?_delItens:{}),
     randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[]) };
 }
 function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
   Object.keys(d).forEach(function(k){ (d[k].estudos||[]).forEach(function(e){ est++; ap+=(e.aplicacoes||[]).length; av+=(e.avaliacoes||[]).length; }); });
-  return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0), estudos:est, aplic:ap, aval:av };
+  return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0),
+           itens:(s.itens?Object.keys(s.itens).length:0), estudos:est, aplic:ap, aval:av };
 }
 function safetyList(){ try{ return JSON.parse(localStorage.getItem('iracema-safety')||'[]'); }catch(e){ return []; } }
 function safetyBackup(motivo){
@@ -13702,6 +13752,11 @@ function safetyApply(snap){
     if(snap.qlocalts && typeof snap.qlocalts==='object'){ QLOCAL_TS=snap.qlocalts; }
     if(snap.locaists && typeof snap.locaists==='object'){ LOCAIS_TS=snap.locaists; }
     if(typeof saveCfgTS==='function') saveCfgTS();
+    if(snap.itens && typeof snap.itens==='object'){
+      ITENS=snap.itens; ITENS_TS=(snap.itensts&&typeof snap.itensts==='object')?snap.itensts:{};
+      _delItens=(snap._deletedItens&&typeof snap._deletedItens==='object')?snap._deletedItens:{};
+      if(typeof saveItens==='function') saveItens();
+    }
     if(Array.isArray(snap.randomizacoes)){ RZLIB=normalizeRZLib(snap.randomizacoes); saveRZLib(); }
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
     _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
@@ -13804,7 +13859,7 @@ function openBackups(){
     var c=s.counts||_safetyCounts(s), dt=new Date(s.ts);
     return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
       '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
-      '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
+      '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
       '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){safetyApply(safetyList().slice().reverse()['+i+']);document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
   }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
@@ -13821,8 +13876,9 @@ function exportData(){
     if(typeof ensureQGEO==='function') ensureQGEO();
     if(typeof ensureNotas==='function') ensureNotas();
     if(typeof ensureCfgTS==='function') ensureCfgTS();
+    if(typeof ensureItens==='function') ensureItens();
     var payload={
-      _iracema:true, version:5, exported:todayISO(),
+      _iracema:true, version:6, exported:todayISO(),
       data:data,
       qgeo:(typeof QGEO!=='undefined'?QGEO:null),
       qgeots:(typeof QGEO_TS!=='undefined'?QGEO_TS:null),
@@ -13838,6 +13894,9 @@ function exportData(){
       _deletedQuadras:(typeof _delQuadras!=='undefined'?_delQuadras:{}),
       _deletedLocais:(typeof _delLocais!=='undefined'?_delLocais:{}),
       _deletedNotas:(typeof _delNotas!=='undefined'?_delNotas:{}),
+      itens:(typeof ITENS!=='undefined'?ITENS:{}),
+      itensts:(typeof ITENS_TS!=='undefined'?ITENS_TS:{}),
+      _deletedItens:(typeof _delItens!=='undefined'?_delItens:{}),
       randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[])
     };
     var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -13957,6 +14016,15 @@ function importData(ev){
         if(imported._deletedLocais && typeof imported._deletedLocais==='object'){ _delLocais=imported._deletedLocais; }
         if(typeof saveDelTombs==='function') saveDelTombs();
         if(imported._deletedNotas && typeof imported._deletedNotas==='object'){ _delNotas=imported._deletedNotas; try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(_e){} }
+        /* backup v6: banco de itens, doses, lotes, eventos de custódia e vínculos
+           históricos. Backup anterior não tinha o campo e, por segurança, não
+           apaga o catálogo atual ao ser importado. */
+        if(imported.itens && typeof imported.itens==='object'){
+          ITENS=imported.itens;
+          ITENS_TS=(imported.itensts&&typeof imported.itensts==='object')?imported.itensts:{};
+          _delItens=(imported._deletedItens&&typeof imported._deletedItens==='object')?imported._deletedItens:{};
+          if(typeof saveItens==='function') saveItens();
+        }
       }
       if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
       _cloudReplace=true; /* importar backup SUBSTITUI o estado (como o aviso promete) — sem merge com a nuvem */
@@ -15535,8 +15603,10 @@ function janelaBuscar(qid, sid, avid, forcar){
      DOSE   — quanto se pretende usar, PARA QUAL cultura e alvo. Uma dose solta
               ("1 L/ha") não significa nada: 1 L/ha em soja contra ferrugem e 1 L/ha
               em milho contra lagarta são duas informações, não uma.
-     LOTE   — o material físico. Fora do escopo por decisão do autor: a cadeia de
-              custódia não entra agora. O modelo abaixo não a impede de entrar depois.
+     LOTE   — o material fisico recebido. Cada entrada, consumo, movimentacao,
+              ajuste e descarte entra num livro-razão somente de acrescimo, com
+              data, responsavel e documento. O protocolo pode apontar para o lote,
+              sem transformar dose planejada em consumo fisico inventado.
 
    ONDE MORA: coleção GLOBAL, como LOCAIS e RZLIB — não pendurada numa quadra. Um item
    é da organização, não de um talhão. Entra em cloudState() pelo mesmo caminho, com
@@ -15622,10 +15692,13 @@ function itemPorId(id){ ensureItens(); return (id&&!_delItens[id])?(ITENS[id]||n
 function itemNovo(dados){
   ensureItens();
   dados=dados||{};
+  var nome=String(dados.nome||'').trim();
+  if(!nome) return null;
   var id=(dados.id||('it'+uid().slice(1)));
+  delete _delItens[id];
   ITENS[id]={
     id:id,
-    nome:String(dados.nome||'').trim(),
+    nome:nome,
     codigo:String(dados.codigo||'').trim(),        /* codigo experimental do patrocinador */
     sinonimos:Array.isArray(dados.sinonimos)?dados.sinonimos.slice():[],
     tipo:(ITEM_TIPOS.some(function(t){return t[0]===dados.tipo;})?dados.tipo:'teste'),
@@ -15641,7 +15714,12 @@ function itemNovo(dados){
        Guardar o campo desde o começo é barato; retroencaixá-lo depois de o item
        aparecer em relatório e exportação é caro. */
     codigoCego:String(dados.codigoCego||'').trim(),
-    doses:[],
+    doses:Array.isArray(dados.doses)?dados.doses.slice():[],
+    lotes:Array.isArray(dados.lotes)?dados.lotes.slice():[],
+    /* Vínculos históricos preservam a identidade de estudos já assinados sem
+       escrever dentro deles. É a conciliação auditável, externa ao registro
+       congelado, que permite a matriz enxergar o passado. */
+    vinculosHistoricos:Array.isArray(dados.vinculosHistoricos)?dados.vinculosHistoricos.slice():[],
     criadoEm:Date.now(),
     criadoPor:(typeof _currentUserName==='function'?(_currentUserName()||''):'')
   };
@@ -15651,9 +15729,13 @@ function itemNovo(dados){
 }
 function itemAtualizar(id, patch){
   var it=itemPorId(id); if(!it) return null;
-  for(var k in patch){ if(Object.prototype.hasOwnProperty.call(patch,k) && k!=='id' && k!=='doses') it[k]=patch[k]; }
+  if(Object.prototype.hasOwnProperty.call(patch||{},'nome') && !String(patch.nome||'').trim()) return null;
+  for(var k in patch){
+    if(Object.prototype.hasOwnProperty.call(patch,k) && ['id','doses','lotes','vinculosHistoricos','criadoEm','criadoPor'].indexOf(k)<0) it[k]=patch[k];
+  }
   it.revisadoEm=Date.now();
   _touchItem(id);
+  try{ if(typeof save==='function') save(); }catch(e){}
   return it;
 }
 /* Exclusão por lápide, como quadras e locais: sem isso um aparelho que sincroniza
@@ -15677,17 +15759,25 @@ function itemDoseAdicionar(id, d){
   var it=itemPorId(id); if(!it) return null;
   if(!Array.isArray(it.doses)) it.doses=[];
   d=d||{};
+  var valor=(d.valor===''||d.valor==null)?null:Number(String(d.valor).replace(',','.'));
+  var valorMax=(d.valorMax===''||d.valorMax==null)?null:Number(String(d.valorMax).replace(',','.'));
+  var aplicacoesMax=(d.aplicacoesMax===''||d.aplicacoesMax==null)?null:Number(d.aplicacoesMax);
+  var intervaloDias=(d.intervaloDias===''||d.intervaloDias==null)?null:Number(d.intervaloDias);
+  if(!(valor>0) || !isFinite(valor)) return {erro:'Informe uma dose numérica maior que zero.'};
+  if(valorMax!=null && (!isFinite(valorMax) || valorMax<valor)) return {erro:'O fim da faixa deve ser um número igual ou maior que a dose inicial.'};
+  if(aplicacoesMax!=null && (!isFinite(aplicacoesMax) || aplicacoesMax<1 || Math.floor(aplicacoesMax)!==aplicacoesMax)) return {erro:'Aplicações máximas deve ser um número inteiro maior que zero.'};
+  if(intervaloDias!=null && (!isFinite(intervaloDias) || intervaloDias<0 || Math.floor(intervaloDias)!==intervaloDias)) return {erro:'O intervalo deve ser um número inteiro não negativo.'};
   var dose={
     id:('ds'+uid().slice(1)),
     cultura:String(d.cultura||'').trim(),
     alvo:String(d.alvo||'').trim(),
-    valor:(d.valor===''||d.valor==null)?null:Number(String(d.valor).replace(',','.')),
-    valorMax:(d.valorMax===''||d.valorMax==null)?null:Number(String(d.valorMax).replace(',','.')),
+    valor:valor,
+    valorMax:valorMax,
     unidade:String(d.unidade||'L/ha').trim(),
     volumeCalda:String(d.volumeCalda||'').trim(),
     modalidade:String(d.modalidade||'').trim(),
-    aplicacoesMax:(d.aplicacoesMax===''||d.aplicacoesMax==null)?null:parseInt(d.aplicacoesMax,10),
-    intervaloDias:(d.intervaloDias===''||d.intervaloDias==null)?null:parseInt(d.intervaloDias,10),
+    aplicacoesMax:aplicacoesMax,
+    intervaloDias:intervaloDias,
     epoca:String(d.epoca||'').trim(),
     restricoes:String(d.restricoes||'').trim(),
     origem:(DOSE_ORIGENS.some(function(o){return o[0]===d.origem;})?d.origem:'manual'),
@@ -15736,6 +15826,144 @@ function doseTexto(d){
   if(d.alvo) p.push(d.alvo);
   p.push(faixa+(d.unidade?(' '+d.unidade):''));
   return p.join(' · ');
+}
+
+/* ---- Lotes e cadeia de custodia ----
+   O saldo nunca e digitado por cima. Ele e a soma de eventos imutaveis pelo app;
+   quando houve erro, registra-se um AJUSTE com justificativa. Isso deixa a trilha
+   entendivel numa auditoria e impede que uma edicao silenciosa apague o caminho do
+   material entre recebimento, armazenamento e ensaio. */
+var LOTE_EVENTOS=['recebimento','entrada','movimentacao','consumo','ajuste','descarte','devolucao'];
+function itemLotes(id){
+  var it=itemPorId(id); if(!it) return [];
+  if(!Array.isArray(it.lotes)) it.lotes=[];
+  return it.lotes;
+}
+function itemLotePorId(itemId,loteId){
+  return itemLotes(itemId).filter(function(l){ return l&&l.id===loteId; })[0]||null;
+}
+function _itemNumero(v){
+  if(v===''||v==null) return null;
+  var n=(typeof v==='number')?v:Number(String(v).replace(',','.'));
+  return isFinite(n)?n:null;
+}
+function _loteImpacto(tipo,q){
+  if(tipo==='recebimento'||tipo==='entrada') return q;
+  if(tipo==='consumo'||tipo==='descarte'||tipo==='devolucao') return -q;
+  if(tipo==='ajuste') return q;
+  return 0;
+}
+function itemLoteSaldo(lote){
+  if(!lote) return 0;
+  var saldo=(lote.eventos||[]).reduce(function(s,e){
+    if(!e) return s;
+    var n=_itemNumero(e.impacto);
+    if(n==null){
+      var q=_itemNumero(e.quantidade)||0;
+      n=_loteImpacto(e.tipo,q);
+    }
+    return s+n;
+  },0);
+  return Math.round(saldo*1000000)/1000000;
+}
+function itemLotesAtivos(itemId){
+  return itemLotes(itemId).filter(function(l){ return l&&l.situacao!=='encerrado'&&itemLoteSaldo(l)>0; });
+}
+function _loteEventoMontar(lote,d){
+  d=d||{};
+  var tipo=String(d.tipo||'').trim();
+  if(LOTE_EVENTOS.indexOf(tipo)<0) return {erro:'Tipo de movimentação inválido.'};
+  var q=_itemNumero(d.quantidade);
+  if(tipo==='ajuste'){
+    if(q==null||q===0) return {erro:'O ajuste precisa informar uma quantidade diferente de zero.'};
+    if(!String(d.obs||'').trim()) return {erro:'Explique o motivo do ajuste; ele não pode alterar o saldo em silêncio.'};
+  }else if(!(q>0)) return {erro:'Informe uma quantidade maior que zero.'};
+  var unidade=String(d.unidade||lote.unidade||'').trim();
+  if(!unidade) return {erro:'Informe a unidade do lote.'};
+  if(lote.unidade && normStr(unidade)!==normStr(lote.unidade)) return {erro:'A movimentação deve usar a mesma unidade do lote ('+lote.unidade+').'};
+  var impacto=_loteImpacto(tipo,q);
+  var saldo=itemLoteSaldo(lote)+impacto;
+  if(saldo < -0.0000001) return {erro:'Saldo insuficiente: este evento deixaria o lote negativo.'};
+  return {evento:{
+    id:'ev'+uid().slice(1), tipo:tipo, em:String(d.em||new Date().toISOString().slice(0,10)),
+    quantidade:q, unidade:unidade, impacto:impacto,
+    origem:String(d.origem||'').trim(), destino:String(d.destino||'').trim(),
+    estudoId:String(d.estudoId||'').trim(), tratamentoId:String(d.tratamentoId||'').trim(),
+    documento:String(d.documento||'').trim(), responsavel:String(d.responsavel||
+      (typeof _currentUserName==='function'?(_currentUserName()||''):'')).trim(),
+    obs:String(d.obs||'').trim(), registradoEm:Date.now(), saldoApos:Math.max(0,Math.round(saldo*1000000)/1000000)
+  }};
+}
+function itemLoteNovo(itemId,d){
+  var it=itemPorId(itemId); if(!it) return {erro:'Item não encontrado.'};
+  d=d||{};
+  var codigo=String(d.codigo||'').trim(), unidade=String(d.unidade||'').trim();
+  var q=_itemNumero(d.quantidade);
+  if(!codigo) return {erro:'Informe o código do lote.'};
+  if(itemLotes(itemId).some(function(l){ return normStr(l.codigo)===normStr(codigo); })) return {erro:'Já existe um lote com esse código neste item.'};
+  if(!(q>0)) return {erro:'Informe a quantidade recebida, maior que zero.'};
+  if(!unidade) return {erro:'Informe a unidade física do lote.'};
+  var lote={
+    id:'lt'+uid().slice(1), codigo:codigo, recebidoEm:String(d.recebidoEm||new Date().toISOString().slice(0,10)),
+    quantidadeInicial:q, unidade:unidade, validade:String(d.validade||'').trim(),
+    fabricante:String(d.fabricante||'').trim(), fornecedor:String(d.fornecedor||'').trim(),
+    documento:String(d.documento||'').trim(), armazenamento:String(d.armazenamento||it.armazenamento||'').trim(),
+    responsavel:String(d.responsavel||(typeof _currentUserName==='function'?(_currentUserName()||''):'')).trim(),
+    situacao:'ativo', obs:String(d.obs||'').trim(), criadoEm:Date.now(), eventos:[]
+  };
+  var montado=_loteEventoMontar(lote,{tipo:'recebimento',quantidade:q,unidade:unidade,em:lote.recebidoEm,
+    origem:lote.fornecedor,documento:lote.documento,responsavel:lote.responsavel,obs:lote.obs});
+  if(montado.erro) return montado;
+  lote.eventos.push(montado.evento); itemLotes(itemId).push(lote); _touchItem(itemId);
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return lote;
+}
+function itemLoteEvento(itemId,loteId,d){
+  var lote=itemLotePorId(itemId,loteId); if(!lote) return {erro:'Lote não encontrado.'};
+  if(lote.situacao==='encerrado') return {erro:'Este lote está encerrado.'};
+  if(!Array.isArray(lote.eventos)) lote.eventos=[];
+  var r=_loteEventoMontar(lote,d); if(r.erro) return r;
+  lote.eventos.push(r.evento);
+  lote.situacao=(r.evento.saldoApos<=0)?'esgotado':'ativo';
+  lote.revisadoEm=Date.now(); _touchItem(itemId);
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return {evento:r.evento,saldo:r.evento.saldoApos,lote:lote};
+}
+
+/* Conciliação de estudo finalizado: o tratamento assinado fica byte por byte como
+   estava. A confirmação vive no item, com referência suficiente para voltar à
+   origem. Repetir a mesma migração não cria uma segunda ocorrência. */
+function itemVinculosHistoricos(itemId){
+  var it=itemPorId(itemId); if(!it) return [];
+  if(!Array.isArray(it.vinculosHistoricos)) it.vinculosHistoricos=[];
+  return it.vinculosHistoricos;
+}
+function _vinculoHistoricoChave(v){ return [v.qid,v.estudoId,v.tratamentoId,v.componenteId||''].join('|'); }
+function itemVincularHistorico(itemId,d){
+  var it=itemPorId(itemId); if(!it) return {erro:'Item não encontrado.'};
+  d=d||{};
+  if(!d.qid||!d.estudoId||!d.tratamentoId) return {erro:'O vínculo histórico precisa apontar para quadra, estudo e tratamento.'};
+  var vs=itemVinculosHistoricos(itemId), chave=_vinculoHistoricoChave(d);
+  var existe=vs.filter(function(v){ return _vinculoHistoricoChave(v)===chave; })[0];
+  if(existe) return {vinculo:existe,criado:false};
+  var v={id:'vh'+uid().slice(1),qid:String(d.qid),quadra:String(d.quadra||d.qid),
+    estudoId:String(d.estudoId),estudo:String(d.estudo||d.estudoId),tratamentoId:String(d.tratamentoId),
+    componenteId:String(d.componenteId||''),produtoOriginal:String(d.produtoOriginal||''),
+    dose:String(d.dose||''),cultura:String(d.cultura||''),origem:String(d.origem||'historica'),
+    finalizado:true,confirmadoEm:Date.now(),confirmadoPor:String(d.confirmadoPor||
+      (typeof _currentUserName==='function'?(_currentUserName()||''):'')).trim()};
+  vs.push(v); _touchItem(itemId);
+  try{ if(typeof save==='function') save(); }catch(e){}
+  return {vinculo:v,criado:true};
+}
+function itemHistoricoJaVinculado(qid,estudoId,tratamentoId,componenteId){
+  ensureItens(); var chave=[qid,estudoId,tratamentoId,componenteId||''].join('|'), achou=false;
+  Object.keys(ITENS||{}).some(function(id){
+    if(_delItens[id]) return false;
+    achou=(ITENS[id].vinculosHistoricos||[]).some(function(v){ return _vinculoHistoricoChave(v)===chave; });
+    return achou;
+  });
+  return achou;
 }
 
 
@@ -15871,9 +16099,9 @@ function tratEquivalenteIA(t){
    são o mesmo produto — e às vezes não são, porque uma formulação nova entra com o
    mesmo nome de campo.
 
-   ESTUDO FINALIZADO NÃO SE TOCA. Ele foi congelado com assinatura e data; acrescentar
-   identidade a um tratamento dele agora reescreveria um registro fechado. Eles
-   aparecem contados, para ninguém achar que foram esquecidos, e ficam de fora. */
+   ESTUDO FINALIZADO NÃO SE TOCA. Ele foi congelado com assinatura e data; a
+   identidade confirmada fica num vínculo histórico EXTERNO, dentro do item. Assim
+   o registro assinado não muda, mas a matriz deixa de apagar o passado. */
 
 /* Um nome digitado, com tudo o que se sabe sobre ele. Mistura vira DOIS candidatos:
    "Sankari + Silwet" são dois produtos, e tratá-los como um perderia o adjuvante. */
@@ -15889,6 +16117,7 @@ function migracaoCandidatos(){
         if(!t) return;
         if(t.itemId || tratTemReceita(t)) return;          /* já tem identidade */
         if(t.testemunha) return;                            /* testemunha não é item */
+        if(fin && typeof itemHistoricoJaVinculado==='function' && itemHistoricoJaVinculado(qid,st.id,t.id,'')) return;
         var txt=String(t.produto||'').trim();
         if(!txt) return;
         /* Mesma separação que o motor de calda usa, para o que o app já sabe partir
@@ -15901,16 +16130,21 @@ function migracaoCandidatos(){
            prometer "12 usos" e ligar 3 — o numero precisa ser honesto antes do clique. */
         var mistura=partes.length>1;
         partes.forEach(function(nome){
-          if(fin){ finalizados++; return; }
           var k=_itemChave(nome);
           if(!k) return;
-          if(!mapa[k]) mapa[k]={chave:k, nome:nome, variantes:{}, ocorrencias:0, simples:0, emMistura:0, estudos:{}, exemplos:[]};
+          if(!mapa[k]) mapa[k]={chave:k, nome:nome, variantes:{}, ocorrencias:0, simples:0, emMistura:0,
+                                finalizados:0, finalizadosSimples:0, finalizadosMistura:0,
+                                estudos:{}, exemplos:[]};
           var c=mapa[k];
           c.variantes[nome]=(c.variantes[nome]||0)+1;
           c.ocorrencias++;
-          if(mistura) c.emMistura++; else c.simples++;
+          if(fin){
+            finalizados++; c.finalizados++;
+            if(mistura) c.finalizadosMistura++; else c.finalizadosSimples++;
+          }else if(mistura) c.emMistura++; else c.simples++;
           c.estudos[st.id]=1;
-          if(c.exemplos.length<3) c.exemplos.push({qid:qid, estudo:(st.codigo||st.nome||st.id), trat:t.id, dose:(t.dose||''), mistura:mistura});
+          if(c.exemplos.length<3) c.exemplos.push({qid:qid, estudo:(st.codigo||st.nome||st.id), trat:t.id,
+                                                   dose:(t.dose||''), mistura:mistura, finalizado:fin});
         });
       });
     });
@@ -15926,28 +16160,36 @@ function migracaoCandidatos(){
     return c;
   }).sort(function(a,b){
     /* O que da para ligar agora vem primeiro; o resto e leitura, nao trabalho. */
-    var la=(a.simples>0?1:0), lb=(b.simples>0?1:0);
+    var la=((a.simples+a.finalizadosSimples)>0?1:0), lb=((b.simples+b.finalizadosSimples)>0?1:0);
     if(la!==lb) return lb-la;
     return b.ocorrencias-a.ocorrencias;
   });
   return {candidatos:out, finalizados:finalizados,
-          ligaveis:out.filter(function(c){ return c.simples>0; }).length};
+          ligaveis:out.filter(function(c){ return (c.simples+c.finalizadosSimples)>0; }).length};
 }
 
-/* Liga TODOS os tratamentos cujo produto bate com esta chave. Não mexe em finalizado,
-   não mexe em quem já tem identidade, e guarda o texto original. */
+/* Liga TODOS os tratamentos abertos cujo produto bate com esta chave. Para um
+   finalizado, cria a conciliação externa no item sem alterar o tratamento. */
 function migracaoLigar(chave, itemId){
   var it=itemPorId(itemId); if(!it) return {erro:'Item não encontrado.'};
-  var n=0, estudosTocados={};
+  var n=0, historicos=0, estudosTocados={};
   Object.keys(data||{}).forEach(function(qid){
     if(qid==='__config') return;
     ((data[qid]||{}).estudos||[]).forEach(function(st){
-      if(typeof estudoFinalizado==='function' && estudoFinalizado(st)) return;
+      var fin=(typeof estudoFinalizado==='function' && estudoFinalizado(st));
       (st.tratamentos||[]).forEach(function(t){
         if(!t || t.itemId || tratTemReceita(t) || t.testemunha) return;
         var partes=String(t.produto||'').split(/\s*\+\s*/).map(function(x){ return x.trim(); }).filter(Boolean);
         if(partes.length!==1) return;      /* mistura vira receita, não vínculo simples */
         if(_itemChave(partes[0])!==chave) return;
+        if(fin){
+          var vh=itemVincularHistorico(it.id,{qid:qid,quadra:(typeof quadraNome==='function'?quadraNome(qid):qid),
+            estudoId:st.id,estudo:(st.codigo||st.nome||st.id),tratamentoId:t.id,
+            produtoOriginal:partes[0],dose:(t.dose||''),
+            cultura:(typeof studyCultura==='function'?studyCultura(st,data[qid]||{}):'')});
+          if(vh&&vh.criado) historicos++;
+          return;
+        }
         tratLigarItem(t, it.id, null);
         /* A migração vai marcada: um vínculo criado por varredura não é a mesma coisa
            que um escolhido na hora de montar o protocolo. */
@@ -15966,13 +16208,14 @@ function migracaoLigar(chave, itemId){
     }catch(e){}
   });
   try{ save(); }catch(e){}
-  return {ligados:n, estudos:Object.keys(estudosTocados).length, item:it};
+  return {ligados:n, historicos:historicos, estudos:Object.keys(estudosTocados).length, item:it};
 }
 
 /* Cria o item a partir do que foi digitado e liga na mesma passada. É o caminho
    normal: quase todo nome digitado ainda não existe no banco. */
 function migracaoCriarELigar(chave, nome, extra){
   var it=itemNovo(Object.assign({nome:nome}, extra||{}));
+  if(!it) return {erro:'Informe o nome do item.',ligados:0,historicos:0};
   var r=migracaoLigar(chave, it.id);
   r.criado=true;
   return r;
@@ -15982,7 +16225,7 @@ function migracaoCriarELigar(chave, nome, extra){
    A regra de tela é uma só: cadastrar um item tem de ser MAIS RÁPIDO que digitar o
    nome à mão. No instante em que não for, o pesquisador digita à mão e o catálogo
    morre. Por isso o cadastro pede quatro campos e o resto é opcional. */
-var _itemAberto=null, _itemBusca='';
+var _itemAberto=null, _itemBusca='', _itemRascunho=null, _loteAberto=null;
 
 function _itensCss(){
   if(document.getElementById('itensCss')) return;
@@ -16014,7 +16257,7 @@ function _itOvl(){
     o.onclick=function(e){ if(e.target===o) fecharItens(); }; document.body.appendChild(o); }
   return o;
 }
-function fecharItens(){ var o=document.getElementById('itensOvl'); if(o) o.style.display='none'; _itemAberto=null; _migAberta=false; }
+function fecharItens(){ var o=document.getElementById('itensOvl'); if(o) o.style.display='none'; _itemAberto=null; _itemRascunho=null; _loteAberto=null; _migAberta=false; }
 
 function abrirItens(){
   if(typeof closeMainMenu==='function') closeMainMenu();
@@ -16061,13 +16304,41 @@ function _itensPinta(){
   o.innerHTML=h;
 }
 
-function itemAbrir(id){ _itemAberto=id; _itensPinta(); }
-function itemVoltar(){ _itemAberto=null; _itensPinta(); }
+function itemAbrir(id){ _itemAberto=id; _itemRascunho=null; _loteAberto=null; _itensPinta(); }
+function itemVoltar(){ _itemAberto=null; _itemRascunho=null; _loteAberto=null; _itensPinta(); }
 
 function itemAbrirNovo(){
-  var it=itemNovo({nome:''});
-  _itemAberto=it.id; _itensPinta();
+  /* Rascunho so existe na tela. Antes, abrir este formulario ja persistia um item
+     sem nome e ele podia sincronizar antes de a pessoa preencher ou cancelar. */
+  _itemRascunho={tipo:'teste',situacao:'experimental'};
+  _itemAberto='__novo__'; _itensPinta();
   setTimeout(function(){ var i=document.getElementById('itNome'); if(i) i.focus(); },50);
+}
+
+function _itemNovoHtml(){
+  var h='<div class="it-box"><div class="it-top"><div class="it-t">Novo item</div>'+
+        '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>'+
+        '<button class="it-btn alt" onclick="itemVoltar()">‹ Cancelar</button><div style="height:10px"></div>'+
+        '<div class="it-f"><label>Nome *</label><input id="itNome" placeholder="como o cliente chama"></div>'+
+        '<div class="it-row"><div class="it-f"><label>Código experimental</label><input id="itNovoCodigo" placeholder="ex.: XYZ-2026-01"></div>'+
+        '<div class="it-f"><label>Cliente / titular</label><input id="itNovoTitular"></div></div>'+
+        '<div class="it-row"><div class="it-f"><label>Tipo</label><select id="itNovoTipo">'+
+        ITEM_TIPOS.map(function(t){return '<option value="'+t[0]+'">'+esc(t[1])+'</option>';}).join('')+'</select></div>'+
+        '<div class="it-f"><label>Situação</label><select id="itNovoSituacao">'+
+        ITEM_SITUACOES.map(function(t){return '<option value="'+t[0]+'"'+(t[0]==='experimental'?' selected':'')+'>'+esc(t[1])+'</option>';}).join('')+
+        '</select></div></div><button class="it-btn" onclick="itemNovoSalvar()">Salvar item</button></div>';
+  return h;
+}
+function itemNovoSalvar(){
+  function v(id){var e=document.getElementById(id);return e?String(e.value||'').trim():'';}
+  var nome=v('itNome'); if(!nome){alert('Informe o nome do item.');return;}
+  var dup=itemPossiveisDuplicatas(nome,null);
+  if(dup.length && !confirm('Já existe '+(dup.length===1?'um item':'itens')+' com este nome: '+
+    dup.map(function(x){return x.nome;}).join(', ')+'.\n\nCadastrar mesmo assim?')) return;
+  var it=itemNovo({nome:nome,codigo:v('itNovoCodigo'),titular:v('itNovoTitular'),
+    tipo:v('itNovoTipo')||'teste',situacao:v('itNovoSituacao')||'experimental'});
+  if(!it){alert('Não foi possível salvar o item.');return;}
+  _itemRascunho=null;_itemAberto=it.id;_itensPinta();
 }
 
 /* ---- Migracao: os produtos que ja foram digitados ----
@@ -16094,8 +16365,10 @@ function migracaoAcaoCriar(chave){
   var c=((_migResumo||{}).candidatos||[]).filter(function(x){ return x.chave===chave; })[0];
   if(!c) return;
   var r=migracaoCriarELigar(chave, c.nome, {});
+  if(r.erro){ alert(r.erro); return; }
   _migracaoRecarrega();
-  if(typeof _stxToast==='function') _stxToast('✓ "'+c.nome+'" cadastrado e ligado em '+r.ligados+' tratamento'+(r.ligados===1?'':'s'));
+  if(typeof _stxToast==='function') _stxToast('✓ "'+c.nome+'" cadastrado · '+r.ligados+' aberto'+(r.ligados===1?'':'s')+
+    (r.historicos?(' · '+r.historicos+' histórico'+(r.historicos===1?'':'s')):''));
 }
 function migracaoAcaoLigar(chave, sel){
   var itemId=(sel&&sel.value)||'';
@@ -16103,7 +16376,8 @@ function migracaoAcaoLigar(chave, sel){
   var r=migracaoLigar(chave, itemId);
   if(r.erro){ alert(r.erro); return; }
   _migracaoRecarrega();
-  if(typeof _stxToast==='function') _stxToast('✓ ligado em '+r.ligados+' tratamento'+(r.ligados===1?'':'s'));
+  if(typeof _stxToast==='function') _stxToast('✓ '+r.ligados+' tratamento'+(r.ligados===1?'':'s')+' aberto'+(r.ligados===1?'':'s')+
+    (r.historicos?(' · '+r.historicos+' vínculo'+(r.historicos===1?'':'s')+' histórico'+(r.historicos===1?'':'s')):''));
 }
 
 function _migracaoHtml(){
@@ -16113,9 +16387,7 @@ function _migracaoHtml(){
   h+='<button class="it-btn alt" onclick="migracaoVoltar()">&lsaquo; Banco de itens</button><div style="height:10px"></div>';
 
   if(!r.candidatos.length){
-    h+='<div class="it-vazio">Nenhum produto digitado solto: todos os tratamentos ja tem item ou receita.'+
-       (r.finalizados?(' '+r.finalizados+' esta'+(r.finalizados===1?'':'o')+' em estudo finalizado e nao se toca.'):'')+
-       '</div></div>';
+    h+='<div class="it-vazio">Nenhum produto digitado solto: todos os tratamentos já têm item, receita ou vínculo histórico confirmado.</div></div>';
     return h;
   }
 
@@ -16123,20 +16395,26 @@ function _migracaoHtml(){
      'Estes nomes foram digitados a mao nos estudos. Cadastrar cada um <b>uma vez</b> faz o'+
      ' produto virar identidade: a partir dai a dose, o registro e o historico andam junto com ele.'+
      ' Nada e ligado sozinho — voce confirma cada um.'+
-     (r.finalizados?('<br><br>'+r.finalizados+' ocorrencia'+(r.finalizados===1?'':'s')+
-       ' ficou de fora por estar em estudo finalizado: aquele registro foi fechado com assinatura e data, e nao se reescreve.'):'')+
+     (r.finalizados?('<br><br>'+r.finalizados+' ocorrência'+(r.finalizados===1?'':'s')+
+       ' está em estudo finalizado. Ao confirmar, o Agracta cria um <b>vínculo histórico externo</b>: o estudo assinado não é alterado, mas passa a entrar no histórico e na matriz do item.'):'')+
      '</div>';
 
   var outros=(typeof itensLista==='function')?itensLista():[];
 
   r.candidatos.forEach(function(c){
-    var pode=c.simples>0;
+    var pode=(c.simples+c.finalizadosSimples)>0;
     h+='<div class="it-lin" style="display:block;cursor:default">';
     h+='<div class="it-nome">'+esc(c.nome)+'</div>';
 
     var uso=c.ocorrencias+' uso'+(c.ocorrencias===1?'':'s')+' em '+c.nEstudos+' estudo'+(c.nEstudos===1?'':'s');
     h+='<div class="it-sub">'+esc(uso)+
        (c.grafias.length>1?(' &middot; escrito tambem como '+esc(c.grafias.slice(1).join(', '))):'')+'</div>';
+
+    if(c.finalizadosSimples){
+      h+='<div class="it-sub" style="color:#7ca88a">'+c.finalizadosSimples+' uso'+(c.finalizadosSimples===1?'':'s')+
+         ' finalizado'+(c.finalizadosSimples===1?'':'s')+' será'+(c.finalizadosSimples===1?'':'ão')+
+         ' conciliado'+(c.finalizadosSimples===1?'':'s')+' externamente, sem reescrever o estudo.</div>';
+    }
 
     /* O numero precisa ser honesto ANTES do clique: o que esta dentro de mistura
        nao vai ser ligado por aqui, e prometer o contrario seria mentir na tela. */
@@ -16146,6 +16424,11 @@ function _migracaoHtml(){
          (pode?('Serao ligados '+c.simples+', e a mistura continua como esta ate virar receita.')
               :'Nenhum pode ser ligado por aqui: monte a receita no tratamento, para o adjuvante nao se perder.')+
          '</div>';
+    }
+    if(c.finalizadosMistura){
+      h+='<div class="it-sub" style="color:#d8b26a">'+c.finalizadosMistura+' ocorrência'+(c.finalizadosMistura===1?'':'s')+
+         ' finalizada'+(c.finalizadosMistura===1?'':'s')+' está'+(c.finalizadosMistura===1?'':'ão')+
+         ' dentro de mistura e precisa ser conciliada como receita, componente por componente.</div>';
     }
 
     if(c.sugestoes && c.sugestoes.length){
@@ -16217,7 +16500,60 @@ function _itemMatrizHtml(itemId){
   return h;
 }
 
+function _loteTipoRotulo(t){
+  var m={recebimento:'Recebimento',entrada:'Entrada adicional',movimentacao:'Movimentação',
+         consumo:'Consumo',ajuste:'Ajuste',descarte:'Descarte',devolucao:'Devolução'};
+  return m[t]||t||'';
+}
+function _itemLotesHtml(it){
+  var lotes=itemLotes(it.id), h='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Lotes e cadeia de custódia</div>'+
+    '<div class="it-sub" style="margin-bottom:8px">O saldo é calculado pelo histórico. Correções entram como novo ajuste justificado; eventos anteriores não são editados nem apagados.</div>';
+  if(_loteAberto){
+    var l=itemLotePorId(it.id,_loteAberto);
+    if(!l){_loteAberto=null;}else{
+      h+='<button class="it-btn alt" style="padding:6px 9px" onclick="itemLoteVoltar()">‹ Todos os lotes</button>'+
+         '<div class="it-dose" style="margin-top:8px"><div><b>Lote '+esc(l.codigo)+'</b><div class="it-sub">Recebido em '+
+         esc(l.recebidoEm||'—')+(l.validade?(' · validade '+esc(l.validade)):'')+(l.armazenamento?(' · '+esc(l.armazenamento)):'')+
+         '</div></div><span class="it-tag">saldo '+esc(String(itemLoteSaldo(l)).replace('.',','))+' '+esc(l.unidade||'')+'</span></div>';
+      (l.eventos||[]).slice().reverse().forEach(function(e){
+        h+='<div class="it-dose"><div><b>'+esc(_loteTipoRotulo(e.tipo))+' · '+
+           esc(String(e.quantidade).replace('.',','))+' '+esc(e.unidade||'')+'</b><div class="it-sub">'+
+           esc([e.em,e.responsavel,e.documento,e.destino,e.estudoId&&('estudo '+e.estudoId),e.tratamentoId&&('trat. '+e.tratamentoId),e.obs].filter(Boolean).join(' · '))+
+           '</div></div><span class="it-tag">saldo '+esc(String(e.saldoApos).replace('.',','))+'</span></div>';
+      });
+      h+='<div class="it-row" style="margin-top:8px"><div class="it-f"><label>Evento</label><select id="ltEvTipo">'+
+         ['entrada','movimentacao','consumo','ajuste','descarte','devolucao'].map(function(t){return '<option value="'+t+'">'+_loteTipoRotulo(t)+'</option>';}).join('')+
+         '</select></div><div class="it-f"><label>Quantidade</label><input id="ltEvQtd" inputmode="decimal" placeholder="0,0"></div>'+
+         '<div class="it-f"><label>Data</label><input id="ltEvData" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div></div>'+
+         '<div class="it-row"><div class="it-f"><label>Origem / destino</label><input id="ltEvDestino" placeholder="almoxarifado, laboratório…"></div>'+
+         '<div class="it-f"><label>Documento</label><input id="ltEvDoc" placeholder="NF, ficha, OS…"></div></div>'+
+         '<div class="it-row"><div class="it-f"><label>Estudo</label><input id="ltEvEstudo" placeholder="opcional"></div>'+
+         '<div class="it-f"><label>Tratamento</label><input id="ltEvTrat" placeholder="opcional"></div></div>'+
+         '<div class="it-f"><label>Observação / justificativa do ajuste</label><input id="ltEvObs" placeholder="obrigatória para ajuste"></div>'+
+         '<button class="it-btn" onclick="itemLoteEventoUI(\''+esc(it.id)+'\',\''+esc(l.id)+'\')">Registrar evento</button>';
+      return h;
+    }
+  }
+  if(!lotes.length) h+='<div class="it-vazio">Nenhum lote recebido. Cadastre o material físico quando ele entrar.</div>';
+  lotes.forEach(function(l){
+    h+='<div class="it-lin" onclick="itemLoteAbrir(\''+esc(l.id)+'\')"><div><div class="it-nome">'+esc(l.codigo)+'</div><div class="it-sub">'+
+       esc([l.recebidoEm,l.validade&&('validade '+l.validade),l.fornecedor,l.armazenamento].filter(Boolean).join(' · '))+
+       '</div></div><span class="it-tag">'+esc(String(itemLoteSaldo(l)).replace('.',','))+' '+esc(l.unidade||'')+'</span></div>';
+  });
+  h+='<div class="it-row" style="margin-top:8px"><div class="it-f"><label>Código do lote *</label><input id="ltCodigo"></div>'+
+     '<div class="it-f"><label>Recebido em *</label><input id="ltRecebido" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div></div>'+
+     '<div class="it-row"><div class="it-f"><label>Quantidade recebida *</label><input id="ltQtd" inputmode="decimal"></div>'+
+     '<div class="it-f"><label>Unidade física *</label><input id="ltUnidade" placeholder="mL, L, g, kg, un"></div>'+
+     '<div class="it-f"><label>Validade</label><input id="ltValidade" type="date"></div></div>'+
+     '<div class="it-row"><div class="it-f"><label>Fornecedor</label><input id="ltFornecedor"></div>'+
+     '<div class="it-f"><label>Documento</label><input id="ltDocumento" placeholder="NF, termo de recebimento…"></div></div>'+
+     '<div class="it-f"><label>Armazenamento</label><input id="ltArmazenamento" value="'+esc(it.armazenamento||'')+'" placeholder="local e condição"></div>'+
+     '<button class="it-btn" onclick="itemLoteNovoUI(\''+esc(it.id)+'\')">+ Receber lote</button>';
+  return h;
+}
+
 function _itemFichaHtml(id){
+  if(id==='__novo__') return _itemNovoHtml();
   var it=itemPorId(id);
   if(!it) return '<div class="it-box"><div class="it-vazio">Item não encontrado.</div><button class="it-btn alt" onclick="itemVoltar()">Voltar</button></div>';
   var dup=itemPossiveisDuplicatas(it.nome, it.id);
@@ -16281,13 +16617,17 @@ function _itemFichaHtml(id){
      '</div>';
   h+='<button class="it-btn" onclick="itemDoseNova(\''+esc(it.id)+'\')">+ Adicionar dose</button>';
 
+  h+=_itemLotesHtml(it);
+
   /* Onde este item já foi usado — a pergunta que o catálogo veio permitir. */
   var usos=itemOndeFoiUsado(it.id);
   if(usos.length){
     h+=_itemMatrizHtml(it.id);
     h+='<div class="it-t" style="font-size:13px;margin:14px 0 6px">Onde já foi usado ('+usos.length+')</div>';
     usos.forEach(function(u){
-      h+='<div class="it-sub" style="padding:3px 0">'+esc(u.estudo+' · '+u.quadra+(u.cultura?(' · '+u.cultura):'')+' · '+u.tratamento+(u.dose?(' · '+u.dose):''))+
+      h+='<div class="it-sub" style="padding:3px 0">'+esc(u.estudo+' · '+u.quadra+(u.cultura?(' · '+u.cultura):'')+' · '+u.tratamento+
+         (u.componente?(' · componente '+u.componente):'')+(u.dose?(' · '+u.dose):'')+(u.lote?(' · lote '+u.lote):''))+
+         (u.historico?' <span style="color:#8fb6d8">vínculo histórico</span>':'')+
          (u.finalizado?' <span style="color:#7ca88a">✓ finalizado</span>':'')+'</div>';
     });
   }
@@ -16298,7 +16638,11 @@ function _itemFichaHtml(id){
   return h+'</div>';
 }
 
-function itemCampo(id, campo, v){ itemAtualizar(id, (function(){ var o={}; o[campo]=String(v||'').trim(); return o; })()); _itensPinta(); }
+function itemCampo(id, campo, v){
+  var val=String(v||'').trim();
+  if(campo==='nome'&&!val){ alert('O item precisa ter um nome.'); _itensPinta(); return; }
+  itemAtualizar(id, (function(){ var o={}; o[campo]=val; return o; })()); _itensPinta();
+}
 function itemDoseFora(id, doseId){ itemDoseAposentar(id, doseId); _itensPinta(); }
 function itemApagar(id){
   var it=itemPorId(id); if(!it) return;
@@ -16310,9 +16654,30 @@ function itemApagar(id){
 function itemDoseNova(id){
   function v(x){ var el=document.getElementById(x); return el?String(el.value||'').trim():''; }
   if(!v('dsValor')){ alert('Informe a dose.'); return; }
-  itemDoseAdicionar(id, {cultura:v('dsCultura'), alvo:v('dsAlvo'), valor:v('dsValor'),
+  var r=itemDoseAdicionar(id, {cultura:v('dsCultura'), alvo:v('dsAlvo'), valor:v('dsValor'),
     valorMax:v('dsValorMax'), unidade:v('dsUnidade')||'L/ha',
     origem:v('dsOrigem')||'manual', documento:v('dsDoc')});
+  if(!r||r.erro){ alert((r&&r.erro)||'Não foi possível adicionar a dose.'); return; }
+  _itensPinta();
+}
+function itemLoteAbrir(loteId){ _loteAberto=loteId; _itensPinta(); }
+function itemLoteVoltar(){ _loteAberto=null; _itensPinta(); }
+function _itemCampoValor(id){var e=document.getElementById(id);return e?String(e.value||'').trim():'';}
+function itemLoteNovoUI(itemId){
+  var r=itemLoteNovo(itemId,{codigo:_itemCampoValor('ltCodigo'),recebidoEm:_itemCampoValor('ltRecebido'),
+    quantidade:_itemCampoValor('ltQtd'),unidade:_itemCampoValor('ltUnidade'),validade:_itemCampoValor('ltValidade'),
+    fornecedor:_itemCampoValor('ltFornecedor'),documento:_itemCampoValor('ltDocumento'),
+    armazenamento:_itemCampoValor('ltArmazenamento')});
+  if(!r||r.erro){alert((r&&r.erro)||'Não foi possível cadastrar o lote.');return;}
+  _loteAberto=r.id;_itensPinta();
+}
+function itemLoteEventoUI(itemId,loteId){
+  var tipo=_itemCampoValor('ltEvTipo'),destino=_itemCampoValor('ltEvDestino');
+  var r=itemLoteEvento(itemId,loteId,{tipo:tipo,quantidade:_itemCampoValor('ltEvQtd'),
+    em:_itemCampoValor('ltEvData'),documento:_itemCampoValor('ltEvDoc'),
+    origem:(tipo==='entrada'?destino:''),destino:(tipo==='entrada'?'':destino),
+    estudoId:_itemCampoValor('ltEvEstudo'),tratamentoId:_itemCampoValor('ltEvTrat'),obs:_itemCampoValor('ltEvObs')});
+  if(!r||r.erro){alert((r&&r.erro)||'Não foi possível registrar o evento.');return;}
   _itensPinta();
 }
 
@@ -16341,6 +16706,7 @@ function tratProdutoNome(t, revelar){
 function tratLigarItem(t, itemId, doseId){
   if(!t) return null;
   var it=itemPorId(itemId); if(!it) return null;
+  if(t.itemId && t.itemId!==it.id) delete t.loteRef;
   if(t.produto && !t.produtoOriginal) t.produtoOriginal=t.produto;
   t.itemId=it.id;
   t.produto=it.nome||t.produto;
@@ -16363,8 +16729,16 @@ function tratLigarItem(t, itemId, doseId){
 }
 function tratDesligarItem(t){
   if(!t) return;
-  delete t.itemId; delete t.doseRef;
+  delete t.itemId; delete t.doseRef; delete t.loteRef;
   if(t.produtoOriginal){ t.produto=t.produtoOriginal; delete t.produtoOriginal; }
+}
+function tratLigarLote(t,loteId){
+  if(!t||!t.itemId) return null;
+  if(!loteId){ delete t.loteRef; return t; }
+  var lote=itemLotePorId(t.itemId,loteId); if(!lote) return null;
+  t.loteRef={itemId:t.itemId,loteId:lote.id,codigo:lote.codigo,unidade:lote.unidade,
+             selecionadoEm:Date.now()};
+  return t;
 }
 
 /* A dose escolhida bate com o que a bula registra? Não bloqueia — ensaio
@@ -16478,22 +16852,46 @@ function itemMatrizDose(itemId){
 }
 
 function itemOndeFoiUsado(itemId){
-  var out=[];
+  var out=[],vistos={};
   if(typeof data==='undefined'||!data) return out;
+  function incluir(u,chave){ if(vistos[chave])return; vistos[chave]=1; out.push(u); }
   Object.keys(data).forEach(function(qid){
     if(qid==='__config') return;
     ((data[qid]||{}).estudos||[]).forEach(function(st){
       (st.tratamentos||[]).forEach(function(t){
-        if(t && t.itemId===itemId){
-          out.push({qid:qid, quadra:(typeof quadraNome==='function'?quadraNome(qid):qid),
-                    estudoId:st.id, estudo:(st.codigo||st.nome||st.id),
-                    cultura:(typeof studyCultura==='function'?studyCultura(st,data[qid]||{}):''),
-                    tratamento:t.id, dose:(t.dose||''),
-                    origem:((t.doseRef&&t.doseRef.origem)||null),
-                    finalizado:(typeof estudoFinalizado==='function'?!!estudoFinalizado(st):false)});
+        if(!t) return;
+        var base={qid:qid, quadra:(typeof quadraNome==='function'?quadraNome(qid):qid),
+                  estudoId:st.id, estudo:(st.codigo||st.nome||st.id),
+                  cultura:(typeof studyCultura==='function'?studyCultura(st,data[qid]||{}):''),
+                  tratamento:t.id,
+                  finalizado:(typeof estudoFinalizado==='function'?!!estudoFinalizado(st):false)};
+        var cs=Array.isArray(t.componentes)?t.componentes:[];
+        /* Receita estruturada manda sobre o item simples possivelmente deixado por
+           uma versão antiga do editor. Cada componente leva SUA dose; usar t.dose
+           aqui produziria "0,8 L/ha + 0,1 %" como se fosse a dose do adjuvante. */
+        if(cs.length){
+          cs.forEach(function(c){
+            if(!c||c.itemId!==itemId)return;
+            var dose=(c.valor!=null?String(c.valor).replace('.',','):'')+(c.unidade?(' '+c.unidade):'');
+            incluir(Object.assign({},base,{dose:dose,origem:((c.doseRef&&c.doseRef.origem)||null),
+              componente:(c.nome||''),componenteId:c.id,lote:((c.loteRef&&c.loteRef.codigo)||'')}),
+              [qid,st.id,t.id,c.id||c.itemId].join('|'));
+          });
+        }else if(t.itemId===itemId){
+          incluir(Object.assign({},base,{dose:(t.dose||''),origem:((t.doseRef&&t.doseRef.origem)||null),
+            lote:((t.loteRef&&t.loteRef.codigo)||'')}),[qid,st.id,t.id,''].join('|'));
         }
       });
     });
+  });
+  /* Estudos finalizados conciliados externamente entram no mesmo relatório, sem
+     que uma única propriedade do tratamento assinado tenha sido alterada. */
+  var historicos=(typeof itemVinculosHistoricos==='function')?itemVinculosHistoricos(itemId):[];
+  historicos.forEach(function(v){
+    incluir({qid:v.qid,quadra:v.quadra||v.qid,estudoId:v.estudoId,estudo:v.estudo||v.estudoId,
+      cultura:v.cultura||'',tratamento:v.tratamentoId,dose:v.dose||'',origem:v.origem||'historica',
+      finalizado:true,historico:true,produtoOriginal:v.produtoOriginal||''},
+      [v.qid,v.estudoId,v.tratamentoId,v.componenteId||''].join('|'));
   });
   return out;
 }
