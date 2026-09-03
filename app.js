@@ -9910,8 +9910,33 @@ function _agrofitCultCarregar(aoPronto){
 function agrofitAchadosCultura(qid, study){
   if(!_agrofitCult || typeof AgrofitCore==='undefined') return [];
   var q=(typeof data!=='undefined'&&data)?(data[qid]||{}):{};
-  var cultura=(typeof studyCultura==='function')?studyCultura(study,q):'';
-  if(!cultura) return [];
+  var escrita=(typeof studyCultura==='function')?studyCultura(study,q):'';
+  if(!escrita) return [];
+  /* O NOME PRECISA SER RESOLVIDO ANTES DE COMPARAR. A cultura é campo de texto
+     livre, e a lista do MAPA está em português: "Soybean" não bate com nada e
+     o app dizia que o produto NÃO tem registro para aquela cultura — quando
+     tem, para "Soja". Achado falso mata a confiança na ferramenta inteira, e
+     este nascia de uma letra diferente.
+     Sem resolver, o app CALA sobre registro e diz apenas que não reconhece a
+     cultura — não reconhecer não é o mesmo que estar errado. */
+  var B=(typeof window!=='undefined')?window.BBCHCore:null;
+  var cultura=(B&&B.canonica)?B.canonica(escrita):escrita;
+  if(!cultura){
+    /* Só vale dizer isso quando havia o que conferir: um estudo sem produto
+       registrado não perde nada por a cultura não ser reconhecida. */
+    var temReg=((study||{}).tratamentos||[]).some(function(t){
+      return ((typeof tratComponentes==='function')?tratComponentes(t):[]).some(function(c){
+        var it=null; try{ it=(c.itemId&&typeof itemPorId==='function')?itemPorId(c.itemId):null; }catch(e){}
+        return !!(it&&String(it.registro||'').trim());
+      });
+    });
+    if(!temReg) return [];
+    return [{codigo:'cultura-nao-reconhecida', severidade:'nota',
+      texto:'Não reconheço a cultura "'+escrita+'". Sem isso não confiro o registro dos produtos '+
+            'no Agrofit nem ofereço os estádios BBCH. Se for uma das culturas conhecidas, '+
+            'escreva o nome em português (ex.: "Soja" em vez de "Soybean").',
+      tratamentos:[]}];
+  }
   var out=[], vistos={};
   ((study||{}).tratamentos||[]).forEach(function(t){
     if(!t||!t.id) return;
