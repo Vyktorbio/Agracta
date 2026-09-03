@@ -1,9 +1,9 @@
 AGRACTA — 9a publicacao                     03/09/2026
 =====================================================
 
-Leva: 7 arquivos de codigo + 1 motor novo + 6 de teste + 1 ampliado.
-  CODIGO:  app.js  ndvi-proxy.py  firebase-sync.js  styles.css
-           index.html  sw.js  conferir.sh
+Leva: 8 arquivos de codigo + 1 motor novo + 10 de teste + 1 ampliado.
+  CODIGO:  app.js  ndvi-proxy.py  firebase-sync.js  prancha.html
+           styles.css  index.html  sw.js  conferir.sh
   MOTOR:   vendor/consumo-core.js (novo)
   TESTE:   test_consumo_lote.js         (novo)
            test_baixa_aplicacao.js      (novo)
@@ -11,6 +11,10 @@ Leva: 7 arquivos de codigo + 1 motor novo + 6 de teste + 1 ampliado.
            test_pos_aplicacao.js        (novo)
            test_dose_receita.js         (novo)
            test_local_ativo.js          (novo)
+           test_sync_leitura_falha.js   (novo)
+           test_forense_execucao.js     (novo)
+           test_agenda_estoque.js       (novo)
+           test_notas_estudo.js         (novo)
            test_offline_local.js        (+5 verificacoes)
   DOCS:    docs/ROADMAP.md
 
@@ -140,6 +144,49 @@ olhando o index.html, qual publicacao esta no ar. O conferir.sh agora avisa, sem
 reprovar a publicacao.
 
 
+7) A LEITURA DA NUVEM PAROU DE MENTIR QUANDO FALHA
+
+Este e o achado mais serio desta leva, e ele explica sensacao de "salvou e sumiu".
+
+Quando a rede pisca, o Supabase NAO devolve erro: ele devolve uma resposta
+vazia com um campo de erro dentro. O app tratava isso como leitura boa e
+marcava "ja li a nuvem". A partir dai, tres coisas davam errado ao mesmo tempo:
+
+  - o selo pintava "salvo" sem nada ter sido lido — voce via o app afirmar que
+    estava tudo em dia;
+  - a gravacao ficava liberada, e ao encontrar a nuvem "vazia" o app gravava o
+    estado do aparelho POR CIMA dela, sem juntar com o que estava la;
+  - e a releitura com re-tentativa, que existe exatamente para rede ruim,
+    desistia sozinha ao ver "ja li a nuvem". O mecanismo era desligado pelo
+    proprio problema que ele deveria resolver.
+
+Agora a leitura que falha e tratada como falha: nao marca nada, nao pinta
+"salvo", nao libera gravacao, e rearma a re-tentativa.
+
+8) A FOLHA BPL GANHOU OS ACHADOS DE EXECUCAO
+
+O carimbo ja dizia quem, quando e onde. Agora a folha tambem diz o que aconteceu
+com o material e com o tempo: lote vencido na data, baixa que nao pode ser
+registrada e por que, e chuva nas primeiras horas depois da aplicacao. Sai como
+CONTAGEM E CLASSIFICACAO, com "conferir" separado de "nota" — nunca como score,
+e nunca como acusacao. O programa aponta; quem conclui e gente.
+
+9) A AGENDA PASSOU A SABER DO ESTOQUE
+
+O cartao do estudo agora avisa, junto das aplicacoes que faltam, quando o lote
+vence antes da ultima aplicacao programada e quando o saldo nao cobre o que
+falta. A conta do quanto se gasta por aplicacao vem da BAIXA JA REGISTRADA —
+sem nenhuma aplicacao registrada, o app cala em vez de estimar. Numero inventado
+aqui vira compra errada.
+
+10) AS OBSERVACOES DE CAMPO APARECEM NO ESTUDO
+
+A nota de scouting ja nascia sabendo em que quadra esta; faltava o caminho de
+volta. O cartao do estudo agora lista as observacoes daquela quadra dentro do
+periodo do ensaio, entre as aplicacoes e as avaliacoes — que e onde alguem lendo
+uma leitura estranha precisa lembrar da mancha da semana anterior.
+
+
 O QUE CONFERIR DEPOIS DE SUBIR
 ------------------------------
 1. Abrir um estudo com lote vinculado, registrar uma aplicacao e ver o saldo do
@@ -151,6 +198,10 @@ O QUE CONFERIR DEPOIS DE SUBIR
    auditoria tem de mostrar a correcao.
 5. Sair, entrar de novo e conferir que o app abre no MESMO lugar em que voce
    estava — nao no Picolini.
+6. Num estudo com aplicacoes ainda por fazer e lote curto, conferir o aviso de
+   estoque no cartao, acima da lista de aplicacoes.
+7. Registrar uma observacao de campo dentro de uma quadra com estudo em
+   andamento e ve-la aparecer no cartao daquele estudo.
 
 
 TESTES
@@ -165,6 +216,10 @@ Todas as suites passando, 5 novas nesta leva:
   test_dose_receita.js         16 verificacoes (novo)
   test_local_ativo.js          13 verificacoes (novo)
   test_offline_local.js        20 verificacoes (5 novas)
+  test_sync_leitura_falha.js   20 verificacoes (novo)
+  test_forense_execucao.js     30 verificacoes (novo)
+  test_agenda_estoque.js       20 verificacoes (novo)
+  test_notas_estudo.js         14 verificacoes (novo)
 
 Os golden tests desta leva, conferidos a mao:
 

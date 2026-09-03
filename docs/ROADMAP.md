@@ -379,6 +379,42 @@ não quebra a atualização, porque o navegador compara o `sw.js` byte a byte; m
 quando o número para de andar, deixa de servir para o único fim que tem, que é
 dizer qual publicação está no ar olhando o `index.html`.
 
+## 7-quinquies. O que o app passou a cruzar sozinho · ✅ **feito (03/09/2026)**
+
+Três ligações entre dados que já existiam e não se encontravam.
+
+**A agenda passou a saber do estoque.** "O lote vence antes da próxima aplicação" e
+"o saldo não cobre o que falta" eram fatos deduzíveis que só apareciam no dia em que
+faltou produto no campo. `estudoAvisosEstoque` os produz e o cartão do estudo os
+mostra junto das aplicações que faltam — não numa tela de estoque que ninguém abre
+antes de sair. **Não vira evento da agenda**, de propósito: evento é coisa que se faz
+numa data, e é sobre eles que o "próximo evento" se apoia; um aviso ali empurraria a
+aplicação de amanhã para o segundo lugar. E **só fala do que sabe**: a necessidade
+por aplicação vem da baixa já registrada, nunca de estimativa — sem nenhuma aplicação
+registrada, cala. Um número inventado aqui vira compra errada. A validade é conferida
+contra a **última** aplicação programada, não a próxima: um lote que vence entre a
+segunda e a terceira inviabiliza o estudo do mesmo jeito. Coberto por
+`test_agenda_estoque.js` (20 verificações).
+
+**As observações de campo apareceram no estudo.** A nota de scouting já nascia
+sabendo em que quadra está — faltava o caminho de volta. O recorte é **quadra +
+período do ensaio**, e é ele que faz a lista ser útil em vez de ruído: a quadra tem
+observações de anos, e só as do intervalo explicam alguma coisa. Estudo sem data de
+início não lista nada — melhor nenhuma lista do que a história inteira da quadra
+apresentada como se fosse do ensaio. Ficam entre as aplicações e as avaliações, que é
+onde alguém lendo uma leitura estranha precisa lembrar da mancha da semana anterior.
+Coberto por `test_notas_estudo.js` (14 verificações).
+
+**E a leitura da nuvem parou de mentir quando falha.** O `.single()` do Supabase
+resolve a promessa com `{data:null, error}` quando a rede pisca — não rejeita. O
+`cloudPull` tratava isso como leitura boa e marcava `_cloudInitDone`, e aí três
+coisas davam errado juntas: o selo pintava "salvo" sem nada ter sido lido; a gravação
+ficava liberada para subir o estado local **sem merge** por cima da nuvem; e a
+releitura cuidadosa do `cloudStart` — a que re-tenta com espera crescente — desiste
+assim que vê `_cloudInitDone`, ou seja, o retry que existe para este caso era
+desligado pelo próprio caso. O `cloudStart` sempre conferiu `res.error`; o
+`cloudPull` não conferia. Coberto por `test_sync_leitura_falha.js` (20 verificações).
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,
@@ -521,6 +557,22 @@ com *"Ver código R"* sempre que possível.
 
 Painel mostra **contagem e classificação**, não um "score 96/100" — score passa falsa
 aparência de validação científica absoluta.
+
+> **Estado (03/09/2026) — os achados de EXECUÇÃO chegaram.** O carimbo já respondia
+> "quem, quando e onde"; faltava "o que aconteceu com o material e com o tempo".
+> `_forenseAchados` deriva cinco, todos de dado que o app passou a gravar sozinho:
+> **lote vencido na data da aplicação**, **baixa em lote recusada** (com o motivo
+> inteiro, não um resumo), **chuva nas primeiras seis horas** depois da pulverização,
+> e duas notas de leitura incompleta — janela ainda aberta e cobertura parcial da
+> estação. Eles entram na folha BPL num bloco próprio, com severidade separando o que
+> pede resposta (`conferir`) do que é contexto (`nota`), e o rodapé conta em vez de
+> pontuar. **A palavra é "conferir"**: "lote vencido na data" é fato conferível;
+> "fraude" seria conclusão que o programa não sustenta.
+> Coberto por `test_forense_execucao.js` (30 verificações).
+>
+> **Falta desta fase:** os achados estatísticos e de domínio (fora de escala, data
+> impossível, BBCH retrocedendo, outlier, duplicação suspeita) continuam só na
+> triagem do BioEstat, não nesta lista.
 
 ## 13. Fase 8 — BPL / integridade completa · **CRÍTICA**
 
