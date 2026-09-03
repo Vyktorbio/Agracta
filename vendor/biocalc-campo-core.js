@@ -91,8 +91,32 @@
       productUnit:cfg.productUnit,
       concentrationUnit:cfg.concentrationUnit,
       liquid:cfg.liquid,
-      bottleCapacityOk:minBottles===0||numBottles>=minBottles
+      bottleCapacityOk:minBottles===0||numBottles>=minBottles,
+      /* Este retorno nunca teve lista de avisos; o campo é próprio para não
+         mudar a forma do objeto para quem já o consome. */
+      bottleCapacityWarning:bottleTooLargeWarning(sprayTotalMl,bottleCapacity,formatAmount)
     };
+  }
+
+  /* CAPACIDADE IMPLAUSÍVEL. O motor só sabia reclamar de frasco PEQUENO demais —
+     o que não cabe. Frasco grande demais passava calado, e é justamente por ali
+     que entra o erro de unidade: "1900" digitado pensando em mililitros vira
+     1.900 L, o preparo de 318 mL cabe folgado e nada denuncia.
+
+     APONTA, NÃO BLOQUEIA: um frasco muito maior que o preparo pode ser
+     legítimo (1 L num costal de 20 L são 20×). Só quando o recipiente comporta
+     mais de cem preparos inteiros é que a unidade vira a explicação mais
+     provável — e ainda assim o texto pergunta, não afirma. */
+  function bottleTooLargeWarning(sprayTotalMl,bottleCapacityL,formatAmount){
+    if(!(bottleCapacityL>0)||!(sprayTotalMl>0))return null;
+    var capMl=bottleCapacityL*1000;
+    /* "mais de cem preparos" é para valer: exatamente cem ainda passa. O
+       epsilon existe porque 31,8 L × 1000 não dá 31800 redondo em ponto
+       flutuante, e um limite que oscila com o arredondamento não é limite. */
+    if(capMl <= sprayTotalMl*100*(1+1e-9)) return null;
+    return "O frasco declarado ("+formatAmount(capMl,"mL")+") comporta "+
+      Math.floor(capMl/sprayTotalMl)+" preparos inteiros deste. Se o número foi digitado em mililitros, "+
+      "a capacidade seria "+formatAmount(bottleCapacityL,"mL")+" — confira a unidade antes de preparar.";
   }
 
   function calculateCalibration(input){
@@ -314,6 +338,8 @@
           " por frasco é um volume muito pequeno. Confira se o instrumento mede essa faixa ou use uma diluição intermediária validada.");
       }
     });
+    var _big=bottleTooLargeWarning(sprayTotalMl,bottleCapacity,formatAmount);
+    if(_big) warnings.push(_big);
     var liquidFits=carrierTotalMl>=-0.000001;
     var bottleCapacityOk=minBottles===0||numBottles>=minBottles;
 

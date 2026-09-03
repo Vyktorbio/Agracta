@@ -4649,6 +4649,56 @@ function statDBC(s, av, v){
   var order=ts.slice().sort(function(a,b){return sentido==='maior'?(tM[b]-tM[a]):(tM[a]-tM[b]);});
   return { t:t,r:r,N:N, grand:grand, dft:dft,dfb:dfb,dfe:dfe, SSt:SSt,SSb:SSb,SSe:SSe,SStot:SStot, MSt:MSt,MSe:MSe, F:F,p:p,cv:cv, q:q,hsd:hsd, tMean:tM, letras:_tukeyLetters(order,tM,hsd), order:order, sentido:sentido, sig:(p<0.05) };
 }
+/* POR QUE ESTA AVALIAÇÃO NÃO TEM ESTATÍSTICA.
+   `statDBC` devolve `null` para tudo que não dá pra analisar: grade com buraco,
+   faixa sem treço, menos de dois tratamentos. Isso está certo — mas quem chamava
+   traduzia o nulo em silêncio: o cartão sumia da tela e a pessoa ficava sem saber
+   se faltava dado, se o app tinha falhado, ou se aquela avaliação simplesmente
+   não rendia análise.
+
+   Aqui o motivo vira NOME e ENDEREÇO: qual tratamento, em qual bloco. É a
+   diferença entre "não deu" e "falta a nota do T3 no bloco 2" — a segunda a
+   pessoa resolve em trinta segundos, no mesmo dia, com a parcela ainda de pé. */
+function statPendencia(s, av, v){
+  s=normalizeStudy(s);
+  var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
+  var reps=Math.max(1, parseInt(s.numRepeticoes)||1);
+  var base={ ok:false, faltam:[], total:0, celulas:trats.length*reps, variavel:v };
+  if(trats.length<2)
+    return Object.assign(base,{ motivo:'o estudo tem '+trats.length+' tratamento: não há o que comparar.' });
+  if(reps<2)
+    return Object.assign(base,{ motivo:'o estudo está cadastrado com 1 repetição. Sem repetição não existe termo de erro, e qualquer p-valor sairia medindo o acaso.' });
+  /* Faixa sem treço tem motivo PRÓPRIO, mais específico que "falta nota" — e ele
+     já está escrito, com a saída, em estudoTemReplicacao(). */
+  if(s.desenho==='faixas'){
+    var rep=null; try{ rep=estudoTemReplicacao(s,av,v); }catch(e){}
+    if(rep && !rep.ok) return Object.assign(base,{ motivo:rep.motivo, desenho:rep.rotulo });
+  }
+  var faltam=[], total=0;
+  trats.forEach(function(t){
+    var blocos=[];
+    for(var r=1;r<=reps;r++){
+      var raw=av?_avNota(av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v):null;
+      var n=parseFloat(String(raw==null?'':raw).replace(',','.'));
+      if(raw==null||raw===''||isNaN(n)) blocos.push(r);
+    }
+    if(blocos.length){ faltam.push({trat:t.id, blocos:blocos}); total+=blocos.length; }
+  });
+  if(!total) return { ok:true, faltam:[], total:0, celulas:trats.length*reps, variavel:v, motivo:'' };
+  return { ok:false, faltam:faltam, total:total, celulas:trats.length*reps, variavel:v,
+           motivo:(total>1?'faltam ':'falta ')+total+' nota'+(total>1?'s':'')+' para a grade fechar.' };
+}
+/* O mesmo em uma frase, para caber num cartão. */
+function statPendenciaTexto(p){
+  if(!p) return '';
+  if(p.ok) return '';
+  if(!p.faltam.length) return p.motivo||'';
+  var pedacos=p.faltam.slice(0,4).map(function(f){
+    return f.trat+' (bloco'+(f.blocos.length>1?'s':'')+' '+f.blocos.join(', ')+')';
+  });
+  var resto=p.faltam.length-pedacos.length;
+  return p.motivo+' Falta em '+pedacos.join(', ')+(resto>0?(' e mais '+resto+' tratamento'+(resto>1?'s':'')):'')+'.';
+}
 function buildStudyRecord(qid,s){
   var q=data[qid]||{};
   var locNome=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]]&&LOCAIS[QLOCAL[qid]].nome)||(LOCAIS&&LOCAIS[HOME_LOCAL]&&LOCAIS[HOME_LOCAL].nome)||'';
@@ -8276,8 +8326,7 @@ function _calcCompute(){
   var bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1);
   /* A capacidade vem com a unidade escolhida ao lado — foi assim que "1900"
      virou 1.900 L num preparo de 318 mL. */
-  var capUn=(_calcVal('calcCapUn')||'L');
-  var cap=_calcNum(_calcVal('calcCap')); if(capUn==='mL') cap=cap/1000;
+  var cap=_calcCapAtualL();
   function f(v,p){ return BC.formatSmartBR?BC.formatSmartBR(v,p==null?3:p):BC.formatBR(v,p==null?2:p); }
   function a(v,u){ return BC.formatAmount?BC.formatAmount(v,u):(f(v)+' '+u); }
   var _metVariam=false;
@@ -9128,6 +9177,15 @@ function calcBarraCfg(){
    Uma única função monta a memória, e a tela, a cópia e a gravação leem dela. Antes
    havia três laços separados recalculando a mesma coisa, livres para divergir. ===== */
 
+/* Capacidade do frasco que a tela está mostrando, SEMPRE em litros.
+   Existe uma função só porque havia duas leituras: a da tela lia o seletor de
+   unidade e a da memória gravada não, e as duas discordavam por um fator de mil
+   sem que nada na interface denunciasse. */
+function _calcCapAtualL(){
+  var n=_calcNum(_calcVal('calcCap'));
+  if(!(n>0)) return 0;
+  return ((_calcVal('calcCapUn')||'L')==='mL') ? n/1000 : n;
+}
 /* Configuração que a tela da calculadora está mostrando neste instante. */
 function _calcConfigAtual(){
   return {
@@ -9137,7 +9195,14 @@ function _calcConfigAtual(){
     volumeCaldaLHa:_calcNum(_calcVal('calcVol')),
     volumeMortoMl:_calcNum(_calcVal('calcDead')),
     frascos:Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1),
-    capacidadeFrascoL:_calcNum(_calcVal('calcCap')),
+    /* A MESMA leitura de `_calcCompute`: o número vale na unidade escolhida ao
+       lado dele. Aqui isso não é cosmético — esta configuração é a que vai para
+       a memória COPIADA e para a memória GRAVADA na aplicação. Sem o seletor, a
+       tela recusava preparar por não caber no frasco e o registro guardado dizia
+       que cabia, com capacidade mil vezes maior. Seletor ausente (tela antiga,
+       teste que extrai a função sozinha) continua valendo litros, que é como
+       todo estudo já cadastrado está gravado. */
+    capacidadeFrascoL:_calcCapAtualL(),
     /* A quadra vai junto porque o metodo depende da categoria dela (campo/bancada). */
     qid:((typeof _calcSel!=='undefined'&&_calcSel)?_calcSel.qid:null),
     /* A barra entra na configuracao so quando foi de fato calibrada; sem leituras
@@ -10704,14 +10769,52 @@ function _bioestatResumoCard(job,rel){
 function _bioestatRapidoCard(job,study){
   var av=(study.avaliacoes||[]).find(function(x){return x&&x.id===job.avId;}),st=null;
   try{st=av&&statDBC(study,av,job.variavel);}catch(e){st=null;}
-  if(!st)return '';
+  /* Nulo não é mais vazio. Sumir o cartão deixava a pessoa sem saber se faltava
+     dado, se o app falhou, ou se aquela avaliação não rendia análise mesmo. */
+  if(!st) return _bioestatPendenteCard(job,study,av);
   var nf=function(x,d){return (x==null||!isFinite(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:d==null?2:d});};
   var pf=function(x){return x<.001?'&lt;0,001':nf(x,3);};
   var rows=(st.order||[]).map(function(tid){return '<tr><td class="av-tname">'+esc(tid)+'</td><td>'+nf(st.tMean[tid],2)+'</td><td><b style="color:#1f6f43">'+esc((st.letras||{})[tid]||'—')+'</b></td></tr>';}).join('');
   return '<div class="bio-fast-card"><div class="bio-fast-top"><b>'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span>prévia imediata</span></div>'+
-    '<div class="bio-fast-meta">ANOVA-DBC · F='+nf(st.F,2)+' · p='+pf(st.p)+' · CV '+nf(st.cv,1)+'% · Tukey 5%</div>'+
+    /* A DMS era calculada em todo cálculo e não aparecia em lugar nenhum. É ela
+       que diz o que as letrinhas escondem: de quanto duas médias precisam
+       diferir para serem diferentes de verdade. Sem ela, o leitor compara 12,1
+       com 11,8 no olho e conclui o que quiser. */
+    '<div class="bio-fast-meta">ANOVA-DBC · F='+nf(st.F,2)+' · p='+pf(st.p)+' · CV '+nf(st.cv,1)+'% · Tukey 5% · DMS '+nf(st.hsd,2)+'</div>'+
     '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<small>Resultado local disponível agora. Pressupostos, rota alternativa e triagem forense seguem em segundo plano.</small></div>';
+}
+/* O cartão que ocupa o lugar do silêncio. Ele não inventa análise nenhuma: diz o
+   que falta, com nome e bloco, para a pessoa fechar a grade e a análise nascer
+   sozinha. */
+function _bioestatPendenteCard(job,study,av){
+  var p=null;
+  try{ p=statPendencia(study, av||(study.avaliacoes||[]).find(function(x){return x&&x.id===job.avId;}), job.variavel); }catch(e){ p=null; }
+  var txt=p?statPendenciaTexto(p):'';
+  if(!txt) txt='a grade desta avaliação ainda não fecha para análise.';
+  var grade=(p&&p.celulas)?('<span style="color:#8a948e"> · '+(p.celulas-p.total)+' de '+p.celulas+' notas lançadas</span>'):'';
+  return '<div style="padding:9px 11px;border:1px solid #6b531b;background:#2a210c;border-radius:9px;margin-top:7px;color:#ffd98a">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
+      '<b>'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
+      '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:#3d3011;white-space:nowrap">sem análise ainda</span></div>'+
+    '<div style="font-size:11px;line-height:1.5;margin-top:4px">'+esc(txt)+grade+'</div></div>';
+}
+/* As avaliações que nem chegaram a virar job. `_bioestatJobs` descarta em
+   silêncio tudo que não tem 2 grupos com 2+ registros; era o descarte mais caro
+   dos três, porque some com o painel inteiro e não sobra nem um rastro. */
+function _bioestatPendentes(qid,study){
+  var jobs={}; try{ _bioestatJobs(qid,study).forEach(function(j){ jobs[j.jobKey]=1; }); }catch(e){}
+  var out=[];
+  (study.avaliacoes||[]).forEach(function(av){ (av.variaveis||[]).forEach(function(v){
+    var k=(av.id||av.data)+'|'+v;
+    if(!jobs[k]) out.push({jobKey:k, avId:av.id, date:av.data, variavel:v, av:av});
+  }); });
+  return out;
+}
+function _bioestatPendentesHtml(qid,study){
+  var pend=_bioestatPendentes(qid,study);
+  if(!pend.length) return '';
+  return pend.map(function(j){ return _bioestatPendenteCard(j,study,j.av); }).join('');
 }
 function _bioestatForenseCard(job,rel){
   if(!rel||!rel.ok) return '';
@@ -10728,7 +10831,17 @@ function _bioestatForenseCard(job,rel){
   '</div>';
 }
 function _bioestatIntegratedHtml(qid,sid,study){
-  var jobs=_bioestatJobs(qid,study); if(!jobs.length)return '';
+  var jobs=_bioestatJobs(qid,study);
+  /* Nenhum job NÃO é o mesmo que nada a dizer. Antes o painel inteiro sumia da
+     tela do estudo — e sumir é a única resposta que a pessoa não consegue
+     interpretar. Se há avaliação lançada, ela merece saber o que falta. */
+  var _pendHtml=_bioestatPendentesHtml(qid,study);
+  if(!jobs.length){
+    if(!_pendHtml) return '';
+    return '<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
+      '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Nenhuma avaliação fecha a grade ainda. O que falta para a análise nascer sozinha:</div>'+
+      _pendHtml+'</div>';
+  }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
   var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
@@ -10737,7 +10850,9 @@ function _bioestatIntegratedHtml(qid,sid,study){
     body+='<div id="bioAutoStatus" class="bio-engine-status">Carregando verificações avançadas no aparelho… '+((c&&c.done)||0)+' de '+tot+'<small>No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.</small></div>';
     fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado… 0 de '+jobs.length+'<small>Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
   }
-  else if(c.status==='empty'){ body='<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>'; }
+  /* "Repetições insuficientes" era o diagnóstico genérico para qualquer motivo.
+     Quando a pendência tem endereço, ela vale mais que a frase. */
+  else if(c.status==='empty'){ body=_pendHtml||'<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>'; }
   else {
     /* Renderização PROGRESSIVA: mostra a análise de cada avaliação assim que o job dela termina,
        sem esperar a triagem forense (que no Pyodide frio pode demorar ~1 min). */
@@ -10767,7 +10882,10 @@ function _bioestatIntegratedHtml(qid,sid,study){
     _btnPrancha='<div style="margin:8px 0 2px"><div style="font-size:11px;color:#728078;margin-bottom:2px">Folha de gráficos para o relatório — uma por alvo avaliado. Baixa em SVG ou PNG.</div>'+_linhas+'</div>';
   }
   var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
-    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+body+_btnPrancha+'</div>';
+    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+
+    /* As avaliações descartadas entram DEPOIS das analisadas. Um estudo com três
+       datas em que só uma fecha mostrava uma análise e duas ausências mudas. */
+    body+_pendHtml+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;
