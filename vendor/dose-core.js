@@ -220,7 +220,7 @@
     var porArea=achados.filter(function(a){ return a.porArea; });
     var sug=(porArea.length===1)?emLha(porArea[0]):null;
     return {valor:null, ambiguo:true, numeros:achados.length,
-            candidatos:achados.map(function(a){ return {valor:emLha(a.valor!=null?a.valor:0), rotulo:a.texto,
+            candidatos:achados.map(function(a){ return {valor:emLha(a), rotulo:a.texto,
                                                         porArea:a.porArea, emLha:emLha(a)}; }),
             sugestao:sug,
             motivo:'O texto tem '+achados.length+' números e não diz qual é o volume de calda.'};

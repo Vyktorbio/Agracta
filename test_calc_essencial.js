@@ -83,14 +83,14 @@ vm.runInContext([
   'var _calcVolAmbiguo=null, _calcAba=null, _calcSel=null;',
   /* O Modo Preparo mostra um tratamento por vez; aqui a aba nasce nula, que
      equivale a "Todos" — este teste cobre a receita, não a navegação. */
-  pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
+  pega('_numBR'), pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
   /* A receita agora tem dose editável na linha: o compute pergunta se o
      tratamento tem receita estruturada e monta o seletor de unidade. */
   'var TRAT_COMP_UNIDADES=[[\'L/ha\',\'L/ha\'],[\'mL/ha\',\'mL/ha\'],[\'g/ha\',\'g/ha\'],[\'kg/ha\',\'kg/ha\'],[\'% v/v\',\'% v/v\']];',
   pega('calcAbas'), pega('calcAbaAtual'), pega('_calcFinalizado'),
   pega('tratComponentes'), pega('tratTemReceita'),
   pega('_seCompUnidadeNormalizar'), pega('_seCompUnidadeOptions'),
-  pega('calcVolumeAmbiguoHtml'), pega('_calcCompute')
+  pega('calcVolumeAmbiguoHtml'), pega('calcVolumeDoTratamento'), pega('_calcCompute')
 ].join('\n'), ctx);
 
 function pinta(detalhe){

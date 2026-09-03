@@ -7972,7 +7972,10 @@ function calcCfgResumo(c){
 function calcAbas(study){
   var out=(((study||{}).tratamentos)||[]).filter(function(t){ return t&&t.id; })
     .map(function(t){ return {id:t.id, rotulo:t.id,
-      testemunha:!!(t.testemunha||(typeof studyTestemunha==='function'&&studyTestemunha(study)===t.id))}; });
+      /* Preparo não pode inventar testemunha. `studyTestemunha()` usa o primeiro
+         tratamento como fallback para a análise estatística de estudos antigos;
+         aqui esse fallback rotulava T1 como testemunha mesmo sem marcação. */
+      testemunha:!!t.testemunha}; });
   if(out.length>1) out.push({id:'__todos', rotulo:'Todos', todos:true});
   return out;
 }
@@ -8194,6 +8197,34 @@ function calcVolumeDoEstudo(study){
   return uniforme?{valor:tvs[0], fonte:'tratamentos'}:vazio;
 }
 
+/* Resolve o volume de UM tratamento sem voltar ao erro do "primeiro número".
+   Se o texto do tratamento é ambíguo, a confirmação/declaração global só pode
+   ser reutilizada quando coincide com o único valor que o próprio texto marca
+   explicitamente em L/ha. Assim a pessoa confirma 3 L/ha uma vez, e T1..T4 com
+   "... TOTAL 3,0 L/ha" não fazem a mesma pergunta quatro vezes. Divergência
+   continua bloqueando o cartão. */
+function calcVolumeDoTratamento(t, volDef){
+  t=t||{};
+  var confirmado=_numBR(t.volumeCaldaLHa,0);
+  if(confirmado>0) return {valor:confirmado, fonte:'tratamento-confirmado'};
+  var txt=(t.volume==null)?'':String(t.volume).trim();
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  if(txt && D && D.volumeCalda){
+    var r=D.volumeCalda(txt);
+    if(r.ambiguo){
+      if(volDef>0 && r.sugestao>0 && Math.abs(volDef-r.sugestao)<1e-9){
+        return {valor:volDef, fonte:'protocolo', conciliado:true, texto:txt};
+      }
+      return {valor:null, ambiguo:true, texto:txt, candidatos:r.candidatos,
+              sugestao:r.sugestao, motivo:r.motivo};
+    }
+    if(r.valor>0) return {valor:r.valor, fonte:'tratamento', texto:txt};
+  }
+  var legado=txt?_calcNum(txt):0;
+  if(legado>0) return {valor:legado, fonte:'tratamento-legado', texto:txt};
+  return volDef>0?{valor:volDef, fonte:'protocolo'}:{valor:null};
+}
+
 /* A pessoa confirma qual número é o volume. O texto original fica onde estava. */
 function calcConfirmarVolume(valor){
   var st=_calcStudy(); if(!st) return;
@@ -8267,23 +8298,22 @@ function _calcCompute(){
     return (_aba==='__todos' || !_aba) ? true : (t && t.id===_aba);
   });
   _lista.forEach(function(t){
-    var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
+    var _isWitness=!!t.testemunha;
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
     /* O mesmo cuidado no volume do TRATAMENTO: texto com mais de um número não
        vira conta. O cartão daquele tratamento diz o que falta, e só ele. */
-    var _tv=(t.volume!=null && String(t.volume).trim()!=='' && window.DoseCore && DoseCore.volumeCalda)
-      ? DoseCore.volumeCalda(t.volume) : null;
-    if(_tv && _tv.ambiguo){
+    var _tv=calcVolumeDoTratamento(t,volDef);
+    if(_tv.ambiguo){
       /* Cabeçalho próprio: o `head` normal ainda não existe aqui, e ele depende
          justamente do volume que não temos. */
       html+='<div class="calc-card"><div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+
         (t.produto?' · '+esc(t.produto):'')+'</span></div>'+
         '<div class="calc-terr">⚠ O volume de calda deste tratamento está escrito como "'+
-        esc(String(t.volume))+'", com mais de um número. Enquanto ele não for um número só, '+
-        'este tratamento não é calculado.</div></div>';
+        esc(String(t.volume))+'", com mais de um número que não coincide com o volume geral confirmado. '+
+        'Confira o protocolo ou informe um único volume para este tratamento.</div></div>';
       return;
     }
-    var vol=(_tv&&_tv.valor>0)?_tv.valor:(t.volume?_calcNum(t.volume):volDef);
+    var vol=(_tv.valor>0)?_tv.valor:volDef;
     /* §7.2 — o método só entra no cartão quando os tratamentos DIVERGEM. Repetir
        "costal CO₂" em cinco cartões idênticos não informa nada; a diferença, sim. */
     var _met=(_metVariam && typeof tratMetodo==='function')?tratMetodo(study,(_calcSel||{}).qid,t):null;

@@ -531,7 +531,16 @@ acrescentar item nem transformar texto livre em receita.
 A leitura dupla (`1,5 L/ha ≡ 1 %`) ficou **só na conferência**: no essencial ela
 confunde — foi ela que levantou a dúvida do autor numa folha real.
 
-Coberto por `test_modo_preparo.js` (21 verificações).
+Coberto por `test_modo_preparo.js` (22 verificações).
+
+**Conciliação do caso real:** confirmar `3,0 L/ha` no protocolo agora também libera
+os tratamentos cujo texto declara `TOTAL 3,0 L/ha`; antes, o protocolo ficava
+confirmado, mas cada cartão continuava bloqueado pela mesma ambiguidade. A confirmação
+só é reutilizada quando coincide com o único número qualificado por área — divergência
+continua bloqueada. T1 também deixou de ser chamado de testemunha por simples posição:
+no preparo, somente a marcação explícita vale. Coberto por
+`test_volume_calda_fluxo.js` (16 verificações, incluindo `318 mL`, `159 mL` de
+SANKARI e `104,94 µL` de SILWET no ensaio real).
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 

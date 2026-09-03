@@ -37,6 +37,8 @@ eq(r.numeros, 2, 'contando os dois números');
 perto(r.sugestao, 3, 1e-9, 'e sugere 3, o único qualificado por área');
 ck(r.motivo.indexOf('não diz qual')>=0, 'com um motivo legível');
 eq(r.candidatos.length, 2, 'os dois candidatos vão para a tela');
+perto(r.candidatos[0].valor, 1.5, 1e-9, 'o valor normalizado do primeiro candidato também é numérico');
+perto(r.candidatos[1].valor, 3, 1e-9, 'e o valor normalizado do candidato por área é 3');
 ck(r.candidatos.some(function(c){ return Math.abs(c.emLha-1.5)<1e-9; }), 'inclusive o 1,5 — quem decide é a pessoa');
 
 console.log('\n--- Texto inequívoco continua funcionando ---');

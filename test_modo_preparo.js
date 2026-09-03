@@ -69,6 +69,8 @@ eq(abas[4].id, '__todos', '"Todos" é a última');
 eq(abas[0].testemunha, true, 'a testemunha vai marcada — quem prepara precisa saber');
 eq(ctx.calcAbas({tratamentos:[{id:'T1'}]}).length, 1,
    'com um tratamento só, "Todos" não aparece — seria a mesma tela duas vezes');
+eq(ctx.calcAbas({tratamentos:[{id:'T1'},{id:'T2'}]})[0].testemunha, false,
+   'sem marcação explícita, T1 não vira testemunha por ser o primeiro');
 eq(ctx.calcAbas(null).length, 0, 'sem estudo, nenhuma aba');
 
 console.log('\n--- Anterior e próximo não dão a volta ---');
