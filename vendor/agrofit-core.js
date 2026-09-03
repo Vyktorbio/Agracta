@@ -145,6 +145,46 @@
     };
   }
 
+  /* ===== PRODUTO x CULTURA REGISTRADA =======================================
+     O catalogo traz, por registro, as culturas para as quais o MAPA o aprovou.
+     Isso responde uma pergunta que o app nao sabia fazer: o produto deste ensaio
+     tem registro para a cultura deste estudo?
+
+     A RESPOSTA NUNCA BLOQUEIA, e a severidade e "nota", nao "conferir". Ensaio
+     de registro existe JUSTAMENTE para gerar dado de cultura ainda nao
+     registrada — tratar isso como erro seria brigar com a finalidade do
+     trabalho. O que o app faz e nao deixar passar despercebido.
+
+     E NAO OPINA SOBRE O QUE NAO CONHECE: item sem numero de registro (o
+     experimental do patrocinador) nao gera achado nenhum. Ausencia de registro
+     nao e ausencia de conformidade. */
+  function carregarCulturas(bruto){
+    if(!bruto || !Array.isArray(bruto.culturas) || !bruto.p) return null;
+    return {culturas:bruto.culturas, p:bruto.p, gerado:bruto.gerado||''};
+  }
+  function culturasDe(cc, nr){
+    if(!cc) return null;
+    var idx=cc.p[String(nr==null?'':nr).trim()];
+    if(!idx) return null;
+    return idx.map(function(i){ return cc.culturas[i]; }).filter(Boolean);
+  }
+  /* "Todas as culturas" e uma entrada REAL do Agrofit, e significa exatamente
+     isso. Tratá-la como uma cultura de nome literal faria o app apontar falta de
+     registro em produto que tem registro para tudo. */
+  function _todasAsCulturas(lista){
+    return (lista||[]).some(function(c){ return /^todas as culturas$/i.test(chave(c)); });
+  }
+  function registradoPara(cc, nr, cultura){
+    var lista=culturasDe(cc, nr);
+    if(!lista) return {conhecido:false};
+    var alvo=chave(cultura);
+    if(!alvo) return {conhecido:true, registrado:null, culturas:lista, motivo:'o estudo não declara cultura'};
+    if(_todasAsCulturas(lista))
+      return {conhecido:true, registrado:true, todas:true, culturas:lista};
+    var achou=lista.some(function(c){ return chave(c)===alvo; });
+    return {conhecido:true, registrado:achou, culturas:lista};
+  }
+
   /* Uma linha para a tela de resultado. */
   function rotulo(r){
     if(!r||!r.produto) return '';
@@ -153,7 +193,9 @@
   }
 
   var API={VERSION:VERSION, chave:chave, carregar:carregar, buscar:buscar,
-           porRegistro:porRegistro, paraItem:paraItem, rotulo:rotulo};
+           porRegistro:porRegistro, paraItem:paraItem, rotulo:rotulo,
+           carregarCulturas:carregarCulturas, culturasDe:culturasDe,
+           registradoPara:registradoPara};
   if(typeof module!=='undefined' && module.exports) module.exports=API;
   if(raiz) raiz.AgrofitCore=API;
 })(typeof window!=='undefined'?window:(typeof globalThis!=='undefined'?globalThis:this));

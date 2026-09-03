@@ -238,12 +238,47 @@
      por ali atravessa parenteses aninhados no grupo quimico — `etefom (etileno
      (precursor de)) (720 g/L)` — que quebram qualquer tentativa de casar o grupo
      primeiro. */
-  var RE_CONC=/\(\s*([\d]+(?:[.,][\d]+)?)\s*(g\/L|g\/l|g\/kg|mg\/kg|mg\/L|mg\/l|%)\s*\)/g;
+  /* NUMERO: aceita tambem o decimal SEM zero a esquerda. O arquivo do MAPA
+     escreve "(.03 g/L)" em produtos de acido indolacetico, e o padrao antigo
+     exigia digito antes do ponto — o ativo saia sem nome nenhum. */
+  var _NUM='(?:[\\d]+(?:[.,][\\d]+)?|[.,][\\d]+)';
+  /* Unidades que viram conta de equivalente em i.a. — massa por volume ou por
+     massa, e porcentagem. */
+  var _UN_OK='g\\/L|g\\/l|g\\/kg|mg\\/kg|mg\\/L|mg\\/l|%';
+  var RE_CONC=new RegExp('\\(\\s*('+_NUM+')\\s*('+_UN_OK+')\\s*\\)','g');
+  /* QUALQUER unidade entre parenteses. Serve para os agentes biologicos, que o
+     MAPA declara em "vespas/copo", "pupas/cartela", "individuos/mL", "UFC/g".
+     Elas NAO sao concentracao no sentido de massa: nao da para tirar grama de
+     i.a. por hectare de "vespas/copo", e fingir que da seria pior que nao ler.
+     Entao o nome do ativo e extraido — que e o que a folha precisa — e a
+     concentracao vem marcada como nao conversivel. */
+  var RE_QUALQUER=new RegExp('\\(\\s*('+_NUM+')\\s*([^()]{1,40}?)\\s*\\)','g');
+  function _conversivel(un){ return new RegExp('^(?:'+_UN_OK+')$').test(un); }
+  /* O NOME e o que sobra depois de tirar UM grupo entre parenteses do FIM — o
+     grupo quimico que o MAPA anexa. Contando parenteses, e nao cortando no
+     primeiro: ha nome que TEM parentese proprio, como
+     "acetato de (E,Z)-3,8-tetradecadienila", que o corte no primeiro parentese
+     reduzia a "acetato de". E ha grupo aninhado, "etefom (etileno (precursor
+     de))", que so o balanceamento atravessa. */
+  function _nomeAtivo(trecho){
+    var s=String(trecho==null?'':trecho).replace(/^[\s+;,]+/,'').trim().replace(/[,;]+$/,'').trim();
+    if(s.charAt(s.length-1)===')'){
+      var d=0, i=s.length-1;
+      for(; i>=0; i--){
+        var c=s.charAt(i);
+        if(c===')') d++;
+        else if(c==='('){ d--; if(d===0) break; }
+      }
+      if(i>=0) s=s.slice(0,i);
+    }
+    return s.replace(/[,;]+$/,'').trim();
+  }
   function ativosDe(texto){
     var s=String(texto==null?'':texto);
     var achados=[], m;
-    RE_CONC.lastIndex=0;
-    while((m=RE_CONC.exec(s))!==null) achados.push({ini:m.index, fim:RE_CONC.lastIndex, valor:m[1], un:m[2]});
+    RE_QUALQUER.lastIndex=0;
+    while((m=RE_QUALQUER.exec(s))!==null)
+      achados.push({ini:m.index, fim:RE_QUALQUER.lastIndex, valor:m[1], un:m[2]});
     if(!achados.length){
       /* SEM PARENTESE e como o campo foi preenchido a mao desde sempre — "500 g/L",
          "70%". Cair fora aqui apagaria o equivalente em i.a. de todo item ja
@@ -252,16 +287,18 @@
       var b=s.match(/([\d]+(?:[.,][\d]+)?)\s*(g\/L|g\/l|g\/kg|mg\/kg|mg\/L|mg\/l|%)/);
       if(!b) return [];
       return [{ia:'', valor:num(b[1].replace(',','.')),
-               unidade:b[2].replace('g/l','g/L').replace('mg/l','mg/L')}];
+               unidade:b[2].replace('g/l','g/L').replace('mg/l','mg/L'), conversivel:true}];
     }
     var out=[], corte=0;
     achados.forEach(function(a){
-      var antes=s.slice(corte, a.ini);
-      /* O nome e o que vem antes do primeiro parentese do trecho; sem parentese,
-         e o trecho inteiro. O separador " + " e o " e " ficam de fora. */
-      var nome=antes.replace(/^[\s+]+/,'').split('(')[0].trim().replace(/[,;]$/,'');
+      var nome=_nomeAtivo(s.slice(corte, a.ini));
       var un=a.un.replace('g/l','g/L').replace('mg/l','mg/L');
-      out.push({ia:nome, valor:num(a.valor.replace(',','.')), unidade:un});
+      var conv=_conversivel(un);
+      /* `conversivel` diz se aquela concentracao serve para a conta de
+         equivalente em i.a. Quem faz a conta filtra por ela; quem so precisa do
+         NOME (a folha, a traducao para ingles) recebe o ativo biologico
+         tambem — antes ele sumia inteiro. */
+      out.push({ia:nome, valor:num(a.valor.replace(',','.')), unidade:un, conversivel:conv});
       corte=a.fim;
     });
     return out;
@@ -272,8 +309,19 @@
      grandeza, e um total unico daria a impressao de que sao. Devolve um resultado
      por ativo, e quem le decide o que fazer com eles. */
   function equivalentesIA(doseValor, doseUnidade, textoConcentracao){
-    var ativos=ativosDe(textoConcentracao);
-    if(!ativos.length) return {erro:'Não achei concentração no formato "(valor unidade)" — ex.: "406 g/L".'};
+    var todos=ativosDe(textoConcentracao);
+    if(!todos.length) return {erro:'Não achei concentração no formato "(valor unidade)" — ex.: "406 g/L".'};
+    /* Agente biológico fica de FORA da conta, não erra dentro dela. Não existe
+       grama de i.a. por hectare a partir de "100 vespas/copo": a unidade não é
+       de massa, e converter ali produziria um número com aparência de resultado.
+       O nome dele continua sendo lido — é a folha que precisa disso. */
+    var biologicos=todos.filter(function(a){ return !a.conversivel; });
+    var ativos=todos.filter(function(a){ return a.conversivel; });
+    if(!ativos.length)
+      return {erro:'A concentração está declarada em '+
+                   (biologicos[0]?('"'+biologicos[0].unidade+'"'):'unidade biológica')+
+                   ', que não é massa: não há equivalente em i.a. a calcular.',
+              biologicos:biologicos};
     var itens=[], erro=null;
     ativos.forEach(function(a){
       var r=equivalenteIA(doseValor, doseUnidade, a.valor, a.unidade);
@@ -282,7 +330,8 @@
                   conc:a.valor, concUnidade:a.unidade});
     });
     if(!itens.length) return {erro:erro||'Não foi possível calcular o equivalente.'};
-    return {itens:itens, ativos:ativos.length, parcial:(itens.length<ativos.length)};
+    return {itens:itens, ativos:ativos.length, biologicos:biologicos,
+            parcial:(itens.length<ativos.length || biologicos.length>0)};
   }
 
   /* Como a dose se escreve. Vírgula, porque é como se escreve aqui. */

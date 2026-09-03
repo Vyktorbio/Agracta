@@ -9878,14 +9878,82 @@ function _pranchaDiag(qid, sid){
    o programa não tem como sustentar. A severidade separa o que exige resposta
    ('conferir') do que é só contexto ('nota') — e não existe nota 96/100, porque
    score dá aparência de validação científica absoluta ao que é uma contagem. */
+/* ===== PRODUTO x CULTURA REGISTRADA ========================================
+   O catálogo do Agrofit sabe, por registro, para quais culturas o MAPA aprovou
+   cada produto. Isso responde uma pergunta que o app não sabia fazer: o produto
+   deste ensaio tem registro para a cultura deste estudo?
+
+   O achado é NOTA, não "conferir". Ensaio de registro existe justamente para
+   gerar dado de cultura ainda não registrada — tratar isso como erro seria
+   brigar com a finalidade do trabalho. O que o app faz é não deixar passar
+   despercebido, e deixar registrado que se sabia.
+
+   Item sem número de registro não gera achado NENHUM. O experimental do
+   patrocinador não tem registro por definição, e ausência de registro não é
+   ausência de conformidade. ============================================== */
+var _agrofitCult=null, _agrofitCultCarregando=false;
+function _agrofitCultCarregar(aoPronto){
+  if(_agrofitCult||_agrofitCultCarregando) return;
+  if(typeof AgrofitCore==='undefined') return;
+  _agrofitCultCarregando=true;
+  fetch('data/agrofit-culturas.json?v=1').then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    _agrofitCult=AgrofitCore.carregarCulturas(j);
+    _agrofitCultCarregando=false;
+    if(_agrofitCult && typeof aoPronto==='function') aoPronto();
+  }).catch(function(){ _agrofitCultCarregando=false; /* sem rede: simplesmente não há achado */ });
+}
+/* Achados de registro para os tratamentos do estudo. Devolve [] enquanto o
+   arquivo não chegou — ausência de dado nunca vira afirmação. */
+function agrofitAchadosCultura(qid, study){
+  if(!_agrofitCult || typeof AgrofitCore==='undefined') return [];
+  var q=(typeof data!=='undefined'&&data)?(data[qid]||{}):{};
+  var cultura=(typeof studyCultura==='function')?studyCultura(study,q):'';
+  if(!cultura) return [];
+  var out=[], vistos={};
+  ((study||{}).tratamentos||[]).forEach(function(t){
+    if(!t||!t.id) return;
+    var comps=(typeof tratComponentes==='function')?tratComponentes(t):[];
+    comps.forEach(function(c){
+      var it=null;
+      try{ it=(c.itemId && typeof itemPorId==='function')?itemPorId(c.itemId):null; }catch(e){}
+      var reg=it&&String(it.registro||'').trim();
+      if(!reg) return;                       /* sem registro: nada a dizer */
+      var r=AgrofitCore.registradoPara(_agrofitCult, reg, cultura);
+      if(!r.conhecido || r.registrado!==false) return;
+      var chave=reg+'|'+t.id;
+      if(vistos[chave]) return; vistos[chave]=1;
+      out.push({codigo:'produto-sem-registro-para-cultura', severidade:'nota',
+        texto:(it.nome||c.nome||t.id)+' (registro '+reg+') não tem '+cultura+
+              ' entre as culturas registradas no Agrofit. Num ensaio de registro isso é esperado; '+
+              'num ensaio de eficácia com padrão comercial, vale conferir.',
+        tratamentos:[t.id]});
+    });
+  });
+  return out;
+}
 /* Bloco do verificador de desenho no cartão do estudo.
    A aritmética é de `vendor/protocolo-core.js`; aqui só se pinta. Silencioso
    quando não há nada a dizer — um verificador que fala sempre vira decoração. */
-function protocoloVerificaHtml(study){
+function protocoloVerificaHtml(study, _pvQid){
+  /* Dispara o carregamento das culturas na primeira vez e repinta o estudo
+     quando ele chegar — o cartão não tem campo de digitação, então repintar
+     aqui não arranca nada de ninguém (ver a lição da busca do Agrofit). */
+  _agrofitCultCarregar(function(){
+    if(typeof curV!=='undefined' && typeof curSid!=='undefined' &&
+       curV===_pvQid && curSid===((study||{}).id) &&
+       typeof openStudyDetail==='function') openStudyDetail(curV, curSid);
+  });
   var P=(typeof window!=='undefined')?window.ProtocoloCore:null;
   if(!P||!study) return '';
   var achados=[];
   try{ achados=P.verificar(study)||[]; }catch(e){ return ''; }
+  /* O achado de registro entra na MESMA lista: para quem lê, "o desenho tem uma
+     pergunta" e "o produto não tem registro para esta cultura" são a mesma
+     conferência, feita antes de instalar. */
+  try{ achados=achados.concat(agrofitAchadosCultura(_pvQid, study)||[]); }catch(e){}
   if(!achados.length) return '';
   var conferir=achados.filter(function(a){ return a.severidade==='conferir'; });
   var notas=achados.filter(function(a){ return a.severidade!=='conferir'; });
@@ -11069,7 +11137,7 @@ function openStudyDetail(qid,sid){
   /* O que o DESENHO do ensaio tem a dizer sobre si mesmo. Fica junto do
      planejamento porque é ali que se conserta — depois da primeira aplicação,
      mudar o delineamento não é mais correção, é outro ensaio. */
-  try{ h+=protocoloVerificaHtml(study); }catch(e){}
+  try{ h+=protocoloVerificaHtml(study, qid); }catch(e){}
 
   /* Aplicações realizadas */
   h+='<div id="study-stage-execucao" class="study-stage-anchor" aria-hidden="true"></div>';
