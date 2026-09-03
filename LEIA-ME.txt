@@ -1,11 +1,13 @@
 AGRACTA — 10a publicacao                    03/09/2026
 =====================================================
 
-Leva: 2 arquivos de codigo + 1 motor novo + 2 de teste.
-  CODIGO:  app.js  prancha.html  index.html  sw.js
+Leva: 4 arquivos de codigo + 1 motor novo + 4 de teste.
+  CODIGO:  app.js  prancha.html  vendor/dose-core.js  index.html  sw.js
   MOTOR:   vendor/protocolo-core.js (novo)
   TESTE:   test_protocolo_verifica.js (novo)
            test_forense_dominio.js    (novo)
+           test_equivalente_ia.js     (novo)
+           test_capacidade_frasco.js  (novo)
   DOCS:    docs/ROADMAP.md
 
 
@@ -63,12 +65,50 @@ em vez de listar celula a celula — vinte valores acima de 100% sao um achado c
 vinte ocorrencias, nao vinte achados.
 
 
+3) O EQUIVALENTE EM I.A. PAROU DE LER SO O PRIMEIRO ATIVO
+
+Num produto de dois ativos — 2,4-D 406 g/L + picloram 103,6 g/L — o app devolvia
+406 e calava sobre o resto: um numero certo apresentado como se fosse a historia
+inteira, sem aviso nenhum. Agora sai UM RESULTADO POR ATIVO, e nenhuma soma:
+gramas de 2,4-D e gramas de picloram nao sao a mesma grandeza, e um total unico
+faria parecer que sao.
+
+Enquanto a concentracao e digitada a mao isso e raro. No catalogo do Agrofit,
+100% dos registros trazem o i.a. com a concentracao embutida e boa parte e
+mistura — por isso se corrigiu ANTES de importar.
+
+O formato antigo, "500 g/L" sem parenteses, continua valendo: e como todo item ja
+cadastrado esta gravado.
+
+4) "CAPACIDADE DO FRASCO" PASSOU A ACEITAR A UNIDADE
+
+Voce contou que digitou 200 mL e saiu 200 L. Fui olhar o formulario e o culpado
+apareceu: o campo fica ao lado de "Volume morto (mL)". Dois campos vizinhos em
+unidades diferentes e armadilha de projeto, nao descuido de quem preenche.
+
+Agora escrever "200 mL" e entendido como 0,2 L. Numero puro continua sendo litros
+— e como todo estudo ja cadastrado esta gravado, e mudar isso reescreveria a
+capacidade dos antigos. E o campo mostra embaixo o que entendeu: um campo que
+interpreta sem exibir o resultado so troca uma armadilha por outra.
+
+
+O QUE FICOU DE FORA, DE PROPOSITO
+---------------------------------
+O "=" da leitura dupla (1,5 L/ha = 1 %) e o aviso de capacidade absurda dentro da
+calculadora. Os dois sao da tela que voce esta refinando agora; mexer nela as
+cegas desfaria ou duplicaria a sua decisao. Entram na proxima, encaixados no que
+voce definir.
+
+
 O QUE CONFERIR DEPOIS DE SUBIR
 ------------------------------
 1. Abrir o estudo do sinergista: o bloco "CONFERENCIA DO DESENHO" deve apontar as
    duas doses de adjuvante sem braco de mistura, como NOTA (nao como erro).
 2. Abrir um ensaio simples e correto: o bloco nao deve aparecer.
 3. Gerar a folha BPL de um estudo e conferir o bloco de achados.
+4. Num item de dois ativos, conferir que o equivalente mostra os dois.
+5. No cadastro do estudo, escrever "200 mL" na capacidade e ver a dica confirmar
+   0,2 L.
 
 
 TESTES
@@ -76,7 +116,9 @@ TESTES
 Duplo clique em  Conferir antes de publicar.command.
 
   test_protocolo_verifica.js  38 verificacoes (novo, golden test do ensaio real)
+  test_equivalente_ia.js      32 verificacoes (novo, golden test conferido a mao)
   test_forense_dominio.js     25 verificacoes (novo)
+  test_capacidade_frasco.js   21 verificacoes (novo, com ida e volta)
 
 
 =====================================================
