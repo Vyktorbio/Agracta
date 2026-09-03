@@ -166,8 +166,34 @@
        do novo e sobrescrevê-lo. */
     var run=FB.checkpointChain.catch(function(){}).then(function(){return checkpointWrite(pending);});
     FB.checkpointChain=run;
-    run.then(function(v){waiters.forEach(function(w){w.resolve(v);});},function(e){waiters.forEach(function(w){w.reject(e);});});
+    run.then(function(v){checkpointOk();waiters.forEach(function(w){w.resolve(v);});},
+             function(e){waiters.forEach(function(w){w.reject(e);});});
     return run;
+  }
+  /* ===== A FALHA DO COFRE OFFLINE PRECISA APARECER ==========================
+     Seis pontos mandavam esta falha so para o console. O estado da nuvem
+     continua salvo, entao nao ha perda de dado — mas o COFRE deste aparelho
+     fica defasado, e isso so se descobre no campo, sem sinal, que e o pior
+     lugar possivel para descobrir.
+
+     O mesmo erro ja aparecia na tela no caminho puramente offline ("falha ao
+     salvar neste aparelho"); era so aqui que ficava mudo. Silencio e a unica
+     resposta que ninguem consegue interpretar.
+
+     Nao muda NADA do que se le ou se grava: so troca o silencio por um aviso,
+     e o aviso some sozinho quando o proximo checkpoint der certo. */
+  function checkpointFalhou(e){
+    console.error('[Agracta offline] checkpoint:',e);
+    FB.cofreDefasado=true;
+    /* Em pagehide/visibilitychange a pagina esta indo embora: pintar selo ali
+       nao adianta, mas registrar que o cofre ficou para tras adianta. */
+    try{ if(typeof document==='undefined' || !document.hidden)
+      cloudBadge('offline','=⌁ nuvem em dia · o cofre offline deste aparelho não atualizou'); }catch(_e){}
+  }
+  function checkpointOk(){
+    if(!FB.cofreDefasado) return;
+    FB.cofreDefasado=false;
+    try{ if(typeof document==='undefined' || !document.hidden) cloudBadge('saved'); }catch(_e){}
   }
   function checkpointPut(st,immediate){
     if(!st)return Promise.resolve(false);
@@ -250,7 +276,7 @@
   if(typeof originalSave==='function'){
     window.save=function(){
       var out=originalSave.apply(this,arguments);
-      checkpointPut(localState()).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
+      checkpointPut(localState()).catch(checkpointFalhou);
       return out;
     };
   }
@@ -431,7 +457,7 @@
   };
   window.doLogout=function(){
     if(typeof closeMainMenu==='function')closeMainMenu();
-    checkpointPut(localState(),true).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
+    checkpointPut(localState(),true).catch(checkpointFalhou);
     try{localStorage.removeItem(TRUST_KEY);}catch(e){}
     if(FB.auth)FB.auth.signOut();
     FB.user=null;window._authUser=null;
@@ -697,7 +723,7 @@
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
       window._cloudRev=newRev;setUnsavedChanges(false);cloudBadge('saved');
-      checkpointPut(st).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
+      checkpointPut(st).catch(checkpointFalhou);
     }).catch(function(e){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
       cloudBadge('error','— salvo localmente');
@@ -752,7 +778,7 @@
       if(meaningful(r.state)){
         var merged=(typeof cloudMerge==='function')?cloudMerge(localState(),r.state):r.state;
         cloudApply(merged);
-        checkpointPut(merged).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});
+        checkpointPut(merged).catch(checkpointFalhou);
         if(stable(splitState(merged))!==stable(r.flat))commitState(merged);
         else cloudBadge('saved');
       }else if(meaningful(localState()))commitState(localState());
@@ -816,9 +842,9 @@
       window.addEventListener('offline',function(){cloudBadge('offline','=⌁ salvo no aparelho · aguardando conexão');});
       document.addEventListener('visibilitychange',function(){
         if(document.visibilityState==='visible')cloudResync();
-        else {checkpointPut(localState(),true).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});if(window._unsavedChanges)cloudSave();}
+        else {checkpointPut(localState(),true).catch(checkpointFalhou);if(window._unsavedChanges)cloudSave();}
       });
-      window.addEventListener('pagehide',function(){checkpointPut(localState(),true).catch(function(e){console.error('[Agracta offline] checkpoint:',e);});if(window._unsavedChanges)cloudSave();});
+      window.addEventListener('pagehide',function(){checkpointPut(localState(),true).catch(checkpointFalhou);if(window._unsavedChanges)cloudSave();});
     }
   };
   window.cloudApplyPending=function(){
