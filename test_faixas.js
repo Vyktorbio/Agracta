@@ -97,7 +97,15 @@ function bosqueiro(tracos, opts){
   var base = {T1:42, T2:18, T3:9};              /* testemunha pior, item de teste melhor */
   ['T1','T2','T3'].forEach(function(t){
     var n = (opts.faltaEm === t) ? Math.max(0, tracos - 1) : tracos;   /* um medido a menos */
-    for(var r = 1; r <= n; r++) av.notas[t + 'R' + r] = {Severidade: String(base[t] + (r - 2) * 1.7)};
+    /* O ruidinho por parcela NAO e enfeite. Sem ele o dado fica perfeitamente
+       aditivo (efeito de tratamento + efeito de bloco, resíduo exatamente zero),
+       e desde a v194 o statDBC RECUSA analisar isso — com razão: sem termo de
+       erro o teste F não existe. Dado de campo sempre tem resíduo; a fixture
+       precisa parecer com campo. É determinístico para o teste não oscilar. */
+    for(var r = 1; r <= n; r++){
+      var ruido = ((t.charCodeAt(1) * 7 + r * 13) % 5 - 2) * 0.35;
+      av.notas[t + 'R' + r] = {Severidade: String(base[t] + (r - 2) * 1.7 + ruido)};
+    }
   });
   var s = C.normalizeStudy({
     id:'E-BOSQ', codigo:'BOSQ-2026-01', dataInicio:'2026-08-01',
