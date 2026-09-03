@@ -903,10 +903,103 @@
     geral:'Os rótulos são genéricos porque a escala geral vale para qualquer planta. Registre o estádio pelo que a planta está fazendo, não pelo nome da cultura.'
   };
 
+  /* ===== O NOME DA CULTURA, RESOLVIDO ======================================
+     A cultura do estudo e CAMPO DE TEXTO LIVRE. Entra "Soja", "soja", "SOJA",
+     "Soybean", "Soybeans", "Suggar cane" — e ate a v191 qualquer grafia fora do
+     mapa desligava a escala BBCH e, pior, fazia a conferencia de registro
+     ACUSAR: o app dizia que o glifosato nao tem registro para "Soybean", quando
+     tem para Soja. Achado falso mata a confianca na ferramenta inteira, e este
+     nascia de uma letra diferente.
+
+     Aqui o nome e resolvido para a forma canonica antes de qualquer comparacao.
+     O que NAO resolve devolve vazio — e quem chama fica em silencio em vez de
+     afirmar. Nao reconhecer nao e o mesmo que estar errado.
+
+     Os sinonimos em ingles nao sao enfeite: programa de PTA e lista de
+     patrocinador internacional vem assim, e e nessa hora que o dado entra. */
+  function _chaveCultura(s){
+    s=String(s==null?'':s);
+    return (s.normalize?s.normalize('NFD').replace(/[\u0300-\u036f]/g,''):s)
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  var SINONIMOS={
+    /* ingles -> canonico */
+    'soybean':'Soja','soybeans':'Soja','soya':'Soja','soy':'Soja',
+    'corn':'Milho','maize':'Milho','cotton':'Algodão','wheat':'Trigo',
+    'rice':'Arroz','barley':'Cevada','oat':'Aveia','oats':'Aveia','rye':'Centeio',
+    'sorghum':'Sorgo','millet':'Milheto','coffee':'Café','sugar cane':'Cana-de-açúcar',
+    'sugarcane':'Cana-de-açúcar','suggar cane':'Cana-de-açúcar','cane':'Cana-de-açúcar',
+    'drybeans':'Feijão','dry beans':'Feijão','bean':'Feijão','beans':'Feijão',
+    'common bean':'Feijão','cowpea':'Caupi','pea':'Ervilha','peas':'Ervilha',
+    'chickpea':'Grão-de-bico','lentil':'Lentilha','peanut':'Amendoim','groundnut':'Amendoim',
+    'sunflower':'Girassol','rapeseed':'Canola','oilseed rape':'Canola','sesame':'Gergelim',
+    'cassava':'Mandioca','potato':'Batata','sweet potato':'Batata-doce',
+    'tomato':'Tomate','pepper':'Pimentão','bell pepper':'Pimentão','eggplant':'Berinjela',
+    'melon':'Melão','watermelon':'Melancia','cucumber':'Pepino','pumpkin':'Abóbora',
+    'squash':'Abobrinha','zucchini':'Abobrinha',
+    'cabbage':'Repolho','kale':'Couve','cauliflower':'Couve-flor','broccoli':'Brócolis',
+    'onion':'Cebola','garlic':'Alho','leek':'Alho-poró','carrot':'Cenoura',
+    'beet':'Beterraba','sugarbeet':'Beterraba','sugar beet':'Beterraba',
+    'radish':'Rabanete','turnip':'Nabo','lettuce':'Alface','spinach':'Espinafre',
+    'strawberry':'Morango','grape':'Uva','grapevine':'Uva','apple':'Maçã','pear':'Pera',
+    'peach':'Pêssego','nectarine':'Nectarina','plum':'Ameixa','cherry':'Cereja',
+    'citrus':'Citros','orange':'Laranja','lemon':'Limão','lime':'Lima','tangerine':'Tangerina',
+    'banana':'Banana','papaya':'Mamão','mango':'Manga','avocado':'Abacate',
+    'guava':'Goiaba','passion fruit':'Maracujá','pineapple':'Abacaxi','persimmon':'Caqui',
+    'cocoa':'Cacau','coconut':'Coco','oil palm':'Dendê','olive':'Oliveira',
+    'cashew':'Caju','tobacco':'Fumo','castor':'Mamona','flax':'Linho','quinoa':'Quinoa',
+    'eucalyptus':'Eucalipto','pine':'Pinus','rubber tree':'Seringueira',
+    'yerba mate':'Erva-mate','tea':'Chá','black pepper':'Pimenta-do-reino',
+    'pasture':'Pastagem','grass':'Pastagem','ryegrass':'Azevém','alfalfa':'Alfafa',
+    /* variantes em portugues que o campo livre produz */
+    'cana':'Cana-de-açúcar','cana de acucar':'Cana-de-açúcar','cana soca':'Cana-de-açúcar',
+    'soja ogm':'Soja','milho ogm':'Milho','algodao ogm':'Algodão','feijao comum':'Feijão',
+    'cafe arabica':'Café','cafeeiro':'Café','citricos':'Citros','citrus sinensis':'Citros',
+    'laranjeira':'Laranja','videira':'Uva','macieira':'Maçã','bananeira':'Banana',
+    'batata inglesa':'Batata','tomateiro':'Tomate','pastagens':'Pastagem',
+    'braquiaria':'Braquiária','capim':'Pastagem','trigo mourisco':'Trigo mourisco',
+    /* Apelidos que o PROPRIO mapa carrega como chave (sem acento, forma curta).
+       Eles servem para achar a escala; aqui se diz qual e a forma que vale
+       quando o nome vai ser comparado com a lista de culturas do MAPA. */
+    'algodao':'Algodão','cafe':'Café','feijao':'Feijão','melao':'Melão',
+    'maca':'Maçã','cana':'Cana-de-açúcar','citros':'Citros','estufas':'Estufa',
+    'colza':'Canola','videira':'Uva','limao':'Limão','pessego':'Pêssego',
+    'brocolis':'Brócolis','couve flor':'Couve-flor','grao de bico':'Grão-de-bico',
+    'alho poro':'Alho-poró','erva mate':'Erva-mate','cha':'Chá','acai':'Açaí',
+    'dende':'Dendê','mamao':'Mamão','maracuja':'Maracujá','azevem':'Azevém',
+    'rucula':'Rúcula','agriao':'Agrião','mombaca':'Mombaça','cara':'Cará'
+  };
+  /* Indice das chaves do MAPA por forma normalizada, montado uma vez. */
+  var _CANON=null;
+  function _canonIndice(){
+    if(_CANON) return _CANON;
+    _CANON={};
+    Object.keys(MAPA).forEach(function(n){ _CANON[_chaveCultura(n)]=n; });
+    return _CANON;
+  }
+  /* Devolve o nome canonico, ou '' quando nao reconhece. NUNCA chuta. */
+  function canonica(nome){
+    var k=_chaveCultura(nome);
+    if(!k) return '';
+    /* SINONIMOS vem ANTES do indice porque o proprio mapa carrega apelidos como
+       chave — 'Algodao' sem acento e 'Cana' curto existem la para a busca de
+       escala funcionar. Para a comparacao com a lista do MAPA, porem, vale a
+       forma que o MAPA escreve: 'Cana' nao bate com 'Cana-de-acucar'. */
+    if(SINONIMOS[k]) return SINONIMOS[k];
+    var idx=_canonIndice();
+    if(idx[k]) return idx[k];
+    /* plural simples do proprio vocabulario: "citros" ja e plural, mas
+       "tomates" e "morangos" aparecem em planilha. */
+    if(/s$/.test(k) && idx[k.slice(0,-1)]) return idx[k.slice(0,-1)];
+    if(/s$/.test(k) && SINONIMOS[k.slice(0,-1)]) return SINONIMOS[k.slice(0,-1)];
+    return '';
+  }
+
   function listaDe(cultura){
-    var m=MAPA[cultura]; return m?(ESCALAS[m[0]]||null):null;
+    var m=MAPA[canonica(cultura)]; return m?(ESCALAS[m[0]]||null):null;
   }
   function origemDe(cultura){
+    cultura=canonica(cultura);
     var m=MAPA[cultura];
     if(!m) return null;
     return {escala:m[0], nivel:m[1], propria:(m[1]==='propria'),
@@ -920,7 +1013,8 @@
   function culturas(){ return Object.keys(MAPA); }
 
   var API={VERSION:VERSION, ESCALAS:ESCALAS, MAPA:MAPA, GERAL:GERAL,
-           listaDe:listaDe, origemDe:origemDe, infoDe:infoDe, culturas:culturas};
+           listaDe:listaDe, origemDe:origemDe, infoDe:infoDe, culturas:culturas,
+           canonica:canonica, SINONIMOS:SINONIMOS};
   if(typeof module!=='undefined' && module.exports) module.exports=API;
   if(raiz) raiz.BBCHCore=API;
 })(typeof window!=='undefined'?window:(typeof globalThis!=='undefined'?globalThis:this));

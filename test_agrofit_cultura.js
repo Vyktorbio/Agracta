@@ -57,6 +57,7 @@ var ITENS={
 };
 var ctx={
   AgrofitCore:A, _agrofitCult:cc,
+  window:{BBCHCore:require('./vendor/bbch-core.js')},
   data:{q1:{cultura:'Morango'}},
   itemPorId:function(id){ return ITENS[id]||null; },
   tratComponentes:function(t){ return (t&&t.componentes)||[]; },
@@ -107,6 +108,35 @@ ctx._agrofitCult=cc;
 console.log('\n--- O mesmo produto em dois componentes não duplica o achado ---');
 ck(ctx.agrofitAchadosCultura('q1', estudo('Morango',[{itemId:'i1'},{itemId:'i1'}])).length===1,
    'um achado por produto e tratamento');
+
+console.log('\n--- O NOME DA CULTURA É RESOLVIDO ANTES DE COMPARAR ---');
+/* A cultura é campo de texto livre e a lista do MAPA está em português. Antes,
+   "Soybean" não batia com nada e o app ACUSAVA falta de registro num produto
+   que tem registro para Soja. Achado falso mata a confiança na ferramenta. */
+ctx.data.q3={cultura:'Soybean'};
+var aEn=ctx.agrofitAchadosCultura('q3', estudo('',[{itemId:'i1'}]));
+ck(!aEn.some(function(x){ return x.codigo==='produto-sem-registro-para-cultura'; }),
+   '"Soybean" NÃO gera mais acusação de falta de registro');
+ctx.data.q4={cultura:'Corn'};
+ck(ctx.agrofitAchadosCultura('q4', estudo('',[{itemId:'i1'}])).length===0,
+   '"Corn" resolve para Milho, que É registrado — silêncio total');
+ctx.data.q5={cultura:'Strawberry'};
+var aMo=ctx.agrofitAchadosCultura('q5', estudo('',[{itemId:'i1'}]));
+ck(aMo.length===1 && /Morango/.test(aMo[0].texto),
+   '"Strawberry" resolve para Morango e aí sim aponta, com o nome certo: '+(aMo[0]||{}).texto);
+
+console.log('\n--- Cultura irreconhecível: explica, não acusa ---');
+ctx.data.q6={cultura:'Xilofagia tropical'};
+var aX=ctx.agrofitAchadosCultura('q6', estudo('',[{itemId:'i1'}]));
+ck(aX.length===1,'gera um achado');
+ck(aX[0].codigo==='cultura-nao-reconhecida','de código próprio, não de falta de registro');
+ck(aX[0].severidade==='nota','como nota');
+ck(/não reconheço/i.test(aX[0].texto),'dizendo que não reconhece: '+aX[0].texto.slice(0,60));
+ck(/Soybean/.test(aX[0].texto),'com exemplo de como resolver');
+
+console.log('\n--- Sem produto registrado, nem isso vale dizer ---');
+ck(ctx.agrofitAchadosCultura('q6', estudo('',[{itemId:'i2'}])).length===0,
+   'estudo só com item experimental não perde nada por a cultura ser desconhecida');
 
 console.log('\n--- Componente de texto livre, sem item, é ignorado ---');
 ck(ctx.agrofitAchadosCultura('q1', estudo('Morango',[{nome:'algo escrito à mão'}])).length===0,

@@ -109,6 +109,47 @@ ck(B.infoDe('Soja','44')===null,'código inexistente devolve nulo, não um palpi
 ck(B.listaDe('Quiabo')===null,'cultura fora do mapa continua sem escala');
 ck(B.origemDe('')===null,'cultura vazia não tem origem');
 
+console.log('\n--- O NOME DA CULTURA É RESOLVIDO ANTES DE PROCURAR ---');
+/* A cultura é campo de TEXTO LIVRE no estudo. Até a v191 qualquer grafia fora do
+   mapa desligava a escala BBCH e — pior — fazia a conferência de registro ACUSAR
+   falta de registro que não existia. Achado falso mata a confiança na ferramenta
+   inteira, e este nascia de uma letra diferente. */
+[['Soybean','Soja'],['Soybeans','Soja'],['Corn','Milho'],['Cotton','Algodão'],
+ ['Coffee','Café'],['Wheat','Trigo'],['Drybeans','Feijão'],['Potato','Batata'],
+ ['Strawberry','Morango'],['Grape','Uva'],['Cabbage','Repolho'],['Papaya','Mamão'],
+ ['Eucalyptus','Eucalipto']].forEach(function(p){
+  ck(B.canonica(p[0])===p[1],p[0]+' → '+p[1]);
+});
+
+console.log('\n--- Grafia solta do campo livre também resolve ---');
+ck(B.canonica('soja')==='Soja','minúscula');
+ck(B.canonica('SOJA')==='Soja','maiúscula');
+ck(B.canonica('  Soja  ')==='Soja','espaços em volta');
+ck(B.canonica('Algodao')==='Algodão','sem acento');
+ck(B.canonica('Sugar cane')==='Cana-de-açúcar','duas palavras em inglês');
+ck(B.canonica('Suggar cane')==='Cana-de-açúcar','com o erro de digitação que aparece na vida real');
+ck(B.canonica('Cana')==='Cana-de-açúcar','a forma curta vira a do MAPA, que é como a lista de registro escreve');
+ck(B.canonica('Soja OGM')==='Soja','variante OGM');
+ck(B.canonica('Tomates')==='Tomate','plural');
+
+console.log('\n--- E a escala passa a sair para esses nomes ---');
+ck(B.origemDe('Soybean')!==null,'"Soybean" tem escala agora');
+ck(B.origemDe('Soybean').escala==='soja','e é a da soja');
+ck(B.infoDe('Corn','65')!==null,'"Corn" consulta a escala do milho');
+
+console.log('\n--- REGRA: o que não resolve devolve VAZIO, não um palpite ---');
+ck(B.canonica('Xilofagia tropical')==='','nome inventado não vira cultura');
+ck(B.canonica('')==='','vazio');
+ck(B.canonica(null)==='','nulo');
+ck(B.canonica('   ')==='','só espaços');
+ck(B.listaDe('Xilofagia tropical')===null,'e sem escala, como antes');
+ck(B.origemDe('Xilofagia tropical')===null,'nem origem');
+
+console.log('\n--- Nenhum sinônimo aponta para cultura que não existe no mapa ---');
+var quebrados=Object.keys(B.SINONIMOS).filter(function(k){ return !B.MAPA[B.SINONIMOS[k]]; });
+ck(quebrados.length===0,'os '+Object.keys(B.SINONIMOS).length+' sinônimos apontam para culturas reais'+
+   (quebrados.length?(': '+quebrados.slice(0,5).join(', ')):''));
+
 console.log('\n--- Todo estádio de todas as escalas é bem formado ---');
 var ruins=0, tot=0;
 Object.keys(B.ESCALAS).forEach(function(k){
