@@ -80,13 +80,25 @@ vm.runInContext([
   'var _calcDetalhe=false;',
   /* O volume de calda ambíguo é estado da tela: quando há um, a receita não é
      pintada. Aqui ele nasce nulo — este teste cobre a receita, não a pergunta. */
-  'var _calcVolAmbiguo=null;',
+  'var _calcVolAmbiguo=null, _calcAba=null, _calcSel=null;',
+  /* O Modo Preparo mostra um tratamento por vez; aqui a aba nasce nula, que
+     equivale a "Todos" — este teste cobre a receita, não a navegação. */
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'),
+  /* A receita agora tem dose editável na linha: o compute pergunta se o
+     tratamento tem receita estruturada e monta o seletor de unidade. */
+  'var TRAT_COMP_UNIDADES=[[\'L/ha\',\'L/ha\'],[\'mL/ha\',\'mL/ha\'],[\'g/ha\',\'g/ha\'],[\'kg/ha\',\'kg/ha\'],[\'% v/v\',\'% v/v\']];',
+  pega('calcAbas'), pega('calcAbaAtual'), pega('_calcFinalizado'),
+  pega('tratComponentes'), pega('tratTemReceita'),
+  pega('_seCompUnidadeNormalizar'), pega('_seCompUnidadeOptions'),
   pega('calcVolumeAmbiguoHtml'), pega('_calcCompute')
 ].join('\n'), ctx);
 
 function pinta(detalhe){
   ctx._calcDetalhe=detalhe;
+  /* O Modo Preparo abre num tratamento por vez; este teste cobre a RECEITA (o
+     que aparece no essencial e o que só aparece na conferência), não a
+     navegação — que é do test_modo_preparo.js. Por isso pede a lista inteira. */
+  ctx._calcAba='__todos';
   pintado.calcResults='';
   ctx._calcCompute();
   return pintado.calcResults||'';

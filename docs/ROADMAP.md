@@ -501,6 +501,38 @@ dentro da calculadora, navegação anterior/próximo, linha de configuração co
 seletor mL/L no frasco. É reescrita da tela, e espera a refinada de usabilidade em
 curso para não colidir com ela.
 
+## 7-octies. Modo Preparo · ✅ **feito (03/09/2026)**
+
+O pedido do autor foi direto: *"as calculadoras precisam facilitar de verdade e não
+complicar mais"*. A tela tinha **sete campos sempre abertos** e todos os tratamentos
+empilhados abaixo. Quem está na bancada quer duas coisas — quanto preparar e quanto
+medir — e rolava a tela para achá-las entre configurações que quase nunca mudam.
+
+A inversão, item a item do que ele pediu:
+
+| Antes | Agora |
+|---|---|
+| 7 campos sempre abertos | uma linha: `5×3 m · 4 parcelas · 3 L/ha · morto 300 mL · frasco 1,9 L` |
+| todos os tratamentos empilhados | abas `T1 T2 … Todos`, um por vez |
+| editar dose = fechar, abrir o protocolo, rolar, achar, voltar | a dose é campo na própria linha da receita |
+| sem navegação | `‹ anterior` e `próximo ›` |
+| capacidade em L ao lado de um campo em mL | seletor **mL/L** ao lado do número |
+
+**A aritmética não mudou uma linha** — continua toda em `vendor/biocalc-campo-core.js`.
+O que mudou é o que se mostra e em que ordem.
+
+Quatro decisões que o teste cobra: a grade **existe sempre, apenas oculta** (tirá-la do
+DOM zeraria parcela e volume, porque o cálculo lê pelos ids); **"Todos" não some**, pois
+a lista inteira é útil para conferir o preparo do dia; **anterior/próximo não dão a
+volta**, porque na bancada isso faz perder a conta de onde se estava; e **o atalho para
+o protocolo continua**, porque a edição na linha resolve trocar dose e unidade, não
+acrescentar item nem transformar texto livre em receita.
+
+A leitura dupla (`1,5 L/ha ≡ 1 %`) ficou **só na conferência**: no essencial ela
+confunde — foi ela que levantou a dúvida do autor numa folha real.
+
+Coberto por `test_modo_preparo.js` (21 verificações).
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,

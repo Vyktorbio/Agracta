@@ -7404,6 +7404,25 @@ function _calcCss(){
   '.calc-prep.bad{background:rgba(210,75,65,.10);border-color:rgba(230,100,85,.32)}.calc-prep.bad span{color:#ff9a8a}'+
   '.calc-eq{display:block;font-style:normal;font-size:10px;color:var(--text-3,#7f9085);margin-top:1px}'+
   '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
+  /* MODO PREPARO: configuração em uma linha, abas por tratamento, dose editável
+     na própria receita, navegação entre tratamentos. */
+  '.calc-cfg{border:1px solid var(--border,#26322b);border-radius:10px;margin:6px 0 8px;overflow:hidden}'+
+  '.calc-cfgh{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;background:var(--surface-3,#111a16)}'+
+  '.calc-cfgr{flex:1;min-width:0;font-size:11.5px;font-weight:700;color:var(--text,#e8efe9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+  '.calc-cfgb{flex:0 0 auto;font-size:10.5px;font-weight:800;color:#82c99a}'+
+  '.calc-cfg .calc-grid{padding:8px 10px}'+
+  '.calc-abas{display:flex;gap:5px;overflow-x:auto;padding:1px 0 7px;-webkit-overflow-scrolling:touch}'+
+  '.calc-aba{flex:0 0 auto;border:1px solid var(--border,#26322b);background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border-radius:999px;padding:6px 13px;font:800 12px inherit;cursor:pointer}'+
+  '.calc-aba i{font-style:normal;font-weight:600;opacity:.75;font-size:10px}'+
+  '.calc-aba.on{background:rgba(74,170,105,.18);border-color:rgba(95,190,125,.5);color:#cdebd7}'+
+  '.calc-aba.todos{opacity:.85}'+
+  '.calc-nav{display:flex;gap:8px;margin:2px 0 4px}'+
+  '.calc-navb{flex:1;border:1px solid var(--border,#26322b);background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border-radius:9px;padding:8px;font:800 12px inherit;cursor:pointer}'+
+  '.calc-navb[disabled]{opacity:.35;cursor:default}'+
+  '.calc-edit{display:flex;align-items:center;gap:4px;flex-wrap:wrap}'+
+  '.calc-inpi{width:60px;flex:0 0 60px;background:var(--surface-3,#111a16);border:1px solid var(--border,#26322b);color:var(--text,#e8efe9);border-radius:6px;padding:3px 5px;font:700 11px inherit}'+
+  '.calc-seli{flex:1;min-width:60px;max-width:118px;background:var(--surface-3,#111a16);border:1px solid var(--border,#26322b);color:var(--text,#e8efe9);border-radius:6px;padding:3px 4px;font:600 10.5px inherit}'+
+  '.calc-mixr.ed{align-items:center}'+
   '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
     s.textContent+='.calc-mem{margin-top:12px;border-top:1px solid rgba(255,255,255,.10);padding-top:10px}'+
    '.calc-memh{font-size:10px;letter-spacing:.8px;color:#9fb1a5;font-weight:700;margin-bottom:6px}'+
@@ -7904,6 +7923,128 @@ function _calcParcelaDefault(){
 function _calcSalvarParcela(){
   try{ var l=_calcNum(_calcVal('calcLen')), w=_calcNum(_calcVal('calcWid')); if(l>0&&w>0) localStorage.setItem('iracema-calc-parcela', l+'x'+w); }catch(e){}
 }
+/* ===================== MODO PREPARO ==========================================
+   A calculadora tinha sete campos sempre abertos e todos os tratamentos
+   empilhados abaixo. Quem está na bancada quer saber duas coisas — QUANTO
+   PREPARAR e QUANTO MEDIR de cada item — e estava rolando a tela para achá-las
+   entre configurações que quase nunca mudam.
+
+   A inversão: a configuração vira UMA LINHA que se abre quando precisa; os
+   tratamentos viram ABAS, um por vez; e o resultado vem primeiro.
+
+   O critério que governa cada decisão aqui é do autor: "as calculadoras precisam
+   facilitar de verdade e não complicar mais". Se uma função adiciona um passo em
+   vez de tirar, ela não entra.
+
+   A ARITMÉTICA NÃO MUDOU uma linha: continua toda em vendor/biocalc-campo-core.js.
+   Aqui só se decide o que mostrar e em que ordem. ============================ */
+
+var _calcAba=null;        /* id do tratamento na aba, ou '__todos' */
+var _calcCfgAberta=false; /* configuração expandida? padrão: fechada */
+var CALC_CFG_KEY='agracta-calc-cfg-aberta';
+try{ _calcCfgAberta=(localStorage.getItem(CALC_CFG_KEY)==='1'); }catch(e){}
+
+/* A linha de configuração, do jeito que se lê de relance:
+   "5×3 m · 4 parcelas · 3 L/ha · morto 300 mL · frasco 1,9 L".
+   Omite o que não foi informado — um "· frasco 0 L" só ocuparia espaço, que é
+   exatamente o problema que esta tela veio resolver. */
+function calcCfgResumo(c){
+  c=c||{};
+  function n(v,casas){
+    var x=Number(v); if(!isFinite(x)) return '';
+    var s=x.toFixed(casas==null?1:casas);
+    if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,'');
+    return s.replace('.',',');
+  }
+  var p=[];
+  if(c.len>0 && c.wid>0) p.push(n(c.len)+'×'+n(c.wid)+' m');
+  if(c.plots>0) p.push(c.plots+' parcela'+(c.plots===1?'':'s'));
+  if(c.vol>0) p.push(n(c.vol)+' L/ha');
+  if(c.dead>0) p.push('morto '+n(c.dead,0)+' mL');
+  if(c.bottles>1) p.push(c.bottles+' frascos');
+  if(c.capL>0) p.push('frasco '+(c.capL<1?(n(c.capL*1000,0)+' mL'):(n(c.capL,2)+' L')));
+  return p.join(' · ');
+}
+
+/* As abas: um tratamento por vez, mais "Todos" para quem quer a lista inteira.
+   "Todos" existe porque a visão antiga é útil na hora de conferir o preparo do
+   dia — tirá-la seria trocar um problema por outro. */
+function calcAbas(study){
+  var out=(((study||{}).tratamentos)||[]).filter(function(t){ return t&&t.id; })
+    .map(function(t){ return {id:t.id, rotulo:t.id,
+      testemunha:!!(t.testemunha||(typeof studyTestemunha==='function'&&studyTestemunha(study)===t.id))}; });
+  if(out.length>1) out.push({id:'__todos', rotulo:'Todos', todos:true});
+  return out;
+}
+/* Anterior/próximo NÃO dão a volta: numa bancada, o botão que retorna ao começo
+   faz a pessoa perder a conta de onde estava. */
+function calcAbaVizinha(abas, atual, dir){
+  var reais=(abas||[]).filter(function(a){ return !a.todos; });
+  if(!reais.length) return null;
+  var i=reais.map(function(a){ return a.id; }).indexOf(atual);
+  if(i<0) return reais[0].id;
+  var j=i+(dir<0?-1:1);
+  if(j<0||j>=reais.length) return null;
+  return reais[j].id;
+}
+/* Qual aba mostrar. A escolha vale enquanto a tela está aberta; ao trocar de
+   estudo, volta ao primeiro — manter "T7" de outro estudo mostraria uma aba que
+   não existe. */
+function calcAbaAtual(study){
+  var abas=calcAbas(study);
+  if(!abas.length) return null;
+  if(_calcAba && abas.some(function(a){ return a.id===_calcAba; })) return _calcAba;
+  return abas[0].id;
+}
+function calcAba(id){ _calcAba=id; try{ _calcRenderShell(); }catch(e){} }
+function calcAbaPasso(dir){
+  var st=_calcStudy(); if(!st) return;
+  var alvo=calcAbaVizinha(calcAbas(st), calcAbaAtual(st), dir);
+  if(alvo) calcAba(alvo);
+}
+function calcCfgToggle(){
+  _calcCfgAberta=!_calcCfgAberta;
+  try{ localStorage.setItem(CALC_CFG_KEY, _calcCfgAberta?'1':'0'); }catch(e){}
+  try{ _calcRenderShell(); }catch(e){}
+}
+/* Editar a receita SEM sair da calculadora. Escreve no estudo de verdade (não há
+   workingStudy aqui), ressincroniza o texto derivado, grava e recalcula.
+   Estudo finalizado nunca entra — conferido antes de a linha virar campo, e de
+   novo aqui, porque a tela pode estar aberta desde antes da finalização. */
+function _calcFinalizado(){
+  var sel=_calcSel; if(!sel) return false;
+  try{ return !!(typeof _bloqueadoPorFinalizacao==='function' && _bloqueadoPorFinalizacao(sel.qid, sel.sid)); }
+  catch(e){ return false; }
+}
+function calcCompEditar(tratId, compId, campo, valor){
+  var st=_calcStudy(); if(!st) return;
+  if(_calcFinalizado()) return;
+  var t=(st.tratamentos||[]).filter(function(x){ return x&&x.id===tratId; })[0]; if(!t) return;
+  var c=tratComponentes(t).filter(function(x){ return x&&x.id===compId; })[0]; if(!c) return;
+  if(campo==='valor'){
+    var n=_seCompNumero(valor);
+    if(!(n>0)){ if(typeof _stxToast==='function') _stxToast('A dose precisa ser maior que zero.'); _calcRenderShell(); return; }
+    c.valor=n;
+  }else if(campo==='unidade'){
+    var u=_seCompUnidadeNormalizar(valor);
+    if(!u){ if(typeof _stxToast==='function') _stxToast('Unidade não reconhecida.'); _calcRenderShell(); return; }
+    c.unidade=u;
+  }else return;
+  /* Editar à mão rompe a referência de dose do catálogo; item e lote seguem
+     ligados. É a mesma regra do editor do protocolo — duas telas que mexem no
+     mesmo dado não podem ter doutrinas diferentes. */
+  delete c.doseRef;
+  try{ _tratSincronizaTexto(t); }catch(e){}
+  try{ logStudyAuditInObject(st,'Dose editada no preparo',
+    'Tratamento '+tratId+' · '+(c.nome||'componente')+' → '+String(c.valor).replace('.',',')+' '+(c.unidade||''),
+    {origem:'calculadora'}); }catch(e){}
+  st._ts=Date.now();
+  try{ save(); }catch(e){}
+  try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(_calcSel.qid, st); }catch(e){}
+  _calcRenderShell();
+}
+
 function _calcRenderShell(){
   var ov=document.getElementById('calcOvl'); if(!ov) return;
   var all=_calcAllStudies();
@@ -7937,29 +8078,75 @@ function _calcRenderShell(){
     selHtml='<div class="calc-f full"><span class="calc-lab">Estudo</span><select id="calcStudy" class="calc-sel" onchange="_calcPick(this.value)">'+
       all.map(function(o){ return '<option value="'+esc(o.qid+'|'+o.sid)+'"'+((_calcSel&&_calcSel.qid===o.qid&&_calcSel.sid===o.sid)?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+'</select></div>';
   }
-  var refTxt = fromProto ? ('✓ Parcela do protocolo: '+dims.comprimento+'×'+dims.largura+' m'+(defVol?(' · volume '+defVol+' L/ha'):'')+' — confira e ajuste se preciso')
-    : (dims? ('Parcela salva ~'+Math.round(dims.comprimento)+'×'+Math.round(dims.largura)+' m — ajuste para o tamanho da PARCELA') : 'Informe o tamanho da parcela');
-  if(volsVariam) refTxt += ' · ⚠ volumes diferentes por tratamento — cada um usa o SEU (o campo padrão é só p/ quem não tiver)';
-  if(defDead>0||defBottles>1||defCap>0) refTxt += ' · preparo de calda vindo do cadastro do estudo';
-  ov.innerHTML='<div class="calc-box">'+
-    '<div class="calc-top"><div class="calc-title">🧪 Calculadora de aplicação</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
-    '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
-    '<div class="calc-grid">'+
-      selHtml+
+
+  /* A CONFIGURAÇÃO NASCE FECHADA. Ela quase nunca muda entre um preparo e o
+     seguinte, e ocupava a tela inteira acima do que a pessoa veio ver. Fechada,
+     é uma linha; aberta, é a grade de sempre — nada foi removido. */
+  var resumo=calcCfgResumo({len:defLen, wid:defWid, plots:defReps, vol:_calcNum(defVol),
+                            dead:defDead, bottles:defBottles, capL:defCap});
+  var avisos=[];
+  if(volsVariam) avisos.push('volumes diferentes por tratamento — cada um usa o seu');
+  if(fromProto) avisos.push('parcela e volume vindos do protocolo');
+
+  var cfgHtml='<div class="calc-cfg'+(_calcCfgAberta?' aberta':'')+'">'+
+    '<div class="calc-cfgh" onclick="calcCfgToggle()" title="Abrir ou fechar a configuração">'+
+      '<span class="calc-cfgr">'+esc(resumo||'configuração incompleta')+'</span>'+
+      '<span class="calc-cfgb">'+(_calcCfgAberta?'▾ fechar':'✎ ajustar')+'</span>'+
+    '</div>'+
+    /* A GRADE EXISTE SEMPRE, mesmo fechada — só fica oculta. `_calcCompute` lê os
+       valores pelo id do input; tirá-los do DOM zeraria parcela, volume e morto,
+       e a conta sairia errada por causa de um detalhe de layout. */
+    '<div class="calc-grid"'+(_calcCfgAberta?'':' style="display:none"')+'>'+selHtml+
       '<div class="calc-f"><span class="calc-lab">Comprimento da parcela (m)</span><input id="calcLen" class="calc-inp" type="number" step="0.1" value="'+defLen+'" oninput="_calcCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Largura da parcela (m)</span><input id="calcWid" class="calc-inp" type="number" step="0.1" value="'+defWid+'" oninput="_calcCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Nº de parcelas / tratamento</span><input id="calcPlots" class="calc-inp" type="number" step="1" value="'+defReps+'" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Volume de calda padrão (L/ha)</span><input id="calcVol" class="calc-inp" type="number" step="1" value="'+defVol+'" placeholder="se o trat. não tiver" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume de calda (L/ha)</span><input id="calcVol" class="calc-inp" type="number" step="1" value="'+defVol+'" placeholder="se o trat. não tiver" oninput="_calcCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Volume morto (mL)</span><input id="calcDead" class="calc-inp" type="number" step="1" value="'+defDead+'" oninput="_calcCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Nº de frascos / preparo</span><input id="calcBottles" class="calc-inp" type="number" step="1" value="'+defBottles+'" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Capacidade do frasco (L)</span><input id="calcCap" class="calc-inp" type="number" step="0.1" value="'+defCap+'" placeholder="0 = ignorar" oninput="_calcCompute()"></div>'+
+      /* O frasco ganha SELETOR de unidade. O campo pedia litros ao lado de um
+         campo em mL, e "1900" virou 1.900 L num preparo de 318 mL. Com a unidade
+         explícita ao lado do número, o engano não tem por onde entrar. */
+      '<div class="calc-f"><span class="calc-lab">Capacidade do frasco</span>'+
+        '<div style="display:flex;gap:5px">'+
+        '<input id="calcCap" class="calc-inp" type="number" step="0.1" style="flex:1;min-width:0" value="'+
+          esc(defCap>0?(defCap<1?String(Math.round(defCap*1000000)/1000):String(defCap)):'')+
+          '" placeholder="0 = ignorar" oninput="_calcCompute()">'+
+        '<select id="calcCapUn" class="calc-sel" style="flex:0 0 74px" onchange="_calcCompute()">'+
+          '<option value="mL"'+((defCap>0&&defCap<1)?' selected':'')+'>mL</option>'+
+          '<option value="L"'+((defCap>=1||!defCap)?' selected':'')+'>L</option>'+
+        '</select></div></div>'+
     '</div>'+
-    '<div class="calc-sub">'+esc(refTxt)+'</div>'+
-    (study?'<div class="calc-actions" style="margin-top:7px"><button class="calc-copy" onclick="calcEditarReceita()">✎ Itens, doses e adjuvante (% v/v)</button></div>':'')+
+    (avisos.length?('<div class="calc-sub" style="margin:0 10px 8px">'+esc(avisos.join(' · '))+'</div>'):'')+
+  '</div>';
+
+  /* ABAS: um tratamento por vez. A lista inteira continua a um toque, em "Todos". */
+  var abas=calcAbas(study), aba=calcAbaAtual(study), abasHtml='';
+  if(abas.length>1){
+    abasHtml='<div class="calc-abas">'+abas.map(function(a){
+      return '<button class="calc-aba'+(a.id===aba?' on':'')+(a.todos?' todos':'')+'" onclick="calcAba(\''+
+             esc(a.id)+'\')">'+esc(a.rotulo)+(a.testemunha?' <i>test.</i>':'')+'</button>';
+    }).join('')+'</div>';
+  }
+
+  ov.innerHTML='<div class="calc-box">'+
+    '<div class="calc-top"><div class="calc-title">🧪 Preparo</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
+    cfgHtml+
+    abasHtml+
     '<div id="calcResults"></div>'+
+    /* O ATALHO PARA O PROTOCOLO CONTINUA. A edição na linha resolve trocar dose e
+       unidade de um componente que já existe — não resolve ACRESCENTAR item,
+       remover componente, nem transformar texto livre em receita. Tirar o atalho
+       deixaria esses casos sem caminho nenhum a partir daqui, que é o oposto de
+       facilitar. Ele só desceu de lugar: agora vem depois do resultado, não antes. */
+    (study?'<div class="calc-actions" style="margin-top:2px"><button class="calc-close" style="font-weight:700" onclick="calcEditarReceita()">✎ Itens, doses e adjuvante (% v/v)</button></div>':'')+
+    ((abas.length>1 && aba!=='__todos')?('<div class="calc-nav">'+
+      '<button class="calc-navb" onclick="calcAbaPasso(-1)"'+(calcAbaVizinha(abas,aba,-1)?'':' disabled')+'>‹ anterior</button>'+
+      '<button class="calc-navb" onclick="calcAbaPasso(1)"'+(calcAbaVizinha(abas,aba,1)?'':' disabled')+'>próximo ›</button>'+
+      '</div>'):'')+
     '<div id="calcBarraBox" class="calc-barra"></div>'+
     '<div id="calcMemBox" class="calc-mem"></div>'+
-    '<div class="calc-actions"><button class="calc-copy" onclick="calcToggleDetalhe()">'+(_calcDetalhe?'👁 Ver só o essencial':'🔍 Ver cálculo completo')+'</button><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
+    '<div class="calc-actions"><button class="calc-copy" onclick="calcToggleDetalhe()">'+(_calcDetalhe?'👁 Só o essencial':'🔍 Cálculo completo')+'</button><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
   '</div>';
   _calcCompute();
 }
@@ -8056,7 +8243,10 @@ function _calcCompute(){
   var volDef=_calcNum(_calcVal('calcVol'));
   var dead=_calcNum(_calcVal('calcDead'));
   var bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1);
-  var cap=_calcNum(_calcVal('calcCap'));
+  /* A capacidade vem com a unidade escolhida ao lado — foi assim que "1900"
+     virou 1.900 L num preparo de 318 mL. */
+  var capUn=(_calcVal('calcCapUn')||'L');
+  var cap=_calcNum(_calcVal('calcCap')); if(capUn==='mL') cap=cap/1000;
   function f(v,p){ return BC.formatSmartBR?BC.formatSmartBR(v,p==null?3:p):BC.formatBR(v,p==null?2:p); }
   function a(v,u){ return BC.formatAmount?BC.formatAmount(v,u):(f(v)+' '+u); }
   var _metVariam=false;
@@ -8069,7 +8259,14 @@ function _calcCompute(){
     return;
   }
   if(_metVariam) html+='<div class="calc-warn" style="margin-bottom:6px">• Este estudo usa mais de um método de aplicação. Cada tratamento mostra o seu; a calibração da barra abaixo vale só para os de barra.</div>';
-  (study.tratamentos||[]).forEach(function(t){
+  /* Um tratamento por vez, salvo em "Todos". A lista inteira continua existindo
+     porque é útil para conferir o preparo do dia — o que mudou é que ela deixou
+     de ser a única opção. */
+  var _aba=calcAbaAtual(study);
+  var _lista=(study.tratamentos||[]).filter(function(t){
+    return (_aba==='__todos' || !_aba) ? true : (t && t.id===_aba);
+  });
+  _lista.forEach(function(t){
     var _isWitness=!!t.testemunha || studyTestemunha(study)===t.id;
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
     /* O mesmo cuidado no volume do TRATAMENTO: texto com mais de um número não
@@ -8128,9 +8325,34 @@ function _calcCompute(){
       var eq='';
       if(c.unidade==='%') eq=a(c.perHa,c.unit)+'/ha';
       else if(c.pctCalda!=null) eq=f(c.pctCalda,3)+' %';
-      html+='<div class="calc-mixr"'+_gc+'><span>'+esc(c.nome)+'</span>'+
-        (_calcDetalhe?('<span>'+f(c.dose,c.unidade==='%'?6:3)+' '+esc(BC.doseUnitLabel?BC.doseUnitLabel(c.unidade):c.unidade)+
-          (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>'):'')+
+      /* A DOSE SE EDITA AQUI. Antes era preciso fechar a calculadora, abrir o
+         editor do protocolo, rolar por delineamento, repetições e método, achar o
+         tratamento na lista inteira aberta, corrigir e voltar — para mudar um
+         número. Agora o campo é a própria linha da receita, e a quantidade ao
+         lado se refaz na hora.
+         Só em receita ESTRUTURADA e estudo não finalizado: em texto livre não há
+         a qual componente atribuir a edição, e num estudo assinado não se edita. */
+      var _ed=(!_calcFinalizado() && c.id && tratTemReceita(t));
+      var _doseCel;
+      if(_ed){
+        _doseCel='<span class="calc-edit"><input type="text" inputmode="decimal" class="calc-inpi" '+
+          'aria-label="Dose de '+esc(c.nome)+'" value="'+esc(String(c.dose).replace('.',','))+'" '+
+          'onchange="calcCompEditar(\''+esc(t.id)+'\',\''+esc(c.id)+'\',\'valor\',this.value)">'+
+          '<select class="calc-seli" aria-label="Unidade de '+esc(c.nome)+'" '+
+          'onchange="calcCompEditar(\''+esc(t.id)+'\',\''+esc(c.id)+'\',\'unidade\',this.value)">'+
+          _seCompUnidadeOptions(c.unidade)+'</select>'+
+          /* A leitura dupla (1,5 L/ha ≡ 1 %) SÓ na conferência. No essencial ela
+             confunde — "1,5" e "1" colidem, e foi isso que levantou a dúvida do
+             autor numa folha real. A regra do modo essencial vale também aqui. */
+          ((_calcDetalhe&&eq)?'<i class="calc-eq">'+eq+'</i>':'')+'</span>';
+      }else{
+        _doseCel='<span>'+f(c.dose,c.unidade==='%'?6:3)+' '+esc(BC.doseUnitLabel?BC.doseUnitLabel(c.unidade):c.unidade)+
+          (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>';
+      }
+      /* No modo essencial a dose aparece quando é editável: sem ela a linha vira
+         um número sem o "de quê". */
+      html+='<div class="calc-mixr'+(_ed?' ed':'')+'"'+_gc+'><span>'+esc(c.nome)+'</span>'+
+        ((_calcDetalhe||_ed)?_doseCel:'')+
         '<b>'+a(c.perBottle,c.unit)+'</b>'+
         (_calcDetalhe?('<b>'+a(c.total,c.unit)+'</b>'):'')+'</div>';
     });
