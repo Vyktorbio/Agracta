@@ -31,7 +31,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=3">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=131').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=132').catch(function(){});});}</script>
 </head>
 <body>
 <div class="top-bar">
@@ -53,7 +53,6 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <div class="map-container">
 <div id="map"></div>
 <div class="map-inner" id="mapInner" style="display:none">
-<img src="mapa-base.jpg" id="mapImg" onload="if(window.init)init()">
 <svg id="svgO" viewBox="0 0 1280 889" preserveAspectRatio="xMidYMid meet">
 <defs>
 <filter id="sh"><feDropShadow dx="0" dy="0.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.9"/></filter>
@@ -125,7 +124,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/leaflet.js"></script>
 <script src="vendor/leaflet-rotate.js"></script>
 <script src="vendor/Leaflet.ImageOverlay.Rotated.js"></script>
-<script src="vendor/quadras-default.js"></script>
+<script src="vendor/quadras-default.js?v=2"></script>
 <script src="vendor/biocalc-campo-core.js"></script>
 <script src="vendor/aplicacao-core.js"></script>
 <script src="vendor/nutricao-core.js"></script>
@@ -137,12 +136,12 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script src="alvos-catalogo.js?v=1"></script>
-<script src="app.js?v=88"></script>
+<script src="app.js?v=89"></script>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-sync.js?v=7"></script>
+<script src="firebase-sync.js?v=8"></script>
 <!-- Camadas de 2027: controle de horário de acesso e a nova casca de uso
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
 <script src="acesso-horario.js?v=2"></script>

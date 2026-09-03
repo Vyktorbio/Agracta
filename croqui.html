@@ -244,7 +244,7 @@ body{
 
 <div class="aviso" id="aviso"></div>
 
-<script src="vendor/quadras-default.js"></script>
+<script src="vendor/quadras-default.js?v=2"></script>
 <script>
 /* Rótulos da prancha. A interface continua em português — quem muda de
    idioma é o entregável, não a ferramenta de campo. */
@@ -280,7 +280,7 @@ const L = {
 
    Três fontes, nesta ordem:
      1. handoff do app          — localStorage 'agracta-croqui-handoff'
-     2. vendor/quadras-default.js — geometria real da estação (página avulsa)
+     2. vendor/quadras-default.js — reserva opcional sem coordenadas operacionais
      3. demonstração embutida   — só quando não há nem uma nem outra
 
    A geometria real é lat/lng. Aqui vira metro local por projeção
@@ -365,7 +365,7 @@ function _carregar(){
              camadaNdvi: hs.camadaNdvi||null, camadaBase: hs.camadaBase||null,
              camadaSat: hs.camadaSat||null };
   }
-  /* 2. geometria real da estação */
+  /* 2. geometria opcional fornecida por uma instalação privada */
   if(typeof window!=="undefined" && window.DEFAULT_QGEO && Object.keys(window.DEFAULT_QGEO).length){
     const m = _paraMetros(window.DEFAULT_QGEO);
     const quadras = Object.keys(m).sort().map(id => ({ id, trat:null, ndvi:null, pts:m[id] }));
@@ -394,7 +394,7 @@ let   TODAS      = _D.quadras;          /* o conjunto inteiro */
 const CARREADOR  = _D.carreador;
 const TRATAMENTOS= _D.tratamentos;
 const CAMADA_NDVI= _D.camadaNdvi || null;   /* imagem do índice, com caixa lat/lng */
-const CAMADA_BASE= _D.camadaBase || null;   /* mapa-base.jpg + 4 cantos alinhados */
+const CAMADA_BASE= _D.camadaBase || null;   /* imagem privada opcional + 4 cantos alinhados */
 const CAMADA_SAT = _D.camadaSat || null;   /* fonte de tiles de satelite (config, nao geometria) */
 const SAT_URL   = (CAMADA_SAT && CAMADA_SAT.url) ||
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";

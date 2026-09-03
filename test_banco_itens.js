@@ -74,6 +74,7 @@ vm.runInContext([
   pega('itensLista'), pega('itemPorId'), pega('itemNovo'), pega('itemAtualizar'), pega('itemExcluir'),
   pega('itemDoses'), pega('itemDoseAdicionar'), pega('itemDoseAposentar'),
   pega('itemDosesPara'), pega('doseTexto'),
+  pega('itemVinculosHistoricos'), pega('_vinculoHistoricoChave'), pega('itemVincularHistorico'),
   pega('tratItem'), pega('tratProdutoNome'), pega('tratLigarItem'), pega('tratDesligarItem'),
   pega('tratDoseForaDaBula'), pega('itemOndeFoiUsado')
 ].join('\n'), ctx);
@@ -87,6 +88,10 @@ eq(A.nome,'Produto A','com o nome');
 eq(A.titular,'Cliente X','e o cliente que o mandou');
 eq(ctx.itensLista().length,1,'e aparece na lista');
 eq(ctx.itemPorId(A.id).codigo,'XYZ-26','e se recupera pelo ID');
+eq(ctx.itemNovo({nome:'   '}),null,'item sem nome não chega a ser persistido');
+var salvouAntes=salvou;ctx.itemAtualizar(A.id,{titular:'Cliente X revisado'});
+ck(salvou>salvouAntes,'editar o item agenda persistência offline e na nuvem');
+ctx.itemAtualizar(A.id,{titular:'Cliente X'});
 
 console.log('\n--- Duplicata AVISA, não funde ---');
 /* Fusão automática de cadastro é como se perde dado sem ninguém notar. */
@@ -116,6 +121,11 @@ eq(ctx.itemDosesPara(A.id,'Algodão','').length,1,'em algodão, só a que não d
 /* Dose sem cultura é o caso do adjuvante: não é específica. */
 eq(ctx.itemDosesPara(A.id,'Soja','Mofo-branco').length,1,'alvo diferente exclui a dose específica');
 ck(/Soja · Ferrugem · 0,6–0,8 L\/ha/.test(ctx.doseTexto(d1)),'a dose se lê numa linha, com faixa');
+var antesDose=ctx.itemDoses(A.id).length;
+ck(!!ctx.itemDoseAdicionar(A.id,{valor:'abc',unidade:'L/ha'}).erro,'dose não numérica é recusada');
+ck(!!ctx.itemDoseAdicionar(A.id,{valor:'0',unidade:'L/ha'}).erro,'dose zero é recusada');
+ck(!!ctx.itemDoseAdicionar(A.id,{valor:'1',valorMax:'0,5',unidade:'L/ha'}).erro,'faixa invertida é recusada');
+eq(ctx.itemDoses(A.id).length,antesDose,'entrada inválida não cria dose fantasma');
 
 console.log('\n--- Dose aposentada some da escolha, mas não do mundo ---');
 /* Um protocolo antigo pode tê-la usado; o registro daquele ensaio não pode ficar
@@ -199,6 +209,9 @@ ck(/itens:\(typeof ITENS!=='undefined'\?ITENS:null\)/.test(src),'ITENS entra em 
 ck(/itensts:\(typeof ITENS_TS/.test(src),'com o mapa de timestamps para o merge');
 ck(/_deletedItens:/.test(src),'e as lápides');
 ck(/if\(st\.itens && typeof st\.itens==='object'\)/.test(src),'e cloudApply o lê de volta');
+ck(/version:6/.test(src) && /itens:\(typeof ITENS/.test(src),'o backup em arquivo inclui itens, doses e lotes');
+ck(/if\(imported\.itens && typeof imported\.itens==='object'\)/.test(src),'e a importação restaura o catálogo');
+ck(/function safetySnap\(\)[\s\S]*_deletedItens:/.test(src),'o snapshot local também guarda as lápides dos itens');
 
 console.log('\n--- Os seletores auxiliares não viram campo do tratamento ---');
 /* t.__item seria lixo persistido, e o sweep de extras o levaria para o banco. */
@@ -226,6 +239,11 @@ eq(ctx.tratTemReceita(Tr),true,'o tratamento se declara receita');
 eq(Tr.produto,'Produto A + Silwet','o texto do produto acompanha a receita');
 eq(Tr.dose,'0,8 L/ha + 0,1 % v/v','e o texto da dose também');
 eq(ctx.tratComponentes(Tr)[1].itemId,ADJ.id,'o adjuvante entra COM identidade, não como texto');
+ctx.data.Q3={cultura:'Soja',estudos:[{id:'s3',codigo:'EST-3',tratamentos:[Tr]}]};
+var usosAdj=ctx.itemOndeFoiUsado(ADJ.id);
+eq(usosAdj.length,1,'o item dentro da receita aparece em onde foi usado');
+eq(usosAdj[0].dose,'0,1 % v/v','com a dose do componente, não a dose combinada da receita');
+eq(usosAdj[0].componente,'Silwet','e identificado como componente');
 ctx.tratCompRemover(Tr, ctx.tratComponentes(Tr)[1].id);
 eq(ctx.tratComponentes(Tr).length,1,'remover componente funciona');
 eq(Tr.produto,'Produto A','e o texto se atualiza junto');
@@ -256,6 +274,11 @@ console.log('\n--- Justificativa de dose fora da bula é campo próprio ---');
 ck(/data-f="justificativaDose"/.test(src),'há campo de justificativa no tratamento');
 ck(/obrigatório para dose fora da bula/.test(src),'que se declara obrigatório');
 ck(/tratDoseForaDaBula\(t\)\)\{/.test(src),'e ele só aparece quando a dose sai da faixa');
+
+console.log('\n--- Novo item é rascunho até salvar ---');
+var abrirNovo=pega('itemAbrirNovo');
+ck(abrirNovo.indexOf("_itemAberto='__novo__'")>=0,'abrir o formulário cria apenas um rascunho de tela');
+ck(abrirNovo.indexOf('itemNovo({nome')<0,'e não salva item vazio antes da confirmação');
 
 console.log('\n'+(f?('FALHA: '+f+' de '+(f+p)+' checagens'):('todas as '+p+' checagens passaram')));
 process.exit(f?1:0);

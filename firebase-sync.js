@@ -22,7 +22,7 @@
     'machadovictorchaves@gmail.com':true,
     'vyktorbio@gmail.com':true
   };
-  var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','config','media'];
+  var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
   var CHECKPOINT_DB='agracta-local-first',CHECKPOINT_STORE='snapshots',CHECKPOINT_KEY='active';
   var LOCAL_STATE_TS_KEY='agracta-local-state-ts';
   var TRUST_KEY='agracta-trusted-device',TRUST_VERSION=2;
@@ -95,6 +95,7 @@
   }
   function meaningful(st){
     if(!st)return false;
+    if(Object.keys(st.itens||{}).length)return true;
     if((st.notas_campo||[]).length||(st.randomizacoes||[]).length)return true;
     var d=st.data||{},yes=false;
     Object.keys(d).some(function(qid){
@@ -201,6 +202,9 @@
       if(st._deletedQuadras)localStorage.setItem('iracema-delq-v1',JSON.stringify(st._deletedQuadras));
       if(st._deletedLocais)localStorage.setItem('iracema-dell-v1',JSON.stringify(st._deletedLocais));
       if(st._deletedNotas)localStorage.setItem('iracema-deln-v1',JSON.stringify(st._deletedNotas));
+      if(st.itens)localStorage.setItem('agracta-itens-v1',JSON.stringify(st.itens));
+      if(st.itensts)localStorage.setItem('agracta-itens-ts-v1',JSON.stringify(st.itensts));
+      if(st._deletedItens)localStorage.setItem('agracta-itens-del-v1',JSON.stringify(st._deletedItens));
       localStorage.setItem('iracema-unsaved','true');
       localStorage.setItem(LOCAL_STATE_TS_KEY,String(savedAt||Date.now()));
       window._agractaLocalSaveOk=true;
@@ -430,7 +434,15 @@
       georef:st.georef||null,georefts:st.georefts||0,
       deletedQuadras:st._deletedQuadras||{},
       deletedLocais:st._deletedLocais||{},
-      deletedNotas:st._deletedNotas||{}
+      deletedNotas:st._deletedNotas||{},
+      deletedItens:st._deletedItens||{}
+    });
+    /* O banco de itens e global para a organizacao. Cada item ocupa um documento:
+       alterar uma dose ou um lote nao regrava o catalogo inteiro, e dois aparelhos
+       que criam itens diferentes podem sincronizar sem se atropelar. */
+    Object.keys(st.itens||{}).forEach(function(id){
+      if((st._deletedItens||{})[id] && (((st.itensts||{})[id]||0)<=(st._deletedItens||{})[id])) return;
+      flat.itens[docId(id)]=clean({id:id,value:st.itens[id],ts:(st.itensts||{})[id]||0});
     });
     Object.keys(st.locais||{}).forEach(function(id){
       flat.locais[docId(id)]=clean({id:id,value:st.locais[id],ts:(st.locaists||{})[id]||0});
@@ -519,6 +531,7 @@
   function blankState(){
     return {data:{},qgeo:{},qgeots:{},georef:null,georefts:0,locais:{},qlocal:{},qnome:{},
       qnomets:{},qlocalts:{},locaists:{},randomizacoes:[],notas_campo:[],
+      itens:{},itensts:{},_deletedItens:{},
       _deletedQuadras:{},_deletedLocais:{},_deletedNotas:{},rev:0};
   }
   function buildState(flat,meta){
@@ -535,6 +548,11 @@
     st._deletedQuadras=clone(cfg.deletedQuadras||{});
     st._deletedLocais=clone(cfg.deletedLocais||{});
     st._deletedNotas=clone(cfg.deletedNotas||{});
+    st._deletedItens=clone(cfg.deletedItens||{});
+    Object.keys(flat.itens).forEach(function(k){
+      var r=flat.itens[k]; if(!r||!r.id)return;
+      st.itens[r.id]=clone(r.value||{});st.itensts[r.id]=r.ts||0;
+    });
     Object.keys(flat.locais).forEach(function(k){var r=flat.locais[k];st.locais[r.id]=clone(r.value||{});st.locaists[r.id]=r.ts||0;});
     Object.keys(flat.quadras).forEach(function(k){
       var r=flat.quadras[k],q=clone(r.data||{});q.estudos=[];st.data[r.id]=q;
@@ -651,7 +669,7 @@
       rev:newRev,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy:FB.user.email||'',
       updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
-      schema:1
+      schema:2
     },{merge:true});
     FB.pendingWrites=ops.length;
     cloudBadge('saving',ops.length?('· '+ops.length+' alterações'):'');
@@ -746,7 +764,7 @@
     });
   };
   /* Resync barato: 1 leitura (o doc raiz) para conferir o 'rev' e só então decidir.
-     Antes isto chamava cloudPull() direto, e cloudPull relê as 10 coleções INTEIRAS.
+     Antes isto chamava cloudPull() direto, e cloudPull relê todas as coleções INTEIRAS.
      Como ele dispara a cada foco na aba e a cada volta de rede, o banco inteiro era
      relido dezenas de vezes por dia por aparelho — foi o que estourou a cota. */
   window.cloudResync=function(){

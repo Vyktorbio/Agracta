@@ -43,6 +43,7 @@ var ctx={
   quadraNome:function(q){ return q; },
   studyCultura:function(s){ return s.cultura||''; },
   estudoFinalizado:function(s){ return !!s.finalizado; },
+  itemVinculosHistoricos:function(){ return ctx._hist||[]; },
   esc:function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 };
 ctx.window=ctx; ctx.globalThis=ctx;
@@ -55,6 +56,7 @@ vm.runInContext([
 ].join('\n'), ctx);
 
 function usos(lista){
+  ctx._hist=[];
   ctx.data={ Q1:{ estudos:lista.map(function(x,i){
     return {id:'e'+i, codigo:'AGR-'+i, cultura:(x.cultura||'Soja'), finalizado:!!x.fin,
             tratamentos:[{id:'T1', itemId:'IT', dose:x.dose}]};
@@ -100,10 +102,29 @@ var naCalda=m.blocos.filter(function(b){return b.familia==='calda';})[0];
 eq(porArea.linhas.length,2,'a escada por área tem as suas duas doses');
 eq(naCalda.linhas.length,1,'e a da calda a sua');
 ck(!porArea.linhas.some(function(l){ return l.texto.indexOf('mL/L')>=0; }),'nenhuma dose de calda vazou para a escada por área');
-
 var html=ctx._itemMatrizHtml('IT');
 ck(html.indexOf('escalas diferentes')>=0,'a tela avisa que são escalas diferentes');
 ck(html.indexOf('inventar uma serie que nao existe')>=0,'e diz por que não as junta');
+
+console.log('\n--- Receita usa a dose de cada componente ---');
+ctx._hist=[];
+ctx.data={Q1:{cultura:'Soja',estudos:[{id:'er',codigo:'REC-1',tratamentos:[{
+  id:'T1',produto:'Produto + Adjuvante',dose:'0,8 L/ha + 0,1 % v/v',componentes:[
+    {id:'c1',itemId:'OUTRO',nome:'Produto',valor:0.8,unidade:'L/ha'},
+    {id:'c2',itemId:'IT',nome:'Adjuvante',valor:0.1,unidade:'% v/v'}
+  ]}]}]}};
+m=ctx.itemMatrizDose('IT');
+eq(m.nUsos,1,'o adjuvante aparece como um uso da receita');
+eq(m.blocos.length,1,'em apenas uma família de dose');
+eq(m.blocos[0].linhas[0].texto,'0,1 % v/v','com sua dose própria, não a string combinada do tratamento');
+
+console.log('\n--- Vínculo histórico entra sem editar o estudo ---');
+ctx.data={Q1:{estudos:[]}};
+ctx._hist=[{qid:'Q9',quadra:'Q9',estudoId:'ef',estudo:'FINAL-1',tratamentoId:'T2',dose:'400 mL/ha',cultura:'Soja',finalizado:true}];
+m=ctx.itemMatrizDose('IT');
+eq(m.nUsos,1,'o uso conciliado externamente entra no total');
+eq(m.blocos[0].linhas[0].texto,'400 mL/ha','e conserva a dose histórica');
+eq(m.blocos[0].linhas[0].finalizados,1,'marcado como finalizado');
 
 console.log('\n--- Uma família só não ganha aviso: seria ruído ---');
 usos([{dose:'1 L/ha'},{dose:'2 L/ha'}]);
