@@ -109,6 +109,15 @@
   function localState(){
     try{return typeof cloudState==='function'?clone(cloudState()):null;}catch(e){return null;}
   }
+  /* O lugar ativo NAO entra em cloudState() de proposito: ele e do APARELHO, nao
+     da organizacao. Sincroniza-lo faria o tecnico que troca de talhao no celular
+     arrastar a tela de quem esta no escritorio. Mas ele precisa sobreviver a
+     restauracao do cofre, senao o aparelho volta com todos os dados e sem saber
+     onde a pessoa estava — e cai num lugar arbitrario. Por isso viaja junto do
+     checkpoint, que e local, e nao dentro do estado que sobe. */
+  function localAtivoAtual(){
+    try{return localStorage.getItem('iracema-local-ativo')||'';}catch(e){return '';}
+  }
 
   function checkpointOpen(){
     return new Promise(function(resolve,reject){
@@ -162,7 +171,7 @@
   }
   function checkpointPut(st,immediate){
     if(!st)return Promise.resolve(false);
-    FB.checkpointPending={savedAt:Date.now(),state:clean(st)};
+    FB.checkpointPending={savedAt:Date.now(),state:clean(st),localAtivo:localAtivoAtual()};
     var promise=new Promise(function(resolve,reject){FB.checkpointWaiters.push({resolve:resolve,reject:reject});});
     clearTimeout(FB.checkpointTimer);
     if(immediate)checkpointFlush();
@@ -179,7 +188,7 @@
       });
     }).catch(function(){return null;});
   }
-  function restoreCheckpointToLocal(st,savedAt){
+  function restoreCheckpointToLocal(st,savedAt,localAtivo){
     if(!st)return false;
     try{
       /* Backups completos repetidos são a causa mais comum de quota cheia.
@@ -205,6 +214,10 @@
       if(st.itens)localStorage.setItem('agracta-itens-v1',JSON.stringify(st.itens));
       if(st.itensts)localStorage.setItem('agracta-itens-ts-v1',JSON.stringify(st.itensts));
       if(st._deletedItens)localStorage.setItem('agracta-itens-del-v1',JSON.stringify(st._deletedItens));
+      /* Devolve o lugar em que a pessoa estava. So quando ele ainda existe entre
+         os lugares restaurados: apontar para um lugar apagado faria o app cair no
+         mesmo palpite que esta restauracao existe para evitar. */
+      if(localAtivo&&st.locais&&st.locais[localAtivo])localStorage.setItem('iracema-local-ativo',localAtivo);
       localStorage.setItem('iracema-unsaved','true');
       localStorage.setItem(LOCAL_STATE_TS_KEY,String(savedAt||Date.now()));
       window._agractaLocalSaveOk=true;
@@ -224,7 +237,7 @@
             sessionStorage.setItem('agracta-idb-restored','1');
             return;
           }
-          if((!temLocal || (snap.savedAt||0)>localTs) && restoreCheckpointToLocal(snap.state,snap.savedAt)){
+          if((!temLocal || (snap.savedAt||0)>localTs) && restoreCheckpointToLocal(snap.state,snap.savedAt,snap.localAtivo)){
             sessionStorage.setItem('agracta-idb-restored','1');
             location.reload();
           }

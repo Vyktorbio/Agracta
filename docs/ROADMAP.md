@@ -127,6 +127,13 @@ relatório reconstrói a versão usada.
 - **7.4** ✅ (01/09/2026) A aplicação **herda** do estudo: tratamentos, doses, parcelas, repetições, método. O operador não redigita — e ao salvar, a memória de cálculo é **derivada** do estudo sozinha.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
 - **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
+  **Estado (03/09/2026):** o costal CO₂ ficou operacional — a calibração passou a dizer
+  quanto cai POR PARCELA, em quantas passadas e em quanto tempo, e a receita fechou em
+  q.s.p. em vez de mandar medir o veículo à parte (volumes de formulação não são
+  aditivos). A receita estruturada virou a fonte do cálculo, com `% v/v` na linha do
+  adjuvante — porcentagem não é unidade do estudo, é da linha, porque só vira volume
+  depois que a calda final é conhecida. E o preparo agora tem veredito: `liberado`
+  separa "pode preparar" de "não prepare", em vez de deixar o aviso solto no rodapé.
 - **7.8** ✅ (02/09/2026) Laboratório no **mesmo pipeline**: a aplicação de bancada passou a ter memória de cálculo, derivada do cadastro do estudo, com a mesma marcação de origem e a mesma regra de nunca gravar por cima. Dois motores, um pipeline — a categoria da quadra escolhe qual.
 - **7.9** ✅ (02/09/2026) A tela mostra o essencial — **quanto pôr no frasco** — e esconde a conferência atrás de *"Ver cálculo completo"*. A escolha é lembrada, e o padrão é o essencial. **Aviso nunca se esconde**: erro, alerta e problema de mistura aparecem nos dois modos, sem exceção.
 
@@ -272,11 +279,141 @@ para sair da bula; bloquear seria inútil e calar seria pior.
   como produto inventaria um produto que não existe.
 - **Justificativa de dose fora da bula** em campo próprio, não escondida em observações.
 
+**A dose escrita passou a ser DERIVADA da receita (03/09/2026).**
+
+Quando a receita estruturada virou a fonte do cálculo, `t.produto` e `t.dose` deixaram
+de ser o dado e viraram texto derivado dela. Só que o campo continuava editável: dava
+para digitar "2 L/ha" num tratamento cuja receita dizia 1, e aí o app **mostrava uma
+dose e preparava outra** — a tabela, o relatório e a exportação liam o texto; o motor
+de calda e a memória liam a receita. Nenhum dos dois números parecia errado no seu
+próprio lugar, que é o que torna esse tipo de divergência difícil de ver.
+
+A tela fechou o campo (dose e produto ficam `readonly` quando há receita, e cada
+componente ganhou dose e unidade próprias). Isso impede divergência nova; não cura a
+antiga. Pelo precedente da §7-bis — *o campo sumiu da tela, mas o dado errado não some
+sozinho* — **salvar o estudo ressincroniza** produto e dose a partir da receita, e a
+correção entra na trilha de auditoria dizendo qual dose virou qual. Estudo já
+consistente sai byte por byte igual: salvar não vira edição fantasma. Coberto por
+`test_dose_receita.js` (16 verificações).
+
+**Terceira leva (03/09/2026) — a aplicação passa a baixar o lote.**
+
+O app sabia as duas pontas e não ligava uma na outra: a memória de cálculo diz quanto
+de cada componente foi preparado, o tratamento aponta para o lote de onde o material
+saiu, e o saldo do lote é a soma de eventos imutáveis. Faltava o fio. Registrar a
+aplicação não mexia no estoque, então para o saldo bater era preciso ir à tela do item
+e digitar a mesma quantidade de novo — e ninguém digita duas vezes. A cadeia de
+custódia ficava furada exatamente no ponto em que o material vira ensaio.
+
+`vendor/consumo-core.js` é o motor puro dessa conta: lê a memória (campo **ou**
+bancada), converte para a unidade do lote e devolve o que deve ser baixado e o que não
+pode ser, cada recusa com o nome do que faltou. `aplicacaoBaixarLotes` grava.
+
+Quatro regras, e cada uma existe para o registro não mentir:
+
+- **Nunca bloqueia a aplicação.** A pulverização aconteceu. Sem saldo ou sem conversão
+  possível, a baixa não sai — a aplicação sai, com o aviso gravado nela, não só exibido.
+- **Unidade não se chuta.** mL → g é recusado nomeando a densidade que falta. Assumir
+  água produziria baixa errada com cara de baixa certa, e o erro só apareceria no
+  inventário do ano seguinte.
+- **O lote é conferido pelo TOTAL da aplicação, não saque a saque.** Os saques que uma
+  aplicação faz do mesmo lote são um preparo físico só; baixar a parte que coube
+  deixaria o saldo num número que não é nem o antigo nem o certo — mantido na aparência
+  e errado no fundo.
+- **Lote vencido é baixado e marcado.** O material foi usado; calar isso reescreveria o
+  ensaio. E excluir a aplicação **não** desfaz a baixa: evento de lote é append-only, o
+  estorno é um ajuste com motivo — e quem apaga é avisado disso antes.
+
+Duas coisas vieram do motor de calda 1.1.0 e mudaram a ligação para melhor: o componente
+gravado na memória agora carrega **o próprio lote**, então casar por nome virou reserva
+para memórias antigas — e o vínculo da memória vence o do tratamento, porque foi o que
+valia na hora do preparo. E `liberado:false` **bloqueia a baixa**: preparo que o motor
+recusou não consumiu lote nenhum, e registrar consumo dele seria inventar um preparo.
+Ausência do campo não é bloqueio — memória anterior ao motor 1.1.0 segue valendo.
+
+Coberto por `test_consumo_lote.js` (76 verificações, com golden test conferido à mão) e
+`test_baixa_aplicacao.js` (52), este último exercitando o gravador de evento real.
+
 **Falta:** documentos anexados ao item (bula, FDS, certificado de análise);
 importação de bula do Agrofit com revisão humana; **programas de aplicação**;
 **cálculo automático de quantidade**; **verificação do protocolo**; **dossiê do item**;
-e o relatório **Item × Dose** entre ensaios. A cadeia de custódia (lotes, recipientes,
-livro-razão) fica registrada como desenho, **não** como pendência.
+e o relatório **Item × Dose** entre ensaios.
+
+## 7-quater. Onde o app abre, e o que o cofre offline lembra · ✅ **feito (03/09/2026)**
+
+Dois defeitos com a mesma consequência: o técnico abre o app num lugar que nunca
+escolheu, e conclui que o que ele digitou sumiu — quando o dado está lá, só que
+noutro lugar da lista.
+
+**O lugar ativo era decidido por acidente de ordem.** O app resolve isso duas vezes
+por abertura: na partida, com o que o aparelho guardou, e de novo quando a nuvem
+chega com os lugares de verdade. Num aparelho zerado — instalação nova,
+armazenamento limpo pelo navegador, ou logout, que apaga tudo — a primeira volta
+acontece sem lugar nenhum, então o app criava o "Local principal" e escolhia ele.
+Na segunda volta a variável já estava preenchida, e por isso **a preferência
+gravada nunca mais era consultada**: o padrão recém-criado não existia na nuvem, e
+caía-se em `Object.keys(LOCAIS)[0]` — que não é "o primeiro lugar" por critério
+nenhum, é a ordem em que as chaves entraram no objeto.
+
+A resolução agora é declarada, em `_resolveLocalAtivo`: a preferência gravada vence
+sempre que o lugar ainda existir (só o toque do usuário escreve essa chave), depois
+o ativo da sessão, depois o padrão, e só então a primeira chave — **que não grava**.
+Um palpite que persiste apaga a escolha do usuário e transforma o erro em
+permanente, que era exatamente como ele se instalava.
+
+**E o cofre offline restaurava tudo menos onde a pessoa estava.** O lugar ativo não
+entra em `cloudState()` de propósito — ele é do aparelho, e sincronizá-lo arrastaria
+a tela de quem está no escritório quando o técnico troca de talhão no celular. Só
+que ele também não entrava no checkpoint do IndexedDB. Num aparelho que restaura o
+cofre com o `localStorage` limpo (reinstalação do PWA, despejo de armazenamento
+pelo navegador), os dados voltavam inteiros e a posição não — direto para o palpite
+acima. Agora o lugar viaja junto do checkpoint, que é local, e volta na restauração
+**se ainda existir** entre os lugares restaurados.
+
+Coberto por `test_local_ativo.js` (13 verificações) e por 5 novas em
+`test_offline_local.js`.
+
+**Bônus no portão:** `conferir.sh` passou a conferir o `?v=` do registro do service
+worker, que tinha derrapado três publicações seguidas. Ele **avisa sem reprovar** —
+não quebra a atualização, porque o navegador compara o `sw.js` byte a byte; mas
+quando o número para de andar, deixa de servir para o único fim que tem, que é
+dizer qual publicação está no ar olhando o `index.html`.
+
+## 7-quinquies. O que o app passou a cruzar sozinho · ✅ **feito (03/09/2026)**
+
+Três ligações entre dados que já existiam e não se encontravam.
+
+**A agenda passou a saber do estoque.** "O lote vence antes da próxima aplicação" e
+"o saldo não cobre o que falta" eram fatos deduzíveis que só apareciam no dia em que
+faltou produto no campo. `estudoAvisosEstoque` os produz e o cartão do estudo os
+mostra junto das aplicações que faltam — não numa tela de estoque que ninguém abre
+antes de sair. **Não vira evento da agenda**, de propósito: evento é coisa que se faz
+numa data, e é sobre eles que o "próximo evento" se apoia; um aviso ali empurraria a
+aplicação de amanhã para o segundo lugar. E **só fala do que sabe**: a necessidade
+por aplicação vem da baixa já registrada, nunca de estimativa — sem nenhuma aplicação
+registrada, cala. Um número inventado aqui vira compra errada. A validade é conferida
+contra a **última** aplicação programada, não a próxima: um lote que vence entre a
+segunda e a terceira inviabiliza o estudo do mesmo jeito. Coberto por
+`test_agenda_estoque.js` (20 verificações).
+
+**As observações de campo apareceram no estudo.** A nota de scouting já nascia
+sabendo em que quadra está — faltava o caminho de volta. O recorte é **quadra +
+período do ensaio**, e é ele que faz a lista ser útil em vez de ruído: a quadra tem
+observações de anos, e só as do intervalo explicam alguma coisa. Estudo sem data de
+início não lista nada — melhor nenhuma lista do que a história inteira da quadra
+apresentada como se fosse do ensaio. Ficam entre as aplicações e as avaliações, que é
+onde alguém lendo uma leitura estranha precisa lembrar da mancha da semana anterior.
+Coberto por `test_notas_estudo.js` (14 verificações).
+
+**E a leitura da nuvem parou de mentir quando falha.** O `.single()` do Supabase
+resolve a promessa com `{data:null, error}` quando a rede pisca — não rejeita. O
+`cloudPull` tratava isso como leitura boa e marcava `_cloudInitDone`, e aí três
+coisas davam errado juntas: o selo pintava "salvo" sem nada ter sido lido; a gravação
+ficava liberada para subir o estado local **sem merge** por cima da nuvem; e a
+releitura cuidadosa do `cloudStart` — a que re-tenta com espera crescente — desiste
+assim que vê `_cloudInitDone`, ou seja, o retry que existe para este caso era
+desligado pelo próprio caso. O `cloudStart` sempre conferiu `res.error`; o
+`cloudPull` não conferia. Coberto por `test_sync_leitura_falha.js` (20 verificações).
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
@@ -346,6 +483,33 @@ Na avaliação: chuva desde a aplicação, graus-dia, temperatura média, dias d
 > Coberto por `test_janela_proxy.py` (28 verificações) e `test_janela_ambiental.js`
 > (44), ambos com golden tests conferidos à mão.
 
+**Chuva depois da aplicação** — "choveu logo depois de pulverizar?" ✅ **feito (03/09/2026)**
+
+> A janela acima responde o que aconteceu ENTRE a aplicação e a avaliação. Faltava a
+> pergunta que decide se a aplicação valeu: produto lavado três horas depois não é
+> produto que não funcionou, e sem esse dado o ensaio conclui a coisa errada com toda a
+> confiança do mundo.
+>
+> **E ela não pode ser contada por dia.** O resumo diário traz `rain_day`, o acumulado
+> do dia inteiro: numa aplicação das 15 h isso inclui a chuva das 6 h, que caiu antes de
+> pulverizar e não lavou nada. Seria um número limpo e falso — o mesmo erro que a
+> cobertura da janela existe para evitar. Por isso `GET /clima/pos?mac=&data=&hora=&horas=`
+> desce à série: a Ecowitt indexa cada amostra pelo epoch, o acumulado zera à meia-noite,
+> e a chuva depois do instante T é quanto esse acumulado subiu de T até o fim da janela.
+>
+> Grava em `ap.pos`, com a mesma doutrina da janela — não recalcula, reconsultar manda a
+> anterior para `posAnteriores`, e abre offline. **Duas declarações acompanham o número,
+> sempre:** aplicação sem hora vira conta do dia inteiro, e isso é dito (`horaConhecida`),
+> porque "choveu 12 mm depois de pulverizar" e "choveu 12 mm no dia em que se pulverizou"
+> são frases diferentes; e janela que ainda não fechou não se apresenta como fechada
+> (`completa`), porque 0 mm em 6 das 48 h não é "não choveu depois da aplicação". Chuva
+> nas primeiras seis horas pinta o bloco e levanta a hipótese de lavagem — é a explicação
+> mais provável de um resultado ruim, e quem lê o cartão precisa tropeçar nela. Numa
+> quadra de laboratório o bloco nem é oferecido: não chove numa bancada.
+>
+> Coberto por `test_pos_aplicacao_proxy.py` (43 verificações, golden test conferido à
+> mão) e `test_pos_aplicacao.js` (40).
+
 **Falta desta fase:** `quadra.ambiente` permanente (altitude, declividade, orientação,
 posição topográfica) — depende de uma fonte de elevação que o app ainda não tem —, e o
 croqui ganhar Declividade e Altitude.
@@ -393,6 +557,22 @@ com *"Ver código R"* sempre que possível.
 
 Painel mostra **contagem e classificação**, não um "score 96/100" — score passa falsa
 aparência de validação científica absoluta.
+
+> **Estado (03/09/2026) — os achados de EXECUÇÃO chegaram.** O carimbo já respondia
+> "quem, quando e onde"; faltava "o que aconteceu com o material e com o tempo".
+> `_forenseAchados` deriva cinco, todos de dado que o app passou a gravar sozinho:
+> **lote vencido na data da aplicação**, **baixa em lote recusada** (com o motivo
+> inteiro, não um resumo), **chuva nas primeiras seis horas** depois da pulverização,
+> e duas notas de leitura incompleta — janela ainda aberta e cobertura parcial da
+> estação. Eles entram na folha BPL num bloco próprio, com severidade separando o que
+> pede resposta (`conferir`) do que é contexto (`nota`), e o rodapé conta em vez de
+> pontuar. **A palavra é "conferir"**: "lote vencido na data" é fato conferível;
+> "fraude" seria conclusão que o programa não sustenta.
+> Coberto por `test_forense_execucao.js` (30 verificações).
+>
+> **Falta desta fase:** os achados estatísticos e de domínio (fora de escala, data
+> impossível, BBCH retrocedendo, outlier, duplicação suspeita) continuam só na
+> triagem do BioEstat, não nesta lista.
 
 ## 13. Fase 8 — BPL / integridade completa · **CRÍTICA**
 

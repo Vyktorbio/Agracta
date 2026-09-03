@@ -101,6 +101,7 @@ JS_HTML=$(grep -o 'app\.js?v=[0-9]*'    index.html 2>/dev/null | head -1)
 CSS_SW=$(grep -o 'styles\.css?v=[0-9]*'  sw.js      2>/dev/null | head -1)
 JS_SW=$(grep -o 'app\.js?v=[0-9]*'       sw.js      2>/dev/null | head -1)
 CACHE=$(grep -o "agracta-app-v[0-9]*"    sw.js      2>/dev/null | head -1)
+SW_REG=$(grep -o "sw\.js?v=[0-9]*"       index.html 2>/dev/null | head -1)
 
 if [ -z "$CSS_HTML" ] || [ -z "$JS_HTML" ]; then
   avisar "não achei as versões (?v=) no index.html"
@@ -146,9 +147,25 @@ fi
 if [ -z "$CACHE" ]; then
   avisar "não achei o nome do CACHE no sw.js"
 else
-  NOAR=""
+  NOAR=""; SW_REG_NOAR=""
   if command -v curl >/dev/null 2>&1; then
     NOAR=$(curl -s -m 12 "https://www.agracta.com.br/sw.js" 2>/dev/null | grep -o "agracta-app-v[0-9]*" | head -1)
+    SW_REG_NOAR=$(curl -s -m 12 "https://www.agracta.com.br/index.html" 2>/dev/null | grep -o "sw\.js?v=[0-9]*" | head -1)
+  fi
+  # O ?v= do REGISTRO do service worker faz parte da convencao de publicacao, e
+  # derrapou tres versoes seguidas sem ninguem notar — porque nada conferia.
+  # NAO reprova a publicacao: o navegador compara o script do SW byte a byte e
+  # ignora o cache HTTP para ele, entao a atualizacao acontece do mesmo jeito. Mas
+  # quando o numero para de andar, ele deixa de servir para o unico fim que tem:
+  # dizer, olhando o index.html, qual publicacao esta la.
+  if [ -n "$SW_REG" ] && [ -n "$SW_REG_NOAR" ] && [ -n "$NOAR" ] && [ "$NOAR" != "$CACHE" ]; then
+    if [ "$SW_REG" = "$SW_REG_NOAR" ]; then
+      printf "   %s??%s   o CACHE vai mudar (%s -> %s) mas o registro continua '%s'.\n" "$AMAR" "$ZERO" "$NOAR" "$CACHE" "$SW_REG"
+      printf "        Nao quebra a atualizacao, mas o numero deixa de dizer qual\n"
+      printf "        publicacao esta no ar. Suba-o no index.html.\n"
+    else
+      ok "registro do service worker: $SW_REG_NOAR (no ar) -> $SW_REG (vai subir)"
+    fi
   fi
   if [ -z "$NOAR" ]; then
     printf "   %s??%s   não consegui ler o sw.js publicado (sem internet?). Confira à mão que o CACHE mudou: aqui está %s\n" "$AMAR" "$ZERO" "$CACHE"

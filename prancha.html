@@ -2012,6 +2012,46 @@ function secBPL(x, y, w){
       : "“Assessor (GPS)” is where the device was at entry time, with reading accuracy and the distance to the mapped plot centre.",
       {t:10.5, c:GRAF});
     cy += 22;
+
+    /* ACHADOS DE EXECUÇÃO (roadmap §12).
+       O carimbo acima responde "quem, quando e onde". Estes respondem "o que
+       aconteceu com o material e com o tempo" — de que lote o preparo saiu, se
+       aquele lote estava vencido no dia, o que se recusou a baixar, e se choveu
+       logo depois. Tudo isso o app passou a gravar sozinho; a folha só não olhava.
+
+       SAI COMO CONTAGEM E CLASSIFICAÇÃO, NUNCA COMO SCORE. Um "96/100" daria
+       aparência de validação científica absoluta ao que é uma lista de coisas a
+       conferir. E a palavra é "conferir": o programa aponta, quem conclui é gente. */
+    const achados = [];
+    B.registros.forEach(r=>{
+      (r.achados||[]).forEach(a=>{
+        achados.push([
+          {v:r.tipo, w:600},
+          r.evento + (r.hora ? " " + r.hora : ""),
+          {v:(a.severidade==="conferir" ? (pt?"Conferir":"Check") : (pt?"Nota":"Note")),
+           w:600, c:(a.severidade==="conferir" ? "#8a6a1f" : GRAF)},
+          a.texto || ""
+        ]);
+      });
+    });
+    if(achados.length){
+      const nConf = achados.filter(l=>l[2].v===(pt?"Conferir":"Check")).length;
+      s += txt(x, cy, pt ? "ACHADOS DE EXECUÇÃO" : "EXECUTION FINDINGS",
+        {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
+      const colsA = [
+        {t:(pt?"Reg.":"Rec."),      w:w*0.07},
+        {t:(pt?"Evento":"Event"),   w:w*0.15},
+        {t:(pt?"Classe":"Class"),   w:w*0.10},
+        {t:(pt?"Achado":"Finding"), w:w*0.68}
+      ];
+      const tbA = tabela(x, cy, colsA, achados, {zebra:true, fs:11});
+      s += tbA.svg; cy += tbA.h + 12;
+      s += txt(x, cy, pt
+        ? `${achados.length} achado(s), ${nConf} a conferir. A lista APONTA e não conclui: cada linha é um fato conferível no registro, não um julgamento sobre o ensaio.`
+        : `${achados.length} finding(s), ${nConf} to check. The list POINTS; it does not conclude.`,
+        {t:10.5, c:GRAF});
+      cy += 22;
+    }
   }
 
   /* ---- trilha de auditoria ---- */

@@ -1222,10 +1222,47 @@ function ensureLocais(){
   var fallback = LOCAIS[HOME_LOCAL] ? HOME_LOCAL : Object.keys(LOCAIS)[0];
   var changed=false;
   if(QGEO && fallback){ Object.keys(QGEO).forEach(function(id){ if(!QLOCAL[id] || !LOCAIS[QLOCAL[id]]){ QLOCAL[id]=fallback; changed=true; } }); }
-  if(!localAtivo){ try{ localAtivo=localStorage.getItem(LOCAL_ATIVO_KEY)||fallback; }catch(e){ localAtivo=fallback; } }
-  if(!LOCAIS[localAtivo]) localAtivo=Object.keys(LOCAIS)[0];
+  localAtivo=_resolveLocalAtivo(localAtivo);
   if(changed) saveQLocal();
   return LOCAIS;
+}
+/* Em que lugar o app abre.
+   ------------------------------------------------------------------------------
+   Esta conta é feita DUAS vezes por abertura, e é daí que vinha o bug: uma na
+   partida, com o que o aparelho tinha guardado, e outra quando a nuvem chega com
+   os lugares de verdade. Na partida de um aparelho zerado — instalação nova,
+   armazenamento limpo pelo navegador, ou logout, que apaga tudo — os lugares
+   ainda não existem, então `ensureLocais` cria o "Local principal" e escolhe ele.
+
+   Até aqui, tudo bem. O problema era a segunda vez: como `localAtivo` já estava
+   preenchido (com aquele padrão), a preferência gravada NUNCA mais era
+   consultada, e o padrão recém-criado não existia na nuvem — então o app caía em
+   `Object.keys(LOCAIS)[0]`, que não é "o primeiro lugar" no sentido de nenhum
+   critério: é a ordem em que as chaves entraram no objeto. O usuário abria o app
+   e se via num lugar que nunca escolheu, sem explicação nenhuma na tela.
+
+   A ORDEM ABAIXO É A CORREÇÃO, e cada degrau tem uma razão:
+
+   1. A PREFERÊNCIA GRAVADA VENCE, sempre que o lugar ainda existir. Só duas
+      coisas escrevem essa chave — `setLocalAtivo`, que é o usuário tocando no
+      lugar, e o reparo de lugares duplicados. Nenhuma delas é palpite do
+      programa, e por isso ela vale mais que o que estiver na variável.
+   2. O que já está ativo na sessão, se for válido.
+   3. O lugar padrão, quando existe.
+   4. E só então a primeira chave — que é arbitrária, e está aqui apenas para o
+      app nunca abrir sem lugar nenhum. Este degrau NÃO grava a preferência: se
+      ele decidisse, a escolha do usuário seria apagada por um palpite, e o erro
+      viraria permanente. É exatamente o que acontecia antes. */
+function _localAtivoSalvo(){
+  try{ return localStorage.getItem(LOCAL_ATIVO_KEY)||''; }catch(e){ return ''; }
+}
+function _resolveLocalAtivo(atual){
+  if(!LOCAIS) return atual;
+  var salvo=_localAtivoSalvo();
+  if(salvo && LOCAIS[salvo]) return salvo;
+  if(atual && LOCAIS[atual]) return atual;
+  if(LOCAIS[HOME_LOCAL]) return HOME_LOCAL;
+  return Object.keys(LOCAIS)[0];
 }
 /* Enumera as quadras do local. Percorre QGEO (quadras de campo, que existem por
    terem geometria) E data (para alcançar as de LABORATÓRIO, que não têm polígono
@@ -2203,14 +2240,44 @@ function _cloudSaveAttempt(allowShrink, replace, tries){
 function cloudSaveSoon(){ setUnsavedChanges(true); if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
 function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }
 /* Puxa o estado atual da nuvem e aplica (não sobrescreve edição em andamento). */
+/* Leitura que falhou não pode virar "já li a nuvem". Rearma a releitura cuidadosa
+   do cloudStart, que é a que sabe re-tentar com espera crescente — e que desiste
+   sozinha assim que alguém marca _cloudInitDone. */
+function _cloudPullFalhou(){
+  cloudBadge('offline');
+  if(_cloudInitDone) return;                 /* já tínhamos lido antes: só a rede piscou */
+  if(window._cloudInitRetry && !window._cloudInitT){
+    try{ window._cloudInitTries=0; window._cloudInitT=setTimeout(function(){
+      window._cloudInitT=null; window._cloudInitRetry();
+    }, 1500); }catch(e){}
+  }
+}
 function cloudPull(){
   if(!cloudInit()) return;
   cloudBadge('saving');
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
-      var st = res && res.data && res.data.state;
-      _cloudInitDone=true; /* já lemos a nuvem -> a partir de agora pode escrever */
+      /* LEITURA QUE FALHA NÃO É LEITURA — e este era o buraco.
+         O `.single()` do Supabase RESOLVE a promessa com {data:null, error:{…}}
+         quando a rede pisca ou a linha não vem; ele não rejeita. Marcar
+         _cloudInitDone aqui dizia ao app que a nuvem tinha sido lida quando ela
+         não foi, e isso saía caro de três maneiras:
+
+           - o selo pintava "salvo" sem nada ter sido lido, então quem estava no
+             campo com sinal ruim via o app afirmar que estava tudo em dia;
+           - a gravação ficava liberada, e o _cloudSaveAttempt, ao encontrar a
+             nuvem "vazia", grava o estado local SEM MERGE por cima dela;
+           - e a releitura cuidadosa do cloudStart — a que re-tenta com espera
+             crescente — desiste assim que vê _cloudInitDone. Ou seja: o retry
+             que existe exatamente para este caso era desligado pelo próprio
+             caso.
+
+         O cloudStart sempre conferiu `res.error` antes de seguir. Aqui não
+         conferia. Agora confere, e a assimetria some. */
+      if(!res || res.error){ _cloudPullFalhou(); return; }
+      var st = res.data && res.data.state;
       if(st && st.data && Object.keys(st.data).length){
+        _cloudInitDone=true; /* leitura BOA -> a partir de agora pode escrever */
         if(_unsavedChanges){
           var merged=cloudMerge(cloudState(), st);
           cloudApply(merged);
@@ -2219,11 +2286,20 @@ function cloudPull(){
           cloudApply(st);
           cloudBadge('saved');
         }
-      } else {
-        cloudBadge('saved');
+        return;
       }
-    }, function(){ cloudBadge('offline'); });
-  }catch(e){ cloudBadge('offline'); }
+      /* Leitura OK e nuvem genuinamente vazia. Se já tínhamos lido antes, é
+         informação; se ainda não, vale a mesma regra do cloudStart — só semeia
+         com dado local REAL e pendente, senão trata como leitura ruim. Semear a
+         partir de um aparelho zerado empurraria os padrões por cima de todo
+         mundo. */
+      if(_cloudInitDone){ cloudBadge('saved'); return; }
+      var nLocal=0;
+      try{ nLocal=Object.keys((typeof data!=='undefined'?data:{})).filter(function(k){return k!=='__config';}).length; }catch(e){}
+      if(nLocal>0 && _unsavedChanges){ _cloudInitDone=true; cloudSave(); }
+      else _cloudPullFalhou();
+    }, function(){ _cloudPullFalhou(); });
+  }catch(e){ _cloudPullFalhou(); }
 }
 /* Reconciliação ao voltar o foco / reconectar: se há mudança local pendente, empurra (ela vence);
    senão, puxa o mais recente da nuvem. E garante o realtime vivo. */
@@ -2520,8 +2596,9 @@ function cloudStart(){
      o realtime mesmo offline p/ pegar quando voltar. */
   window._cloudInitTries=0;
   function _cloudInitRead(){
+    window._cloudInitT=null;
     if(_cloudInitDone || _rrOn()) return;
-    function _retry(){ _cloudInitTries++; cloudBadge('offline'); cloudSubscribe(); if(_cloudInitTries<=30){ clearTimeout(window._cloudInitT); window._cloudInitT=setTimeout(_cloudInitRead, Math.min(15000, 1200*_cloudInitTries)); } }
+    function _retry(){ _cloudInitTries++; cloudBadge('offline'); cloudSubscribe(); if(_cloudInitTries<=30){ clearTimeout(window._cloudInitT); window._cloudInitT=setTimeout(function(){ window._cloudInitT=null; _cloudInitRead(); }, Math.min(15000, 1200*_cloudInitTries)); } }
     try{
       SB.from('app_state').select('state').eq('id',1).single().then(function(res){
         if(res && res.error){ _retry(); return; }            /* leitura falhou -> re-tenta, sem semear */
@@ -2541,6 +2618,11 @@ function cloudStart(){
       }, function(){ _retry(); });                            /* rejeição de rede -> re-tenta */
     }catch(e){ _retry(); }
   }
+  /* A releitura fica alcançável de fora: quando um cloudPull avulso (reconexão,
+     volta do foco) falha antes de a nuvem ter sido lida uma vez, é ela que precisa
+     voltar a rodar. Sem isso, a desistência após 30 tentativas era definitiva até
+     alguém recarregar o app. */
+  window._cloudInitRetry=_cloudInitRead;
   _cloudInitRead();
   }
   if(!window.__cloudNet){ window.__cloudNet=true;
@@ -6896,6 +6978,147 @@ function studyEventsV2(study){
   return out.sort(function(a,b){return a.date-b.date});
 }
 
+/* O QUE O ESTOQUE TEM A DIZER SOBRE O QUE AINDA VAI SER FEITO.
+   ------------------------------------------------------------------------------
+   A agenda sabia de aplicação e avaliação, e nada mais. Mas "o lote vence antes da
+   próxima aplicação" e "o saldo não cobre o que falta" são fatos que o app já podia
+   deduzir — e que só aparecem no dia em que faltou produto no campo, que é tarde.
+
+   ISTO NÃO VIRA EVENTO DA AGENDA, de propósito. Evento é coisa que se FAZ numa data,
+   e é sobre eles que o "próximo evento" e o alerta da quadra se apoiam. Um aviso de
+   estoque entrando ali empurraria a aplicação de amanhã para o segundo lugar da
+   lista. Ele é uma leitura à parte, exibida junto de quem decide.
+
+   E ELE SÓ FALA DO QUE SABE. A necessidade por aplicação vem da BAIXA JÁ REGISTRADA
+   numa aplicação anterior — nunca de estimativa. Sem nenhuma aplicação registrada,
+   o app não tem como saber quanto se gasta por vez, e então não diz nada: um número
+   inventado aqui viraria compra errada. */
+function estudoAvisosEstoque(study, qid){
+  var out=[];
+  if(!study || estudoFinalizado(study)) return out;
+
+  /* Próxima aplicação programada e quantas ainda faltam. */
+  var proxima=null, ultima=null, faltam=0;
+  try{
+    var evs=studyEventsV2(study);
+    evs.forEach(function(e){
+      if(e.type!=='apl' || e.realizada) return;
+      faltam++;
+      if(!proxima || e.date<proxima) proxima=e.date;
+      if(!ultima || e.date>ultima) ultima=e.date;
+    });
+  }catch(e){}
+  if(!faltam) return out;
+
+  /* Quanto cada lote já saiu por aplicação, segundo o que foi REGISTRADO. */
+  var porLote={};
+  (study.aplicacoes||[]).forEach(function(ap){
+    (aplicacaoConsumos(ap)||[]).forEach(function(c){
+      if(!c||!c.loteId) return;
+      var r=porLote[c.loteId]||(porLote[c.loteId]={qtd:0, aplicacoes:{}, unidade:c.unidade,
+                                                   codigo:c.codigo, itemId:c.itemId, nome:c.nome});
+      r.qtd+=(Number(c.quantidade)||0);
+      r.aplicacoes[ap.id]=1;
+    });
+  });
+
+  /* Lotes vinculados aos tratamentos — inclusive os que nunca foram baixados,
+     porque validade vencendo vale mesmo sem consumo nenhum. */
+  var vinculados={};
+  (study.tratamentos||[]).forEach(function(t){
+    var refs=[];
+    if(t&&t.loteRef) refs.push(t.loteRef);
+    ((t&&t.componentes)||[]).forEach(function(c){ if(c&&c.loteRef) refs.push(c.loteRef); });
+    refs.forEach(function(r){ if(r&&r.loteId) vinculados[r.loteId]=r; });
+  });
+  Object.keys(porLote).forEach(function(id){ if(!vinculados[id]) vinculados[id]={loteId:id, itemId:porLote[id].itemId}; });
+
+  function br(d){ try{ return isoToBR(d)||d; }catch(e){ return d; } }
+  function n(v){ return String(Math.round(v*1000000)/1000000).replace('.',','); }
+
+  Object.keys(vinculados).forEach(function(loteId){
+    var ref=vinculados[loteId], lote=null;
+    try{ lote=itemLotePorId(ref.itemId, loteId); }catch(e){}
+    if(!lote) return;
+    var rot=(lote.codigo||loteId), saldo=itemLoteSaldo(lote);
+
+    if(lote.situacao==='encerrado' || saldo<=0){
+      out.push({codigo:'lote-sem-saldo', severidade:'conferir',
+        texto:'O lote '+rot+' está '+(lote.situacao==='encerrado'?'encerrado':'sem saldo')+
+              ', e este estudo ainda tem '+faltam+' aplicação(ões) programada(s).'});
+      return;
+    }
+
+    /* Validade: o que importa não é vencer, é vencer ANTES DO USO PREVISTO — e o
+       uso previsto vai até a ÚLTIMA aplicação programada, não até a próxima. Um
+       lote que vence entre a segunda e a terceira aplicação inviabiliza o estudo
+       do mesmo jeito, e descobrir isso na véspera da terceira não ajuda ninguém. */
+    if(lote.validade && ultima){
+      var venc=pD(isoToBR(lote.validade))||pD(lote.validade);
+      if(venc && !isNaN(venc) && venc<ultima){
+        var antesDaProxima=(proxima && venc<proxima);
+        out.push({codigo:'lote-vence-antes', severidade:'conferir',
+          texto:'O lote '+rot+' vence em '+br(lote.validade)+', antes da '+
+                (antesDaProxima?'próxima':'última')+' aplicação programada ('+
+                br(fDIso(antesDaProxima?proxima:ultima))+').'});
+      }
+    }
+
+    /* Saldo × o que falta, e SÓ com base no que já foi gasto de verdade. */
+    var r=porLote[loteId];
+    if(!r) return;
+    var nAps=Object.keys(r.aplicacoes).length;
+    if(!nAps) return;
+    var porAplicacao=r.qtd/nAps, precisa=porAplicacao*faltam;
+    if(precisa-saldo>0.0000001){
+      out.push({codigo:'saldo-nao-cobre', severidade:'conferir',
+        texto:'O lote '+rot+' tem '+n(saldo)+' '+(r.unidade||lote.unidade||'')+
+              ' e as '+faltam+' aplicação(ões) que faltam pedem cerca de '+n(precisa)+' '+
+              (r.unidade||lote.unidade||'')+' — média de '+n(porAplicacao)+' por aplicação, '+
+              'medida nas '+nAps+' já registrada(s).'});
+    }
+  });
+
+  return out;
+}
+/* AS OBSERVAÇÕES DE CAMPO QUE CAEM DENTRO DESTE ESTUDO.
+   ------------------------------------------------------------------------------
+   A nota de scouting já nasce sabendo em que quadra está — o app resolve isso pela
+   geometria no momento em que ela é criada. O que faltava era o caminho de volta: o
+   cartão do estudo não sabia que alguém tinha registrado "mancha de ferrugem no
+   canto leste" no meio do ensaio.
+
+   E esse é justamente o contexto que falta quando uma avaliação sai fora da curva.
+   O dado estava lá, a duas telas de distância, e ninguém cruzava.
+
+   O RECORTE É QUADRA + PERÍODO DO ENSAIO, e é isso que torna a lista útil em vez de
+   ruído: a quadra tem observações de anos, e só as do intervalo do estudo explicam
+   alguma coisa sobre ele. Sem data de início declarada, não há período — e aí é
+   melhor não listar nada do que listar a história inteira da quadra. */
+function notasDoEstudo(qid, study){
+  if(!qid || !study) return [];
+  try{ if(typeof ensureNotas==='function') ensureNotas(); }catch(e){}
+  var todas=(typeof NOTAS_CAMPO!=='undefined' && NOTAS_CAMPO)?NOTAS_CAMPO:[];
+  if(!todas.length) return [];
+
+  var ini=String(study.dataInicio||'').slice(0,10);
+  if(!ini) return [];
+  /* O fim é a última coisa datada do estudo — avaliação ou aplicação —, e nunca
+     antes do início. Um ensaio ainda em andamento não tem fim: vale até hoje. */
+  var fim=ini;
+  (study.aplicacoes||[]).concat(study.avaliacoes||[]).forEach(function(e){
+    var d=String((e&&e.data)||'').slice(0,10);
+    if(d && d>fim) fim=d;
+  });
+  try{ var hoje=todayISO(); if(!estudoFinalizado(study) && hoje>fim) fim=hoje; }catch(e){}
+
+  return todas.filter(function(n){
+    if(!n || (typeof _delNotas!=='undefined' && _delNotas && _delNotas[n.id])) return false;
+    if(n.quadraId!==qid) return false;
+    var d=String(n.criadoEm||'').slice(0,10);
+    return !!d && d>=ini && d<=fim;
+  }).sort(function(a,b){ return String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')); });
+}
 function nextEventV2(study){
   var evs=studyEventsV2(study);
   var now=today0();
@@ -9129,6 +9352,184 @@ function aplicacaoMemoriaResumo(ap){
                           cvPct:(m.barra.resultado||{}).cvPct}:null)};
 }
 
+/* ===================== BAIXA EM LOTE AO REGISTRAR A APLICAÇÃO =====================
+   O app já sabia as duas pontas e não ligava uma na outra. A memória de cálculo
+   diz quanto de cada componente foi preparado; o tratamento aponta para o lote de
+   onde o material saiu; o lote tem saldo somado de eventos imutáveis. Faltava o
+   fio: registrar a aplicação não mexia no estoque, então para o saldo bater era
+   preciso ir à tela do item e digitar a mesma quantidade de novo. Ninguém digita
+   duas vezes — e a cadeia de custódia ficava furada justamente no ponto em que o
+   material vira ensaio.
+
+   A ARITMÉTICA NÃO MORA AQUI. Conversão de unidade, saldo e recusas são de
+   `vendor/consumo-core.js`; o app faz o que só ele pode fazer — ler os lotes,
+   gravar o evento e mostrar o que aconteceu.
+
+   QUATRO REGRAS, e todas existem para o registro não mentir:
+
+   1. NUNCA BLOQUEIA A APLICAÇÃO. A pulverização aconteceu. Se o lote não tem
+      saldo, ou a unidade não converte, a baixa não sai — a aplicação sai, com o
+      aviso junto. Perder o registro do que foi aplicado por causa do estoque
+      seria trocar o dado importante pelo secundário.
+   2. NUNCA BAIXA DUAS VEZES. Cada baixa é gravada em `ap.consumos` com a chave
+      tratamento|componente|lote. Salvar a aplicação de novo não repete nada.
+   3. ORIGEM VAI MARCADA. O evento nasce `derivada`, e sabe de que aplicação
+      veio. Um consumo automático que se pareça com um lançamento conferido à mão
+      apagaria a diferença entre o que o app concluiu e o que alguém confirmou.
+   4. LOTE VENCIDO É BAIXADO E MARCADO. O material foi usado; calar isso
+      reescreveria o ensaio. */
+
+function _consumoNucleo(){
+  return (typeof window!=='undefined' && window.ConsumoCore)?window.ConsumoCore:null;
+}
+/* Leitura não cria campo: uma aplicação que nunca baixou lote nenhum não precisa
+   carregar um `consumos:[]` vazio para sempre, no aparelho e na nuvem. */
+function aplicacaoConsumos(ap){
+  return (ap && Array.isArray(ap.consumos)) ? ap.consumos : [];
+}
+
+/* Os lotes que este preparo referencia, do jeito que o motor precisa vê-los:
+   saldo já somado, validade e situação.
+
+   A MEMÓRIA ENTRA NA BUSCA, não só o tratamento. Desde o motor de calda 1.1.0 o
+   componente gravado carrega o lote que estava valendo na hora do preparo, e o
+   tratamento pode ter sido reeditado depois. Procurar só no tratamento faria uma
+   baixa legítima ser recusada com "o lote não existe mais" — quando ele existe,
+   e é justamente o que foi usado. */
+function _consumoLotesDoEstudo(study, ap){
+  var lotes={}, refs=[];
+  (((study||{}).tratamentos)||[]).forEach(function(t){
+    if(t&&t.loteRef) refs.push(t.loteRef);
+    ((t&&t.componentes)||[]).forEach(function(c){ if(c&&c.loteRef) refs.push(c.loteRef); });
+  });
+  ((((ap||{}).memoriaCalculo)||{}).tratamentos||[]).forEach(function(t){
+    ((t&&t.componentes)||[]).forEach(function(c){ if(c&&c.loteRef) refs.push(c.loteRef); });
+  });
+  refs.forEach(function(r){
+    if(!r||!r.loteId||lotes[r.loteId]) return;
+    var l=null;
+    try{ l=itemLotePorId(r.itemId, r.loteId); }catch(e){}
+    if(!l) return;
+    lotes[r.loteId]={id:l.id, codigo:l.codigo, unidade:l.unidade,
+                     saldo:itemLoteSaldo(l), validade:(l.validade||''),
+                     situacao:(l.situacao||'ativo')};
+  });
+  return lotes;
+}
+
+/* O plano: o que baixar, o que se recusa a baixar e por quê. Não escreve nada —
+   serve tanto para executar quanto para a tela explicar o que aconteceu. */
+function consumoPlanoDaAplicacao(study, ap){
+  var C=_consumoNucleo();
+  if(!C||!study||!ap||!ap.memoriaCalculo) return null;
+  var trats=((study.tratamentos)||[]).map(function(t){
+    return {id:t.id, loteRef:(t.loteRef||null),
+            componentes:((t.componentes)||[]).map(function(c){
+              return {id:c.id, nome:c.nome, loteRef:(c.loteRef||null)};
+            })};
+  });
+  return C.planejar({memoria:ap.memoriaCalculo, tratamentos:trats,
+                     lotes:_consumoLotesDoEstudo(study, ap), data:(ap.data||''),
+                     jaRegistrados:aplicacaoConsumos(ap).map(function(x){ return x.chave; })});
+}
+
+/* Executa o plano. Devolve o que efetivamente foi gravado — e guarda na própria
+   aplicação tanto as baixas quanto as recusas, porque um aviso que só existe no
+   instante do salvamento não é registro, é notificação. */
+function aplicacaoBaixarLotes(study, qid, ap){
+  var plano=null;
+  try{ plano=consumoPlanoDaAplicacao(study, ap); }catch(e){ return null; }
+  if(!plano) return null;
+
+  var feitas=[], erros=[];
+  plano.baixas.forEach(function(b){
+    var obs='Aplicação de '+((typeof isoToBR==='function'&&isoToBR(ap.data))||ap.data||'')+
+            ' · '+(study.codigo||study.nome||study.id)+' · tratamento '+(b.tratamentoId||'?');
+    if(b.vencido) obs+=' · ATENÇÃO: lote vencido em '+
+      ((typeof isoToBR==='function'&&isoToBR(b.validade))||b.validade)+' na data da aplicação';
+    var r=null;
+    try{
+      r=itemLoteEvento(b.itemId, b.loteId, {
+        tipo:'consumo', quantidade:b.quantidade, unidade:b.unidade, em:(ap.data||''),
+        estudoId:study.id, tratamentoId:(b.tratamentoId||''), componenteId:(b.componenteId||''),
+        aplicacaoId:ap.id, origemRegistro:'derivada', destino:(study.codigo||study.nome||''), obs:obs});
+    }catch(e){ r={erro:(e&&e.message)||'Falha ao registrar o consumo.'}; }
+    if(!r || r.erro){ erros.push({chave:b.chave, nome:b.nome, tratamentoId:b.tratamentoId,
+                                  causa:'gravacao', motivo:(r&&r.erro)||'Falha ao registrar o consumo.'}); return; }
+    feitas.push({chave:b.chave, itemId:b.itemId, loteId:b.loteId, codigo:b.codigo,
+                 tratamentoId:b.tratamentoId, componenteId:b.componenteId, nome:b.nome,
+                 quantidade:b.quantidade, unidade:b.unidade,
+                 quantidadeOriginal:b.quantidadeOriginal, unidadeOriginal:b.unidadeOriginal,
+                 eventoId:(r.evento&&r.evento.id)||null, saldoApos:r.saldo,
+                 vencido:!!b.vencido, validade:(b.validade||null),
+                 origem:'derivada', em:Date.now()});
+  });
+
+  if(feitas.length){
+    if(!Array.isArray(ap.consumos)) ap.consumos=[];
+    feitas.forEach(function(f){ ap.consumos.push(f); });
+    try{
+      logStudyAuditInObject(study,'Baixa em lote',
+        feitas.length+' consumo(s) registrado(s) a partir da memória de cálculo da aplicação '+
+        (ap.data||ap.id),
+        {aplicacao:ap.id, origem:'derivada', lotes:feitas.map(function(f){ return f.codigo; }).join(', ')});
+    }catch(e){}
+  }
+
+  /* As recusas ficam gravadas: quem abrir a aplicação amanhã precisa ver que a
+     baixa não saiu, e por quê, sem depender de ter estado na tela na hora. */
+  var avisos=plano.recusas.concat(erros).map(function(r){
+    return {chave:r.chave, tratamentoId:r.tratamentoId, nome:r.nome, causa:r.causa,
+            motivo:r.motivo, em:Date.now()};
+  });
+  if(avisos.length) ap.consumoAvisos=avisos; else if(ap.consumoAvisos) delete ap.consumoAvisos;
+
+  return {feitas:feitas, avisos:avisos, plano:plano};
+}
+
+/* Bloco no cartão da aplicação. Silencioso quando não há lote nenhum vinculado —
+   lote é opcional, e cobrar por um que ninguém cadastrou seria ruído. */
+function consumoBlocoHtml(ap){
+  var cons=aplicacaoConsumos(ap), avisos=(ap&&ap.consumoAvisos)||[];
+  if(!cons.length && !avisos.length) return '';
+  var h='<div class="lote-bloco"><div class="jan-t">BAIXA EM LOTE</div>';
+  if(cons.length){
+    h+='<div class="jan-resumo">'+esc(cons.length+' baixa'+(cons.length===1?'':'s')+' registrada'+(cons.length===1?'':'s'))+'</div>';
+    h+='<div class="jan-det">'+cons.map(function(c){
+      return esc((c.nome||'—')+' · '+String(c.quantidade).replace('.',',')+' '+(c.unidade||'')+
+                 ' do lote '+(c.codigo||'')+(c.saldoApos!=null?(' · restam '+String(c.saldoApos).replace('.',',')+' '+(c.unidade||'')):''))+
+             (c.vencido?' <b class="lote-venc">⚠ lote vencido na data da aplicação</b>':'');
+    }).join('<br>')+'</div>';
+  }
+  if(avisos.length){
+    h+='<div class="jan-cob">⚠ '+avisos.map(function(a){
+      return esc((a.nome?(a.nome+': '):'')+(a.motivo||''));
+    }).join('<br>⚠ ')+'</div>';
+    h+='<div class="jan-pe">Nada foi baixado nesses casos. Corrija no banco de itens e toque em conferir.</div>';
+  }
+  if(cons.length) h+='<div class="jan-pe">Derivada da memória de cálculo · o estorno, se for preciso, é um ajuste no lote</div>';
+  return h+'</div>';
+}
+
+/* Botão de reconferir: útil quando a recusa foi de saldo e o lote acabou de ser
+   reposto. Nunca refaz o que já está feito — a chave impede. */
+function consumoConferir(qid, sid, apid){
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  var ap=study&&(study.aplicacoes||[]).filter(function(a){return a.id===apid;})[0];
+  if(!study||!ap) return;
+  if(typeof _bloqueadoPorFinalizacao==='function' && _bloqueadoPorFinalizacao(qid,sid)) return;
+  var r=aplicacaoBaixarLotes(study, qid, ap);
+  if(r&&r.feitas.length){
+    ap._ts=Date.now();
+    try{ save(); }catch(e){}
+    try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(qid,sid,ap); }catch(e){}
+    if(typeof _stxToast==='function') _stxToast('✓ '+r.feitas.length+' baixa(s) registrada(s)');
+  }else if(typeof _stxToast==='function'){
+    _stxToast((r&&r.avisos.length)?r.avisos[0].motivo:'Nada novo para baixar.');
+  }
+  try{ openStudyDetail(qid,sid); }catch(e){}
+}
+
 /* ===================== ANÁLISE ESTATÍSTICA (BioEstat embutido em estatistica/) =====================
    Monta a matriz longa (Tratamento/Repeticao/Variavel/Valor + contexto) da avaliação do estudo,
    passa via localStorage e abre o BioEstat num iframe. Modo 'analise' (Geral) ou 'forense'. */
@@ -9286,6 +9687,59 @@ function _pranchaDiag(qid, sid){
 /* Um registro da folha forense: o que aconteceu, quando aconteceu, quando foi
    digitado, onde, com que clima e por quem foi assinado. As DUAS datas saem
    juntas de propósito — é a diferença entre elas que um auditor procura. */
+/* Achados de EXECUÇÃO de um registro — o que a folha forense não enxergava.
+   Cada um nasce de dado que o app já grava sozinho, e por isso não depende de
+   ninguém lembrar de anotar nada.
+
+   A REGRA DA §12 VALE INTEIRA AQUI: isto APONTA, nunca altera, e nunca acusa.
+   "Lote vencido na data" é um fato conferível; "fraude" seria uma conclusão que
+   o programa não tem como sustentar. A severidade separa o que exige resposta
+   ('conferir') do que é só contexto ('nota') — e não existe nota 96/100, porque
+   score dá aparência de validação científica absoluta ao que é uma contagem. */
+function _forenseAchados(r){
+  var out=[];
+  if(!r) return out;
+
+  (r.consumos||[]).forEach(function(c){
+    if(c && c.vencido) out.push({
+      codigo:'lote-vencido', severidade:'conferir',
+      texto:'Lote '+(c.codigo||'?')+' ('+(c.nome||'?')+') estava vencido em '+
+            ((typeof isoToBR==='function'&&isoToBR(c.validade))||c.validade||'?')+
+            ', data desta aplicação.'
+    });
+  });
+
+  (r.consumoAvisos||[]).forEach(function(a){
+    if(a) out.push({
+      codigo:'baixa-recusada', severidade:'conferir',
+      texto:'Baixa em lote não registrada'+(a.nome?(' ('+a.nome+')'):'')+': '+(a.motivo||'')
+    });
+  });
+
+  var p=r.pos;
+  if(p && !p.erro && p.chuvaMm!=null && p.choveu && p.primeiraChuvaHoras!=null && p.primeiraChuvaHoras<=6){
+    out.push({
+      codigo:'chuva-apos-aplicacao', severidade:'conferir',
+      texto:'Choveu '+String(p.chuvaMm).replace('.',',')+' mm nas '+p.horas+' h seguintes, '+
+            'a primeira '+String(p.primeiraChuvaHoras).replace('.',',')+' h depois da aplicação — '+
+            'considerar lavagem ao interpretar o resultado.'+
+            (p.horaConhecida?'':' A aplicação não registrou hora, então a janela conta o dia inteiro.')
+    });
+  }
+  /* Janela ainda aberta não é achado: é leitura incompleta, e dizer isso evita
+     que alguém leia "0 mm" como "não choveu". */
+  if(p && !p.erro && p.completa===false) out.push({
+    codigo:'chuva-janela-aberta', severidade:'nota',
+    texto:'A janela de chuva desta aplicação ainda não fechou; o total é parcial.'
+  });
+  if(p && !p.erro && p.coberturaPct!=null && p.coberturaPct<100) out.push({
+    codigo:'chuva-cobertura-parcial', severidade:'nota',
+    texto:'A estação tinha leitura em '+(p.diasComLeitura||0)+' de '+(p.dias||0)+
+          ' dias da janela ('+p.coberturaPct+'%).'
+  });
+
+  return out;
+}
 function _forenseDe(r, tipo){
   if(!r) return null;
   var c=r.carimbo||{};
@@ -9309,7 +9763,13 @@ function _forenseDe(r, tipo){
     assinada:!!c.rubrica,
     assinadaPor:ident.nome,
     assinadaEmail:ident.email,
-    assinadaEm:(c.rubricaEm||null)
+    assinadaEm:(c.rubricaEm||null),
+    /* §12 — a execução também tem achados, e até aqui a folha não os via.
+       Estes três nascem de dado que o app passou a gravar sozinho: de que lote o
+       material saiu, se aquele lote estava vencido no dia, o que se recusou a
+       baixar e o que caiu do céu depois. Vão como CONTAGEM E CLASSIFICAÇÃO — nunca
+       como acusação, e nunca como score: "conferir", jamais "fraudado". */
+    achados:_forenseAchados(r)
   };
 }
 function _autorBPL(study){
@@ -10242,6 +10702,14 @@ function openStudyDetail(qid,sid){
   /* Aplicações realizadas */
   h+='<div id="study-stage-execucao" class="study-stage-anchor" aria-hidden="true"></div>';
   h+='<div class="sd-section"><div class="sd-section-title">Aplicações'+(_fin?'':' <button class="sd-add" onclick="quickAddAplicacao()">+ Registrar</button>')+'</div>';
+  /* O estoque tem o que dizer sobre o que ainda vai ser feito, e o lugar disso é
+     aqui — junto das aplicações que faltam, não numa tela de estoque que ninguém
+     abre antes de sair para o campo. */
+  try{
+    var _avEst=estudoAvisosEstoque(study, qid);
+    if(_avEst.length) h+='<div class="lote-bloco"><div class="jan-t">ESTOQUE PARA O QUE FALTA</div>'+
+      '<div class="jan-cob">⚠ '+_avEst.map(function(a){ return esc(a.texto); }).join('<br>⚠ ')+'</div></div>';
+  }catch(e){}
   if(study.aplicacoes.length===0){
     h+='<div class="sd-empty">Nenhuma aplicação registrada ainda.</div>';
   }else{
@@ -10257,11 +10725,43 @@ function openStudyDetail(qid,sid){
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       h+=carimboHtml(a.carimbo,a.data,a.hora);
+      /* O que saiu do lote e o que caiu do céu depois: as duas coisas que uma
+         aplicação registrada não sabia dizer sobre si mesma. */
+      try{ h+=consumoBlocoHtml(a); }catch(e){}
+      try{ if((a.consumoAvisos||[]).length && !_fin)
+             h+='<div class="jan-linha"><button class="jan-btn mini" style="margin-left:0" onclick="consumoConferir(\''+
+                _avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\',\''+_avCroquiEscJs(a.id)+'\')">conferir baixa em lote</button></div>';
+      }catch(e){}
+      try{ h+=posBlocoHtml(qid, sid, a); }catch(e){}
       h+='</div>';
     });
     h+='</div>';
   }
   h+='</div>';
+
+  /* Observações de campo caídas dentro do período deste ensaio. Ficam ENTRE as
+     aplicações e as avaliações de propósito: é lendo uma avaliação estranha que a
+     pessoa precisa lembrar que alguém viu uma mancha na semana anterior. */
+  try{
+    var _nts=notasDoEstudo(qid, study);
+    if(_nts.length){
+      var _abertas=_nts.filter(function(n){ return !n.resolvido; }).length;
+      h+='<div class="sd-section"><div class="sd-section-title">Observações de campo no período'+
+         (_abertas?(' <span style="font-weight:400;opacity:.8">· '+_abertas+' em aberto</span>'):'')+'</div>';
+      h+='<div class="eventos-list">';
+      _nts.forEach(function(n){
+        h+='<div class="evento-item"><div class="evento-head">'+
+           '<span class="evento-tipo '+(n.resolvido?'apl':'eval')+'">'+(n.resolvido?'✓':'!')+'</span>'+
+           '<span class="evento-data">'+esc(isoToBR(n.criadoEm)||n.criadoEm||'')+'</span>'+
+           '<span style="margin-left:6px;font-weight:700">'+esc(n.titulo||'')+'</span></div>';
+        var _meta=[n.categoria,n.severidade].filter(Boolean).join(' · ');
+        if(_meta) h+='<div class="evento-subtipo">'+esc(_meta)+'</div>';
+        if(n.descricao) h+='<div class="evento-obs">'+esc(n.descricao)+'</div>';
+        h+='</div>';
+      });
+      h+='</div></div>';
+    }
+  }catch(e){}
 
   /* Avaliações */
   h+='<div id="study-stage-avaliacoes" class="study-stage-anchor" aria-hidden="true"></div>';
@@ -10461,7 +10961,18 @@ function quickAddAvaliacao(){
 function removeAplicacao(id){
   var qid=curV, sid=curSid;
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
-  requireDeletePassword('Remover esta aplicação registrada.', function(){
+  /* Excluir a aplicação NÃO desfaz a baixa em lote, e quem apaga precisa saber
+     disso antes. Evento de lote é append-only: o estorno é um ajuste com motivo,
+     na tela do item — apagar o consumo em silêncio faria o inventário mentir sem
+     deixar rastro de que um dia bateu. */
+  var _apDel=null;
+  try{ var _stD=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+       _apDel=_stD&&(_stD.aplicacoes||[]).filter(function(a){return a.id===id;})[0]; }catch(e){}
+  var _nCons=((_apDel&&_apDel.consumos)||[]).length;
+  var _msgDel='Remover esta aplicação registrada.'+
+    (_nCons?(' Atenção: '+_nCons+' baixa(s) em lote já registrada(s) NÃO são desfeitas — '+
+             'o estorno é um ajuste com motivo, na tela do item.'):'');
+  requireDeletePassword(_msgDel, function(){
     safetyBackup('antes de excluir aplicação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
     var ap=study.aplicacoes.find(function(a){return a.id===id});
@@ -11651,6 +12162,22 @@ function saveStudyV2(){
 
   if(!s.codigo){alert("O código do estudo é obrigatório.");return;}
 
+  /* A receita manda; o texto é derivado dela. A tela já impede editar a dose de um
+     tratamento com receita, mas isso só vale daqui para a frente: um estudo em que
+     alguém digitou "2 L/ha" enquanto a receita dizia 1 guarda a divergência para
+     sempre — o cálculo usa a receita e a tabela, o relatório e a exportação mostram
+     o texto velho. É o mesmo caso da §7-bis: o campo sumiu da tela, mas o dado
+     errado não some sozinho. Ressincronizar ao salvar cura os que já divergiram, e
+     nos que estão certos não muda um caractere. */
+  var _dessinc=[];
+  (s.tratamentos||[]).forEach(function(t){
+    if(!t || !(typeof tratTemReceita==='function' && tratTemReceita(t))) return;
+    var pAntes=t.produto, dAntes=t.dose;
+    try{ _tratSincronizaTexto(t); }catch(e){ return; }
+    if(pAntes!==t.produto || dAntes!==t.dose)
+      _dessinc.push((t.id||'?')+': "'+(dAntes||'')+'" → "'+(t.dose||'')+'"');
+  });
+
   gerarAvaliacoesAuto(s);
   if(s.randomizado) ensureStudyRandomizacao(s);
   else s.randomizacao=null;
@@ -11693,6 +12220,12 @@ function saveStudyV2(){
     details = 'Código: "' + s.codigo + '", ' + s.tratamentos.length + ' tratamentos, ' + s.numRepeticoes + ' repetições.';
   }
   logStudyAuditInObject(s, action, details);
+  /* Correção de dado gravado nunca é silenciosa: quem ler a trilha precisa saber
+     que a dose exibida mudou, e para qual valor. */
+  if(_dessinc.length)
+    logStudyAuditInObject(s, 'Dose ressincronizada com a receita',
+      'A dose escrita divergia da receita estruturada e foi refeita a partir dela — '+
+      _dessinc.join(' · '), {origem:'derivada', tratamentos:_dessinc.length});
   s._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
 
   if(idx>=0)q.estudos[idx]=s;
@@ -12124,6 +12657,10 @@ function saveAplicacao(){
         {aplicacao:ap.id, origem:'derivada', motor:_memAuto.motor, motorVersao:_memAuto.motorVersao});
     }
   }catch(e){}
+  /* A baixa em lote vem DEPOIS da memória e vale para qualquer memória — derivada
+     ou conferida na calculadora. Ela nunca impede o salvamento: o que não pôde ser
+     baixado fica gravado como aviso na própria aplicação. */
+  try{ aplicacaoBaixarLotes(study, curV, ap); }catch(e){}
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   else _recarimbaEvento(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
@@ -15787,6 +16324,154 @@ function janelaBuscar(qid, sid, avid, forcar){
 
 
 
+/* ===================== CHUVA DEPOIS DA APLICAÇÃO =================================
+   A janela ambiental responde "o que aconteceu ENTRE a aplicação e a avaliação".
+   Falta a pergunta que decide se a aplicação valeu: choveu LOGO DEPOIS? Produto
+   lavado três horas após a pulverização não é produto que não funcionou — e sem
+   esse dado o ensaio conclui a coisa errada com toda a confiança do mundo.
+
+   O carimbo já guarda o instante e o clima da hora da pulverização; a estação já
+   guarda o histórico. O que faltava era o fio: nada olhava para as horas
+   SEGUINTES.
+
+   A conta mora no proxy (`/clima/pos`), pela mesma razão da janela: são N
+   chamadas à Ecowitt, o fan-out é dele, e o cache aproveita entre estudos da
+   mesma estação. Aqui fica o que só o app pode fazer — guardar o que foi lido.
+
+   E vale o mesmo que vale para a janela: FICA GRAVADA, não recalculada. A leitura
+   muda quando a Ecowitt reprocessa, num registro BPL vale o que foi lido quando se
+   registrou, e a aplicação precisa abrir offline. Reconsultar não apaga: a
+   anterior vira histórico.
+
+   DUAS DECLARAÇÕES ACOMPANHAM O NÚMERO, SEMPRE. Se a aplicação não tem hora, a
+   conta é do dia inteiro — e "choveu 12 mm depois de pulverizar" vira "choveu
+   12 mm no dia em que se pulverizou", que é outra frase. E se a janela ainda não
+   fechou, 0 mm não é resposta: é uma janela aberta. ============================= */
+
+var _posSeq=0, _posEstado={};      /* chave -> 'buscando' | 'erro' | null */
+var POS_HORAS_PADRAO=48;
+
+function posDaAplicacao(ap){ return (ap&&ap.pos)||null; }
+function _posChave(qid, sid, apid){ return 'pos|'+qid+'|'+sid+'|'+apid; }
+
+function consultarPos(qid, sid, ap, horas, forcar, cb){
+  cb=cb||function(){};
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  if(!study||!ap||!ap.data){ cb(null); return; }
+  if(ap.pos && !forcar){ cb(ap.pos); return; }
+
+  /* Numa bancada não chove. Oferecer isso ali seria a §7-bis de novo. */
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)){
+    cb({erro:'Aplicação de bancada não tem chuva depois.'}); return;
+  }
+  var mac=(typeof _stationMacForQuadra==='function')?_stationMacForQuadra(qid):null;
+  if(!mac){ cb({erro:'Esta quadra não tem estação meteorológica associada.'}); return; }
+
+  var h=Math.max(1,parseInt(horas||POS_HORAS_PADRAO,10)||POS_HORAS_PADRAO);
+  var chave=_posChave(qid,sid,ap.id), seq=++_posSeq;
+  _posEstado[chave]='buscando';
+  var url=NDVI_PROXY+'/clima/pos?mac='+encodeURIComponent(mac)+
+          '&data='+encodeURIComponent(ap.data)+
+          (ap.hora?('&hora='+encodeURIComponent(String(ap.hora).slice(0,5))):'')+
+          '&horas='+encodeURIComponent(h);
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if(seq!==_posSeq && _posEstado[chave]!=='buscando') return;
+    if(!d || d.error){ _posEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui ler a chuva depois da aplicação.'}); return; }
+    _posEstado[chave]=null;
+    var p={
+      data:ap.data, hora:(ap.hora||null), horas:d.horas,
+      horaConhecida:!!d.hora_conhecida, completa:!!d.completa,
+      dias:d.dias, diasComLeitura:d.dias_com_leitura, coberturaPct:d.cobertura_pct,
+      diasSemLeitura:(d.dias_sem_leitura||[]),
+      chuvaMm:d.chuva_mm, choveu:d.choveu,
+      primeiraChuvaHoras:d.primeira_chuva_horas,
+      fonte:d.fonte, mac:mac, ts:Date.now(), iso:new Date().toISOString(),
+      app:(typeof APP_VER!=='undefined'?APP_VER:null)
+    };
+    if(ap.pos){ ap.posAnteriores=(ap.posAnteriores||[]); ap.posAnteriores.push(ap.pos); }
+    ap.pos=p;
+    ap._ts=Date.now();
+    try{ save(); }catch(e){}
+    try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(qid,sid,ap); }catch(e){}
+    cb(p);
+  }).catch(function(){
+    _posEstado[chave]='erro';
+    cb({erro:'Não consegui falar com o servidor de clima.'});
+  });
+}
+
+/* Uma linha, do jeito que se lê em voz alta: "18 mm nas 48 h seguintes — a
+   primeira chuva 3,2 h depois". */
+function posResumo(p){
+  if(!p||p.erro) return (p&&p.erro)||'';
+  var horas=p.horas+' h';
+  if(p.chuvaMm==null) return 'sem leitura da estação nas '+horas+' seguintes';
+  function n(v){ return (v==null||!isFinite(v))?null:String(Number(v).toFixed(1)).replace('.',','); }
+  if(!p.choveu) return 'não choveu nas '+horas+' seguintes';
+  var s=n(p.chuvaMm)+' mm nas '+horas+' seguintes';
+  if(p.primeiraChuvaHoras!=null) s+=' — a primeira chuva '+n(p.primeiraChuvaHoras)+' h depois';
+  return s;
+}
+
+/* As ressalvas não são rodapé: cada uma muda como se lê o número de cima. */
+function posRessalvas(p){
+  if(!p||p.erro) return [];
+  var r=[];
+  if(!p.completa) r.push('A janela ainda não fechou: o total acima é parcial e vai mudar.');
+  if(!p.horaConhecida) r.push('A aplicação não registrou hora, então a conta é do DIA INTEIRO — '+
+    'a chuva que caiu antes de pulverizar está incluída.');
+  if(p.coberturaPct<100){
+    if(!p.diasComLeitura) r.push('A estação não tinha leitura em nenhum dia desta janela — nada acima pôde ser calculado.');
+    else r.push('Atenção: '+p.diasComLeitura+' de '+p.dias+' dias com leitura ('+p.coberturaPct+'%). '+
+                'A chuva dos dias sem leitura não entra no total.');
+  }
+  return r;
+}
+
+function posBlocoHtml(qid, sid, ap){
+  if(!ap||!ap.data) return '';
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return '';
+  var p=posDaAplicacao(ap);
+  var chave=_posChave(qid,sid,ap.id), estado=_posEstado[chave];
+
+  if(!p){
+    if(estado==='buscando') return '<div class="jan-linha">Lendo a chuva depois da aplicação…</div>';
+    return '<div class="jan-linha">'+
+      '<button class="jan-btn" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\')">'+
+      '🌧 Choveu depois? (48 h)</button>'+
+      (estado==='erro'?'<span class="jan-erro">não consegui na última tentativa</span>':'')+'</div>';
+  }
+
+  var lavou=(p.chuvaMm!=null && p.choveu && p.primeiraChuvaHoras!=null && p.primeiraChuvaHoras<=6);
+  var h='<div class="jan-bloco'+(lavou?' pos-lavou':'')+'"><div class="jan-t">CHUVA DEPOIS DESTA APLICAÇÃO</div>'+
+        '<div class="jan-resumo">'+esc(posResumo(p))+'</div>';
+  /* Chuva nas primeiras horas não é detalhe do rodapé: é a explicação mais
+     provável de um resultado ruim, e quem lê o cartão precisa tropeçar nela. */
+  if(lavou) h+='<div class="jan-det pos-alerta">⚠ Chuva nas primeiras horas depois da aplicação — '+
+    'considere a possibilidade de lavagem ao interpretar este ensaio.</div>';
+  var res=posRessalvas(p);
+  if(res.length) h+='<div class="jan-cob">⚠ '+res.map(esc).join('<br>⚠ ')+'</div>';
+  h+='<div class="jan-pe">Estação · lido em '+
+     esc((function(){ try{ return new Date(p.ts).toLocaleString('pt-BR'); }catch(e){ return p.iso; } })())+
+     '<button class="jan-btn mini" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\',24,1)">24 h</button>'+
+     '<button class="jan-btn mini" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\',48,1)">48 h</button>'+
+     '<button class="jan-btn mini" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\',72,1)">72 h</button>'+
+     '</div>';
+  return h+'</div>';
+}
+
+function posBuscar(qid, sid, apid, horas, forcar){
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  var ap=study&&(study.aplicacoes||[]).filter(function(a){return a.id===apid;})[0];
+  if(!ap) return;
+  _posEstado[_posChave(qid,sid,apid)]='buscando';
+  try{ openStudyDetail(qid,sid); }catch(e){}
+  consultarPos(qid, sid, ap, horas||POS_HORAS_PADRAO, !!forcar, function(r){
+    if(r&&r.erro && typeof _stxToast==='function') _stxToast(r.erro);
+    try{ openStudyDetail(qid,sid); }catch(e){}
+  });
+}
+
 /* ===================== BANCO DE ITENS E DOSES ====================================
    Até aqui o produto de um tratamento era uma STRING digitada. "Sankari", "sankari",
    "SANKARI 500 SC" e "Sankari (lote novo)" eram quatro produtos diferentes para o
@@ -16092,6 +16777,11 @@ function _loteEventoMontar(lote,d){
     quantidade:q, unidade:unidade, impacto:impacto,
     origem:String(d.origem||'').trim(), destino:String(d.destino||'').trim(),
     estudoId:String(d.estudoId||'').trim(), tratamentoId:String(d.tratamentoId||'').trim(),
+    /* Um consumo que não sabe de que aplicação saiu é meia trilha: o inventário
+       fecha, mas "onde este material foi parar" volta a depender de memória
+       humana. A aplicação e o componente vão gravados no evento. */
+    aplicacaoId:String(d.aplicacaoId||'').trim(), componenteId:String(d.componenteId||'').trim(),
+    origemRegistro:String(d.origemRegistro||'manual').trim(),
     documento:String(d.documento||'').trim(), responsavel:String(d.responsavel||
       (typeof _currentUserName==='function'?(_currentUserName()||''):'')).trim(),
     obs:String(d.obs||'').trim(), registradoEm:Date.now(), saldoApos:Math.max(0,Math.round(saldo*1000000)/1000000)

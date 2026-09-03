@@ -35,7 +35,8 @@ vm.runInContext([
   pega('ensureConfig'),
   pega('_identidadeEhEmail'),pega('_identidadeNomeValido'),
   pega('_nomeCadastradoPorEmail'),pega('_identidadeBPL'),
-  pega('_currentUserName'),pega('_forenseDe'),pega('_autorBPL'),pega('newStudy')
+  pega('_currentUserName'),pega('_forenseAchados'),pega('_forenseDe'),
+  pega('_autorBPL'),pega('newStudy')
 ].join('\n'),ctx);
 
 var f=0,p=0;

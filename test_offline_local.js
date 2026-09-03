@@ -131,5 +131,40 @@ var estado={
   assert(!Object.prototype.hasOwnProperty.call(b.store,'iracema-safety'),'remove backup redundante que ocupava a quota');
   assert(b.ctx._reloads===1,'reabre o app uma vez depois da recuperação');
 
-  console.log('\n15 verificações, nenhuma falha.');
+  console.log('\n--- O cofre lembra ONDE a pessoa estava ---');
+  /* O lugar ativo nao entra no estado que sobe para a nuvem — ele e do aparelho, e
+     sincroniza-lo arrastaria a tela de quem esta no escritorio quando o tecnico
+     troca de talhao no celular. Mas ele precisa sobreviver a restauracao: sem
+     isso o aparelho volta com todos os dados e sem saber onde a pessoa estava, e
+     cai num lugar arbitrario — que foi o "por que ele abre no Picolini". */
+  var c=makeContext({state:estado,store:{'iracema-local-ativo':'L1'}});
+  await tick();await tick();
+  await c.ctx.AgractaFirebase.flushLocal();
+  assert(c.idb.mem.active.localAtivo==='L1','o checkpoint guarda o lugar ativo junto');
+
+  var doisLugares=JSON.parse(JSON.stringify(estado));
+  doisLugares.locais={picolini:{nome:'Picolini'},L1:{nome:'Fazenda'}};
+  doisLugares.data.Q1.cultura='trigo';
+  var d=makeContext({state:estado,seed:{savedAt:900,state:doisLugares,localAtivo:'L1'},store:{
+    'iracema-v7':JSON.stringify(estado.data),'agracta-local-state-ts':'100'
+  }});
+  await tick();await tick();await tick();
+  assert(JSON.parse(d.store['iracema-v7']).Q1.cultura==='trigo','o checkpoint mais novo foi restaurado');
+  assert(d.store['iracema-local-ativo']==='L1',
+    'e o lugar ativo volta junto, em vez de o app cair no primeiro do objeto');
+
+  /* Apontar para um lugar apagado faria o app cair no mesmo palpite que esta
+     restauracao existe para evitar. */
+  var semLugar=JSON.parse(JSON.stringify(doisLugares));
+  semLugar.data.Q1.cultura='aveia';
+  var e2=makeContext({state:estado,seed:{savedAt:900,state:semLugar,localAtivo:'lugar-apagado'},store:{
+    'iracema-v7':JSON.stringify(estado.data),'agracta-local-state-ts':'100',
+    'iracema-local-ativo':'L1'
+  }});
+  await tick();await tick();await tick();
+  assert(JSON.parse(e2.store['iracema-v7']).Q1.cultura==='aveia','restaurou o estado');
+  assert(e2.store['iracema-local-ativo']==='L1',
+    'lugar do checkpoint que nao existe mais NAO sobrescreve a preferencia atual');
+
+  console.log('\n20 verificações, nenhuma falha.');
 })().catch(function(e){console.error(e&&e.stack||e);process.exit(1);});
