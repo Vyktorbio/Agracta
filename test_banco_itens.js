@@ -73,7 +73,7 @@ vm.runInContext([
   pega('_itemChave'), pega('itemPossiveisDuplicatas'),
   pega('itensLista'), pega('itemPorId'), pega('itemNovo'), pega('itemAtualizar'), pega('itemExcluir'),
   pega('itemDoses'), pega('itemDoseAdicionar'), pega('itemDoseAposentar'),
-  pega('itemDosesPara'), pega('doseTexto'),
+  pega('_mesmaCultura'), pega('itemDosesPara'), pega('doseTexto'),
   pega('itemVinculosHistoricos'), pega('_vinculoHistoricoChave'), pega('itemVincularHistorico'),
   pega('tratItem'), pega('tratProdutoNome'), pega('tratLigarItem'), pega('tratDesligarItem'),
   pega('tratDoseForaDaBula'), pega('itemOndeFoiUsado')
