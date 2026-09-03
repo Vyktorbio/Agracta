@@ -334,10 +334,32 @@ Ausência do campo não é bloqueio — memória anterior ao motor 1.1.0 segue v
 Coberto por `test_consumo_lote.js` (76 verificações, com golden test conferido à mão) e
 `test_baixa_aplicacao.js` (52), este último exercitando o gravador de evento real.
 
+**Verificação do protocolo** ✅ **feita (03/09/2026)** — `vendor/protocolo-core.js`.
+
+O app conferia a execução e não tinha opinião nenhuma sobre o **desenho**. E é ali que
+o erro custa mais caro: uma calda mal calculada se refaz no mesmo dia; um braço que
+faltou no delineamento só aparece na hora de analisar, com a safra já colhida.
+
+O caso que originou o motor foi real: um ensaio de sinergista testava o adjuvante
+sozinho a 0,033% e 0,2% e misturava com o produto **só na dose baixa**. Quem notou foi
+uma leitura humana da folha exportada — o app não perguntava. Hoje pergunta, e o
+golden test do motor é exatamente esse ensaio.
+
+Sete checagens: sem testemunha · sem replicação · tratamento sem dose · tratamentos
+com receita idêntica · componente que só existe em mistura · **dose testada sozinha
+que nunca entra em mistura** · mesmo item com unidades de famílias diferentes.
+
+Três regras governam: **aponta, não bloqueia** (ensaio experimental existe para sair
+do padrão); **severidade separa** o que quase sempre é erro do que é pergunta legítima,
+senão a lista vira ruído e ninguém lê; e **não adivinha receita** — texto livre cujo
+número de produtos não bate com o de doses fica FORA das checagens por componente,
+porque achado falso mata a confiança na ferramenta inteira. Coberto por
+`test_protocolo_verifica.js` (38 verificações, com o ensaio real como golden test).
+
 **Falta:** documentos anexados ao item (bula, FDS, certificado de análise);
 importação de bula do Agrofit com revisão humana; **programas de aplicação**;
-**cálculo automático de quantidade**; **verificação do protocolo**; **dossiê do item**;
-e o relatório **Item × Dose** entre ensaios.
+**cálculo automático de quantidade**; **dossiê do item**; e o relatório
+**Item × Dose** entre ensaios.
 
 ## 7-quater. Onde o app abre, e o que o cofre offline lembra · ✅ **feito (03/09/2026)**
 
@@ -414,6 +436,39 @@ releitura cuidadosa do `cloudStart` — a que re-tenta com espera crescente — 
 assim que vê `_cloudInitDone`, ou seja, o retry que existe para este caso era
 desligado pelo próprio caso. O `cloudStart` sempre conferiu `res.error`; o
 `cloudPull` não conferia. Coberto por `test_sync_leitura_falha.js` (20 verificações).
+
+## 7-sexies. Duas arestas que a importação do Agrofit tornaria comuns · ✅ **feito (03/09/2026)**
+
+**O equivalente em i.a. lia só o primeiro ativo.** `tratEquivalenteIA` regexava a
+primeira concentração do texto de `item.concentracao`. Num produto de dois ativos —
+2,4-D 406 g/L + picloram 103,6 g/L — devolvia 406 e calava sobre o resto: um número
+certo apresentado como se fosse a história inteira. Enquanto a concentração era
+digitada à mão isso era raro; no catálogo do Agrofit **100% dos registros** trazem o
+i.a. com a concentração embutida, e boa parte é mistura — por isso se corrigiu antes
+de importar, não depois.
+
+`DoseCore.ativosDe` e `DoseCore.equivalentesIA` devolvem **um resultado por ativo, e
+nenhuma soma**: gramas de 2,4-D e gramas de picloram não são a mesma grandeza, e um
+total único faria parecer que são. A âncora do parser é a **concentração**, não o
+nome — foi o que permitiu atravessar parêntese aninhado no grupo químico
+(`etefom (etileno (precursor de)) (720 g/L)`), que derrubou a primeira tentativa no
+reconhecimento do Agrofit. E o formato antigo sem parênteses (`500 g/L`), que é como
+todo item já cadastrado está, continua valendo — quebrá-lo seria o oposto da
+correção. Coberto por `test_equivalente_ia.js` (32 verificações, com golden test).
+
+**"Capacidade do frasco (L)" ao lado de "Volume morto (mL)".** Num preparo de 62 mL
+saiu "frasco 200 L" numa folha real. Quem preencheu digitou 200 pensando em
+mililitros — e não sem razão: dois campos vizinhos em unidades diferentes é
+armadilha, não descuido. O campo passou a **aceitar a unidade escrita** ("200 mL" são
+0,2 L) mantendo número puro como litros, que é como todo estudo já cadastrado está
+gravado; e mostra embaixo o que entendeu, porque um campo que interpreta sem exibir o
+resultado troca uma armadilha por outra. Coberto por `test_capacidade_frasco.js`
+(21 verificações, incluindo a ida e volta — editar duas vezes não pode mudar a
+capacidade sozinho).
+
+**Falta desta dupla:** o aviso de plausibilidade na própria calculadora (capacidade
+absurda em relação à calda preparada) fica para depois da refinada de usabilidade em
+curso, para não colidir com ela.
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
@@ -570,9 +625,20 @@ aparência de validação científica absoluta.
 > "fraude" seria conclusão que o programa não sustenta.
 > Coberto por `test_forense_execucao.js` (30 verificações).
 >
-> **Falta desta fase:** os achados estatísticos e de domínio (fora de escala, data
-> impossível, BBCH retrocedendo, outlier, duplicação suspeita) continuam só na
-> triagem do BioEstat, não nesta lista.
+> **Estado (03/09/2026) — os achados de DOMÍNIO e TEMPORAIS chegaram.** Nenhum deles
+> precisou de registro novo: são comparações entre campos já gravados.
+> `_forenseAchadosEstudo` olha a SEQUÊNCIA — avaliação anterior à primeira aplicação,
+> aplicação anterior ao plantio, registro com data no futuro, BBCH retrocedendo — e
+> `_forenseDominio` olha a grade — valor negativo, acima de 100% numa variável
+> percentual, acima do máximo da escala, contagem fracionada. **Agenda não é erro**:
+> avaliação programada para o futuro é o normal, então só entra o que já tem registro.
+> E o domínio **conta em vez de listar célula a célula** — vinte valores acima de 100%
+> são um achado com vinte ocorrências, não vinte achados.
+> Coberto por `test_forense_dominio.js` (25 verificações).
+>
+> **Falta desta fase:** os achados estatísticos (outlier, resíduo extremo, CV elevado,
+> duplicação suspeita, tendência entre avaliadores) continuam só na triagem do
+> BioEstat, não nesta lista.
 
 ## 13. Fase 8 — BPL / integridade completa · **CRÍTICA**
 

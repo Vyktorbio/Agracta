@@ -9696,9 +9696,121 @@ function _pranchaDiag(qid, sid){
    o programa não tem como sustentar. A severidade separa o que exige resposta
    ('conferir') do que é só contexto ('nota') — e não existe nota 96/100, porque
    score dá aparência de validação científica absoluta ao que é uma contagem. */
+/* Bloco do verificador de desenho no cartão do estudo.
+   A aritmética é de `vendor/protocolo-core.js`; aqui só se pinta. Silencioso
+   quando não há nada a dizer — um verificador que fala sempre vira decoração. */
+function protocoloVerificaHtml(study){
+  var P=(typeof window!=='undefined')?window.ProtocoloCore:null;
+  if(!P||!study) return '';
+  var achados=[];
+  try{ achados=P.verificar(study)||[]; }catch(e){ return ''; }
+  if(!achados.length) return '';
+  var conferir=achados.filter(function(a){ return a.severidade==='conferir'; });
+  var notas=achados.filter(function(a){ return a.severidade!=='conferir'; });
+  function linha(a){
+    return '<div>'+(a.severidade==='conferir'?'⚠ ':'· ')+esc(a.texto)+'</div>';
+  }
+  var h='<div class="lote-bloco"><div class="jan-t">CONFERÊNCIA DO DESENHO</div>';
+  if(conferir.length) h+='<div class="jan-cob">'+conferir.map(linha).join('')+'</div>';
+  if(notas.length) h+='<div class="jan-det">'+notas.map(linha).join('')+'</div>';
+  /* A frase do rodapé é a doutrina, e ela precisa estar na tela: quem lê tem de
+     saber que isto não reprova nada. */
+  h+='<div class="jan-pe">'+esc(P.resumo(achados))+' · o app aponta, quem decide é você — '+
+     'ensaio experimental existe para sair do padrão</div>';
+  return h+'</div>';
+}
+
+/* Achados de DOMÍNIO e TEMPORAIS (§12) — o que o dado diz sobre si mesmo.
+   Estes não precisam de nenhum registro novo: são comparações entre campos que
+   já estão gravados. Ficam à parte dos achados de execução porque nascem do
+   ESTUDO, não do evento isolado — "avaliação antes da aplicação" só existe
+   quando se olha os dois. */
+function _forenseAchadosEstudo(study, qid){
+  var out=[];
+  if(!study) return out;
+  function br(d){ try{ return isoToBR(d)||d; }catch(e){ return d; } }
+  function dia(x){ return String((x&&x.data)||'').slice(0,10); }
+  var hoje=''; try{ hoje=todayISO(); }catch(e){}
+
+  var aps=(study.aplicacoes||[]).filter(dia).slice().sort(function(a,b){ return dia(a).localeCompare(dia(b)); });
+  var avs=(study.avaliacoes||[]).filter(dia).slice().sort(function(a,b){ return dia(a).localeCompare(dia(b)); });
+
+  /* Avaliação antes de qualquer aplicação: ou a data está errada, ou a leitura é
+     de pré-tratamento e deveria estar declarada como tal. */
+  if(aps.length){
+    var primeira=dia(aps[0]);
+    avs.forEach(function(a){
+      if(dia(a)<primeira) out.push({codigo:'avaliacao-antes-da-aplicacao', severidade:'conferir',
+        texto:'A avaliação de '+br(dia(a))+' é anterior à primeira aplicação ('+br(primeira)+').'});
+    });
+  }
+
+  /* Aplicação antes do plantio. */
+  var plantio=''; try{ plantio=String(studyPlantio(study)||'').slice(0,10); }catch(e){}
+  if(plantio) aps.forEach(function(a){
+    if(dia(a)<plantio) out.push({codigo:'aplicacao-antes-do-plantio', severidade:'conferir',
+      texto:'A aplicação de '+br(dia(a))+' é anterior ao plantio ('+br(plantio)+').'});
+  });
+
+  /* Data no futuro. Evento programado é agenda; evento REGISTRADO com data
+     futura é digitação. Só conta o que tem registro. */
+  if(hoje) aps.concat(avs).forEach(function(e){
+    if(dia(e)>hoje && (e.carimbo||(e.notas&&Object.keys(e.notas).length)))
+      out.push({codigo:'data-no-futuro', severidade:'conferir',
+        texto:'Há registro com data no futuro ('+br(dia(e))+').'});
+  });
+
+  /* BBCH retrocedendo: a planta não volta de estádio. */
+  var comBbch=aps.concat(avs).filter(function(e){ return e && e.bbch!=='' && e.bbch!=null; })
+    .sort(function(a,b){ return dia(a).localeCompare(dia(b)); });
+  for(var i=1;i<comBbch.length;i++){
+    var ant=parseInt(comBbch[i-1].bbch,10), at=parseInt(comBbch[i].bbch,10);
+    if(isFinite(ant)&&isFinite(at)&&at<ant)
+      out.push({codigo:'bbch-retrocedendo', severidade:'conferir',
+        texto:'BBCH retrocede de '+ant+' ('+br(dia(comBbch[i-1]))+') para '+at+' ('+br(dia(comBbch[i]))+').'});
+  }
+
+  return out;
+}
+
+/* Valores fora do domínio da própria variável. A tela já valida na digitação;
+   isto pega o que entrou por outro caminho — importação, sincronização de uma
+   versão antiga, edição fora do formulário. Conta em vez de listar célula a
+   célula: vinte achados iguais são um achado com vinte ocorrências. */
+function _forenseDominio(av){
+  var out=[];
+  if(!av || !av.notas) return out;
+  var fora={};
+  (av.variaveis||[]).forEach(function(v){
+    var cfg=null; try{ cfg=_avCfg(av,v); }catch(e){ return; }
+    if(!cfg) return;
+    Object.keys(av.notas).forEach(function(k){
+      var raw=(av.notas[k]||{})[v];
+      if(raw==null||String(raw).trim()==='') return;
+      var n=parseFloat(String(raw).replace(',','.'));
+      if(!isFinite(n)) return;
+      var m='';
+      if(n<0) m='negativo';
+      else if(cfg.tipo==='pct' && n>100) m='acima de 100%';
+      else if(cfg.tipo==='escala' && n>cfg.escalaMax) m='acima do máximo da escala ('+cfg.escalaMax+')';
+      else if(cfg.tipo==='contagem' && Math.abs(n-Math.round(n))>1e-9) m='contagem fracionada';
+      if(!m) return;
+      var ch=v+'|'+m;
+      fora[ch]=fora[ch]||{v:v, m:m, n:0};
+      fora[ch].n++;
+    });
+  });
+  Object.keys(fora).forEach(function(ch){
+    var d=fora[ch];
+    out.push({codigo:'valor-fora-do-dominio', severidade:'conferir',
+      texto:d.n+' valor(es) '+d.m+' na variável "'+d.v+'".'});
+  });
+  return out;
+}
 function _forenseAchados(r){
   var out=[];
   if(!r) return out;
+  _forenseDominio(r).forEach(function(a){ out.push(a); });
 
   (r.consumos||[]).forEach(function(c){
     if(c && c.vencido) out.push({
@@ -9923,6 +10035,10 @@ function _pranchaPayload(qid, sid, variavel){
         .concat((s.aplicacoes||[]).map(function(a){ return _forenseDe(a,'APL'); }))
         .concat((s.avaliacoes||[]).map(function(a){ return _forenseDe(a,'AV'); }))
         .filter(Boolean),
+      /* Achados que não pertencem a um registro isolado: "avaliação antes da
+         aplicação" só existe quando se olham os dois. Vão à parte, e a folha os
+         mostra na mesma lista de achados. */
+      achadosEstudo:(function(){ try{ return _forenseAchadosEstudo(s, qid); }catch(e){ return []; } })(),
       trilha: (s.audit||[]).map(function(e){
         var q=new Date(e.ts||0);
         var id=_identidadeBPL(e.user,e.por);
@@ -10698,6 +10814,10 @@ function openStudyDetail(qid,sid){
      '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(_studyRandomOk(study)?'Randomizada':(study.randomizado?'A conferir':'Sequencial'))+'</b></div></div><div class="study-plan-actions">'+
      '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
      (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
+  /* O que o DESENHO do ensaio tem a dizer sobre si mesmo. Fica junto do
+     planejamento porque é ali que se conserta — depois da primeira aplicação,
+     mudar o delineamento não é mais correção, é outro ensaio. */
+  try{ h+=protocoloVerificaHtml(study); }catch(e){}
 
   /* Aplicações realizadas */
   h+='<div id="study-stage-execucao" class="study-stage-anchor" aria-hidden="true"></div>';
@@ -11391,6 +11511,38 @@ function _seTrocaContagem(){
   try{ syncStudyInputs(); }catch(e){}
   try{ renderStudyEditModal(); }catch(e){}
 }
+/* Capacidade do frasco, em LITROS, a partir do que a pessoa escreveu.
+   Número puro = litros, que é como todo estudo já cadastrado está gravado —
+   mudar isso reescreveria capacidade de estudo antigo. Com unidade escrita,
+   vale a unidade escrita. */
+function _capFrascoL(txt){
+  var s=String(txt==null?'':txt).trim();
+  if(!s) return 0;
+  var n=_numBR(s.replace(/[^\d.,-]/g,''),0);
+  if(!(n>0)) return 0;
+  var u=s.toLowerCase().replace(/\s/g,'');
+  if(/ml\b|ml$/.test(u)) return n/1000;
+  return n;
+}
+function _capFrascoTexto(litros){
+  var n=_numBR(litros,0);
+  if(!(n>0)) return '';
+  /* Abaixo de um litro, mL é como a pessoa pensa numa bancada. */
+  if(n<1) return String(Math.round(n*1000*1000)/1000).replace('.',',')+' mL';
+  return String(n).replace('.',',')+' L';
+}
+/* Diz o que foi entendido, na outra unidade — é a dica que teria evitado o
+   "frasco 200 L". */
+function _seCapDica(){
+  var el=document.getElementById('seCapDica'), inp=document.getElementById('seCapFrasco');
+  if(!el||!inp) return;
+  var L=_capFrascoL(inp.value);
+  if(!(L>0)){ el.textContent=inp.value.trim()?'':'Capacidade 0 — não confere se a calda cabe.'; return; }
+  var ml=Math.round(L*1000*1000)/1000;
+  el.innerHTML='Entendi <b>'+esc(String(L).replace('.',','))+' L</b> = '+
+    esc(String(ml).replace('.',','))+' mL'+
+    (L>=10?' — se quis dizer mililitros, escreva <b>'+esc(String(ml).replace('.',','))+' mL</b>':'');
+}
 function renderStudyEditModal(){
   var s=workingStudy;
   var q=data[curV]||{};
@@ -11508,7 +11660,14 @@ function renderStudyEditModal(){
     h+='<div class="se-row">';
     h+='<div class="se-field"><label>Volume morto (mL)</label><input type="number" id="seVolMorto" value="'+(s.volumeMorto||0)+'" min="0" step="1"></div>';
     h+='<div class="se-field"><label>Nº de frascos / preparo</label><input type="number" id="seNumFrascos" value="'+(s.numFrascos||1)+'" min="1" step="1"></div>';
-    h+='<div class="se-field"><label>Capacidade do frasco (L)</label><input type="number" id="seCapFrasco" value="'+(s.capacidadeFrasco||0)+'" min="0" step="0.1"></div>';
+    /* O campo aceita a UNIDADE, e não só o número. Ele fica ao lado de "Volume
+       morto (mL)", e digitar 200 pensando na unidade do vizinho é o erro natural —
+       aconteceu, e virou "frasco 200 L" num preparo de 62 mL. Número puro continua
+       significando litros, para não mudar nenhum estudo já cadastrado; quem
+       escrever "200 mL" é entendido. E a dica embaixo diz o que foi entendido,
+       porque um campo que interpreta sem mostrar o resultado troca uma armadilha
+       por outra. */
+    h+='<div class="se-field"><label>Capacidade do frasco</label><input type="text" inputmode="decimal" id="seCapFrasco" placeholder="0 = não conferir · ex.: 200 mL" value="'+esc(_capFrascoTexto(s.capacidadeFrasco))+'" oninput="_seCapDica()"><div class="e-hint" id="seCapDica" style="margin:2px 0 0"></div></div>';
     h+='</div>';
     h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de aplicação deste estudo. Volume morto = calda que sobra no equipamento. Capacidade 0 = não conferir se a calda cabe nos frascos.</div>';
   }
@@ -11658,7 +11817,8 @@ function renderStudyEditModal(){
         /* Equivalente em i.a.: duas formulações a 1 L/ha não são a mesma dose se uma
            tem 250 g/L e a outra 500. */
         var _ia=null; try{ _ia=tratEquivalenteIA(t); }catch(e){}
-        if(_ia) h+='<div class="e-hint" style="margin:2px 0 0">Equivalente: <b>'+esc((window.DoseCore?DoseCore.formatar(_ia.valor,''):_ia.valor))+' g i.a./ha</b></div>';
+        if(_ia) h+='<div class="e-hint" style="margin:2px 0 0">Equivalente: <b>'+esc(tratEquivalenteIATexto(_ia))+'</b>'+
+          (_ia.parcial?' <span style="color:#dccd8c">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
         /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
            PEDE a justificativa, e o campo fica ali mesmo, não escondido em obs. */
         if(tratDoseForaDaBula(t)){
@@ -11860,7 +12020,7 @@ function syncStudyInputs(){
   workingStudy.numRepeticoes=intVal("seReps",workingStudy.numRepeticoes||4);
   x=el("seVolMorto"); if(x) workingStudy.volumeMorto=Math.max(0,_numBR(x.value,0));
   x=el("seNumFrascos"); if(x) workingStudy.numFrascos=Math.max(1,Math.round(_numBR(x.value,1))||1);
-  x=el("seCapFrasco"); if(x) workingStudy.capacidadeFrasco=Math.max(0,_numBR(x.value,0));
+  x=el("seCapFrasco"); if(x) workingStudy.capacidadeFrasco=Math.max(0,_capFrascoL(x.value));
   x=el("seLabVol"); if(x) workingStudy.labVolumeMl=Math.max(0,_numBR(x.value,50))||50;
   x=el("seLabFonte"); if(x) workingStudy.labFonteTipo=x.value;
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
@@ -16969,16 +17129,35 @@ function _tratProximoId(study){
 
 /* Equivalente em i.a. de um tratamento, quando o item declara concentração. Duas
    formulações a 1 L/ha não são a mesma dose se uma tem 250 g/L e a outra 500. */
+/* Equivalente em i.a. do tratamento — UM POR ATIVO.
+   Antes esta função pegava a PRIMEIRA concentração que achasse no texto. Num
+   produto de dois ativos (2,4-D 406 g/L + picloram 103,6 g/L) ela devolvia 406 e
+   calava sobre o resto: um número certo apresentado como se fosse a história
+   inteira. Enquanto a concentração era digitada à mão isso era raro; com o
+   catálogo do Agrofit, onde todo registro traz os ativos com a concentração
+   embutida, passa a ser o caso comum.
+
+   NÃO SE SOMA os ativos: gramas de 2,4-D e gramas de picloram não são a mesma
+   grandeza, e um total único faria parecer que são. Sai uma linha por ativo. */
 function tratEquivalenteIA(t){
   var D=(typeof window!=='undefined')?window.DoseCore:null;
-  if(!D) return null;
+  if(!D || !D.equivalentesIA) return null;
   var it=tratItem(t); if(!it || !it.concentracao) return null;
-  var m=String(it.concentracao).match(/([\d.,]+)\s*(g\/L|g\/kg|%)/i);
-  if(!m) return null;
   var v=_calcNum(t.dose), u=_calcDoseUnit(t.dose);
   if(!(v>0)) return null;
-  var r=D.equivalenteIA(v, u, m[1].replace(',','.'), m[2].toLowerCase().replace('g/l','g/L').replace('g/kg','g/kg'));
-  return (r&&!r.erro)?r:null;
+  var r=D.equivalentesIA(v, u, it.concentracao);
+  return (r&&!r.erro&&r.itens&&r.itens.length)?r:null;
+}
+/* Uma linha por ativo, nomeando cada um quando o texto trouxe o nome. Produto de
+   ativo único continua saindo exatamente como saía antes. */
+function tratEquivalenteIATexto(r){
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  if(!r||!r.itens||!r.itens.length) return '';
+  function n(v){ return D?D.formatar(v,''):String(v); }
+  if(r.itens.length===1 && !r.itens[0].ia) return n(r.itens[0].valor)+' g i.a./ha';
+  return r.itens.map(function(i){
+    return (i.ia?(i.ia+' '):'')+n(i.valor)+' g i.a./ha';
+  }).join(' + ');
 }
 
 
