@@ -17787,8 +17787,10 @@ function _agrofitListaHtml(){
   if(t.length<2) return '<div class="it-hint">Digite ao menos duas letras da marca, do ingrediente ativo ou o número de registro.</div>';
   if(!_agrofitCat) return '';
   var res=AgrofitCore.buscar(_agrofitCat,t,{limite:12});
-  if(!res.length) return '<div class="it-hint">Nada com "'+esc(t)+'" no Agrofit. Pode ser produto experimental — cadastre à mão.</div>';
-  return res.map(function(r){
+  if(!res.length) return agrofitIdadeHtml()+'<div class="it-hint">Nada com "'+esc(t)+'" no Agrofit. Pode ser produto experimental — cadastre à mão.</div>';
+  /* A idade do catálogo aparece junto do resultado, não escondida numa tela de
+     configuração: é ali que ela muda a leitura do que se está vendo. */
+  return agrofitIdadeHtml()+res.map(function(r){
     var p=r.produto;
     return '<button type="button" class="it-agf" onclick="agrofitEscolher('+esc(JSON.stringify(p.nr))+','+esc(JSON.stringify(r.marca))+')">'+
       '<b>'+esc(r.marca||p.nr)+'</b>'+
@@ -18085,6 +18087,152 @@ function _itemLotesHtml(it){
   return h;
 }
 
+/* ===== LIGAR UM ITEM JÁ CADASTRADO AO AGROFIT ==============================
+   A busca do catálogo existia só no formulário de item NOVO. Quem já tinha
+   cadastro — que é todo mundo com base anterior à v185, e quem digita à mão —
+   nunca podia ligar um item a um registro depois. E como o achado de "produto
+   sem registro para esta cultura" só dispara em item COM registro, ele
+   simplesmente não rodava em base nenhuma real. A verificação existia e não
+   alcançava ninguém.
+
+   AQUI A REGRA É DIFERENTE DA TELA DE ITEM NOVO. Lá o formulário estava em
+   branco e preencher era ganho puro. Aqui já existe o que a pessoa digitou e
+   conferiu, então NUNCA se grava por cima: o catálogo mostra o que traria, os
+   campos VAZIOS podem ser preenchidos de uma vez, e cada campo que DIVERGE fica
+   visível com um botão só dele. Divergência é informação — pode ser erro de
+   digitação antigo, pode ser que o catálogo não descreva aquele item. Quem
+   decide é quem conhece o produto. */
+var _agLigTermo='', _agLigSel=null, _agLigItem=null;
+
+function agrofitLigarToggle(itemId){
+  _agLigItem=(_agLigItem===itemId)?null:itemId;
+  _agLigSel=null; _agLigTermo='';
+  if(_agLigItem) _agrofitCarregar(function(){ _agLigPintaLista(); });
+  _itensPinta();
+}
+function agrofitLigarBusca(){
+  var i=document.getElementById('itAgLigQ');
+  _agLigTermo=i?String(i.value||''):'';
+  if(_agLigTermo.trim().length>=2 && !_agrofitCat) _agrofitCarregar(function(){ _agLigPintaLista(); });
+  else _agLigPintaLista();
+}
+/* Só a lista é repintada — a caixa inteira levaria embora o campo em que se
+   está digitando. Foi assim que a busca do item novo deixou de buscar na v185. */
+function _agLigPintaLista(){
+  var box=document.getElementById('itAgLigRes'); if(!box) return;
+  box.innerHTML=_agLigListaHtml();
+}
+function _agLigListaHtml(){
+  if(_agrofitErro) return '<div class="it-hint" style="color:#b07d18">'+esc(_agrofitErro)+'</div>';
+  if(_agrofitCarregando) return '<div class="it-hint">Baixando o catálogo do MAPA (uma vez só)…</div>';
+  var t=String(_agLigTermo||'').trim();
+  if(t.length<2) return '<div class="it-hint">Digite ao menos duas letras da marca, do ingrediente ativo ou o número de registro.</div>';
+  if(!_agrofitCat) return '';
+  var res=AgrofitCore.buscar(_agrofitCat,t,{limite:10});
+  if(!res.length) return '<div class="it-hint">Nada com "'+esc(t)+'" no Agrofit. Produto experimental não tem registro — e não ter registro não é problema nenhum.</div>';
+  return res.map(function(r){
+    var p=r.produto;
+    return '<button type="button" class="it-agf" onclick="agrofitLigarEscolher('+esc(JSON.stringify(p.nr))+','+esc(JSON.stringify(r.marca))+')">'+
+      '<b>'+esc(r.marca||p.nr)+'</b><span>'+esc([p.classe,p.formulacao].filter(Boolean).join(' · '))+'</span>'+
+      '<small>'+esc(p.ativos)+'</small>'+
+      '<small style="opacity:.75">reg. '+esc(p.nr)+' · '+esc(p.titular)+'</small></button>';
+  }).join('');
+}
+function agrofitLigarEscolher(nr, marca){
+  if(!_agrofitCat) return;
+  var m=AgrofitCore.paraItem(AgrofitCore.porRegistro(_agrofitCat,nr), marca);
+  if(m.erro){ _agrofitErro=m.erro; _agLigPintaLista(); return; }
+  _agLigSel=m; _itensPinta();
+}
+/* Os campos que o catálogo tem a dizer sobre este item, e como cada um está. */
+function _agLigCampos(it, m){
+  return [
+    ['registro',    'Registro MAPA',      m.registro],
+    ['titular',     'Titular',            m.titular],
+    ['formulacao',  'Formulação',         m.formulacao],
+    ['concentracao','Concentração',       m.concentracao],
+    ['ativos',      'Ingrediente ativo',  m.ativos]
+  ].map(function(c){
+    var atual=String((it||{})[c[0]]||'').trim(), novo=String(c[2]||'').trim();
+    return {campo:c[0], rotulo:c[1], atual:atual, novo:novo,
+            vazio:(!atual && !!novo), diverge:(!!atual && !!novo && atual!==novo)};
+  }).filter(function(c){ return c.novo; });
+}
+function agrofitLigarAplicar(itemId, campo){
+  if(!_agLigSel) return;
+  var c=_agLigCampos(itemPorId(itemId), _agLigSel).filter(function(x){ return x.campo===campo; })[0];
+  if(!c) return;
+  itemAtualizar(itemId, (function(){ var o={}; o[campo]=c.novo; return o; })());
+  _itensPinta();
+}
+function agrofitLigarPreencherVazios(itemId){
+  if(!_agLigSel) return;
+  var it=itemPorId(itemId); if(!it) return;
+  var patch={}, n=0;
+  _agLigCampos(it,_agLigSel).forEach(function(c){ if(c.vazio){ patch[c.campo]=c.novo; n++; } });
+  /* Os sinônimos só entram se o item ainda não tem nenhum: são as OUTRAS marcas
+     do mesmo registro, e sobrescrever apelidos que a equipe usa seria perder
+     informação que o catálogo não tem como conhecer. */
+  if((_agLigSel.sinonimos||[]).length && !((it.sinonimos||[]).length)){
+    patch.sinonimos=_agLigSel.sinonimos.slice(); n++;
+  }
+  if(!n){ alert('Não há campo vazio para preencher — o que diverge você aplica um a um.'); return; }
+  itemAtualizar(itemId, patch);
+  _itensPinta();
+}
+/* A IDADE DO CATÁLOGO. Ele é um retrato do dia em que foi destilado; um catálogo
+   que envelhece calado acaba mentindo — produto cancelado pelo MAPA continua
+   parecendo registrado. Então a data aparece, e depois de seis meses ela vira
+   aviso: não bloqueia nada, só deixa de ser silêncio. */
+function agrofitIdadeHtml(){
+  var g=(_agrofitCat&&_agrofitCat.gerado)||'';
+  if(!g) return '';
+  var dias=null;
+  try{ dias=Math.floor((Date.now()-new Date(g+'T00:00:00').getTime())/86400000); }catch(e){}
+  var br=g; try{ br=isoToBR(g)||g; }catch(e){}
+  var velho=(dias!=null && dias>180);
+  return '<div class="it-hint" style="'+(velho?'color:#b07d18':'')+'">'+
+    (velho?'⚠ ':'')+'Catálogo do Agrofit de '+esc(br)+
+    (dias!=null?(' · '+dias+' dia'+(dias===1?'':'s')):'')+
+    (velho?'. O MAPA atualiza todo dia; um catálogo antigo pode mostrar como registrado um produto já cancelado. Regere com tools/agrofit-destila.py.':'.')+
+    '</div>';
+}
+function _agLigHtml(it){
+  if(_agLigItem!==it.id)
+    return '<button class="it-btn alt" style="margin:2px 0 10px" onclick="agrofitLigarToggle('+esc(JSON.stringify(it.id))+')">'+
+           (it.registro?'🔎 Conferir no Agrofit':'🔎 Ligar ao Agrofit')+'</button>';
+  var h='<div class="it-agf-sel" style="margin-bottom:10px">'+
+    '<div class="it-agf-selh"><b>Agrofit</b>'+
+    '<button type="button" onclick="agrofitLigarToggle('+esc(JSON.stringify(it.id))+')">fechar</button></div>'+
+    agrofitIdadeHtml()+
+    '<div class="it-f" style="margin-top:6px"><input id="itAgLigQ" placeholder="marca, ingrediente ativo ou nº de registro" '+
+    'value="'+esc(_agLigTermo||'')+'" oninput="agrofitLigarBusca()" autocomplete="off"></div>'+
+    '<div id="itAgLigRes" class="it-agf-res">'+_agLigListaHtml()+'</div>';
+  if(_agLigSel){
+    var campos=_agLigCampos(it,_agLigSel);
+    var vazios=campos.filter(function(c){ return c.vazio; }).length;
+    var divs=campos.filter(function(c){ return c.diverge; });
+    h+='<div style="border-top:1px solid rgba(47,111,72,.25);margin-top:6px;padding-top:6px">'+
+       '<div style="font-size:11px;margin-bottom:4px"><b>'+esc(_agLigSel.nome)+'</b> · reg. '+esc(_agLigSel.registro)+'</div>';
+    campos.forEach(function(c){
+      var cor=c.diverge?'#dccd8c':(c.vazio?'#7fbf98':'#8a948e');
+      h+='<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-top:1px solid rgba(255,255,255,.05)">'+
+         '<span style="color:#8a948e;flex:0 0 34%">'+esc(c.rotulo)+'</span>'+
+         '<span style="flex:1;min-width:0;text-align:right;color:'+cor+';word-break:break-word">'+esc(c.novo)+
+         (c.diverge?('<br><span style="color:#8a948e">atual: '+esc(c.atual)+'</span>'):'')+'</span>'+
+         (c.diverge?('<button type="button" class="it-btn alt" style="padding:3px 7px;font-size:10px;flex:0 0 auto" onclick="agrofitLigarAplicar('+
+            esc(JSON.stringify(it.id))+','+esc(JSON.stringify(c.campo))+')">usar</button>'):'')+
+         '</div>';
+    });
+    if(divs.length)
+      h+='<div class="it-hint" style="color:#dccd8c">'+divs.length+' campo(s) diferem do que está cadastrado. Não sobrescrevo nada: aplique um a um se quiser.</div>';
+    h+='<button class="it-btn" style="margin-top:7px;width:100%" onclick="agrofitLigarPreencherVazios('+esc(JSON.stringify(it.id))+')">'+
+       'Preencher os '+vazios+' campo(s) vazio(s)</button>';
+    h+='</div>';
+  }
+  return h+'</div>';
+}
+
 function _itemFichaHtml(id){
   if(id==='__novo__') return _itemNovoHtml();
   var it=itemPorId(id);
@@ -18093,6 +18241,7 @@ function _itemFichaHtml(id){
   var h='<div class="it-box"><div class="it-top"><div class="it-t">'+esc(it.nome||'Novo item')+'</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
   h+='<button class="it-btn alt" onclick="itemVoltar()">‹ Todos os itens</button><div style="height:10px"></div>';
+  h+=_agLigHtml(it);
 
   /* Duplicata avisa, não funde. Fusão automática de cadastro é como se perde dado
      sem ninguém notar. */

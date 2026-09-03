@@ -39,6 +39,8 @@ var pintasCompletas=0;
 var ctx={
   document:{ getElementById:function(id){ return nos[id]||null; } },
   esc:function(s){ return String(s==null?'':s); },
+  isoToBR:function(x){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(x||''); return m?(m[3]+'/'+m[2]+'/'+m[1]):''; },
+  Date:Date,
   _itensPinta:function(){ pintasCompletas++; repintaCaixa(); },
   AgrofitCore:require('./vendor/agrofit-core.js'),
   fetch:function(){ return {then:function(){ return {then:function(){ return {catch:function(){ return null; }}; }}; }}; },
@@ -48,7 +50,9 @@ vm.createContext(ctx);
 vm.runInContext([
   'var _agrofitCat=null,_agrofitCarregando=false,_agrofitSel=null,_agrofitErro="",_agrofitTermo="";',
   pega('_agrofitCarregar'), pega('agrofitBusca'),
-  pega('_agrofitPintaLista'), pega('_agrofitListaHtml')
+  pega('_agrofitPintaLista'), pega('_agrofitListaHtml'),
+  /* A lista passou a mostrar a idade do catálogo junto do resultado. */
+  pega('agrofitIdadeHtml')
 ].join('\n'),ctx);
 
 function digita(txt){ nos.itAgrofitQ.value=txt; ctx.agrofitBusca(); }
