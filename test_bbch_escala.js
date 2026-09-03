@@ -1,118 +1,94 @@
-/* A fenologia deixa de adivinhar.
+/* A ponte do app para o motor de fenologia.
  *
  * O QUE ESTE TESTE PROTEGE
  *
- * O mapa de culturas roteava 53 culturas para a escala de OUTRA cultura sem que
- * nada dissesse isso. Um ensaio de eucalipto registrava "89 — Maturação plena
- * (ponto colheita)", herdado do citros. Trigo e arroz recebiam a escala do
- * milho, que não tem perfilhamento (2) nem emborrachamento (4) — justamente os
- * dois estádios em que se decide regulador, fungicida de folha bandeira e
- * herbicida de pós num cereal.
+ * As escalas mudaram de endereço (app.js -> vendor/bbch-core.js) porque viraram
+ * conteúdo grande demais para viver dentro da interface. Este teste cuida do que
+ * ficou no app: a ponte, o aviso na tela e o rótulo do estádio já gravado.
+ * O conteúdo em si é de `test_bbch_culturas.js`.
  *
- * O número saía com cara de BBCH oficial e ia para a folha BPL. É o mesmo erro
- * que o app proíbe em todo o resto: adivinhar em silêncio.
+ * As três garantias da v186 continuam valendo e continuam verificadas aqui:
  *
- * Três destinos agora, e o teste guarda os três:
- *   1. escala PRÓPRIA para os cereais e para o arroz;
- *   2. escala EMPRESTADA continua existindo, mas DECLARADA na tela;
- *   3. SEM escala onde emprestar não é aproximação, é invenção.
+ *  1. Trigo e arroz NÃO usam a escala do milho — eles perfilham e emborracham,
+ *     e era isso que o milho não tinha.
+ *  2. Nenhuma cultura recebe os rótulos de OUTRA cultura. O que mudou na v187 é
+ *     que quem não tem monografia própria passou a usar a ESCALA GERAL da BBCH
+ *     (publicada para esse caso, com rótulos genéricos) em vez de ficar sem nada.
+ *  3. O estádio já gravado se explica sozinho, inclusive o órfão.
  *
  * Rodar: node test_bbch_escala.js
  */
 var fs=require('fs'),vm=require('vm');
 var src=fs.readFileSync('app.js','utf8');
+function pega(n){
+  var i=src.indexOf('function '+n+'(');
+  if(i<0) throw new Error('não achei a função '+n+' em app.js');
+  var j=i,d=0,v=false;
+  for(;j<src.length;j++){ if(src[j]==='{'){d++;v=true;} else if(src[j]==='}'){d--;if(v&&d===0){j++;break;}} }
+  return src.slice(i,j);
+}
 var falhas=0,passou=0;
 function ck(ok,n){ if(ok){passou++;console.log('  ok    '+n);}else{falhas++;console.log('  FALHA '+n);} }
 
-function pega(n){var i=src.indexOf('function '+n+'(');var j=i,d=0,v=false;
- for(;j<src.length;j++){if(src[j]==='{'){d++;v=true;}else if(src[j]==='}'){d--;if(v&&d===0){j++;break;}}}
- return src.slice(i,j);}
-var ctx={esc:function(s){return String(s==null?'':s);}, Object:Object, String:String};
+var BBCHCore=require('./vendor/bbch-core.js');
+var ctx={ window:{BBCHCore:BBCHCore}, BBCHCore:BBCHCore,
+          esc:function(s){return String(s==null?'':s);},
+          String:String, Object:Object };
 vm.createContext(ctx);
-var i=src.indexOf('var BBCH = {');
-var fim=src.indexOf('function getBBCHInfo');
-vm.runInContext(src.slice(i,fim),ctx);
+vm.runInContext([pega('_nucleoBBCH'), pega('bbchListDaQuadra'), pega('getBBCHList'),
+                 pega('getBBCHOrigem'), pega('bbchAvisoHtml'), pega('getBBCHInfo'),
+                 pega('bbchRotulo')].join('\n'),ctx);
 
-var BBCH=ctx.BBCH, MAP=ctx.BBCH_MAP, origem=ctx.getBBCHOrigem, lista=ctx.getBBCHList;
+console.log('\n--- A ponte encontra o motor ---');
+ck(ctx._nucleoBBCH()===BBCHCore,'o app acha o BBCHCore');
+ck(ctx.getBBCHList('Soja')!==null,'e devolve a escala da soja');
+ck(ctx.getBBCHList('Quiabo')===null,'cultura fora do mapa continua sem escala');
 
-function principais(escala){
-  var s={}; (BBCH[escala]||[]).forEach(function(e){ s[e.code[0]]=1; });
-  return Object.keys(s).sort().join('');
-}
-
-console.log('\n--- Os cereais ganharam escala própria, com os dez estádios ---');
+console.log('\n--- Garantia 1 da v186: cereais não usam a escala do milho ---');
 ['Trigo','Cevada','Aveia','Centeio','Triticale'].forEach(function(c){
-  var o=origem(c);
-  ck(o && o.escala==='cereais' && o.propria===true, c+' usa a escala de cereais, como escala própria');
+  ck(ctx.getBBCHOrigem(c).escala==='cereais',c+' usa a escala de cereais');
 });
-ck(principais('cereais')==='0123456789','a escala de cereais tem os 10 estádios principais ('+principais('cereais')+')');
+ck(ctx.getBBCHOrigem('Arroz').escala==='arroz','arroz tem a sua');
+var cer=ctx.getBBCHList('Trigo').map(function(e){return e.label;}).join(' | ');
+ck(/perfilhamento/i.test(cer),'e perfilhamento está lá');
+ck(/emborrachamento/i.test(cer),'e emborrachamento também');
+ck(!/camada preta|grão duro \(milho\)/i.test(cer),'sem rótulo de milho no meio');
 
-console.log('\n--- E os dois estádios que faltavam existem de verdade ---');
-var cer=BBCH.cereais.map(function(e){return e.label;}).join(' | ');
-ck(/perfilhamento/i.test(cer),'perfilhamento está na escala');
-ck(/emborrachamento/i.test(cer),'emborrachamento está na escala');
-ck(/folha bandeira/i.test(cer),'folha bandeira está na escala');
+console.log('\n--- Garantia 2: eucalipto não recebe os rótulos do citros ---');
+var euc=ctx.getBBCHList('Eucalipto');
+ck(euc!==null,'eucalipto TEM escala agora (a geral) — não ficou sem nada');
+var eucTxt=euc.map(function(e){return e.label;}).join(' | ');
+ck(!/gema dormente \(citros\)|fruto colhido/i.test(eucTxt),'e nenhum rótulo de citros nela');
+ck(ctx.getBBCHOrigem('Eucalipto').nivel==='geral','o nível é declarado como geral');
+var cit=ctx.getBBCHList('Citros');
+ck(cit!==euc,'a escala do citros e a geral são objetos diferentes');
 
-console.log('\n--- Arroz saiu do milho ---');
-var oa=origem('Arroz');
-ck(oa && oa.escala==='arroz' && oa.propria===true,'arroz tem escala própria');
-ck(principais('arroz')==='0123456789','com os 10 estádios principais');
-ck(/pan[íi]cula/i.test(BBCH.arroz.map(function(e){return e.label;}).join(' ')),'e com a emissão da panícula, que é dele');
+console.log('\n--- O aviso da tela ---');
+ck(ctx.bbchAvisoHtml('Soja')==='','escala própria não gera aviso');
+ck(ctx.bbchAvisoHtml('Milho')==='','milho também não');
+var aG=ctx.bbchAvisoHtml('Eucalipto');
+ck(aG.length>0,'escala geral gera aviso');
+ck(/geral/i.test(aG),'que diz que é a geral');
+var aGr=ctx.bbchAvisoHtml('Trigo');
+ck(aGr.length>0,'escala de grupo gera aviso');
+ck(/norma|grupo/i.test(aGr),'que diz que o grupo é da norma');
+ck(ctx.bbchAvisoHtml('Quiabo')==='','cultura sem escala não gera aviso de escala');
 
-console.log('\n--- O que continua emprestado é DECLARADO ---');
-[['Pimentão','tomate'],['Melancia','melão'],['Girassol','soja'],['Uva','citros'],['Sorgo','cereais']].forEach(function(par){
-  var o=origem(par[0]);
-  ck(o && o.propria===false,par[0]+' é declarado como escala emprestada');
-  ck(o && o.base===par[1],'  e diz de quem: '+(o&&o.base));
-  ck(!!(o&&o.nota),'  com o motivo escrito');
-});
-
-console.log('\n--- O aviso aparece só quando há empréstimo ---');
-ck(ctx.bbchAvisoHtml('Uva').indexOf('Escala emprestada')>=0,'uva mostra o aviso');
-ck(ctx.bbchAvisoHtml('Uva').indexOf('citros')>=0,'e nomeia a escala de origem');
-ck(ctx.bbchAvisoHtml('Trigo')==='','trigo NÃO mostra aviso — a escala é dele');
-ck(ctx.bbchAvisoHtml('Soja')==='','soja também não');
-ck(ctx.bbchAvisoHtml('Eucalipto')==='','cultura sem escala não mostra aviso de empréstimo');
-
-console.log('\n--- Onde emprestar seria invenção, o app não oferece nada ---');
-['Eucalipto','Seringueira','Erva-mate','Chá'].forEach(function(c){
-  ck(!MAP[c],c+' saiu do mapa — não tem fenologia de fruto');
-  ck(lista(c)===null,'  e o seletor de estádio não aparece para ele');
-  ck(origem(c)===null,'  nem origem de escala');
-});
-
-console.log('\n--- As culturas que já tinham escala própria não mudaram ---');
-[['Soja','soja'],['Milho','milho'],['Algodão','algodao'],['Café','cafe'],['Citros','citros'],
- ['Feijão','feijao'],['Tomate','tomate'],['Cana','cana'],['Melão','melao'],['Pastagem','pastagem']].forEach(function(p){
-  var o=origem(p[0]);
-  ck(o && o.escala===p[1] && o.propria===true,p[0]+' segue com a sua escala');
-});
-
-console.log('\n--- Cultura desconhecida não ganha escala por acidente ---');
-ck(lista('Quiabo')===null,'cultura fora do mapa não tem lista');
-ck(origem('')===null,'cultura vazia não tem origem');
-
-console.log('\n--- O estádio JÁ GRAVADO se explica sozinho ---');
-/* A limpeza do mapa deixou registros órfãos: um ensaio de eucalipto que gravou
-   "89" o fez quando o app servia a escala do citros. O código fica — apagá-lo
-   seria reescrever o passado — mas não pode voltar a parecer interpretável. */
-vm.runInContext([pega('getBBCHInfo'),pega('bbchRotulo')].join('\n'),ctx);
+console.log('\n--- Garantia 3: o estádio já gravado se explica ---');
 var rot=ctx.bbchRotulo;
-ck(rot('Trigo','21')==='BBCH 21 · Perfilhamento','trigo 21 diz perfilhamento: '+rot('Trigo','21'));
-ck(rot('Trigo','45')==='BBCH 45 · Emborrachamento','trigo 45 diz emborrachamento');
-ck(/escala de citros/.test(rot('Uva','65')),'uva declara de quem é a fase: '+rot('Uva','65'));
-ck(/sem escala/.test(rot('Eucalipto','89')),'eucalipto órfão diz que não há escala: '+rot('Eucalipto','89'));
-ck(/fora da escala/.test(rot('Trigo','63')),'código que não existe na escala é apontado: '+rot('Trigo','63'));
+ck(rot('Trigo','21')==='BBCH 21 · Perfilhamento','trigo 21: '+rot('Trigo','21'));
+ck(rot('Batata','45').indexOf('Tuberização')>=0,'batata 45: '+rot('Batata','45'));
+ck(/fora da escala/.test(rot('Trigo','63')),'código inexistente é apontado: '+rot('Trigo','63'));
+ck(/sem escala/.test(rot('Quiabo','89')),'cultura sem escala é apontada: '+rot('Quiabo','89'));
 ck(rot('Soja','')==='','sem estádio gravado, nada é dito');
+ck(/escala geral/i.test(rot('Eucalipto','65')),'estádio na geral declara a procedência: '+rot('Eucalipto','65'));
+ck(!/escala/i.test(rot('Trigo','21')),'e no grupo NÃO repete a procedência em todo registro — vira ruído');
 
-console.log('\n--- Todo estádio de toda escala é bem formado ---');
-var ruins=0;
-Object.keys(BBCH).forEach(function(k){
-  BBCH[k].forEach(function(e){
-    if(!/^\d{2}$/.test(e.code) || !e.label || !e.fase) ruins++;
-  });
-});
-ck(ruins===0,'nenhum estádio malformado em '+Object.keys(BBCH).length+' escalas');
+console.log('\n--- Laboratório continua sem fenologia de planta ---');
+ctx.isQuadraLab=function(qid){ return qid==='lab1'; };
+vm.runInContext(pega('bbchListDaQuadra'),ctx);
+ck(ctx.bbchListDaQuadra('lab1','Soja')===null,'quadra de laboratório não oferece BBCH nem com cultura preenchida');
+ck(ctx.bbchListDaQuadra('q1','Soja')!==null,'quadra de campo oferece');
 
 console.log('');
 if(falhas){ console.log('FALHOU: '+falhas+' de '+(falhas+passou)); process.exit(1); }
