@@ -4645,6 +4645,40 @@ function statDBC(s, av, v){
   var SStot=0; all.forEach(function(x){ SStot+=Math.pow(x-grand,2); });
   var SSe=Math.max(0,SStot-SSt-SSb), dft=t-1, dfb=r-1, dfe=(t-1)*(r-1);
   var MSt=SSt/dft, MSe=dfe>0?SSe/dfe:0, F=MSe>0?MSt/MSe:Infinity, p=_fpval(F,dft,dfe);
+  /* ===== SEM VARIACAO RESIDUAL NAO EXISTE TESTE =============================
+     Caso real de bancada: testemunha 0/0/0 e produto 10/10/10. As repeticoes
+     concordam perfeitamente dentro de cada tratamento, entao SSe = 0.
+
+     O que acontecia: F virava Infinity, `_fpval` devolvia 1 — "nao
+     significativo" — e a DMS virava ZERO, o que faz o Tukey separar QUALQUER
+     diferenca. O cartao mostrava "p=1 · ns" ao lado das letras "a" e "b". Duas
+     respostas contrarias no mesmo lugar, justamente quando o produto funcionou
+     perfeitamente. E o agronomo le as letras.
+
+     Nem "significativo" nem "nao significativo" e verdade aqui: o teste F NAO
+     PODE SER CALCULADO sem termo de erro. Dizer p=1 e pior que calar, porque
+     sugere evidencia de que nao ha diferenca — quando a diferenca e total.
+
+     O limiar e RELATIVO porque residuo quase-zero de arredondamento e o mesmo
+     problema pelo outro lado: com valores na casa de 1e12, sobra ruido de ponto
+     flutuante e o F explode para 1e8, saindo "significativo" a partir de nada. */
+  var _semResiduo=null;
+  if(SStot<=0)
+    _semResiduo='Todas as parcelas deram o mesmo valor. Sem nenhuma variação não há o que comparar.';
+  else if(SSe<=SStot*1e-9)
+    _semResiduo='As repetições concordam perfeitamente dentro de cada tratamento: não há variação residual, '+
+                'e sem ela o teste F não pode ser calculado. As médias abaixo estão certas; a comparação '+
+                'estatística é que não existe com este dado.';
+  if(_semResiduo){
+    var _tM={}; ts.forEach(function(tid){ _tM[tid]=Y[tid].reduce(function(a,b){return a+b;},0)/r; });
+    var _sent='menor'; try{ _sent=_avSentido(av,v); }catch(e){}
+    var _ord=ts.slice().sort(function(a,b){ return _sent==='maior'?(_tM[b]-_tM[a]):(_tM[a]-_tM[b]); });
+    return { t:t,r:r,N:N, grand:grand, dft:dft,dfb:dfb,dfe:dfe,
+             SSt:SSt,SSb:SSb,SSe:SSe,SStot:SStot, MSt:MSt,MSe:MSe,
+             F:null, p:null, cv:null, q:null, hsd:null,
+             tMean:_tM, letras:{}, order:_ord, sentido:_sent, sig:false,
+             semResiduo:_semResiduo };
+  }
   var cv=grand!==0?Math.sqrt(MSe)/Math.abs(grand)*100:null;
   var q=_qtukey(t,dfe,0.05), hsd=q*Math.sqrt(MSe/r);
   var sentido='menor';try{sentido=_avSentido(av,v);}catch(e){}
@@ -4786,7 +4820,8 @@ function buildStudyRecord(qid,s){
         }
         var st=(typeof statDBC==='function')?statDBC(s,a,v):null;
         if(!st){ L.push(v+' — '+(isoToBR(a.data)||'')+'\t(insuficiente ou desbalanceado p/ ANOVA)'); return; }
-        L.push(v+' — '+(isoToBR(a.data)||'')+'\tF='+_r1(st.F)+'\tp='+(st.p<0.001?'<0,001':_r1(st.p))+'\tCV='+_r1(st.cv)+'%\t'+(st.sig?'significativo':'ns')+'\t(ANOVA-DBC rapida — motor nao rodou)');
+        if(st.semResiduo){ L.push(v+' — '+(isoToBR(a.data)||'')+'\tsem variacao residual: teste F nao calculavel'); }
+        else L.push(v+' — '+(isoToBR(a.data)||'')+'\tF='+_r1(st.F)+'\tp='+(st.p<0.001?'<0,001':_r1(st.p))+'\tCV='+_r1(st.cv)+'%\t'+(st.sig?'significativo':'ns')+'\t(ANOVA-DBC rapida — motor nao rodou)');
         L.push('Trat\tProduto\tMedia\tLetra');
         (st.order||(s.tratamentos||[]).map(function(t){return t.id;})).forEach(function(tid){
           var t=(s.tratamentos||[]).find(function(x){return x.id===tid;})||{};
@@ -4884,6 +4919,7 @@ function buildStudyModelo(qid, s, opts){
     });
     if(!paraColar){ var rf=15+trats.length;
       if(be){ lbl(rf,c0,(be.metodo||'comparação')+(be.p!=null?('  p='+(be.p<0.001?'<0,001':_r1(be.p))+(be.p<0.05?'  *':'  ns')):'')+'  · motor BioEstat'); }
+      else if(st && st.semResiduo){ lbl(rf,c0,'Sem variação residual — teste F não calculável. '+st.semResiduo); }
       else if(st){ lbl(rf,c0,'F='+_r1(st.F)+'  p='+(st.p<0.001?'<0,001':_r1(st.p))+'  CV='+_r1(st.cv)+'%'+(st.sig?'  *':'  ns')+'  · ANOVA-DBC rápida'); }
     }
   }); });
@@ -5286,7 +5322,9 @@ function _bioestatStatSheet(qid,s){
     try{st=av&&statDBC(s,av,job.variavel);}catch(e){st=null;}
     if(!st)return false;
     var aviso=erroAvancado?('Motor avançado: '+erroAvancado):'Diagnósticos avançados ainda em processamento; ANOVA-DBC e Tukey 5% calculados localmente.';
-    add(job,'CONCLUIDO_RAPIDO','Resumo','Resultado imediato',{metodo:'Tukey 5%',tipoAnalise:'ANOVA-DBC',mse:st.MSe,dfErro:st.dfe,p:st.p,cv:st.cv,resultado:st.sig?'significativo':'não significativo',interpretacao:aviso},st);
+    add(job,'CONCLUIDO_RAPIDO','Resumo','Resultado imediato',{metodo:st.semResiduo?'':'Tukey 5%',tipoAnalise:'ANOVA-DBC',mse:st.MSe,dfErro:st.dfe,p:st.p,cv:st.cv,
+      resultado:st.semResiduo?'teste não calculável':(st.sig?'significativo':'não significativo'),
+      interpretacao:(st.semResiduo||aviso)},st);
     [
       {fonte:'Tratamentos',gl:st.dft,sq:st.SSt,qm:st.MSt,F:st.F,p:st.p},
       {fonte:'Blocos',gl:st.dfb,sq:st.SSb,qm:st.dfb?st.SSb/st.dfb:null},
@@ -10656,12 +10694,17 @@ function _bioestatRapidoCard(job,study){
   var nf=function(x,d){return (x==null||!isFinite(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:d==null?2:d});};
   var pf=function(x){return x<.001?'&lt;0,001':nf(x,3);};
   var rows=(st.order||[]).map(function(tid){return '<tr><td class="av-tname">'+esc(tid)+'</td><td>'+nf(st.tMean[tid],2)+'</td><td><b style="color:#1f6f43">'+esc((st.letras||{})[tid]||'—')+'</b></td></tr>';}).join('');
+  /* Sem termo de erro nao ha teste: as MEDIAS ficam (elas estao certas), o
+     p-valor e as letras nao aparecem, e o motivo ocupa o lugar deles. */
+  var _meta = st.semResiduo
+    ? '<div class="bio-fast-meta" style="color:#dccd8c">⚠ '+esc(st.semResiduo)+'</div>'
+    : '<div class="bio-fast-meta">ANOVA-DBC · F='+nf(st.F,2)+' · p='+pf(st.p)+' · CV '+nf(st.cv,1)+'% · Tukey 5% · DMS '+nf(st.hsd,2)+'</div>';
   return '<div class="bio-fast-card"><div class="bio-fast-top"><b>'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span>prévia imediata</span></div>'+
     /* A DMS era calculada em todo cálculo e não aparecia em lugar nenhum. É ela
        que diz o que as letrinhas escondem: de quanto duas médias precisam
        diferir para serem diferentes de verdade. Sem ela, o leitor compara 12,1
        com 11,8 no olho e conclui o que quiser. */
-    '<div class="bio-fast-meta">ANOVA-DBC · F='+nf(st.F,2)+' · p='+pf(st.p)+' · CV '+nf(st.cv,1)+'% · Tukey 5% · DMS '+nf(st.hsd,2)+'</div>'+
+    _meta+
     '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<small>Resultado local disponível agora. Pressupostos, rota alternativa e triagem forense seguem em segundo plano.</small></div>';
 }
