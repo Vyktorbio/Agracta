@@ -1,3 +1,132 @@
+AGRACTA — 11a publicacao                    03/09/2026
+=====================================================
+
+Leva: 3 arquivos de codigo + 3 de teste.
+  CODIGO:  app.js  vendor/dose-core.js  vendor/protocolo-core.js
+           index.html  sw.js
+  TESTE:   test_volume_calda.js        (novo)
+           test_modo_preparo.js        (novo)
+           test_volume_calda_fluxo.js  (novo)
+  DOCS:    docs/ROADMAP.md
+
+O PROXY NAO PRECISA SUBIR. Nada mudou nele nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+1) O VOLUME DE CALDA DEIXOU DE SER TEXTO
+
+Este e o erro que voce encontrou, e ele explica o "NAO PREPARE" junto de uma
+receita absurda.
+
+O protocolo trazia:
+
+    1,5 L AGUA (TOTAL 3,0 L/ha)
+
+e a calculadora pegava o PRIMEIRO numero — 1,5. O que acontece a seguir e a
+parte que ninguem conseguia ver: com 1,5 L/ha no lugar de 3, o Sankari (1,5
+L/ha) passa a ocupar 100% DA CALDA. Nao sobra espaco para agua nenhuma, e o
+motor recusa preparar. O bloqueio estava CERTO — ele so recusava por um motivo
+invisivel na tela.
+
+Conferi a sua conta e ela bate exatamente: parcela 5x3 m, 4 parcelas, 300 mL de
+volume morto e 3 L/ha dao 318 mL de calda, Sankari 159 mL e Silwet 105 uL.
+
+Agora, texto com mais de um numero NAO E INTERPRETADO: vira pergunta, com os
+candidatos na tela. Quando so um numero esta qualificado por area ("3,0 L/ha"),
+ele aparece marcado como sugestao — e so sugestao. Escolher outro numero em
+silencio nao conserta o erro, so muda a vitima.
+
+Enquanto o volume nao for confirmado, NENHUMA receita e pintada: meia conta na
+bancada e pior que conta nenhuma. O texto original continua guardado no
+protocolo; o que se confirma vira um NUMERO ao lado dele, e a correcao entra na
+trilha de auditoria.
+
+2) UMA CONFIRMACAO VALE PARA O ESTUDO INTEIRO
+
+A primeira versao da pergunta acertava o protocolo e esquecia os tratamentos:
+voce confirmava 3,0 L/ha uma vez, e T1 a T4 — cujos textos dizem ".. (TOTAL 3,0
+L/ha)" — continuavam bloqueados pedindo a mesma coisa quatro vezes.
+
+Agora a confirmacao e reaproveitada, mas SO quando coincide com o unico numero
+que o proprio texto qualifica por area. Se o tratamento declara um total
+diferente do confirmado, o cartao continua bloqueado — divergencia e informacao,
+nao ruido a ser silenciado.
+
+Na mesma correcao: no preparo, testemunha e apenas a MARCADA como tal. A analise
+estatistica usa o primeiro tratamento como recurso para estudos antigos sem
+marcacao; na bancada isso rotulava T1 de testemunha sem que ninguem tivesse dito
+isso.
+
+3) MODO PREPARO
+
+Voce disse que as calculadoras precisam facilitar de verdade. A tela tinha SETE
+campos sempre abertos e todos os tratamentos empilhados abaixo — e quem esta na
+bancada quer duas coisas: quanto preparar e quanto medir.
+
+  ANTES                             AGORA
+  7 campos sempre abertos           uma linha: 5x3 m · 4 parcelas · 3 L/ha ·
+                                    morto 300 mL · frasco 1,9 L
+  todos os tratamentos empilhados   abas T1 T2 ... Todos, um por vez
+  editar dose: fechar, abrir o      a dose e campo NA PROPRIA LINHA da receita
+  protocolo, rolar, achar, voltar
+  sem navegacao                     botoes anterior e proximo
+  capacidade em L ao lado de um     seletor mL/L ao lado do numero
+  campo em mL
+
+A ARITMETICA NAO MUDOU UMA LINHA. So mudou o que se mostra e em que ordem.
+
+TRES COISAS QUE EU MANTIVE CONTRA O PEDIDO LITERAL, e por que:
+
+  - O ATALHO PARA O PROTOCOLO CONTINUA. Editar na linha resolve trocar dose e
+    unidade de um componente que ja existe; nao resolve acrescentar item, remover
+    componente nem transformar texto livre em receita. Tirar o atalho deixaria
+    esses casos sem caminho — o oposto de facilitar. (Um teste seu, de uma
+    publicacao anterior, pegou quando eu tinha removido.)
+  - "TODOS" NAO SUMIU. A lista inteira e util para conferir o preparo do dia.
+  - ANTERIOR E PROXIMO NAO DAO A VOLTA. Na bancada, o botao que retorna ao
+    comeco faz perder a conta de onde se estava.
+
+4) A LEITURA DUPLA SAIU DO MODO ESSENCIAL
+
+"1,5 L/ha (1 %)" — os dois numeros colidem, e foi isso que levantou a sua duvida
+na folha. A equivalencia continua existindo, mas so na conferencia.
+
+5) TESTEMUNHA COM PRODUTO
+
+O verificador de desenho passou a apontar uma testemunha que carrega produto e
+dose. Ela e o zero do ensaio: se tem produto, o % de controle sai medido contra
+um tratamento — numero que parece resultado e nao e.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o estudo do sinergista: a calculadora deve PERGUNTAR qual e o volume,
+   com 3,0 L/ha sugerido. Confirmando UMA vez, T1 a T4 saem juntos — 318 mL de
+   calda, Sankari 159 mL e Silwet 105 uL.
+2. Conferir que a configuracao abre em uma linha so, e expande no toque.
+3. Trocar de tratamento pelas abas e pelos botoes anterior/proximo.
+4. Editar a dose de um componente direto na linha da receita e ver a quantidade
+   se refazer.
+5. No frasco, escolher mL e digitar 1900 — deve virar 1,9 L.
+6. Um estudo sem testemunha marcada nao deve mostrar T1 como testemunha.
+
+
+TESTES
+------
+Duplo clique em  Conferir antes de publicar.command.
+
+  test_volume_calda.js        30 verificacoes (novo, golden test do texto real)
+  test_modo_preparo.js        22 verificacoes (novo)
+  test_volume_calda_fluxo.js  16 verificacoes (novo, o ensaio real de ponta a
+                              ponta: confirmar, conciliar e preparar)
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 10a publicacao                    03/09/2026
 =====================================================
 
