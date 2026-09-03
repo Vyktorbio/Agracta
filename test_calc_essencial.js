@@ -62,7 +62,11 @@ var ESTUDO={ id:'s1', codigo:'EST-1', numRepeticoes:4,
     {id:'T1',produto:'Testemunha',dose:'0',testemunha:true},
     {id:'T2',produto:'Sankari + Silwet',dose:'1,5 L/ha + 0,033%'},
     /* Dose que o produto não comporta: precisa gerar aviso de mistura. */
-    {id:'T3',produto:'Produto B',dose:'sem número'}
+    {id:'T3',produto:'Produto B',dose:'sem número'},
+    /* Strings propositalmente antigas: a receita estruturada deve mandar. */
+    {id:'T4',produto:'Texto legado',dose:'99 L/ha',componentes:[
+      {id:'cp1',itemId:'adj1',nome:'Adjuvante do banco',valor:.15,unidade:'% v/v'}
+    ]}
   ]};
 ctx._calcStudy=function(){ return ESTUDO; };
 ctx._calcSel={qid:'Q1', sid:'s1'};
@@ -131,9 +135,17 @@ console.log('\n--- Esconder não é deixar de calcular ---');
    Os dois modos têm de trazer exatamente estes números. */
 ck(/8,25 mL/.test(ess),'o essencial traz os 8,25 mL do Sankari');
 ck(/8,25 mL/.test(comp),'e o completo traz os mesmos 8,25 mL');
-ck(/0,36 mL/.test(ess),'o essencial traz os 0,36 mL do Silwet');
-ck(/0,36 mL/.test(comp),'e o completo, os mesmos');
-ck(/1,10 L/.test(ess)&&/1,10 L/.test(comp),'e a calda de 1,10 L bate nos dois');
+ck(/363 µL/.test(ess),'o essencial traz os 363 µL do Silwet');
+ck(/363 µL/.test(comp),'e o completo, os mesmos');
+ck(/1,1 L/.test(ess)&&/1,1 L/.test(comp),'e a calda de 1,1 L bate nos dois');
+ck(/Completar com Água até/.test(ess),'o preparo manda completar com água até o volume final');
+ck(!/0,363 mL/.test(ess),'a tela não devolve o microlitro como decimal de mL');
+
+console.log('\n--- A receita estruturada manda sobre o texto legado ---');
+/* 0,15% de 1,1 L = 1,65 mL. Se a tela voltasse a ler "99 L/ha", apareceria um
+   valor completamente diferente e o vínculo com o banco de itens seria perdido. */
+ck(/Adjuvante do banco/.test(ess),'o componente vem da receita estruturada');
+ck(/1,65 mL/.test(ess),'a dose estruturada de 0,15% calcula 1,65 mL');
 
 console.log('\n--- A escolha é lembrada, e o padrão é o essencial ---');
 ck(/CALC_DETALHE_KEY='agracta-calc-detalhe'/.test(src),'a preferência tem chave própria em localStorage');

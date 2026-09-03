@@ -45,7 +45,7 @@ function eq(a,b,n){ ck(a===b,n+(a===b?'':' (obtido '+JSON.stringify(a)+', espera
 function perto(a,b,tol,n){ var ok=(a!=null&&isFinite(a)&&Math.abs(a-b)<=tol);
   ck(ok,n+(ok?'':' (obtido '+JSON.stringify(a)+', esperado ~'+b+')')); }
 
-/* Campos da calculadora de calda que a barra consulta (só calcVol importa aqui). */
+/* Campos da calculadora de calda que a calibração conecta à parcela. */
 var campos={calcLen:'5', calcWid:'2', calcPlots:'4', calcVol:'200',
             calcDead:'300', calcBottles:'1', calcCap:'0'};
 var store={};
@@ -87,7 +87,7 @@ vm.runInContext([
   pega('_parseBicos'), pega('_calcBarraEquip'), pega('_calcBarraProto'),
   pega('_calcBarraPadrao'), pega('_calcBarraChave'), pega('_calcBarraEstado'),
   pega('_calcBarraSalvar'), pega('_calcBarraReset'), pega('_calcBarraLinhas'),
-  pega('calcBarraTaxa'), pega('calcBarraOperacao'),
+  pega('calcBarraTaxa'), pega('calcBarraOperacao'), pega('calcBarraParcela'),
   pega('_calcBarraTol'), pega('_calcBarraCv'),
   pega('calcBarraAvisos'), pega('calcBarraResumo'),
   pega('calcBarraSaidaHtml'), pega('calcBarraHtml'), pega('calcBarraCfg'),
@@ -133,6 +133,22 @@ perto(op.idealSpeed,5,1e-9,'velocidade ideal 5,00 km/h');
 perto(op.calibration.cv,0,1e-9,'CV 0% com os quatro bicos iguais');
 eq(op.calibration.valid,true,'calibração completa com 12 leituras');
 eq(op.calibration.requiredInputs,12,'4 bicos × 3 repetições = 12 leituras exigidas');
+
+console.log('\n--- Costal CO₂ conectado à parcela por área ---');
+/* Parcela 0,80 × 1,00 m = 0,8 m²; a 200 L/ha são 16 mL. Com faixa de
+   1 m e 1,8 km/h (0,5 m/s), é uma passada de 0,8 m em 1,6 s. */
+campos.calcLen='0.8'; campos.calcWid='1'; campos.calcVol='200';
+var bco2=barra({equipamento:'co2',bicos:2,espacamento:.5,velocidade:1.8,taxaAlvo:'200'});
+var oco2=ctx.calcBarraOperacao(bco2), pco2=ctx.calcBarraParcela(oco2,bco2);
+perto(pco2.areaM2,.8,1e-9,'área da parcela = 0,8 m²');
+perto(pco2.caldaAlvoMl,16,1e-9,'calda-alvo por parcela = 16 mL');
+eq(pco2.passadas,1,'faixa de 1 m fecha a largura com uma passada');
+perto(pco2.tempoPassadaS,1.6,1e-9,'percurso de 0,8 m a 1,8 km/h leva 1,6 s');
+ctx._calcBarra=bco2; ctx._calcBarraAberta=true;
+ck(/COSTAL CO₂ E CALIBRAÇÃO/.test(ctx.calcBarraHtml()),'a seção se identifica como costal CO₂, não como trator');
+ck(/POR PARCELA/.test(ctx.calcBarraSaidaHtml())&&/16 mL/.test(ctx.calcBarraSaidaHtml()),
+   'a saída mostra o volume operacional por parcela');
+ctx._calcBarraAberta=false; campos.calcLen='5'; campos.calcWid='2';
 
 console.log('\n--- Largura manual sobrepõe bicos × espaçamento ---');
 /* Barra de 3 m declarada à mão: a vazão requerida sobe na mesma proporção
@@ -218,7 +234,7 @@ eq(ctx.calcBarraCfg(),null,'sem calibração válida, calcBarraCfg devolve null'
 eq(ctx._calcConfigAtual().barra,null,'e a configuração da tela não carrega barra nenhuma');
 var memSem=ctx.calcMemoria(ESTUDO, ctx._calcConfigAtual());
 eq(memSem.barra,null,'a memória grava barra:null — ausência explícita, não bloco vazio');
-ck(!/BARRA E CALIBRAÇÃO/.test(ctx.calcMemoriaTexto(memSem)),'e o texto copiado não inventa uma seção de calibração');
+ck(!/(?:COSTAL CO₂|SIDER) E CALIBRAÇÃO/.test(ctx.calcMemoriaTexto(memSem)),'e o texto copiado não inventa uma seção de calibração');
 
 console.log('\n--- Calibração válida entra inteira, com motor e leituras ---');
 barra({taxaAlvo:'240', leiturasBico:coletas([500,500,500,500])});
@@ -237,7 +253,7 @@ ck(!!mem.barra,'a memória promove a barra a campo próprio');
 eq(mem.entradas.barra,undefined,'e NÃO a deixa duplicada dentro de entradas');
 eq(mem.entradas.parcelaComprimento,5,'as entradas da calda seguem intactas');
 var txt=ctx.calcMemoriaTexto(mem);
-ck(/BARRA E CALIBRAÇÃO/.test(txt),'o texto copiado traz a seção de calibração');
+ck(/COSTAL CO₂ E CALIBRAÇÃO/.test(txt),'o texto copiado traz a seção de calibração do equipamento certo');
 ck(/240/.test(txt),'com a taxa real');
 ck(/Motor da calibração: AplicacaoCore/.test(txt),'e o motor que a produziu');
 

@@ -17,8 +17,23 @@
     return Math.round((value+Number.EPSILON)*factor)/factor;
   }
 
+  /* Uma mesma unidade chega do protocolo de vários jeitos ("%", "%v/v",
+     "% v/v", "ml/ha"). O núcleo trabalha com um identificador único para que
+     uma grafia diferente nunca transforme adjuvante em dose por hectare. */
+  function normalizeDoseUnit(unit){
+    var raw=String(unit==null?"":unit).trim();
+    var s=raw.toLowerCase().replace(/\s+/g,"");
+    if(s.indexOf("%")>=0)return"%";
+    if(s==="l"||s==="l/ha"||s==="lha")return"L/ha";
+    if(s==="ml"||s==="ml/ha"||s==="mlha")return"mL/ha";
+    if(s==="kg"||s==="kg/ha"||s==="kgha")return"kg/ha";
+    if(s==="g"||s==="g/ha"||s==="gha")return"g/ha";
+    return raw;
+  }
+
   function doseConfig(dose,unit){
     var numeric=parseNum(dose);
+    unit=normalizeDoseUnit(unit);
     if(unit==="L/ha")return{perHa:numeric*1000,productUnit:"mL",concentrationUnit:"mL/L",liquid:true};
     if(unit==="mL/ha")return{perHa:numeric,productUnit:"mL",concentrationUnit:"mL/L",liquid:true};
     if(unit==="kg/ha")return{perHa:numeric*1000,productUnit:"g",concentrationUnit:"g/L",liquid:false};
@@ -171,7 +186,10 @@
     else if(/k\s*g/.test(u))              unidade="kg/ha";
     else if(/(^|[^k])g(\b|ramas|\/|$)/.test(u)) unidade="g/ha";
     else if(/l/.test(u))                  unidade="L/ha";
-    else unidade=(DOSE_UNITS.indexOf(fallbackUnit)>=0?fallbackUnit:"L/ha");
+    else{
+      var fallback=normalizeDoseUnit(fallbackUnit);
+      unidade=(DOSE_UNITS.indexOf(fallback)>=0?fallback:"L/ha");
+    }
     return{valor:valor,unidade:unidade,texto:s};
   }
 
@@ -200,6 +218,34 @@
       comps.push({nome:nomes[i]||("Componente "+(i+1)),valor:d.valor,unidade:d.unidade,texto:d.texto});
     }
     return{components:comps,problems:problems};
+  }
+
+  /* Receita nova do Agracta: cada componente já tem identidade, dose e unidade.
+     Ela manda sobre as strings legadas `produto` e `dose`. Além de evitar partir
+     texto de novo, conserva item, lote e origem da dose até a memória BPL. */
+  function parseStructuredComponents(source,fallbackUnit){
+    var list=Array.isArray(source)?source:[];
+    var problems=[],comps=[];
+    if(!list.length)return{components:[],problems:["Sem componentes na receita."],source:"structured"};
+    list.forEach(function(c,i){
+      c=c||{};
+      var nome=String(c.nome||c.name||("Componente "+(i+1))).trim()||("Componente "+(i+1));
+      var raw=(c.valor!==undefined&&c.valor!==null)?c.valor:c.dose;
+      var valor=parseNum(raw);
+      var unidade=normalizeDoseUnit(c.unidade||c.unit||c.type||fallbackUnit);
+      if(DOSE_UNITS.indexOf(unidade)<0){
+        problems.push("Unidade \""+(c.unidade||c.unit||c.type||"")+"\" não reconhecida em "+nome+".");
+        unidade=normalizeDoseUnit(fallbackUnit);
+        if(DOSE_UNITS.indexOf(unidade)<0)unidade="L/ha";
+      }
+      if(!(valor>0))problems.push("A dose de "+nome+" deve ser maior que zero.");
+      comps.push({
+        id:c.id||null,itemId:c.itemId||null,nome:nome,valor:valor,unidade:unidade,
+        texto:String(raw==null?"":raw)+(unidade?(" "+(unidade==="%"?"% v/v":unidade)):""),
+        doseRef:c.doseRef||null,loteRef:c.loteRef||null
+      });
+    });
+    return{components:comps,problems:problems,source:"structured"};
   }
 
   /* mL (ou g) por hectare de UM componente, dado o volume de calda em L/ha. */
@@ -237,7 +283,8 @@
       var total=p.perHa*haTotal;
       if(p.liquid)liquidoMl+=total;
       itens.push({
-        nome:c.nome,unidade:c.unidade,dose:parseNum(c.valor),liquid:p.liquid,
+        id:c.id||null,itemId:c.itemId||null,doseRef:c.doseRef||null,loteRef:c.loteRef||null,
+        nome:c.nome,unidade:normalizeDoseUnit(c.unidade),dose:parseNum(c.valor),liquid:p.liquid,
         perHa:round(p.perHa),unit:p.unit,
         concentration:round(sprayVolume>0?p.perHa/sprayVolume:0),
         concentrationUnit:p.liquid?"mL/L":"g/L",
@@ -261,12 +308,21 @@
         round(sprayTotalMl/1000,3)+" L. Não cabe "+carrier.toLowerCase()+" nenhum: revise dose ou volume de calda.");
     }
     var minBottles=bottleCapacity>0?Math.ceil(sprayTotalMl/(bottleCapacity*1000)):0;
+    itens.forEach(function(c){
+      if(c.liquid&&c.perBottle>0&&c.perBottle<0.02){
+        warnings.push(c.nome+": "+formatAmount(c.perBottle,"mL")+
+          " por frasco é um volume muito pequeno. Confira se o instrumento mede essa faixa ou use uma diluição intermediária validada.");
+      }
+    });
+    var liquidFits=carrierTotalMl>=-0.000001;
+    var bottleCapacityOk=minBottles===0||numBottles>=minBottles;
 
     return{
       components:itens,
       carrier:{nome:carrier,total:round(Math.max(carrierTotalMl,0)),
                perBottle:round(Math.max(carrierTotalMl,0)/numBottles),unit:"mL"},
       liquidTotalMl:round(liquidoMl),
+      liquidFractionPct:round(sprayTotalMl>0?(liquidoMl/sprayTotalMl)*100:0),
       plotAreaHa:round(plotAreaHa),
       sprayPerPlotMl:round(sprayPerPlotMl),
       sprayTotalMl:round(sprayTotalMl),
@@ -275,7 +331,9 @@
       hectaresTotal:round(haTotal),
       minBottles:minBottles,
       requestedBottles:numBottles,
-      bottleCapacityOk:minBottles===0||numBottles>=minBottles,
+      liquidFits:liquidFits,
+      bottleCapacityOk:bottleCapacityOk,
+      canPrepare:liquidFits&&bottleCapacityOk,
       warnings:warnings
     };
   }
@@ -296,10 +354,38 @@
     });
   }
 
+  /* Formatação operacional: precisão interna não muda, mas a bancada deixa de ver
+     "0,54 mL" ou "6,600 mL" quando o instrumento real lê 540 µL e 6,6 mL. */
+  function formatSmartBR(value,maxPlaces){
+    if(value===null||value===undefined||!Number.isFinite(Number(value)))return"-";
+    var n=Number(value),lim=(maxPlaces==null?3:Math.max(0,maxPlaces));
+    if(Math.abs(n)<1e-12)n=0;
+    return n.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:lim});
+  }
+
+  function formatAmount(value,unit){
+    var n=Number(value);
+    if(!Number.isFinite(n))return"-";
+    var a=Math.abs(n),u=String(unit||"");
+    if(u==="mL"){
+      if(a>=1000)return formatSmartBR(n/1000,3)+" L";
+      if(a>0&&a<1)return formatSmartBR(n*1000,3)+" µL";
+      return formatSmartBR(n,3)+" mL";
+    }
+    if(u==="g"){
+      if(a>=1000)return formatSmartBR(n/1000,3)+" kg";
+      if(a>0&&a<1)return formatSmartBR(n*1000,3)+" mg";
+      return formatSmartBR(n,3)+" g";
+    }
+    return formatSmartBR(n,3)+(u?(" "+u):"");
+  }
+
+  function doseUnitLabel(unit){ return normalizeDoseUnit(unit)==="%"?"% v/v":normalizeDoseUnit(unit); }
+
   /* Versao do motor. Vai gravada na memoria de calculo de cada aplicacao: sem
      ela, um resultado guardado em 2026 nao teria como ser reconferido depois que
      a formula mudasse. Subir aqui sempre que o calculo mudar de resultado. */
-  var VERSION="1.0.0";
+  var VERSION="1.1.0";
 
   return{
     VERSION:VERSION,
@@ -308,9 +394,14 @@
     calculateCalibration:calculateCalibration,
     parseDose:parseDose,
     parseComponents:parseComponents,
+    parseStructuredComponents:parseStructuredComponents,
+    normalizeDoseUnit:normalizeDoseUnit,
+    doseUnitLabel:doseUnitLabel,
     calculateMixture:calculateMixture,
     DOSE_UNITS:DOSE_UNITS,
     stableStringify:stableStringify,
-    formatBR:formatBR
+    formatBR:formatBR,
+    formatSmartBR:formatSmartBR,
+    formatAmount:formatAmount
   };
 });

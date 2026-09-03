@@ -7175,6 +7175,9 @@ function _calcCss(){
   '.calc-mixr span{color:var(--text-2,#9fb1a5);overflow:hidden;text-overflow:ellipsis}'+
   '.calc-mixr b{color:var(--text,#e8efe9);font-weight:700;text-align:right}'+
   '.calc-mixr.carrier{background:rgba(120,200,150,.06)}.calc-mixr.carrier span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
+  '.calc-prep{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin:2px 0 7px;padding:7px 9px;border-radius:8px;background:rgba(74,170,105,.10);border:1px solid rgba(95,190,125,.24)}'+
+  '.calc-prep span{font-size:9px;letter-spacing:.7px;font-weight:900;color:#82c99a}.calc-prep b{font-size:15px;color:var(--text,#e8efe9)}.calc-prep small{font-size:10px;color:var(--text-2,#9fb1a5)}'+
+  '.calc-prep.bad{background:rgba(210,75,65,.10);border-color:rgba(230,100,85,.32)}.calc-prep.bad span{color:#ff9a8a}'+
   '.calc-eq{display:block;font-style:normal;font-size:10px;color:var(--text-3,#7f9085);margin-top:1px}'+
   '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
   '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
@@ -7746,7 +7749,8 @@ function _calcCompute(){
   var dead=_calcNum(_calcVal('calcDead'));
   var bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1);
   var cap=_calcNum(_calcVal('calcCap'));
-  function f(v,p){ return BC.formatBR(v,p==null?2:p); }
+  function f(v,p){ return BC.formatSmartBR?BC.formatSmartBR(v,p==null?3:p):BC.formatBR(v,p==null?2:p); }
+  function a(v,u){ return BC.formatAmount?BC.formatAmount(v,u):(f(v)+' '+u); }
   var _metVariam=false;
   try{ _metVariam=studyMetodosVariam(study,(_calcSel||{}).qid); }catch(e){}
   var html='';
@@ -7766,12 +7770,22 @@ function _calcCompute(){
     /* Mistura: o tratamento pode ter N componentes ("Sankari + Silwet") e cada um
        com a SUA base — L/ha no produto, % v/v no adjuvante. E o que completa a
        calda pode ser óleo. Produto único cai no mesmo número de sempre. */
-    var mix=BC.parseComponents(t.produto, t.dose, dunit);
+    /* A receita estruturada (item, lote, dose e unidade próprios) é a fonte
+       principal. As strings continuam como compatibilidade para estudos antigos. */
+    var mix=(Array.isArray(t.componentes)&&t.componentes.length&&BC.parseStructuredComponents)
+      ? BC.parseStructuredComponents(t.componentes,dunit)
+      : BC.parseComponents(t.produto, t.dose, dunit);
     var res=null, err='';
     try{ res=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'), sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap}); }
     catch(e){ err=e.message||String(e); }
     html+='<div class="calc-card">'+head;
     if(err){ html+='<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
+
+    var _bloqueado=!!((mix.problems||[]).length||!res.canPrepare);
+    var _prepDetalhe=a(res.sprayPerPlotMl,'mL')+' por parcela × '+plots;
+    if(dead>0) _prepDetalhe+=' + '+a(dead,'mL')+' de volume morto';
+    if(bottles>1) _prepDetalhe+=' · '+a(res.sprayPerBottleMl,'mL')+' em cada frasco';
+    html+='<div class="calc-prep'+(_bloqueado?' bad':'')+'"><span>'+(_bloqueado?'NÃO PREPARE':'PREPARAR')+'</span><b>'+a(res.sprayTotalMl,'mL')+'</b><small>'+esc(_prepDetalhe)+'</small></div>';
 
     /* Receita de preparo: uma linha por componente + o veículo fechando o volume.
        É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
@@ -7784,31 +7798,33 @@ function _calcCompute(){
       /* A dose escrita e a mesma dose lida do outro jeito. % só vira quantidade
          depois do volume — e é aí que 3 L/ha e 150 L/ha se separam 50×. */
       var eq='';
-      if(c.unidade==='%') eq=f(c.perHa,2)+' '+c.unit+'/ha';
+      if(c.unidade==='%') eq=a(c.perHa,c.unit)+'/ha';
       else if(c.pctCalda!=null) eq=f(c.pctCalda,3)+' %';
       html+='<div class="calc-mixr"'+_gc+'><span>'+esc(c.nome)+'</span>'+
-        (_calcDetalhe?('<span>'+f(c.dose,c.unidade==='%'?3:2)+' '+esc(c.unidade)+
+        (_calcDetalhe?('<span>'+f(c.dose,c.unidade==='%'?6:3)+' '+esc(BC.doseUnitLabel?BC.doseUnitLabel(c.unidade):c.unidade)+
           (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>'):'')+
-        '<b>'+f(c.perBottle)+' '+c.unit+'</b>'+
-        (_calcDetalhe?('<b>'+f(c.total)+' '+c.unit+'</b>'):'')+'</div>';
+        '<b>'+a(c.perBottle,c.unit)+'</b>'+
+        (_calcDetalhe?('<b>'+a(c.total,c.unit)+'</b>'):'')+'</div>';
     });
-    /* O veículo fica nos dois modos: "água completa até X mL" é execução, não
-       conferência — sem ela a receita não fecha o volume. */
-    html+='<div class="calc-mixr carrier"'+_gc+'><span>'+esc(res.carrier.nome)+'</span>'+
-      (_calcDetalhe?'<span>completa</span>':'')+'<b>'+f(res.carrier.perBottle)+' mL</b>'+
-      (_calcDetalhe?('<b>'+f(res.carrier.total)+' mL</b>'):'')+'</div>';
+    /* q.s.p. evita o erro operacional de medir o veículo como se volumes de
+       formulações fossem perfeitamente aditivos: os itens entram primeiro e o
+       veículo completa o volume FINAL marcado. */
+    html+='<div class="calc-mixr carrier"'+_gc+'><span>Completar com '+esc(res.carrier.nome)+' até</span>'+
+      (_calcDetalhe?'<span>q.s.p.</span>':'')+'<b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
+      (_calcDetalhe?('<b>'+a(res.sprayTotalMl,'mL')+'</b>'):'')+'</div>';
     html+='</div>';
 
     html+='<div class="calc-kv">'+
-      (_calcDetalhe?('<span>Calda / parcela</span><b>'+f(res.sprayPerPlotMl/1000)+' L</b>'):'')+
-      '<span>Calda total</span><b>'+f(res.sprayTotalMl/1000)+' L</b>'+
+      (_calcDetalhe?('<span>Calda / parcela</span><b>'+a(res.sprayPerPlotMl,'mL')+'</b>'):'')+
+      '<span>Calda total</span><b>'+a(res.sprayTotalMl,'mL')+'</b>'+
       (_calcDetalhe?('<span>Concentração</span><b>'+res.components.map(function(c){return f(c.concentration)+' '+c.concentrationUnit;}).join(' · ')+'</b>'):'')+
-      '<span>Calda / frasco</span><b>'+f(res.sprayPerBottleMl/1000)+' L</b>'+
+      '<span>Calda / frasco</span><b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
+      (_calcDetalhe?('<span>Líquidos na calda</span><b>'+a(res.liquidTotalMl,'mL')+' · '+f(res.liquidFractionPct,2)+'%</b>'):'')+
     '</div>';
     /* Nada de erro silencioso: se produto e dose não casam, isso aparece. */
-    mix.problems.forEach(function(p){ html+='<div class="calc-warn">⚠ '+esc(p)+'</div>'; });
-    (res.warnings||[]).forEach(function(w){ html+='<div class="calc-warn">⚠ '+esc(w)+'</div>'; });
-    if(cap>0 && !res.bottleCapacityOk) html+='<div class="calc-warn">⚠ Calda total não cabe em '+bottles+' frasco(s) de '+f(cap,1)+' L — mínimo '+res.minBottles+'.</div>';
+    mix.problems.forEach(function(p){ html+='<div class="calc-terr calc-warn">⚠ '+esc(p)+'</div>'; });
+    (res.warnings||[]).forEach(function(w){ html+='<div class="'+(!res.liquidFits?'calc-terr':'calc-warn')+'">⚠ '+esc(w)+'</div>'; });
+    if(cap>0 && !res.bottleCapacityOk) html+='<div class="calc-terr">⚠ Calda total não cabe em '+bottles+' frasco(s) de '+f(cap,2)+' L — use no mínimo '+res.minBottles+' frasco(s) ou aumente a capacidade.</div>';
     html+='</div>';
   });
   box.innerHTML=html||'<div class="calc-empty">—</div>';
@@ -8188,6 +8204,29 @@ function calcBarraOperacao(b){
   try{ return AC.equipmentOperation(st); }catch(e){ return null; }
 }
 
+/* Traduz a calibração para a parcela que já está no alto da calculadora. Não cria
+   outro modo nem outra geometria: usa comprimento × largura, taxa e a faixa do
+   costal CO₂ para dizer quanto deve cair e quanto tempo o percurso leva. */
+function calcBarraParcela(op,b){
+  b=b||_calcBarraEstado();
+  var comprimento=_calcNum(_calcVal('calcLen')), largura=_calcNum(_calcVal('calcWid'));
+  var taxa=calcBarraTaxa(b), faixa=op&&op.width>0?op.width:0, velocidade=op&&op.speed>0?op.speed:0;
+  if(!(comprimento>0&&largura>0&&taxa>0)) return null;
+  var area=comprimento*largura;
+  var razao=faixa>0?largura/faixa:null;
+  var arred=razao!=null?Math.round(razao):null;
+  var passadas=(razao!=null&&arred>=1&&Math.abs(razao-arred)<=0.02)?arred:null;
+  var tempoPassada=velocidade>0?comprimento/(velocidade/3.6):null;
+  var percursoEquiv=faixa>0?area/faixa:null;
+  return {
+    areaM2:area, caldaAlvoMl:taxa*area*0.1,
+    faixaM:faixa||null, relacaoFaixa:razao, passadas:passadas,
+    tempoPassadaS:tempoPassada,
+    percursoEquivalenteM:percursoEquiv,
+    tempoTotalS:(velocidade>0&&percursoEquiv!=null)?percursoEquiv/(velocidade/3.6):null
+  };
+}
+
 /* Os limites de aceitação são do protocolo, não do programa: ficam editáveis e
    ficam gravados. Um "±5%" que o Agracta escolheu sozinho não é critério de ensaio. */
 function _calcBarraTol(b){ var v=_calcNum(b.tolerancia); return v>0?v:5; }
@@ -8234,6 +8273,10 @@ function calcBarraAvisos(op, b){
   if(!(op.width>0)) A.push({k:'aviso', t:'Largura de trabalho zero: informe bicos e espaçamento, ou a largura da barra.'});
   if(!(op.speed>0)) A.push({k:'aviso', t:'Sem velocidade não há taxa em L/ha — a vazão sozinha não diz quanto o alvo recebe.'});
   if(!(calcBarraTaxa(b)>0)) A.push({k:'aviso', t:'Sem taxa-alvo (L/ha) não há contra o que comparar a vazão medida.'});
+  var pp=calcBarraParcela(op,b);
+  if(b.equipamento==='co2'&&pp&&pp.relacaoFaixa!=null&&!pp.passadas)
+    A.push({k:'aviso', t:'A largura da parcela não é múltipla da faixa do costal ('+
+      f(pp.faixaM,2)+' m). Defina no campo “Largura da barra” a faixa efetivamente aplicada para o volume e o percurso fecharem.'});
   return A;
 }
 
@@ -8244,7 +8287,8 @@ function calcBarraResumo(op, b){
   op=op||calcBarraOperacao(b);
   if(!op) return 'motor não carregado';
   var AC=window.AplicacaoCore;
-  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  var BC=window.BioCalculoCampo;
+  function f(v,d){ return BC&&BC.formatSmartBR?BC.formatSmartBR(v,d==null?2:d):(AC?AC.formatNumber(v,d==null?2:d):String(v)); }
   var cal=op.calibration||{};
   if(!cal.valid) return 'não calibrada — '+(cal.completed||0)+'/'+(cal.requiredInputs||0)+' leituras';
   var avisos=calcBarraAvisos(op,b);
@@ -8261,14 +8305,16 @@ function calcBarraSaidaHtml(){
   var op=calcBarraOperacao(b);
   if(!op) return '<div class="calc-terr">⚠ O motor de aplicação (AplicacaoCore) não carregou. Recarregue o app.</div>';
   var AC=window.AplicacaoCore;
-  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  var BC=window.BioCalculoCampo;
+  function f(v,d){ return BC&&BC.formatSmartBR?BC.formatSmartBR(v,d==null?3:d):(AC?AC.formatNumber(v,d==null?2:d):String(v)); }
+  function a(v,u){ return BC&&BC.formatAmount?BC.formatAmount(v,u):(f(v)+' '+u); }
   function ou(v,fmt){ return (v==null||!isFinite(v))?'—':fmt; }
   var cal=op.calibration||{};
   var h='<div class="calc-kv">'+
     '<span>Largura de trabalho</span><b>'+ou(op.width, f(op.width,2)+' m')+'</b>'+
     '<span>Vazão requerida</span><b>'+(op.requiredFlow>0?f(op.requiredFlow,3)+' L/min':'—')+'</b>'+
-    '<span>Coleta esperada / bico</span><b>'+ou(op.requiredCollectionPerNozzleMl, f(op.requiredCollectionPerNozzleMl,1)+' mL')+'</b>'+
-    '<span>Coleta esperada / barra</span><b>'+ou(op.requiredCollectionTotalMl, f(op.requiredCollectionTotalMl,1)+' mL')+'</b>'+
+    '<span>Coleta esperada / bico</span><b>'+ou(op.requiredCollectionPerNozzleMl, a(op.requiredCollectionPerNozzleMl,'mL'))+'</b>'+
+    '<span>Coleta esperada / barra</span><b>'+ou(op.requiredCollectionTotalMl, a(op.requiredCollectionTotalMl,'mL'))+'</b>'+
     '<span>Vazão medida</span><b>'+(op.measuredFlow>0?f(op.measuredFlow,3)+' L/min':'—')+'</b>'+
     '<span>Vazão por bico</span><b>'+(cal.perNozzleFlow>0?f(cal.perNozzleFlow,3)+' L/min':'—')+'</b>'+
     '<span>Taxa real</span><b>'+ou(op.actualRate, f(op.actualRate,1)+' L/ha')+'</b>'+
@@ -8276,6 +8322,15 @@ function calcBarraSaidaHtml(){
     '<span>Velocidade ideal</span><b>'+ou(op.idealSpeed, f(op.idealSpeed,2)+' km/h')+'</b>'+
     '<span>'+(_calcBarraMetodo(b)==='barra'?'CV entre repetições':'CV entre bicos')+'</span><b>'+ou(cal.cv, f(cal.cv,1)+' %')+'</b>'+
   '</div>';
+  var pp=calcBarraParcela(op,b);
+  if(b.equipamento==='co2'&&pp){
+    var percurso=pp.passadas
+      ? (pp.passadas+' passada'+(pp.passadas===1?'':'s')+' de '+f(_calcNum(_calcVal('calcLen')),2)+' m'+
+         (pp.tempoPassadaS!=null?(' · '+f(pp.tempoPassadaS,2)+' s por passada'):'') )
+      : (pp.percursoEquivalenteM!=null?('percurso equivalente '+f(pp.percursoEquivalenteM,2)+' m'):'faixa ainda não definida');
+    h+='<div class="calc-prep"><span>POR PARCELA</span><b>'+a(pp.caldaAlvoMl,'mL')+'</b><small>'+f(pp.areaM2,3)+' m² · '+esc(percurso)+
+       (pp.tempoTotalS!=null&&!pp.passadas?(' · '+f(pp.tempoTotalS,2)+' s na velocidade informada'):'')+'</small></div>';
+  }
   /* O mesmo número com dois significados. Entre bicos, o CV mede UNIFORMIDADE DA
      FAIXA: alto quer dizer que parte da parcela recebe mais dose que a outra. Entre
      repetições da barra inteira, mede REPETIBILIDADE da máquina: alto quer dizer que a
@@ -8296,9 +8351,11 @@ function calcBarraHtml(){
   var b=_calcBarraEstado();
   var op=calcBarraOperacao(b);
   var AC=window.AplicacaoCore;
-  function f(v,d){ return AC?AC.formatNumber(v,d==null?2:d):String(v); }
+  var BC=window.BioCalculoCampo;
+  function f(v,d){ return BC&&BC.formatSmartBR?BC.formatSmartBR(v,d==null?3:d):(AC?AC.formatNumber(v,d==null?2:d):String(v)); }
+  var _titBarra=b.equipamento==='co2'?'COSTAL CO₂ E CALIBRAÇÃO':'SIDER E CALIBRAÇÃO';
   var h='<div class="calc-barrah" onclick="_calcBarraToggle()">'+
-        '<span>'+(_calcBarraAberta?'▾':'▸')+' 🚜 BARRA E CALIBRAÇÃO</span>'+
+        '<span>'+(_calcBarraAberta?'▾':'▸')+' '+_titBarra+'</span>'+
         '<span class="calc-barrares">'+esc(calcBarraResumo(op,b))+'</span></div>';
   if(!_calcBarraAberta) return h;
 
@@ -8437,6 +8494,7 @@ function calcBarraCfg(){
   if(!op||!op.calibration||!op.calibration.valid) return null;
   var AC=window.AplicacaoCore;
   var cal=op.calibration;
+  var pp=calcBarraParcela(op,b);
   return {
     motor:'AplicacaoCore', motorVersao:(AC&&AC.VERSION)||'?',
     equipamento:((b.equipamento==='tractor')?'tractor':'co2'),
@@ -8462,6 +8520,12 @@ function calcBarraCfg(){
       coletaEsperadaPorBicoMl:op.requiredCollectionPerNozzleMl,
       taxaRealLHa:op.actualRate, desvioPct:op.deviationPct,
       velocidadeIdealKmH:op.idealSpeed, cvPct:cal.cv,
+      areaParcelaM2:pp?pp.areaM2:null,
+      caldaAlvoParcelaMl:pp?pp.caldaAlvoMl:null,
+      passadasPorParcela:pp?pp.passadas:null,
+      tempoPorPassadaS:pp?pp.tempoPassadaS:null,
+      percursoEquivalenteM:pp?pp.percursoEquivalenteM:null,
+      tempoTotalParcelaS:pp?pp.tempoTotalS:null,
       mediasPorBicoMl:(cal.means||[]).slice()
     },
     avisos:calcBarraAvisos(op,b).map(function(a){ return a.k+': '+a.t; })
@@ -8813,7 +8877,8 @@ function calcMemoria(study, cfg){
                 seria irreproduzivel tres anos depois. */
              metodo:((typeof tratMetodo==='function')?tratMetodo(study,(cfg.qid||null),t):null),
              doseUnidade:dunit, volumeCaldaLHa:vol, testemunha:testemunha,
-             componentes:[], veiculo:null, caldaTotalL:null, avisos:[]};
+             componentes:[], veiculo:null, caldaTotalMl:null, caldaTotalL:null,
+             liquidosTotalMl:null, liquidosPct:null, liberado:false, avisos:[]};
 
     /* Testemunha sem dose não gera calda — e isso é resultado, não falta de dado. */
     if(testemunha && !(dval>0)){
@@ -8822,7 +8887,9 @@ function calcMemoria(study, cfg){
       return;
     }
 
-    var mix=BC.parseComponents(t.produto, t.dose, dunit);
+    var mix=(Array.isArray(t.componentes)&&t.componentes.length&&BC.parseStructuredComponents)
+      ? BC.parseStructuredComponents(t.componentes,dunit)
+      : BC.parseComponents(t.produto, t.dose, dunit);
     (mix.problems||[]).forEach(function(p){ reg.avisos.push(p); });
 
     var r;
@@ -8838,13 +8905,19 @@ function calcMemoria(study, cfg){
     }
 
     (r.components||[]).forEach(function(c){
-      reg.componentes.push({nome:c.nome, dose:c.dose, unidade:c.unidade,
+      reg.componentes.push({id:c.id||null, itemId:c.itemId||null,
+        doseRef:c.doseRef||null, loteRef:c.loteRef||null,
+        nome:c.nome, dose:c.dose, unidade:c.unidade,
         perFrasco:c.perBottle, total:c.total, unidadeMassa:c.unit,
         perHa:(c.perHa!=null?c.perHa:null), pctCalda:(c.pctCalda!=null?c.pctCalda:null)});
     });
     if(r.carrier) reg.veiculo={nome:r.carrier.nome, perFrasco:r.carrier.perBottle, total:r.carrier.total};
-    if(r.sprayTotalMl!=null) reg.caldaTotalL=r.sprayTotalMl/1000;
+    if(r.sprayTotalMl!=null){ reg.caldaTotalMl=r.sprayTotalMl; reg.caldaTotalL=r.sprayTotalMl/1000; }
+    reg.liquidosTotalMl=r.liquidTotalMl;
+    reg.liquidosPct=r.liquidFractionPct;
+    reg.liberado=!(mix.problems||[]).length&&!!r.canPrepare;
     (r.warnings||[]).forEach(function(w){ reg.avisos.push(w); });
+    if(!r.bottleCapacityOk) reg.avisos.push('A calda não cabe nos frascos informados. Mínimo: '+r.minBottles+' frasco(s).');
 
     mem.tratamentos.push(reg);
   });
@@ -8858,30 +8931,35 @@ function calcMemoriaTexto(mem){
      frasco), então tem o seu próprio texto. A forma do registro é a mesma. */
   if(mem.contexto==='laboratorio') return calcMemoriaLabTexto(mem);
   var BC=window.BioCalculoCampo;
-  function f(v,p){ return BC?BC.formatBR(v,p==null?2:p):String(v); }
+  function f(v,p){ return BC?(BC.formatSmartBR?BC.formatSmartBR(v,p==null?3:p):BC.formatBR(v,p==null?2:p)):String(v); }
+  function a(v,u){ return BC&&BC.formatAmount?BC.formatAmount(v,u):(f(v)+' '+u); }
   var e=mem.entradas||{};
   var L=['CALCULADORA DE APLICAÇÃO — '+(mem.estudo.codigo||mem.estudo.nome||mem.estudo.id),
     'Parcela '+f(e.parcelaComprimento,1)+'×'+f(e.parcelaLargura,1)+' m · '+e.parcelas+
       ' parcela(s)/trat · vol. morto '+f(e.volumeMortoMl,0)+' mL'+
       (e.capacidadeFrascoL>0?(' · frasco '+f(e.capacidadeFrascoL,1)+' L'):''),
-    'Trat\tComponente\tDose\tPor frasco\tTotal\tCalda total(L)'];
+    'Trat\tComponente\tDose\tPor frasco\tTotal\tCalda total'];
   mem.tratamentos.forEach(function(t){
     if(t.semPreparo){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\t0\t0\t0'); return; }
     if(t.erro){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro)'); return; }
     t.componentes.forEach(function(c,i){
-      var eq=(c.unidade==='%')?(' ('+f(c.perHa,2)+' '+c.unidadeMassa+'/ha)')
+      var eq=(c.unidade==='%')?(' ('+a(c.perHa,c.unidadeMassa)+'/ha)')
             :(c.pctCalda!=null?(' ('+f(c.pctCalda,3)+' %)'):'');
-      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?3:2)+' '+c.unidade+eq+
-        '\t'+f(c.perFrasco)+' '+c.unidadeMassa+'\t'+f(c.total)+' '+c.unidadeMassa+
-        '\t'+(i===0?f(t.caldaTotalL):''));
+      var un=(BC&&BC.doseUnitLabel)?BC.doseUnitLabel(c.unidade):c.unidade;
+      L.push((i===0?(t.id||''):'')+'\t'+c.nome+'\t'+f(c.dose,c.unidade==='%'?6:3)+' '+un+eq+
+        '\t'+a(c.perFrasco,c.unidadeMassa)+'\t'+a(c.total,c.unidadeMassa)+
+        '\t'+(i===0?a(t.caldaTotalMl!=null?t.caldaTotalMl:t.caldaTotalL*1000,'mL'):''));
     });
-    if(t.veiculo) L.push('\t'+t.veiculo.nome+'\tcompleta\t'+f(t.veiculo.perFrasco)+' mL\t'+f(t.veiculo.total)+' mL\t');
+    if(t.veiculo) L.push('\tCompletar com '+t.veiculo.nome+' até\tq.s.p.\t'+
+      a((t.caldaTotalMl!=null?t.caldaTotalMl:t.caldaTotalL*1000)/(e.frascos||1),'mL')+'\t'+
+      a(t.caldaTotalMl!=null?t.caldaTotalMl:t.caldaTotalL*1000,'mL')+'\t');
+    if(t.liberado===false) L.push('\t⚠ NÃO PREPARAR antes de corrigir os alertas abaixo.');
     (t.avisos||[]).forEach(function(w){ L.push('\t⚠ '+w); });
   });
   if(mem.barra){
     var b=mem.barra, r=b.resultado||{};
     L.push('');
-    L.push('BARRA E CALIBRAÇÃO — '+b.equipamentoRotulo+' · '+b.metodo);
+    L.push((b.equipamento==='co2'?'COSTAL CO₂ E CALIBRAÇÃO':'SIDER E CALIBRAÇÃO')+' — '+b.equipamentoRotulo+' · '+b.metodo);
     L.push(b.bicos+' bico(s) · espaçamento '+f(b.espacamentoM,2)+' m · largura '+f(r.larguraM,2)+
            ' m · '+f(b.velocidadeKmH,1)+' km/h · coleta de '+f(b.tempoColetaS,0)+' s'+
            (b.ponta?(' · ponta '+b.ponta):'')+(b.pressao?(' · '+b.pressao):''));
@@ -8890,6 +8968,11 @@ function calcMemoriaTexto(mem){
     L.push('Vazão medida '+f(r.vazaoMedidaLMin,3)+' L/min · taxa real '+f(r.taxaRealLHa,1)+
            ' L/ha · desvio '+f(r.desvioPct,1)+'% · CV '+f(r.cvPct,1)+
            '% · velocidade ideal '+f(r.velocidadeIdealKmH,2)+' km/h');
+    if(r.caldaAlvoParcelaMl!=null){
+      L.push('Por parcela: '+f(r.areaParcelaM2,3)+' m² · calda-alvo '+a(r.caldaAlvoParcelaMl,'mL')+
+        (r.passadasPorParcela?(' · '+r.passadasPorParcela+' passada(s) · '+f(r.tempoPorPassadaS,2)+' s/passada'):
+         (r.percursoEquivalenteM!=null?(' · percurso equivalente '+f(r.percursoEquivalenteM,2)+' m · '+f(r.tempoTotalParcelaS,2)+' s'):'')));
+    }
     if(b.leituras&&b.leituras.bicos){
       L.push('Bico\t1ª(mL)\t2ª(mL)\t3ª(mL)\tMédia(mL)');
       b.leituras.bicos.forEach(function(lin,i){
