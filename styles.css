@@ -244,6 +244,8 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .tr-cp:first-child{border-top:0}
 .tr-cp span{flex:1;min-width:0;color:#c8d8c8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tr-cp b{font-weight:800;color:#dbe7e0;white-space:nowrap}
+.tr-cp input,.tr-cp select,.se-trat select{box-sizing:border-box;background:var(--gp-s1,#050805);border:1px solid var(--gp-line-2,#2a3a2a);color:var(--gp-text,#d0d8d0);padding:7px 8px;border-radius:7px;font:650 12px/1.2 inherit;min-height:34px}
+.tr-cp input:focus,.tr-cp select:focus,.se-trat select:focus{border-color:var(--gp-green-deep,#1d7a44);box-shadow:0 0 0 3px rgba(52,209,120,.13)}
 .tr-x{background:none;border:0;color:#d79a8a;font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
 
 .sd-danger-zone{margin-top:30px;padding-top:20px;border-top:1px solid #2a1a1a;text-align:center}
