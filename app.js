@@ -10467,6 +10467,18 @@ function _autorBPL(study){
   try{ email=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; }catch(e){}
   return _identidadeBPL(nome,email);
 }
+/* Nome do produto/ativo para a folha em inglês. Um tratamento pode ser mistura
+   ("Produto A + Produto B"): cada parte é traduzida por si, e a que não estiver
+   na tabela volta em português. */
+function _pranchaNomeEN(nome){
+  var T=(typeof window!=='undefined')?window.AtivosEN:null;
+  var s=String(nome==null?'':nome).trim();
+  if(!T || !s) return s;
+  return s.split(/\s\+\s/).map(function(parte){
+    var r=T.emIngles(parte.trim());
+    return r.nome||parte.trim();
+  }).join(' + ');
+}
 function _pranchaPayload(qid, sid, variavel){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
   if(!s) return { erro:'Estudo não encontrado.' };
@@ -10569,8 +10581,14 @@ function _pranchaPayload(qid, sid, variavel){
       en:{ titulo:titulo, local:(loc.nome||''), cultura:_cultura, safra:'', escala:escalaTxt }
     },
     tratamentos: trats.map(function(t,i){
-      return { id:t.id, pt:(t.produto||t.id), en:(t.produto||t.id),
-               ia:(t.ia||'—'), dose:(parseFloat(String(t.dose||'').replace(',','.'))||0),
+      /* O campo `en` sempre existiu no contrato da prancha e sempre recebeu o
+         nome em português — então o botão EN produzia uma figura em inglês com
+         "tebuconazol" no eixo. Agora ele passa pela tabela de nomes ISO.
+         Sem entrada na tabela, volta o português: nome não traduzido é
+         visivelmente português, nome inventado passa por inglês. */
+      return { id:t.id, pt:(t.produto||t.id), en:_pranchaNomeEN(t.produto||t.id),
+               ia:(t.ia||'—'), iaEn:_pranchaNomeEN(t.ia||''),
+               dose:(parseFloat(String(t.dose||'').replace(',','.'))||0),
                doseTxt:doseTextoDe(s, t.dose),   /* já com unidade; preserva mistura "500 + 300" */
                doseUnid:doseUnidadeDe(s, t.dose),
                gia:(t.gia||''), testemunha:(i===iTest) };
@@ -18046,8 +18064,13 @@ var _agrofitCat=null, _agrofitCarregando=false, _agrofitSel=null, _agrofitErro='
 function _agrofitCarregar(cb){
   if(_agrofitCat){ cb&&cb(_agrofitCat); return; }
   if(_agrofitCarregando) return;
-  if(typeof AgrofitCore==='undefined'){ _agrofitErro='O motor do catálogo não carregou.'; _itensPinta(); return; }
-  _agrofitCarregando=true; _agrofitErro=''; _itensPinta();
+  /* SÓ A LISTA É REPINTADA AQUI. `_itensPinta()` reconstrói a caixa inteira com
+     innerHTML — ela destrói o input em que a pessoa está digitando. Como o
+     carregamento dispara na SEGUNDA letra, chamá-la aqui arrancava o campo
+     debaixo dos dedos: o foco ia embora, as letras seguintes não chegavam a
+     lugar nenhum, e o sintoma não era "carregando", era "não busca". */
+  if(typeof AgrofitCore==='undefined'){ _agrofitErro='O motor do catálogo não carregou.'; _agrofitPintaLista(); return; }
+  _agrofitCarregando=true; _agrofitErro=''; _agrofitPintaLista();
   fetch('data/agrofit.json?v=1').then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.json();
@@ -18055,13 +18078,13 @@ function _agrofitCarregar(cb){
     _agrofitCat=AgrofitCore.carregar(j);
     _agrofitCarregando=false;
     if(!_agrofitCat) _agrofitErro='O catálogo veio num formato que não reconheço.';
-    _itensPinta(); cb&&cb(_agrofitCat);
+    _agrofitPintaLista(); cb&&cb(_agrofitCat);
   }).catch(function(e){
     _agrofitCarregando=false;
     /* Sem rede e sem cache: dizer isso é melhor que um campo que não responde. */
     _agrofitErro='Não consegui abrir o catálogo ('+(e&&e.message||'erro')+'). '+
                  'Ele é baixado uma vez e depois funciona offline.';
-    _itensPinta();
+    _agrofitPintaLista();
   });
 }
 function agrofitBusca(){
