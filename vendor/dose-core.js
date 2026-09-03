@@ -304,6 +304,63 @@
     return out;
   }
 
+  /* ===== CONCENTRACAO ESCRITA A MAO, SEM PARENTESE E SEM UNIDADE ===========
+     O catalogo do MAPA escreve "nome (grupo) (406 g/L)". A planilha de um
+     programa de PTAs escreve outra coisa:
+
+         Etiprole 70 + Bifentrina 45 + Acido Nonanoico 370 SE
+         Bifenthrin50+Acido Nonanoico400 EC
+
+     Nao ha parentese, o numero cola no nome, e — o que mais importa — NAO HA
+     UNIDADE. `ativosDe` devolve vazio nesses textos, e faz certo: 70 o que?
+     Supor g/L acertaria quase sempre e erraria calado nas vezes em que fosse
+     g/kg, que e o tipo de erro que ninguem revisa.
+
+     Esta funcao nao adivinha a unidade. Ela LE o que da (nomes, valores, e o
+     codigo de formulacao no fim) e DIZ o que nao deu, para a tela poder
+     perguntar em vez de calar. Quem responde e quem tem o rotulo na mao. */
+  var _FORMS=['EC','SC','SE','SL','WG','WP','CS','OD','ME','FS','GR','DF','SG','EW','ZC','WDG','DC','EO','SP','TB'];
+  function lerConcentracaoLivre(texto){
+    var s=String(texto==null?'':texto).trim();
+    var out={texto:s, componentes:[], formulacao:'', semUnidade:false, unidades:[]};
+    if(!s) return out;
+    /* O codigo de formulacao vive no FIM da linha, depois do ultimo numero.
+       Tira-lo antes evita que "SE" vire nome de ativo. */
+    var mf=new RegExp('[\\s,;]*\\b('+_FORMS.join('|')+')\\b\\s*$','i').exec(s);
+    if(mf){ out.formulacao=mf[1].toUpperCase(); s=s.slice(0,mf.index).trim(); }
+    s.split(/\s*\+\s*/).forEach(function(parte){
+      parte=parte.trim(); if(!parte) return;
+      /* Nota entre parenteses no fim ("D Limoneno 180 (Ol.Ess.Casca Lar)") fica
+         de lado antes de procurar o numero, senao o numero deixa de estar no fim
+         e o componente sai sem valor. A nota volta para o nome: ela descreve o
+         ativo e jogar fora seria perder o que alguem escreveu de proposito. */
+      var nota='';
+      var mn=/\s*(\([^()]*\))\s*$/.exec(parte);
+      if(mn){ nota=' '+mn[1]; parte=parte.slice(0,mn.index).trim(); }
+      /* numero no fim do trecho, com ou sem espaco antes, com unidade opcional */
+      var m=/^(.*?)[\s]*([\d]+(?:[.,][\d]+)?)\s*(g\/L|g\/l|g\/kg|mg\/kg|mg\/L|mg\/l|%)?\s*$/.exec(parte);
+      if(!m){ out.componentes.push({nome:(parte+nota).trim(), valor:null, unidade:''}); return; }
+      var nome=(m[1].replace(/[,;]+$/,'').trim()+nota).trim();
+      var un=(m[3]||'').replace('g/l','g/L').replace('mg/l','mg/L');
+      if(!un) out.semUnidade=true; else if(out.unidades.indexOf(un)<0) out.unidades.push(un);
+      out.componentes.push({nome:nome, valor:num(m[2].replace(',','.')), unidade:un});
+    });
+    return out;
+  }
+  /* O mesmo texto, reescrito no formato que o resto do app ja le, DEPOIS que
+     alguem disse qual e a unidade. Nao e conversao: e a mesma leitura, agora
+     completa. */
+  function concentracaoComUnidade(texto, unidade){
+    var r=lerConcentracaoLivre(texto);
+    var un=String(unidade||'').trim();
+    if(!un || !r.componentes.length) return '';
+    return r.componentes.map(function(c){
+      if(c.valor==null) return c.nome;
+      var v=String(c.valor).replace('.',',');
+      return c.nome+' ('+v+' '+(c.unidade||un)+')';
+    }).join(' + ');
+  }
+
   /* Equivalente em i.a. de um produto que pode ter varios ativos.
      NAO SOMA os ativos: gramas de 2,4-D e gramas de picloram nao sao a mesma
      grandeza, e um total unico daria a impressao de que sao. Devolve um resultado
@@ -373,6 +430,7 @@
     unidadesDaFamilia:unidadesDaFamilia,
     num:num, canonico:canonico, converter:converter, converterComContexto:converterComContexto,
     equivalenteIA:equivalenteIA, ativosDe:ativosDe, equivalentesIA:equivalentesIA,
+    lerConcentracaoLivre:lerConcentracaoLivre, concentracaoComUnidade:concentracaoComUnidade,
     volumeCalda:volumeCalda,
     formatar:formatar, escada:escada
   };

@@ -17721,7 +17721,7 @@ function itemAbrirNovo(){
   _itemRascunho={tipo:'teste',situacao:'experimental'};
   /* Formulário novo começa sem a busca anterior: reaproveitar o produto da
      última vez faria o item nascer com registro de outro. */
-  _agrofitSel=null; _agrofitTermo=''; _agrofitErro='';
+  _agrofitSel=null; _agrofitTermo=''; _agrofitErro=''; _itLeitura=null;
   _itemAberto='__novo__'; _itensPinta();
   setTimeout(function(){ var i=document.getElementById('itNome'); if(i) i.focus(); },50);
 }
@@ -17809,6 +17809,11 @@ function agrofitEscolher(nr, marca){
   _agrofitSel=m;
   function põe(id,val){ var e=document.getElementById(id); if(e&&val!=null) e.value=val; }
   põe('itNome',m.nome); põe('itNovoTitular',m.titular);
+  /* O que o catálogo traz vai para os CAMPOS, não para um estado invisível.
+     Assim o que se salva é o que está na tela — e a pessoa pode corrigir
+     qualquer coisa antes de gravar. */
+  põe('itNovoAtivos',m.concentracao); põe('itNovoForm',m.formulacao); põe('itNovoRegistro',m.registro);
+  try{ itemLerAtivos(); }catch(e){}
   var t=document.getElementById('itNovoTipo'); if(t) t.value=m.tipo;
   var s=document.getElementById('itNovoSituacao'); if(s) s.value=m.situacao;
   _itensPinta();
@@ -17830,6 +17835,82 @@ function _agrofitSelHtml(){
     linhas.map(function(l){ return '<div><span>'+esc(l[0])+'</span><b>'+esc(l[1]||'—')+'</b></div>'; }).join('')+
     '</div>';
 }
+/* ===== O FORMULÁRIO LÊ O QUE SE DIGITA =====================================
+   Cadastrar um produto era duas idas: preencher nome/código/titular, salvar,
+   reabrir o item e só então preencher concentração, ativos e formulação. Num
+   programa com dezenas de PTAs isso é dezenas de idas e voltas — e no fim o
+   equivalente em i.a. não sai, porque o texto veio sem unidade e ninguém avisou.
+
+   Agora o campo do ingrediente ativo existe no cadastro, e o que se digita é
+   LIDO na hora:
+
+     "Etiprole 70 + Bifentrina 45 + Acido Nonanoico 370 SE"
+        → três ativos, formulação SE, e uma pergunta: 70 o quê?
+
+   O que ele NUNCA faz é supor a unidade. Supor acertaria quase sempre e erraria
+   calado quando fosse g/kg — o tipo de erro que ninguém revisa porque o número
+   parece plausível. Então ele mostra o que entendeu e pergunta o que falta.
+
+   E o que ele oferece, ninguém é obrigado a aceitar: os botões preenchem, a
+   pessoa confere. */
+var _itLeitura=null;
+
+function itemLerAtivos(){
+  var el=document.getElementById('itNovoAtivos');
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  if(!el||!D||!D.lerConcentracaoLivre){ _itLeitura=null; return; }
+  var txt=String(el.value||'');
+  _itLeitura=txt.trim()?D.lerConcentracaoLivre(txt):null;
+  /* Só a caixa de leitura é repintada. Repintar o formulário inteiro levaria
+     embora o campo em que se está digitando — foi assim que a busca do Agrofit
+     deixou de buscar na v185. */
+  var box=document.getElementById('itNovoLeitura');
+  if(box) box.innerHTML=_itLeituraHtml();
+}
+function _itLeituraHtml(){
+  var r=_itLeitura;
+  if(!r||!r.componentes.length) return '';
+  var h='<div class="it-agf-sel" style="margin:-4px 0 9px">'+
+        '<div class="it-agf-selh"><b>Li isto</b></div>';
+  r.componentes.forEach(function(c){
+    h+='<div><span>'+esc(c.nome||'(sem nome)')+'</span><b>'+
+       (c.valor==null?'—':(String(c.valor).replace('.',',')+(c.unidade?(' '+c.unidade):' <span style="color:#dccd8c">?</span>')))+
+       '</b></div>';
+  });
+  if(r.formulacao)
+    h+='<div><span>Formulação</span><b>'+esc(r.formulacao)+
+       ' <button type="button" class="it-btn alt" style="padding:2px 6px;font-size:10px" '+
+       'onclick="itemUsarFormulacao()">usar</button></b></div>';
+  if(r.semUnidade){
+    /* A pergunta que evita o silêncio no fim: sem unidade, o equivalente em i.a.
+       simplesmente não sai, e a pessoa só descobre isso muito depois. */
+    h+='<div class="it-hint" style="color:#dccd8c;padding:6px 0 2px">'+
+       'Os números estão sem unidade — <b>'+esc(String((r.componentes[0]||{}).valor||''))+
+       ' o quê?</b> Sem ela o equivalente em i.a. não é calculado. Se todos forem a mesma:</div>'+
+       '<div style="display:flex;gap:6px">'+
+       ['g/L','g/kg','%'].map(function(u){
+         return '<button type="button" class="it-btn alt" style="flex:1;padding:5px;font-size:11px" '+
+                'onclick="itemAplicarUnidade('+esc(JSON.stringify(u))+')">'+esc(u)+'</button>';
+       }).join('')+'</div>';
+  }
+  return h+'</div>';
+}
+function itemUsarFormulacao(){
+  var f=document.getElementById('itNovoForm');
+  if(f&&_itLeitura&&_itLeitura.formulacao){ f.value=_itLeitura.formulacao; }
+}
+/* Reescreve o texto com a unidade escolhida, no formato que o resto do app já
+   lê. Não é conversão de valor nenhum — é a mesma leitura, agora completa. */
+function itemAplicarUnidade(un){
+  var el=document.getElementById('itNovoAtivos');
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  if(!el||!D||!D.concentracaoComUnidade) return;
+  var novo=D.concentracaoComUnidade(el.value, un);
+  if(!novo) return;
+  el.value=novo;
+  itemLerAtivos();
+}
+
 function _itemNovoHtml(){
   var h='<div class="it-box"><div class="it-top"><div class="it-t">Novo item</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>'+
@@ -17845,6 +17926,16 @@ function _itemNovoHtml(){
         '<div class="it-f"><label>Nome *</label><input id="itNome" placeholder="como o cliente chama"></div>'+
         '<div class="it-row"><div class="it-f"><label>Código experimental</label><input id="itNovoCodigo" placeholder="ex.: XYZ-2026-01"></div>'+
         '<div class="it-f"><label>Cliente / titular</label><input id="itNovoTitular"></div></div>'+
+        /* O ingrediente ativo passa a existir no CADASTRO, não só depois de
+           salvar e reabrir. É o campo que mais custa numa leva de produtos. */
+        '<div class="it-f"><label>Ingrediente(s) ativo(s) e concentração</label>'+
+        '<input id="itNovoAtivos" placeholder="ex.: Etiprole 70 g/L + Bifentrina 45 g/L" '+
+        'oninput="itemLerAtivos()" autocomplete="off"></div>'+
+        '<div id="itNovoLeitura">'+_itLeituraHtml()+'</div>'+
+        '<div class="it-row"><div class="it-f"><label>Formulação</label>'+
+        '<input id="itNovoForm" placeholder="SC, WG, EC…"></div>'+
+        '<div class="it-f"><label>Registro <span style="text-transform:none;letter-spacing:0;font-weight:600;opacity:.7">— se houver</span></label>'+
+        '<input id="itNovoRegistro" placeholder="experimental não tem"></div></div>'+
         '<div class="it-row"><div class="it-f"><label>Tipo</label><select id="itNovoTipo">'+
         ITEM_TIPOS.map(function(t){return '<option value="'+t[0]+'">'+esc(t[1])+'</option>';}).join('')+'</select></div>'+
         '<div class="it-f"><label>Situação</label><select id="itNovoSituacao">'+
@@ -17859,16 +17950,34 @@ function itemNovoSalvar(){
   if(dup.length && !confirm('Já existe '+(dup.length===1?'um item':'itens')+' com este nome: '+
     dup.map(function(x){return x.nome;}).join(', ')+'.\n\nCadastrar mesmo assim?')) return;
   var dados={nome:nome,codigo:v('itNovoCodigo'),titular:v('itNovoTitular'),
-    tipo:v('itNovoTipo')||'teste',situacao:v('itNovoSituacao')||'experimental'};
+    tipo:v('itNovoTipo')||'teste',situacao:v('itNovoSituacao')||'experimental',
+    ativos:v('itNovoAtivos'), concentracao:v('itNovoAtivos'),
+    formulacao:v('itNovoForm'), registro:v('itNovoRegistro')};
   /* O que veio do Agrofit só entra se o NOME ainda for o que o catálogo trouxe.
      Se a pessoa reescreveu o nome, ela está cadastrando outra coisa, e herdar
      registro e concentração de um produto que ela abandonou seria pior que não
      preencher nada — sairia com cara de dado oficial. */
+  /* Registro, formulação e concentração já vêm dos CAMPOS acima — o catálogo os
+     preencheu à vista quando foi escolhido. Aqui sobra só o que não tem campo
+     próprio: as outras marcas do mesmo registro. E elas só entram se o nome
+     ainda for o que o catálogo trouxe; se a pessoa reescreveu o nome, está
+     cadastrando outra coisa, e herdar os apelidos de um produto abandonado
+     daria cara de dado oficial ao que não é. */
   var m=_agrofitSel;
   if(m && m.nome===nome){
-    dados.registro=m.registro; dados.formulacao=m.formulacao;
-    dados.concentracao=m.concentracao; dados.ativos=m.ativos;
     dados.sinonimos=(m.sinonimos||[]).slice();
+  } else if(m && dados.registro && dados.registro===m.registro){
+    /* O nome deixou de ser o do catálogo, mas o registro dele continua no campo.
+       Antes isso era descartado em silêncio — com o campo cheio na tela, que é
+       uma mentira de outro tipo. Agora pergunta: um item com nome próprio e o
+       número de registro de outro produto é dado oficial errado, e ninguém
+       revisa porque tem cara de certo. */
+    if(!confirm('Você renomeou o item para "'+nome+'", mas o registro '+dados.registro+
+                ' é do produto "'+m.nome+'" do Agrofit.\n\n'+
+                'Manter esse número de registro?\n\n'+
+                'Cancele para apagar o registro e cadastrar como produto próprio.')){
+      dados.registro=''; dados.sinonimos=[];
+    }
   }
   var it=itemNovo(dados);
   if(!it){alert('Não foi possível salvar o item.');return;}
