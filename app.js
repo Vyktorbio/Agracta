@@ -9696,9 +9696,121 @@ function _pranchaDiag(qid, sid){
    o programa não tem como sustentar. A severidade separa o que exige resposta
    ('conferir') do que é só contexto ('nota') — e não existe nota 96/100, porque
    score dá aparência de validação científica absoluta ao que é uma contagem. */
+/* Bloco do verificador de desenho no cartão do estudo.
+   A aritmética é de `vendor/protocolo-core.js`; aqui só se pinta. Silencioso
+   quando não há nada a dizer — um verificador que fala sempre vira decoração. */
+function protocoloVerificaHtml(study){
+  var P=(typeof window!=='undefined')?window.ProtocoloCore:null;
+  if(!P||!study) return '';
+  var achados=[];
+  try{ achados=P.verificar(study)||[]; }catch(e){ return ''; }
+  if(!achados.length) return '';
+  var conferir=achados.filter(function(a){ return a.severidade==='conferir'; });
+  var notas=achados.filter(function(a){ return a.severidade!=='conferir'; });
+  function linha(a){
+    return '<div>'+(a.severidade==='conferir'?'⚠ ':'· ')+esc(a.texto)+'</div>';
+  }
+  var h='<div class="lote-bloco"><div class="jan-t">CONFERÊNCIA DO DESENHO</div>';
+  if(conferir.length) h+='<div class="jan-cob">'+conferir.map(linha).join('')+'</div>';
+  if(notas.length) h+='<div class="jan-det">'+notas.map(linha).join('')+'</div>';
+  /* A frase do rodapé é a doutrina, e ela precisa estar na tela: quem lê tem de
+     saber que isto não reprova nada. */
+  h+='<div class="jan-pe">'+esc(P.resumo(achados))+' · o app aponta, quem decide é você — '+
+     'ensaio experimental existe para sair do padrão</div>';
+  return h+'</div>';
+}
+
+/* Achados de DOMÍNIO e TEMPORAIS (§12) — o que o dado diz sobre si mesmo.
+   Estes não precisam de nenhum registro novo: são comparações entre campos que
+   já estão gravados. Ficam à parte dos achados de execução porque nascem do
+   ESTUDO, não do evento isolado — "avaliação antes da aplicação" só existe
+   quando se olha os dois. */
+function _forenseAchadosEstudo(study, qid){
+  var out=[];
+  if(!study) return out;
+  function br(d){ try{ return isoToBR(d)||d; }catch(e){ return d; } }
+  function dia(x){ return String((x&&x.data)||'').slice(0,10); }
+  var hoje=''; try{ hoje=todayISO(); }catch(e){}
+
+  var aps=(study.aplicacoes||[]).filter(dia).slice().sort(function(a,b){ return dia(a).localeCompare(dia(b)); });
+  var avs=(study.avaliacoes||[]).filter(dia).slice().sort(function(a,b){ return dia(a).localeCompare(dia(b)); });
+
+  /* Avaliação antes de qualquer aplicação: ou a data está errada, ou a leitura é
+     de pré-tratamento e deveria estar declarada como tal. */
+  if(aps.length){
+    var primeira=dia(aps[0]);
+    avs.forEach(function(a){
+      if(dia(a)<primeira) out.push({codigo:'avaliacao-antes-da-aplicacao', severidade:'conferir',
+        texto:'A avaliação de '+br(dia(a))+' é anterior à primeira aplicação ('+br(primeira)+').'});
+    });
+  }
+
+  /* Aplicação antes do plantio. */
+  var plantio=''; try{ plantio=String(studyPlantio(study)||'').slice(0,10); }catch(e){}
+  if(plantio) aps.forEach(function(a){
+    if(dia(a)<plantio) out.push({codigo:'aplicacao-antes-do-plantio', severidade:'conferir',
+      texto:'A aplicação de '+br(dia(a))+' é anterior ao plantio ('+br(plantio)+').'});
+  });
+
+  /* Data no futuro. Evento programado é agenda; evento REGISTRADO com data
+     futura é digitação. Só conta o que tem registro. */
+  if(hoje) aps.concat(avs).forEach(function(e){
+    if(dia(e)>hoje && (e.carimbo||(e.notas&&Object.keys(e.notas).length)))
+      out.push({codigo:'data-no-futuro', severidade:'conferir',
+        texto:'Há registro com data no futuro ('+br(dia(e))+').'});
+  });
+
+  /* BBCH retrocedendo: a planta não volta de estádio. */
+  var comBbch=aps.concat(avs).filter(function(e){ return e && e.bbch!=='' && e.bbch!=null; })
+    .sort(function(a,b){ return dia(a).localeCompare(dia(b)); });
+  for(var i=1;i<comBbch.length;i++){
+    var ant=parseInt(comBbch[i-1].bbch,10), at=parseInt(comBbch[i].bbch,10);
+    if(isFinite(ant)&&isFinite(at)&&at<ant)
+      out.push({codigo:'bbch-retrocedendo', severidade:'conferir',
+        texto:'BBCH retrocede de '+ant+' ('+br(dia(comBbch[i-1]))+') para '+at+' ('+br(dia(comBbch[i]))+').'});
+  }
+
+  return out;
+}
+
+/* Valores fora do domínio da própria variável. A tela já valida na digitação;
+   isto pega o que entrou por outro caminho — importação, sincronização de uma
+   versão antiga, edição fora do formulário. Conta em vez de listar célula a
+   célula: vinte achados iguais são um achado com vinte ocorrências. */
+function _forenseDominio(av){
+  var out=[];
+  if(!av || !av.notas) return out;
+  var fora={};
+  (av.variaveis||[]).forEach(function(v){
+    var cfg=null; try{ cfg=_avCfg(av,v); }catch(e){ return; }
+    if(!cfg) return;
+    Object.keys(av.notas).forEach(function(k){
+      var raw=(av.notas[k]||{})[v];
+      if(raw==null||String(raw).trim()==='') return;
+      var n=parseFloat(String(raw).replace(',','.'));
+      if(!isFinite(n)) return;
+      var m='';
+      if(n<0) m='negativo';
+      else if(cfg.tipo==='pct' && n>100) m='acima de 100%';
+      else if(cfg.tipo==='escala' && n>cfg.escalaMax) m='acima do máximo da escala ('+cfg.escalaMax+')';
+      else if(cfg.tipo==='contagem' && Math.abs(n-Math.round(n))>1e-9) m='contagem fracionada';
+      if(!m) return;
+      var ch=v+'|'+m;
+      fora[ch]=fora[ch]||{v:v, m:m, n:0};
+      fora[ch].n++;
+    });
+  });
+  Object.keys(fora).forEach(function(ch){
+    var d=fora[ch];
+    out.push({codigo:'valor-fora-do-dominio', severidade:'conferir',
+      texto:d.n+' valor(es) '+d.m+' na variável "'+d.v+'".'});
+  });
+  return out;
+}
 function _forenseAchados(r){
   var out=[];
   if(!r) return out;
+  _forenseDominio(r).forEach(function(a){ out.push(a); });
 
   (r.consumos||[]).forEach(function(c){
     if(c && c.vencido) out.push({
@@ -9923,6 +10035,10 @@ function _pranchaPayload(qid, sid, variavel){
         .concat((s.aplicacoes||[]).map(function(a){ return _forenseDe(a,'APL'); }))
         .concat((s.avaliacoes||[]).map(function(a){ return _forenseDe(a,'AV'); }))
         .filter(Boolean),
+      /* Achados que não pertencem a um registro isolado: "avaliação antes da
+         aplicação" só existe quando se olham os dois. Vão à parte, e a folha os
+         mostra na mesma lista de achados. */
+      achadosEstudo:(function(){ try{ return _forenseAchadosEstudo(s, qid); }catch(e){ return []; } })(),
       trilha: (s.audit||[]).map(function(e){
         var q=new Date(e.ts||0);
         var id=_identidadeBPL(e.user,e.por);
@@ -10698,6 +10814,10 @@ function openStudyDetail(qid,sid){
      '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(_studyRandomOk(study)?'Randomizada':(study.randomizado?'A conferir':'Sequencial'))+'</b></div></div><div class="study-plan-actions">'+
      '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
      (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
+  /* O que o DESENHO do ensaio tem a dizer sobre si mesmo. Fica junto do
+     planejamento porque é ali que se conserta — depois da primeira aplicação,
+     mudar o delineamento não é mais correção, é outro ensaio. */
+  try{ h+=protocoloVerificaHtml(study); }catch(e){}
 
   /* Aplicações realizadas */
   h+='<div id="study-stage-execucao" class="study-stage-anchor" aria-hidden="true"></div>';

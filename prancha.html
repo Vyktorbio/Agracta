@@ -331,7 +331,7 @@ let DAA = [7,14,21];
 let MOM = null;
 /* BPL: carimbos e trilha de auditoria do estudo. Só existem quando o app abre a
    folha; na demonstração ficam vazios e a vista diz isso em vez de mentir. */
-let BPL = {autor:"", finalizado:false, finalizadoEm:null, registros:[], trilha:[]};
+let BPL = {autor:"", finalizado:false, finalizadoEm:null, registros:[], achadosEstudo:[], trilha:[]};
 /* Número curto para rótulo: sem casa decimal quando é inteiro, e vírgula em PT. */
 const numRot = v => {
   const n = Math.round(v*10)/10;
@@ -412,8 +412,9 @@ let BLOCOS = FATOR_BLOCO.map((_,i)=> i+1);
   if(Array.isArray(h.avaliacoes) && h.avaliacoes.length) AVALIACOES = h.avaliacoes;
   if(!TRAT.some(t=>t.testemunha) && TRAT.length) TRAT[0].testemunha = true;
   if(h.bpl && typeof h.bpl === "object"){
-    BPL = Object.assign({autor:"", finalizado:false, finalizadoEm:null, registros:[], trilha:[]}, h.bpl);
+    BPL = Object.assign({autor:"", finalizado:false, finalizadoEm:null, registros:[], achadosEstudo:[], trilha:[]}, h.bpl);
     if(!Array.isArray(BPL.registros)) BPL.registros = [];
+    if(!Array.isArray(BPL.achadosEstudo)) BPL.achadosEstudo = [];
     if(!Array.isArray(BPL.trilha))    BPL.trilha = [];
   }
 })();
@@ -2023,6 +2024,17 @@ function secBPL(x, y, w){
        aparência de validação científica absoluta ao que é uma lista de coisas a
        conferir. E a palavra é "conferir": o programa aponta, quem conclui é gente. */
     const achados = [];
+    /* Achados do ESTUDO — os que não pertencem a um registro isolado. Entram na
+       mesma lista, com o campo de evento em branco: o achado é do conjunto. */
+    (B.achadosEstudo||[]).forEach(a=>{
+      achados.push([
+        {v:"—", w:600},
+        (pt?"o estudo":"the study"),
+        {v:(a.severidade==="conferir" ? (pt?"Conferir":"Check") : (pt?"Nota":"Note")),
+         w:600, c:(a.severidade==="conferir" ? "#8a6a1f" : GRAF)},
+        a.texto || ""
+      ]);
+    });
     B.registros.forEach(r=>{
       (r.achados||[]).forEach(a=>{
         achados.push([

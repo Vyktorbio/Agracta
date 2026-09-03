@@ -40,7 +40,10 @@ var ctx={console:console, String:String, Number:Number, Array:Array, Object:Obje
   isoToBR:function(d){ var x=String(d||'').split('-'); return x.length===3?(x[2]+'/'+x[1]+'/'+x[0]):d; }};
 ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
-vm.runInContext(pega('_forenseAchados'), ctx);
+vm.runInContext([
+  'var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};',
+  pega('_avTipo'), pega('_avCfg'), pega('_forenseDominio'), pega('_forenseAchados')
+].join('\n'), ctx);
 function cod(as){ return as.map(function(a){return a.codigo;}); }
 
 console.log('\n--- Registro limpo não gera achado ---');

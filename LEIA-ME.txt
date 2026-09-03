@@ -1,3 +1,88 @@
+AGRACTA — 10a publicacao                    03/09/2026
+=====================================================
+
+Leva: 2 arquivos de codigo + 1 motor novo + 2 de teste.
+  CODIGO:  app.js  prancha.html  index.html  sw.js
+  MOTOR:   vendor/protocolo-core.js (novo)
+  TESTE:   test_protocolo_verifica.js (novo)
+           test_forense_dominio.js    (novo)
+  DOCS:    docs/ROADMAP.md
+
+
+O QUE MUDOU
+-----------
+
+1) O APP PASSOU A TER OPINIAO SOBRE O DESENHO DO ENSAIO
+
+Ate aqui o Agracta conferia a EXECUCAO: se a conta da calda fecha, se a baixa do
+lote bate, se o registro tem carimbo. Sobre o DESENHO — se o conjunto de
+tratamentos responde a pergunta que o ensaio faz — ele nao tinha nada a dizer.
+
+E e ali que o erro custa mais caro. Uma calda mal calculada se refaz no mesmo
+dia; um braco que faltou no delineamento so aparece na hora de analisar, com a
+safra ja colhida.
+
+O caso que originou isto foi o seu ensaio de sinergista. Ele testa o adjuvante
+sozinho a 0,033% e a 0,2%, e mistura com o Sankari SO na dose baixa. Nao ha braco
+de mistura na dose alta. Pode ser proposital — o ponto e que ninguem tinha
+perguntado, e a folha nao perguntava. Agora o cartao do estudo pergunta, e esse
+ensaio e o golden test do motor.
+
+Sete checagens: sem testemunha; sem replicacao; tratamento sem dose; dois
+tratamentos com receita identica; componente que so existe em mistura e nunca
+sozinho; dose testada sozinha que nunca entra em mistura; e o mesmo item usado
+com unidades de familias diferentes (L/ha num braco, % v/v noutro).
+
+TRES REGRAS, e elas importam mais que as checagens:
+
+  - APONTA, NAO BLOQUEIA. Ensaio experimental existe para sair do padrao. Um
+    verificador que impedisse desenhos incomuns seria pior que nenhum.
+  - SEVERIDADE SEPARA o que quase sempre e erro ("conferir") do que e pergunta
+    legitima ("nota"). Misturar os dois faria a lista virar ruido, e lista
+    ruidosa ninguem le.
+  - NAO ADIVINHA RECEITA. Quando o tratamento e texto livre e o numero de
+    produtos nao bate com o de doses, aquele tratamento fica FORA das checagens
+    por componente. Um pareamento errado geraria achado falso, e achado falso
+    mata a confianca na ferramenta inteira.
+
+2) A FOLHA BPL GANHOU OS ACHADOS DE DOMINIO E DE SEQUENCIA
+
+Nenhum deles precisou de registro novo: sao comparacoes entre campos que ja estao
+gravados, e que ninguem percebe lendo um evento por vez.
+
+  DE SEQUENCIA: avaliacao anterior a primeira aplicacao; aplicacao anterior ao
+  plantio; registro com data no futuro; BBCH retrocedendo (a planta nao volta de
+  estadio).
+
+  DE DOMINIO: valor negativo; acima de 100% numa variavel percentual; acima do
+  maximo da escala; contagem com casa decimal.
+
+Duas decisoes que evitam ruido: AGENDA NAO E ERRO — avaliacao programada para o
+futuro e o normal do app, entao so entra o que ja tem registro; e o dominio CONTA
+em vez de listar celula a celula — vinte valores acima de 100% sao um achado com
+vinte ocorrencias, nao vinte achados.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o estudo do sinergista: o bloco "CONFERENCIA DO DESENHO" deve apontar as
+   duas doses de adjuvante sem braco de mistura, como NOTA (nao como erro).
+2. Abrir um ensaio simples e correto: o bloco nao deve aparecer.
+3. Gerar a folha BPL de um estudo e conferir o bloco de achados.
+
+
+TESTES
+------
+Duplo clique em  Conferir antes de publicar.command.
+
+  test_protocolo_verifica.js  38 verificacoes (novo, golden test do ensaio real)
+  test_forense_dominio.js     25 verificacoes (novo)
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 9a publicacao                     03/09/2026
 =====================================================
 
