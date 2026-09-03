@@ -132,6 +132,23 @@
           'O tratamento '+t.id+' não tem dose declarada e não está marcado como testemunha.',[t.id]);
     });
 
+    /* ---- 3-bis. Testemunha COM produto e dose ------------------------------
+       A testemunha e o zero do ensaio: e contra ela que o % de controle se
+       calcula. Uma testemunha que carrega produto nao e zero de nada, e o % de
+       controle sai medido contra um tratamento — numero que parece resultado e
+       nao e. Ou a marca esta errada, ou o produto esta no lugar errado. */
+    trats.forEach(function(t){
+      if(!ehTestemunha(study,t)) return;
+      var r=receitaDe(t);
+      if(r===null || !r.length) return;
+      var comDose=r.filter(function(c){ return c.valor!=null && c.valor>0; });
+      if(comDose.length)
+        achado('testemunha-com-produto','conferir',
+          'O tratamento '+t.id+' está marcado como testemunha, mas tem produto e dose ('+
+          comDose.map(function(c){ return c.nome+' '+doseRotulo(c); }).join(' + ')+
+          '). O % de controle sai medido contra ele.',[t.id]);
+    });
+
     /* ---- 4. Tratamentos idênticos ------------------------------------------
        Dois braços com a mesma receita não são dois braços: são um, digitado
        duas vezes — e a estatística os trata como se fossem diferentes. */

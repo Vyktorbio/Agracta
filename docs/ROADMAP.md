@@ -470,6 +470,78 @@ capacidade sozinho).
 absurda em relação à calda preparada) fica para depois da refinada de usabilidade em
 curso, para não colidir com ela.
 
+## 7-septies. O volume de calda deixou de ser texto · ✅ **feito (03/09/2026)**
+
+O caso foi real e caro. O protocolo trazia `1,5 L ÁGUA (TOTAL 3,0 L/ha)`, e a
+calculadora pegava o **primeiro número** — 1,5. Com 1,5 L/ha no lugar de 3, o produto
+a 1,5 L/ha passa a ocupar **100% da calda**: não sobra espaço para água nenhuma, e a
+tela mostra "NÃO PREPARE". O bloqueio estava certo — ele apenas recusava por um motivo
+invisível para quem estava na bancada, e a receita ao lado saía absurda.
+
+`DoseCore.volumeCalda` passa a **recusar em vez de escolher**. Texto com mais de um
+número não vira conta: vira pergunta, com os candidatos na tela. Quando um único
+número está qualificado por área (`3,0 L/ha`), ele é **sugerido** — e só sugerido:
+escolher outro número em silêncio não conserta o erro, só muda a vítima.
+
+Enquanto o volume não é confirmado, **nenhuma receita é pintada**. Meia conta na
+bancada é pior que conta nenhuma. O mesmo cuidado vale no volume do tratamento: o
+cartão daquele tratamento diz o que falta, e só ele.
+
+A confirmação grava um NÚMERO em `protocolo.volumeCaldaLHa`, ao lado do texto
+original, que nunca é apagado — e entra na trilha de auditoria dizendo qual texto
+virou qual número. Coberto por `test_volume_calda.js` (28 verificações, com o texto
+real como golden test).
+
+**Também nesta leva:** o verificador de desenho ganhou `testemunha-com-produto` — uma
+testemunha que carrega produto não é o zero de nada, e o % de controle sai medido
+contra um tratamento.
+
+**Falta:** o Modo Preparo pedido pelo autor — abas por tratamento, edição da receita
+dentro da calculadora, navegação anterior/próximo, linha de configuração compacta e
+seletor mL/L no frasco. É reescrita da tela, e espera a refinada de usabilidade em
+curso para não colidir com ela.
+
+## 7-octies. Modo Preparo · ✅ **feito (03/09/2026)**
+
+O pedido do autor foi direto: *"as calculadoras precisam facilitar de verdade e não
+complicar mais"*. A tela tinha **sete campos sempre abertos** e todos os tratamentos
+empilhados abaixo. Quem está na bancada quer duas coisas — quanto preparar e quanto
+medir — e rolava a tela para achá-las entre configurações que quase nunca mudam.
+
+A inversão, item a item do que ele pediu:
+
+| Antes | Agora |
+|---|---|
+| 7 campos sempre abertos | uma linha: `5×3 m · 4 parcelas · 3 L/ha · morto 300 mL · frasco 1,9 L` |
+| todos os tratamentos empilhados | abas `T1 T2 … Todos`, um por vez |
+| editar dose = fechar, abrir o protocolo, rolar, achar, voltar | a dose é campo na própria linha da receita |
+| sem navegação | `‹ anterior` e `próximo ›` |
+| capacidade em L ao lado de um campo em mL | seletor **mL/L** ao lado do número |
+
+**A aritmética não mudou uma linha** — continua toda em `vendor/biocalc-campo-core.js`.
+O que mudou é o que se mostra e em que ordem.
+
+Quatro decisões que o teste cobra: a grade **existe sempre, apenas oculta** (tirá-la do
+DOM zeraria parcela e volume, porque o cálculo lê pelos ids); **"Todos" não some**, pois
+a lista inteira é útil para conferir o preparo do dia; **anterior/próximo não dão a
+volta**, porque na bancada isso faz perder a conta de onde se estava; e **o atalho para
+o protocolo continua**, porque a edição na linha resolve trocar dose e unidade, não
+acrescentar item nem transformar texto livre em receita.
+
+A leitura dupla (`1,5 L/ha ≡ 1 %`) ficou **só na conferência**: no essencial ela
+confunde — foi ela que levantou a dúvida do autor numa folha real.
+
+Coberto por `test_modo_preparo.js` (22 verificações).
+
+**Conciliação do caso real:** confirmar `3,0 L/ha` no protocolo agora também libera
+os tratamentos cujo texto declara `TOTAL 3,0 L/ha`; antes, o protocolo ficava
+confirmado, mas cada cartão continuava bloqueado pela mesma ambiguidade. A confirmação
+só é reutilizada quando coincide com o único número qualificado por área — divergência
+continua bloqueada. T1 também deixou de ser chamado de testemunha por simples posição:
+no preparo, somente a marcação explícita vale. Coberto por
+`test_volume_calda_fluxo.js` (16 verificações, incluindo `318 mL`, `159 mL` de
+SANKARI e `104,94 µL` de SILWET no ensaio real).
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,
