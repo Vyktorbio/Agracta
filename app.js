@@ -7729,6 +7729,7 @@ function _calcRenderShell(){
       '<div class="calc-f"><span class="calc-lab">Capacidade do frasco (L)</span><input id="calcCap" class="calc-inp" type="number" step="0.1" value="'+defCap+'" placeholder="0 = ignorar" oninput="_calcCompute()"></div>'+
     '</div>'+
     '<div class="calc-sub">'+esc(refTxt)+'</div>'+
+    (study?'<div class="calc-actions" style="margin-top:7px"><button class="calc-copy" onclick="calcEditarReceita()">✎ Itens, doses e adjuvante (% v/v)</button></div>':'')+
     '<div id="calcResults"></div>'+
     '<div id="calcBarraBox" class="calc-barra"></div>'+
     '<div id="calcMemBox" class="calc-mem"></div>'+
@@ -7737,6 +7738,13 @@ function _calcRenderShell(){
   _calcCompute();
 }
 function _calcPick(v){ var p=String(v||'').split('|'); if(p.length===2){ _calcSel={qid:p[0],sid:p[1]}; if(typeof _calcBarraReset==='function') _calcBarraReset(); _calcRenderShell(); } }
+function calcEditarReceita(){
+  var sel=_calcSel; if(!sel) return;
+  if(typeof _bloqueadoPorFinalizacao==='function'&&_bloqueadoPorFinalizacao(sel.qid,sel.sid)) return;
+  closeCalc();
+  openStudyEditV2(sel.qid,sel.sid);
+  if(workingStudy){ studyEditStep=3; renderStudyEditModal(); }
+}
 function _calcCompute(){
   var box=document.getElementById('calcResults'); if(!box) return;
   var study=_calcStudy();
@@ -10496,6 +10504,42 @@ function confirmDeleteStudy(qid,sid){
 
 /* ============ EDIT MODAL PRINCIPAL DO ESTUDO ============ */
 var workingStudy=null;
+/* Apenas um compositor de mistura fica aberto por vez. Ele e estado de tela, nao
+   dado do protocolo: cancelar ou fechar o cadastro nunca deixa componente vazio
+   salvo no estudo. */
+var _seCompNovoIdx=null;
+
+/* Unidades que a calculadora de CAMPO sabe executar por componente. A porcentagem
+   nao e uma "unidade geral do estudo": ela pertence a linha do adjuvante, pois
+   0,1 % v/v so vira volume depois que a calda final e conhecida. */
+var TRAT_COMP_UNIDADES=[
+  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'],
+  ['% v/v','% v/v — adjuvante líquido']
+];
+function _seCompUnidadeNormalizar(u){
+  var s=String(u||'').trim();
+  if(s==='%' || /^%\s*v\s*\/\s*v$/i.test(s)) return '% v/v';
+  var achou=TRAT_COMP_UNIDADES.filter(function(x){return x[0].toLowerCase()===s.toLowerCase();})[0];
+  return achou?achou[0]:'';
+}
+function _seCompUnidadeOptions(atual){
+  var sel=_seCompUnidadeNormalizar(atual)||'L/ha';
+  return TRAT_COMP_UNIDADES.map(function(x){
+    return '<option value="'+x[0]+'"'+(x[0]===sel?' selected':'')+'>'+x[1]+'</option>';
+  }).join('');
+}
+function _seCompUnidadePadrao(itemId){
+  var it=(typeof itemPorId==='function')?itemPorId(itemId):null;
+  if(it&&it.tipo==='adjuvante') return '% v/v';
+  var u=(workingStudy&&workingStudy.doseUnidade)||'L/ha';
+  return _seCompUnidadeNormalizar(u)||'L/ha';
+}
+function _itemDoseUnidadeOptions(atual){
+  var lista=(window.DoseCore&&DoseCore.unidades)?DoseCore.unidades():TRAT_COMP_UNIDADES.map(function(x){return x[0];});
+  var sel=(String(atual||'').trim()==='%')?'% v/v':String(atual||'L/ha').trim();
+  if(lista.indexOf(sel)<0) lista=lista.concat([sel]); /* preserva unidade legada ao editar */
+  return lista.map(function(u){return '<option value="'+esc(u)+'"'+(u===sel?' selected':'')+'>'+esc(u)+'</option>';}).join('');
+}
 /* O cadastro completo continua usando o mesmo objeto de estudo; estas etapas só
    tornam a conversa com o usuário mais curta e legível no campo. */
 var studyEditStep=1;
@@ -10536,6 +10580,7 @@ function _seWizardSummary(s){
 function openStudyEditV2(qid,sid){
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
   curV=qid;curSid=sid;
+  _seCompNovoIdx=null;
   var q=data[qid];
   var existing=(q.estudos||[]).find(function(s){return s.id===sid});
   if(existing){
@@ -10555,6 +10600,7 @@ function openStudyEditV2(qid,sid){
 
 function openNewStudy(qid){
   curV=qid;
+  _seCompNovoIdx=null;
   workingStudy=newStudy();
   /* O estudo nasce com uma fotografia do contexto da quadra. Além de deixar o
      formulário explícito, isto impede uma futura troca de cultura da quadra de
@@ -11069,9 +11115,10 @@ function renderStudyEditModal(){
          Trocar o texto por um seletor obrigatório travaria quem tem o item na mão e
          ainda não o cadastrou — e travar quem está com pressa é como se ensina a
          contornar o cadastro. */
+      var _cps=tratComponentes(t);
       var _itSel=tratItem(t);
       h+='<div style="display:flex;gap:6px;align-items:stretch">'+
-         '<select data-f="__item" style="flex:1;min-width:0" onchange="seTratItem('+i+',this.value)">'+
+         '<select data-f="__item" style="flex:1;min-width:0" onchange="seTratItem('+i+',this.value)"'+(_cps.length?' disabled title="A identidade agora está em cada componente da receita"':'')+'>'+
          '<option value="">— produto por texto livre —</option>'+
          itensLista().map(function(x){
            return '<option value="'+esc(x.id)+'"'+(_itSel&&_itSel.id===x.id?' selected':'')+'>'+esc(x.nome||x.id)+(x.codigo?(' · '+esc(x.codigo)):'')+'</option>';
@@ -11079,7 +11126,7 @@ function renderStudyEditModal(){
          '</select>'+
          '<button type="button" class="btn-sm" style="flex:0 0 auto" onclick="abrirItens()" title="Abrir o banco de itens">📦</button>'+
          '</div>';
-      h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'"'+(_itSel?' readonly style="opacity:.7"':'')+'>';
+      h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'"'+((_itSel||_cps.length)?' readonly style="opacity:.7"':'')+'>';
       if(_itSel){
         var _dsc=itemDosesPara(_itSel.id, studyCultura(s,data[curV]||{}), '');
         if(_dsc.length){
@@ -11109,7 +11156,7 @@ function renderStudyEditModal(){
              (t.justificativaDose?'':' style="border-color:#6b531b"')+'>';
         }
       }
-      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1"><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
+      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':'')+'><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
       /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
          drone: metade dos tratamentos fecha o volume com óleo de soja. Vazio
          continua significando água, então nada muda em estudo antigo. */
@@ -11118,12 +11165,16 @@ function renderStudyEditModal(){
       /* RECEITA: um tratamento raramente é um produto só. Cada componente vira uma
          linha própria — o catálogo passa a ver dois itens, e "onde este adjuvante foi
          usado" ganha resposta. */
-      var _cps=tratComponentes(t);
       if(_cps.length){
+        h+='<div class="e-hint" style="margin:1px 0 3px">Receita estruturada: edite a dose e a unidade em cada linha. Para adjuvante líquido, use <b>% v/v</b>.</div>';
         h+='<div class="tr-rec">';
         _cps.forEach(function(c){
-          h+='<div class="tr-cp"><span>'+esc(c.nome||'(sem nome)')+'</span>'+
-             '<b>'+esc((c.valor!=null?String(c.valor).replace('.',','):'')+(c.unidade?(' '+c.unidade):''))+'</b>'+
+          var _cu=_seCompUnidadeNormalizar(c.unidade)||c.unidade||'L/ha';
+          h+='<div class="tr-cp" style="flex-wrap:wrap"><span title="'+esc(c.nome||'')+'">'+esc(c.nome||'(sem nome)')+'</span>'+
+             '<input type="text" inputmode="decimal" aria-label="Dose de '+esc(c.nome||'componente')+'" value="'+esc(c.valor!=null?String(c.valor).replace('.',','):'')+'" '+
+               'style="width:76px;flex:0 0 76px" onchange="seTratCompEditar('+i+',\''+esc(c.id)+'\',\'valor\',this.value)">'+
+             '<select aria-label="Unidade de '+esc(c.nome||'componente')+'" style="width:auto;max-width:165px;flex:0 0 auto" '+
+               'onchange="seTratCompEditar('+i+',\''+esc(c.id)+'\',\'unidade\',this.value)">'+_seCompUnidadeOptions(_cu)+'</select>'+
              '<button type="button" class="tr-x" onclick="seTratCompRemover('+i+',\''+esc(c.id)+'\')" title="Remover componente">×</button></div>';
           if(c.itemId){
             var _clts=itemLotes(c.itemId).filter(function(l){return l&&(itemLoteSaldo(l)>0||(c.loteRef&&c.loteRef.loteId===l.id));});
@@ -11135,7 +11186,23 @@ function renderStudyEditModal(){
         });
         h+='</div>';
       }
-      h+='<button type="button" class="se-add-trat" style="margin:2px 0 4px;padding:6px 9px;font-size:11.5px" onclick="seTratCompNovo('+i+')">+ Componente (mistura)</button>';
+      if(_seCompNovoIdx===i){
+        var _ci=itensLista(), _cdu=_seCompUnidadePadrao('');
+        h+='<div style="border:1px solid var(--gp-line,#2a3a2a);border-radius:9px;padding:9px;margin:4px 0 6px;background:var(--gp-s2,#101712)">'+
+          '<div style="font-size:11px;font-weight:850;color:var(--gp-text,#e8efe9);margin-bottom:7px">ADICIONAR ITEM OU ADJUVANTE À RECEITA</div>'+
+          '<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(68px,.55fr);gap:6px">'+
+            '<select id="seCompItem'+i+'" aria-label="Item ou adjuvante" onchange="seTratCompItemMudou('+i+',this.value)">'+
+              '<option value="">— escolha o item —</option>'+_ci.map(function(it){return '<option value="'+esc(it.id)+'">'+esc(it.nome||it.id)+(it.tipo==='adjuvante'?' · adjuvante':'')+'</option>';}).join('')+
+            '</select>'+
+            '<input id="seCompValor'+i+'" type="text" inputmode="decimal" aria-label="Dose do componente" placeholder="Dose, ex.: 0,1">'+
+            '<select id="seCompUnidade'+i+'" aria-label="Unidade do componente" style="grid-column:1/-1">'+_seCompUnidadeOptions(_cdu)+'</select>'+
+          '</div>'+
+          '<div style="font-size:10.5px;color:var(--gp-muted,#9fb1a5);line-height:1.45;margin:6px 0">Adjuvante líquido: escolha <b>% v/v</b>. A porcentagem será aplicada ao volume final de calda, depois da área e do volume morto.</div>'+
+          '<div style="display:flex;gap:6px"><button type="button" class="btn-sm" style="flex:1" onclick="seTratCompConfirmar('+i+')">Adicionar à receita</button>'+
+          '<button type="button" class="btn-sm" style="flex:0 0 auto" onclick="seTratCompCancelar()">Cancelar</button></div></div>';
+      }
+      h+='<button type="button" class="se-add-trat" style="margin:2px 0 4px;padding:6px 9px;font-size:11.5px" onclick="seTratCompNovo('+i+')">'+
+         (_seCompNovoIdx===i?'Fechar compositor':'+ Item / adjuvante (mistura)')+'</button>';
 
       /* O select por tratamento só existe depois de declarado. Cinco selects
          mostrando o mesmo valor não seriam configuração: seriam ruído. */
@@ -11313,32 +11380,82 @@ function syncStudyInputs(){
 
 function seTratCompNovo(idx){
   try{ syncTratInputs(); }catch(e){}
-  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx];
-  if(!t) return;
-  var lista=itensLista();
-  if(!lista.length){ alert('Cadastre um item no banco antes de montar uma mistura.\n\nMenu → Dados → Banco de itens.'); return; }
-  /* O primeiro componente herda o que já estava digitado: quem tinha um produto
-     escrito não perde nada ao transformar o tratamento em receita. */
+  if(!workingStudy||!workingStudy.tratamentos||!workingStudy.tratamentos[idx]) return;
+  if(!itensLista().length){ alert('Cadastre um item no banco antes de montar uma mistura.\n\nMenu → Dados → Banco de itens.'); return; }
+  _seCompNovoIdx=(_seCompNovoIdx===idx)?null:idx;
+  renderStudyEditModal();
+  if(_seCompNovoIdx===idx) setTimeout(function(){var e=document.getElementById('seCompItem'+idx);if(e)e.focus();},30);
+}
+function seTratCompCancelar(){
+  _seCompNovoIdx=null;
+  renderStudyEditModal();
+}
+function _seCompNumero(raw){
+  var s=String(raw==null?'':raw).trim().replace(',','.');
+  if(!/^\d*(?:\.\d+)?$/.test(s)) return null;
+  var n=Number(s); return isFinite(n)?n:null;
+}
+function _seCompNumeroDaDose(raw){
+  var s=String(raw||''), m=s.match(/\d+(?:[.,]\d+)?/); if(!m) return null;
+  /* Em porcentagem, 0.033 e decimal mesmo; em dose por area preservamos a
+     convencao brasileira ja usada pelo app, em que 1.500 g/ha significa 1500. */
+  return s.indexOf('%')>=0?_seCompNumero(m[0]):_calcNum(s);
+}
+function _seCompUnidadeDaDose(raw,fallback){
+  var s=String(raw||'').toLowerCase().replace(/\s+/g,'');
+  if(s.indexOf('%')>=0) return '% v/v';
+  if(/ml(?:\/ha|ha)?/.test(s)) return 'mL/ha';
+  if(/kg(?:\/ha|ha)?/.test(s)) return 'kg/ha';
+  if(/g(?:\/ha|ha)?/.test(s)) return 'g/ha';
+  if(/l(?:\/ha|ha)?/.test(s)) return 'L/ha';
+  return _seCompUnidadeNormalizar(fallback)||'L/ha';
+}
+function seTratCompItemMudou(idx,itemId){
+  var e=document.getElementById('seCompUnidade'+idx); if(!e) return;
+  e.value=_seCompUnidadePadrao(itemId);
+}
+function seTratCompConfirmar(idx){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx]; if(!t) return;
+  var ei=document.getElementById('seCompItem'+idx), ev=document.getElementById('seCompValor'+idx),
+      eu=document.getElementById('seCompUnidade'+idx);
+  var it=ei?itemPorId(ei.value):null, valor=_seCompNumero(ev&&ev.value),
+      unidade=_seCompUnidadeNormalizar(eu&&eu.value);
+  if(!it){ alert('Escolha o item ou adjuvante.'); return; }
+  if(!(valor>0)){ alert('Informe uma dose numérica maior que zero. Ex.: 0,1'); return; }
+  if(!unidade){ alert('Escolha a unidade da dose.'); return; }
+
+  /* A primeira vez que a receita e aberta, o produto principal que ja estava no
+     tratamento vira a primeira linha. A conversao so acontece ao confirmar: abrir
+     e cancelar o compositor nao altera o protocolo. */
   if(!tratComponentes(t).length && (t.produto||t.dose)){
-    var primeiro=tratCompAdicionar(t, (t.itemId||t.produto), _calcNum(t.dose)||null, _calcDoseUnit(t.dose)||'L/ha', null);
+    var _dosePrimeira=String(t.dose||'').split('+')[0].trim();
+    var _dosePrimeiroValor=_seCompNumeroDaDose(_dosePrimeira);
+    var primeiro=tratCompAdicionar(t,(t.itemId||t.produto),(_dosePrimeiroValor>0?_dosePrimeiroValor:null),
+      _seCompUnidadeDaDose(_dosePrimeira,(workingStudy&&workingStudy.doseUnidade)||'L/ha'),null);
     if(primeiro&&t.doseRef) primeiro.doseRef=JSON.parse(JSON.stringify(t.doseRef));
     if(primeiro&&t.loteRef) primeiro.loteRef=JSON.parse(JSON.stringify(t.loteRef));
     delete t.itemId;delete t.doseRef;delete t.loteRef;
   }
-  var nome=prompt('Componente — qual item?\n\n'+lista.map(function(x,n){ return (n+1)+'. '+(x.nome||x.id); }).join('\n'));
-  if(nome==null) return;
-  var esc1=parseInt(String(nome).trim(),10);
-  var it=(esc1>=1&&esc1<=lista.length)?lista[esc1-1]:null;
-  if(!it){ alert('Não reconheci a escolha. Digite o número do item da lista.'); return; }
-  var dv=prompt('Dose de '+(it.nome||it.id)+'?\n\nEx.: 0,1 % v/v   ·   0,8 L/ha   ·   50 ppm');
-  if(dv==null) return;
-  var v=_calcNum(dv), u=String(dv).replace(/[\d.,\s]/g,'').trim()||_calcDoseUnit(dv)||'L/ha';
-  var UN=(window.DoseCore&&DoseCore.UNIDADES)||{};
-  if(!UN[u]){
-    var achou=Object.keys(UN).filter(function(k){ return normStr(k).replace(/\s/g,'')===normStr(u).replace(/\s/g,''); })[0];
-    u=achou||'L/ha';
-  }
-  tratCompAdicionar(t, it.id, v, u, null);
+  tratCompAdicionar(t,it.id,valor,unidade,null);
+  _seCompNovoIdx=null;
+  renderStudyEditModal();
+}
+function seTratCompEditar(idx,compId,campo,raw){
+  try{ syncTratInputs(); }catch(e){}
+  var t=workingStudy&&workingStudy.tratamentos&&workingStudy.tratamentos[idx]; if(!t) return;
+  var c=tratComponentes(t).filter(function(x){return x&&x.id===compId;})[0]; if(!c) return;
+  if(campo==='valor'){
+    var n=_seCompNumero(raw); if(!(n>0)){ alert('A dose do componente deve ser maior que zero.'); renderStudyEditModal(); return; }
+    c.valor=n;
+  }else if(campo==='unidade'){
+    var u=_seCompUnidadeNormalizar(raw); if(!u){ alert('Unidade não reconhecida.'); renderStudyEditModal(); return; }
+    c.unidade=u;
+  }else return;
+  /* Editar manualmente rompe apenas a referencia de dose do catalogo; item e lote
+     continuam ligados, e a nova dose fica registrada no snapshot do protocolo. */
+  delete c.doseRef;
+  _tratSincronizaTexto(t);
   renderStudyEditModal();
 }
 function seTratCompRemover(idx, compId){
@@ -11590,6 +11707,7 @@ function saveStudyV2(){
 
 function closeStudyEditV2(){
   document.getElementById("seOvl").classList.remove("open");
+  _seCompNovoIdx=null;
   workingStudy=null;
 }
 
@@ -15846,17 +15964,19 @@ function itemDoseAdicionar(id, d){
   var valorMax=(d.valorMax===''||d.valorMax==null)?null:Number(String(d.valorMax).replace(',','.'));
   var aplicacoesMax=(d.aplicacoesMax===''||d.aplicacoesMax==null)?null:Number(d.aplicacoesMax);
   var intervaloDias=(d.intervaloDias===''||d.intervaloDias==null)?null:Number(d.intervaloDias);
+  var unidade=String(d.unidade||'L/ha').trim(); if(unidade==='%') unidade='% v/v';
   if(!(valor>0) || !isFinite(valor)) return {erro:'Informe uma dose numérica maior que zero.'};
   if(valorMax!=null && (!isFinite(valorMax) || valorMax<valor)) return {erro:'O fim da faixa deve ser um número igual ou maior que a dose inicial.'};
   if(aplicacoesMax!=null && (!isFinite(aplicacoesMax) || aplicacoesMax<1 || Math.floor(aplicacoesMax)!==aplicacoesMax)) return {erro:'Aplicações máximas deve ser um número inteiro maior que zero.'};
   if(intervaloDias!=null && (!isFinite(intervaloDias) || intervaloDias<0 || Math.floor(intervaloDias)!==intervaloDias)) return {erro:'O intervalo deve ser um número inteiro não negativo.'};
+  if(window.DoseCore&&DoseCore.UNIDADES&&!DoseCore.UNIDADES[unidade]) return {erro:'Escolha uma unidade de dose válida.'};
   var dose={
     id:('ds'+uid().slice(1)),
     cultura:String(d.cultura||'').trim(),
     alvo:String(d.alvo||'').trim(),
     valor:valor,
     valorMax:valorMax,
-    unidade:String(d.unidade||'L/ha').trim(),
+    unidade:unidade,
     volumeCalda:String(d.volumeCalda||'').trim(),
     modalidade:String(d.modalidade||'').trim(),
     aplicacoesMax:aplicacoesMax,
@@ -16691,7 +16811,7 @@ function _itemFichaHtml(id){
   h+='<div class="it-row">'+
      '<div class="it-f"><label>Dose</label><input id="dsValor" inputmode="decimal" placeholder="0,8"></div>'+
      '<div class="it-f"><label>até (faixa)</label><input id="dsValorMax" inputmode="decimal" placeholder="opcional"></div>'+
-     '<div class="it-f"><label>Unidade</label><input id="dsUnidade" value="L/ha"></div>'+
+     '<div class="it-f"><label>Unidade</label><select id="dsUnidade">'+_itemDoseUnidadeOptions(it.tipo==='adjuvante'?'% v/v':'L/ha')+'</select></div>'+
      '</div>';
   h+='<div class="it-row">'+
      '<div class="it-f"><label>Origem</label><select id="dsOrigem">'+
