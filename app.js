@@ -5925,442 +5925,50 @@ function deleteStudy(qid,sid,skipConfirm){
   - Feijão/Tomate/Cana/outros: Monografia BBCH geral (Hack et al. 1992; Meier 2001)
 */
 
-var BBCH = {
-  soja:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"05",label:"05 — Radícula emergiu",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência (hipocótilo rompe o solo)",fase:"Germinação",equiv:"VE"},
-    {code:"10",label:"10 — Cotilédones completamente abertos",fase:"Des. folhas",equiv:"VC"},
-    {code:"11",label:"11 — 1º par de folhas unifolioladas",fase:"Des. folhas",equiv:"V1"},
-    {code:"12",label:"12 — 1ª folha trifoliolada",fase:"Des. folhas",equiv:"V2"},
-    {code:"13",label:"13 — 2ª folha trifoliolada",fase:"Des. folhas",equiv:"V3"},
-    {code:"14",label:"14 — 3ª folha trifoliolada",fase:"Des. folhas",equiv:"V4"},
-    {code:"15",label:"15 — 4ª folha trifoliolada",fase:"Des. folhas",equiv:"V5"},
-    {code:"16",label:"16 — 5ª folha trifoliolada",fase:"Des. folhas",equiv:"V6"},
-    {code:"19",label:"19 — 8+ folhas trifolioladas",fase:"Des. folhas",equiv:"V7+"},
-    {code:"51",label:"51 — Primórdios florais visíveis",fase:"Inflorescência",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:"R1"},
-    {code:"61",label:"61 — Início floração (10% abertas)",fase:"Floração",equiv:"R1"},
-    {code:"65",label:"65 — Plena floração (50% abertas)",fase:"Floração",equiv:"R2"},
-    {code:"69",label:"69 — Fim da floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Vagens começam a desenvolver (10%)",fase:"Vagens",equiv:"R3"},
-    {code:"75",label:"75 — 50% das vagens no tamanho final",fase:"Vagens",equiv:"R4"},
-    {code:"79",label:"79 — Quase todas vagens no tamanho final",fase:"Vagens",equiv:"R4/R5"},
-    {code:"81",label:"81 — Início enchimento de grãos (10%)",fase:"Grãos",equiv:"R5.1"},
-    {code:"85",label:"85 — 50% dos grãos enchendo vagens",fase:"Grãos",equiv:"R5.3"},
-    {code:"89",label:"89 — Grãos atingiram tamanho final",fase:"Grãos",equiv:"R6"},
-    {code:"91",label:"91 — Início maturação (10% vagens maduras)",fase:"Maturação",equiv:"R7"},
-    {code:"95",label:"95 — 50% das folhas amareladas ou caídas",fase:"Maturação",equiv:"R7"},
-    {code:"97",label:"97 — Plantas maduras/secas",fase:"Maturação",equiv:"R8"},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  algodao:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:""},
-    {code:"10",label:"10 — Cotilédones abertos",fase:"Des. folhas",equiv:""},
-    {code:"11",label:"11 — 1ª folha verdadeira",fase:"Des. folhas",equiv:""},
-    {code:"13",label:"13 — 3 folhas verdadeiras",fase:"Des. folhas",equiv:""},
-    {code:"15",label:"15 — 5 folhas verdadeiras",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ folhas verdadeiras",fase:"Des. folhas",equiv:""},
-    {code:"51",label:"51 — 1º botão floral visível (square)",fase:"Botões",equiv:"B1"},
-    {code:"55",label:"55 — Botões em ramos secundários",fase:"Botões",equiv:""},
-    {code:"59",label:"59 — 1º botão prestes a abrir",fase:"Botões",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:"F1"},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim da floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — 1ª maçã formada",fase:"Maçãs",equiv:"M1"},
-    {code:"75",label:"75 — Maçãs em metade tamanho final",fase:"Maçãs",equiv:""},
-    {code:"79",label:"79 — Maçãs no tamanho final",fase:"Maçãs",equiv:""},
-    {code:"81",label:"81 — 10% das maçãs abertas",fase:"Abertura",equiv:""},
-    {code:"85",label:"85 — 50% das maçãs abertas",fase:"Abertura",equiv:""},
-    {code:"89",label:"89 — Maturação completa (90%+ abertas)",fase:"Maturação",equiv:""},
-    {code:"95",label:"95 — 50% folhas caídas (desfolha)",fase:"Senescência",equiv:""},
-    {code:"97",label:"97 — Planta seca/morta",fase:"Senescência",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  cafe:[
-    {code:"00",label:"00 — Gema dormente",fase:"Brotação",equiv:""},
-    {code:"07",label:"07 — Início brotação",fase:"Brotação",equiv:""},
-    {code:"09",label:"09 — Gemas abertas",fase:"Brotação",equiv:""},
-    {code:"11",label:"11 — 1º par de folhas verdadeiras",fase:"Des. folhas",equiv:""},
-    {code:"15",label:"15 — 5 pares de folhas",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ pares de folhas",fase:"Des. folhas",equiv:""},
-    {code:"31",label:"31 — Alongamento dos ramos",fase:"Des. ramos",equiv:""},
-    {code:"51",label:"51 — Botões florais visíveis",fase:"Inflorescência",equiv:""},
-    {code:"55",label:"55 — Botões grão de chumbo",fase:"Inflorescência",equiv:""},
-    {code:"59",label:"59 — Botões prontos para abrir",fase:"Inflorescência",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"67",label:"67 — Pétalas murchando",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim floração (queda pétalas)",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Chumbinho (frutos pequenos verdes)",fase:"Frutos",equiv:""},
-    {code:"75",label:"75 — Frutos em expansão (meio tamanho)",fase:"Frutos",equiv:""},
-    {code:"79",label:"79 — Frutos no tamanho final, verdes",fase:"Frutos",equiv:""},
-    {code:"81",label:"81 — Início maturação (verde-cana)",fase:"Maturação",equiv:""},
-    {code:"85",label:"85 — Frutos cereja (maduros vermelhos)",fase:"Maturação",equiv:""},
-    {code:"87",label:"87 — Frutos passa (escuros)",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
-    {code:"97",label:"97 — Pós-colheita (repouso)",fase:"Repouso",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  milho:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:"VE"},
-    {code:"11",label:"11 — 1ª folha expandida",fase:"Des. folhas",equiv:"V1"},
-    {code:"13",label:"13 — 3 folhas",fase:"Des. folhas",equiv:"V3"},
-    {code:"15",label:"15 — 5 folhas",fase:"Des. folhas",equiv:"V5"},
-    {code:"17",label:"17 — 7 folhas",fase:"Des. folhas",equiv:"V7"},
-    {code:"19",label:"19 — 9+ folhas",fase:"Des. folhas",equiv:"V9+"},
-    {code:"32",label:"32 — 2 nós visíveis",fase:"Alongamento",equiv:""},
-    {code:"34",label:"34 — 4 nós visíveis",fase:"Alongamento",equiv:""},
-    {code:"51",label:"51 — Pendão emerge da bainha",fase:"Inflorescência",equiv:"VT"},
-    {code:"55",label:"55 — Metade do pendão visível",fase:"Inflorescência",equiv:""},
-    {code:"59",label:"59 — Pendão totalmente emergido",fase:"Inflorescência",equiv:""},
-    {code:"61",label:"61 — Início liberação de pólen",fase:"Floração",equiv:""},
-    {code:"63",label:"63 — Estigmas visíveis",fase:"Floração",equiv:"R1"},
-    {code:"65",label:"65 — Plena polinização",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim floração (estigmas secando)",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Grãos em bolha (16% MS)",fase:"Grãos",equiv:"R2"},
-    {code:"73",label:"73 — Leitoso inicial",fase:"Grãos",equiv:"R3"},
-    {code:"75",label:"75 — Leitoso pleno (40% MS)",fase:"Grãos",equiv:"R4"},
-    {code:"79",label:"79 — Grãos tamanho final",fase:"Grãos",equiv:""},
-    {code:"83",label:"83 — Pastoso mole (45% MS)",fase:"Maturação",equiv:"R5"},
-    {code:"85",label:"85 — Pastoso duro (55% MS)",fase:"Maturação",equiv:""},
-    {code:"87",label:"87 — Camada preta (maturação fisiológica)",fase:"Maturação",equiv:"R6"},
-    {code:"89",label:"89 — Maturação completa (grão duro)",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  feijao:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:"V1"},
-    {code:"10",label:"10 — Cotilédones abertos",fase:"Des. folhas",equiv:"V2"},
-    {code:"11",label:"11 — 1ª folha trifoliolada",fase:"Des. folhas",equiv:"V3"},
-    {code:"13",label:"13 — 3ª folha trifoliolada",fase:"Des. folhas",equiv:"V4"},
-    {code:"15",label:"15 — 5ª folha trifoliolada",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ folhas trifolioladas",fase:"Des. folhas",equiv:""},
-    {code:"51",label:"51 — Botões florais visíveis",fase:"Inflorescência",equiv:"R5"},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:"R6"},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Primeiras vagens formadas",fase:"Vagens",equiv:"R7"},
-    {code:"75",label:"75 — Vagens metade tamanho",fase:"Vagens",equiv:""},
-    {code:"79",label:"79 — Vagens tamanho final",fase:"Vagens",equiv:"R8"},
-    {code:"81",label:"81 — Início maturação (10%)",fase:"Maturação",equiv:"R9"},
-    {code:"85",label:"85 — 50% vagens maduras",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
-    {code:"97",label:"97 — Planta seca",fase:"Senescência",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  tomate:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:""},
-    {code:"11",label:"11 — 1ª folha verdadeira",fase:"Des. folhas",equiv:""},
-    {code:"15",label:"15 — 5 folhas verdadeiras",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ folhas verdadeiras",fase:"Des. folhas",equiv:""},
-    {code:"51",label:"51 — 1º cacho floral visível",fase:"Inflorescência",equiv:""},
-    {code:"55",label:"55 — Botões fechados",fase:"Inflorescência",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Primeiros frutos formados",fase:"Frutos",equiv:""},
-    {code:"75",label:"75 — Frutos metade tamanho",fase:"Frutos",equiv:""},
-    {code:"79",label:"79 — Frutos tamanho final (verdes)",fase:"Frutos",equiv:""},
-    {code:"81",label:"81 — Início maturação (1º fruto colorindo)",fase:"Maturação",equiv:""},
-    {code:"85",label:"85 — 50% frutos coloridos",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  cana:[
-    {code:"00",label:"00 — Tolete/muda dormente",fase:"Brotação",equiv:""},
-    {code:"09",label:"09 — Emergência de broto",fase:"Brotação",equiv:""},
-    {code:"12",label:"12 — 2 folhas",fase:"Des. folhas",equiv:""},
-    {code:"15",label:"15 — 5 folhas",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ folhas",fase:"Des. folhas",equiv:""},
-    {code:"21",label:"21 — Início perfilhamento",fase:"Perfilhamento",equiv:""},
-    {code:"25",label:"25 — Perfilhamento pleno",fase:"Perfilhamento",equiv:""},
-    {code:"29",label:"29 — Fim perfilhamento",fase:"Perfilhamento",equiv:""},
-    {code:"31",label:"31 — Início alongamento colmos",fase:"Alongamento",equiv:""},
-    {code:"35",label:"35 — Colmos em alongamento pleno",fase:"Alongamento",equiv:""},
-    {code:"39",label:"39 — Colmos atingem altura final",fase:"Alongamento",equiv:""},
-    {code:"51",label:"51 — Início emissão do pendão",fase:"Florescimento",equiv:""},
-    {code:"65",label:"65 — Plena florada (se ocorrer)",fase:"Florescimento",equiv:""},
-    {code:"81",label:"81 — Início maturação (acúmulo sacarose)",fase:"Maturação",equiv:""},
-    {code:"85",label:"85 — Maturação avançada",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena (ponto de corte)",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  morango:[
-    {code:"00",label:"00 — Muda dormente",fase:"Plantio",equiv:""},
-    {code:"09",label:"09 — Pegamento da muda",fase:"Plantio",equiv:""},
-    {code:"11",label:"11 — 1ª folha nova",fase:"Des. folhas",equiv:""},
-    {code:"15",label:"15 — 5 folhas",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ folhas",fase:"Des. folhas",equiv:""},
-    {code:"51",label:"51 — Botões florais visíveis",fase:"Inflorescência",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Primeiros frutos formados",fase:"Frutos",equiv:""},
-    {code:"79",label:"79 — Frutos tamanho final (verdes)",fase:"Frutos",equiv:""},
-    {code:"85",label:"85 — 50% frutos vermelhos",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  melao:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:""},
-    {code:"11",label:"11 — 1ª folha verdadeira",fase:"Des. folhas",equiv:""},
-    {code:"15",label:"15 — 5 folhas",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9+ folhas",fase:"Des. folhas",equiv:""},
-    {code:"21",label:"21 — 1ª ramificação lateral",fase:"Ramificação",equiv:""},
-    {code:"51",label:"51 — Botões florais visíveis",fase:"Inflorescência",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Primeiros frutos formados",fase:"Frutos",equiv:""},
-    {code:"75",label:"75 — Frutos metade tamanho",fase:"Frutos",equiv:""},
-    {code:"79",label:"79 — Frutos tamanho final",fase:"Frutos",equiv:""},
-    {code:"81",label:"81 — Início maturação",fase:"Maturação",equiv:""},
-    {code:"85",label:"85 — Maturação avançada",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  pastagem:[
-    {code:"00",label:"00 — Dormência/pós-pastejo",fase:"Rebrote",equiv:""},
-    {code:"09",label:"09 — Emergência de brotos",fase:"Rebrote",equiv:""},
-    {code:"21",label:"21 — Início perfilhamento",fase:"Perfilhamento",equiv:""},
-    {code:"25",label:"25 — Perfilhamento pleno",fase:"Perfilhamento",equiv:""},
-    {code:"31",label:"31 — Alongamento dos colmos",fase:"Alongamento",equiv:""},
-    {code:"39",label:"39 — Altura de pré-pastejo atingida",fase:"Alongamento",equiv:""},
-    {code:"51",label:"51 — Emergência da inflorescência",fase:"Florescimento",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Florescimento",equiv:""},
-    {code:"85",label:"85 — Sementes em maturação",fase:"Maturação",equiv:""},
-    {code:"92",label:"92 — Senescência parcial",fase:"Senescência",equiv:""},
-    {code:"99",label:"99 — Pós-pastejo/corte",fase:"Corte",equiv:""}
-  ],
-  citros:[
-    {code:"00",label:"00 — Gemas dormentes",fase:"Repouso",equiv:""},
-    {code:"07",label:"07 — Início brotação",fase:"Brotação",equiv:""},
-    {code:"09",label:"09 — Brotações verdes visíveis",fase:"Brotação",equiv:""},
-    {code:"11",label:"11 — 1ª folha nova",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — Folhas novas maduras",fase:"Des. folhas",equiv:""},
-    {code:"51",label:"51 — Botões florais visíveis",fase:"Inflorescência",equiv:""},
-    {code:"59",label:"59 — Botões quase abrindo",fase:"Inflorescência",equiv:""},
-    {code:"60",label:"60 — Primeiras flores abertas",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Queda de pétalas",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Chumbinho (frutos pequenos)",fase:"Frutos",equiv:""},
-    {code:"75",label:"75 — Frutos metade tamanho",fase:"Frutos",equiv:""},
-    {code:"79",label:"79 — Frutos tamanho final (verdes)",fase:"Frutos",equiv:""},
-    {code:"81",label:"81 — Início mudança de cor",fase:"Maturação",equiv:""},
-    {code:"85",label:"85 — Cor típica da cultivar",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena (ponto colheita)",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Fruto colhido",fase:"Colheita",equiv:""}
-  ],
-  estufa:[
-    {code:"00",label:"00 — Área vazia / preparo",fase:"Preparo",equiv:""},
-    {code:"09",label:"09 — Plantio/emergência",fase:"Plantio",equiv:""},
-    {code:"15",label:"15 — Desenvolvimento vegetativo",fase:"Vegetativo",equiv:""},
-    {code:"51",label:"51 — Início formação órgãos reprodutivos",fase:"Inflorescência",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"75",label:"75 — Frutos/grãos em formação",fase:"Frutos",equiv:""},
-    {code:"89",label:"89 — Maturação",fase:"Maturação",equiv:""},
-    {code:"99",label:"99 — Ciclo finalizado",fase:"Colheita",equiv:""}
-  ],
-  /* ESCALA DE CEREAIS (BBCH) — trigo, cevada, aveia, centeio, triticale.
-     Existe porque estas culturas estavam na escala do MILHO, que não tem
-     perfilhamento (2) nem emborrachamento (4). São justamente os dois estádios
-     que governam o manejo de um cereal de inverno: é neles que se decide
-     regulador, fungicida de folha bandeira e herbicida de pós. Registrar um
-     ensaio de trigo sem poder dizer "emborrachamento" é registrar outra coisa. */
-  cereais:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"05",label:"05 — Radícula emergiu",fase:"Germinação",equiv:""},
-    {code:"07",label:"07 — Coleóptilo emergiu",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência (1ª folha rompe o coleóptilo)",fase:"Germinação",equiv:""},
-    {code:"11",label:"11 — 1ª folha desdobrada",fase:"Des. folhas",equiv:""},
-    {code:"12",label:"12 — 2ª folha desdobrada",fase:"Des. folhas",equiv:""},
-    {code:"13",label:"13 — 3ª folha desdobrada",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9 ou mais folhas desdobradas",fase:"Des. folhas",equiv:""},
-    {code:"21",label:"21 — Início do perfilhamento (1º perfilho)",fase:"Perfilhamento",equiv:""},
-    {code:"25",label:"25 — 5 perfilhos visíveis",fase:"Perfilhamento",equiv:""},
-    {code:"29",label:"29 — Fim do perfilhamento (nº máximo)",fase:"Perfilhamento",equiv:""},
-    {code:"30",label:"30 — Início da elongação do colmo",fase:"Elongação",equiv:""},
-    {code:"31",label:"31 — 1º nó detectável",fase:"Elongação",equiv:""},
-    {code:"32",label:"32 — 2º nó detectável",fase:"Elongação",equiv:""},
-    {code:"37",label:"37 — Folha bandeira apenas visível",fase:"Elongação",equiv:""},
-    {code:"39",label:"39 — Lígula da folha bandeira visível",fase:"Elongação",equiv:""},
-    {code:"41",label:"41 — Início do emborrachamento",fase:"Emborrachamento",equiv:""},
-    {code:"45",label:"45 — Emborrachamento pleno (bainha inchada)",fase:"Emborrachamento",equiv:""},
-    {code:"49",label:"49 — Primeiras aristas visíveis",fase:"Emborrachamento",equiv:""},
-    {code:"51",label:"51 — Início do espigamento",fase:"Espigamento",equiv:""},
-    {code:"55",label:"55 — Metade da espiga emergida",fase:"Espigamento",equiv:""},
-    {code:"59",label:"59 — Fim do espigamento",fase:"Espigamento",equiv:""},
-    {code:"61",label:"61 — Início da floração (antese)",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim da floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Grão aquoso",fase:"Enchimento",equiv:""},
-    {code:"75",label:"75 — Grão leitoso",fase:"Enchimento",equiv:""},
-    {code:"83",label:"83 — Massa mole (início)",fase:"Maturação",equiv:""},
-    {code:"85",label:"85 — Massa mole",fase:"Maturação",equiv:""},
-    {code:"87",label:"87 — Massa dura (ponto de maturação fisiológica)",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena (grão duro)",fase:"Maturação",equiv:""},
-    {code:"92",label:"92 — Sobrematuração",fase:"Senescência",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ],
-  /* ARROZ (BBCH). Também estava no milho. O arroz perfilha e emborracha como os
-     demais cereais, mas tem estádios próprios de emissão da panícula. */
-  arroz:[
-    {code:"00",label:"00 — Semente seca",fase:"Germinação",equiv:""},
-    {code:"05",label:"05 — Radícula emergiu",fase:"Germinação",equiv:""},
-    {code:"09",label:"09 — Emergência",fase:"Germinação",equiv:""},
-    {code:"11",label:"11 — 1ª folha desdobrada",fase:"Des. folhas",equiv:""},
-    {code:"13",label:"13 — 3ª folha desdobrada",fase:"Des. folhas",equiv:""},
-    {code:"19",label:"19 — 9 ou mais folhas desdobradas",fase:"Des. folhas",equiv:""},
-    {code:"21",label:"21 — Início do perfilhamento",fase:"Perfilhamento",equiv:""},
-    {code:"25",label:"25 — 5 perfilhos visíveis",fase:"Perfilhamento",equiv:""},
-    {code:"29",label:"29 — Fim do perfilhamento",fase:"Perfilhamento",equiv:""},
-    {code:"30",label:"30 — Início da elongação do colmo",fase:"Elongação",equiv:""},
-    {code:"32",label:"32 — 2º nó detectável",fase:"Elongação",equiv:""},
-    {code:"37",label:"37 — Folha bandeira apenas visível",fase:"Elongação",equiv:""},
-    {code:"41",label:"41 — Início do emborrachamento",fase:"Emborrachamento",equiv:""},
-    {code:"45",label:"45 — Emborrachamento pleno",fase:"Emborrachamento",equiv:""},
-    {code:"51",label:"51 — Início da emissão da panícula",fase:"Emissão da panícula",equiv:""},
-    {code:"55",label:"55 — Metade da panícula emergida",fase:"Emissão da panícula",equiv:""},
-    {code:"59",label:"59 — Panícula totalmente emergida",fase:"Emissão da panícula",equiv:""},
-    {code:"61",label:"61 — Início da floração",fase:"Floração",equiv:""},
-    {code:"65",label:"65 — Plena floração",fase:"Floração",equiv:""},
-    {code:"69",label:"69 — Fim da floração",fase:"Floração",equiv:""},
-    {code:"71",label:"71 — Grão aquoso",fase:"Enchimento",equiv:""},
-    {code:"75",label:"75 — Grão leitoso",fase:"Enchimento",equiv:""},
-    {code:"83",label:"83 — Massa mole",fase:"Maturação",equiv:""},
-    {code:"87",label:"87 — Massa dura",fase:"Maturação",equiv:""},
-    {code:"89",label:"89 — Maturação plena",fase:"Maturação",equiv:""},
-    {code:"92",label:"92 — Sobrematuração",fase:"Senescência",equiv:""},
-    {code:"99",label:"99 — Produto colhido",fase:"Colheita",equiv:""}
-  ]
-};
+/* ===== FENOLOGIA — PONTE PARA O MOTOR ======================================
+   As escalas BBCH moraram aqui dentro por muito tempo, e cresceram: são 28
+   escalas, 120 culturas e 654 estádios. Isso é CONTEÚDO, não interface, e
+   conteúdo que não se consegue testar fora do navegador é conteúdo que ninguém
+   confere. Mudaram de endereço para vendor/bbch-core.js — nenhum estádio foi
+   alterado na mudança.
 
-/* Mapeamento entre nome da cultura usado nas quadras e chave BBCH */
-var BBCH_MAP = {
-  "Soja":"soja",
-  "Algodão":"algodao",
-  "Algodao":"algodao",
-  "Café":"cafe",
-  "Cafe":"cafe",
-  "CITROS":"citros",
-  "Citros":"citros",
-  "Milho":"milho",
-  "Feijão":"feijao",
-  "Feijao":"feijao",
-  "Tomate":"tomate",
-  "Cana":"cana",
-  "Morango":"morango",
-  "Melão":"melao",
-  "Melao":"melao",
-  "Pastagem":"pastagem",
-  "ESTUFAS":"estufa",
-  "Estufa":"estufa"
-};
-/* ===== O QUE É ESCALA PRÓPRIA E O QUE É ESCALA EMPRESTADA =====================
-   Aqui morava um defeito silencioso. Cinquenta e três culturas eram roteadas
-   para a escala de OUTRA cultura sem que nada na tela dissesse isso. Um ensaio
-   de eucalipto registrava "89 — Maturação plena (ponto colheita)", herdado do
-   citros; trigo e arroz recebiam a escala do milho, que não tem perfilhamento
-   nem emborrachamento — os dois estádios que governam o manejo de um cereal.
-
-   O código saía com cara de BBCH oficial e ia para a folha BPL. Adivinhar em
-   silêncio é o que este app proíbe em todo o resto; não podia continuar valendo
-   justamente na fenologia.
-
-   Três destinos agora, e cada um é explícito:
-
-   1. ESCALA PRÓPRIA. Trigo, cevada, aveia, centeio e triticale passaram a ter a
-      escala de cereais; arroz, a sua. Ambas com os dez estádios principais.
-   2. ESCALA EMPRESTADA, DECLARADA. Onde a aproximação é defensável — pimentão
-      pelo tomate, melancia pelo melão — a escala continua, mas a tela diz de
-      onde ela veio e o estádio guardado registra isso.
-   3. SEM ESCALA. Eucalipto, seringueira, erva-mate e chá saíram do mapa. Não
-      têm fenologia de fruto, e oferecer os estádios do citros ali não é
-      aproximação: é convite a gravar um número que não quer dizer nada.
-      Sem escala, o app simplesmente não pergunta o estádio — que é a resposta
-      honesta. ========================================================== */
-var BBCH_EMPRESTADA = {};
-(function(){
-  /* Cultura -> escala PRÓPRIA. Estas não são empréstimo: a escala é da cultura. */
-  var propria={ cereais:["Trigo","Cevada","Aveia","Centeio","Triticale"],
-                arroz:["Arroz"] };
-  /* Cultura -> escala de outra cultura, com a semelhança que justifica o
-     empréstimo. O texto vai para a tela: quem registra precisa saber o que está
-     escolhendo, e quem audita depois precisa saber o que foi escolhido. */
-  var emprestada={
-    cereais:{ culturas:["Sorgo","Milheto"], base:"cereais",
-              nota:"Sorgo e milheto perfilham e emborracham como os demais cereais, mas a panícula tem estádios próprios." },
-    feijao:{ culturas:["Caupi","Ervilha","Grão-de-bico","Lentilha"], base:"feijão",
-             nota:"Leguminosas de grão com fenologia próxima à do feijão." },
-    soja:{ culturas:["Girassol","Canola","Amendoim","Gergelim"], base:"soja",
-           nota:"Os rótulos falam em folha trifoliolada, que é da soja; use o número do estádio, não o texto." },
-    tomate:{ culturas:["Pimentão","Pimenta","Berinjela"], base:"tomate",
-             nota:"Solanáceas de fruto, fenologia próxima à do tomate." },
-    melao:{ culturas:["Melancia","Pepino","Abóbora","Abobrinha"], base:"melão",
-            nota:"Cucurbitáceas, fenologia próxima à do melão." },
-    pastagem:{ culturas:["Braquiária","Urochloa","Mombaça","Panicum","Tifton","Cynodon","Azevém","Alfafa","Aveia forrageira"], base:"pastagem",
-               nota:"Escala genérica de forrageira: perfilhamento, rebrota e corte." },
-    citros:{ culturas:["Uva","Maçã","Pera","Pêssego","Ameixa","Banana","Manga","Abacate","Goiaba","Mamão","Maracujá","Abacaxi","Coco","Caqui","Cacau","Dendê","Oliveira"], base:"citros",
-             nota:"Fruteiras perenes na escala do citros. As fases batem em linhas gerais; os rótulos são de citros." }
-  };
-  Object.keys(propria).forEach(function(sc){
-    propria[sc].forEach(function(n){ BBCH_MAP[n]=sc; });
-  });
-  Object.keys(emprestada).forEach(function(sc){
-    var e=emprestada[sc];
-    e.culturas.forEach(function(n){
-      if(!BBCH_MAP[n]) BBCH_MAP[n]=sc;
-      BBCH_EMPRESTADA[n]={base:e.base, nota:e.nota};
-    });
-  });
-})();
-/* De onde vem a escala desta cultura. `propria:false` é o que a tela mostra e o
-   que a folha precisa saber para não apresentar empréstimo como se fosse BBCH
-   da cultura. */
-function getBBCHOrigem(cultura){
-  var k=BBCH_MAP[cultura];
-  if(!k) return null;
-  var e=BBCH_EMPRESTADA[cultura];
-  return e ? {escala:k, propria:false, base:e.base, nota:e.nota}
-           : {escala:k, propria:true, base:'', nota:''};
+   O que ficou aqui é o que depende do aparelho: saber se a quadra é de
+   laboratório e pintar o aviso na tela. Estas funções continuam existindo com
+   os mesmos nomes porque a interface inteira as chama assim. ================= */
+function _nucleoBBCH(){
+  return (typeof window!=='undefined' && window.BBCHCore) ? window.BBCHCore
+       : (typeof BBCHCore!=='undefined' ? BBCHCore : null);
 }
-/* Aviso de empréstimo para as telas que oferecem o seletor de estádio. Devolve
-   string vazia quando a escala é da própria cultura — nada a dizer é melhor que
-   um aviso que se aprende a ignorar. */
-function bbchAvisoHtml(cultura){
-  var o=getBBCHOrigem(cultura);
-  if(!o || o.propria) return '';
-  return '<div style="margin:-4px 0 8px;padding:8px 10px;border-radius:9px;font-size:11px;line-height:1.5;'+
-    'background:#2a210c;border:1px solid #6b531b;color:#ffd98a">⚠ <b>Escala emprestada.</b> '+
-    esc(cultura)+' não tem escala BBCH própria no Agracta: os estádios abaixo são os de <b>'+
-    esc(o.base)+'</b>. '+esc(o.nota)+'</div>';
-}
-
-/* §7-bis. O BBCH estava guardado POR ACIDENTE: só não aparecia no laboratório porque
-   getBBCHList vinha vazio sem cultura. Uma quadra convertida de campo que tivesse
-   mantido data[qid].cultura voltava a mostrar fenologia de planta num ensaio de placa.
-   Guarda acidental é guarda que volta a falhar quando o dado reaparece — então a
-   pergunta passa a ser explícita: existe planta aqui? */
+/* §7-bis. O BBCH estava guardado POR ACIDENTE: só não aparecia no laboratório
+   porque a lista vinha vazia sem cultura. Uma quadra convertida de campo que
+   tivesse mantido data[qid].cultura voltava a mostrar fenologia de planta num
+   ensaio de placa. Guarda acidental é guarda que volta a falhar quando o dado
+   reaparece — então a pergunta é explícita: existe planta aqui? */
 function bbchListDaQuadra(qid, cultura){
   if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return null;
   return getBBCHList(cultura);
 }
 function getBBCHList(cultura){
-  var k=BBCH_MAP[cultura];
-  return k?BBCH[k]:null;
+  var N=_nucleoBBCH(); return N?N.listaDe(cultura):null;
 }
-
+/* De onde vem a escala desta cultura, e em que NÍVEL: própria, do grupo que a
+   norma define, ou a escala geral da BBCH. O nível é o que a tela mostra e o
+   que a folha precisa saber para não apresentar uma coisa como se fosse outra. */
+function getBBCHOrigem(cultura){
+  var N=_nucleoBBCH(); return N?N.origemDe(cultura):null;
+}
+/* Aviso para as telas que oferecem o seletor. Escala própria não gera aviso:
+   nada a dizer é melhor que um aviso que se aprende a ignorar. */
+function bbchAvisoHtml(cultura){
+  var o=getBBCHOrigem(cultura);
+  if(!o || o.propria) return '';
+  var cor = (o.nivel==='geral') ? ['#2a210c','#6b531b','#ffd98a'] : ['#101c26','#2b4c66','#a9d3f0'];
+  return '<div style="margin:-4px 0 8px;padding:8px 10px;border-radius:9px;font-size:11px;line-height:1.5;'+
+    'background:'+cor[0]+';border:1px solid '+cor[1]+';color:'+cor[2]+'">'+
+    (o.nivel==='geral'?'⚠ ':'ℹ ')+'<b>'+esc(cultura)+':</b> '+esc(o.rotulo)+'. '+esc(o.nota)+'</div>';
+}
 function getBBCHInfo(cultura,code){
-  var list=getBBCHList(cultura);
-  if(!list||!code)return null;
-  for(var i=0;i<list.length;i++){
-    if(list[i].code===code)return list[i];
-  }
-  return null;
+  var N=_nucleoBBCH(); return N?N.infoDe(cultura,code):null;
 }
 
 /* Como um estádio GRAVADO se apresenta hoje. Existe porque a limpeza do mapa
@@ -6375,8 +5983,12 @@ function bbchRotulo(cultura, code){
   var o=(typeof getBBCHOrigem==='function')?getBBCHOrigem(cultura):null;
   if(!o) return 'BBCH '+code+' · sem escala para '+(cultura||'esta cultura');
   var info=getBBCHInfo(cultura,code);
-  if(!info) return 'BBCH '+code+' · fora da escala de '+(o.propria?(cultura||''):o.base);
-  return 'BBCH '+code+' · '+info.fase+(o.propria?'':(' (escala de '+o.base+')'));
+  if(!info) return 'BBCH '+code+' · fora da escala de '+(cultura||'esta cultura');
+  /* O sufixo só entra na ESCALA GERAL, onde os rótulos são genéricos e o leitor
+     precisa saber disso para não ler "Floração" como fenologia daquela espécie.
+     No grupo ele não entra: a escala do grupo É a escala daquela cultura segundo
+     a norma, e repetir isso em todo registro vira ruído que se aprende a pular. */
+  return 'BBCH '+code+' · '+info.fase+(o.nivel==='geral'?' (escala geral)':'');
 }
 
 /* Identificação efetiva do ensaio. A quadra é somente o padrão geográfico;
