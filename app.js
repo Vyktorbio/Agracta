@@ -3020,7 +3020,6 @@ function toggleAgenda(){
 }
 function renderAgenda(){
   var events=allUpcomingEvents(30, agVerDispensados);
-  var activeEvents=allUpcomingEvents(30, false);
   var today=today0();
 
   var groups={overdue:[],today:[],soon:[],week:[],month:[]};
@@ -3036,7 +3035,10 @@ function renderAgenda(){
   var h='<div class="ag-title">AGENDA (30 DIAS)<button class="ag-close" onclick="toggleAgenda()">×</button></div>';
   h+='<div class="ag-acoes">';
   /* Botão que não tem o que limpar é botão que só ensina a desconfiar do app. */
-  var _pend30=allUpcomingEvents(30).filter(function(e){ return !e.dispensado; }).length;
+  /* `allUpcomingEvents` sem o segundo argumento JÁ exclui os dispensados, então
+     o filtro que estava aqui não filtrava nada — e a chamada gêmea logo acima
+     varria todos os estudos de novo só para ser descartada. */
+  var _pend30=allUpcomingEvents(30).length;
   if(_pend30) h+='<button class="ag-acao" onclick="agLimparTudo()">Limpar lembretes ('+_pend30+')</button>';
   if(_nDisp) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nDisp+')</button>';
   h+='</div>';
@@ -15383,7 +15385,6 @@ function collectTodayEvents(windowDays, incluirDispensados){
 function renderToday(){
   var events=collectTodayEvents(1, agVerDispensados);
   var tomorrowEvs=collectTodayEvents(3, agVerDispensados).filter(function(e){return e.diff>1});
-  var activeToday=collectTodayEvents(3, false);
 
   var h='<div class="today-head" style="position:relative">';
   h+='<button class="panel-x-tr" onclick="closeToday()" aria-label="Fechar" title="Fechar">✕</button>';
@@ -15404,7 +15405,7 @@ function renderToday(){
 
   var _nD=_agTotalDispensados();
   h+='<div class="ag-acoes" style="margin:2px 0 12px">';
-  var _pendHoje=collectTodayEvents(3).filter(function(e){ return !e.dispensado; }).length;
+  var _pendHoje=collectTodayEvents(3).length;
   if(_pendHoje) h+='<button class="ag-acao" onclick="agLimparHoje()">Limpar lembretes ('+_pendHoje+')</button>';
   if(_nD) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nD+')</button>';
   h+='</div>';
@@ -17199,11 +17200,34 @@ function itemDoseAposentar(id, doseId){
 
 /* Doses que servem para ESTA cultura e ESTE alvo. Dose sem cultura declarada serve
    para qualquer uma — é o caso do adjuvante, que não é específico. */
+/* Cultura da dose e cultura do estudo são DOIS campos de texto livre, escritos
+   em momentos diferentes por pessoas diferentes. Comparar as duas letra a letra
+   escondia a dose certa em silêncio: uma dose cadastrada para "Soja" não
+   aparecia num estudo cadastrado como "Soybean" — e a pessoa concluía que nunca
+   tinha cadastrado a dose.
+   Esconder o que existe é pior que apontar o que não existe: o segundo se
+   discute, o primeiro não se percebe. */
+function _mesmaCultura(a, b){
+  var na=normStr(a||''), nb=normStr(b||'');
+  if(!na || !nb) return true;              /* sem declaração, serve para qualquer */
+  if(na===nb) return true;
+  var B=(typeof window!=='undefined')?window.BBCHCore:(typeof BBCHCore!=='undefined'?BBCHCore:null);
+  if(!B || !B.canonica) return false;
+  var ca=B.canonica(a), cb=B.canonica(b);
+  /* Só quando AS DUAS resolvem. Se uma delas é cultura fora do vocabulário, a
+     comparação volta a ser literal — assim uma dose cadastrada para cultura
+     exótica não deixa de casar consigo mesma. */
+  return !!(ca && cb && ca===cb);
+}
 function itemDosesPara(id, cultura, alvo){
-  var c=normStr(cultura||''), a=normStr(alvo||'');
+  var a=normStr(alvo||'');
   return (itemDoses(id)||[]).filter(function(d){
     if(d.situacao!=='ativa') return false;
-    if(d.cultura && c && normStr(d.cultura)!==c) return false;
+    if(!_mesmaCultura(d.cultura, cultura)) return false;
+    /* O ALVO não passa por vocabulário: são nomes científicos de praga e doença,
+       e não existe tabela canônica deles aqui. Inventar equivalência entre
+       "Euschistus heros" e outra coisa seria adivinhar. Fica na comparação
+       literal, sem acento e sem caixa. */
     if(d.alvo && a && normStr(d.alvo)!==a) return false;
     return true;
   });
