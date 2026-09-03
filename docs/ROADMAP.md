@@ -127,6 +127,13 @@ relatório reconstrói a versão usada.
 - **7.4** ✅ (01/09/2026) A aplicação **herda** do estudo: tratamentos, doses, parcelas, repetições, método. O operador não redigita — e ao salvar, a memória de cálculo é **derivada** do estudo sozinha.
 - **7.6** `aplicacao.memoriaCalculo` — entradas, fórmulas, resultados, alertas, **versão do motor**. Não só texto para copiar.
 - **7.7** Calibração por equipamento (CO₂: pressão, bicos, espaçamento, vazões individuais, tempo, CV entre bicos, velocidade, taxa. Drone: modelo, velocidade, largura, altura, vazão, taxa, capacidade, mínimo operacional). ✅ sider e costal CO₂ na tela (01/09/2026), com a diferença certa entre eles: **coleta bico a bico só no costal**. Drone e Torre de Potter pendentes — e a Potter tem de ser a do laboratório.
+  **Estado (03/09/2026):** o costal CO₂ ficou operacional — a calibração passou a dizer
+  quanto cai POR PARCELA, em quantas passadas e em quanto tempo, e a receita fechou em
+  q.s.p. em vez de mandar medir o veículo à parte (volumes de formulação não são
+  aditivos). A receita estruturada virou a fonte do cálculo, com `% v/v` na linha do
+  adjuvante — porcentagem não é unidade do estudo, é da linha, porque só vira volume
+  depois que a calda final é conhecida. E o preparo agora tem veredito: `liberado`
+  separa "pode preparar" de "não prepare", em vez de deixar o aviso solto no rodapé.
 - **7.8** ✅ (02/09/2026) Laboratório no **mesmo pipeline**: a aplicação de bancada passou a ter memória de cálculo, derivada do cadastro do estudo, com a mesma marcação de origem e a mesma regra de nunca gravar por cima. Dois motores, um pipeline — a categoria da quadra escolhe qual.
 - **7.9** ✅ (02/09/2026) A tela mostra o essencial — **quanto pôr no frasco** — e esconde a conferência atrás de *"Ver cálculo completo"*. A escolha é lembrada, e o padrão é o essencial. **Aviso nunca se esconde**: erro, alerta e problema de mistura aparecem nos dois modos, sem exceção.
 
@@ -272,11 +279,65 @@ para sair da bula; bloquear seria inútil e calar seria pior.
   como produto inventaria um produto que não existe.
 - **Justificativa de dose fora da bula** em campo próprio, não escondida em observações.
 
+**A dose escrita passou a ser DERIVADA da receita (03/09/2026).**
+
+Quando a receita estruturada virou a fonte do cálculo, `t.produto` e `t.dose` deixaram
+de ser o dado e viraram texto derivado dela. Só que o campo continuava editável: dava
+para digitar "2 L/ha" num tratamento cuja receita dizia 1, e aí o app **mostrava uma
+dose e preparava outra** — a tabela, o relatório e a exportação liam o texto; o motor
+de calda e a memória liam a receita. Nenhum dos dois números parecia errado no seu
+próprio lugar, que é o que torna esse tipo de divergência difícil de ver.
+
+A tela fechou o campo (dose e produto ficam `readonly` quando há receita, e cada
+componente ganhou dose e unidade próprias). Isso impede divergência nova; não cura a
+antiga. Pelo precedente da §7-bis — *o campo sumiu da tela, mas o dado errado não some
+sozinho* — **salvar o estudo ressincroniza** produto e dose a partir da receita, e a
+correção entra na trilha de auditoria dizendo qual dose virou qual. Estudo já
+consistente sai byte por byte igual: salvar não vira edição fantasma. Coberto por
+`test_dose_receita.js` (16 verificações).
+
+**Terceira leva (03/09/2026) — a aplicação passa a baixar o lote.**
+
+O app sabia as duas pontas e não ligava uma na outra: a memória de cálculo diz quanto
+de cada componente foi preparado, o tratamento aponta para o lote de onde o material
+saiu, e o saldo do lote é a soma de eventos imutáveis. Faltava o fio. Registrar a
+aplicação não mexia no estoque, então para o saldo bater era preciso ir à tela do item
+e digitar a mesma quantidade de novo — e ninguém digita duas vezes. A cadeia de
+custódia ficava furada exatamente no ponto em que o material vira ensaio.
+
+`vendor/consumo-core.js` é o motor puro dessa conta: lê a memória (campo **ou**
+bancada), converte para a unidade do lote e devolve o que deve ser baixado e o que não
+pode ser, cada recusa com o nome do que faltou. `aplicacaoBaixarLotes` grava.
+
+Quatro regras, e cada uma existe para o registro não mentir:
+
+- **Nunca bloqueia a aplicação.** A pulverização aconteceu. Sem saldo ou sem conversão
+  possível, a baixa não sai — a aplicação sai, com o aviso gravado nela, não só exibido.
+- **Unidade não se chuta.** mL → g é recusado nomeando a densidade que falta. Assumir
+  água produziria baixa errada com cara de baixa certa, e o erro só apareceria no
+  inventário do ano seguinte.
+- **O lote é conferido pelo TOTAL da aplicação, não saque a saque.** Os saques que uma
+  aplicação faz do mesmo lote são um preparo físico só; baixar a parte que coube
+  deixaria o saldo num número que não é nem o antigo nem o certo — mantido na aparência
+  e errado no fundo.
+- **Lote vencido é baixado e marcado.** O material foi usado; calar isso reescreveria o
+  ensaio. E excluir a aplicação **não** desfaz a baixa: evento de lote é append-only, o
+  estorno é um ajuste com motivo — e quem apaga é avisado disso antes.
+
+Duas coisas vieram do motor de calda 1.1.0 e mudaram a ligação para melhor: o componente
+gravado na memória agora carrega **o próprio lote**, então casar por nome virou reserva
+para memórias antigas — e o vínculo da memória vence o do tratamento, porque foi o que
+valia na hora do preparo. E `liberado:false` **bloqueia a baixa**: preparo que o motor
+recusou não consumiu lote nenhum, e registrar consumo dele seria inventar um preparo.
+Ausência do campo não é bloqueio — memória anterior ao motor 1.1.0 segue valendo.
+
+Coberto por `test_consumo_lote.js` (76 verificações, com golden test conferido à mão) e
+`test_baixa_aplicacao.js` (52), este último exercitando o gravador de evento real.
+
 **Falta:** documentos anexados ao item (bula, FDS, certificado de análise);
 importação de bula do Agrofit com revisão humana; **programas de aplicação**;
 **cálculo automático de quantidade**; **verificação do protocolo**; **dossiê do item**;
-e o relatório **Item × Dose** entre ensaios. A cadeia de custódia (lotes, recipientes,
-livro-razão) fica registrada como desenho, **não** como pendência.
+e o relatório **Item × Dose** entre ensaios.
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
@@ -345,6 +406,33 @@ Na avaliação: chuva desde a aplicação, graus-dia, temperatura média, dias d
 >
 > Coberto por `test_janela_proxy.py` (28 verificações) e `test_janela_ambiental.js`
 > (44), ambos com golden tests conferidos à mão.
+
+**Chuva depois da aplicação** — "choveu logo depois de pulverizar?" ✅ **feito (03/09/2026)**
+
+> A janela acima responde o que aconteceu ENTRE a aplicação e a avaliação. Faltava a
+> pergunta que decide se a aplicação valeu: produto lavado três horas depois não é
+> produto que não funcionou, e sem esse dado o ensaio conclui a coisa errada com toda a
+> confiança do mundo.
+>
+> **E ela não pode ser contada por dia.** O resumo diário traz `rain_day`, o acumulado
+> do dia inteiro: numa aplicação das 15 h isso inclui a chuva das 6 h, que caiu antes de
+> pulverizar e não lavou nada. Seria um número limpo e falso — o mesmo erro que a
+> cobertura da janela existe para evitar. Por isso `GET /clima/pos?mac=&data=&hora=&horas=`
+> desce à série: a Ecowitt indexa cada amostra pelo epoch, o acumulado zera à meia-noite,
+> e a chuva depois do instante T é quanto esse acumulado subiu de T até o fim da janela.
+>
+> Grava em `ap.pos`, com a mesma doutrina da janela — não recalcula, reconsultar manda a
+> anterior para `posAnteriores`, e abre offline. **Duas declarações acompanham o número,
+> sempre:** aplicação sem hora vira conta do dia inteiro, e isso é dito (`horaConhecida`),
+> porque "choveu 12 mm depois de pulverizar" e "choveu 12 mm no dia em que se pulverizou"
+> são frases diferentes; e janela que ainda não fechou não se apresenta como fechada
+> (`completa`), porque 0 mm em 6 das 48 h não é "não choveu depois da aplicação". Chuva
+> nas primeiras seis horas pinta o bloco e levanta a hipótese de lavagem — é a explicação
+> mais provável de um resultado ruim, e quem lê o cartão precisa tropeçar nela. Numa
+> quadra de laboratório o bloco nem é oferecido: não chove numa bancada.
+>
+> Coberto por `test_pos_aplicacao_proxy.py` (43 verificações, golden test conferido à
+> mão) e `test_pos_aplicacao.js` (40).
 
 **Falta desta fase:** `quadra.ambiente` permanente (altitude, declividade, orientação,
 posição topográfica) — depende de uma fonte de elevação que o app ainda não tem —, e o

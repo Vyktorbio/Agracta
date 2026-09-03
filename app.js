@@ -9129,6 +9129,184 @@ function aplicacaoMemoriaResumo(ap){
                           cvPct:(m.barra.resultado||{}).cvPct}:null)};
 }
 
+/* ===================== BAIXA EM LOTE AO REGISTRAR A APLICAÇÃO =====================
+   O app já sabia as duas pontas e não ligava uma na outra. A memória de cálculo
+   diz quanto de cada componente foi preparado; o tratamento aponta para o lote de
+   onde o material saiu; o lote tem saldo somado de eventos imutáveis. Faltava o
+   fio: registrar a aplicação não mexia no estoque, então para o saldo bater era
+   preciso ir à tela do item e digitar a mesma quantidade de novo. Ninguém digita
+   duas vezes — e a cadeia de custódia ficava furada justamente no ponto em que o
+   material vira ensaio.
+
+   A ARITMÉTICA NÃO MORA AQUI. Conversão de unidade, saldo e recusas são de
+   `vendor/consumo-core.js`; o app faz o que só ele pode fazer — ler os lotes,
+   gravar o evento e mostrar o que aconteceu.
+
+   QUATRO REGRAS, e todas existem para o registro não mentir:
+
+   1. NUNCA BLOQUEIA A APLICAÇÃO. A pulverização aconteceu. Se o lote não tem
+      saldo, ou a unidade não converte, a baixa não sai — a aplicação sai, com o
+      aviso junto. Perder o registro do que foi aplicado por causa do estoque
+      seria trocar o dado importante pelo secundário.
+   2. NUNCA BAIXA DUAS VEZES. Cada baixa é gravada em `ap.consumos` com a chave
+      tratamento|componente|lote. Salvar a aplicação de novo não repete nada.
+   3. ORIGEM VAI MARCADA. O evento nasce `derivada`, e sabe de que aplicação
+      veio. Um consumo automático que se pareça com um lançamento conferido à mão
+      apagaria a diferença entre o que o app concluiu e o que alguém confirmou.
+   4. LOTE VENCIDO É BAIXADO E MARCADO. O material foi usado; calar isso
+      reescreveria o ensaio. */
+
+function _consumoNucleo(){
+  return (typeof window!=='undefined' && window.ConsumoCore)?window.ConsumoCore:null;
+}
+/* Leitura não cria campo: uma aplicação que nunca baixou lote nenhum não precisa
+   carregar um `consumos:[]` vazio para sempre, no aparelho e na nuvem. */
+function aplicacaoConsumos(ap){
+  return (ap && Array.isArray(ap.consumos)) ? ap.consumos : [];
+}
+
+/* Os lotes que este preparo referencia, do jeito que o motor precisa vê-los:
+   saldo já somado, validade e situação.
+
+   A MEMÓRIA ENTRA NA BUSCA, não só o tratamento. Desde o motor de calda 1.1.0 o
+   componente gravado carrega o lote que estava valendo na hora do preparo, e o
+   tratamento pode ter sido reeditado depois. Procurar só no tratamento faria uma
+   baixa legítima ser recusada com "o lote não existe mais" — quando ele existe,
+   e é justamente o que foi usado. */
+function _consumoLotesDoEstudo(study, ap){
+  var lotes={}, refs=[];
+  (((study||{}).tratamentos)||[]).forEach(function(t){
+    if(t&&t.loteRef) refs.push(t.loteRef);
+    ((t&&t.componentes)||[]).forEach(function(c){ if(c&&c.loteRef) refs.push(c.loteRef); });
+  });
+  ((((ap||{}).memoriaCalculo)||{}).tratamentos||[]).forEach(function(t){
+    ((t&&t.componentes)||[]).forEach(function(c){ if(c&&c.loteRef) refs.push(c.loteRef); });
+  });
+  refs.forEach(function(r){
+    if(!r||!r.loteId||lotes[r.loteId]) return;
+    var l=null;
+    try{ l=itemLotePorId(r.itemId, r.loteId); }catch(e){}
+    if(!l) return;
+    lotes[r.loteId]={id:l.id, codigo:l.codigo, unidade:l.unidade,
+                     saldo:itemLoteSaldo(l), validade:(l.validade||''),
+                     situacao:(l.situacao||'ativo')};
+  });
+  return lotes;
+}
+
+/* O plano: o que baixar, o que se recusa a baixar e por quê. Não escreve nada —
+   serve tanto para executar quanto para a tela explicar o que aconteceu. */
+function consumoPlanoDaAplicacao(study, ap){
+  var C=_consumoNucleo();
+  if(!C||!study||!ap||!ap.memoriaCalculo) return null;
+  var trats=((study.tratamentos)||[]).map(function(t){
+    return {id:t.id, loteRef:(t.loteRef||null),
+            componentes:((t.componentes)||[]).map(function(c){
+              return {id:c.id, nome:c.nome, loteRef:(c.loteRef||null)};
+            })};
+  });
+  return C.planejar({memoria:ap.memoriaCalculo, tratamentos:trats,
+                     lotes:_consumoLotesDoEstudo(study, ap), data:(ap.data||''),
+                     jaRegistrados:aplicacaoConsumos(ap).map(function(x){ return x.chave; })});
+}
+
+/* Executa o plano. Devolve o que efetivamente foi gravado — e guarda na própria
+   aplicação tanto as baixas quanto as recusas, porque um aviso que só existe no
+   instante do salvamento não é registro, é notificação. */
+function aplicacaoBaixarLotes(study, qid, ap){
+  var plano=null;
+  try{ plano=consumoPlanoDaAplicacao(study, ap); }catch(e){ return null; }
+  if(!plano) return null;
+
+  var feitas=[], erros=[];
+  plano.baixas.forEach(function(b){
+    var obs='Aplicação de '+((typeof isoToBR==='function'&&isoToBR(ap.data))||ap.data||'')+
+            ' · '+(study.codigo||study.nome||study.id)+' · tratamento '+(b.tratamentoId||'?');
+    if(b.vencido) obs+=' · ATENÇÃO: lote vencido em '+
+      ((typeof isoToBR==='function'&&isoToBR(b.validade))||b.validade)+' na data da aplicação';
+    var r=null;
+    try{
+      r=itemLoteEvento(b.itemId, b.loteId, {
+        tipo:'consumo', quantidade:b.quantidade, unidade:b.unidade, em:(ap.data||''),
+        estudoId:study.id, tratamentoId:(b.tratamentoId||''), componenteId:(b.componenteId||''),
+        aplicacaoId:ap.id, origemRegistro:'derivada', destino:(study.codigo||study.nome||''), obs:obs});
+    }catch(e){ r={erro:(e&&e.message)||'Falha ao registrar o consumo.'}; }
+    if(!r || r.erro){ erros.push({chave:b.chave, nome:b.nome, tratamentoId:b.tratamentoId,
+                                  causa:'gravacao', motivo:(r&&r.erro)||'Falha ao registrar o consumo.'}); return; }
+    feitas.push({chave:b.chave, itemId:b.itemId, loteId:b.loteId, codigo:b.codigo,
+                 tratamentoId:b.tratamentoId, componenteId:b.componenteId, nome:b.nome,
+                 quantidade:b.quantidade, unidade:b.unidade,
+                 quantidadeOriginal:b.quantidadeOriginal, unidadeOriginal:b.unidadeOriginal,
+                 eventoId:(r.evento&&r.evento.id)||null, saldoApos:r.saldo,
+                 vencido:!!b.vencido, validade:(b.validade||null),
+                 origem:'derivada', em:Date.now()});
+  });
+
+  if(feitas.length){
+    if(!Array.isArray(ap.consumos)) ap.consumos=[];
+    feitas.forEach(function(f){ ap.consumos.push(f); });
+    try{
+      logStudyAuditInObject(study,'Baixa em lote',
+        feitas.length+' consumo(s) registrado(s) a partir da memória de cálculo da aplicação '+
+        (ap.data||ap.id),
+        {aplicacao:ap.id, origem:'derivada', lotes:feitas.map(function(f){ return f.codigo; }).join(', ')});
+    }catch(e){}
+  }
+
+  /* As recusas ficam gravadas: quem abrir a aplicação amanhã precisa ver que a
+     baixa não saiu, e por quê, sem depender de ter estado na tela na hora. */
+  var avisos=plano.recusas.concat(erros).map(function(r){
+    return {chave:r.chave, tratamentoId:r.tratamentoId, nome:r.nome, causa:r.causa,
+            motivo:r.motivo, em:Date.now()};
+  });
+  if(avisos.length) ap.consumoAvisos=avisos; else if(ap.consumoAvisos) delete ap.consumoAvisos;
+
+  return {feitas:feitas, avisos:avisos, plano:plano};
+}
+
+/* Bloco no cartão da aplicação. Silencioso quando não há lote nenhum vinculado —
+   lote é opcional, e cobrar por um que ninguém cadastrou seria ruído. */
+function consumoBlocoHtml(ap){
+  var cons=aplicacaoConsumos(ap), avisos=(ap&&ap.consumoAvisos)||[];
+  if(!cons.length && !avisos.length) return '';
+  var h='<div class="lote-bloco"><div class="jan-t">BAIXA EM LOTE</div>';
+  if(cons.length){
+    h+='<div class="jan-resumo">'+esc(cons.length+' baixa'+(cons.length===1?'':'s')+' registrada'+(cons.length===1?'':'s'))+'</div>';
+    h+='<div class="jan-det">'+cons.map(function(c){
+      return esc((c.nome||'—')+' · '+String(c.quantidade).replace('.',',')+' '+(c.unidade||'')+
+                 ' do lote '+(c.codigo||'')+(c.saldoApos!=null?(' · restam '+String(c.saldoApos).replace('.',',')+' '+(c.unidade||'')):''))+
+             (c.vencido?' <b class="lote-venc">⚠ lote vencido na data da aplicação</b>':'');
+    }).join('<br>')+'</div>';
+  }
+  if(avisos.length){
+    h+='<div class="jan-cob">⚠ '+avisos.map(function(a){
+      return esc((a.nome?(a.nome+': '):'')+(a.motivo||''));
+    }).join('<br>⚠ ')+'</div>';
+    h+='<div class="jan-pe">Nada foi baixado nesses casos. Corrija no banco de itens e toque em conferir.</div>';
+  }
+  if(cons.length) h+='<div class="jan-pe">Derivada da memória de cálculo · o estorno, se for preciso, é um ajuste no lote</div>';
+  return h+'</div>';
+}
+
+/* Botão de reconferir: útil quando a recusa foi de saldo e o lote acabou de ser
+   reposto. Nunca refaz o que já está feito — a chave impede. */
+function consumoConferir(qid, sid, apid){
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  var ap=study&&(study.aplicacoes||[]).filter(function(a){return a.id===apid;})[0];
+  if(!study||!ap) return;
+  if(typeof _bloqueadoPorFinalizacao==='function' && _bloqueadoPorFinalizacao(qid,sid)) return;
+  var r=aplicacaoBaixarLotes(study, qid, ap);
+  if(r&&r.feitas.length){
+    ap._ts=Date.now();
+    try{ save(); }catch(e){}
+    try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(qid,sid,ap); }catch(e){}
+    if(typeof _stxToast==='function') _stxToast('✓ '+r.feitas.length+' baixa(s) registrada(s)');
+  }else if(typeof _stxToast==='function'){
+    _stxToast((r&&r.avisos.length)?r.avisos[0].motivo:'Nada novo para baixar.');
+  }
+  try{ openStudyDetail(qid,sid); }catch(e){}
+}
+
 /* ===================== ANÁLISE ESTATÍSTICA (BioEstat embutido em estatistica/) =====================
    Monta a matriz longa (Tratamento/Repeticao/Variavel/Valor + contexto) da avaliação do estudo,
    passa via localStorage e abre o BioEstat num iframe. Modo 'analise' (Geral) ou 'forense'. */
@@ -10257,6 +10435,14 @@ function openStudyDetail(qid,sid){
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       h+=carimboHtml(a.carimbo,a.data,a.hora);
+      /* O que saiu do lote e o que caiu do céu depois: as duas coisas que uma
+         aplicação registrada não sabia dizer sobre si mesma. */
+      try{ h+=consumoBlocoHtml(a); }catch(e){}
+      try{ if((a.consumoAvisos||[]).length && !_fin)
+             h+='<div class="jan-linha"><button class="jan-btn mini" style="margin-left:0" onclick="consumoConferir(\''+
+                _avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\',\''+_avCroquiEscJs(a.id)+'\')">conferir baixa em lote</button></div>';
+      }catch(e){}
+      try{ h+=posBlocoHtml(qid, sid, a); }catch(e){}
       h+='</div>';
     });
     h+='</div>';
@@ -10461,7 +10647,18 @@ function quickAddAvaliacao(){
 function removeAplicacao(id){
   var qid=curV, sid=curSid;
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
-  requireDeletePassword('Remover esta aplicação registrada.', function(){
+  /* Excluir a aplicação NÃO desfaz a baixa em lote, e quem apaga precisa saber
+     disso antes. Evento de lote é append-only: o estorno é um ajuste com motivo,
+     na tela do item — apagar o consumo em silêncio faria o inventário mentir sem
+     deixar rastro de que um dia bateu. */
+  var _apDel=null;
+  try{ var _stD=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+       _apDel=_stD&&(_stD.aplicacoes||[]).filter(function(a){return a.id===id;})[0]; }catch(e){}
+  var _nCons=((_apDel&&_apDel.consumos)||[]).length;
+  var _msgDel='Remover esta aplicação registrada.'+
+    (_nCons?(' Atenção: '+_nCons+' baixa(s) em lote já registrada(s) NÃO são desfeitas — '+
+             'o estorno é um ajuste com motivo, na tela do item.'):'');
+  requireDeletePassword(_msgDel, function(){
     safetyBackup('antes de excluir aplicação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
     var ap=study.aplicacoes.find(function(a){return a.id===id});
@@ -11651,6 +11848,22 @@ function saveStudyV2(){
 
   if(!s.codigo){alert("O código do estudo é obrigatório.");return;}
 
+  /* A receita manda; o texto é derivado dela. A tela já impede editar a dose de um
+     tratamento com receita, mas isso só vale daqui para a frente: um estudo em que
+     alguém digitou "2 L/ha" enquanto a receita dizia 1 guarda a divergência para
+     sempre — o cálculo usa a receita e a tabela, o relatório e a exportação mostram
+     o texto velho. É o mesmo caso da §7-bis: o campo sumiu da tela, mas o dado
+     errado não some sozinho. Ressincronizar ao salvar cura os que já divergiram, e
+     nos que estão certos não muda um caractere. */
+  var _dessinc=[];
+  (s.tratamentos||[]).forEach(function(t){
+    if(!t || !(typeof tratTemReceita==='function' && tratTemReceita(t))) return;
+    var pAntes=t.produto, dAntes=t.dose;
+    try{ _tratSincronizaTexto(t); }catch(e){ return; }
+    if(pAntes!==t.produto || dAntes!==t.dose)
+      _dessinc.push((t.id||'?')+': "'+(dAntes||'')+'" → "'+(t.dose||'')+'"');
+  });
+
   gerarAvaliacoesAuto(s);
   if(s.randomizado) ensureStudyRandomizacao(s);
   else s.randomizacao=null;
@@ -11693,6 +11906,12 @@ function saveStudyV2(){
     details = 'Código: "' + s.codigo + '", ' + s.tratamentos.length + ' tratamentos, ' + s.numRepeticoes + ' repetições.';
   }
   logStudyAuditInObject(s, action, details);
+  /* Correção de dado gravado nunca é silenciosa: quem ler a trilha precisa saber
+     que a dose exibida mudou, e para qual valor. */
+  if(_dessinc.length)
+    logStudyAuditInObject(s, 'Dose ressincronizada com a receita',
+      'A dose escrita divergia da receita estruturada e foi refeita a partir dela — '+
+      _dessinc.join(' · '), {origem:'derivada', tratamentos:_dessinc.length});
   s._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
 
   if(idx>=0)q.estudos[idx]=s;
@@ -12124,6 +12343,10 @@ function saveAplicacao(){
         {aplicacao:ap.id, origem:'derivada', motor:_memAuto.motor, motorVersao:_memAuto.motorVersao});
     }
   }catch(e){}
+  /* A baixa em lote vem DEPOIS da memória e vale para qualquer memória — derivada
+     ou conferida na calculadora. Ela nunca impede o salvamento: o que não pôde ser
+     baixado fica gravado como aviso na própria aplicação. */
+  try{ aplicacaoBaixarLotes(study, curV, ap); }catch(e){}
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   else _recarimbaEvento(curV,curSid,ap.id,'apl',ap.data,ap.hora);
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
@@ -15787,6 +16010,154 @@ function janelaBuscar(qid, sid, avid, forcar){
 
 
 
+/* ===================== CHUVA DEPOIS DA APLICAÇÃO =================================
+   A janela ambiental responde "o que aconteceu ENTRE a aplicação e a avaliação".
+   Falta a pergunta que decide se a aplicação valeu: choveu LOGO DEPOIS? Produto
+   lavado três horas após a pulverização não é produto que não funcionou — e sem
+   esse dado o ensaio conclui a coisa errada com toda a confiança do mundo.
+
+   O carimbo já guarda o instante e o clima da hora da pulverização; a estação já
+   guarda o histórico. O que faltava era o fio: nada olhava para as horas
+   SEGUINTES.
+
+   A conta mora no proxy (`/clima/pos`), pela mesma razão da janela: são N
+   chamadas à Ecowitt, o fan-out é dele, e o cache aproveita entre estudos da
+   mesma estação. Aqui fica o que só o app pode fazer — guardar o que foi lido.
+
+   E vale o mesmo que vale para a janela: FICA GRAVADA, não recalculada. A leitura
+   muda quando a Ecowitt reprocessa, num registro BPL vale o que foi lido quando se
+   registrou, e a aplicação precisa abrir offline. Reconsultar não apaga: a
+   anterior vira histórico.
+
+   DUAS DECLARAÇÕES ACOMPANHAM O NÚMERO, SEMPRE. Se a aplicação não tem hora, a
+   conta é do dia inteiro — e "choveu 12 mm depois de pulverizar" vira "choveu
+   12 mm no dia em que se pulverizou", que é outra frase. E se a janela ainda não
+   fechou, 0 mm não é resposta: é uma janela aberta. ============================= */
+
+var _posSeq=0, _posEstado={};      /* chave -> 'buscando' | 'erro' | null */
+var POS_HORAS_PADRAO=48;
+
+function posDaAplicacao(ap){ return (ap&&ap.pos)||null; }
+function _posChave(qid, sid, apid){ return 'pos|'+qid+'|'+sid+'|'+apid; }
+
+function consultarPos(qid, sid, ap, horas, forcar, cb){
+  cb=cb||function(){};
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  if(!study||!ap||!ap.data){ cb(null); return; }
+  if(ap.pos && !forcar){ cb(ap.pos); return; }
+
+  /* Numa bancada não chove. Oferecer isso ali seria a §7-bis de novo. */
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)){
+    cb({erro:'Aplicação de bancada não tem chuva depois.'}); return;
+  }
+  var mac=(typeof _stationMacForQuadra==='function')?_stationMacForQuadra(qid):null;
+  if(!mac){ cb({erro:'Esta quadra não tem estação meteorológica associada.'}); return; }
+
+  var h=Math.max(1,parseInt(horas||POS_HORAS_PADRAO,10)||POS_HORAS_PADRAO);
+  var chave=_posChave(qid,sid,ap.id), seq=++_posSeq;
+  _posEstado[chave]='buscando';
+  var url=NDVI_PROXY+'/clima/pos?mac='+encodeURIComponent(mac)+
+          '&data='+encodeURIComponent(ap.data)+
+          (ap.hora?('&hora='+encodeURIComponent(String(ap.hora).slice(0,5))):'')+
+          '&horas='+encodeURIComponent(h);
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if(seq!==_posSeq && _posEstado[chave]!=='buscando') return;
+    if(!d || d.error){ _posEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui ler a chuva depois da aplicação.'}); return; }
+    _posEstado[chave]=null;
+    var p={
+      data:ap.data, hora:(ap.hora||null), horas:d.horas,
+      horaConhecida:!!d.hora_conhecida, completa:!!d.completa,
+      dias:d.dias, diasComLeitura:d.dias_com_leitura, coberturaPct:d.cobertura_pct,
+      diasSemLeitura:(d.dias_sem_leitura||[]),
+      chuvaMm:d.chuva_mm, choveu:d.choveu,
+      primeiraChuvaHoras:d.primeira_chuva_horas,
+      fonte:d.fonte, mac:mac, ts:Date.now(), iso:new Date().toISOString(),
+      app:(typeof APP_VER!=='undefined'?APP_VER:null)
+    };
+    if(ap.pos){ ap.posAnteriores=(ap.posAnteriores||[]); ap.posAnteriores.push(ap.pos); }
+    ap.pos=p;
+    ap._ts=Date.now();
+    try{ save(); }catch(e){}
+    try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(qid,sid,ap); }catch(e){}
+    cb(p);
+  }).catch(function(){
+    _posEstado[chave]='erro';
+    cb({erro:'Não consegui falar com o servidor de clima.'});
+  });
+}
+
+/* Uma linha, do jeito que se lê em voz alta: "18 mm nas 48 h seguintes — a
+   primeira chuva 3,2 h depois". */
+function posResumo(p){
+  if(!p||p.erro) return (p&&p.erro)||'';
+  var horas=p.horas+' h';
+  if(p.chuvaMm==null) return 'sem leitura da estação nas '+horas+' seguintes';
+  function n(v){ return (v==null||!isFinite(v))?null:String(Number(v).toFixed(1)).replace('.',','); }
+  if(!p.choveu) return 'não choveu nas '+horas+' seguintes';
+  var s=n(p.chuvaMm)+' mm nas '+horas+' seguintes';
+  if(p.primeiraChuvaHoras!=null) s+=' — a primeira chuva '+n(p.primeiraChuvaHoras)+' h depois';
+  return s;
+}
+
+/* As ressalvas não são rodapé: cada uma muda como se lê o número de cima. */
+function posRessalvas(p){
+  if(!p||p.erro) return [];
+  var r=[];
+  if(!p.completa) r.push('A janela ainda não fechou: o total acima é parcial e vai mudar.');
+  if(!p.horaConhecida) r.push('A aplicação não registrou hora, então a conta é do DIA INTEIRO — '+
+    'a chuva que caiu antes de pulverizar está incluída.');
+  if(p.coberturaPct<100){
+    if(!p.diasComLeitura) r.push('A estação não tinha leitura em nenhum dia desta janela — nada acima pôde ser calculado.');
+    else r.push('Atenção: '+p.diasComLeitura+' de '+p.dias+' dias com leitura ('+p.coberturaPct+'%). '+
+                'A chuva dos dias sem leitura não entra no total.');
+  }
+  return r;
+}
+
+function posBlocoHtml(qid, sid, ap){
+  if(!ap||!ap.data) return '';
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return '';
+  var p=posDaAplicacao(ap);
+  var chave=_posChave(qid,sid,ap.id), estado=_posEstado[chave];
+
+  if(!p){
+    if(estado==='buscando') return '<div class="jan-linha">Lendo a chuva depois da aplicação…</div>';
+    return '<div class="jan-linha">'+
+      '<button class="jan-btn" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\')">'+
+      '🌧 Choveu depois? (48 h)</button>'+
+      (estado==='erro'?'<span class="jan-erro">não consegui na última tentativa</span>':'')+'</div>';
+  }
+
+  var lavou=(p.chuvaMm!=null && p.choveu && p.primeiraChuvaHoras!=null && p.primeiraChuvaHoras<=6);
+  var h='<div class="jan-bloco'+(lavou?' pos-lavou':'')+'"><div class="jan-t">CHUVA DEPOIS DESTA APLICAÇÃO</div>'+
+        '<div class="jan-resumo">'+esc(posResumo(p))+'</div>';
+  /* Chuva nas primeiras horas não é detalhe do rodapé: é a explicação mais
+     provável de um resultado ruim, e quem lê o cartão precisa tropeçar nela. */
+  if(lavou) h+='<div class="jan-det pos-alerta">⚠ Chuva nas primeiras horas depois da aplicação — '+
+    'considere a possibilidade de lavagem ao interpretar este ensaio.</div>';
+  var res=posRessalvas(p);
+  if(res.length) h+='<div class="jan-cob">⚠ '+res.map(esc).join('<br>⚠ ')+'</div>';
+  h+='<div class="jan-pe">Estação · lido em '+
+     esc((function(){ try{ return new Date(p.ts).toLocaleString('pt-BR'); }catch(e){ return p.iso; } })())+
+     '<button class="jan-btn mini" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\',24,1)">24 h</button>'+
+     '<button class="jan-btn mini" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\',48,1)">48 h</button>'+
+     '<button class="jan-btn mini" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\',72,1)">72 h</button>'+
+     '</div>';
+  return h+'</div>';
+}
+
+function posBuscar(qid, sid, apid, horas, forcar){
+  var study=(data[qid]&&(data[qid].estudos||[]).filter(function(s){return s.id===sid;})[0])||null;
+  var ap=study&&(study.aplicacoes||[]).filter(function(a){return a.id===apid;})[0];
+  if(!ap) return;
+  _posEstado[_posChave(qid,sid,apid)]='buscando';
+  try{ openStudyDetail(qid,sid); }catch(e){}
+  consultarPos(qid, sid, ap, horas||POS_HORAS_PADRAO, !!forcar, function(r){
+    if(r&&r.erro && typeof _stxToast==='function') _stxToast(r.erro);
+    try{ openStudyDetail(qid,sid); }catch(e){}
+  });
+}
+
 /* ===================== BANCO DE ITENS E DOSES ====================================
    Até aqui o produto de um tratamento era uma STRING digitada. "Sankari", "sankari",
    "SANKARI 500 SC" e "Sankari (lote novo)" eram quatro produtos diferentes para o
@@ -16092,6 +16463,11 @@ function _loteEventoMontar(lote,d){
     quantidade:q, unidade:unidade, impacto:impacto,
     origem:String(d.origem||'').trim(), destino:String(d.destino||'').trim(),
     estudoId:String(d.estudoId||'').trim(), tratamentoId:String(d.tratamentoId||'').trim(),
+    /* Um consumo que não sabe de que aplicação saiu é meia trilha: o inventário
+       fecha, mas "onde este material foi parar" volta a depender de memória
+       humana. A aplicação e o componente vão gravados no evento. */
+    aplicacaoId:String(d.aplicacaoId||'').trim(), componenteId:String(d.componenteId||'').trim(),
+    origemRegistro:String(d.origemRegistro||'manual').trim(),
     documento:String(d.documento||'').trim(), responsavel:String(d.responsavel||
       (typeof _currentUserName==='function'?(_currentUserName()||''):'')).trim(),
     obs:String(d.obs||'').trim(), registradoEm:Date.now(), saldoApos:Math.max(0,Math.round(saldo*1000000)/1000000)

@@ -1248,6 +1248,175 @@ def do_clima_janela(mac, de, ate):
     _janela_cache[chave] = (time.time(), out)
     return out
 
+
+# ---------------------------------------------------------------------------
+# CHUVA DEPOIS DA APLICACAO
+#
+# A janela ambiental (secao 9) responde "o que aconteceu ENTRE a aplicacao e a
+# avaliacao". Falta a pergunta que decide se a aplicacao valeu: choveu LOGO
+# DEPOIS? Produto lavado tres horas apos a pulverizacao nao e produto que nao
+# funcionou, e sem esse dado o ensaio inteiro conclui a coisa errada.
+#
+# POR QUE ISSO NAO PODE SER CONTADO POR DIA. O resumo diario da estacao traz
+# `rain_day`, o acumulado do dia inteiro. Numa aplicacao das 15h, o acumulado do
+# dia inclui a chuva das 6h — que caiu ANTES de pulverizar e nao lavou nada.
+# Somar isso produziria um numero limpo e falso, que e exatamente o erro que a
+# cobertura da janela existe para evitar. Por isso aqui se desce a serie: a
+# Ecowitt indexa cada amostra pelo epoch, e o acumulado diario e monotonico
+# dentro do dia (zera a meia-noite). A chuva depois do instante T e, entao,
+# quanto o acumulado subiu de T ate o fim da janela.
+#
+# SEM HORA NA APLICACAO, NAO SE FINGE PRECISAO: conta-se o dia inteiro e o
+# retorno diz isso em `hora_conhecida: false`. Melhor um numero declarado como
+# grosseiro do que um preciso que ninguem pode conferir.
+POS_MAX_HORAS = 168        # sete dias; alem disso a pergunta e a da janela
+POS_TTL = 3600             # a janela recem-fechada ainda muda; TTL curto
+POS_CHUVA_MIN = 0.2        # mm: abaixo disso e orvalho no pluviometro
+_pos_cache = {}
+
+
+def _epoch_de(data, hora=None):
+    """Epoch local de AAAA-MM-DD [HH:MM]. Sem hora, meia-noite do dia."""
+    hh, mm = 0, 0
+    if hora:
+        try:
+            partes = str(hora).strip().split(":")
+            hh, mm = int(partes[0]), int(partes[1]) if len(partes) > 1 else 0
+        except (ValueError, TypeError, IndexError):
+            hh, mm = 0, 0
+    try:
+        tm = time.strptime("%s %02d:%02d" % (data, hh, mm), "%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        raise RuntimeError("CLIMA:data ou hora invalida (esperado AAAA-MM-DD e HH:MM).")
+    return int(time.mktime(tm))
+
+
+def _chuva_serie_dia(mac, dia):
+    """Serie do acumulado de chuva do dia: [(epoch, mm), ...] ordenada.
+
+    Devolve [] quando a estacao nao tem leitura naquele dia — e [] e ausencia,
+    nao zero: quem chama conta o dia como sem cobertura em vez de afirmar que
+    nao choveu."""
+    d = ecowitt_get("/device/history", {
+        "mac": mac, "start_date": dia + " 00:00:00", "end_date": dia + " 23:59:59",
+        "call_back": "rainfall", "cycle_type": "auto", "rainfall_unitid": 12,
+    }) or {}
+    r = d.get("rainfall") or d.get("rainfall_piezo") or {}
+    return _hist_serie(r.get("daily"))
+
+
+def _meia_noite_de(epoch):
+    """Epoch das 00:00 do dia a que este instante pertence."""
+    t = time.localtime(epoch)
+    return int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+
+
+def _chuva_no_intervalo(serie, ini, fim):
+    """Quanto o acumulado do dia subiu dentro de (ini, fim].
+
+    A base e a ultima amostra ATE `ini` — o que ja tinha chovido antes do
+    instante e que, portanto, nao conta.
+
+    Sem amostra anterior, a base depende de ONDE a janela comeca. Se ela pega o
+    dia desde a meia-noite, a base e ZERO: o acumulado zera a meia-noite, entao
+    tudo que a primeira amostra ja marca caiu dentro da janela. Se ela comeca no
+    meio do dia e a estacao so tem registro depois, a base e a primeira amostra
+    do intervalo — assumir zero ai atribuiria a janela a chuva da madrugada
+    inteira, que e justamente o erro que contar por hora existe para evitar.
+
+    Devolve (mm, epoch_da_primeira_chuva) — o epoch e None quando nao choveu."""
+    dentro = [p for p in serie if ini < p[0] <= fim]
+    if not dentro:
+        return (0.0, None)
+    anteriores = [p for p in serie if p[0] <= ini]
+    if anteriores:
+        base = anteriores[-1][1]
+    elif ini <= _meia_noite_de(dentro[0][0]):
+        base = 0.0
+    else:
+        base = dentro[0][1]
+    pico = max(p[1] for p in dentro)
+    mm = pico - base
+    if mm < 0:                      # acumulado zerou no meio (troca de dia/reset)
+        mm = pico
+    primeiro = None
+    for ep, val in dentro:
+        if val - base >= POS_CHUVA_MIN:
+            primeiro = ep
+            break
+    return (round(mm, 1), primeiro)
+
+
+def do_clima_pos(mac, data, hora=None, horas=48):
+    if not mac:
+        raise RuntimeError("CLIMA:informe a estacao (mac).")
+    try:
+        horas = int(horas)
+    except (TypeError, ValueError):
+        raise RuntimeError("CLIMA:janela em horas invalida.")
+    if horas <= 0 or horas > POS_MAX_HORAS:
+        raise RuntimeError("CLIMA:janela de %d horas fora do limite (1 a %d)." % (horas, POS_MAX_HORAS))
+
+    ini = _epoch_de(data, hora)
+    fim = ini + horas * 3600
+    agora = int(time.time())
+
+    chave = "%s|%s|%s|%d" % (mac, data, hora or "-", horas)
+    hit = _pos_cache.get(chave)
+    if hit and (time.time() - hit[0]) < POS_TTL:
+        return hit[1]
+
+    dias = _dias_entre(data, time.strftime("%Y-%m-%d", time.localtime(fim)))
+
+    def um(dia):
+        try:
+            return dia, _chuva_serie_dia(mac, dia)
+        except (RuntimeError, urllib.error.URLError, ValueError, KeyError, TypeError):
+            return dia, None
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        series = dict(ex.map(um, dias))
+
+    chuva = 0.0
+    primeiro = None
+    com_leitura, faltantes = 0, []
+    for dia in dias:
+        s = series.get(dia)
+        if not s:
+            faltantes.append(dia)
+            continue
+        com_leitura += 1
+        mm, prim = _chuva_no_intervalo(s, ini, fim)
+        chuva += mm
+        if prim is not None and (primeiro is None or prim < primeiro):
+            primeiro = prim
+
+    total = len(dias)
+    out = {
+        "mac": mac, "data": data, "hora": (hora or None), "horas": horas,
+        "de_epoch": ini, "ate_epoch": fim,
+        # Sem hora na aplicacao a conta e a do dia inteiro, e isso vai declarado:
+        # e a diferenca entre "choveu 12 mm depois de pulverizar" e "choveu 12 mm
+        # no dia em que se pulverizou".
+        "hora_conhecida": bool(hora),
+        # A janela ainda aberta nao pode ser lida como fechada: 0 mm em 6 das 48
+        # horas nao e "nao choveu depois da aplicacao".
+        "completa": fim <= agora,
+        "dias": total,
+        "dias_com_leitura": com_leitura,
+        "cobertura_pct": (round(100.0 * com_leitura / total) if total else 0),
+        "dias_sem_leitura": faltantes,
+        "chuva_mm": (round(chuva, 1) if com_leitura else None),
+        "choveu": ((primeiro is not None) if com_leitura else None),
+        "primeira_chuva_epoch": primeiro,
+        "primeira_chuva_horas": (round((primeiro - ini) / 3600.0, 1) if primeiro else None),
+        "fonte": "ecowitt-historico",
+        "ts": int(time.time() * 1000),
+    }
+    _pos_cache[chave] = (time.time(), out)
+    return out
+
+
 def do_solo_legenda(camada_nome):
     """Legenda oficial da exata camada que o recorte WMS desenhou."""
     escolhida = next((c for c in SOLO_CAMADAS if c["typeName"] == camada_nome), None)
@@ -1328,6 +1497,9 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_clima_history(q["mac"], q["date"], q.get("hora")))
             if u.path == "/clima/janela":
                 return self._json(do_clima_janela(q.get("mac"), q.get("de"), q.get("ate")))
+            if u.path == "/clima/pos":
+                return self._json(do_clima_pos(q.get("mac"), q.get("data"),
+                                               q.get("hora"), q.get("horas", 48)))
             if u.path == "/dates":
                 bbox = [float(x) for x in q["bbox"].split(",")]
                 return self._json(do_dates(bbox, q["from"], q["to"]))

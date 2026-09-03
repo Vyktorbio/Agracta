@@ -1,112 +1,127 @@
-AGRACTA — 8a publicacao                     01/09/2026
+AGRACTA — 9a publicacao                     03/09/2026
 =====================================================
 
-Leva: 3 arquivos de codigo + 2 de teste.
-  CODIGO:  app.js  sw.js  index.html
-  TESTE:   test_calc_barra.js  test_metodo_aplicacao.js (novo)
+Leva: 3 arquivos de codigo + 1 motor novo + 5 de teste.
+  CODIGO:  app.js  ndvi-proxy.py  styles.css  index.html  sw.js
+  MOTOR:   vendor/consumo-core.js (novo)
+  TESTE:   test_consumo_lote.js         (novo)
+           test_baixa_aplicacao.js      (novo)
+           test_pos_aplicacao_proxy.py  (novo)
+           test_pos_aplicacao.js        (novo)
+           test_dose_receita.js         (novo)
   DOCS:    docs/ROADMAP.md
 
-Fecha as secoes 7.2, 7.3 e 7-bis do roadmap.
+Avanca a secao 9 e fecha o buraco da cadeia de custodia da 7-ter.
 
 
 COMO SUBIR
 ----------
-Ja esta publicado — foi por pull request. Nao ha nada para arrastar.
+Vai por pull request, como as anteriores. Nao ha nada para arrastar.
+
+O PROXY PRECISA SUBIR JUNTO. A chuva depois da aplicacao usa um endpoint novo
+(/clima/pos) no ndvi-proxy.py. Enquanto o proxy nao for reiniciado, o botao
+aparece e responde "nao consegui falar com o servidor de clima" — nao quebra
+nada, so nao responde. O resto da publicacao independe dele.
 
 
 O QUE MUDOU
 -----------
-Tres coisas, e a primeira e a fundacao das outras duas.
+Duas ligacoes entre dados que o app ja tinha e nao cruzava, e uma correcao.
 
-1) O LABORATORIO PAROU DE CARREGAR COISA DE CAMPO
+1) A APLICACAO PASSOU A BAIXAR O LOTE
 
-Voce apontou e a auditoria confirmou. Tres vazamentos:
+O app sabia as duas pontas e nao ligava uma na outra. A memoria de calculo dizia
+quanto de cada componente foi preparado; o tratamento apontava para o lote de
+onde o material saiu; o saldo do lote era a soma de eventos imutaveis. Faltava o
+fio entre as tres coisas. Registrar a aplicacao nao mexia no estoque — para o
+saldo bater era preciso ir a tela do item e digitar a mesma quantidade de novo, e
+ninguem digita duas vezes. A cadeia de custodia ficava furada exatamente no ponto
+em que o material vira ensaio.
 
-  - o editor de estudo pedia "1a aplicacao / N aplicacoes / intervalo em dias"
-    e, mais abaixo, o MESMO formulario ja chamava aquilo de "Dia do tratamento".
-    Duas nocoes concorrentes de quando o tratamento aconteceu, lado a lado. Na
-    bancada a linha sumiu, com uma frase dizendo onde o momento se define.
+Agora sai sozinho ao salvar a aplicacao, e o evento no lote sabe de que aplicacao,
+estudo, tratamento e componente veio, marcado como derivado.
 
-  - "Desenho do ensaio" oferecia FAIXAS, com o aviso inteiro falando de solo,
-    declive e bordadura. Nao existe faixa numa bancada: nem a pergunta se faz. E
-    estudo de bancada que tenha herdado "faixas" de uma edicao antiga e corrigido
-    ao salvar — o campo sumiu da tela, mas o dado errado nao some sozinho.
+Quatro regras, e cada uma existe para o registro nao mentir:
 
-  - o BBCH estava guardado POR ACIDENTE: so nao aparecia porque a lista vinha
-    vazia sem cultura. Uma quadra convertida de campo que tivesse mantido a
-    cultura voltava a mostrar fenologia de planta num ensaio de placa. Agora a
-    pergunta e explicita: e laboratorio? Guarda acidental e guarda que volta a
-    falhar quando o dado reaparece.
+  - NUNCA BLOQUEIA A APLICACAO. A pulverizacao aconteceu. Sem saldo ou sem
+    conversao possivel, a baixa nao sai e a aplicacao sai — com o aviso gravado
+    nela, nao so exibido na hora.
 
-2) METODO DE APLICACAO POR TRATAMENTO
+  - UNIDADE NAO SE CHUTA. mL -> g e recusado dizendo que falta a densidade.
+    Assumir agua daria baixa errada com cara de baixa certa, e o erro so
+    apareceria no inventario do ano seguinte.
 
-Agora um estudo pode aplicar T1 e T2 de drone e T3 de trator. Duas regras
-decidem o que aparece na tela:
+  - O LOTE E CONFERIDO PELO TOTAL DA APLICACAO, nao saque a saque. Os saques que
+    uma aplicacao faz do mesmo lote sao um preparo fisico so; baixar a parte que
+    coube deixaria o saldo num numero que nao e nem o antigo nem o certo.
 
-  CATEGORIA. Bancada e campo nao compartilham metodo. Na quadra de laboratorio o
-  unico metodo e a Torre de Potter — sider e drone nem aparecem. Na quadra de
-  campo a Potter nao existe. E a mesma fronteira do item 1, vista do outro lado.
+  - LOTE VENCIDO E BAIXADO E MARCADO. O material foi usado; calar isso
+    reescreveria o ensaio. E excluir a aplicacao NAO desfaz a baixa: evento de
+    lote e append-only, o estorno e um ajuste com motivo na tela do item — e
+    quem apaga e avisado disso antes de confirmar.
 
-  DIVERGENCIA E QUE E INFORMACAO. Enquanto todos os tratamentos usam o metodo do
-  estudo, ele nao vira tinta em lugar nenhum — repetir cinco vezes o mesmo rotulo
-  nao informa nada. Quando um diverge, TODOS passam a mostrar o seu. E a mesma
-  regra que o campo de volume da calculadora ja seguia.
+2) CHUVA DEPOIS DA APLICACAO
 
-O override e DECLARADO: a chave "Metodos diferentes por tratamento" e a
-declaracao. Sem ela, um metodo guardado num tratamento numa edicao anterior NAO
-volta a valer sozinho — senao o calculo mudaria sem ninguem ter pedido.
+A janela ambiental ja respondia o que aconteceu entre a aplicacao e a avaliacao.
+Faltava a pergunta que decide se a aplicacao valeu: choveu logo depois? Produto
+lavado tres horas apos a pulverizacao nao e produto que nao funcionou, e sem esse
+dado o ensaio conclui a coisa errada com toda a confianca do mundo.
 
-O metodo vai gravado na memoria de calculo de todo jeito, divirja ou nao. Na tela
-ele so aparece quando informa; no registro, um calculo sem dizer com que maquina
-seria irreproduzivel tres anos depois.
+E ela nao pode ser contada por dia. O resumo diario da estacao traz o acumulado
+do dia inteiro: numa aplicacao das 15h isso inclui a chuva das 6h, que caiu antes
+de pulverizar e nao lavou nada. Seria um numero limpo e falso. O proxy desce a
+serie da estacao — indexada por instante, zerando a meia-noite — e soma so o que
+o acumulado subiu do momento da aplicacao em diante.
 
-3) PERFIL DE EQUIPAMENTO, SEM TELA DE CADASTRO
+Duas declaracoes acompanham o numero, sempre: aplicacao sem hora vira conta do
+dia inteiro, e a tela diz isso; janela que ainda nao fechou nao se apresenta como
+fechada, porque 0 mm em 6 das 48 horas nao e "nao choveu depois da aplicacao".
+Chuva nas primeiras seis horas pinta o bloco e levanta a hipotese de lavagem.
+Numa quadra de laboratorio o bloco nem e oferecido: nao chove numa bancada.
 
-Nao ha cadastro nenhum para preencher. O perfil e APRENDIDO: toda calibracao
-valida que voce grava numa aplicacao vira a configuracao habitual daquela
-maquina. Da proxima vez, antes da coleta comecar, aparece:
+3) A DOSE ESCRITA VOLTOU A CONCORDAR COM A RECEITA
 
-    Ultima calibracao deste equipamento em 12/08 — 4 bico(s) · 0,5 m ·
-    5 km/h · 30 s   [usar esta configuracao]
-    So a configuracao. As coletas continuam sendo medidas agora.
+Quando a receita estruturada virou a fonte do calculo (8a e 9a publicacoes), a
+dose escrita no tratamento deixou de ser o dado e virou texto derivado dela. So
+que o campo continuava editavel: dava para digitar "2 L/ha" num tratamento cuja
+receita dizia 1, e ai o app MOSTRAVA UMA DOSE E PREPARAVA OUTRA — a tabela, o
+relatorio e a exportacao liam o texto; o motor de calda e a memoria liam a
+receita. Nenhum dos dois numeros parecia errado no seu proprio lugar.
 
-A LINHA DURA: o perfil devolve bicos, espacamento, largura, velocidade, tempo e
-criterios. NUNCA as leituras. Pre-preencher coleta seria forjar medicao —
-apareceriam na tela numeros que ninguem coletou, com cara de que alguem coletou.
-A configuracao se herda; a medida se faz. Ha teste cobrando que nenhum valor de
-coleta sobreviva no perfil.
-
-A oferta so aparece quando a coleta ainda nao comecou: oferecer configuracao no
-meio de uma calibracao em andamento seria convidar a apaga-la.
-
-
-UMA ESCOLHA QUE VALE CONHECER
------------------------------
-Quando um estudo nao declara metodo e o protocolo nao diz nada, o padrao e o
-COSTAL A CO2, nao o sider. Num app de P&D o costal e o pulverizador de pesquisa:
-e nele que se coleta bico a bico. Comecar pelo sider faria o estudo sem protocolo
-nascer sem a planilha de coleta, calado.
+A tela ja fechou o campo. Isso impede divergencia nova, nao cura a antiga — e o
+dado errado nao some sozinho. Agora salvar o estudo ressincroniza produto e dose
+a partir da receita, e a correcao entra na trilha de auditoria dizendo qual dose
+virou qual. Estudo ja consistente sai byte por byte igual: salvar nao vira edicao
+fantasma.
 
 
-DEPOIS DE PUBLICAR
-------------------
-FECHE E REABRA o Agracta no Mac. Cache foi de v155 para v158 (registro do sw.js
-de v113 para v116).
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir um estudo com lote vinculado, registrar uma aplicacao e ver o saldo do
+   lote cair na tela do item, com o evento apontando para a aplicacao.
+2. Salvar de novo a mesma aplicacao: o saldo NAO pode cair outra vez.
+3. Numa aplicacao passada, tocar "Choveu depois? (48 h)" e conferir que a leitura
+   fica gravada — fechar e reabrir o estudo nao deve rebater na estacao.
+4. Abrir e salvar um estudo com receita: se a dose exibida mudar, a trilha de
+   auditoria tem de mostrar a correcao.
 
-O ndvi-proxy.py NAO mudou — nao ha nada a esperar do Render.
 
-
-ANTES DA PROXIMA VEZ
---------------------
+TESTES
+------
 Duplo clique em  Conferir antes de publicar.command.
 
-35 suites em JavaScript e 2 em Python, todas passando.
-  test_calc_barra.js       127 verificacoes
-  test_metodo_aplicacao.js  47 verificacoes (novo)
+Todas as suites passando, 5 novas nesta leva:
+  test_consumo_lote.js         76 verificacoes (novo, golden test a mao)
+  test_baixa_aplicacao.js      52 verificacoes (novo)
+  test_pos_aplicacao_proxy.py  43 verificacoes (novo, golden test a mao)
+  test_pos_aplicacao.js        40 verificacoes (novo)
+  test_dose_receita.js         16 verificacoes (novo)
 
-Os golden tests da barra seguem intactos:
+Os golden tests desta leva, conferidos a mao:
 
-  4 bicos x 0,5 m, 5 km/h, 500 mL em 30 s, meta 240 L/ha -> 2 m de barra,
-  4,000 L/min, 240 L/ha, desvio 0%, velocidade ideal 5,00 km/h
+  450 mL de produto com o lote cadastrado em litros -> 0,045 L de baixa.
+  Lote com 0,2 L e aplicacao que pede 0,54 L -> NENHUMA baixa, e a recusa
+  diz que faltaram 0,34 L. Nao se baixa a parte que coube.
 
-  300/500/500/700 mL -> media identica, taxa identica, CV 32,66%
+  Estacao marcando 8 mm as 6h e 20 mm as 18h, aplicacao as 15h -> 12 mm
+  depois da aplicacao, primeira chuva 3 h depois. Nao 20 mm.

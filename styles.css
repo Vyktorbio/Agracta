@@ -226,6 +226,13 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .jan-det{font-size:11.5px;color:#9fb1a5;margin-top:3px;line-height:1.45}
 .jan-cob{font-size:11.5px;color:#e2b869;margin-top:6px;line-height:1.45}
 .jan-pe{font-size:10px;color:#7f9085;margin-top:6px;display:flex;align-items:center;flex-wrap:wrap}
+/* Baixa em lote (o que a aplicacao tirou do estoque) e chuva depois da
+   aplicacao. Reusam a caixa da janela ambiental de proposito: sao a mesma coisa
+   para quem le o cartao — contexto que a aplicacao passou a saber sobre si. */
+.lote-bloco{margin-top:6px;padding:8px 9px;border-radius:9px;background:rgba(120,200,150,.07);border:1px solid rgba(120,200,150,.22)}
+.lote-venc{color:#e2b869;font-weight:700}
+.jan-bloco.pos-lavou{background:rgba(215,150,120,.09);border-color:rgba(215,150,120,.3)}
+.pos-alerta{color:#e0a68f;font-weight:600}
 /* Leitura dupla (roadmap §10). A prancheta ativa fica evidente porque e ela que
    decide qual leitura a grade carrega — trocar sem perceber seria escrever a nota
    de A no caderno de B. */
@@ -698,6 +705,8 @@ html,body{background:var(--bg)} body{color:var(--text)}
 .trat-table{background:#fff;border-color:var(--border)} .trat-head{background:#eef3f0;color:var(--text-2)} .trat-row{border-top-color:var(--border)} .trat-id{color:var(--accent-d)}
 .evento-item{background:#f6f8f7;border-color:var(--border)} .evento-data,.evento-subtipo,.evento-obs{color:var(--text)} .evento-del{color:var(--text-3)}
 .jan-resumo{color:var(--text)} .jan-det{color:var(--text-2)} .jan-bloco{background:rgba(60,120,180,.06);border-color:rgba(60,120,180,.2)} .jan-cob{color:#8a6a1f}
+.lote-bloco{background:rgba(40,140,90,.06);border-color:rgba(40,140,90,.2)} .lote-venc{color:#8a6a1f}
+.jan-bloco.pos-lavou{background:rgba(190,90,50,.07);border-color:rgba(190,90,50,.22)} .pos-alerta{color:#9c4a2a}
 .av-quem{background:#fff;color:var(--text-2)} .av-quem.on{background:rgba(60,120,180,.08);color:var(--text)} .av-conc{background:rgba(60,120,180,.06);border-color:rgba(60,120,180,.2)} .av-conc-l{color:var(--text)} .av-conc-a{color:#8a6a1f}
 
 /* Editar estudo */
