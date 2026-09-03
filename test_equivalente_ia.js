@@ -19,7 +19,11 @@
  *     item já cadastrado está — quebrar isso seria o oposto da correção.
  *  3. A ÂNCORA É A CONCENTRAÇÃO, NÃO O NOME. Parêntese aninhado no grupo químico
  *     ("etefom (etileno (precursor de)) (720 g/L)") não pode derrubar a leitura.
- *  4. UNIDADE QUE NÃO É CONCENTRAÇÃO DE MASSA É RECUSADA, não adivinhada.
+ *  4. UNIDADE QUE NÃO É CONCENTRAÇÃO DE MASSA FICA FORA DA CONTA, não é
+ *     adivinhada. Desde a v189 o NOME do ativo biológico é lido — antes ele
+ *     sumia inteiro, e era isso que deixava 186 produtos do catálogo sem
+ *     ingrediente ativo na tela. O que não se faz é aritmética de i.a. sobre
+ *     "vespas/copo".
  *
  * Rodar: node test_equivalente_ia.js
  */
@@ -67,12 +71,25 @@ eq(an[0].ia, 'etefom', 'com o nome certo');
 eq(an[0].valor, 720, 'e a concentração certa');
 eq(D.ativosDe('propinebe (alquilenobis(ditiocarbamato)) (700 g/kg)')[0].valor, 700, 'outro caso idem');
 
-console.log('\n--- Unidade que não é concentração de massa é recusada ---');
-eq(D.ativosDe('Bacillus thuringiensis (Produto Microbiológico) (700 ml/litro)').length, 0,
-   'ml/litro não vira concentração');
-eq(D.ativosDe('Phytoseiulus macropilis (Ácaros Vivos) (10000 ácaros/cilindro)').length, 0,
-   'ácaros por cilindro também não — biológico não tem g/L');
-eq(D.ativosDe('0,8 kg/ha').length, 0, 'dose por área não é concentração');
+console.log('\n--- Unidade que não é concentração de massa fica FORA da conta ---');
+/* Este bloco mudou de contrato na v189, e a mudança é uma correção.
+   Antes, unidade biológica fazia `ativosDe` devolver ZERO ativos — o ativo
+   sumia inteiro, e com ele o NOME. Era o que deixava 186 produtos do catálogo
+   sem ingrediente ativo nenhum na tela.
+   Agora o nome é lido (a folha precisa dele) e a concentração vem marcada como
+   `conversivel:false`. A garantia que este teste sempre defendeu continua de pé,
+   e mais forte: ela agora é verificada onde a conta acontece, não pela ausência
+   do dado. */
+var bt=D.ativosDe('Bacillus thuringiensis (Produto Microbiológico) (700 ml/litro)');
+eq(bt.length, 1, 'o ativo biológico passa a ser lido');
+eq(bt[0].ia, 'Bacillus thuringiensis', 'com o nome, que antes se perdia');
+eq(bt[0].conversivel, false, 'mas "ml/litro" NÃO é concentração de massa');
+ck(!!D.equivalentesIA(1,'L/ha','Bacillus thuringiensis (Produto Microbiológico) (700 ml/litro)').erro,
+   'e o equivalente em i.a. recusa em vez de calcular');
+var ac=D.ativosDe('Phytoseiulus macropilis (Ácaros Vivos) (10000 ácaros/cilindro)');
+eq(ac[0].ia, 'Phytoseiulus macropilis', 'ácaro predador idem: nome lido');
+eq(ac[0].conversivel, false, 'e fora da conta — biológico não tem g/L');
+eq(D.ativosDe('0,8 kg/ha').length, 0, 'dose por área continua não sendo concentração');
 ck(!!D.equivalentesIA(1,'L/ha','sem concentração nenhuma').erro, 'texto sem concentração devolve erro nomeado');
 
 console.log('\n--- A fase tem de casar, como sempre teve ---');
