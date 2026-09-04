@@ -90,16 +90,28 @@ function avCheia(id, dia, offset){
   } });
   return a;
 }
+/* AS DATAS SÃO RELATIVAS A HOJE, e isso não é preciosismo.
+   Com datas fixas este teste apodrecia com o calendário: a agenda só devolve
+   evento a partir de 3 dias atrasado (`diff>=-3` em `allUpcomingEvents`), então
+   a fixture ancorada em agosto passava num dia e falhava no seguinte, sem nada
+   ter mudado no código. Portão que falha sozinho ensina a ignorar o portão — e
+   é ele que protege toda publicação. */
+function diasAtras(n){
+  var d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function novoEstudo(){
   return C.normalizeStudy({
-    /* 2 aplicações com 30 dias: a segunda cai no futuro e NÃO está registrada,
-       então existe evento pendente para a agenda mostrar. */
-    id:'E1', codigo:'PL-2026-0001', dataInicio:'2026-08-01', numRepeticoes:3,
+    /* 2 aplicações com 30 dias: a segunda cai no FUTURO e não está registrada,
+       então existe evento pendente para a agenda mostrar. Começando há 10 dias,
+       a segunda aplicação fica a 20 dias à frente — bem dentro da janela, e
+       longe das duas bordas. */
+    id:'E1', codigo:'PL-2026-0001', dataInicio:diasAtras(10), numRepeticoes:3,
     numAplicacoes:2, intervaloDias:30,
     tratamentos:[{id:'T1',produto:'Testemunha',dose:'0',testemunha:true},
                  {id:'T2',produto:'A',dose:'1'},{id:'T3',produto:'B',dose:'2'}],
-    aplicacoes:[{id:'ap1', data:'2026-08-01'}],
-    avaliacoes:[avCheia('a1','2026-08-08',0), avCheia('a2','2026-08-15',5)]
+    aplicacoes:[{id:'ap1', data:diasAtras(10)}],
+    avaliacoes:[avCheia('a1',diasAtras(3),0), avCheia('a2',diasAtras(1),5)]
   });
 }
 
