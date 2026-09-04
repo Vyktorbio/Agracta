@@ -448,7 +448,11 @@
 
   function calculateComponent(component, operation) {
     const dose = parseNumber(component.dose);
-    const type = component.type;
+    // Componente sem unidade e erro do usuario, e a ultima linha desta funcao ja
+    // sabe recusa-lo por nome. So que `type` chegava cru ate `endsWith` abaixo:
+    // um campo ausente derrubava o calculo do PLANO INTEIRO com TypeError, em vez
+    // de recusar aquele componente. Quem esta com o tanque aberto perdia a tela.
+    const type = component.type == null ? "" : String(component.type);
     const batchMl = operation.finalBatchMl;
     const batchL = batchMl / 1000;
     const appliedMl = operation.appliedTotalMl;
