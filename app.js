@@ -6128,6 +6128,10 @@ function newStudy(){
     volumeMorto:0,        /* mL — calda que fica no pulverizador/mangueira */
     numFrascos:1,         /* frascos por preparo de calda */
     capacidadeFrasco:0,   /* L — 0 = não confere capacidade */
+    /* JANELA DO PROTOCOLO: em que condições a aplicação DEVIA acontecer.
+       Objeto vazio = nada declarado, e aí o app se cala como sempre fez.
+       Ver vendor/janela-core.js. */
+    janela:{},
     /* preparo no laboratório (só usado quando a quadra é do tipo 'lab') */
     labVolumeMl:50,       /* mL — volume do pote; 50 = falcon */
     labFonteTipo:'gL',    /* gL | gkg | mae | puro */
@@ -12042,6 +12046,171 @@ function _seCapDica(){
     esc(String(ml).replace('.',','))+' mL'+
     (L>=10?' — se quis dizer mililitros, escreva <b>'+esc(String(ml).replace('.',','))+' mL</b>':'');
 }
+/* ===== A JANELA DO PROTOCOLO, NA TELA =====================================
+   Declarar é opcional e o bloco nasce FECHADO. Um protocolo que não declara
+   janela continua funcionando como sempre — e um campo a mais sempre aberto,
+   em branco na maioria dos estudos, seria só ruído no cadastro.
+
+   Campo vazio NÃO é zero. "vento até 0 km/h" reprovaria toda aplicação já
+   feita, então o vazio significa "não confiro isto". */
+var _janelaAberta=false;
+function janelaToggle(){ _janelaAberta=!_janelaAberta; try{ renderStudyEditModal(); }catch(e){} }
+/* ===== A CONFERÊNCIA NO MOMENTO DA APLICAÇÃO ==============================
+   Aqui a janela declarada encontra o que está acontecendo. Três fontes:
+   o estádio que a pessoa acabou de escolher na tela, o clima do carimbo, e o
+   intervalo desde a aplicação anterior — que o app calcula sozinho, porque
+   ninguém deveria ter que contar dias na mão.
+
+   O aviso genérico de bula (temp<30, UR>50, vento<10) continua existindo para
+   quem não declarou nada. Declarado, é o PROTOCOLO que manda: é ele que o
+   ensaio tem de cumprir, e não a recomendação média. */
+function _janelaDoEstudo(study){
+  var J=(typeof window!=='undefined')?window.JanelaCore:null;
+  var j=(study&&study.janela)||{};
+  return (J&&J.temJanela(j))?j:null;
+}
+/* Dias entre esta aplicação e a anterior REGISTRADA. Null quando é a primeira
+   ou quando falta data — e null vira lacuna, não desvio. */
+function _janelaIntervalo(study, ap, dataTexto){
+  var d=null; try{ d=pD(isoToBR(dataTexto))||pD(dataTexto); }catch(e){}
+  if(!d||isNaN(d)) return null;
+  var antes=((study||{}).aplicacoes||[]).filter(function(a){
+    if(!a||a.id===((ap||{}).id)) return false;
+    var ad=null; try{ ad=pD(isoToBR(a.data))||pD(a.data); }catch(e){}
+    return ad && !isNaN(ad) && ad<d;
+  }).map(function(a){ try{ return pD(isoToBR(a.data))||pD(a.data); }catch(e){ return null; } })
+    .filter(Boolean).sort(function(x,y){ return y-x; });
+  if(!antes.length) return null;
+  return daysBetween(antes[0], d);
+}
+/* Pinta o confronto. Devolve '' quando não há janela declarada — silêncio é o
+   comportamento de quem não pediu conferência. */
+function janelaConfereHtml(study, ap, clima){
+  var J=(typeof window!=='undefined')?window.JanelaCore:null;
+  var jan=_janelaDoEstudo(study);
+  if(!J||!jan) return '';
+  function val(id){ var e=document.getElementById(id); return e?e.value:''; }
+  var obs={
+    bbch: val('aeBBCH') || (ap&&ap.bbch) || '',
+    intervaloDias: _janelaIntervalo(study, ap, val('aeData') || (ap&&ap.data) || ''),
+    temp:(clima&&clima.temp), ur:(clima&&clima.umidade), vento:(clima&&clima.vento)
+  };
+  var r=J.verificar(jan, obs);
+  var cor = r.desvios.length ? ['#2a210c','#6b531b','#ffd98a']
+          : (r.lacunas.length ? ['#101c26','#2b4c66','#a9d3f0']
+                              : ['#0f1d14','#245a36','#9fe0b6']);
+  var h='<div id="aeJanela" style="margin-bottom:12px;padding:10px;border-radius:10px;font-size:12px;line-height:1.5;'+
+        'background:'+cor[0]+';border:1px solid '+cor[1]+';color:'+cor[2]+'">'+
+        '<b>'+(r.desvios.length?'⚠ Fora da janela do protocolo':(r.lacunas.length?'ℹ Janela do protocolo':'✓ Dentro da janela do protocolo'))+'</b>'+
+        '<div style="font-size:11px;opacity:.85;margin-top:2px">'+esc(J.resumo(jan))+'</div>';
+  r.achados.forEach(function(a){ h+='<div style="margin-top:5px">• '+esc(a.texto)+'</div>'; });
+  if(r.desvios.length){
+    /* O desvio não impede salvar — pede motivo. Ensaio existe para sair do
+       padrão; o que não pode é sair sem registro de por quê. */
+    var jus=(ap&&ap.janela&&ap.janela.justificativa)||'';
+    h+='<div style="margin-top:8px"><label style="display:block;font-size:10px;letter-spacing:.6px;text-transform:uppercase;opacity:.8;margin-bottom:3px">Por que fora da janela</label>'+
+       '<textarea id="aeJanelaJus" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border-radius:8px;'+
+       'border:1px solid '+cor[1]+';background:rgba(0,0,0,.25);color:inherit;font:inherit" '+
+       'placeholder="ex.: chuva prevista para os 3 dias seguintes; aplicado com vento acima do previsto">'+esc(jus)+'</textarea></div>';
+  }
+  return h+'</div>';
+}
+/* O último clima obtido para esta tela. Guardado porque a conferência é
+   refeita quando a pessoa muda o estádio, e nessa hora não há por que pedir o
+   clima de novo — a rede pode nem existir. */
+var _janelaCtx=null;
+function _janelaAoMudar(){
+  if(!_janelaCtx) return;
+  try{ _janelaRepinta(_janelaCtx.study, _janelaCtx.ap, _janelaCtx.clima); }catch(e){}
+}
+/* Repinta só o bloco da janela — sem tocar no resto do formulário, que tem
+   campos sendo digitados. */
+function _janelaRepinta(study, ap, clima){
+  _janelaCtx={study:study, ap:ap, clima:clima};
+  var box=document.getElementById('aeJanela');
+  var novo=janelaConfereHtml(study, ap, clima);
+  if(!box){
+    if(!novo) return;
+    var alvo=document.getElementById('aeWeatherAlert');
+    if(alvo && alvo.insertAdjacentHTML) alvo.insertAdjacentHTML('afterend', novo);
+    return;
+  }
+  if(!novo){ box.remove(); return; }
+  box.outerHTML=novo;
+}
+/* O que fica GRAVADO na aplicação. A conferência vira registro: quem audita
+   depois precisa ver a janela que valia, o que ocorreu e o motivo — não só o
+   resultado. */
+function janelaRegistro(study, ap, clima){
+  var J=(typeof window!=='undefined')?window.JanelaCore:null;
+  var jan=_janelaDoEstudo(study);
+  if(!J||!jan) return null;
+  function val(id){ var e=document.getElementById(id); return e?e.value:''; }
+  var obs={
+    bbch: val('aeBBCH') || (ap&&ap.bbch) || '',
+    intervaloDias: _janelaIntervalo(study, ap, val('aeData') || (ap&&ap.data) || ''),
+    temp:(clima&&clima.temp), ur:(clima&&clima.umidade), vento:(clima&&clima.vento)
+  };
+  var r=J.verificar(jan, obs);
+  var jusEl=document.getElementById('aeJanelaJus');
+  return {
+    janela:jan, observado:obs, dentro:r.dentro,
+    desvios:r.desvios.map(function(a){ return {campo:a.campo, texto:a.texto}; }),
+    lacunas:r.lacunas.map(function(a){ return {campo:a.campo, texto:a.texto}; }),
+    justificativa:(jusEl?String(jusEl.value||'').trim():((ap&&ap.janela&&ap.janela.justificativa)||'')),
+    conferidoEm:Date.now()
+  };
+}
+
+function janelaCampoHtml(s){
+  var J=(typeof window!=='undefined')?window.JanelaCore:null;
+  var j=(s&&s.janela)||{};
+  var res=(J&&J.resumo)?J.resumo(j):'';
+  var h='<div class="se-field" style="margin-top:2px">'+
+    '<div onclick="janelaToggle()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;'+
+    'padding:8px 10px;border:1px solid var(--border,#26322b);border-radius:9px;background:var(--surface-2,#0c1210)">'+
+    '<span style="font-size:11.5px">'+(res
+      ? ('<b style="color:#7fbf98">Janela do protocolo:</b> '+esc(res))
+      : '<span style="color:#8a948e">Janela do protocolo — em que condições a aplicação deve acontecer <b>(opcional)</b></span>')+
+    '</span><span style="font-size:11px;color:#8a948e;white-space:nowrap;margin-left:8px">'+
+    (_janelaAberta?'▾ fechar':'✎ declarar')+'</span></div>';
+  if(!_janelaAberta) return h+'</div>';
+  /* A chave vem EXPLÍCITA. Derivá-la do id por manipulação de string
+     funcionava e era o tipo de coisa que quebra em silêncio na primeira
+     renomeação — o campo apareceria vazio sem ninguém entender por quê. */
+  function um(rot,chave,un,ph){
+    return '<div class="se-field"><label>'+esc(rot)+(un?(' ('+un+')'):'')+'</label>'+
+      '<input type="number" step="any" id="seJan_'+chave+'" value="'+
+      esc(j[chave]!=null?j[chave]:'')+'" placeholder="'+esc(ph||'sem limite')+'"></div>';
+  }
+  function par(rot,cMin,cMax,un,ph1,ph2){
+    return '<div class="se-row" style="margin-top:6px">'+
+      um(rot+' — mínimo',cMin,un,ph1)+um(rot+' — máximo',cMax,un,ph2)+'</div>';
+  }
+  h+='<div style="border:1px solid var(--border,#26322b);border-top:0;border-radius:0 0 9px 9px;padding:9px 10px;margin-top:-1px">'+
+     '<div style="font-size:11px;color:#8a948e;line-height:1.5;margin-bottom:4px">'+
+     'Deixe em branco o que não quiser conferir. Na hora da aplicação o app compara o que aconteceu com o que está aqui — '+
+     '<b>aponta, não impede</b>: sair da janela é decisão sua, e fica registrada com o motivo.</div>'+
+     par('Estádio BBCH','bbchMin','bbchMax','','ex.: 61','ex.: 69')+
+     par('Intervalo desde a anterior','intervaloMin','intervaloMax','dias','ex.: 14','ex.: 21')+
+     par('Temperatura','tempMin','tempMax','°C','','ex.: 30')+
+     par('Umidade relativa','urMin','urMax','%','ex.: 50','')+
+     '<div class="se-row" style="margin-top:6px">'+um('Vento — máximo','ventoMax','km/h','ex.: 10')+
+     '<div class="se-field"></div></div>'+
+     '</div>';
+  return h+'</div>';
+}
+/* Lê a janela da tela. Só existe quando algum campo foi preenchido. */
+function janelaDaTela(){
+  var J=(typeof window!=='undefined')?window.JanelaCore:null;
+  if(!J) return {};
+  function v(k){ var e=document.getElementById('seJan_'+k); return e?e.value:''; }
+  var bruto={};
+  ['bbchMin','bbchMax','intervaloMin','intervaloMax','tempMin','tempMax','urMin','urMax','ventoMax']
+    .forEach(function(k){ bruto[k]=v(k); });
+  return J.normalizar(bruto);
+}
+
 function renderStudyEditModal(){
   var s=workingStudy;
   var q=data[curV]||{};
@@ -12130,6 +12299,7 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Nº aplicações</label><input type="number" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
     h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
     h+='</div>';
+    h+=janelaCampoHtml(s);
   }
   h+='</div><div class="se-step'+(studyEditStep===4?' is-active':'')+'" data-step="4">';
 
@@ -12519,6 +12689,12 @@ function syncStudyInputs(){
   x=el("seVolMorto"); if(x) workingStudy.volumeMorto=Math.max(0,_numBR(x.value,0));
   x=el("seNumFrascos"); if(x) workingStudy.numFrascos=Math.max(1,Math.round(_numBR(x.value,1))||1);
   x=el("seCapFrasco"); if(x) workingStudy.capacidadeFrasco=Math.max(0,_capFrascoL(x.value));
+  /* A janela só é lida quando o bloco está ABERTO — fechado, os campos não
+     existem no DOM e `janelaDaTela()` devolveria vazio, apagando o que já
+     estava declarado só porque ninguém abriu a seção. */
+  if(typeof _janelaAberta!=='undefined' && _janelaAberta && typeof janelaDaTela==='function'){
+    try{ workingStudy.janela=janelaDaTela(); }catch(e){}
+  }
   x=el("seLabVol"); if(x) workingStudy.labVolumeMl=Math.max(0,_numBR(x.value,50))||50;
   x=el("seLabFonte"); if(x) workingStudy.labFonteTipo=x.value;
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
@@ -12998,7 +13174,7 @@ function openStudyEditAplicacao(aid){
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Preencha a hora quando registrar uma aplicação de outro dia: o clima carimbado passa a ser o da estação NAQUELE horário, não a média do dia.</div>';
   if(bbchList){
     h+=bbchAvisoHtml(studyCultura(study,q));
-    h+='<div class="se-field"><label>Estádio BBCH no momento</label><select id="aeBBCH"><option value="">—</option>';
+    h+='<div class="se-field"><label>Estádio BBCH no momento</label><select id="aeBBCH" onchange="_janelaAoMudar()"><option value="">—</option>';
     bbchList.forEach(function(b){
       h+='<option value="'+esc(b.code)+'"'+(b.code===ap.bbch?' selected':'')+'>'+esc(b.label)+(b.equiv?' ('+esc(b.equiv)+')':'')+'</option>';
     });
@@ -13021,7 +13197,12 @@ function openStudyEditAplicacao(aid){
   _aplRenderClimaBox();
   window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
   
+  /* A janela do protocolo entra ANTES do clima chegar: BBCH e intervalo já dão
+     para conferir sem rede, e quem está sem sinal no campo precisa ver isso. */
+  try{ _janelaRepinta(study, ap, null); }catch(e){}
   _carimboClima(curV, function(cl){
+    /* Clima chegou: refaz a conferência agora com temperatura, UR e vento. */
+    try{ _janelaRepinta(study, ap, cl); }catch(e){}
     var el = document.getElementById('aeWeatherAlert');
     if(!el) return;
     if(!cl){
@@ -13287,7 +13468,15 @@ function saveAplicacao(){
   var bbchEl=document.getElementById("aeBBCH");
   ap.bbch=bbchEl?bbchEl.value:"";
   ap.obs=document.getElementById("aeObs").value.trim();
-  
+  /* A CONFERÊNCIA VIRA REGISTRO. Não basta ter avisado na tela: quem audita
+     depois precisa ver qual janela valia, o que de fato ocorreu, e o motivo do
+     desvio. Sem janela declarada, `janelaRegistro` devolve nulo e o campo nem
+     existe — estudo antigo continua exatamente como estava. */
+  try{
+    var _jr=janelaRegistro(study, ap, (_janelaCtx&&_janelaCtx.clima)||null);
+    if(_jr) ap.janela=_jr; else delete ap.janela;
+  }catch(e){}
+
   var action = isNew ? 'Registro de Aplicação' : 'Edição de Aplicação';
   var details = '';
   if(isNew) {
