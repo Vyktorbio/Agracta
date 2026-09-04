@@ -401,16 +401,30 @@ function studyEvents(study){
 // Next upcoming event (including today)
 function nextEvent(study){
   var t=today0();
-  var evs=studyEvents(study);
+  /* V2 marca `realizada`; a versão antiga não. Sem isso, "o próximo a fazer"
+     podia ser um evento JÁ REGISTRADO — e a agenda, que usa V2, discordaria do
+     cartão sobre o mesmo estudo. */
+  var evs=(typeof studyEventsV2==='function')?studyEventsV2(study):studyEvents(study);
   for(var i=0;i<evs.length;i++){
+    if(evs[i].realizada) continue;
     if(evs[i].date >= t)return evs[i];
   }
-  // if nothing upcoming, check overdue (past but within 3 days window)
-  var last=evs[evs.length-1];
-  if(last){
-    var diff=daysBetween(last.date,t);
-    if(diff<=3)return Object.assign({overdue:true,daysAgo:diff},last);
+  /* NADA À FRENTE: o que sobrou está atrasado, e atrasado continua sendo o
+     próximo a fazer. Havia aqui a mesma janela de três dias da agenda, com uma
+     consequência pior: passado o prazo, `nextEvent` devolvia null e o estudo
+     ficava SEM alerta no mapa e SEM etiqueta no cartão. O ensaio mais atrasado
+     era o que parecia mais calmo.
+
+     E devolve o PRIMEIRO atrasado, não o último. Com três avaliações pendentes,
+     o que trava é a mais antiga; mostrar a mais recente esconderia as outras
+     duas e faria o atraso parecer menor do que é. */
+  for(var j=0;j<evs.length;j++){
+    if(!evs[j].realizada)
+      return Object.assign({overdue:true,daysAgo:daysBetween(evs[j].date,t)},evs[j]);
   }
+  /* Tudo realizado: NÃO há próximo evento. Devolver o último como "atrasado"
+     poria etiqueta vermelha num estudo que cumpriu o plano inteiro — o oposto
+     do que este conserto existe para fazer. */
   return null;
 }
 
@@ -528,7 +542,18 @@ function allUpcomingEvents(windowDays, incluirDispensados){
         var _disp=_agEstaDispensado(st,ev);
         if(_disp && !incluirDispensados) return;
         var diff=daysBetween(t,ev.date);
-        if(diff>=-3 && ev.date<=limit){
+        /* NÃO HÁ LIMITE PARA TRÁS. Havia um: três dias. Uma aplicação planejada
+           que não aconteceu sumia da agenda no quarto dia e só reaparecia no
+           checklist de fechamento do estudo — meses depois, quando não há mais
+           o que fazer a respeito.
+           Aplicação que devia ter acontecido e não aconteceu não deixa de ser
+           verdade porque envelheceu; envelhecer é justamente o que a torna mais
+           grave. O painel HOJE já contava todas (o `collectTodayEvents` nunca
+           teve limite inferior) — era só a agenda de 30 dias que truncava, e as
+           duas discordavam sobre o mesmo fato.
+           Quem não quiser ver dispensa o lembrete ou finaliza o estudo; as duas
+           saídas já existem, e ambas são decisão de alguém, não esquecimento. */
+        if(ev.date<=limit){
           all.push({qid:qid,study:st,event:ev,diff:diff,dispensado:_disp});
         }
       });
