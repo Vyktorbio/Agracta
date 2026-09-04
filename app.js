@@ -9762,7 +9762,13 @@ function _bioestatAoa(qid, study){
   var qn=(typeof quadraNome==='function')?quadraNome(qid):qid;
   var reps=Math.max(1,parseInt(study.numRepeticoes)||1);
   var trats=study.tratamentos||[];
+  /* A mesma dose que o cartão manda ao motor automático vai também neste
+     caminho, que é o da tela de estatística completa. Fossem tabelas
+     diferentes, a análise manual e a automática partiriam de dados diferentes —
+     e a divergência apareceria só no relatório. */
+  var serie=null; try{ serie=_doseSerieDoEstudo(study); }catch(e){}
   var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'];
+  if(serie) header.push('Dose');
   var rows=[header];
   (study.avaliacoes||[]).forEach(function(a){
     (a.variaveis||[]).forEach(function(v){
@@ -9770,7 +9776,9 @@ function _bioestatAoa(qid, study){
         for(var r=1;r<=reps;r++){
           var val=_avNota(a,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v);
           if(val==null||String(val).trim()==='') continue;
-          rows.push([locNome, qn, studyCultura(study,q), (study.codigo||study.nome||study.id), (isoToBR(a.data)||a.data||''), (a.tipo||''), (a.bbch||''), t.id, r, (t.produto||''), v, val]);
+          var linha=[locNome, qn, studyCultura(study,q), (study.codigo||study.nome||study.id), (isoToBR(a.data)||a.data||''), (a.tipo||''), (a.bbch||''), t.id, r, (t.produto||''), v, val];
+          if(serie) linha.push(serie.doses[t.id]!=null?serie.doses[t.id]:'');
+          rows.push(linha);
         }
       });
     });
@@ -10565,14 +10573,92 @@ function _openBioestatFrame(modo){
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
 var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false, _bioAutoWd=null;
+/* ===== QUANDO O ENSAIO É UMA SÉRIE DE DOSES ================================
+   O motor estatístico do Agracta tem análise de dose-resposta completa —
+   Abbott, GLM, intervalo de Fieller, comparação de curvas — e ela nunca rodou,
+   porque a tabela mandada para ele não levava a DOSE.
+
+   Ligar a dose sem critério seria pior que deixar desligado. Num rastreio de
+   trinta produtos diferentes, cada um na sua dose, existe um número na coluna
+   "dose" e ele NÃO forma curva nenhuma: ajustar uma CL50 ali produz um número
+   plausível e sem sentido, com intervalo de confiança e tudo. Número errado com
+   aparência de resultado e o pior tipo de erro, porque ninguem revisa.
+
+   Serie de doses e uma coisa especifica: O MESMO item, em doses diferentes.
+   Entao a dose so viaja quando isso se verifica:
+
+     - os tratamentos com dose positiva apontam para o MESMO item (ou, sem
+       vinculo de item, para o mesmo texto de produto);
+     - ha ao menos TRES niveis de dose distintos — com dois pontos passa uma
+       reta por qualquer lugar, e a curva nao tem o que dizer;
+     - a unidade de dose e a mesma em todos, senao 1 L/ha e 1 g/ha entrariam
+       como o mesmo "1".
+
+   A testemunha (dose zero ou marcada como tal) entra junto: ela e o controle
+   que o Abbott usa, e o motor a reconhece pela dose 0. ======================= */
+function _doseSerieDoEstudo(study){
+  var trats=((study||{}).tratamentos||[]).filter(function(t){ return t&&t.id; });
+  if(trats.length<3) return null;
+  var itens={}, unidades={}, niveis={}, doses={}, comDose=0;
+  var testemunha=''; try{ testemunha=studyTestemunha(study)||''; }catch(e){}
+  trats.forEach(function(t){
+    var ehTest=!!t.testemunha || t.id===testemunha;
+    var v=(typeof _calcNum==='function')?_calcNum(t.dose):parseFloat(String(t.dose||'').replace(',','.'));
+    if(!(v>0)){ if(ehTest) doses[t.id]=0; return; }   /* testemunha vale como dose 0 */
+    doses[t.id]=v; comDose++;
+    /* identidade do item: o vínculo estruturado primeiro; sem ele, o texto. */
+    var comps=(typeof tratComponentes==='function')?tratComponentes(t):[];
+    var id=(comps.length===1&&comps[0].itemId)?('i:'+comps[0].itemId)
+          :('p:'+String(t.produto||'').trim().toLowerCase());
+    itens[id]=1;
+    var u=''; try{ u=(typeof doseUnidadeDe==='function')?doseUnidadeDe(study,t.dose):''; }catch(e){}
+    if(!u && typeof _calcDoseUnit==='function'){ try{ u=_calcDoseUnit(t.dose); }catch(e){} }
+    unidades[String(u||'').toLowerCase()]=1;
+    niveis[v]=1;
+  });
+  if(comDose<3) return null;                       /* menos de 3 doses: sem curva */
+  if(Object.keys(itens).length!==1) return null;   /* produtos diferentes: rastreio, nao curva */
+  if(Object.keys(unidades).length!==1) return null;/* unidades misturadas */
+  if(Object.keys(niveis).length<3) return null;    /* doses repetidas nao sao niveis */
+  var un=Object.keys(unidades)[0];
+  return {doses:doses, unidade:un, niveis:Object.keys(niveis).length, item:Object.keys(itens)[0]};
+}
+
 function _bioestatJobAoa(qid,study,av,v){
   var q=data[qid]||{}, loc=(typeof LOCAIS!=='undefined'&&typeof QLOCAL!=='undefined'&&LOCAIS[QLOCAL[qid]])||{};
-  var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'], rows=[header];
+  /* A DOSE só entra quando o ensaio É uma série de doses — ver
+     `_doseSerieDoEstudo`. Com ela na tabela, o motor estatístico roteia para
+     dose-resposta e devolve CL50/CE50 com intervalo de Fieller. Sem série, a
+     coluna não existe e nada muda: rastreio de produtos diferentes continua
+     saindo como comparação de médias, que é o que ele é. */
+  var serie=null; try{ serie=_doseSerieDoEstudo(study); }catch(e){}
+  /* n de afetados e N de avaliados só existem em variável do tipo RAZÃO, e são
+     exatamente o que a dose-resposta binomial pede (x de n). Sem eles o motor
+     ainda ajusta a curva sobre a proporção, mas perde o peso amostral — então
+     eles vão quando existem, e a coluna some quando não. */
+  var tipo=(typeof _avTipo==='function')?_avTipo(av,v):'pct';
+  var comNN=(serie&&tipo==='razao');
+  var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'];
+  if(serie) header.push('Dose');
+  if(comNN) header=header.concat(['Afetados','N_total']);
+  var rows=[header];
   var reps=Math.max(1,parseInt(study.numRepeticoes)||1);
   (study.tratamentos||[]).forEach(function(t){ for(var r=1;r<=reps;r++){
-    var raw=_avNota(av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v);
+    var key=_avRowKey(t.id,r);
+    var raw=_avNota(av,{key:key,tratId:t.id,rep:r},v);
     if(raw==null||String(raw).trim()===''||isNaN(parseFloat(String(raw).replace(',','.'))))continue;
-    rows.push([loc.nome||'',quadraNome(qid),studyCultura(study,q),study.codigo||study.id,isoToBR(av.data)||av.data||'',av.tipo||v,av.bbch||'',t.id,r,t.produto||'',v,raw]);
+    var linha=[loc.nome||'',quadraNome(qid),studyCultura(study,q),study.codigo||study.id,isoToBR(av.data)||av.data||'',av.tipo||v,av.bbch||'',t.id,r,t.produto||'',v,raw];
+    if(serie) linha.push(serie.doses[t.id]!=null?serie.doses[t.id]:'');
+    if(comNN){
+      var cel=(typeof _avCel==='function')?_avCel(av,key,v,false):null;
+      var nn=(cel&&cel.n!=null&&cel.n!=='')?cel.n:'';
+      var NN=(cel&&cel.N!=null&&cel.N!=='')?cel.N:'';
+      /* Parcela sem o par completo entra sem os dois: meia informação faria o
+         motor pesar essa linha como se n fosse a contagem inteira. */
+      if(nn===''||NN===''){ nn=''; NN=''; }
+      linha.push(nn, NN);
+    }
+    rows.push(linha);
   }});
   return rows;
 }
