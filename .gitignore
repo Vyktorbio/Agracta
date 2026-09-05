@@ -35,7 +35,11 @@ cloud-*.json
 
 # Ferramentas locais
 .claude/
+# node_modules existe so na maquina de quem roda o portao, para o teste que sobe
+# o app num DOM de verdade (npm install). NUNCA vai para o repositorio: o site e
+# servido daqui.
 node_modules/
+package-lock.json
 
 # Python / sistema
 __pycache__/

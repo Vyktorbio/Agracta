@@ -82,15 +82,46 @@ function executeFile(filePath) {
   }
 }
 
-// 1. Load vendor libraries in order
-executeFile(path.join(vendorDir, 'leaflet.js'));
-// Mock LF
-window.LF = window.L;
+/* 1. Carrega os arquivos NA ORDEM QUE O index.html DECLARA.
+   ----------------------------------------------------------------------------
+   Antes esta lista era escrita à mão e tinha cinco arquivos de vendor. O app.js
+   NÃO estava nela. O teste dizia "sobe o app inteiro e vê se ele arranca" e
+   nunca carregava o app — a primeira verificação de auditoria estourava em
+   `ensureConfig is not defined`, que é uma função do app.js.
 
-executeFile(path.join(vendorDir, 'leaflet-rotate.js'));
-executeFile(path.join(vendorDir, 'Leaflet.ImageOverlay.Rotated.js'));
-executeFile(path.join(vendorDir, 'quadras-default.js'));
-executeFile(path.join(vendorDir, 'supabase.js'));
+   Ninguém viu porque o teste estava PULADO por falta do jsdom, e o portão
+   contava pulado como aprovado. Três camadas de silêncio em cima do mesmo
+   ponto cego.
+
+   Lendo do index.html, a lista não pode mais envelhecer: arquivo novo entra no
+   teste no mesmo commit em que entra no app. */
+function scriptsDoIndex(){
+  var re = /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi, m, out = [];
+  while ((m = re.exec(html)) !== null){
+    var p0 = m[1].split('?')[0];
+    if (/^https?:/i.test(p0)) continue;          /* CDN: não é nosso código */
+    out.push(p0);
+  }
+  return out;
+}
+var carregados = 0, ausentes = [];
+scriptsDoIndex().forEach(function(rel){
+  var abs = path.join(raiz, rel);
+  if (!fs.existsSync(abs)){ ausentes.push(rel); return; }
+  executeFile(abs);
+  carregados++;
+  /* O leaflet-rotate espera LF; o index.html real o define entre os scripts. */
+  if (/leaflet\.js$/.test(rel)) window.LF = window.L;
+});
+console.log('Carregados ' + carregados + ' arquivos do index.html.');
+if (ausentes.length){
+  console.error('ARQUIVO DECLARADO NO index.html E AUSENTE NO DISCO: ' + ausentes.join(', '));
+  process.exit(1);
+}
+if (typeof window.ensureConfig !== 'function'){
+  console.error('O app.js nao definiu ensureConfig — o app nao arrancou.');
+  process.exit(1);
+}
 
 // 2. Extract and run inline script blocks from index.html
 var scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
@@ -154,21 +185,48 @@ try {
       var isAllowed3 = checkAccess('tech@agracta.com');
       if (!isAllowed3) throw new Error("Authorized technician should have access");
 
-      // 2. Audit log friendly name resolution
+      // 2. Trilha de auditoria: NOME é nome de pessoa, nunca rótulo nem e-mail.
+      //
+      //    Este bloco esperava 'Administrador' e 'Local/Offline' — as duas
+      //    strings que a identidade BPL passou a REJEITAR de propósito, porque
+      //    rubrica é o nome de quem assinou, e ninguém se chama Administrador.
+      //    O app mudou; o teste não, porque estava pulado por falta do jsdom e o
+      //    portão contava pulado como aprovado. Agora ele confere a regra atual.
       _authUser = { email: 'tech@agracta.com' };
       var study = { audit: [] };
       logStudyAuditInObject(study, 'Test Action', 'Test Details');
       if (study.audit[0].user !== 'John Doe') throw new Error("Audit log should resolve tech friendly name");
+      if (study.audit[0].por !== 'tech@agracta.com') throw new Error("Audit log should keep the email in 'por'");
+      if (study.audit[0].autenticado !== true) throw new Error("Audit log should mark an authenticated session");
 
+      //    Admin sem nome cadastrado: NÃO vira 'Administrador'. Fica
+      //    'Não identificado', que é a verdade — e o e-mail continua ao lado,
+      //    em 'por', para a rastreabilidade não depender do nome.
       _authUser = { email: 'machadovictorchaves@gmail.com' };
       var studyAdmin = { audit: [] };
       logStudyAuditInObject(studyAdmin, 'Admin Action', 'Admin Details');
-      if (studyAdmin.audit[0].user !== 'Administrador') throw new Error("Audit log should resolve admin name");
+      if (studyAdmin.audit[0].user !== 'Não identificado') throw new Error("Admin sem nome cadastrado deve ficar 'Não identificado', não 'Administrador'");
+      if (studyAdmin.audit[0].por !== 'machadovictorchaves@gmail.com') throw new Error("O e-mail do admin deve continuar em 'por'");
+      if (studyAdmin.audit[0].autenticado !== true) throw new Error("Sessão do admin é autenticada");
 
+      //    Sem sessão (o caso normal no talhão): também 'Não identificado', e a
+      //    trilha marca que NÃO houve autenticação. É o que separa uma rubrica
+      //    de um carimbo automático.
       _authUser = null;
       var studyOffline = { audit: [] };
       logStudyAuditInObject(studyOffline, 'Offline Action', 'Offline Details');
-      if (studyOffline.audit[0].user !== 'Local/Offline') throw new Error("Audit log should resolve offline name");
+      if (studyOffline.audit[0].user !== 'Não identificado') throw new Error("Sem sessão deve ficar 'Não identificado', não 'Local/Offline'");
+      if (studyOffline.audit[0].por !== null) throw new Error("Sem sessão não há e-mail para gravar");
+      if (studyOffline.audit[0].autenticado !== false) throw new Error("Sem sessão a trilha tem de marcar que não houve autenticação");
+
+      //    E o nome declarado NESTE APARELHO vale quando não há sessão: a
+      //    alternativa era gravar um rótulo na rubrica de quem trabalhou.
+      data.__config.meuNome = 'Maria do Campo';
+      var studyLocal = { audit: [] };
+      logStudyAuditInObject(studyLocal, 'Local Action', 'Local Details');
+      if (studyLocal.audit[0].user !== 'Maria do Campo') throw new Error("Sem sessão, o nome declarado no aparelho vale");
+      if (studyLocal.audit[0].autenticado !== false) throw new Error("Ter nome não transforma sessão nenhuma em autenticada");
+      data.__config.meuNome = '';
 
       // 3. Range and input validation (avValidateCell)
       _avGrid = { tipos: { v1: 'pct', v2: 'contagem' } };

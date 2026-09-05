@@ -23,6 +23,10 @@ ok(){     printf "   %sok%s   %s\n" "$VERDE" "$ZERO" "$1"; }
 # rodar, com o portao dizendo que estava tudo certo. Nao bloqueia a publicacao,
 # porque biblioteca faltando nao e app quebrado, mas nunca mais se parece com ok.
 pulado(){ printf "   %spulado%s  %s — este teste NAO rodou, o portao nao sabe nada sobre ele\n" "$AMAR" "$ZERO" "$1"; PULADOS=$((PULADOS+1)); }
+# Aviso que se resolve sozinho: dizer QUAL comando liga o teste vale mais que
+# dizer que ele esta desligado.
+COMO_LIGAR="npm install"
+
 titulo(){ printf "\n%s%s%s\n" "$NEG" "$1" "$ZERO"; }
 
 printf "%s\n" "======================================================"
@@ -189,6 +193,7 @@ if [ "$PROBLEMAS" -eq 0 ]; then
   printf "  %s%sPODE SUBIR.%s  Nada quebrado encontrado.\n" "$VERDE" "$NEG" "$ZERO"
   if [ "$PULADOS" -gt 0 ]; then
     printf "\n  %sMas %s teste(s) nao rodaram%s — nada foi conferido neles.\n" "$AMAR" "$PULADOS" "$ZERO"
+    printf "  Para ligar: %s (uma vez, nesta pasta).\n" "$COMO_LIGAR"
   fi
   printf "\n  Lembre: arraste os ARQUIVOS, nunca a pasta.\n"
   printf "  Pasta vira subpasta no GitHub e a publicação não faz nada.\n"
@@ -196,6 +201,7 @@ else
   printf "  %s%sNAO SUBA.%s  %s problema(s) acima.\n" "$VERM" "$NEG" "$ZERO" "$PROBLEMAS"
   if [ "$PULADOS" -gt 0 ]; then
     printf "  %sE %s teste(s) nao rodaram%s — nada foi conferido neles.\n" "$AMAR" "$PULADOS" "$ZERO"
+    printf "  Para ligar: %s (uma vez, nesta pasta).\n" "$COMO_LIGAR"
   fi
   printf "\n  Publicar assim pode derrubar o app para todo mundo.\n"
 fi
