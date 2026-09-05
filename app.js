@@ -1157,6 +1157,12 @@ function ensureQGEO(){
 
 /* ===== LOCAIS — múltiplos locais georreferenciados (mundo todo) ===== */
 var LOCAIS_KEY="iracema-locais-v1", QLOCAL_KEY="iracema-qlocal-v1", LOCAL_ATIVO_KEY="iracema-local-ativo", QNOME_KEY="iracema-qnome-v1";
+/* A preferencia de lugar guardava so o ID -- e o id e justamente a parte
+   INSTAVEL desta base: local recriado ganha id novo, duplicata fundida faz o
+   id perdedor desaparecer, e nos dois casos a preferencia vira orfa em
+   silencio. O NOME e o que o usuario escolheu de verdade e o que sobrevive
+   aos dois casos; guardamos os dois e o nome resgata quando o id morre. */
+var LOCAL_ATIVO_NOME_KEY="iracema-local-ativo-nome";
 var HOME_LOCAL="iracemapolis";
 var LOCAIS=null, QLOCAL=null, localAtivo=null, _locPick=null, QNOME=null;
 /* Carimbos de config (renomear/mover quadra, renomear local): a edição mais nova vence no merge */
@@ -1336,13 +1342,69 @@ function _localPorEvidencia(){
   }catch(e){ return null; }
 }
 
+/* O RESGATE PELO NOME.
+   ------------------------------------------------------------------------------
+   O relato voltou uma terceira vez, agora já com a evidência no lugar do acaso:
+   "ainda vai pro Picolini e dá a mensagem". Se a mensagem apareceu, a preferência
+   gravada NÃO foi encontrada — e a pessoa jurava ter escolhido o lugar.
+
+   As duas rodadas anteriores consertaram quem DECIDE. O que estava errado é o
+   que se GRAVA: só o id. E o id é a parte instável desta base — local apagado e
+   recriado ganha id novo, e `fundirLugaresDuplicados` faz o id perdedor sumir
+   (o próprio código documenta que o merge entre aparelhos já criou dois
+   "Iracemápolis"). Nos dois casos a escolha do usuário continuava gravada,
+   apontando para um id que não existe mais, e o app ia adivinhar.
+
+   O nome é o que a pessoa escolheu de verdade e é o que sobrevive aos dois casos.
+   Quando o id morre mas existe um lugar com o mesmo nome, isso NÃO é palpite: é a
+   mesma escolha sob um id novo. Por isso este degrau — e só ele, entre os que não
+   são o id exato — pode regravar a preferência: sem regravar, o resgate teria de
+   acontecer de novo a cada abertura, e uma fusão futura o quebraria outra vez.
+
+   Nome repetido desempata por quantidade de quadras, a mesma regra que
+   `fundirLugaresDuplicados` usa para escolher o sobrevivente. */
+function _localAtivoNomeSalvo(){
+  try{ return localStorage.getItem(LOCAL_ATIVO_NOME_KEY)||''; }catch(e){ return ''; }
+}
+function _localPorNomeSalvo(){
+  var nome=_locNorm(_localAtivoNomeSalvo());
+  if(!nome || !LOCAIS) return null;
+  var cands=Object.keys(LOCAIS).filter(function(id){
+    return _locNorm((LOCAIS[id]&&LOCAIS[id].nome)||'')===nome;
+  });
+  if(!cands.length) return null;
+  if(cands.length===1) return cands[0];
+  cands.sort(function(a,b){
+    var qa=0, qb=0;
+    try{ qa=quadrasDoLocal(a).length; qb=quadrasDoLocal(b).length; }catch(e){}
+    return qb-qa || String(a).localeCompare(String(b));
+  });
+  return cands[0];
+}
+
 /* Por que o app abriu onde abriu. Só para a tela poder explicar quando foi
    palpite — quem escolheu não precisa de aviso. */
 var _localMotivo='';
 function _resolveLocalAtivo(atual){
   if(!LOCAIS) return atual;
   var salvo=_localAtivoSalvo();
-  if(salvo && LOCAIS[salvo]){ _localMotivo='escolha'; return salvo; }
+  if(salvo && LOCAIS[salvo]){
+    _localMotivo='escolha';
+    /* Preferência antiga guardou só o id (era o que existia). Anotar o nome agora,
+       enquanto o id ainda é válido, é o que protege da PRÓXIMA vez que ele mudar
+       -- e é registro do que a pessoa já escolheu, não palpite sobre o que ela quer. */
+    if(!_localAtivoNomeSalvo()){
+      try{ localStorage.setItem(LOCAL_ATIVO_NOME_KEY, (LOCAIS[salvo]&&LOCAIS[salvo].nome)||''); }catch(e){}
+    }
+    return salvo;
+  }
+  var porNome=_localPorNomeSalvo();
+  if(porNome){
+    _localMotivo='escolha';
+    /* Regrava o id: a escolha é a mesma, só o id mudou. Ver o comentário acima. */
+    try{ localStorage.setItem(LOCAL_ATIVO_KEY, porNome); }catch(e){}
+    return porNome;
+  }
   if(atual && LOCAIS[atual]){ _localMotivo='sessao'; return atual; }
   if(LOCAIS[HOME_LOCAL]){ _localMotivo='padrao'; return HOME_LOCAL; }
   var ev=_localPorEvidencia();
@@ -1392,9 +1454,30 @@ function flyToLocal(id){
   try{ _map.flyTo(Lc.centro||ESTACAO_CENTER, z, {duration:0.8}); }
   catch(e4){ try{ _map.setView(Lc.centro||ESTACAO_CENTER, z); }catch(e5){} }
 }
+/* Grava a preferência de lugar e CONFERE que ficou gravada. Devolve false quando
+   o armazenamento recusou (cota cheia, modo privativo, storage bloqueado) — que é
+   uma coisa que o usuário precisa saber, não um detalhe para engolir. */
+function _localGravaPreferencia(id){
+  var nome=(LOCAIS&&LOCAIS[id]&&LOCAIS[id].nome)||'';
+  try{
+    localStorage.setItem(LOCAL_ATIVO_KEY, id);
+    localStorage.setItem(LOCAL_ATIVO_NOME_KEY, nome);
+    return localStorage.getItem(LOCAL_ATIVO_KEY)===id;
+  }catch(e){ return false; }
+}
+
 function setLocalAtivo(id){
   ensureLocais(); if(!LOCAIS[id]) return;
-  localAtivo=id; try{ localStorage.setItem(LOCAL_ATIVO_KEY, id); }catch(e){}
+  localAtivo=id;
+  /* Gravação conferida, não tentada. Este `try` engolia calado a falha de cota:
+     o app trocava de lugar na tela, nada era gravado, e na abertura seguinte a
+     pessoa voltava para o lugar errado sem nenhuma pista do motivo. Se não deu
+     para gravar, quem precisa saber é o usuário — ele é que vai reabrir o app. */
+  if(!_localGravaPreferencia(id)){
+    try{ if(typeof _stxToast==='function')
+      _stxToast('Troquei de lugar agora, mas NÃO consegui guardar essa escolha neste aparelho — o armazenamento recusou. Na próxima abertura o app pode voltar para outro lugar.', 7000);
+    }catch(e){}
+  }
   ndviMeans=null; if(ndviOverlay&&_map){ try{_map.removeLayer(ndviOverlay);}catch(e){} ndviOverlay=null; }
   closeLocalMenu();
   flyToLocal(id); render(); buildLocalChip(); if(typeof renderNdviRank==='function') renderNdviRank();
@@ -1487,7 +1570,10 @@ function fundirLugaresDuplicados(silencioso){
     });
   });
   saveQLocal(); saveLocais();
-  try{ localStorage.setItem(LOCAL_ATIVO_KEY, localAtivo); }catch(e){}
+  /* A fusão faz o id perdedor sumir. Se o usuário estava nele, a preferência tem
+     de acompanhar -- id E nome --, senão a próxima abertura cai no palpite: era
+     por aqui que o "Iracemápolis duplicado" virava "abriu no Picolini". */
+  _localGravaPreferencia(localAtivo);
   if(typeof _touchGeoref==='function') _touchGeoref();
   if(typeof cloudSaveSoon==='function') cloudSaveSoon();
   try{ renderLocalChip(); }catch(e){}
@@ -2498,7 +2584,7 @@ function clearLocalStorageData(){
     'iracema-randomizacoes-v1', 'iracema-georef-v1', 'iracema-qgeo-v1', 'iracema-qgeots-v1', 'iracema-georefts-v1',
     'iracema-locais-v1', 'iracema-qlocal-v1', 'iracema-qnome-v1',
     'iracema-qnomets-v1', 'iracema-qlocalts-v1', 'iracema-locaists-v1',
-    'iracema-local-ativo', 'iracema-notas-v1',
+    'iracema-local-ativo', 'iracema-local-ativo-nome', 'iracema-notas-v1',
     'iracema-delq-v1', 'iracema-dell-v1', 'iracema-deln-v1'
   ];
   keys.forEach(function(k){

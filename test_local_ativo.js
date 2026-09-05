@@ -52,13 +52,20 @@ var ctx={
     removeItem:function(k){ delete LS[k]; }
   },
   LOCAL_ATIVO_KEY:'iracema-local-ativo',
+  LOCAL_ATIVO_NOME_KEY:'iracema-local-ativo-nome',
+  quadrasDoLocal:function(id){
+    var n=0, Q=ctx.QLOCAL||{};
+    Object.keys(Q).forEach(function(q){ if(Q[q]===id) n++; });
+    return {length:n};
+  },
   HOME_LOCAL:'iracemapolis',
   LOCAIS:null, QGEO:null, QLOCAL:null, data:null, Number:Number
 };
 ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
-vm.runInContext([pega('_localAtivoSalvo'), pega('_localPorEvidencia'), pega('_resolveLocalAtivo'),
-                 pega('_localAvisaPalpite')].join('\n'), ctx);
+vm.runInContext([pega('_locNorm'), pega('_localAtivoSalvo'), pega('_localAtivoNomeSalvo'),
+                 pega('_localPorNomeSalvo'), pega('_localPorEvidencia'), pega('_resolveLocalAtivo'),
+                 pega('_localGravaPreferencia'), pega('_localAvisaPalpite')].join('\n'), ctx);
 ctx._localAvisou=false;
 var TOASTS=[];
 ctx._stxToast=function(m,ms){ TOASTS.push({m:m, ms:ms}); };
@@ -171,6 +178,85 @@ console.log('\n--- Acervo estragado não derruba a abertura do app ---');
   catch(e){ ck(false, 'acervo malformado #'+(i+1)+' derrubou: '+e.message); }
 });
 ctx.QGEO=null; ctx.QLOCAL=null; ctx.data=null;
+
+console.log('\n--- O RELATO NA TERCEIRA VOLTA: o id morreu, a escolha não ---');
+/* "ainda vai pro picolini e dá a mensagem". Se a mensagem apareceu, a preferência
+   gravada não foi encontrada. As duas rodadas anteriores consertaram quem DECIDE;
+   o que estava errado é o que se GRAVA — só o id, que é a parte instável desta
+   base. Local apagado e recriado ganha id novo; duplicata fundida faz o id
+   perdedor sumir. Nos dois casos a escolha continuava gravada, apontando para
+   nada. */
+LS={ 'iracema-local-ativo':'iracemapolis-velho',
+     'iracema-local-ativo-nome':'Iracemápolis' };
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, loc999:{nome:'Iracemápolis'} };
+ctx.QLOCAL={ q1:'picolini', q2:'picolini', q3:'loc999' };
+ctx.QGEO={ q1:1, q2:1, q3:1 };
+ctx.data={ q1:{estudos:[{_ts:9999}]}, q2:{estudos:[]}, q3:{estudos:[{_ts:1}]} };
+/* Repare: a evidência apontaria para o Picolini (mexeu por último E mais quadras).
+   A escolha do usuário tem de vencer mesmo assim. */
+eq(ctx._localPorEvidencia(), 'picolini', 'a evidência de fato apontaria para o Picolini aqui');
+eq(ctx._resolveLocalAtivo(null), 'loc999', 'mas o nome guardado resgata a escolha, e ela vence');
+eq(ctx._localMotivo, 'escolha', 'e o motivo é escolha, não palpite: a tela não avisa nada');
+eq(LS['iracema-local-ativo'], 'loc999', 'o id novo é regravado — o resgate acontece uma vez, não toda abertura');
+
+console.log('\n--- Preferência antiga ganha o nome antes de precisar dele ---');
+/* Quem já tinha a preferência gravada tem só o id — era o que existia. O nome é
+   anotado na primeira abertura em que o id ainda é válido, que é justamente o
+   momento em que dá para saber qual é. */
+LS={ 'iracema-local-ativo':'loc999' };
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, loc999:{nome:'Iracemápolis'} };
+eq(ctx._resolveLocalAtivo(null), 'loc999', 'a preferência antiga continua valendo');
+eq(LS['iracema-local-ativo-nome'], 'Iracemápolis', 'e o nome fica anotado para o dia em que o id mudar');
+/* E aí o resgate já funciona, mesmo sem a pessoa ter tocado em nada. */
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, locNOVO:{nome:'Iracemápolis'} };
+eq(ctx._resolveLocalAtivo(null), 'locNOVO', 'trocado o id, o nome anotado resgata sozinho');
+
+console.log('\n--- O nome anotado não sobrescreve o que o usuário guardou ---');
+LS={ 'iracema-local-ativo':'picolini', 'iracema-local-ativo-nome':'Iracemápolis' };
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, locNOVO:{nome:'Iracemápolis'} };
+eq(ctx._resolveLocalAtivo(null), 'picolini', 'id válido manda, como sempre mandou');
+eq(LS['iracema-local-ativo-nome'], 'Iracemápolis', 'e o nome já guardado não é reescrito por cima');
+
+console.log('\n--- O resgate por nome ignora acento e caixa ---');
+LS={ 'iracema-local-ativo':'morto', 'iracema-local-ativo-nome':'IRACEMAPOLIS' };
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, loc999:{nome:'Iracemápolis'} };
+eq(ctx._resolveLocalAtivo(null), 'loc999', '"IRACEMAPOLIS" acha "Iracemápolis"');
+
+console.log('\n--- Nome repetido: desempata como a fusão desempata ---');
+LS={ 'iracema-local-ativo':'morto', 'iracema-local-ativo-nome':'Iracemápolis' };
+ctx.LOCAIS={ locA:{nome:'Iracemápolis'}, locB:{nome:'Iracemápolis'}, picolini:{nome:'Picolini'} };
+ctx.QLOCAL={ q1:'locA', q2:'locB', q3:'locB', q4:'picolini' };
+eq(ctx._resolveLocalAtivo(null), 'locB', 'entre dois de mesmo nome, vence o que tem mais quadras');
+
+console.log('\n--- O nome não resgata o que não existe ---');
+LS={ 'iracema-local-ativo':'morto', 'iracema-local-ativo-nome':'Fazenda que nao existe' };
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, sitio:{nome:'Sítio'} };
+ctx.QLOCAL={}; ctx.QGEO={}; ctx.data={};
+eq(ctx._localPorNomeSalvo(), null, 'nome sem correspondente não inventa lugar');
+LS={ 'iracema-local-ativo':'morto' };
+eq(ctx._localPorNomeSalvo(), null, 'e sem nome guardado também não');
+
+console.log('\n--- Gravar é conferido, não tentado ---');
+ctx.LOCAIS={ loc999:{nome:'Iracemápolis'} };
+LS={};
+eq(ctx._localGravaPreferencia('loc999'), true, 'gravação normal confirma');
+eq(LS['iracema-local-ativo'], 'loc999', 'o id fica guardado');
+eq(LS['iracema-local-ativo-nome'], 'Iracemápolis', 'e o nome junto — é ele que resgata depois');
+/* Cota cheia / modo privativo: o setItem estoura. Isto era engolido por um
+   try/catch vazio, e a pessoa voltava para o lugar errado sem nenhuma pista. */
+var setReal=ctx.localStorage.setItem;
+ctx.localStorage.setItem=function(){ throw new Error('QuotaExceededError'); };
+eq(ctx._localGravaPreferencia('loc999'), false, 'armazenamento recusando devolve false, para a tela poder avisar');
+ctx.localStorage.setItem=setReal;
+/* Gravação que não estoura mas também não persiste (storage inerte): a leitura
+   de volta é o que denuncia. Tem de ser um lugar DIFERENTE do que já está lá —
+   regravar o mesmo valor num storage inerte é indistinguível de sucesso, e de
+   fato não é problema nenhum. */
+ctx.LOCAIS={ loc999:{nome:'Iracemápolis'}, outro:{nome:'Sítio'} };
+ctx.localStorage.setItem=function(){};
+eq(ctx._localGravaPreferencia('outro'), false, 'gravação que não persiste é falha, não sucesso');
+ctx.localStorage.setItem=setReal;
+eq(ctx._localGravaPreferencia('outro'), true, 'e volta a funcionar quando o armazenamento volta');
 
 console.log('\n--- Quando o app escolhe sozinho, ele diz ---');
 /* Abrir no lugar errado sem falar nada foi o relato duas vezes: a pessoa via o
