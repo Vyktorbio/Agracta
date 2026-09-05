@@ -93,10 +93,40 @@
     var s=unescape(encodeURIComponent(String(raw)));
     return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   }
+  /* "TEM ALGUMA COISA AQUI?" — e a resposta decide se um estado e preservado ou
+     atropelado.
+     ----------------------------------------------------------------------------
+     Ela olhava so estudos, cultura, itens, notas e randomizacoes. NAO olhava o
+     mapa: quadras desenhadas, locais cadastrados, imagem georreferenciada. Um dia
+     inteiro desenhando a fazenda contava como NADA -- e isso quebrava em tres
+     lugares, o ultimo deles apagando dado de verdade:
+
+       1. hasLocalRecords/offlineAccessAllowed: quem mapeou a fazenda ontem nao
+          conseguia abrir o app offline hoje, no campo. "Nao ha nada neste
+          aparelho."
+       2. A restauracao do cofre era pulada: o checkpoint com o mapa era ignorado
+          e o app abria vazio.
+       3. O PIOR, na primeira sincronizacao apos o login: se a NUVEM tem so o
+          mapa, `meaningful(r.state)` dava false, o MERGE era pulado, e o estado
+          local subia por cima. E queueOps apaga da nuvem tudo que existia no
+          snapshot lido e nao existe no local -- ou seja, as quadras do colega
+          desapareciam. Silencioso e sem volta pelo app.
+
+     Agora conta o trabalho de mapa. Continua exigindo alguma coisa: workspace
+     recem-criado tem `locais` com o unico local padrao e nada mais, e isso segue
+     valendo nada -- e por isso que a contagem de locais pede MAIS de um, em vez
+     de qualquer um. */
   function meaningful(st){
     if(!st)return false;
     if(Object.keys(st.itens||{}).length)return true;
     if((st.notas_campo||[]).length||(st.randomizacoes||[]).length)return true;
+    /* Mapa desenhado e trabalho, e trabalho que ninguem refaz de cabeca. */
+    if(Object.keys(st.qgeo||{}).length)return true;
+    if(st.georef&&(st.georef.corners||[]).length)return true;
+    if(Object.keys(st.locais||{}).length>1)return true;
+    /* Lista de autorizados: perde-la e tirar o acesso das pessoas. O padrao e
+       vazio, entao ter alguem aqui e declaracao de alguem. */
+    try{ if((((st.data||{}).__config||{}).allowedUsers||[]).length)return true; }catch(e){}
     var d=st.data||{},yes=false;
     Object.keys(d).some(function(qid){
       if(qid==='__config')return false;
