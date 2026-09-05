@@ -14,8 +14,15 @@ cd "$(dirname "$0")" || exit 1
 
 VERDE=$'\033[0;32m'; VERM=$'\033[0;31m'; AMAR=$'\033[0;33m'; NEG=$'\033[1m'; ZERO=$'\033[0m'
 PROBLEMAS=0
+PULADOS=0
 avisar(){ printf "   %s%s%s\n" "$VERM" "$1" "$ZERO"; PROBLEMAS=$((PROBLEMAS+1)); }
 ok(){     printf "   %sok%s   %s\n" "$VERDE" "$ZERO" "$1"; }
+# Teste que nao rodou nao e teste que passou. Um arquivo que se declara PULADO
+# (dependencia ausente, por exemplo) saia com codigo 0 e este portao imprimia
+# "ok" -- foi assim que o unico teste do controle de acesso passou meses sem
+# rodar, com o portao dizendo que estava tudo certo. Nao bloqueia a publicacao,
+# porque biblioteca faltando nao e app quebrado, mas nunca mais se parece com ok.
+pulado(){ printf "   %spulado%s  %s — este teste NAO rodou, o portao nao sabe nada sobre ele\n" "$AMAR" "$ZERO" "$1"; PULADOS=$((PULADOS+1)); }
 titulo(){ printf "\n%s%s%s\n" "$NEG" "$1" "$ZERO"; }
 
 printf "%s\n" "======================================================"
@@ -73,7 +80,7 @@ if command -v node >/dev/null 2>&1; then
   for t in test_*.js; do
     [ -f "$t" ] || continue
     if node "$t" >/tmp/agracta_teste.log 2>&1; then
-      ok "$t"
+      if grep -q "^PULADO" /tmp/agracta_teste.log; then pulado "$t"; else ok "$t"; fi
     else
       avisar "$t FALHOU:"
       grep -E "FALHA|Error" /tmp/agracta_teste.log | head -4 | sed 's/^/        /'
@@ -84,7 +91,7 @@ if command -v python3 >/dev/null 2>&1; then
   for t in test_*.py; do
     [ -f "$t" ] || continue
     if python3 "$t" >/tmp/agracta_teste.log 2>&1; then
-      ok "$t"
+      if grep -q "^PULADO" /tmp/agracta_teste.log; then pulado "$t"; else ok "$t"; fi
     else
       avisar "$t FALHOU:"
       grep -E "FALHA|Error" /tmp/agracta_teste.log | head -4 | sed 's/^/        /'
@@ -180,10 +187,16 @@ fi
 printf "\n%s\n" "======================================================"
 if [ "$PROBLEMAS" -eq 0 ]; then
   printf "  %s%sPODE SUBIR.%s  Nada quebrado encontrado.\n" "$VERDE" "$NEG" "$ZERO"
+  if [ "$PULADOS" -gt 0 ]; then
+    printf "\n  %sMas %s teste(s) nao rodaram%s — nada foi conferido neles.\n" "$AMAR" "$PULADOS" "$ZERO"
+  fi
   printf "\n  Lembre: arraste os ARQUIVOS, nunca a pasta.\n"
   printf "  Pasta vira subpasta no GitHub e a publicação não faz nada.\n"
 else
   printf "  %s%sNAO SUBA.%s  %s problema(s) acima.\n" "$VERM" "$NEG" "$ZERO" "$PROBLEMAS"
+  if [ "$PULADOS" -gt 0 ]; then
+    printf "  %sE %s teste(s) nao rodaram%s — nada foi conferido neles.\n" "$AMAR" "$PULADOS" "$ZERO"
+  fi
   printf "\n  Publicar assim pode derrubar o app para todo mundo.\n"
 fi
 printf "%s\n\n" "======================================================"

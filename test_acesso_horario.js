@@ -4,18 +4,18 @@
  * abrir e a que horas, e qual imagem aparece quando alguém liga os índices.
  * Ambas são pura conta — dá para conferir sem navegador.
  *
- * O jsdom é opcional: sem ele o teste se declara PULADO, porque não ter a
- * biblioteca não diz nada sobre o app.
+ * ESTE TESTE PASSOU MESES SEM RODAR. Ele dependia do jsdom, que não está
+ * instalado, e se declarava PULADO saindo com código 0 — e o conferir.sh, que
+ * só olha o código de saída, imprimia "ok". O único teste do controle de acesso
+ * nunca rodou, e o portão dizia que estava tudo certo. Um teste que mente é
+ * pior que teste nenhum: teste nenhum pelo menos não dá confiança falsa.
+ *
+ * Agora o DOM é um boneco de 30 linhas aqui dentro e o teste roda sempre.
+ * Dependência que não está instalada não pode decidir o que é conferido.
  */
 var fs = require('fs');
 var path = require('path');
 var vm = require('vm');
-var jsdom;
-try{ jsdom = require('jsdom'); }
-catch(e){
-  console.log('PULADO: jsdom não está instalado (npm install jsdom para rodar este teste).');
-  process.exit(0);
-}
 
 var falhas = 0;
 function ck(cond, nome){
@@ -24,30 +24,72 @@ function ck(cond, nome){
 }
 function titulo(t){ console.log('\n' + t); }
 
-var dom = new jsdom.JSDOM('<!doctype html><html><head></head><body></body></html>',
-  {url:'https://www.agracta.com.br/', pretendToBeVisual:true, runScripts:'outside-only'});
-var win = dom.window;
+/* Um DOM de mentira que aceita qualquer chamada. Os dois arquivos montam
+   interface ao carregar; nada disso interessa aqui, e um boneco permissivo é
+   mais honesto que recortar os arquivos e testar outra coisa que não o que roda. */
+function noOp(){}
+function elBoneco(){
+  var el = {
+    id:'', className:'', _html:'', style:{cssText:''}, dataset:{}, value:'', checked:false,
+    classList:{ add:noOp, remove:noOp, contains:function(){ return false; }, toggle:noOp },
+    appendChild:noOp, removeChild:noOp, insertBefore:noOp, remove:noOp,
+    setAttribute:noOp, getAttribute:function(){ return null; }, removeAttribute:noOp,
+    addEventListener:noOp, removeEventListener:noOp, focus:noOp, click:noOp,
+    querySelector:function(){ return elBoneco(); }, querySelectorAll:function(){ return []; },
+    closest:function(){ return null; },
+    getBoundingClientRect:function(){ return {left:0,top:0,right:0,bottom:0,width:0,height:0}; },
+    onclick:null
+  };
+  Object.defineProperty(el, 'innerHTML', { get:function(){ return el._html; }, set:function(v){ el._html = v; } });
+  Object.defineProperty(el, 'textContent', { get:function(){ return ''; }, set:noOp });
+  return el;
+}
+function docBoneco(){
+  var doc = elBoneco();
+  doc.documentElement = elBoneco();
+  doc.body = elBoneco();
+  doc.head = elBoneco();
+  doc.readyState = 'complete';
+  doc.getElementById = function(){ return null; };
+  doc.createElement = function(){ return elBoneco(); };
+  doc.querySelector = function(){ return null; };
+  doc.querySelectorAll = function(){ return []; };
+  doc.addEventListener = noOp;
+  return doc;
+}
 
-/* localStorage do jsdom antigo pode não existir */
-if(!win.localStorage){
-  var mem = {};
-  win.localStorage = {
+var mem = {};
+var win = {
+  console:console, Math:Math, Date:Date, String:String, Number:Number, Object:Object,
+  Array:Array, JSON:JSON, RegExp:RegExp, parseInt:parseInt, parseFloat:parseFloat, isNaN:isNaN,
+  setTimeout:function(){ return 0; }, clearTimeout:noOp,
+  setInterval:function(){ return 0; }, clearInterval:noOp,
+  document: docBoneco(),
+  navigator:{ geolocation:null },
+  location:{ href:'https://www.agracta.com.br/', hostname:'www.agracta.com.br' },
+  matchMedia:function(){ return {matches:false, addListener:noOp, addEventListener:noOp}; },
+  fetch:function(){ return Promise.resolve({json:function(){ return Promise.resolve([]); }}); },
+  Promise:Promise,
+  localStorage:{
     getItem:function(k){ return Object.prototype.hasOwnProperty.call(mem,k) ? mem[k] : null; },
     setItem:function(k,v){ mem[k] = String(v); },
     removeItem:function(k){ delete mem[k]; }
-  };
-}
-win.fetch = function(){ return Promise.resolve({json:function(){ return Promise.resolve([]); }}); };
+  }
+};
+win.window = win; win.globalThis = win; win.self = win;
+vm.createContext(win);
 
 function carregar(arquivo){
   var src = fs.readFileSync(path.join(__dirname, arquivo), 'utf8');
-  vm.runInContext(src, dom.getInternalVMContext(), {filename:arquivo});
+  vm.runInContext(src, win, {filename:arquivo});
 }
 carregar('acesso-horario.js');
 carregar('ui-campo.js');
 
 var A = win.AgractaAcesso;
 var U = win.AgractaUI;
+ck(!!A && typeof A.dentro === 'function', 'acesso-horario.js expôs a regra de janela');
+ck(!!U && typeof U.escolherData === 'function', 'ui-campo.js expôs a escolha de data');
 
 /* Sexta-feira, 14 de agosto de 2026. Os horários são de São Paulo (UTC-3), e
    é assim que o teste os monta — sem depender do fuso da máquina. */
@@ -84,6 +126,31 @@ var texto = {on:true, dias:[5], ini:'08:30', fim:'12:00'};
 ck(A.normalizar(texto).iniMin === 510, '"08:30" vira 510 minutos');
 ck(A.dentro(texto, quando(14, 9, 0)) === true,  'sexta às 9h dentro de 08:30–12:00');
 ck(A.dentro(texto, quando(14, 12, 5)) === false,'sexta às 12h05 já fora');
+
+titulo('NENHUM DIA é uma decisão, não um formulário em branco');
+/* O defeito: o administrador desmarcava TODOS os dias, querendo dizer "este
+   acesso não abre", e `normalizar` trocava a lista vazia por seg–sex. O app
+   salvava uma semana inteira de trabalho liberada e ainda avisava "horário
+   salvo" com os dias que ninguém escolheu. Num portão de acesso, inventar
+   permissão que ninguém concedeu é falhar para o lado errado. */
+ck(A.normalizar({on:true, dias:[]}).dias.length === 0,
+   'lista vazia continua vazia — a decisão do administrador sobrevive');
+ck(A.dentro({on:true, dias:[], iniMin:420, fimMin:1080}, quando(14, 9, 0)) === false,
+   'e nenhum dia liberado significa que ninguém entra, nem em horário comercial');
+ck(/não abre nunca/.test(A.descrever({on:true, dias:[]})),
+   'e a tela do admin diz isso em voz alta, para a configuração não passar batida');
+
+/* Ausente e vazio são coisas diferentes: quem nunca escolheu dia nenhum está no
+   formato antigo, e o padrão de sempre continua valendo. */
+ck(A.normalizar({on:true}).dias.join(',') === '1,2,3,4,5',
+   'sem a chave dias (formato antigo), o padrão seg–sex continua valendo');
+ck(A.dentro({on:true, iniMin:420, fimMin:1080}, quando(14, 9, 0)) === true,
+   'e quem está no formato antigo não é barrado por causa desta correção');
+
+/* Lista só com lixo é declaração que não dá para entender. O que não se
+   entende não vira permissão. */
+ck(A.normalizar({on:true, dias:[99, -3]}).dias.length === 0,
+   'dias inválidos não viram uma semana de trabalho liberada');
 
 titulo('O texto que o técnico lê na tela');
 ck(/seg, ter, qua, qui, sex · 07:00 às 17:00/.test(A.descrever(comercial)), 'descrição legível da janela');
