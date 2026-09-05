@@ -2203,13 +2203,13 @@ function cloudApply(st){
     if(st.locaists && typeof st.locaists==='object'){ LOCAIS_TS=st.locaists; }
     saveCfgTS();
     if(Array.isArray(st.randomizacoes)){ RZLIB=normalizeRZLib(st.randomizacoes); try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){} }
-    if(st._deletedQuadras && typeof st._deletedQuadras==='object'){ _delQuadras=_mergeObj(_delQuadras, st._deletedQuadras); }
-    if(st._deletedLocais && typeof st._deletedLocais==='object'){ _delLocais=_mergeObj(_delLocais, st._deletedLocais); }
+    if(st._deletedQuadras && typeof st._deletedQuadras==='object'){ _delQuadras=_mergeTombs(_delQuadras, st._deletedQuadras); }
+    if(st._deletedLocais && typeof st._deletedLocais==='object'){ _delLocais=_mergeTombs(_delLocais, st._deletedLocais); }
     if(st.notas_campo && Array.isArray(st.notas_campo)){ NOTAS_CAMPO=st.notas_campo; try{ localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO)); }catch(e){} }
-    if(st._deletedNotas && typeof st._deletedNotas==='object'){ _delNotas=_mergeObj(_delNotas, st._deletedNotas); try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(e){} }
+    if(st._deletedNotas && typeof st._deletedNotas==='object'){ _delNotas=_mergeTombs(_delNotas, st._deletedNotas); try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(e){} }
     if(st.itens && typeof st.itens==='object'){ ensureItens(); ITENS=st.itens; }
     if(st.itensts && typeof st.itensts==='object'){ ITENS_TS=st.itensts; }
-    if(st._deletedItens && typeof st._deletedItens==='object'){ _delItens=_mergeObj(_delItens, st._deletedItens); }
+    if(st._deletedItens && typeof st._deletedItens==='object'){ _delItens=_mergeTombs(_delItens, st._deletedItens); }
     try{ saveItens(); }catch(e){}
     saveDelTombs();
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
@@ -2244,7 +2244,33 @@ function _mergeById(la,ca,mergeFn,deleted){
   la.forEach(function(x){ if(!x||!x.id||!_vivoTomb(x,deleted))return; if(byId[x.id]){ byId[x.id]=mergeFn?mergeFn(x,byId[x.id]):x; } else { order.push(x.id); byId[x.id]=x; } });
   return order.map(function(id){ return byId[id]; });
 }
-function _mergeObj(a,b){ var o={},k; if(b)for(k in b)o[k]=b[k]; if(a)for(k in a)o[k]=a[k]; return o; }
+/* MERGE DE LÁPIDES: a mais NOVA vence, nunca "a minha vence".
+   ------------------------------------------------------------------------------
+   Isto era `_mergeTombs(a,b)`, que copiava b e deixava a por cima — o local vencia
+   a nuvem. Numa lápide, cujo valor é a HORA da exclusão, isso não é uma regra:
+   é o ponto de vista de quem está executando o merge. E ponto de vista faz o
+   merge NÃO CONVERGIR.
+
+   O caso: o aparelho A apaga a quadra às 10h; o B, sem sinal, apaga a mesma às
+   12h; a quadra foi mexida às 11h. `_vivoTomb` deixa viver quem tem `_ts` maior
+   que a lápide. Com "o local vence", A fica com a lápide das 10h e ressuscita a
+   quadra; B fica com a das 12h e a mantém apagada. Mesmos dois estados, respostas
+   opostas, e cada sync reimplanta o desacordo — a quadra pisca entre os aparelhos
+   para sempre.
+
+   Com o máximo, a decisão não depende de quem está calculando: os dois chegam às
+   12h e concordam. É a mesma regra que _mergeDelUsers já usava para a lista de
+   autorizados; a das quadras, locais, notas e itens é que tinha ficado para trás.
+
+   Só serve para mapa de lápide (id -> carimbo). Não use para juntar objetos de
+   verdade: ali o máximo não quer dizer nada. */
+function _mergeTombs(a,b){
+  var o={},k;
+  a=a||{}; b=b||{};
+  for(k in b) o[k]=b[k];
+  for(k in a) o[k]=Math.max(Number(o[k])||0, Number(a[k])||0);
+  return o;
+}
 /* Lista de autorizados (BPL): UNIÃO por email — acumula e NUNCA some por aparelho zerado. 'delUsers' = lápides p/ remover. */
 function _mergeDelUsers(a,b){ var o={},k; a=a||{}; b=b||{}; for(k in b)o[k]=b[k]; for(k in a){ o[k]=Math.max(o[k]||0, a[k]||0); } return o; }
 function _mergeAllowedUsers(la,ca,del){
@@ -2321,7 +2347,7 @@ function _mergeStudy(ls,cs){
   if(ct>lt){ for(k in ls)m[k]=ls[k]; for(k in cs)m[k]=cs[k]; }
   else { for(k in cs)m[k]=cs[k]; for(k in ls)m[k]=ls[k]; }
   if(lt||ct) m._ts=Math.max(lt,ct);
-  var delAp=_mergeObj(ls._deletedAplicacoes,cs._deletedAplicacoes), delAv=_mergeObj(ls._deletedAvaliacoes,cs._deletedAvaliacoes);
+  var delAp=_mergeTombs(ls._deletedAplicacoes,cs._deletedAplicacoes), delAv=_mergeTombs(ls._deletedAvaliacoes,cs._deletedAvaliacoes);
   m._deletedAplicacoes=delAp; m._deletedAvaliacoes=delAv;
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
@@ -2341,10 +2367,10 @@ function _mergeNota(la,ca){
 function cloudMerge(local,cloud){
   if(!cloud) return local; if(!local) return cloud;
   var out={};
-  var delQ=_mergeObj(local._deletedQuadras,cloud._deletedQuadras)||{};
-  var delL=_mergeObj(local._deletedLocais,cloud._deletedLocais)||{};
-  var delN=_mergeObj(local._deletedNotas,cloud._deletedNotas)||{};
-  var delI=_mergeObj(local._deletedItens,cloud._deletedItens)||{};
+  var delQ=_mergeTombs(local._deletedQuadras,cloud._deletedQuadras)||{};
+  var delL=_mergeTombs(local._deletedLocais,cloud._deletedLocais)||{};
+  var delN=_mergeTombs(local._deletedNotas,cloud._deletedNotas)||{};
+  var delI=_mergeTombs(local._deletedItens,cloud._deletedItens)||{};
   out._deletedQuadras=delQ; out._deletedLocais=delL; out._deletedNotas=delN; out._deletedItens=delI;
   function strip(obj,tomb){ var o={},k; for(k in (obj||{})){ if(!tomb[k]) o[k]=obj[k]; } return o; }
   var _mq=_mergeQGEO(local.qgeo,cloud.qgeo,local.qgeots,cloud.qgeots,delQ); out.qgeo=_mq.geo; out.qgeots=_mq.ts; /* mapa: vale o mais recente por quadra */
@@ -2385,7 +2411,7 @@ function cloudMerge(local,cloud){
         isAdmin = true;
       }
       if(window._adminUnlocked) isAdmin = true; /* destravou o painel com a senha -> autoridade do admin nesta sessão */
-      var cfg = isAdmin ? _mergeObj(lq, cq) : _mergeObj(cq, lq); /* escalares (adminEmail/senha) por papel */
+      var cfg = isAdmin ? _mergeTombs(lq, cq) : _mergeTombs(cq, lq); /* escalares (adminEmail/senha) por papel */
       cfg.delUsers = _mergeDelUsers(lq.delUsers, cq.delUsers);
       cfg.allowedUsers = _mergeAllowedUsers(lq.allowedUsers, cq.allowedUsers, cfg.delUsers); /* UNIÃO: nunca perde autorizado, mesmo abrindo aparelho/domínio zerado */
       out.data[qid] = cfg;
@@ -2396,7 +2422,7 @@ function cloudMerge(local,cloud){
     var lts2=lq._ts||0, cts2=cq._ts||0, base=(lts2>cts2)?cq:lq, top=(lts2>cts2)?lq:cq;
     var m={},kk; for(kk in base)m[kk]=base[kk]; for(kk in top)m[kk]=top[kk];
     if(lts2||cts2) m._ts=Math.max(lts2,cts2);
-    var delS=_mergeObj(lq._deletedStudies,cq._deletedStudies); m._deletedStudies=delS;
+    var delS=_mergeTombs(lq._deletedStudies,cq._deletedStudies); m._deletedStudies=delS;
     m.estudos=_mergeById(lq.estudos,cq.estudos,_mergeStudy,delS);
     out.data[qid]=m;
   });
@@ -14621,7 +14647,17 @@ function _alvoRender(){
   /* Quando o campo bate exatamente com um alvo já escolhido, a lista some:
      ela é ajuda para achar, não decoração permanente. */
   if(achados.length===1 && String(termo).trim().toLowerCase()===achados[0].comum.toLowerCase()){ box.innerHTML=''; return; }
-  var cab=cultura?('Alvos de '+esc(cultura)):'Alvos (todas as culturas)';
+  /* O cabeçalho tem de dizer o que a lista É, não o que se gostaria que fosse.
+     Ele escrevia "Alvos de Citros" em cima dos 99 alvos de todas as culturas,
+     porque a busca caía calada na lista inteira quando não reconhecia a cultura.
+     Agora pergunta se o filtro pegou: pegou, nomeia a cultura; não pegou, diz
+     que não conhece a lista dela — e aí quem está com a folha na mão sabe que
+     está vendo praga de outra cultura junto, em vez de confiar num filtro que
+     não existiu. */
+  var _cultOk=(typeof window.alvosCultura==='function')?window.alvosCultura(cultura):(cultura||null);
+  var cab = _cultOk ? ('Alvos de '+esc(cultura))
+          : (cultura ? ('Alvos de todas as culturas — não tenho lista própria para '+esc(cultura))
+                     : 'Alvos (todas as culturas)');
   box.innerHTML='<div class="alvo-cab">'+cab+(termo?'':' · comece a digitar para filtrar')+'</div>'+
     achados.map(function(a,i){
       return '<button type="button" class="alvo-item" onclick="_alvoEscolher('+i+')">'+

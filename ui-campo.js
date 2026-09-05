@@ -354,13 +354,30 @@
     }
     return arr[0];
   }
+  /* O que ficou para tras da data escolhida -- separando o que se SABE nublado
+     do que simplesmente nao tem informacao de nuvem. A conta antiga somava os
+     dois e a tela anunciava "2 datas nubladas a frente" sobre imagens cuja nuvem
+     ninguem mediu. Afirmar nuvem que nao foi medida e o mesmo erro de sempre,
+     em tamanho pequeno: o app dizendo saber uma coisa que nao sabe. */
   function puladas(arr, alvo){
-    var n = 0;
+    var nubladas = 0, semInfo = 0;
+    var refe = null;
+    for(var k=0; k<arr.length; k++){ if(arr[k].date === alvo){ refe = arr[k].cloud; break; } }
     for(var i=0; i<arr.length; i++){
-      if(arr[i].date === alvo) return n;
-      n++;
+      if(arr[i].date === alvo) break;
+      if(arr[i].cloud == null) semInfo++;
+      else if(refe == null || arr[i].cloud > refe) nubladas++;
+      else semInfo++;   /* pulada por outro motivo: nao e "mais nublada" */
     }
-    return 0;
+    return {nubladas:nubladas, semInfo:semInfo};
+  }
+  /* A frase do rodape sobre as datas puladas. '' quando nao ha o que dizer. */
+  function textoPuladas(pl){
+    if(!pl) return '';
+    var p = [];
+    if(pl.nubladas) p.push(pl.nubladas + ' data' + (pl.nubladas>1?'s':'') + ' mais nublada' + (pl.nubladas>1?'s':'') + ' à frente');
+    if(pl.semInfo)  p.push(pl.semInfo + ' sem informação de nuvem');
+    return p.length ? (' · ' + p.join(' · ')) : '';
   }
 
   function aquecerProxy(){
@@ -400,10 +417,10 @@
             pintarDatas();
             ndviLoadImage();
           }
-          var pulou = m ? puladas(arr, m.date) : 0;
+          var pulou = m ? puladas(arr, m.date) : null;
           ndviStatus((window.ndviIndex||'NDVI') + ' · ' + rotulo(m.date) +
-            (m.cloud != null ? (' · ' + Math.round(m.cloud) + '% de nuvem') : '') +
-            (pulou ? (' · ' + pulou + ' data' + (pulou>1?'s':'') + ' nublada' + (pulou>1?'s':'') + ' à frente') : ''), 'ok');
+            (m.cloud != null ? (' · ' + Math.round(m.cloud) + '% de nuvem') : ' · nuvem não informada') +
+            textoPuladas(pulou), 'ok');
         }else{
           ndviStatus(arr.length + ' datas disponíveis', 'ok');
         }
@@ -539,6 +556,7 @@
   else iniciar();
 
   window.AgractaUI = {
+    _puladas: puladas, _textoPuladas: textoPuladas,
     abrirGaveta: abrirGaveta,
     datas: function(){ return _datas.slice(); },
     melhorData: function(){ var m = melhor(_datas); return m && m.date; },

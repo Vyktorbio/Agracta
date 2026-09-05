@@ -179,6 +179,26 @@ ck(U.escolherData([{date:'2026-08-16', cloud:null}]) === '2026-08-16',
 ck(U.escolherData([]) === null && U.escolherData(null) === null,
    'lista vazia não quebra');
 
+titulo('NDVI: o app não afirma nuvem que ninguém mediu');
+/* A frase do rodapé dizia "2 datas nubladas à frente" contando também imagens
+   cuja cobertura de nuvem simplesmente não veio no catálogo. Nublada e
+   desconhecida são coisas diferentes, e o app só pode dizer a primeira. */
+var pl = U._puladas([{date:'16',cloud:null},{date:'13',cloud:null},{date:'11',cloud:6}], '11');
+ck(pl.nubladas === 0, 'data sem informação de nuvem NÃO é contada como nublada');
+ck(pl.semInfo === 2, 'ela é contada à parte, como sem informação');
+ck(!/nublada/.test(U._textoPuladas(pl)), 'e a frase não usa a palavra nublada para elas');
+ck(/sem informação de nuvem/.test(U._textoPuladas(pl)), 'a frase diz o que realmente se sabe');
+
+var pl2 = U._puladas([{date:'16',cloud:80},{date:'13',cloud:60},{date:'11',cloud:6}], '11');
+ck(pl2.nubladas === 2, 'duas imagens realmente mais nubladas são contadas como tal');
+ck(pl2.semInfo === 0, 'e nenhuma entra como desconhecida');
+ck(/2 datas mais nubladas à frente/.test(U._textoPuladas(pl2)), 'a frase diz as duas');
+
+var pl3 = U._puladas([{date:'11',cloud:6}], '11');
+ck(pl3.nubladas === 0 && pl3.semInfo === 0, 'sem nada pulado, nada a contar');
+ck(U._textoPuladas(pl3) === '', 'e a frase fica vazia em vez de dizer "0 datas"');
+ck(U._textoPuladas(null) === '', 'nada a relatar não vira texto');
+
 titulo('A porta de entrada não pode quebrar o mapa');
 
 /* Aconteceu de verdade: esconder o app com display:none fazia o Leaflet nascer

@@ -451,8 +451,45 @@
       .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
   }
+  /* QUAL LISTA A CULTURA ABRE.
+     ----------------------------------------------------------------------------
+     Era `ALVOS_POR_CULTURA[cultura]` -- busca literal pela chave. As chaves deste
+     arquivo são 'CITROS' (caixa alta) e 'Cana de açúcar' (sem hífen), então a
+     quadra que diz "Citros" ou "Cana-de-açúcar" -- a forma que o resto do app
+     usa e produz -- não casava com nada e caía CALADA na lista inteira: 99 alvos
+     de treze culturas. E a tela ainda escrevia "Alvos de Citros" em cima deles.
+     Oferecer praga de algodão num ensaio de citros, sob um cabeçalho que jura
+     ter filtrado, é o tipo de erro que não parece erro.
+
+     Agora compara normalizado (acento, caixa, hífen, espaço sobrando) e passa
+     antes pela tabela de sinônimos do BBCHCore, a mesma que já resolve "Soybean"
+     e "Cana" no resto do app. Não resolveu, devolve null -- e quem chama tem de
+     dizer isso na tela em vez de fingir filtro. */
+  var _chaves = null;
+  function _norm(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  window.alvosCultura = function(cultura){
+    var c = String(cultura||'').trim();
+    if(!c) return null;
+    if(!_chaves){
+      _chaves = {};
+      Object.keys(window.ALVOS_POR_CULTURA).forEach(function(k){ _chaves[_norm(k)] = k; });
+    }
+    if(_chaves[_norm(c)]) return _chaves[_norm(c)];
+    var B = window.BBCHCore;
+    if(B && B.canonica){
+      try{
+        var can = B.canonica(c);
+        if(can && _chaves[_norm(can)]) return _chaves[_norm(can)];
+      }catch(e){}
+    }
+    return null;
+  };
   window.alvosBuscar = function(cultura, termo, limite){
-    var base = (cultura && window.ALVOS_POR_CULTURA[cultura]) || window.ALVOS_TODOS;
+    var chave = window.alvosCultura(cultura);
+    var base = chave ? window.ALVOS_POR_CULTURA[chave] : window.ALVOS_TODOS;
     var q = limpar(termo);
     if(!q) return base.slice(0, limite||14);
     var comeca = [], contem = [];
