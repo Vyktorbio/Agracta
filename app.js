@@ -1466,6 +1466,24 @@ function _localGravaPreferencia(id){
   }catch(e){ return false; }
 }
 
+/* TROCAR DE LUGAR AGORA versus DECLARAR ONDE EU TRABALHO — são duas coisas, e
+   tratá-las como uma só foi a causa real do "ele sempre volta pro Picolini".
+
+   O GPS troca o lugar quando você chega numa fazenda. Isso é sobre HOJE. Mas a
+   troca chamava `setLocalAtivo`, que GRAVA a preferência — então o palpite do
+   GPS sobrescrevia, em cada abertura, a escolha que a pessoa tinha feito à mão.
+   Nenhum conserto no lado de quem LÊ a preferência poderia funcionar, porque o
+   problema estava em quem a ESCREVIA.
+
+   `setLocalAtivoSessao` faz tudo o que a troca precisa fazer na tela e não
+   encosta na preferência. É o que o GPS usa. `setLocalAtivo` continua sendo o
+   toque do usuário, e só ele grava. */
+function setLocalAtivoSessao(id){
+  ensureLocais(); if(!LOCAIS[id]) return false;
+  localAtivo=id;
+  _localAplicaTroca(id);
+  return true;
+}
 function setLocalAtivo(id){
   ensureLocais(); if(!LOCAIS[id]) return;
   localAtivo=id;
@@ -1478,6 +1496,11 @@ function setLocalAtivo(id){
       _stxToast('Troquei de lugar agora, mas NÃO consegui guardar essa escolha neste aparelho — o armazenamento recusou. Na próxima abertura o app pode voltar para outro lugar.', 7000);
     }catch(e){}
   }
+  _localAplicaTroca(id);
+}
+/* Tudo o que a tela precisa refazer quando o lugar muda. Não sabe, e não deve
+   saber, se a troca foi escolha ou GPS. */
+function _localAplicaTroca(id){
   ndviMeans=null; if(ndviOverlay&&_map){ try{_map.removeLayer(ndviOverlay);}catch(e){} ndviOverlay=null; }
   closeLocalMenu();
   flyToLocal(id); render(); buildLocalChip(); if(typeof renderNdviRank==='function') renderNdviRank();

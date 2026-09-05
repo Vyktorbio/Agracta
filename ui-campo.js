@@ -590,7 +590,19 @@
   /* ====================================================================== */
 
   var _autoLocalFeito = false;   /* só tenta uma vez por sessão */
-  var _autoLocalVetado = false;  /* se a pessoa desfizer, não insiste */
+
+  /* O VETO TEM DE SOBREVIVER AO FECHAR DO APP.
+     Era uma variável de módulo: quem tocava em "Voltar para Iracemápolis" era
+     atendido naquele instante e via a mesma troca de novo na abertura seguinte,
+     e na outra, e na outra. Dizer não uma vez e ser ignorado todo dia é pior do
+     que o app nunca ter oferecido nada. Agora fica gravado. */
+  var VETO_KEY = 'agracta-auto-local-vetado';
+  function autoLocalVetado(){
+    try{ return localStorage.getItem(VETO_KEY) === '1'; }catch(err){ return false; }
+  }
+  function autoLocalVetar(){
+    try{ localStorage.setItem(VETO_KEY, '1'); }catch(err){}
+  }
 
   function e_(t){ return (typeof esc === 'function') ? esc(t) : String(t||''); }
 
@@ -621,15 +633,21 @@
 
   /* Local mais próximo de uma coordenada, com a distância — quem decide se
      vale trocar é quem chama, porque "perto" depende do contexto. */
+  /* Devolve o mais proximo E o segundo. Sem o segundo nao da para saber se a
+     resposta foi clara ou se foi cara ou coroa entre duas fazendas vizinhas --
+     e era cara ou coroa que estava mandando o usuario para o Picolini. */
   window.agLocalMaisProximo = function(lat, lng){
     try{ ensureLocais(); }catch(err){ return null; }
-    var melhor = null;
+    var todos = [];
     Object.keys(LOCAIS || {}).forEach(function(id){
       var c = centroLocal(id);
       if(!c) return;
-      var d = km(lat, lng, c.lat, c.lng);
-      if(!melhor || d < melhor.km) melhor = {id: id, km: d, nome: (LOCAIS[id]||{}).nome || id};
+      todos.push({id: id, km: km(lat, lng, c.lat, c.lng), nome: (LOCAIS[id]||{}).nome || id});
     });
+    if(!todos.length) return null;
+    todos.sort(function(a, b){ return a.km - b.km; });
+    var melhor = todos[0];
+    melhor.segundo = todos[1] || null;
     return melhor;
   };
 
@@ -649,12 +667,28 @@
              '</span>' +
            '</button>';
     });
+    /* Desligar a troca automatica nao pode ser porta sem maçaneta do outro lado:
+       quem disse "nao" um dia tem de conseguir dizer "pode de novo". Aparece so
+       quando esta desligada -- ligada, seria um botao para nao fazer nada. */
+    if(autoLocalVetado()){
+      h += '<div class="ag-local-dica">Troca automática pelo GPS: <b>desligada</b> ' +
+             '<button onclick="agAutoLocalReligar()">religar</button></div>';
+    }
     h += '<div class="ag-local-acoes">' +
            '<button onclick="agMenuAcao(\'abrirNovoLocal\')">+ Novo local</button>' +
            '<button onclick="agMenuAcao(\'gerenciarLocais\')">Gerenciar</button>' +
          '</div>';
     return h;
   }
+
+  window.agAutoLocalReligar = function(){
+    try{ localStorage.removeItem(VETO_KEY); }catch(err){}
+    _autoLocalFeito = false;
+    try{ if(typeof _stxToast === 'function')
+      _stxToast('Troca automática pelo GPS religada. Ela só age quando você estiver claramente numa fazenda.', 5000);
+    }catch(err){}
+    try{ agMenu(false); }catch(err){}
+  };
 
   /* Ir a um local é o gesto mais comum aqui: troca e sai da frente. */
   window.agIrParaLocal = function(id){
@@ -684,9 +718,19 @@
     el._t = setTimeout(function(){ el.classList.remove('on'); }, 9000);
   }
 
+  /* Perto o bastante para ser "estou nesta fazenda". 25 km era o raio de um
+     MUNICIPIO inteiro: da casa do usuario, em Iracemapolis, o centro do Picolini
+     caía dentro dele, e o app anunciava que ele estava numa fazenda onde nao
+     estava -- as 01h42 da manha, pela captura de tela do relato. */
+  var AUTO_PERTO_KM = 3;
+  /* E ainda assim so troca se a resposta for CLARA: a segunda fazenda tem de
+     estar bem mais longe. Empate tecnico entre duas vizinhas nao e informacao,
+     e sorteio -- e sorteio com a cara de quem sabe e o pior que o app pode fazer. */
+  var AUTO_FOLGA_KM = 5;
+
   window.agAutoLocal = function(forcado){
     if(_autoLocalFeito && !forcado) return;
-    if(_autoLocalVetado && !forcado) return;
+    if(autoLocalVetado() && !forcado) return;
     _autoLocalFeito = true;
     if(!existe('gpsBest')) return;
     try{ ensureLocais(); }catch(err){ return; }
@@ -698,15 +742,32 @@
       if(!b) return;
       var perto = window.agLocalMaisProximo(b.lat, b.lng);
       if(!perto) return;
-      /* 25 km é o raio de "estou nesta fazenda". Além disso a pessoa está no
-         escritório ou na estrada, e trocar o local seria palpite. */
-      if(perto.km > 25) return;
       if(perto.id === localAtivo) return;
+      /* Longe da fazenda: a pessoa esta em casa, no escritorio ou na estrada. */
+      if(perto.km > AUTO_PERTO_KM) return;
+      /* Perto de duas: o GPS nao sabe em qual delas voce esta. Ficar calado e a
+         unica resposta honesta -- e o lugar que a pessoa declarou continua
+         valendo, que e o que ela espera. */
+      if(perto.segundo && (perto.segundo.km - perto.km) < AUTO_FOLGA_KM) return;
+
       var anterior = localAtivo, nomeAnterior = ((LOCAIS[anterior] || {}).nome) || anterior;
-      try{ if(existe('setLocalAtivo')) window.setLocalAtivo(perto.id); }catch(err){ return; }
-      avisoLocal('Você está em <b>' + e_(perto.nome) + '</b> — local trocado.', 'Voltar para ' + e_(nomeAnterior), function(){
-        _autoLocalVetado = true;
-        try{ window.setLocalAtivo(anterior); }catch(err){}
+      /* TROCA DE SESSAO, nao preferencia. Ver setLocalAtivoSessao em app.js: o
+         GPS diz onde voce esta HOJE, nao onde voce trabalha. Gravar o palpite
+         por cima da escolha do usuario era a causa real do relato. */
+      /* Sem a troca de sessao disponivel (app.js antigo ainda em cache durante uma
+         atualizacao), NAO cai para setLocalAtivo: gravar o palpite por cima da
+         escolha do usuario e justamente o defeito que se esta consertando. Nao
+         trocar de local e um incomodo de um dia; sobrescrever a escolha e um
+         incomodo de todo dia, e foi o que aconteceu. */
+      if(!existe('setLocalAtivoSessao')) return;
+      try{ if(!window.setLocalAtivoSessao(perto.id)) return; }catch(err){ return; }
+      avisoLocal('Você está em <b>' + e_(perto.nome) + '</b> — local trocado só nesta sessão.',
+                 'Voltar para ' + e_(nomeAnterior), function(){
+        autoLocalVetar();
+        try{ window.setLocalAtivoSessao(anterior); }catch(err){}
+        try{ if(typeof _stxToast === 'function')
+          _stxToast('Voltei para ' + (nomeAnterior) + '. Não troco mais de local sozinho neste aparelho.', 6000);
+        }catch(err){}
       });
     });
   };
