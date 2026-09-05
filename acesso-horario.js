@@ -50,15 +50,34 @@
     var v = parseInt(m[1],10)*60 + parseInt(m[2],10);
     return (v>=0 && v<=1439) ? v : null;
   }
-  /* Normaliza qualquer formato guardado (novo, antigo ou vazio) numa só forma. */
+  /* Normaliza qualquer formato guardado (novo, antigo ou vazio) numa só forma.
+     ----------------------------------------------------------------------------
+     NÃO DECLARADO E DECLARADO VAZIO SÃO COISAS DIFERENTES, e confundir os dois
+     era uma falha para o lado errado num controle de acesso.
+
+     `dias` ausente = formato antigo, ninguém escolheu nada: o padrão seg–sex é o
+     que sempre valeu e continua valendo.
+
+     `dias: []` = alguém desmarcou TODOS os dias. Isso é uma decisão, e a decisão
+     é "nenhum dia". A linha antiga (`dias.length ? dias : [1,2,3,4,5]`) trocava
+     essa decisão por uma semana inteira de trabalho liberada -- o administrador
+     desmarcava tudo, o app salvava seg–sex e ainda avisava "horário salvo" com
+     os dias que ele não escolheu. De quebra, isso tornava a recusa de
+     `_janelaSalvar` ("Escolha pelo menos um dia") CÓDIGO MORTO: a lista nunca
+     chegava lá vazia.
+
+     Lista só com valores inválidos cai no mesmo caso: alguém declarou algo que
+     não dá para entender. Num portão de acesso, o que não se entende não vira
+     permissão. */
   function normalizar(j){
     if(!j || typeof j!=='object') return {on:false, dias:[1,2,3,4,5], iniMin:420, fimMin:1080};
-    var dias = Array.isArray(j.dias) ? j.dias.map(Number).filter(function(d){return d>=0&&d<=6;}) : [1,2,3,4,5];
+    var declarou = Array.isArray(j.dias);
+    var dias = declarou ? j.dias.map(Number).filter(function(d){return d>=0&&d<=6;}) : [1,2,3,4,5];
     var ini = (typeof j.iniMin==='number') ? j.iniMin : paraMin(j.ini);
     var fim = (typeof j.fimMin==='number') ? j.fimMin : paraMin(j.fim);
     return {
       on: !!j.on,
-      dias: dias.length ? dias : [1,2,3,4,5],
+      dias: dias,
       iniMin: (ini==null?420:ini),
       fimMin: (fim==null?1080:fim)
     };
@@ -80,6 +99,9 @@
   function descrever(j){
     j = normalizar(j);
     if(!j.on) return 'Acesso liberado a qualquer hora.';
+    /* Nenhum dia é uma janela que nunca abre. Dizer isso em voz alta é o que
+       impede que uma configuração assim passe despercebida na tela do admin. */
+    if(!j.dias.length) return 'Nenhum dia liberado — este acesso não abre nunca.';
     var d = j.dias.slice().sort(function(a,b){return a-b;}).map(function(i){return DIAS[i];}).join(', ');
     return d+' · '+hhmm(j.iniMin)+' às '+hhmm(j.fimMin);
   }
