@@ -2339,8 +2339,72 @@ function _mergeAval(la,ca){
   m.bruto=brutos;
   return m;
 }
-/* Aplicação: a edição mais NOVA vence o item inteiro (empate/sem carimbo: local, compat) */
-function _mergeAplicacao(la,ca){ return ((ca&&ca._ts)||0)>((la&&la._ts)||0) ? ca : la; }
+/* APLICAÇÃO: a edição mais nova vence — mas REGISTRO DE FATO não se perde.
+   ------------------------------------------------------------------------------
+   Isto devolvia o objeto inteiro do lado mais novo, e só. Numa aplicação isso
+   apaga coisas que não são "versão antiga de um campo": são o registro de algo
+   que aconteceu uma vez e não acontece de novo.
+
+   O caso real: de manhã, no campo, o técnico carimba o início da aplicação (hora
+   e clima), termina, carimba o fim, e grava a memória de cálculo na calculadora.
+   À tarde, do escritório, alguém abre a mesma aplicação e corrige a observação.
+   A edição da tarde é mais nova, vence o item inteiro — e leva junto o carimbo
+   de hora, o clima da aplicação e a MEMÓRIA DE CÁLCULO, que é a prova de quanto
+   produto foi para o tanque. Corrigir uma vírgula apagava a evidência BPL.
+
+   A regra que falta aqui o app já escreve em dois lugares: `_fundeAval` faz
+   "se o vencedor não tem, herda do perdedor", e a própria gravação da memória
+   diz que "regravar não apaga o anterior: a memória antiga vira histórico".
+
+   A lista abaixo é só de campos que ENTRAM E NÃO SAEM. `hora`, `janela` e
+   `consumoAvisos` ficam de fora de propósito: esses o app apaga deliberadamente
+   quando deixam de valer, e herdá-los ressuscitaria o que alguém removeu. */
+var APL_REGISTROS = ['inicio','fim','carimbo','memoriaCalculo'];
+function _aplChave(x){
+  try{
+    return (function ord(v){
+      if(v===null||typeof v!=='object') return JSON.stringify(v);
+      if(Array.isArray(v)) return '['+v.map(ord).join(',')+']';
+      return '{'+Object.keys(v).sort().map(function(k){ return JSON.stringify(k)+':'+ord(v[k]); }).join(',')+'}';
+    })(x);
+  }catch(e){ return String(x); }
+}
+/* União da trilha de memórias, sem repetir. A memória CORRENTE do lado perdedor
+   entra no histórico: alguém a conferiu e mandou gravar, e o app não descarta
+   cálculo conferido só porque o outro aparelho refez o dele depois. */
+function _mergeMemorias(novo, velho){
+  var out=[], vistos={};
+  function junta(lista){
+    /* Trilha corrompida (texto, número, objeto) não pode derrubar a
+       sincronização inteira: ignora-se o que não é lista e o resto passa. */
+    if(!Array.isArray(lista)) return;
+    lista.forEach(function(m){
+      if(m==null) return;
+      var k=_aplChave(m); if(vistos[k]) return;
+      vistos[k]=1; out.push(m);
+    });
+  }
+  junta(novo&&novo.memoriasAnteriores);
+  junta(velho&&velho.memoriasAnteriores);
+  if(velho&&velho.memoriaCalculo && novo && novo.memoriaCalculo &&
+     _aplChave(velho.memoriaCalculo)!==_aplChave(novo.memoriaCalculo)){
+    junta([velho.memoriaCalculo]);
+  }
+  return out;
+}
+function _mergeAplicacao(la,ca){
+  var novo=((ca&&ca._ts)||0)>((la&&la._ts)||0) ? ca : la;
+  var velho=(novo===ca)?la:ca;
+  if(!novo) return velho||null;
+  if(!velho) return novo;
+  var m={},k; for(k in novo) m[k]=novo[k];
+  APL_REGISTROS.forEach(function(f){
+    if(m[f]==null && velho[f]!=null) m[f]=velho[f];
+  });
+  var mem=_mergeMemorias(novo, velho);
+  if(mem.length) m.memoriasAnteriores=mem; else delete m.memoriasAnteriores;
+  return m;
+}
 function _mergeStudy(ls,cs){
   /* escalares do estudo: a edição mais NOVA vence; empate/sem carimbo: local (compat) */
   var lt=ls._ts||0, ct=cs._ts||0, m={},k;
