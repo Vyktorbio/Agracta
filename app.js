@@ -2264,6 +2264,17 @@ function _mergeById(la,ca,mergeFn,deleted){
 
    Só serve para mapa de lápide (id -> carimbo). Não use para juntar objetos de
    verdade: ali o máximo não quer dizer nada. */
+/* Fusão simples de dois objetos: o de `a` vence campo a campo. É o que o
+   `__config` precisa — ele guarda TEXTO (e-mail do administrador, hash da senha,
+   nomes de assinatura por e-mail), e a prioridade ali é por PAPEL: o lado do
+   administrador vence o do técnico.
+
+   Existe separada de `_mergeTombs` porque as duas responderam a mesma pergunta
+   por muito tempo e não deviam. Ver o comentário da outra: lápide guarda hora, e
+   hora se resolve pelo máximo; texto não tem máximo. Passar o `__config` pelo
+   máximo transformava `Number('machadovictorchaves@gmail.com')` em NaN e gravava
+   ZERO no lugar do e-mail, da senha e da tabela de nomes. */
+function _mergeCampos(a,b){ var o={},k; if(b)for(k in b)o[k]=b[k]; if(a)for(k in a)o[k]=a[k]; return o; }
 function _mergeTombs(a,b){
   var o={},k;
   a=a||{}; b=b||{};
@@ -2475,7 +2486,7 @@ function cloudMerge(local,cloud){
         isAdmin = true;
       }
       if(window._adminUnlocked) isAdmin = true; /* destravou o painel com a senha -> autoridade do admin nesta sessão */
-      var cfg = isAdmin ? _mergeTombs(lq, cq) : _mergeTombs(cq, lq); /* escalares (adminEmail/senha) por papel */
+      var cfg = isAdmin ? _mergeCampos(lq, cq) : _mergeCampos(cq, lq); /* escalares (adminEmail/senha) por papel */
       cfg.delUsers = _mergeDelUsers(lq.delUsers, cq.delUsers);
       cfg.allowedUsers = _mergeAllowedUsers(lq.allowedUsers, cq.allowedUsers, cfg.delUsers); /* UNIÃO: nunca perde autorizado, mesmo abrindo aparelho/domínio zerado */
       out.data[qid] = cfg;

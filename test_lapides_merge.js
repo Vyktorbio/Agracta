@@ -28,7 +28,7 @@ function pega(n){
 }
 var ctx = { Math:Math, Number:Number, Object:Object, JSON:JSON, console:console };
 vm.createContext(ctx);
-vm.runInContext([pega('_mergeTombs'), pega('_vivoTomb'), pega('_mergeById')].join('\n'), ctx);
+vm.runInContext([pega('_mergeTombs'), pega('_mergeCampos'), pega('_vivoTomb'), pega('_mergeById')].join('\n'), ctx);
 
 var f = 0, p = 0;
 function ck(ok, n){ if (ok){ p++; console.log('  ok    ' + n); } else { f++; console.log('  FALHA ' + n); } }
@@ -96,6 +96,38 @@ console.log('\n--- Entradas ausentes não estouram ---');
   try { ctx._mergeTombs(par[0], par[1]); ck(true, 'combinação nula #' + (i+1) + ' não derruba o merge'); }
   catch (e) { ck(false, 'combinação nula #' + (i+1) + ' derrubou: ' + e.message); }
 });
+
+console.log('\n--- LÁPIDE E CAMPO SÃO COISAS DIFERENTES ---');
+/* REGRESSÃO REAL, publicada e corrigida: ao trocar o merge de lápides pelo
+   máximo, uma das chamadas convertidas era o `__config` — que não guarda hora
+   nenhuma, guarda TEXTO: e-mail do administrador, hash da senha, tabela de
+   nomes de assinatura. `Number('machadovictorchaves@gmail.com')` é NaN, e o
+   máximo gravava ZERO no lugar dos três.
+   Máximo serve para carimbo. Texto não tem máximo. */
+var conf = { adminEmail:'admin@agracta.com', adminPassword:'21ecaab54a2b0913',
+             nomesPorEmail:{ 'tec@x.com':'Maria do Campo' } };
+var confNuvem = { adminEmail:'admin@agracta.com', adminPassword:'21ecaab54a2b0913',
+                  nomesPorEmail:{ 'tec@x.com':'Maria do Campo' } };
+var cfg = ctx._mergeCampos(conf, confNuvem);
+eq(cfg.adminEmail, 'admin@agracta.com', 'o e-mail do administrador sobrevive ao merge');
+eq(cfg.adminPassword, '21ecaab54a2b0913', 'o hash da senha sobrevive — virar zero resetava a senha para o padrão');
+eq(cfg.nomesPorEmail['tec@x.com'], 'Maria do Campo', 'a tabela de nomes de assinatura sobrevive');
+ck(typeof cfg.adminEmail === 'string', 'e continua sendo texto, não número');
+
+console.log('\n--- No campo, o lado de quem tem autoridade vence ---');
+var doAdmin = { adminPassword:'nova', meuNome:'Victor' };
+var daNuvem = { adminPassword:'antiga', meuNome:'Outro' };
+eq(ctx._mergeCampos(doAdmin, daNuvem).adminPassword, 'nova', 'o primeiro argumento vence campo a campo');
+eq(ctx._mergeCampos(daNuvem, doAdmin).adminPassword, 'antiga', 'e invertendo, o outro vence — a prioridade é de quem chama');
+eq(ctx._mergeCampos({a:1}, {b:2}).b, 2, 'campo que só um lado tem sobrevive');
+ck(!!ctx._mergeCampos(null, {a:1}) && ctx._mergeCampos(null,{a:1}).a === 1, 'lado nulo não estoura');
+ck(!!ctx._mergeCampos({a:1}, null) && ctx._mergeCampos({a:1},null).a === 1, 'nem do outro lado');
+
+console.log('\n--- E a lápide continua sendo lápide ---');
+/* As duas funções existem separadas de propósito; este par garante que ninguém
+   volte a usar uma no lugar da outra sem o teste reclamar. */
+eq(ctx._mergeTombs({q:1000}, {q:2000}).q, 2000, 'lápide: vence a hora mais nova');
+eq(ctx._mergeCampos({q:'1000'}, {q:'2000'}).q, '1000', 'campo: vence o lado prioritário, sem virar número');
 
 console.log('\n--- O merge por id respeita a lápide dos dois lados ---');
 var locais = [{id:'x', _ts:100}, {id:'y', _ts:3000}];

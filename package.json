@@ -1,0 +1,11 @@
+{
+  "name": "agracta",
+  "private": true,
+  "description": "Agracta — PWA de ensaios de campo. NAO ha build: o app e servido como esta. Este arquivo existe so para o teste que precisa de um DOM de verdade.",
+  "scripts": {
+    "test": "bash conferir.sh"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}
