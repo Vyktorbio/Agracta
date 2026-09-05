@@ -1284,12 +1284,70 @@ function ensureLocais(){
 function _localAtivoSalvo(){
   try{ return localStorage.getItem(LOCAL_ATIVO_KEY)||''; }catch(e){ return ''; }
 }
+
+/* O QUARTO DEGRAU, quando os três de cima não decidiram.
+   ------------------------------------------------------------------------------
+   Ele era `Object.keys(LOCAIS)[0]` — a ordem em que as chaves entraram no objeto,
+   que não é critério nenhum. O relato voltou: "por que ele sempre vai pro
+   Picolini? eu uso muito Iracemápolis". E voltou porque a correção anterior
+   dependia de HOME_LOCAL ainda existir: quem apagou o Iracemápolis original e
+   criou outro no lugar ficou com um id novo, o degrau 3 passou a apontar para um
+   lugar que não existe mais, e a decisão caiu de novo no acaso da ordem das
+   chaves.
+
+   Este degrau agora decide por EVIDÊNCIA, não por acaso: onde o usuário mexeu
+   por último. É um fato registrado — o carimbo de gravação dos estudos —, não um
+   palpite sobre preferência. Se ninguém mexeu em lugar nenhum, desempata por
+   quantidade de quadras e, em último caso, por nome. Qualquer coisa menos a
+   ordem do objeto, que muda sozinha entre aparelhos e não se explica a ninguém.
+
+   Continua valendo o que a correção anterior estabeleceu: ESTE DEGRAU NÃO GRAVA
+   a preferência. Se gravasse, o palpite apagaria a escolha do usuário e o erro
+   viraria permanente. */
+function _localPorEvidencia(){
+  try{
+    if(!LOCAIS || !Object.keys(LOCAIS).length) return null;
+    var rec={}, nq={};
+    function conta(q){
+      if(!q || q==='__config') return;
+      var loc=(QLOCAL && QLOCAL[q]) || HOME_LOCAL;
+      if(!LOCAIS[loc]) return;
+      nq[loc]=(nq[loc]||0)+1;
+      var d=(typeof data!=='undefined' && data) ? data[q] : null;
+      ((d&&d.estudos)||[]).forEach(function(st){
+        var ts=Number(st&&st._ts)||0;
+        if(ts>(rec[loc]||0)) rec[loc]=ts;
+      });
+    }
+    var visto={};
+    if(typeof QGEO!=='undefined' && QGEO) Object.keys(QGEO).forEach(function(q){ if(!visto[q]){visto[q]=1; conta(q);} });
+    if(typeof data!=='undefined' && data) Object.keys(data).forEach(function(q){ if(!visto[q]){visto[q]=1; conta(q);} });
+    var ids=Object.keys(LOCAIS);
+    ids.sort(function(a,b){
+      var ra=rec[a]||0, rb=rec[b]||0;
+      if(rb!==ra) return rb-ra;                       /* mexeu por último */
+      var qa=nq[a]||0, qb=nq[b]||0;
+      if(qb!==qa) return qb-qa;                       /* mais quadras */
+      var na=String((LOCAIS[a]&&LOCAIS[a].nome)||a), nb=String((LOCAIS[b]&&LOCAIS[b].nome)||b);
+      var c=na.localeCompare(nb,'pt-BR');
+      return c || String(a).localeCompare(String(b));  /* nome, depois id: sempre igual */
+    });
+    return ids[0]||null;
+  }catch(e){ return null; }
+}
+
+/* Por que o app abriu onde abriu. Só para a tela poder explicar quando foi
+   palpite — quem escolheu não precisa de aviso. */
+var _localMotivo='';
 function _resolveLocalAtivo(atual){
   if(!LOCAIS) return atual;
   var salvo=_localAtivoSalvo();
-  if(salvo && LOCAIS[salvo]) return salvo;
-  if(atual && LOCAIS[atual]) return atual;
-  if(LOCAIS[HOME_LOCAL]) return HOME_LOCAL;
+  if(salvo && LOCAIS[salvo]){ _localMotivo='escolha'; return salvo; }
+  if(atual && LOCAIS[atual]){ _localMotivo='sessao'; return atual; }
+  if(LOCAIS[HOME_LOCAL]){ _localMotivo='padrao'; return HOME_LOCAL; }
+  var ev=_localPorEvidencia();
+  if(ev){ _localMotivo='evidencia'; return ev; }
+  _localMotivo='evidencia';
   return Object.keys(LOCAIS)[0];
 }
 /* Enumera as quadras do local. Percorre QGEO (quadras de campo, que existem por
@@ -1360,6 +1418,21 @@ function _locCss(){ if(document.getElementById('locCss'))return; var s=document.
   '.lm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-soft,#1e2e1e)}.lm-info{display:flex;flex-direction:column;gap:2px;min-width:0}.lm-info b{color:var(--text,#eaf3ed);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lm-info span{font-size:11px;color:var(--text-3,#6a8a6a)}.lm-del{flex:none;background:rgba(216,75,67,.12);color:var(--danger,#d84b43);border:1px solid rgba(216,75,67,.42);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}.lm-del:hover{background:rgba(216,75,67,.22)}';
   document.head.appendChild(s);
 }
+/* Aviso de abertura por palpite: uma vez por sessão, e só quando havia escolha
+   a fazer. Abrir no lugar errado sem dizer nada foi o relato duas vezes — a
+   pessoa via o app noutro lugar e não tinha como saber por quê nem o que fazer.
+   O toque no nome do lugar grava a preferência e o palpite nunca mais acontece. */
+var _localAvisou=false;
+function _localAvisaPalpite(){
+  if(_localAvisou) return;
+  if(_localMotivo!=='evidencia') return;
+  if(!LOCAIS || Object.keys(LOCAIS).length<2) return;   /* um lugar só: não houve escolha */
+  _localAvisou=true;
+  var nome=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
+  try{ if(typeof _stxToast==='function')
+    _stxToast('Abrindo em '+nome+' — onde você mexeu por último. Toque no nome do lugar para escolher outro e o app passa a abrir sempre nele.', 7000);
+  }catch(e){}
+}
 function buildLocalChip(){
   _locCss(); ensureLocais();
   var host=document.querySelector('.top-bar > div:first-child'); if(!host) return;
@@ -1368,6 +1441,7 @@ function buildLocalChip(){
   var nome=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
   var n=quadrasDoLocal(localAtivo).length;
   chip.innerHTML='<b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
+  _localAvisaPalpite();
 }
 function closeLocalMenu(){ var m=document.getElementById('localMenu'); if(m) m.remove(); document.removeEventListener('click', _locMenuOutside, true); }
 function _locMenuOutside(e){ var m=document.getElementById('localMenu'), c=document.getElementById('localChip'); if(m && !m.contains(e.target) && c && !c.contains(e.target)) closeLocalMenu(); }
@@ -4593,7 +4667,12 @@ function _isoShift(iso,days){
 }
 function _stxCopyFallback(text){ try{ var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=document.execCommand('copy'); document.body.removeChild(ta); return ok; }catch(e){ return false; } }
 function _stxCopy(text){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function(){return true;},function(){return _stxCopyFallback(text);}); }catch(e){} return Promise.resolve(_stxCopyFallback(text)); }
-function _stxToast(msg){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:#1f5a2a;color:#eafaea;padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt); window._stxTt=setTimeout(function(){t.style.opacity='0';},1900); }
+function _stxToast(msg, ms){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:#1f5a2a;color:#eafaea;padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none;max-width:min(92vw,520px);white-space:normal;text-align:center;line-height:1.35'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt);
+  /* 1,9 s dá para "✓ salvo". Não dá para uma frase que explica algo e pede uma
+     ação — some antes de ser lida, e aí o aviso é o mesmo que silêncio. Quem
+     precisa de mais tempo pede; ninguém mais muda de comportamento. */
+  var _ms=(typeof ms==='number' && ms>0)?ms:1900;
+  window._stxTt=setTimeout(function(){t.style.opacity='0';},_ms); }
 /* ===================== ESTATÍSTICA — ANOVA (DBC) + Tukey HSD + letrinhas ===================== */
 function _lgamma(x){ var c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5]; var y=x,t=x+5.5; t-=(x+0.5)*Math.log(t); var sm=1.000000000190015; for(var j=0;j<6;j++){y++;sm+=c[j]/y;} return -t+Math.log(2.5066282746310005*sm/x); }
 function _betacf(a,b,x){ var FPMIN=1e-30,qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap; if(Math.abs(d)<FPMIN)d=FPMIN; d=1/d; var h=d; for(var m=1;m<=240;m++){ var m2=2*m,aa=m*(b-m)*x/((qam+m2)*(a+m2)); d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN; c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN; d=1/d; h*=d*c; aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2)); d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN; c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN; d=1/d; var del=d*c; h*=del; if(Math.abs(del-1)<3e-7)break; } return h; }

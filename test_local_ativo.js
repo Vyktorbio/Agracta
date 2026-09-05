@@ -53,11 +53,15 @@ var ctx={
   },
   LOCAL_ATIVO_KEY:'iracema-local-ativo',
   HOME_LOCAL:'iracemapolis',
-  LOCAIS:null
+  LOCAIS:null, QGEO:null, QLOCAL:null, data:null, Number:Number
 };
 ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
-vm.runInContext([pega('_localAtivoSalvo'), pega('_resolveLocalAtivo')].join('\n'), ctx);
+vm.runInContext([pega('_localAtivoSalvo'), pega('_localPorEvidencia'), pega('_resolveLocalAtivo'),
+                 pega('_localAvisaPalpite')].join('\n'), ctx);
+ctx._localAvisou=false;
+var TOASTS=[];
+ctx._stxToast=function(m,ms){ TOASTS.push({m:m, ms:ms}); };
 
 /* Os lugares reais do usuário. A ordem das chaves é a ordem de criação — e
    "picolini" ser a primeira é exatamente o acidente que causava o relato. */
@@ -95,14 +99,106 @@ eq(ctx._resolveLocalAtivo('picolini'), 'fazenda', 'e por isso ela ainda pode ser
 
 console.log('\n--- Lugar apagado não trava o app ---');
 LS={'iracema-local-ativo':'lugar-que-nao-existe-mais'};
-ctx.LOCAIS=nuvem();
-eq(ctx._resolveLocalAtivo(null), 'picolini', 'preferência morta cai para o primeiro disponível');
+ctx.LOCAIS=nuvem(); ctx.QGEO=null; ctx.QLOCAL=null; ctx.data=null;
+/* Sem nenhuma evidência de trabalho, o desempate é por NOME — determinístico e
+   explicável. Antes era a ordem das chaves, que é diferente em cada aparelho. */
+eq(ctx._resolveLocalAtivo(null), 'fazenda', 'preferência morta cai num critério estável, não na ordem do objeto');
 eq(ctx._resolveLocalAtivo('sitio'), 'sitio', 'e um ativo válido na sessão vale mais que o palpite');
 
 console.log('\n--- O lugar padrão vem antes do palpite ---');
 LS={};
 ctx.LOCAIS={picolini:{nome:'Picolini'}, iracemapolis:{nome:'Local principal'}};
 eq(ctx._resolveLocalAtivo(null), 'iracemapolis', 'sem preferência, o padrão vence a ordem do objeto');
+
+console.log('\n--- O RELATO QUE VOLTOU: "por que ele sempre vai pro Picolini?" ---');
+/* A correção anterior dependia de HOME_LOCAL ainda existir. Quem APAGOU o
+   Iracemápolis original e criou outro no lugar ficou com um id novo: o degrau do
+   padrão passou a apontar para um lugar que não existe mais, e a decisão caiu de
+   volta no acaso da ordem das chaves — Picolini. O usuário trabalha em
+   Iracemápolis todo dia e o app abre noutro lugar, sem explicação. */
+LS={};                                            /* preferência perdida no logout */
+ctx.LOCAIS={ picolini:{nome:'Picolini'},
+             loc123:{nome:'Iracemápolis'},        /* recriado: id novo, não é HOME_LOCAL */
+             sitio:{nome:'Sítio'} };
+ctx.QLOCAL={ qA:'picolini', qB:'loc123', qC:'sitio' };
+ctx.QGEO={ qA:1, qB:1, qC:1 };
+ctx.data={ __config:{},
+  qA:{estudos:[{_ts:1000}]},
+  qB:{estudos:[{_ts:5000}, {_ts:9000}]},          /* onde ele mexeu por último */
+  qC:{estudos:[{_ts:2000}]} };
+eq(ctx._resolveLocalAtivo(null), 'loc123', 'abre onde o usuário mexeu por último, não no primeiro do objeto');
+eq(LS['iracema-local-ativo'], undefined, 'e continua sem gravar: a evidência é palpite, não escolha');
+eq(ctx._localMotivo, 'evidencia', 'e o app sabe dizer que foi ele quem escolheu');
+
+console.log('\n--- A escolha do usuário ainda vence a evidência ---');
+LS={'iracema-local-ativo':'picolini'};
+eq(ctx._resolveLocalAtivo(null), 'picolini', 'quem tocou no nome do lugar manda, mesmo trabalhando mais noutro');
+eq(ctx._localMotivo, 'escolha', 'e o motivo é a escolha, não o palpite');
+
+console.log('\n--- A evidência é o carimbo do trabalho, não a quantidade de quadras ---');
+LS={};
+ctx.QLOCAL={ q1:'picolini', q2:'picolini', q3:'picolini', q4:'loc123' };
+ctx.QGEO={ q1:1, q2:1, q3:1, q4:1 };
+ctx.data={ q1:{estudos:[{_ts:10}]}, q2:{estudos:[]}, q3:{estudos:[]},
+           q4:{estudos:[{_ts:99}]} };
+eq(ctx._resolveLocalAtivo(null), 'loc123', 'três quadras paradas não vencem uma quadra em uso');
+
+console.log('\n--- Sem trabalho nenhum, desempata por quadras; depois por nome ---');
+ctx.data={ q1:{estudos:[]}, q2:{estudos:[]}, q3:{estudos:[]}, q4:{estudos:[]} };
+eq(ctx._resolveLocalAtivo(null), 'picolini', 'sem carimbo de trabalho, ganha quem tem mais quadras');
+ctx.QLOCAL={ q1:'picolini', q4:'loc123' }; ctx.QGEO={ q1:1, q4:1 };
+ctx.data={ q1:{estudos:[]}, q4:{estudos:[]} };
+eq(ctx._resolveLocalAtivo(null), 'loc123', 'empatado em quadras, ganha o primeiro nome em ordem alfabética');
+
+console.log('\n--- A resposta não depende da ordem das chaves ---');
+/* O mesmo acervo, com os lugares em outra ordem, tem de dar a mesma resposta:
+   é justamente a ordem do objeto que difere de um aparelho para outro. */
+LS={};
+ctx.QLOCAL={ qA:'picolini', qB:'loc123' }; ctx.QGEO={ qA:1, qB:1 };
+ctx.data={ qA:{estudos:[{_ts:1}]}, qB:{estudos:[{_ts:2}]} };
+ctx.LOCAIS={ picolini:{nome:'Picolini'}, loc123:{nome:'Iracemápolis'} };
+var ordemA=ctx._resolveLocalAtivo(null);
+ctx.LOCAIS={ loc123:{nome:'Iracemápolis'}, picolini:{nome:'Picolini'} };
+var ordemB=ctx._resolveLocalAtivo(null);
+eq(ordemA, ordemB, 'invertida a ordem das chaves, a decisão é a mesma');
+eq(ordemA, 'loc123', 'e é a certa nas duas');
+
+console.log('\n--- Acervo estragado não derruba a abertura do app ---');
+[null, {}, {q:null}, {q:{estudos:null}}, {q:{estudos:[null]}}, {q:{estudos:[{_ts:'abc'}]}}]
+.forEach(function(mau,i){
+  ctx.data=mau;
+  try{ ck(!!ctx._resolveLocalAtivo(null), 'acervo malformado #'+(i+1)+': o app ainda abre em algum lugar'); }
+  catch(e){ ck(false, 'acervo malformado #'+(i+1)+' derrubou: '+e.message); }
+});
+ctx.QGEO=null; ctx.QLOCAL=null; ctx.data=null;
+
+console.log('\n--- Quando o app escolhe sozinho, ele diz ---');
+/* Abrir no lugar errado sem falar nada foi o relato duas vezes: a pessoa via o
+   app noutro lugar e não tinha como saber por quê nem o que fazer a respeito. */
+TOASTS=[]; ctx._localAvisou=false;
+ctx.LOCAIS={picolini:{nome:'Picolini'}, loc123:{nome:'Iracemápolis'}};
+ctx.localAtivo='loc123'; ctx._localMotivo='evidencia';
+ctx._localAvisaPalpite();
+eq(TOASTS.length, 1, 'o app avisa que foi ele quem escolheu o lugar');
+ck(/Iracemápolis/.test(TOASTS[0].m), 'e diz em qual lugar abriu');
+ck(/Toque no nome/.test(TOASTS[0].m), 'e diz como trocar de uma vez por todas');
+ck(TOASTS[0].ms > 1900, 'com tempo de leitura maior que o de um "salvo"');
+ctx._localAvisaPalpite();
+eq(TOASTS.length, 1, 'e avisa UMA vez por sessão, não a cada redesenho da barra');
+
+console.log('\n--- Quem escolheu não recebe aviso ---');
+TOASTS=[]; ctx._localAvisou=false; ctx._localMotivo='escolha';
+ctx._localAvisaPalpite();
+eq(TOASTS.length, 0, 'preferência gravada não gera aviso nenhum');
+TOASTS=[]; ctx._localAvisou=false; ctx._localMotivo='padrao';
+ctx._localAvisaPalpite();
+eq(TOASTS.length, 0, 'nem o lugar padrão declarado');
+
+console.log('\n--- Com um lugar só, não houve escolha a explicar ---');
+TOASTS=[]; ctx._localAvisou=false; ctx._localMotivo='evidencia';
+ctx.LOCAIS={picolini:{nome:'Picolini'}}; ctx.localAtivo='picolini';
+ctx._localAvisaPalpite();
+eq(TOASTS.length, 0, 'um lugar só: avisar seria ruído');
 
 console.log('\n--- Nada quebra quando não há lugar nenhum ---');
 LS={};
