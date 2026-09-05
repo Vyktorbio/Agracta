@@ -344,6 +344,9 @@ var _saveErrAlerted=false;
 var AGR_LOCAL_STATE_TS_KEY='agracta-local-state-ts';
 function save(){
   var ok=false, savedAt=Date.now(), err=null;
+  /* O indice entre ensaios foi montado a partir do que estava gravado. Gravou de
+     novo, ele deixa de valer -- e histórico velho é pior que histórico nenhum. */
+  try{ _histInvalida(); }catch(e){}
   try{
     localStorage.setItem("iracema-v7",JSON.stringify(data));
     ok=true;
@@ -12501,6 +12504,9 @@ function renderStudyEditModal(){
          continua significando água, então nada muda em estudo antigo. */
       h+='<input type="text" placeholder="Veículo — completa a calda (vazio = Água)" data-f="veiculo" list="seVeiculos" value="'+esc(t.veiculo||'')+'">';
       h+='<input type="text" placeholder="Observações (opcional)" data-f="obs" value="'+esc(t.obs)+'">';
+      /* Histórico entre ensaios. Devolve '' quando não há nada anterior — a
+         tela não escreve "nenhum registro" em todo tratamento novo. */
+      try{ h+=histTratHtml(t, studyCultura(s, data[curV]||{})); }catch(e){}
       /* RECEITA: um tratamento raramente é um produto só. Cada componente vira uma
          linha própria — o catálogo passa a ver dois itens, e "onde este adjuvante foi
          usado" ganha resposta. */
@@ -17861,6 +17867,184 @@ function tratEquivalenteIA(t){
 }
 /* Uma linha por ativo, nomeando cada um quando o texto trouxe o nome. Produto de
    ativo único continua saindo exatamente como saía antes. */
+/* ======================================================= HISTÓRICO ENTRE ENSAIOS
+   "Eu já usei isto?" é a pergunta que quem monta um tratamento faz de cabeça,
+   e o Agracta já tinha a resposta guardada — espalhada por um estudo de cada
+   vez. Este bloco liga o índice de vendor/historico-core.js à tela.
+
+   O QUE ELE DIZ: em quantos ensaios seus o ativo entrou, em que culturas,
+   contra que alvos e em que doses. Com link para abrir cada um.
+
+   O QUE ELE NUNCA DIZ: se funcionou. Ensaios diferentes têm delineamento,
+   pressão de praga, ano e local diferentes; uma eficácia média entre eles
+   seria um número que não corresponde a experimento nenhum. Quem quiser
+   comparar abre os dois ensaios — e aí está comparando de olho aberto.
+
+   Ver as quatro regras escritas em vendor/historico-core.js. */
+
+/* O texto de ativos de um tratamento, na ordem em que a identidade é confiável:
+   a receita estruturada manda, depois o item ligado, depois o campo livre. Nome
+   comercial entra só como último recurso, e o motor marca que não resolveu. */
+function _histIaDoTrat(t){
+  if(!t) return '';
+  var partes=[];
+  try{
+    tratComponentes(t).forEach(function(c){
+      var it=c&&c.itemId?itemPorId(c.itemId):null;
+      var a=(it&&it.ativos)||(c&&c.nome)||'';
+      if(String(a).trim()) partes.push(String(a).trim());
+    });
+  }catch(e){}
+  if(partes.length) return partes.join(' + ');
+  try{ var it2=tratItem(t); if(it2&&String(it2.ativos||'').trim()) return String(it2.ativos).trim(); }catch(e){}
+  var livre=String((t.ingredienteAtivo||t.ia||'')).trim();
+  if(livre) return livre;
+  return String(t.produto||'').trim();
+}
+
+/* Achata data{} no formato que o motor espera. A cultura do estudo herda a da
+   quadra quando não foi declarada — é a mesma regra que a figura já usa. */
+function _histAcervo(){
+  var out=[];
+  try{
+    Object.keys(data||{}).forEach(function(qid){
+      var q=data[qid]; if(!q||!Array.isArray(q.estudos)) return;
+      q.estudos.forEach(function(st){
+        if(!st||!st.id) return;
+        out.push({
+          qid:qid, sid:st.id, codigo:st.codigo||st.id,
+          cultura:studyCultura(st,q), alvo:String(st.alvo||'').trim(),
+          tipoEstudo:String(st.tipoEstudo||'').trim(),
+          dataInicio:String(st.dataInicio||''),
+          finalizado:estudoFinalizado(st),
+          tratamentos:(st.tratamentos||[]).map(function(t){
+            return { id:(t&&t.id)||'', produto:(t&&t.produto)||'', ia:_histIaDoTrat(t),
+                     dose:(t&&t.dose)||'', testemunha:!!(t&&t.testemunha) };
+          })
+        });
+      });
+    });
+  }catch(e){}
+  return out;
+}
+
+/* O índice é caro o bastante para não refazer a cada tecla e barato o bastante
+   para não virar cache eterno. O selo muda quando um estudo entra, sai ou é
+   gravado — que é exatamente quando o histórico deixa de valer. */
+var _histCache={selo:'', indice:null};
+function _histSelo(){
+  var n=0, ts=0;
+  try{
+    Object.keys(data||{}).forEach(function(qid){
+      var q=data[qid]; if(!q||!Array.isArray(q.estudos)) return;
+      q.estudos.forEach(function(st){ if(!st) return; n++; if(st._ts>ts) ts=st._ts; });
+    });
+  }catch(e){}
+  return n+'|'+ts;
+}
+function _histDeps(){
+  return { AtivosEN:(typeof window!=='undefined'?window.AtivosEN:null),
+           DoseCore:(typeof window!=='undefined'?window.DoseCore:null) };
+}
+function _histIndice(){
+  var H=(typeof window!=='undefined')?window.HistoricoCore:null;
+  if(!H) return null;
+  var selo=_histSelo();
+  if(_histCache.indice && _histCache.selo===selo) return _histCache.indice;
+  _histCache={selo:selo, indice:H.indexar(_histAcervo(), _histDeps())};
+  return _histCache.indice;
+}
+function _histInvalida(){ _histCache={selo:'', indice:null}; }
+
+/* Os ativos que este tratamento traz, já separados. Sem DoseCore, o texto
+   inteiro conta como um nome só — o motor avisa isso em `resolvido`. */
+function _histNomesDoTrat(t){
+  var txt=_histIaDoTrat(t); if(!txt) return [];
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  var nomes=[];
+  if(D&&D.ativosDe){
+    try{ (D.ativosDe(txt)||[]).forEach(function(a){ if(a&&String(a.ia||'').trim()) nomes.push(String(a.ia).trim()); }); }catch(e){}
+  }
+  if(!nomes.length) nomes=[txt];
+  var visto={}, out=[];
+  nomes.forEach(function(n){ var k=n.toLowerCase(); if(visto[k])return; visto[k]=1; out.push(n); });
+  return out;
+}
+
+/* Qual ensaio está aberto agora — para ele não ser histórico de si mesmo. */
+function _histSidAtual(){
+  try{ if(typeof workingStudy!=='undefined' && workingStudy && workingStudy.id) return workingStudy.id; }catch(e){}
+  return '';
+}
+
+var _histAbertos={};
+function histToggle(chave){
+  _histAbertos[chave]=!_histAbertos[chave];
+  try{ renderStudyEditModal(); }catch(e){}
+}
+
+/* A linha discreta abaixo do tratamento. Devolve '' quando não há histórico:
+   "nenhum registro anterior" em todo tratamento novo ocupa espaço para não
+   informar nada. */
+function histTratHtml(t, cultura){
+  var H=(typeof window!=='undefined')?window.HistoricoCore:null;
+  if(!H||!t||t.testemunha) return '';
+  var idx=_histIndice(); if(!idx) return '';
+  var deps=_histDeps(), sid=_histSidAtual(), h='';
+  _histNomesDoTrat(t).forEach(function(nome){
+    var r=null;
+    try{ r=H.consultar(idx, nome, {excluirSid:sid, cultura:cultura}, deps); }catch(e){ r=null; }
+    if(!r) return;
+    var frase=H.resumo(r);
+    if(!frase) return;
+    var aberto=!!_histAbertos[r.chave];
+    h+='<div class="e-hint" style="margin:2px 0 0">'+
+       'Já usado — <b>'+esc(r.rotulo)+'</b>: '+esc(frase)+
+       ' <a href="javascript:void(0)" onclick="histToggle(\''+esc(r.chave)+'\')" style="color:#8fbf8f">'+
+       (aberto?'ocultar':'ver os ensaios')+'</a>';
+    if(!r.resolvido){
+      /* Nome que a tabela ISO não conhece casou por texto literal. Dizer isso é
+         a diferença entre "não achei mais nada" e "não sei procurar direito". */
+      h+='<br><span style="color:#dccd8c">Busca por texto: <b>'+esc(r.rotulo)+
+         '</b> não está na tabela de nomes ISO, então outra grafia do mesmo ativo não seria encontrada.</span>';
+    }
+    if(r.naCultura===0 && cultura){
+      h+='<br><span style="color:#9fb1a5">Nunca usado em '+esc(cultura)+' — os ensaios abaixo são de outra cultura.</span>';
+    }
+    if(aberto) h+=_histListaHtml(r);
+    h+='</div>';
+  });
+  return h;
+}
+
+/* AAAA-MM-DD em DD/MM/AAAA, sem passar por new Date(): data pura interpretada
+   como UTC volta um dia atrás em fuso negativo, e o Brasil inteiro está em um. */
+function _histData(iso){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||''));
+  return m ? (m[3]+'/'+m[2]+'/'+m[1]) : String(iso||'');
+}
+
+function _histListaHtml(r){
+  var h='<div style="border-left:2px solid #2a3a2a;margin:5px 0 2px;padding:2px 0 2px 8px">';
+  r.ensaios.forEach(function(e){
+    var p=[];
+    if(e.cultura) p.push(esc(e.cultura));
+    if(e.alvo) p.push(esc(e.alvo));
+    if(e.doses.length) p.push(esc(e.doses.join(' · ')));
+    if(e.dataInicio) p.push(esc(_histData(e.dataInicio)));
+    else p.push('<span style="color:#9fb1a5">sem data de início</span>');
+    h+='<div style="margin:2px 0">'+
+       '<a href="javascript:void(0)" onclick="openStudyDetail(\''+esc(e.qid)+'\',\''+esc(e.sid)+'\')" style="color:#8fbf8f;font-weight:700">'+
+       esc(e.codigo||e.sid)+'</a>'+
+       (e.finalizado?' <span style="color:#9fb1a5">· finalizado</span>':'')+
+       ' <span style="color:#9fb1a5">'+p.join(' · ')+'</span></div>';
+  });
+  /* O que este painel deliberadamente NÃO mostra: resultado. Ver regra 1. */
+  h+='<div style="color:#9fb1a5;font-size:10.5px;margin-top:4px">Abra um ensaio para ver o resultado dele. O Agracta não combina resultados de ensaios diferentes.</div>';
+  h+='</div>';
+  return h;
+}
+
 function tratEquivalenteIATexto(r){
   var D=(typeof window!=='undefined')?window.DoseCore:null;
   if(!r||!r.itens||!r.itens.length) return '';
