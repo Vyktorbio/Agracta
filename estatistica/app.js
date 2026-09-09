@@ -4,9 +4,9 @@
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
                     "posthoc.py","anova.py","glmcount.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-6";
+const APP_VERSION = "bioensaio-auditoria-7";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v39-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v41-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -2682,11 +2682,12 @@ function renderGlm(out, a){
   const rotulo = a.proporcoes_estimadas ? "Proporção estimada" : "Média estimada";
   let head = `<div>${chip(a.familia,"chip-info")} ${a.sobredispersao?chip("φ="+fmt(a.sobredispersao.phi,2),(a.sobredispersao.sobredisperso?"chip-alerta":"chip-ok")):""}</div>`;
   if(a.nota_modelo) head += `<p class="dica">${a.nota_modelo}</p>`;
+  if(a.formula) head += `<p class="dica">Modelo: ${esc(a.formula)}. ${esc(a.escala_medias||'')}.</p>`;
   out.appendChild(secao(a.tipo_analise, head));
 
   let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${esc(rotulo)}</th><th>Grupo</th></tr></thead><tbody>`;
   a.ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(medias[t],3)}</td><td><span class="letra">${esc(a.letras[t]||"")}</span></td></tr>`);
-  h+=`</tbody></table></div><p class="dica">Tratamentos com a mesma letra não diferem (α=${a.alfa}).</p>`;
+  h+=`</tbody></table></div><p class="dica">Compartilhar uma letra indica que não se detectou diferença (α=${a.alfa}); não comprova equivalência.</p>`;
   const b=secao("Comparação de tratamentos", h);
   const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);
   out.appendChild(b);
@@ -2696,20 +2697,29 @@ function renderGlm(out, a){
 function renderComparacoes(out, cm, descritiva){
   const medias={}, erros={};
   (descritiva||[]).forEach(d=>{ medias[d.tratamento]=d.media; if(d.ep!=null) erros[d.tratamento]=d.ep; });
-  ["tukey","scott_knott","dunn"].forEach(metodo=>{
+  let principal=true;
+  ["ajustadas","tukey","scott_knott","dunn"].forEach(metodo=>{
     const r=cm[metodo]; if(!r) return;
     const ordem = r.ordem || Object.keys(r.letras);
     const valores = r.medias_exibicao || r.medias || r.medianas || medias;
-    const rotuloValor = r.medianas ? "Mediana" : (r.escala_teste && r.escala_teste !== "original" ? "Média (escala original)" : "Média");
+    const ajustadaOriginal=r.ajustadas && (!r.escala_teste || r.escala_teste==='original');
+    const ep=ajustadaOriginal?r.erros_padrao||{}:erros;
+    const rotuloValor = r.medianas ? "Mediana" : ajustadaOriginal ? "Média ajustada" : (r.escala_teste && r.escala_teste !== "original" ? "Média (escala original)" : "Média");
     let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotuloValor}</th>${r.medianas?"":"<th>± EP</th>"}<th>Grupo</th></tr></thead><tbody>`;
-    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${erros[t]!=null?"± "+fmt(erros[t],2):"—"}</td>`}<td><span class="letra">${esc(r.letras[t]||"")}</span></td></tr>`);
-    h+=`</tbody></table></div><p class="dica">Mesma letra = não diferem (α=${r.alfa}).${r.medianas?"":" Barras = média ± erro-padrão."}`+
+    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${ep[t]!=null?"± "+fmt(ep[t],2):"—"}</td>`}<td><span class="letra">${esc(r.letras[t]||"")}</span></td></tr>`);
+    h+=`</tbody></table></div><p class="dica">Compartilhar uma letra indica que não se detectou diferença (α=${r.alfa}); não comprova equivalência.${r.medianas?"":" Barras = média ± erro-padrão."}`+
       (r.escala_teste && r.escala_teste !== "original" ? ` Agrupamento calculado na escala ${esc(r.escala_teste)}; valores exibidos na escala original.` : "")+
       `</p>`;
+    if(r.comparacoes?.length){
+      h+='<details class="comparacoes-detalhe"><summary>Diferenças entre tratamentos</summary><div class="tab-rolavel"><table><thead><tr><th>Comparação</th><th>Diferença (2 − 1)</th><th>IC simultâneo</th><th>p ajustado</th></tr></thead><tbody>';
+      r.comparacoes.forEach(c=>{h+=`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td><td>${fmt(c.diferenca,3)}</td><td>${c.ic_inf!=null?fmt(c.ic_inf,3)+' a '+fmt(c.ic_sup,3):'—'}</td><td>${fmt(c.p_ajustado??c.p,4)}</td></tr>`;});
+      h+='</tbody></table></div><p class="dica">Diferenças na escala do modelo. IC simultâneo disponível para Tukey.</p></details>';
+    }
     const b=secao(r.metodo, h);
     const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);
-    out.appendChild(b);
-    desenharBarras(cv, ordem, valores, r.letras, r.medianas?"Mediana":"Média", r.medianas?null:erros);
+    if(principal){out.appendChild(b);principal=false;}
+    else{const extra=el('details','analise-secundaria');extra.appendChild(el('summary','',r.metodo));extra.appendChild(b);out.appendChild(extra);}
+    desenharBarras(cv, ordem, valores, r.letras, rotuloValor, r.medianas?null:ep);
   });
 }
 
@@ -3452,7 +3462,11 @@ function __agractaHandoff(payload){
         setModo(modo);
         var papeis = (modo === 'analise') ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null;
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
-        /* tipo de resposta: deixa o MOTOR detectar pelos dados (mais confiável que o rótulo da avaliação) */
+        /* A natureza registrada tem precedência sobre adivinhar pela aparência
+           dos números: uma contagem pequena não vira medida contínua. */
+        var tipoEl=document.getElementById('opt-tipo');
+        if(tipoEl) tipoEl.value='';
+        _setSel('opt-tipo', _agTipoResp(payload.tipo || resposta));
         _set('opt-unidade', payload.doseUnit);
         if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
         if(typeof atualizarPipeline==='function') atualizarPipeline();

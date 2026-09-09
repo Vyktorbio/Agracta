@@ -63,8 +63,10 @@
     var sprayPlotsOnlyMl=sprayPerPlotMl*numPlots;
     var productPlotsOnly=productPerPlot*numPlots;
     var deadProduct=concentration*(deadVolumeMl/1000);
-    var sprayTotalMl=sprayPlotsOnlyMl+deadVolumeMl;
-    var productTotal=productPlotsOnly+deadProduct;
+    var minimumOperatingMl=Math.max(0,parseNum(input.minimumOperatingMl));
+    var sprayTotalMl=Math.max(sprayPlotsOnlyMl+deadVolumeMl,minimumOperatingMl);
+    var minimumAdditionMl=sprayTotalMl-sprayPlotsOnlyMl-deadVolumeMl;
+    var productTotal=concentration*sprayTotalMl/1000;
     var sprayPerBottleMl=sprayTotalMl/numBottles;
     var productPerBottle=productTotal/numBottles;
     var waterPerBottleMl=cfg.liquid?Math.max(sprayPerBottleMl-productPerBottle,0):sprayPerBottleMl;
@@ -80,6 +82,9 @@
       productPlotsOnly:round(productPlotsOnly),
       deadVolumeMl:round(deadVolumeMl),
       deadProduct:round(deadProduct),
+      minimumOperatingMl:round(minimumOperatingMl),
+      minimumAdditionMl:round(minimumAdditionMl),
+      residualMl:round(sprayTotalMl-sprayPlotsOnlyMl),
       sprayTotalMl:round(sprayTotalMl),
       productTotal:round(productTotal),
       sprayPerBottleMl:round(sprayPerBottleMl),
@@ -297,7 +302,9 @@
 
     var plotAreaHa=(plotLength*plotWidth)/10000;
     var sprayPerPlotMl=sprayVolume*plotAreaHa*1000;
-    var sprayTotalMl=sprayPerPlotMl*numPlots+deadVolumeMl;
+    var minimumOperatingMl=Math.max(0,parseNum(input.minimumOperatingMl));
+    var appliedMl=sprayPerPlotMl*numPlots;
+    var sprayTotalMl=Math.max(appliedMl+deadVolumeMl,minimumOperatingMl);
     var sprayPerBottleMl=sprayTotalMl/numBottles;
     var haTotal=sprayVolume>0?(sprayTotalMl/1000)/sprayVolume:0; /* ha equivalentes na calda preparada */
 
@@ -354,6 +361,10 @@
       sprayTotalMl:round(sprayTotalMl),
       sprayPerBottleMl:round(sprayPerBottleMl),
       deadVolumeMl:round(deadVolumeMl),
+      minimumOperatingMl:round(minimumOperatingMl),
+      minimumAdditionMl:round(sprayTotalMl-appliedMl-deadVolumeMl),
+      appliedMl:round(appliedMl),
+      residualMl:round(sprayTotalMl-appliedMl),
       hectaresTotal:round(haTotal),
       minBottles:minBottles,
       requestedBottles:numBottles,
@@ -411,7 +422,7 @@
   /* Versao do motor. Vai gravada na memoria de calculo de cada aplicacao: sem
      ela, um resultado guardado em 2026 nao teria como ser reconferido depois que
      a formula mudasse. Subir aqui sempre que o calculo mudar de resultado. */
-  var VERSION="1.1.0";
+  var VERSION="1.2.0";
 
   return{
     VERSION:VERSION,

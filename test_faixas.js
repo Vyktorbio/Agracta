@@ -8,14 +8,14 @@
  * faixas carrega solo, declive e bordadura junto com o produto. Rodar ANOVA
  * nisso da p-valor pequeno quase sempre, e ele nao quer dizer o que parece.
  *
- * A saida valida e blocar por POSICAO: tracos transversais amostrados nas
- * mesmas posicoes de todas as faixas. Ai cada traco e um bloco legitimo.
+ * Traços transversais nas mesmas posições continuam sendo subamostras.
+ * A inferência exige unidades de aplicação independentes e randomizadas.
  *
  * O contrato que estes testes protegem:
  *   - estudo antigo (sem `desenho`) continua DBC e nada muda para ele;
  *   - faixas com 1 traco => statDBC devolve NULO, e o motivo fica escrito;
- *   - faixas com 2+ tracos em TODOS os tratamentos => volta a haver analise;
- *   - um tratamento medido a menos derruba o ensaio inteiro (o minimo manda);
+ *   - faixas com 2+ tracos continuam sem repetição independente;
+ *   - as medidas disponíveis são contadas sem virar repetições;
  *   - a finalizacao BPL grava o porque de nao ter havido analise.
  *
  * Rodar: node test_faixas.js
@@ -146,24 +146,22 @@ eq(rep1.blocos, 1, 'reconhece que há 1 traço');
 check(/n[aã]o cria repeti/.test(rep1.motivo), 'e o motivo explica a pseudorreplicação');
 eq(C.statDBC(b1.s, b1.av, 'Severidade'), null, 'statDBC devolve NULO em vez de um p-valor bonito');
 
-/* ------------------------------------------ faixas com 3 traços: aceita --- */
-S('Faixas com três traços: volta a haver análise');
+/* ----------------------------------------- faixas com 3 traços: recusa --- */
+S('Faixas com três treços continuam sem replicação independente');
 var b3 = bosqueiro(3);
 var rep3 = C.estudoTemReplicacao(b3.s, b3.av, 'Severidade');
-eq(rep3.ok, true, 'o portão aceita');
+eq(rep3.ok, false, 'o portão recusa subamostras como repetições');
 eq(rep3.blocos, 3, 'conta os 3 traços');
-check(/tre[cç]os/.test(rep3.rotulo), 'e rotula como blocos por posição: "' + rep3.rotulo + '"');
+check(/tre[cç]os/.test(rep3.rotulo), 'e identifica as subamostras: "' + rep3.rotulo + '"');
 var st3 = C.statDBC(b3.s, b3.av, 'Severidade');
-check(st3 !== null, 'statDBC agora calcula');
-check(st3 && isFinite(st3.F) , 'com F finito');
-check(st3 && st3.letras && st3.letras.T1, 'e letras de Tukey');
+eq(st3, null, 'nenhum F ou letra de Tukey para faixas únicas');
 
 /* --------------------------------- um tratamento medido a menos derruba --- */
 S('Se UM tratamento ficou com menos traços, o ensaio inteiro cai');
 var bFalta = bosqueiro(3, {faltaEm:'T2'});   /* T2 com 2, os outros com 3 */
 var repF = C.estudoTemReplicacao(bFalta.s, bFalta.av, 'Severidade');
 eq(repF.blocos, 2, 'vale o MÍNIMO entre os tratamentos, não o máximo');
-eq(repF.ok, true, 'com 2 ainda há análise');
+eq(repF.ok, false, 'subamostras não criam replicação');
 var bFalta1 = bosqueiro(2, {faltaEm:'T2'});  /* T2 com 1, os outros com 2 */
 var repF1 = C.estudoTemReplicacao(bFalta1.s, bFalta1.av, 'Severidade');
 eq(repF1.blocos, 1, 'T2 medido uma vez só derruba para 1');
@@ -199,8 +197,12 @@ eq(snap.semAnalise.length, 1, 'mas a avaliação é registrada');
 check(/n[aã]o cria repeti/.test(snap.semAnalise[0].porque),
       'com o motivo real, não um genérico: "' + snap.semAnalise[0].porque.slice(0,60) + '…"');
 var snap3 = C._statSnapshot(bosqueiro(3).s);
-eq(snap3.itens.length, 1, 'com 3 traços, a estatística é congelada');
-check(/tre[cç]os/.test(snap3.itens[0].desenho||''), 'e o desenho fica gravado junto');
+eq(snap3.itens.length, 0, 'três traços também não geram resultado inferencial');
+eq(snap3.semAnalise.length, 1, 'a avaliação continua no registro');
+check(/subamostras/.test(snap3.semAnalise[0].porque), 'o motivo documenta a falta de replicação');
+C.data = {BOSQ_A:{estudos:[b3.s]}};
+check(/subamostras/.test(C._pranchaPayload('BOSQ_A',b3.s.id,'Severidade').erro),
+      'a prancha também impede inferência com subamostras');
 
 console.log('\n' + (falhas === 0
   ? passes + ' verificações, nenhuma falha.'

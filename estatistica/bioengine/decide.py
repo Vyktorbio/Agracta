@@ -109,7 +109,7 @@ def analisar(dados, papeis, opcoes=None):
         avisos.append(f"Tipo de resposta definido manualmente como '{forcado}' "
                       f"(detecção automática sugeria '{rinfo['tipo']}').")
         rinfo["tipo"] = forcado
-    elif rinfo["tipo"] == "contagem" and chaves is not None:
+    elif not forcado and rinfo["tipo"] == "contagem" and chaves is not None:
         # refino: contagem subdispersa intra-grupo é, na prática, medida contínua
         razao = _dispersao_intra(rinfo["valores"], chaves)
         if razao is not None and razao < 0.4:
@@ -160,7 +160,7 @@ def analisar(dados, papeis, opcoes=None):
                                 "de Poisson; se houver sobredispersão, troca-se "
                                 "automaticamente por Binomial Negativa.")
         relatorio["descritiva"] = _descritiva(rinfo["valores"], chaves)
-        relatorio["analise"] = glmcount.glm_contagem(rinfo["valores"], chaves, alfa)
+        relatorio["analise"] = glmcount.glm_contagem(rinfo["valores"], chaves, alfa, bloco=bloco, maior_melhor=bool(opcoes.get('maior_melhor', True)))
         return relatorio
 
     # ----------------------------------------------------------------- #
@@ -172,27 +172,17 @@ def analisar(dados, papeis, opcoes=None):
         prop = np.asarray(rinfo["valores"], float) / np.asarray(rinfo["n_total"], float)
         relatorio["descritiva"] = _descritiva(prop * 100, chaves)
         relatorio["analise"] = glmcount.glm_proporcao(
-            rinfo["valores"], rinfo["n_total"], chaves, alfa)
+            rinfo["valores"], rinfo["n_total"], chaves, alfa, bloco=bloco, maior_melhor=bool(opcoes.get('maior_melhor', True)))
         return relatorio
 
     # ----------------------------------------------------------------- #
     # ROTA D — BINÁRIO individual (sem dose) -> agrega para x de n e GLM Binomial
     # ----------------------------------------------------------------- #
     if tipo == "binario" and chaves is not None and not dinfo["tem_dose"]:
-        y_agg, n_agg, grp_agg = [], [], []
-        vals = np.asarray(rinfo["valores"], float)
-        for grp in sorted(set(chaves)):
-            sel = np.array([c == grp for c in chaves]) & ~np.isnan(vals)
-            y_agg.append(float(np.nansum(vals[sel]))); n_agg.append(int(np.sum(sel)))
-            grp_agg.append(grp)
-        relatorio["decisao"] = ("Resposta BINÁRIA (evento/não-evento) por indivíduo. "
-                                "Agregada em proporções por tratamento e analisada por "
-                                "GLM Binomial (logístico).")
-        prop = np.array(y_agg) / np.array(n_agg)
-        relatorio["descritiva"] = [{"tratamento": g, "n": nn, "eventos": int(yy),
-                                    "proporcao": float(yy / nn)}
-                                   for g, nn, yy in zip(grp_agg, n_agg, y_agg)]
-        relatorio["analise"] = glmcount.glm_proporcao(y_agg, n_agg, grp_agg, alfa)
+        # Mantém a unidade de cada linha e o bloco no modelo; agregar só por
+        # tratamento apagava o delineamento e deixava o modelo saturado.
+        relatorio['decisao'] = 'Resposta binária analisada por GLM Binomial, preservando os blocos informados.'
+        relatorio['analise'] = glmcount.glm_proporcao(rinfo['valores'], np.ones(len(resp)), chaves, alfa, bloco=bloco, maior_melhor=bool(opcoes.get('maior_melhor', True)))
         return relatorio
 
     # ----------------------------------------------------------------- #
@@ -309,7 +299,8 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
     relatorio["descritiva"] = _descritiva(valores, chaves)
 
     res_anova = anova_mod.anova(
-        valores, fatores_vals, bloco=bloco, alfa=alfa, tipo_resposta=tipo)
+        valores, fatores_vals, bloco=bloco, alfa=alfa, tipo_resposta=tipo,
+        transformar_auto=bool(opcoes.get('transformar_auto', True)))
 
     # A ANOVA pode recusar antes de calcular — ensaio sem repetição, por exemplo,
     # onde não sobra grau de liberdade para o erro. Sem esta guarda o código
@@ -334,10 +325,14 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
                     "transformada; a descritiva permanece na escala original. ")
     if res_anova["pressupostos_ok"]:
         decisao += "Pressupostos atendidos → ANOVA paramétrica."
-    else:
+    elif bloco is None:
         decisao += ("Pressupostos ainda violados → resultados da ANOVA "
                     "apresentados com cautela e teste não-paramétrico "
                     "(Kruskal-Wallis/Dunn) incluído.")
+    else:
+        decisao += ('Pressupostos não confirmados. O modelo mantém os blocos; '
+                    'Kruskal-Wallis/Dunn não substitui um ensaio em blocos. '
+                    'Interprete a análise paramétrica com cautela e revise o modelo.')
     relatorio["decisao"] = decisao
     relatorio["analise"] = {k: v for k, v in res_anova.items() if not k.startswith("_")}
 
@@ -356,13 +351,17 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
 
     if res_anova["pressupostos_ok"] or res_anova["kruskal"] is None:
         try:
-            tukey = posthoc.tukey(valores_modelo, chaves, alfa, maior_melhor)
-            tukey["medias_exibicao"] = medias
+            tukey = posthoc.comparar_modelo(res_anova, alfa, maior_melhor)
+            # Na escala original, exibe a média ajustada que foi comparada.
+            # Sob transformação, distingue a descritiva original do modelo.
+            tukey["medias_exibicao"] = medias if res_anova['transformacao'] else tukey['medias']
             tukey["escala_teste"] = res_anova["escala_usada"]
-            comparacoes["tukey"] = tukey
+            comparacoes['tukey' if tukey['balanceado'] else 'ajustadas'] = tukey
         except Exception as e:
             avisos.append(f"Tukey falhou: {e}")
         try:
+            if not comparacoes.get('tukey', {}).get('balanceado'):
+                raise ValueError('Usar os contrastes de médias ajustadas para dados desbalanceados.')
             sk = posthoc.scott_knott(
                 medias_modelo, reps, res_anova["mse"], res_anova["df_erro"], alfa,
                 maior_melhor)

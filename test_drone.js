@@ -1,0 +1,22 @@
+const assert=require('assert/strict');
+const D=require('./vendor/drone-core.js'),B=require('./vendor/biocalc-campo-core.js');
+function near(a,b){assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);}
+const receita={components:[{nome:'Produto',valor:1.5,unidade:'L/ha'},{nome:'Adjuvante',valor:.033,unidade:'%'}],sprayVolume:3,plotLength:20,plotWidth:11,numPlots:4,numBottles:1,deadVolumeMl:300,bottleCapacity:2,minimumOperatingMl:1700};
+const r=B.calculateMixture(receita);
+near(r.appliedMl,264);near(r.sprayTotalMl,1700);near(r.minimumAdditionMl,1136);near(r.residualMl,1436);
+near(r.components[0].total,850);near(r.components[1].total,.561);near(r.carrier.total,849.439);
+near(B.calculateMixture({...receita,minimumOperatingMl:0}).sprayTotalMl,564);
+assert.equal(B.calculateMixture({...receita,bottleCapacity:1}).canPrepare,false);
+const input={rate:3,speed:20.2,width:11,height:3,minFlow:1.111,maxFlow:16,tankCapacity:20,minimumOperatingMl:1700,observedFlow:1.111,swathConfirmed:true,plotLength:20,plotWidth:11,preparedMl:1700};
+const d=D.calculate(input);near(d.requiredFlow,1.111);near(d.actualRate,3);near(d.minSpeed,20.2);near(d.usefulVolumeMl,66);near(d.secondsPerPass,20*3.6/20.2);
+assert.equal(d.canApply,true);
+assert.equal(D.calculate({...input,speed:10}).canApply,false);
+assert.equal(D.calculate({...input,observedFlow:''}).status,'pendente');
+assert.equal(D.calculate({...input,minimumOperatingMl:''}).minimumOperatingMl,null);
+assert.equal(D.calculate({...input,speed:'20abc'}).status,'incompativel');
+assert.equal(D.calculate({...input,swathConfirmed:false}).canApply,false);
+assert.equal(D.calculate({...input,tankCapacity:1}).status,'incompativel');
+const rotas=D.calculate({...input,width:6});near(rotas.routeAreaM2,240);near(rotas.excessAreaM2,20);near(rotas.routeVolumeMl,72);
+assert.equal(rotas.canApply,false);
+near(D.calculate({...input,speed:'20,2'}).requiredFlow,1.111);
+console.log('Drone: receita, mínimo, residual, vazão, unidades, limites e geometria conferidos.');

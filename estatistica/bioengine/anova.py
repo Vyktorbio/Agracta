@@ -23,6 +23,13 @@ from . import diagnostics as diag
 
 def _df(resp, fatores, bloco=None):
     dados = {"y": np.asarray(resp, float)}
+    if np.any(np.isinf(dados['y'])):
+        raise ValueError('A resposta contém valor infinito. Confira a entrada.')
+    for f in list(fatores) + ([bloco] if bloco is not None else []):
+        if len(f) != len(resp):
+            raise ValueError('Resposta, fatores e blocos precisam ter o mesmo número de linhas.')
+        if any(np.isfinite(y) and (pd.isna(v) or not str(v).strip()) for y,v in zip(dados['y'],f)):
+            raise ValueError('Há resposta observada sem identificação de tratamento ou bloco. Complete o delineamento.')
     nomes_fatores = []
     for i, f in enumerate(fatores):
         col = f"F{i+1}"
@@ -49,13 +56,18 @@ def _formula(nomes_fatores, bloco, com_interacao):
 def _ajustar(df, nomes_fatores, tem_bloco, com_interacao=True):
     formula = _formula(nomes_fatores, "bloco" if tem_bloco else None, com_interacao)
     modelo = smf.ols(formula, data=df).fit()
+    if modelo.df_resid < 1 or np.linalg.matrix_rank(modelo.model.exog) < modelo.model.exog.shape[1]:
+        raise ValueError('Delineamento sem erro residual ou com efeitos confundidos. Confira repetições, blocos e combinações de fatores.')
     aov = sm.stats.anova_lm(modelo, typ=2)
     return modelo, aov, formula
 
 
 def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
           tipo_resposta="continua"):
-    df, nomes_fatores = _df(resp, fatores, bloco)
+    try:
+        df, nomes_fatores = _df(resp, fatores, bloco)
+    except ValueError as e:
+        return {'ok': False, 'erro': str(e)}
     df = df.dropna(subset=["y"])
     tem_bloco = bloco is not None
 
@@ -95,7 +107,12 @@ def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
     inversa = None
     usada = "original"
 
-    modelo, aov, formula = _ajustar(df, nomes_fatores, tem_bloco)
+    try:
+        modelo, aov, formula = _ajustar(df, nomes_fatores, tem_bloco)
+    except ValueError as e:
+        return {'ok': False, 'erro': str(e)}
+    if modelo.ssr <= max(float(np.sum((df['y']-df['y'].mean())**2)), 1e-30)*1e-12:
+        return {'ok': False, 'erro': 'Sem variação residual estimável. Apresente médias e dados individuais; não há base para teste F ou letras.'}
     resid = modelo.resid.values
     norm = diag.normalidade(resid)
 
@@ -164,7 +181,7 @@ def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
 
     # alternativa não-paramétrica (Kruskal) quando pressupostos seguem violados
     kruskal = None
-    if not pressupostos_ok and len(nomes_fatores) == 1:
+    if not pressupostos_ok and len(nomes_fatores) == 1 and not tem_bloco:
         try:
             H, pk = stats.kruskal(*grupos)
             kruskal = {"H": float(H), "p": float(pk), "significativo": bool(pk < alfa)}
