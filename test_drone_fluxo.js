@@ -29,7 +29,7 @@ Object.assign(w,{
   studyMetodosVariam:s=>new Set(s.tratamentos.map(t=>t.metodo)).size>1,tratMetodo:(s,q,t)=>t.metodo,
   esc:v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))
 });
-const nomes=['_numBR','_calcNum','_calcVal','_calcCapAtualL','_calcDoseUnit','calcAbas','calcAbaAtual','calcAbaVizinha','calcAba','_calcPick','calcCfgResumo','_calcFinalizado','tratComponentes','tratTemReceita','_seCompUnidadeNormalizar','_seCompUnidadeOptions','calcVolumeDoEstudo','calcVolumeDoTratamento','calcVolumeAmbiguoHtml','_calcRememberInputs','_calcRenderShell','_calcCompute','_calcConfigAtual','calcMemoria','_bioestatP','_bioestatResumoCard'];
+const nomes=['_numBR','_calcNum','_calcVal','_calcCapAtualL','_calcDoseUnit','calcAbas','calcAbaAtual','calcAbaVizinha','calcAba','_calcPick','calcCfgResumo','_calcFinalizado','tratComponentes','tratTemReceita','_seCompUnidadeNormalizar','_seCompUnidadeOptions','calcVolumeDoEstudo','calcVolumeDoTratamento','calcVolumeAmbiguoHtml','calcConfirmarVolume','_calcRememberInputs','_calcRenderShell','_calcCompute','_calcConfigAtual','calcMemoria','_bioestatP','_bioestatResumoCard'];
 w.eval(nomes.map(pega).join('\n'));
 w.eval(fs.readFileSync('calculadora-drone.js','utf8'));
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
@@ -77,5 +77,11 @@ assert.match(card,/Média ajustada/);assert.match(card,/>±EP</);assert.match(ca
 rel.analise.transformacao='log';
 card=w._bioestatResumoCard({variavel:'Resposta',date:'2026-09-09'},rel);
 assert.doesNotMatch(card,/CV residual/);
+// Confirmar um volume ambíguo deve atualizar também o campo preservado.
+estudos.s3={...estudos.s2,id:'s3',protocolo:{volumeCalda:'1,5 L água (TOTAL 3,0 L/ha)'}};
+w._calcPick('Q1|s3');assert.match(html(),/CONFIRME O VOLUME/);
+w.calcConfirmarVolume(3);
+near(w._calcConfigAtual().volumeCaldaLHa,3);
+assert.match(html(),/PREPARAR/);assert.doesNotMatch(html(),/CONFIRME O VOLUME/);
 dom.window.close();
 console.log('Integração: receita na tela e na memória, métodos distintos, troca de estudo e validade da calibração conferidos.');

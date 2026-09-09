@@ -8416,6 +8416,8 @@ function calcConfirmarVolume(valor){
   var v=_numBR(valor,0); if(!(v>0)) return;
   st.protocolo=st.protocolo||{};
   st.protocolo.volumeCaldaLHa=v;
+  var campoVolume=document.getElementById('calcVol');
+  if(campoVolume) campoVolume.value=String(v);
   try{
     logStudyAuditInObject(st,'Volume de calda confirmado',
       'O texto "'+String(st.protocolo.volumeCalda||'')+'" tinha mais de um número; '+
