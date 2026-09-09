@@ -89,6 +89,60 @@ service cloud.firestore {
       }
     }
 
+    /* A consulta do cliente é uma cópia selecionada, em coleção independente.
+       Ser cliente não concede acesso a workspaces/agracta. */
+    function portalPath(portal) {
+      return /databases/$(database)/documents/clientPortals/$(portal);
+    }
+    function clientPath(portal) {
+      return /databases/$(database)/documents/clientPortals/$(portal)/members/$(request.auth.token.email.lower());
+    }
+    function isPortalClient(portal) {
+      return signedIn() && request.auth.token.get('email_verified', false) == true
+        && exists(portalPath(portal)) && get(portalPath(portal)).data.active == true
+        && exists(clientPath(portal)) && get(clientPath(portal)).data.active == true
+        && get(clientPath(portal)).data.accessVersion == get(portalPath(portal)).data.accessVersion;
+    }
+    function selectedReport(portal, report) {
+      return exists(portalPath(portal)) && get(portalPath(portal)).data.active == true
+        && report in get(portalPath(portal)).data.studies;
+    }
+    function reportShape() {
+      return request.resource.data.keys().hasOnly(['schema','codigo','cultura','alvo','ambiente','local','inicio','desenho','finalizado','tratamentos','resultados','ambienteEventos','pendencias','atualizadoEm','nota','sourceRev','publicadoEm'])
+        && request.resource.data.schema == 1
+        && request.resource.data.resultados is list
+        && request.resource.data.tratamentos is list
+        && request.resource.data.sourceRev is number;
+    }
+    match /clientPortals/{portal} {
+      allow get: if canUseAgracta() || isPortalClient(portal);
+      allow list: if canUseAgracta();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome','active','auto','studies','schema','accessVersion'])
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 120
+        && request.resource.data.active is bool && request.resource.data.auto is bool
+        && request.resource.data.studies is list && request.resource.data.studies.size() <= 40
+        && request.resource.data.accessVersion is string && request.resource.data.schema == 1;
+      allow delete: if isAdmin();
+      match /members/{email} {
+        allow get: if isAdmin() || (signedIn() && email == request.auth.token.email.lower());
+        allow list: if isAdmin();
+        allow create, update: if isAdmin()
+          && request.resource.data.keys().hasOnly(['active','accessVersion'])
+          && request.resource.data.active is bool
+          && request.resource.data.accessVersion == getAfter(portalPath(portal)).data.accessVersion;
+        allow delete: if isAdmin();
+      }
+      match /reports/{report} {
+        allow get: if canUseAgracta() || (isPortalClient(portal) && selectedReport(portal, report));
+        allow list: if canUseAgracta();
+        allow create, update: if canUseAgracta() && reportShape()
+          && getAfter(portalPath(portal)).data.active == true
+          && report in getAfter(portalPath(portal)).data.studies;
+        allow delete: if canUseAgracta();
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

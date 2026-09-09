@@ -2426,6 +2426,7 @@ function _mergeStudy(ls,cs){
   m._deletedAplicacoes=delAp; m._deletedAvaliacoes=delAv;
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
+  if(typeof ConhecimentoCore!=="undefined" && (ls.integracoes||cs.integracoes)) m.integracoes=ConhecimentoCore.merge(ls.integracoes,cs.integracoes);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
   return m;
 }
@@ -11515,6 +11516,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(quadraNome(qid))+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
+  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Conhecimento e contexto</button>';
   h+='<button class="btn-sm" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+sid+'\')" title="Escolher entre o modelo Agracta e o protocolo Sinergista">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
   h+=isQuadraLab(qid)
@@ -18310,6 +18312,7 @@ function histTratHtml(t, cultura){
     if(r.naCultura===0 && cultura){
       h+='<br><span style="color:#9fb1a5">Nunca usado em '+esc(cultura)+' — os ensaios abaixo são de outra cultura.</span>';
     }
+    h+=' <button type="button" class="btn-sm" data-ag-conhecimento-busca="'+esc(r.rotulo)+'">Consultar resultados</button>';
     if(aberto) h+=_histListaHtml(r);
     h+='</div>';
   });
@@ -19225,7 +19228,9 @@ function _itemFichaHtml(id){
   var h='<div class="it-box"><div class="it-top"><div class="it-t">'+esc(it.nome||'Novo item')+'</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
   h+='<button class="it-btn alt" onclick="itemVoltar()">‹ Todos os itens</button><div style="height:10px"></div>';
+  h+='<button class="it-btn alt" data-ag-conhecimento-item="'+esc(it.id)+'">Resultados nos estudos</button>';
   h+=_agLigHtml(it);
+  if(window.agFonteItemHtml)h+=agFonteItemHtml(it);
 
   /* Duplicata avisa, não funde. Fusão automática de cadastro é como se perde dado
      sem ninguém notar. */

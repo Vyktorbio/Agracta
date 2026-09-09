@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <title>Resultados · Agracta</title>
+  <link rel="icon" href="icon-192.png?v=3"><link rel="stylesheet" href="integracoes.css?v=1">
+  <style>
+    :root{color-scheme:light;--bg:#f2f6f3;--surface:#fff;--text:#1c3027;--muted:#586d60;--border:#d3dfd6}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,sans-serif;padding:24px}
+    [hidden]{display:none!important}#clienteLogin{max-width:420px;margin:60px auto}#clienteLogin h1{font-size:1.8rem}
+    .cli-report{margin:28px 0 44px}.cli-report h2{border-top:3px solid #277e54;padding-top:20px}.cli-bars{max-width:640px;padding:0;list-style:none}.cli-bars li{margin:12px 0}.cli-bars span{display:block}.cli-bar{display:block;height:16px;min-width:2px;background:#2a8257;border-radius:4px}
+    @media(max-width:600px){body{padding:16px 12px}.con-head{flex-wrap:wrap}}
+  </style>
+</head>
+<body>
+  <div class="con-shell">
+    <header class="con-head"><div><p>AGRACTA · RESULTADOS</p><h1 id="clienteTitulo">Consulta do cliente</h1></div><button id="clienteSair" class="con-btn" hidden>Sair</button></header>
+    <p id="clienteStatus" role="status" aria-live="polite">Carregando acesso…</p>
+    <section id="clienteLogin" class="con-painel" hidden><h2>Entrar na sua consulta</h2><p>Use o e-mail autorizado para receber os resultados.</p><form id="clienteAuth"><label>E-mail<input id="clienteEmail" type="email" autocomplete="username" required></label><label>Senha<input id="clienteSenha" type="password" autocomplete="current-password" minlength="6" required></label><p><button class="con-btn primary" type="submit">Entrar</button> <button class="con-btn" id="clienteCriar" type="button">Primeiro acesso</button></p></form><button class="con-btn" id="clienteRecuperar">Recuperar senha</button></section>
+    <section id="clienteVerificacao" class="con-painel" hidden><h2>Verifique seu e-mail</h2><p>A consulta será liberada após a confirmação do endereço autorizado.</p><button class="con-btn" id="clienteEnviarVerificacao">Enviar confirmação</button> <button class="con-btn" id="clienteVerificado">Já confirmei</button></section>
+    <main id="clienteConteudo" aria-live="polite"></main>
+  </div>
+  <script src="vendor/firebase-app-compat.js"></script><script src="vendor/firebase-auth-compat.js"></script><script src="vendor/firebase-firestore-compat.js"></script><script src="firebase-config.js"></script>
+  <script src="cliente.js?v=1"></script>
+</body>
+</html>
