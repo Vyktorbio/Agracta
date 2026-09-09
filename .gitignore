@@ -45,3 +45,10 @@ package-lock.json
 __pycache__/
 *.pyc
 .DS_Store
+
+# Importações licenciadas e relatórios internos nunca entram no site público.
+ppdb-*.json
+propriedades-*.json
+# Logs e dados do emulador local.
+*-debug.log
+.firebase/

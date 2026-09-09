@@ -754,6 +754,8 @@
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
       window._cloudRev=newRev;setUnsavedChanges(false);cloudBadge('saved');
       checkpointPut(st).catch(checkpointFalhou);
+      // O portal recebe somente a cópia confirmada, nunca lançamentos em edição.
+      try{window.dispatchEvent(new CustomEvent('agracta:sincronizado',{detail:{state:st,rev:newRev}}));}catch(_e){}
     }).catch(function(e){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
       cloudBadge('error','— salvo localmente');

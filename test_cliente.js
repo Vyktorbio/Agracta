@@ -1,0 +1,25 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('fs'),{JSDOM}=require('jsdom');
+(async()=>{
+ const html=fs.readFileSync('cliente.html','utf8');assert(!/src="(?:app|firebase-sync|integracoes)\.js/.test(html));
+ const dom=new JSDOM(html,{url:'https://agracta.test/cliente.html?portal=p1',runScripts:'outside-only'}),w=dom.window,watch=new Map();
+ let authCb,signedOut=false;const user={email:'cliente@example.com',emailVerified:true};
+ const snap=(data,cache=false)=>({exists:data!==null,data:()=>data,metadata:{fromCache:cache}});
+ const membership={active:true,accessVersion:'v1'};
+ const ref=path=>({collection:n=>ref(path+'/'+n),doc:n=>ref(path+'/'+n),get:async()=>snap(membership),onSnapshot:(opts,ok,err)=>{const l={ok,err,on:true};if(!watch.has(path))watch.set(path,[]);watch.get(path).push(l);return ()=>{l.on=false;};}});
+ const db={collection:n=>{assert.equal(n,'clientPortals');return ref(n);}};
+ const auth={currentUser:user,setPersistence:async()=>{},onAuthStateChanged:cb=>{authCb=cb;},signOut:async()=>{signedOut=true;authCb(null);}};
+ w.firebase={initializeApp:(config,name)=>{assert.equal(name,'agracta-cliente');return {auth:()=>auth,firestore:()=>db};},auth:{Auth:{Persistence:{SESSION:'session'}}}};
+ w.eval(fs.readFileSync('cliente.js','utf8'));
+ const tick=()=>new Promise(r=>setImmediate(r));
+ const emit=(path,data,cache=false)=>{for(const l of watch.get(path)||[])if(l.on)l.ok(snap(data,cache));};
+ authCb(user);emit('clientPortals/p1',{nome:'Projeto X',active:true,accessVersion:'v1',studies:['r1']});await tick();
+ const report={codigo:'Ensaio <img src=x onerror=alert(1)>',cultura:'Soja',alvo:'Alvo A',local:'Campo',resultados:[{data:'2026-09-01',momento:'1 DAT',variavel:'Dano',tratamento:'T1',produto:'Cego 01',media:5,n:4,dp:1}],ambienteEventos:[]};
+ emit('clientPortals/p1/reports/r1',report);assert(w.document.getElementById('clienteConteudo').textContent.includes('Cego 01'));assert.equal(w.document.querySelectorAll('img').length,0);
+ const antigo=watch.get('clientPortals/p1/reports/r1').find(l=>l.on).ok;
+ emit('clientPortals/p1',{nome:'Projeto X',active:true,accessVersion:'v1',studies:[]});await tick();antigo(snap(report));assert.equal(w.document.getElementById('clienteConteudo').textContent,'');
+ emit('clientPortals/p1/members/cliente@example.com',{active:false,accessVersion:'v1'});assert.equal(w.document.getElementById('clienteConteudo').textContent,'');assert(w.document.getElementById('clienteStatus').textContent.includes('revogado'));
+ authCb({...user,emailVerified:false});assert.equal(w.document.getElementById('clienteVerificacao').hidden,false);assert(!Array.from(watch.values()).flat().some(l=>l.on));
+ w.document.getElementById('clienteSair').click();await tick();assert(signedOut);assert.equal(w.document.getElementById('clienteLogin').hidden,false);
+ dom.window.close();console.log('Cliente: sessão isolada, XSS, revogação, callbacks antigos, e-mail e saída OK.');
+})().catch(err=>{console.error(err);process.exitCode=1;});
