@@ -4902,10 +4902,8 @@ function _tukeyLetters(order, tMean, hsd){ var n=order.length, m=order.map(funct
    tem de sair como demonstração descritiva.
 
    DBC: sempre replicado — o delineamento já nasce com blocos.
-   Faixas: replicado só se houver 2+ treços preenchidos por tratamento. Com um
-   treço só, cada tratamento tem uma medida por faixa e não existe termo de erro
-   independente: qualquer p-valor ali estaria medindo variação DENTRO da faixa e
-   apresentando como se fosse efeito do produto.
+   Faixas únicas por tratamento: os treços são subamostras, independentemente
+   da quantidade. Não existe replicação da unidade que recebeu o tratamento.
 
    Devolve {ok, motivo, blocos, desenho, rotulo} — o rotulo é o que sai impresso
    na folha, para o leitor saber o que está olhando sem precisar perguntar. */
@@ -4933,13 +4931,9 @@ function estudoTemReplicacao(s, av, v){
   if(trats.length<2)
     return { ok:false, blocos:minCheios, desenho:'faixas', rotulo:'faixa única',
              motivo:'só há um tratamento — não há o que comparar' };
-  if(minCheios>=2)
-    return { ok:true, blocos:minCheios, desenho:'faixas',
-             rotulo:minCheios+' treços por faixa (blocos por posição)', motivo:'' };
-  return { ok:false, blocos:minCheios, desenho:'faixas', rotulo:'faixas sem treços',
-           motivo:'cada tratamento ocupa uma faixa só e foi medido em um ponto: '+
-                  'medir mais pontos dentro da MESMA faixa não cria repetição. '+
-                  'Divida as faixas em treços transversais e amostre os mesmos treços em todas.' };
+  return { ok:false, blocos:minCheios, desenho:'faixas', rotulo:minCheios+' treços por faixa · descritivo',
+           motivo:'Cada tratamento ocupa uma faixa única. Medir mais pontos dentro da MESMA faixa não cria repetição independente. '+
+                  'Os treços são subamostras; para inferência, planeje unidades independentes com tratamentos randomizados em cada bloco.' };
 }
 function statDBC(s, av, v){
   var ts=(s.tratamentos||[]).map(function(t){return t.id;}), r=Math.max(1,parseInt(s.numRepeticoes)||1), t=ts.length;
@@ -5585,7 +5579,7 @@ function _xlsClearValue(ws,r,c){
 }
 function _bioestatLetters(qid,s,av,v){
   var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v]; if(!rel||!rel.ok)return {};
-  var cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn;
+  var cm=rel.comparacao_medias||{}, cmp=cm.ajustadas||cm.tukey||cm.scott_knott||cm.dunn;
   return (cmp&&cmp.letras)||(rel.analise&&rel.analise.letras)||{};
 }
 /* Resumo completo do resultado do motor BioEstat (cache) p/ as saídas rápidas usarem o MESMO motor do xls.
@@ -5593,12 +5587,12 @@ function _bioestatLetters(qid,s,av,v){
 function _bioestatResumo(qid,s,av,v){
   var c=_bioAutoCache[qid+'|'+s.id], rel=c&&c.results&&c.results[(av.id||av.data)+'|'+v];
   if(!rel||!rel.ok) return null;
-  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn||null;
+  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.ajustadas||cm.tukey||cm.scott_knott||cm.dunn||null;
   var desc={}; (rel.descritiva||[]).forEach(function(d){ desc[d.tratamento]=(d.media!=null?d.media:d.proporcao); });
   var order=(cmp&&cmp.ordem)||a.ordem||Object.keys(desc);
   var vals=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||desc;
   var letras=(cmp&&cmp.letras)||a.letras||{};
-  var metodo=cm.scott_knott?'Scott-Knott':(cm.tukey?'Tukey':(cm.dunn?'Dunn (Kruskal-Wallis)':(a.tabela_anova?'ANOVA':'GLM')));
+  var metodo=cmp&&cmp.metodo|| (a.tabela_anova?'ANOVA':'GLM');
   var p=(typeof _bioestatP==='function')?_bioestatP(rel):null;
   return { order:order, vals:vals, letras:letras, p:p, metodo:metodo, tipo:(rel.deteccao&&rel.deteccao.tipo_resposta)||'', transform:a.transformacao||'' };
 }
@@ -6449,12 +6443,9 @@ function newStudy(){
        faixas carrega solo, declive e bordadura junto com o produto. Isso é
        pseudorreplicação, e p-valor tirado dali não quer dizer o que parece.
 
-       A saída válida é BLOCAR POR POSIÇÃO: dividir as faixas em treços
-       transversais e amostrar os mesmos treços em todas elas. Aí cada treço é
-       um bloco legítimo, absorve o gradiente do terreno, e a ANOVA volta a
-       valer. `faixas[]` amarra tratamento -> quadra; o treço entra como a
-       "repetição" de sempre na grade de notas (T1R1, T1R2...), então o motor
-       estatístico não muda. Quem decide se há análise é estudoTemReplicacao(). */
+       Treços transversais ajudam a descrever o gradiente; não recriam a
+       randomização de tratamentos. `faixas[]` amarra tratamento -> quadra,
+       e os treços permanecem registrados como subamostras descritivas. */
     /* Método de aplicação (§7.2). Vazio = deriva do protocolo/categoria; ver
        studyMetodo(). metodoPorTratamento é a DECLARAÇÃO de que os tratamentos
        divergem — sem ela, um método guardado num tratamento não volta a valer. */
@@ -7539,7 +7530,7 @@ function _seDesenhoSync(){
   if(workingStudy) workingStudy.desenho=faixas?'faixas':'dbc';
   var w=document.getElementById('seFaixasWrap'); if(w) w.style.display=faixas?'':'none';
   var l=document.getElementById('seRepsLbl');
-  if(l) l.textContent=faixas?'Treços por faixa (blocos)':'Repetições por tratamento';
+  if(l) l.textContent=faixas?'Treços por faixa (subamostras)':'Repetições por tratamento';
   if(faixas) _seFaixasRender();
 }
 /* Mostra/esconde a unidade quando o estudo é declarado em ppm. */
@@ -8228,8 +8219,19 @@ function calcCompEditar(tratId, compId, campo, valor){
   _calcRenderShell();
 }
 
+var _calcInputDrafts=Object.create(null), _calcRenderKey=null;
+function _calcRememberInputs(){
+  if(!_calcRenderKey) return;
+  var values={};
+  ['calcLen','calcWid','calcPlots','calcVol','calcDead','calcBottles','calcCap','calcCapUn'].forEach(function(id){
+    var el=document.getElementById(id); if(el) values[id]=el.value;
+  });
+  if(Object.keys(values).length) _calcInputDrafts[_calcRenderKey]=values;
+}
 function _calcRenderShell(){
   var ov=document.getElementById('calcOvl'); if(!ov) return;
+  _calcRememberInputs();
+  _calcRenderKey=_calcSel?JSON.stringify([_calcSel.qid,_calcSel.sid]):null;
   var all=_calcAllStudies();
   var study=_calcStudy();
   /* parcela: PREFERE o tamanho do protocolo do estudo (modelo.xls); senão o salvo pelo usuário
@@ -8272,10 +8274,10 @@ function _calcRenderShell(){
   if(fromProto) avisos.push('parcela e volume vindos do protocolo');
 
   var cfgHtml='<div class="calc-cfg'+(_calcCfgAberta?' aberta':'')+'">'+
-    '<div class="calc-cfgh" onclick="calcCfgToggle()" title="Abrir ou fechar a configuração">'+
+    '<button type="button" class="calc-cfgh" onclick="calcCfgToggle()" aria-expanded="'+_calcCfgAberta+'" title="Abrir ou fechar a configuração">'+
       '<span class="calc-cfgr">'+esc(resumo||'configuração incompleta')+'</span>'+
       '<span class="calc-cfgb">'+(_calcCfgAberta?'▾ fechar':'✎ ajustar')+'</span>'+
-    '</div>'+
+    '</button>'+
     /* A GRADE EXISTE SEMPRE, mesmo fechada — só fica oculta. `_calcCompute` lê os
        valores pelo id do input; tirá-los do DOM zeraria parcela, volume e morto,
        e a conta sairia errada por causa de um detalhe de layout. */
@@ -8312,9 +8314,10 @@ function _calcRenderShell(){
   }
 
   ov.innerHTML='<div class="calc-box">'+
-    '<div class="calc-top"><div class="calc-title">🧪 Preparo</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-top"><div class="calc-title">Preparo de aplicação</div><button class="calc-x" onclick="closeCalc()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">'+(study?esc((study.codigo||study.nome||study.id)+' · '+(_calcSel?quadraNome(_calcSel.qid):'')):'Nenhum estudo com tratamentos')+'</div>'+
     cfgHtml+
+    (study&&typeof calcDroneHtml==='function'?calcDroneHtml(study):'')+
     abasHtml+
     '<div id="calcResults"></div>'+
     /* O ATALHO PARA O PROTOCOLO CONTINUA. A edição na linha resolve trocar dose e
@@ -8329,8 +8332,10 @@ function _calcRenderShell(){
       '</div>'):'')+
     '<div id="calcBarraBox" class="calc-barra"></div>'+
     '<div id="calcMemBox" class="calc-mem"></div>'+
-    '<div class="calc-actions"><button class="calc-copy" onclick="calcToggleDetalhe()">'+(_calcDetalhe?'👁 Só o essencial':'🔍 Cálculo completo')+'</button><button class="calc-copy" onclick="_calcCopy()">📋 Copiar</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
+    '<div class="calc-actions"><button class="calc-copy" onclick="calcToggleDetalhe()">'+(_calcDetalhe?'Só o essencial':'Cálculo completo')+'</button><button class="calc-copy" onclick="_calcCopy()">Copiar cálculo</button><button class="calc-close" onclick="closeCalc()">Fechar</button></div>'+
   '</div>';
+  var draft=_calcInputDrafts[_calcRenderKey];
+  if(draft) Object.keys(draft).forEach(function(id){var el=document.getElementById(id);if(el) el.value=draft[id];});
   _calcCompute();
 }
 function _calcPick(v){ var p=String(v||'').split('|'); if(p.length===2){ _calcSel={qid:p[0],sid:p[1]}; if(typeof _calcBarraReset==='function') _calcBarraReset(); _calcRenderShell(); } }
@@ -8457,6 +8462,10 @@ function _calcCompute(){
   /* A capacidade vem com a unidade escolhida ao lado — foi assim que "1900"
      virou 1.900 L num preparo de 318 mL. */
   var cap=_calcCapAtualL();
+  if(typeof document.querySelector==='function'){
+    var resumoEl=document.querySelector('#calcOvl .calc-cfgr');
+    if(resumoEl) resumoEl.textContent=calcCfgResumo({len:len,wid:wid,plots:plots,vol:volDef,dead:dead,bottles:bottles,capL:cap});
+  }
   function f(v,p){ return BC.formatSmartBR?BC.formatSmartBR(v,p==null?3:p):BC.formatBR(v,p==null?2:p); }
   function a(v,u){ return BC.formatAmount?BC.formatAmount(v,u):(f(v)+' '+u); }
   var _metVariam=false;
@@ -8510,16 +8519,24 @@ function _calcCompute(){
       ? BC.parseStructuredComponents(t.componentes,dunit)
       : BC.parseComponents(t.produto, t.dose, dunit);
     var res=null, err='';
-    try{ res=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'), sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap}); }
+    try{ res=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'), sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap,
+      minimumOperatingMl:typeof calcDroneMinimum==='function'?calcDroneMinimum(study,t):0}); }
     catch(e){ err=e.message||String(e); }
     html+='<div class="calc-card">'+head;
     if(err){ html+='<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
+    var droneResult=typeof calcDroneResult==='function'?calcDroneResult(study,t,null,res.sprayTotalMl):null;
+    if(droneResult&&droneResult.minimumOperatingMl===null){
+      html+='<div class="calc-warn">Confirme a carga mínima inicial em Configuração de voo e preparo. Informe 0 se o equipamento não exigir mínimo.</div>'+calcDroneSummaryHtml(droneResult)+'</div>';
+      return;
+    }
 
     var _bloqueado=!!((mix.problems||[]).length||!res.canPrepare);
     var _prepDetalhe=a(res.sprayPerPlotMl,'mL')+' por parcela × '+plots;
     if(dead>0) _prepDetalhe+=' + '+a(dead,'mL')+' de volume morto';
+    if(res.minimumAdditionMl>0) _prepDetalhe+=' + '+a(res.minimumAdditionMl,'mL')+' para atingir a carga mínima';
     if(bottles>1) _prepDetalhe+=' · '+a(res.sprayPerBottleMl,'mL')+' em cada frasco';
-    html+='<div class="calc-prep'+(_bloqueado?' bad':'')+'"><span>'+(_bloqueado?'NÃO PREPARE':'PREPARAR')+'</span><b>'+a(res.sprayTotalMl,'mL')+'</b><small>'+esc(_prepDetalhe)+'</small></div>';
+    html+='<div class="calc-prep'+(_bloqueado?' bad':'')+'"><span>'+(_bloqueado?'NÃO PREPARE':droneResult&&!droneResult.canApply?'CALDA PLANEJADA':'PREPARAR')+'</span><b>'+a(res.sprayTotalMl,'mL')+'</b><small>'+esc(_prepDetalhe)+'</small></div>';
+    if(droneResult) html+='<div class="calc-kv"><span>Aplicar nas parcelas</span><b>'+a(res.appliedMl,'mL')+'</b><span>Residual previsto</span><b>'+a(res.residualMl,'mL')+'</b></div>'+calcDroneSummaryHtml(droneResult);
 
     /* Receita de preparo: uma linha por componente + o veículo fechando o volume.
        É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
@@ -9338,7 +9355,8 @@ function _calcConfigAtual(){
     /* A barra entra na configuracao so quando foi de fato calibrada; sem leituras
        validas calcBarraCfg devolve null. O typeof guarda quem consome esta funcao
        fora do app inteiro (os testes extraem funcao por funcao). */
-    barra:(typeof calcBarraCfg==='function'?calcBarraCfg():null)
+    barra:(typeof calcBarraCfg==='function'?calcBarraCfg():null),
+    drone:(typeof calcDroneConfig==='function'?calcDroneConfig():null)
   };
 }
 
@@ -9578,12 +9596,13 @@ function calcConfigDoEstudo(study, qid){
      seria aplicado justamente a quem não declarou nada. */
   var vols=(study.tratamentos||[]).map(function(t){ return _calcNum(t.volume); }).filter(function(n){ return n>0; });
   var uniforme=vols.length>0 && vols.every(function(n){ return n===vols[0]; });
-  var pv=_calcNum((study.protocolo||{}).volumeCalda);
+  var resolvido=typeof calcVolumeDoEstudo==='function'?calcVolumeDoEstudo(study):null;
+  var pv=resolvido?resolvido.valor:_calcNum((study.protocolo||{}).volumeCalda);
   return {
     parcelaComprimento:(p?p.comprimento:0),
     parcelaLargura:(p?p.largura:0),
     parcelas:Math.max(1,parseInt(study.numRepeticoes)||1),
-    volumeCaldaLHa:(pv>0?pv:(uniforme?vols[0]:0)),
+    volumeCaldaLHa:(resolvido&&resolvido.ambiguo?0:pv>0?pv:(uniforme?vols[0]:0)),
     volumeMortoMl:Math.max(0,_numBR(study.volumeMorto,0)),
     frascos:Math.max(1,Math.round(_numBR(study.numFrascos,1))||1),
     capacidadeFrascoL:Math.max(0,_numBR(study.capacidadeFrasco,0)),
@@ -9643,9 +9662,10 @@ function calcMemoria(study, cfg){
   };
 
   (study.tratamentos||[]).forEach(function(t){
-    var testemunha=!!t.testemunha || (typeof studyTestemunha==='function' && studyTestemunha(study)===t.id);
+    var testemunha=!!t.testemunha;
     var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
-    var vol=t.volume?_calcNum(t.volume):cfg.volumeCaldaLHa;
+    var volumeResolvido=typeof calcVolumeDoTratamento==='function'?calcVolumeDoTratamento(t,cfg.volumeCaldaLHa):null;
+    var vol=volumeResolvido?(volumeResolvido.ambiguo?0:volumeResolvido.valor):(t.volume?_calcNum(t.volume):cfg.volumeCaldaLHa);
     var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
              /* O metodo vai gravado SEMPRE, divirja ou nao. Na tela ele so aparece
                 quando informa; no registro, um calculo sem dizer com que maquina
@@ -9672,7 +9692,8 @@ function calcMemoria(study, cfg){
       r=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'),
         sprayVolume:vol, plotLength:cfg.parcelaComprimento, plotWidth:cfg.parcelaLargura,
         numPlots:cfg.parcelas, numBottles:cfg.frascos,
-        deadVolumeMl:cfg.volumeMortoMl, bottleCapacity:cfg.capacidadeFrascoL});
+        deadVolumeMl:cfg.volumeMortoMl, bottleCapacity:cfg.capacidadeFrascoL,
+        minimumOperatingMl:typeof calcDroneMinimum==='function'?calcDroneMinimum(study,t,cfg.drone||{},cfg.qid):0});
     }catch(e){
       reg.erro=(e&&e.message)||String(e);
       mem.tratamentos.push(reg);
@@ -9691,6 +9712,17 @@ function calcMemoria(study, cfg){
     reg.liquidosTotalMl=r.liquidTotalMl;
     reg.liquidosPct=r.liquidFractionPct;
     reg.liberado=!(mix.problems||[]).length&&!!r.canPrepare;
+    if(typeof calcDroneResult==='function'){
+      reg.drone=calcDroneResult(study,t,cfg.drone||{},r.sprayTotalMl,cfg);
+      if(reg.drone){
+        reg.aplicadoMl=r.appliedMl; reg.residualMl=r.residualMl;
+        reg.adicionalMinimoMl=r.minimumAdditionMl;
+        reg.liberado=reg.liberado&&reg.drone.minimumOperatingMl!==null&&!reg.drone.errors.length;
+        reg.aplicacaoConferida=reg.drone.canApply;
+        reg.avisos=reg.avisos.concat(reg.drone.errors,reg.drone.pending,reg.drone.warnings);
+        if(reg.drone.minimumOperatingMl===null) reg.erro='Carga mínima inicial do drone não confirmada.';
+      }
+    }
     (r.warnings||[]).forEach(function(w){ reg.avisos.push(w); });
     if(!r.bottleCapacityOk) reg.avisos.push('A calda não cabe nos frascos informados. Mínimo: '+r.minBottles+' frasco(s).');
 
@@ -9729,6 +9761,10 @@ function calcMemoriaTexto(mem){
       a((t.caldaTotalMl!=null?t.caldaTotalMl:t.caldaTotalL*1000)/(e.frascos||1),'mL')+'\t'+
       a(t.caldaTotalMl!=null?t.caldaTotalMl:t.caldaTotalL*1000,'mL')+'\t');
     if(t.liberado===false) L.push('\t⚠ NÃO PREPARAR antes de corrigir os alertas abaixo.');
+    if(t.drone){
+      L.push('\tDrone: '+t.drone.status+' · vazão requerida '+f(t.drone.requiredFlow)+' L/min · taxa pela medição '+f(t.drone.actualRate)+' L/ha');
+      L.push('\tAplicado nas parcelas '+a(t.aplicadoMl,'mL')+' · residual previsto '+a(t.residualMl,'mL'));
+    }
     (t.avisos||[]).forEach(function(w){ L.push('\t⚠ '+w); });
   });
   if(mem.barra){
@@ -10111,6 +10147,10 @@ function openBioestat(qid, sid, modo){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){return x.id===sid;});
   if(!s){ alert('Estudo não encontrado.'); return; }
   s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
+  if(s.desenho==='faixas'&&modo!=='forense'){
+    alert('Faixas únicas por tratamento permitem descrição, mas os treços não são repetições independentes. Consulte as médias e os dados individuais na avaliação.');
+    return;
+  }
   var aoa=_bioestatAoa(qid, s);
   if(aoa.length<2){ alert('Esta avaliação ainda não tem valores preenchidos para analisar.'); return; }
   var resp=''; try{ resp=(typeof _currentUserName==='function'?_currentUserName():'')||(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; }catch(e){}
@@ -10558,6 +10598,7 @@ function _pranchaPayload(qid, sid, variavel){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
   if(!s) return { erro:'Estudo não encontrado.' };
   s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
+  if(s.desenho==='faixas') return {erro:'Os treços de uma faixa única são subamostras, não repetições independentes. Consulte os dados e as médias na avaliação; esta prancha com testes estatísticos exige replicação do tratamento.'};
 
   var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
   var reps=Math.max(1, parseInt(s.numRepeticoes)||1);
@@ -10986,9 +11027,10 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-6';
+var MOTOR_VERSAO='agracta-7';
 function _bioestatJobs(qid,study){
   var jobs=[];
+  if(study.desenho==='faixas') return jobs;
   (study.avaliacoes||[]).forEach(function(av){ (av.variaveis||[]).forEach(function(v){
     var aoa=_bioestatJobAoa(qid,study,av,v), groups={};
     aoa.slice(1).forEach(function(r){groups[r[7]]=(groups[r[7]]||0)+1;});
@@ -10998,7 +11040,7 @@ function _bioestatJobs(qid,study){
   return jobs;
 }
 function _bioestatSignature(study){
-  var slim={r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
+  var slim={motor:MOTOR_VERSAO,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
     a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.variaveis,a.notas];})};
   return String(_hashSeed(JSON.stringify(slim)));
 }
@@ -11065,31 +11107,33 @@ function _bioestatP(rel){
 }
 function _bioestatResumoCard(job,rel){
   if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
-  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.scott_knott||cm.tukey||cm.dunn||null;
+  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.ajustadas||cm.tukey||cm.scott_knott||cm.dunn||null;
   var nf=function(x,d){ return (x==null||isNaN(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(d==null?1:d)}); };
   var pf=function(x){ return x==null?'—':(x<0.001?'<0,001':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3})); };
   var ok=function(b){ return b?'<span style="color:#1f6f43">✓</span>':'<span style="color:#b07d18">✗</span>'; };
-  var metodoCmp=cm.scott_knott?'Scott-Knott':(cm.tukey?'Tukey':(cm.dunn?'Dunn · Kruskal-Wallis':'—'));
+  var metodoCmp=cmp&&cmp.metodo||'—';
   var descArr=rel.descritiva||[], desc={}; descArr.forEach(function(d){desc[d.tratamento]=d;});
   var letras=(cmp&&cmp.letras)||a.letras||{};
   var valsObj=(cmp&&(cmp.medias_exibicao||cmp.medias||cmp.medianas))||a.medias_estimadas||a.proporcoes_estimadas||null;
   var order=(cmp&&cmp.ordem)||a.ordem||descArr.map(function(d){return d.tratamento;});
-  var labelMedia=cm.dunn?'Mediana':'Média', p=_bioestatP(rel);
+  var ajustada=!!(cmp&&cmp.ajustadas&&!a.transformacao);
+  var glm=!!(a.medias_estimadas||a.proporcoes_estimadas);
+  var labelMedia=a.proporcoes_estimadas?'Proporção estimada':glm?'Média estimada':cm.dunn?'Mediana':(ajustada?'Média ajustada':'Média'), p=_bioestatP(rel);
+  var labelErro=ajustada?'±EP':'±DP';
   /* CV% do ensaio = raiz(QM resíduo) / média geral × 100 */
-  var mg=null, cv=null, sm=0, nn=0; descArr.forEach(function(d){ if(d.media!=null){sm+=d.media;nn++;} }); if(nn){ mg=sm/nn; if(a.mse!=null&&mg) cv=Math.sqrt(a.mse)/Math.abs(mg)*100; }
-  /* classificação do CV p/ experimentos de campo (Pimentel-Gomes) */
-  var cvCls = cv==null?'' : (cv<=10?'baixo · ótima precisão':(cv<=20?'médio · boa':(cv<=30?'alto · regular':'muito alto · baixa precisão')));
+  var mg=null, cv=null, sm=0, nn=0; descArr.forEach(function(d){ if(d.media!=null){var n=d.n||1;sm+=d.media*n;nn+=n;} }); if(nn){ mg=sm/nn; if(!a.transformacao&&a.mse!=null&&mg) cv=Math.sqrt(a.mse)/Math.abs(mg)*100; }
   var rows=''; order.forEach(function(t){ var d=desc[t]||{}, val=(valsObj&&valsObj[t]!=null)?valsObj[t]:d.media;
-    rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+nf(val,1)+'</td><td style="color:#7a877f">'+(d.dp!=null?('±'+nf(d.dp,1)):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td></tr>'; });
+    var erro=glm?null:ajustada?(cmp.erros_padrao||{})[t]:d.dp;
+    rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+nf(val,1)+'</td><td style="color:#7a877f">'+(erro!=null?('±'+nf(erro,1)):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td></tr>'; });
   var nr=a.normalidade||{}, hm=a.homogeneidade||{}, kr=a.kruskal||{};
   var anova=(a.tabela_anova||[]).map(function(r){ return '<tr><td class="av-tname">'+esc(r.fonte)+'</td><td>'+(r.gl!=null?r.gl:'—')+'</td><td>'+nf(r.sq,2)+'</td><td>'+nf(r.qm,3)+'</td><td>'+(r.F!=null?nf(r.F,1):'—')+'</td><td>'+pf(r.p)+'</td></tr>'; }).join('');
   var statTxt=p==null?'modelo calculado':('p='+pf(p)+(p<.05?' · significativo':' · ns'));
   var transf=a.transformacao? (typeof a.transformacao==='string'?a.transformacao:(a.transformacao.nome||a.transformacao.tipo||'aplicada')) : null;
   return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
-    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV '+nf(cv,1)+'% <span style="color:#8a948e">('+cvCls+')</span>':'')+' · comparação <b>'+esc(metodoCmp)+'</b>'+(transf?' · transf. '+esc(transf):'')+'</div>'+
-    '<div style="font-size:10px;color:#728078;margin-top:1px">Pressupostos: normalidade '+ok(nr.normal)+' <span style="color:#9aa69e">('+esc(nr.teste||'?')+' p'+pf(nr.p)+')</span> · homogeneidade '+ok(hm.homogenea)+' <span style="color:#9aa69e">('+esc(hm.teste||'?')+' p'+pf(hm.p)+')</span>'+(a.pressupostos_ok===false?' <span style="color:#b07d18">→ não-paramétrico</span>':'')+'</div>'+
-    '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>±DP</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV residual '+nf(cv,1)+'%':'')+' · comparação <b>'+esc(metodoCmp)+'</b>'+(transf?' · transf. '+esc(transf):'')+'</div>'+
+    '<div style="font-size:10px;color:#728078;margin-top:1px">Pressupostos: normalidade '+ok(nr.normal)+' <span style="color:#9aa69e">('+esc(nr.teste||'?')+' p'+pf(nr.p)+')</span> · homogeneidade '+ok(hm.homogenea)+' <span style="color:#9aa69e">('+esc(hm.teste||'?')+' p'+pf(hm.p)+')</span>'+(a.pressupostos_ok===false?' <span style="color:#b07d18">· revisar pressupostos</span>':'')+'</div>'+
+    '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
   '</div>';
 }
@@ -12698,8 +12742,8 @@ function renderStudyEditModal(){
   h+='<div id="seFaixasWrap"'+(_des==='faixas'?'':' style="display:none"')+'>';
   h+='<div style="font-size:11px;color:#9a8;line-height:1.55;margin:2px 0 8px;padding:8px 10px;border-radius:9px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a">'+
      '<b>Em faixas, cada tratamento aparece uma vez só.</b> Medir vinte pontos dentro da mesma faixa não cria vinte repetições — cria vinte medidas do mesmo pedaço de terra, e a diferença entre faixas carrega solo, declive e bordadura junto com o produto.<br><br>'+
-     'Para haver estatística, divida as faixas em <b>treços transversais</b> e amostre os <b>mesmos treços em todas</b>. Cada treço vira um bloco e absorve o gradiente do terreno. É o campo "Treços por faixa" abaixo.<br><br>'+
-     'Com 1 treço só, o app entrega médias e diferenças, mas <b>não</b> p-valor — e escreve na folha por quê.</div>';
+     'Os <b>treços são subamostras</b>: ajudam a descrever cada faixa, mas não replicam o tratamento.<br><br>'+
+     'O app entrega médias e diferenças descritivas. Para testar tratamentos, planeje unidades independentes e randomizadas em cada bloco.</div>';
   /* Agrupado por LOCAL. Nome de quadra repete entre locais de propósito — existe
      A1 em Iracemápolis e A1 em Anápolis —, então lista plana de nomes é ambígua:
      duas linhas "A1" e nenhuma pista de qual é qual. O local ativo vem primeiro,
@@ -12712,7 +12756,7 @@ function renderStudyEditModal(){
   }else{ window._seQuadraOpts=[]; }
 
   h+='<div class="se-section-title">Tratamentos</div>';
-  var _lblRep=(_des==='faixas')?'Treços por faixa (blocos)':'Repetições por tratamento';
+  var _lblRep=(_des==='faixas')?'Treços por faixa (subamostras)':'Repetições por tratamento';
   h+='<div class="se-field"><label id="seRepsLbl">'+_lblRep+'</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
 

@@ -629,13 +629,13 @@ function porData(){ return baseAnalise() === 'data'; }
 function analiseNaData(j){
   const Y  = TRAT.map((_,i)=> BLOCOS.map((_,b)=> SEV[i][b][j]));
   const A  = Est.anovaDBC(Y.map(l=>l.map(x=>Math.sqrt(x+0.5))));
-  const dm = Est.dmsTukey(A.QMerro, A.r, A.k, A.glErro);
+  const dm = A.semResiduo ? null : Est.dmsTukey(A.QMerro, A.r, A.k, A.glErro);
   const mY = Y.map(_md);
   return { aacpdParcela:Y, mediaAACPD:mY, mediaSeveridade:_mSEV0,
            anova:A, dms:dm,
            /* MENOS_MELHOR, não `true` cravado: com a letra "a" indo para a MENOR
               média, um bioensaio de uma data só premiava quem menos matou. */
-           letras:Est.letrasTukey(A.mediasTrat, dm, MENOS_MELHOR),
+           letras:A.semResiduo ? TRAT.map(()=>"") : Est.letrasTukey(A.mediasTrat, dm, MENOS_MELHOR),
            q:Est.qTukey(A.k, A.glErro),
            eficacia: mY.map((m,i)=> i===_iT0 ? null : _efic1(m, mY[_iT0])) };
 }

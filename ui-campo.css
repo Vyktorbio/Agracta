@@ -29,12 +29,12 @@
 .ag-drawer-bg.on{opacity:1;pointer-events:auto}
 
 .ag-drawer{
-  position:fixed;top:0;right:0;bottom:0;z-index:2500;width:min(360px,88vw);
+  position:fixed;top:0;right:0;bottom:0;z-index:2500;width:min(400px,94vw);
   display:flex;flex-direction:column;
   background:var(--gp-glass-strong,rgba(15,24,18,.96));
   backdrop-filter:var(--gp-blur,blur(22px));-webkit-backdrop-filter:var(--gp-blur,blur(22px));
   border-left:1px solid var(--gp-line,rgba(232,244,235,.10));
-  box-shadow:-24px 0 60px rgba(0,0,0,.34);
+  box-shadow:-12px 0 36px rgba(0,0,0,.18);
   transform:translateX(102%);transition:transform .26s cubic-bezier(.22,.9,.28,1);
   font-family:var(--ag-font,system-ui)
 }
@@ -46,12 +46,12 @@
   border-bottom:1px solid var(--gp-line,rgba(232,244,235,.10))
 }
 .ag-dw-head h2{
-  margin:0;font:750 15px/1.2 var(--ag-display,system-ui);letter-spacing:-.01em;
+  margin:0;font:650 22px/1.2 var(--ag-font,system-ui);letter-spacing:-.025em;
   color:var(--gp-text,#f2f7f3)
 }
 .ag-dw-x{
   background:none;border:none;cursor:pointer;padding:6px;border-radius:10px;
-  color:var(--gp-text-3,#7f9085);display:flex
+  color:var(--gp-text-2,#7f9085);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px
 }
 .ag-dw-x:hover{background:var(--gp-s3,#203026);color:var(--gp-text,#f2f7f3)}
 
@@ -59,23 +59,26 @@
 
 .ag-sec{margin-bottom:20px}
 .ag-sec-t{
-  font:650 10px/1 var(--ag-font,system-ui);letter-spacing:.14em;text-transform:uppercase;
-  color:var(--gp-text-3,#7f9085);margin:0 4px 9px
+  font:650 .875rem/1.4 var(--ag-font,system-ui);letter-spacing:0;
+  color:var(--gp-text-2,#7f9085);margin:0 12px 6px
 }
 
 /* linhas de ferramenta */
 .ag-row{
   width:100%;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;
-  padding:12px 13px;margin-bottom:5px;border-radius:14px;
-  background:var(--gp-s1,#111c16);border:1px solid transparent;
-  color:var(--gp-text-2,#bdc9c0);font:600 13.5px/1.25 var(--ag-font,system-ui);
+  padding:14px 12px;margin-bottom:2px;border-radius:10px;min-height:52px;
+  background:transparent;border:1px solid transparent;
+  color:var(--gp-text,#bdc9c0);font:550 1rem/1.35 var(--ag-font,system-ui);
   transition:background .14s,border-color .14s,color .14s
 }
 .ag-row:hover{background:var(--gp-s2,#17231b);color:var(--gp-text,#f2f7f3)}
 .ag-row:active{transform:translateY(1px)}
 .ag-row .ag-ic{flex:0 0 auto;width:20px;height:20px;color:var(--gp-text-3,#7f9085);display:flex}
 .ag-row .ag-lbl{flex:1;min-width:0}
-.ag-row .ag-sub{display:block;margin-top:2px;font:500 11px/1.3 var(--ag-font,system-ui);color:var(--gp-text-3,#7f9085)}
+.ag-row .ag-sub{display:block;margin-top:4px;font:400 .875rem/1.4 var(--ag-font,system-ui);color:var(--gp-text-2,#7f9085)}
+.ag-menu-details{border-top:1px solid var(--gp-line);padding-top:8px;margin-bottom:8px}
+.ag-menu-details>summary{cursor:pointer;padding:12px;font:550 1rem/1.4 var(--ag-font,system-ui);color:var(--gp-text)}
+.ag-menu-details[open]>summary{margin-bottom:6px}
 .ag-row.on{
   background:color-mix(in srgb,var(--gp-green,#3bd27f) 14%,transparent);
   border-color:color-mix(in srgb,var(--gp-green,#3bd27f) 34%,transparent);
@@ -197,6 +200,46 @@ html.light .btn-tools .ag-dot{box-shadow:0 0 0 2px #fff}
 
 /* modo tela cheia do mapa esconde a casca inteira */
 body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{display:none!important}
+
+/* Preparo: números em primeiro plano, opções em um único painel. */
+.calc-box{background:var(--gp-s1)!important;color:var(--gp-text)!important;border:1px solid var(--gp-line)!important;border-radius:20px!important;width:min(720px,96vw)!important;max-width:96vw!important;padding:20px!important;box-shadow:0 20px 64px rgba(0,0,0,.2)!important}
+.calc-box .calc-title{font:650 1.25rem/1.3 var(--ag-font)!important;letter-spacing:-.025em}
+.calc-box .calc-sub{font-size:.875rem!important;color:var(--gp-text-2)!important;line-height:1.5!important}
+.calc-box .calc-grid{gap:14px!important}
+.calc-box .calc-lab,.calc-box .calc-kv,.calc-box .calc-mix,.calc-box .calc-warn,.calc-box .calc-terr{font-size:.875rem!important;line-height:1.5!important}
+.calc-box .calc-inp,.calc-box .calc-sel,.calc-box .calc-inpi,.calc-box .calc-seli{min-height:44px!important;font-size:1rem!important;color:var(--gp-text)!important;background:var(--gp-bg)!important;border:1px solid var(--gp-line-2)!important;border-radius:8px!important;box-sizing:border-box}
+.calc-box .calc-inp:focus,.calc-box .calc-sel:focus{outline:2px solid var(--gp-green);outline-offset:2px}
+.calc-box .calc-cfg{background:var(--gp-bg)!important;border:1px solid var(--gp-line)!important;border-radius:12px!important}
+.calc-box .calc-cfgh{display:flex;width:100%;align-items:center;justify-content:space-between;text-align:left;gap:12px;color:var(--gp-text)!important;border:0;background:transparent;padding:14px!important;min-height:48px;font-size:.875rem!important;cursor:pointer}
+.calc-box .calc-card{border:0!important;border-top:1px solid var(--gp-line)!important;border-radius:0!important;padding:18px 0!important;background:transparent!important}
+.calc-box .calc-cardh{gap:12px;flex-wrap:wrap}
+.calc-box .calc-tname{font-size:1rem!important;color:var(--gp-text)!important}
+.calc-box .calc-abas{gap:4px!important;padding:5px!important;background:var(--gp-bg);border-radius:12px}
+.calc-box .calc-aba{min-height:44px!important;font-size:.875rem!important;background:transparent!important;color:var(--gp-text-2)!important;border:0!important;border-radius:8px!important}
+.calc-box .calc-aba.on{background:var(--gp-s2)!important;color:var(--gp-text)!important;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.calc-box .calc-prep{background:var(--gp-bg)!important;border:0!important;border-left:3px solid var(--gp-green)!important;border-radius:8px!important;padding:16px!important;color:var(--gp-text)!important}
+.calc-box .calc-prep>span{font-size:.75rem!important;letter-spacing:.06em!important;color:var(--gp-text-2)!important}
+.calc-box .calc-prep>b{font:650 2rem/1.25 var(--ag-font)!important;font-variant-numeric:tabular-nums;letter-spacing:-.035em}
+.calc-box .calc-prep>small{font-size:.875rem!important;line-height:1.5!important;color:var(--gp-text-2)!important}
+.calc-box .calc-prep.bad{border-left-color:var(--gp-red)!important}
+.calc-box .calc-copy,.calc-box .calc-close,.calc-box .calc-navb,.calc-box .calc-x{min-height:44px!important;font-size:.875rem!important;border:1px solid var(--gp-line-2)!important;background:var(--gp-s2)!important;color:var(--gp-text)!important;border-radius:9px!important}
+.calc-box .calc-x{min-width:44px;font-size:1.5rem!important}
+.calc-box .calc-mixr{border-color:var(--gp-line)!important}
+.calc-box .calc-kv b{color:var(--gp-text)!important;font-variant-numeric:tabular-nums}
+.calc-box .calc-kv span,.calc-box .calc-eq{color:var(--gp-text-2)!important}
+.calc-drone{margin:12px 0;border:1px solid var(--gp-line);border-radius:12px;overflow:hidden}
+.calc-drone>summary{padding:14px;cursor:pointer;font-weight:650;font-size:1rem}
+.calc-drone>summary span{display:block;margin:4px 0 0 18px;font-size:.875rem;font-weight:400;color:var(--gp-text-2)}
+.calc-drone .calc-grid{padding:0 14px 12px}
+.calc-drone-check{grid-column:1/-1;display:flex;align-items:center;gap:10px;font-size:.875rem;min-height:44px}
+.calc-drone-check input{width:20px;height:20px;accent-color:var(--gp-green)}
+.calc-drone-note,.calc-drone-status p{font-size:.875rem;line-height:1.5;margin:8px 14px 14px;color:var(--gp-text-2)}
+.calc-drone-status{margin:12px 0;padding:14px;background:var(--gp-bg);border-radius:10px;border-left:3px solid var(--gp-amber);font-size:.875rem}
+.calc-drone-status.incompativel{border-left-color:var(--gp-red)}
+.calc-drone-status.conferido{border-left-color:var(--gp-green)}
+.calc-drone-status p{margin:8px 0 0}
+@media(max-width:480px){.calc-box{padding:14px!important;border-radius:14px!important}.calc-box .calc-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.calc-box .calc-actions{flex-wrap:wrap}.calc-box .calc-actions>button{flex:1 1 130px}.calc-drone .calc-f{min-width:0}.calc-drone .calc-inp{width:100%}}
+@media(prefers-reduced-motion:reduce){.ag-drawer,.ag-drawer-bg,.ag-row{transition:none!important}}
 
 /* ==========================================================================
    MAPA LIMPO — nada de chrome flutuante sobre a imagem

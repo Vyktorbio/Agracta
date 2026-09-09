@@ -19,8 +19,8 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 </style>
 <script>document.documentElement.classList.add('pre-auth');try{if(localStorage.getItem('agracta-theme')!=='dark'){document.documentElement.classList.add('light');}else{document.addEventListener('DOMContentLoaded',function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content='#101513';});}}catch(e){document.documentElement.classList.add('light');}</script>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="theme-2026.css?v=6">
-<link rel="stylesheet" href="ui-campo.css?v=8">
+<link rel="stylesheet" href="theme-2026.css?v=7">
+<link rel="stylesheet" href="ui-campo.css?v=9">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
@@ -32,7 +32,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=3">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=165').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=166').catch(function(){});});}</script>
 </head>
 <body>
 <div class="top-bar">
@@ -126,8 +126,9 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/leaflet-rotate.js"></script>
 <script src="vendor/Leaflet.ImageOverlay.Rotated.js"></script>
 <script src="vendor/quadras-default.js?v=2"></script>
-<script src="vendor/biocalc-campo-core.js?v=3"></script>
+<script src="vendor/biocalc-campo-core.js?v=4"></script>
 <script src="vendor/aplicacao-core.js?v=1"></script>
+<script src="vendor/drone-core.js?v=1"></script>
 <script src="vendor/nutricao-core.js"></script>
 <script src="vendor/concordancia-core.js"></script>
 <script src="vendor/dose-core.js?v=6"></script>
@@ -147,7 +148,8 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script src="alvos-catalogo.js?v=2"></script>
-<script src="app.js?v=120"></script>
+<script src="app.js?v=121"></script>
+<script src="calculadora-drone.js?v=1"></script>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
@@ -156,7 +158,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <!-- Camadas de 2027: controle de horário de acesso e a nova casca de uso
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
 <script src="acesso-horario.js?v=3"></script>
-<script src="ui-campo.js?v=16"></script>
+<script src="ui-campo.js?v=17"></script>
 <script src="integracoes.js?v=1"></script>
 <script src="integracoes-fontes.js?v=1"></script>
 <script src="integracoes-clientes.js?v=1"></script>

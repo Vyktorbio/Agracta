@@ -822,24 +822,23 @@
            e nao dentro de um estudo. */
         linha(I.caixa, 'Banco de itens', 'Produtos e doses usados nos protocolos', 'agMenuAcao(\'abrirItens\')')+
         linha(I.caixa, 'Conhecimento', 'Produtos, alvos, resultados e contexto', 'agMenuAcao(\'abrirConhecimento\')')+
-        linha(I.baixar, 'Backup em arquivo', 'Baixa tudo para o aparelho', 'agMenuAcao(\'exportData\')')+
+      '</div><details class="ag-sec ag-menu-details"><summary>Cópias e recuperação</summary>'+
+        linha(I.baixar, 'Salvar cópia', 'Arquivo com os dados do Agracta', 'agMenuAcao(\'exportData\')')+
         linha(I.subir, 'Importar arquivo', 'Restaura de um backup .json', 'agImportar()')+
         linha(I.caixa, 'Backups (restaurar)', 'Pontos de restauração guardados', 'agMenuAcao(\'openBackups\')')+
         linha(I.nuvem, 'Histórico da nuvem', 'Versões sincronizadas', 'agMenuAcao(\'openCloudHistory\')')+
         linha(I.recarregar, 'Recuperação de avaliações', 'Resgata lançamentos perdidos', 'agMenuAcao(\'openAvalRecovery\')')+
-      '</div>'+
-      '<div class="ag-sec">'+
-        '<div class="ag-sec-t">Este aparelho</div>'+
+      '</details>'+
+      '<details class="ag-sec ag-menu-details"><summary>Preferências</summary>'+
         linha(I.lua, escuro?'Tema escuro':'Tema claro', 'Alterna o visual', 'agMenuAcao(\'toggleTheme\')')+
         linha(I.lapis, 'Meu nome e assinatura', 'Como você assina na trilha BPL', 'agMenuAcao(\'definirMeuNome\')')+
         linha(I.recarregar, 'Atualizar Agracta', 'Baixa e abre a versão mais recente', 'agMenuAcao(\'forcarAtualizacao\')')+
         (instalar ? linha(I.celular, 'Instalar o app', 'Fica como aplicativo na tela inicial', 'agMenuAcao(\'installApp\')') : '')+
-      '</div>'+
-      (adm ? '<div class="ag-sec">'+
-        '<div class="ag-sec-t">Administração</div>'+
+      '</details>'+
+      (adm ? '<details class="ag-sec ag-menu-details"><summary>Administração</summary>'+
         linha(I.engrenagem, 'Painel Admin', 'Técnicos, horários e acessos', 'agMenuAcao(\'openAdminPanel\')')+
         linha(I.escudo, 'Conformidade &amp; ISMS', 'Registro de segurança da informação', 'agMenuAcao(\'openComplianceISMS\')')+
-      '</div>' : '')+
+      '</details>' : '')+
       '<div class="ag-sec">'+
         linha(I.sair, 'Sair da conta', '', 'agMenuAcao(\'doLogout\')')+
       '</div>';
@@ -856,7 +855,7 @@
     d.id = 'agMenuDrawer'; d.className = 'ag-drawer';
     d.setAttribute('role','dialog'); d.setAttribute('aria-label','Menu');
     d.innerHTML =
-      '<div class="ag-dw-head"><h2>Menu</h2>'+
+      '<div class="ag-dw-head"><h2>Agracta</h2>'+
         '<button class="ag-dw-x" onclick="agMenu(false)" aria-label="Fechar">'+svg(I.x,20)+'</button></div>'+
       '<div class="ag-dw-body" id="agMenuBody"></div>';
     document.body.appendChild(d);

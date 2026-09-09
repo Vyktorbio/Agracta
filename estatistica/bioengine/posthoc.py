@@ -25,6 +25,8 @@ letras diferentes em duas telas do app, o que é indefensável num relatório.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
+import patsy
 from scipy import stats
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
@@ -85,6 +87,59 @@ def _ordenar_por_media(medias, maior_melhor=True):
     """Ordena do MELHOR para o pior — é essa ordem que define quem recebe 'a'."""
     return [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1],
                                  reverse=bool(maior_melhor))]
+
+
+def comparar_modelo(a, alfa=0.05, maior_melhor=True):
+    """Médias marginais e contrastes do MESMO modelo da ANOVA.
+
+    DBC completo/equilibrado: Tukey com QME e GL residuais do modelo.
+    Dados desbalanceados: contrastes t das médias ajustadas, correção Holm.
+    Nunca refaz uma ANOVA de uma via descartando os blocos.
+    """
+    modelo, df, fatores = a['_modelo'], a['_df'], a['_nomes_fatores']
+    celulas = df[fatores].drop_duplicates().sort_values(fatores)
+    blocos = sorted(df['bloco'].unique()) if 'bloco' in df else [None]
+    vetores, medias, erros = {}, {}, {}
+    beta, cov = np.asarray(modelo.params), np.asarray(modelo.cov_params())
+    for _, cel in celulas.iterrows():
+        nome = ' × '.join(str(cel[f]) for f in fatores)
+        linhas = [{**cel.to_dict(), **({'bloco': b} if b is not None else {})} for b in blocos]
+        design = patsy.build_design_matrices([modelo.model.data.design_info], pd.DataFrame(linhas))[0]
+        v = np.asarray(design).mean(axis=0)
+        vetores[nome], medias[nome] = v, float(v @ beta)
+        erros[nome] = float(np.sqrt(max(0, v @ cov @ v)))
+    nomes = sorted(medias)
+    if len(nomes) < 2:
+        raise ValueError('São necessários ao menos dois tratamentos estimáveis.')
+    contagens = df.groupby(fatores + (['bloco'] if 'bloco' in df else [])).size()
+    balanceado = len(contagens) == len(nomes)*len(blocos) and contagens.nunique() == 1
+    gl, k = float(modelo.df_resid), len(nomes)
+    crit = float(stats.studentized_range.ppf(1-alfa, k, gl)) if balanceado else None
+    detalhes, pvals = [], []
+    for i, g1 in enumerate(nomes):
+        for g2 in nomes[i+1:]:
+            c = vetores[g2]-vetores[g1]
+            dif = float(c @ beta)
+            se = float(np.sqrt(max(0, c @ cov @ c)))
+            if not se > 0:
+                raise ValueError('Não há erro residual estimável para comparar tratamentos.')
+            p = float(stats.studentized_range.sf(abs(dif)/(se/np.sqrt(2)), k, gl)) if balanceado else float(2*stats.t.sf(abs(dif)/se, gl))
+            pvals.append(p)
+            d = {'g1': g1, 'g2': g2, 'diferenca': dif, 'ep_diferenca': se, 'p_bruto': p}
+            if balanceado:
+                d.update(ic_inf=dif-crit*se/np.sqrt(2), ic_sup=dif+crit*se/np.sqrt(2))
+            detalhes.append(d)
+    ajustados = pvals if balanceado else _ajuste_p(pvals, 'holm')
+    difere = set()
+    for d, p in zip(detalhes, ajustados):
+        d.update(p=float(p), significativo=bool(p < alfa))
+        if p < alfa:
+            difere.add(frozenset((d['g1'],d['g2'])))
+    ordem = _ordenar_por_media(medias, maior_melhor)
+    return {'metodo': 'Tukey HSD — erro do modelo' if balanceado else 'Médias ajustadas — contrastes t com Holm',
+            'alfa': alfa, 'medias': medias, 'erros_padrao': erros, 'ajustadas': True,
+            'balanceado': balanceado, 'letras': compact_letters(ordem,difere), 'ordem': ordem,
+            'comparacoes': detalhes, 'df_erro': gl, 'mse': float(modelo.mse_resid)}
 
 
 # --------------------------------------------------------------------------- #

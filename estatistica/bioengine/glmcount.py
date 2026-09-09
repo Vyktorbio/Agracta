@@ -21,12 +21,16 @@ from . import diagnostics as diag
 from .posthoc import compact_letters, _ajuste_p
 
 
-def _letras_por_contraste(res, niveis, design_info, alfa, dispersao=1.0):
+def _linha(design_info, nivel, blocos=None):
+    df = pd.DataFrame([{'F1': nivel, **({'bloco': b} if b is not None else {})} for b in (blocos or [None])])
+    return np.asarray(patsy.build_design_matrices([design_info], df)[0], float).mean(axis=0)
+
+
+def _letras_por_contraste(res, niveis, design_info, alfa, dispersao=1.0, blocos=None):
     """Comparações pareadas no preditor linear -> letras."""
     linhas = {}
     for lv in niveis:
-        d = patsy.dmatrix(design_info, pd.DataFrame({"F1": [lv]}), return_type="dataframe")
-        linhas[lv] = np.asarray(d.iloc[0].values, float)
+        linhas[lv] = _linha(design_info, lv, blocos)
 
     cov = np.asarray(res.cov_params(), float) * dispersao
     beta = np.asarray(res.params, float)
@@ -54,61 +58,89 @@ def _letras_por_contraste(res, niveis, design_info, alfa, dispersao=1.0):
     return difere, detalhes
 
 
-def _medias_preditas(res, niveis, design_info, link_inv):
+def _medias_preditas(res, niveis, design_info, link_inv, blocos=None):
     out = {}
     for lv in niveis:
-        d = patsy.dmatrix(design_info, pd.DataFrame({"F1": [lv]}), return_type="dataframe")
-        eta = float(np.asarray(d.iloc[0].values, float) @ np.asarray(res.params, float))
+        eta = float(_linha(design_info, lv, blocos) @ np.asarray(res.params, float))
         out[lv] = float(link_inv(eta))
     return out
 
 
-def glm_contagem(resp, fator, alfa=0.05):
+def glm_contagem(resp, fator, alfa=0.05, bloco=None, maior_melhor=True):
     """Resposta de contagem ~ um fator categórico."""
-    df = pd.DataFrame({"y": np.asarray(resp, float), "F1": [str(v) for v in fator]}).dropna()
+    df = pd.DataFrame({"y": np.asarray(resp, float), "F1": fator})
+    if bloco is not None:
+        df['bloco'] = bloco
+    df = df.dropna()
+    if not np.all(np.isfinite(df['y'])) or np.any(df['y'] < 0) or np.any(df['y'] != np.floor(df['y'])):
+        raise ValueError('Uma contagem precisa conter inteiros finitos e não negativos.')
+    df['F1'] = df['F1'].astype(str)
+    if bloco is not None:
+        df['bloco'] = df['bloco'].astype(str)
+    blocos = sorted(df['bloco'].unique()) if bloco is not None else None
+    formula = 'y ~ C(F1)' + (' + C(bloco)' if blocos else '')
     niveis = sorted(df["F1"].unique())
 
-    pois = smf.glm("y ~ C(F1)", data=df, family=sm.families.Poisson()).fit()
+    pois = smf.glm(formula, data=df, family=sm.families.Poisson()).fit()
+    if pois.df_resid < 1 or np.linalg.matrix_rank(pois.model.exog) < pois.model.exog.shape[1]:
+        raise ValueError('GLM sem erro residual ou com tratamento e bloco confundidos.')
     over = diag.sobredispersao_poisson(df["y"].values, pois.fittedvalues.values,
                                        len(pois.params))
 
     modelo, familia, nota = pois, "Poisson", None
     if over["sobredisperso"]:
         try:
-            nb = smf.glm("y ~ C(F1)", data=df,
-                         family=sm.families.NegativeBinomial()).fit()
+            # Estima a dispersão NB2; o default de GLM fixava alpha=1 para todo ensaio.
+            ajuste_nb = smf.negativebinomial(formula, data=df).fit(disp=False)
+            alpha_nb = float(ajuste_nb.params['alpha'])
+            if not ajuste_nb.mle_retvals.get('converged') or not np.isfinite(alpha_nb) or alpha_nb <= 0:
+                raise ValueError('Dispersão NB não estimável.')
+            nb = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=alpha_nb)).fit()
             modelo, familia = nb, "Binomial Negativa"
             nota = (f"sobredispersão detectada (φ={over['phi']:.2f}); "
-                    "modelo trocado de Poisson para Binomial Negativa")
+                    f"modelo trocado para Binomial Negativa (alpha estimado={alpha_nb:.4g}; inferência condicional à dispersão)")
         except Exception:
             nota = (f"sobredispersão (φ={over['phi']:.2f}); usando quase-Poisson "
                     "(erros-padrão inflados)")
 
     design_info = modelo.model.data.design_info
     dispersao = over["phi"] if (familia == "Poisson" and over["sobredisperso"]) else 1.0
-    difere, comparacoes = _letras_por_contraste(modelo, niveis, design_info, alfa, dispersao)
-    medias = _medias_preditas(modelo, niveis, design_info, np.exp)
-    ordem = [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1], reverse=True)]
+    difere, comparacoes = _letras_por_contraste(modelo, niveis, design_info, alfa, dispersao, blocos)
+    medias = _medias_preditas(modelo, niveis, design_info, np.exp, blocos)
+    ordem = [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1], reverse=maior_melhor)]
     letras = compact_letters(ordem, difere)
 
     return {"tipo_analise": f"GLM {familia} (contagem)", "familia": familia,
             "nota_modelo": nota, "sobredispersao": over,
             "medias_estimadas": medias, "letras": letras,
             "comparacoes": comparacoes, "ordem": ordem,
-            "aic": float(modelo.aic), "alfa": alfa}
+            "aic": float(modelo.aic), "alfa": alfa, 'formula': formula, 'blocos': blocos,
+            'escala_medias': 'Ligação inversa da média ajustada no preditor linear'}
 
 
-def glm_proporcao(y, n, fator, alfa=0.05):
+def glm_proporcao(y, n, fator, alfa=0.05, bloco=None, maior_melhor=True):
     """Resposta binomial (x de n) ~ um fator categórico (ex.: % afetados)."""
     df = pd.DataFrame({"y": np.asarray(y, float), "n": np.asarray(n, float),
-                       "F1": [str(v) for v in fator]}).dropna()
+                       "F1": fator})
+    if bloco is not None:
+        df['bloco'] = bloco
+    df = df.dropna()
+    df['F1'] = df['F1'].astype(str)
+    if bloco is not None:
+        df['bloco'] = df['bloco'].astype(str)
+    blocos = sorted(df['bloco'].unique()) if bloco is not None else None
+    if not np.all(np.isfinite(df[['y','n']])) or np.any(df['n']<=0) or np.any(df['y']<0) or np.any(df['y']>df['n']) or np.any(df[['y','n']] != np.floor(df[['y','n']])):
+        raise ValueError('Confira eventos e total: inteiros finitos com 0 ≤ eventos ≤ total e total positivo.')
     df["falha"] = df["n"] - df["y"]
     niveis = sorted(df["F1"].unique())
 
     endog = df[["y", "falha"]].values
-    X = patsy.dmatrix("C(F1)", df, return_type="dataframe")
+    formula = 'C(F1)' + (' + C(bloco)' if blocos else '')
+    X = patsy.dmatrix(formula, df, return_type="dataframe")
     design_info = X.design_info
     modelo = sm.GLM(endog, X, family=sm.families.Binomial()).fit()
+    if modelo.df_resid < 1 or np.linalg.matrix_rank(X) < X.shape[1]:
+        raise ValueError('GLM sem erro residual ou com tratamento e bloco confundidos.')
 
     mu_prop = np.asarray(modelo.predict(X), dtype=float)
     over = diag.sobredispersao_binomial(df["y"].values, df["n"].values,
@@ -119,13 +151,14 @@ def glm_proporcao(y, n, fator, alfa=0.05):
             if over["sobredisperso"] else None)
 
     inv = lambda eta: 1 / (1 + np.exp(-eta))
-    difere, comparacoes = _letras_por_contraste(modelo, niveis, design_info, alfa, dispersao)
-    medias = _medias_preditas(modelo, niveis, design_info, inv)
-    ordem = [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1], reverse=True)]
+    difere, comparacoes = _letras_por_contraste(modelo, niveis, design_info, alfa, dispersao, blocos)
+    medias = _medias_preditas(modelo, niveis, design_info, inv, blocos)
+    ordem = [t for t, _ in sorted(medias.items(), key=lambda kv: kv[1], reverse=maior_melhor)]
     letras = compact_letters(ordem, difere)
 
     return {"tipo_analise": f"GLM {familia} (proporção x de n)", "familia": familia,
             "nota_modelo": nota, "sobredispersao": over,
             "proporcoes_estimadas": medias, "letras": letras,
             "comparacoes": comparacoes, "ordem": ordem,
-            "aic": float(modelo.aic), "alfa": alfa}
+            "aic": float(modelo.aic), "alfa": alfa, 'formula': 'eventos/total ~ '+formula, 'blocos': blocos,
+            'escala_medias': 'Ligação inversa da média ajustada no preditor linear'}

@@ -69,21 +69,23 @@ function anovaDBC(Y) {
   const SQtotal = soma(todos.map(y => (y - G) ** 2));
   const SQtrat  = r * soma(mT.map(m => (m - G) ** 2));
   const SQbloco = k * soma(mB.map(m => (m - G) ** 2));
-  const SQerro  = SQtotal - SQtrat - SQbloco;
+  const SQerro = Math.max(0, SQtotal - SQtrat - SQbloco);
 
   const glTrat = k - 1, glBloco = r - 1, glErro = (k - 1) * (r - 1);
   const QMtrat = SQtrat / glTrat, QMbloco = SQbloco / glBloco, QMerro = SQerro / glErro;
+  const semResiduo = SQtotal <= 0 || SQerro <= SQtotal*1e-9;
 
   return {
     k, r, N, G, mediasTrat: mT, mediasBloco: mB,
     SQtrat, SQbloco, SQerro, SQtotal,
     glTrat, glBloco, glErro, glTotal: N - 1,
     QMtrat, QMbloco, QMerro,
-    F: QMtrat / QMerro,
-    Fbloco: QMbloco / QMerro,
-    p: pF(QMtrat / QMerro, glTrat, glErro),
-    pBloco: pF(QMbloco / QMerro, glBloco, glErro),
-    CV: 100 * Math.sqrt(QMerro) / G
+    semResiduo,
+    F: semResiduo ? null : QMtrat / QMerro,
+    Fbloco: semResiduo ? null : QMbloco / QMerro,
+    p: semResiduo ? null : pF(QMtrat / QMerro, glTrat, glErro),
+    pBloco: semResiduo ? null : pF(QMbloco / QMerro, glBloco, glErro),
+    CV: semResiduo || G===0 ? null : 100 * Math.sqrt(QMerro) / Math.abs(G)
   };
 }
 
@@ -307,8 +309,8 @@ function analisar(cfg) {
   /* ANOVA na escala transformada */
   const f = TRANSFORMACOES[transf].f;
   const anova = anovaDBC(AACPD.map(bl => bl.map(f)));
-  const dms = dmsTukey(anova.QMerro, anova.r, anova.k, anova.glErro);
-  const letras = letrasTukey(anova.mediasTrat, dms, menosEhMelhor);
+  const dms = anova.semResiduo ? null : dmsTukey(anova.QMerro, anova.r, anova.k, anova.glErro);
+  const letras = anova.semResiduo ? tratamentos.map(()=>"") : letrasTukey(anova.mediasTrat, dms, menosEhMelhor);
 
   const eficacia = mAACPD.map((m, i) => i === iTest ? null : abbott(m, mAACPD[iTest]));
 
