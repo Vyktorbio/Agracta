@@ -29,7 +29,7 @@ Object.assign(w,{
   studyMetodosVariam:s=>new Set(s.tratamentos.map(t=>t.metodo)).size>1,tratMetodo:(s,q,t)=>t.metodo,
   esc:v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))
 });
-const nomes=['_numBR','_calcNum','_calcVal','_calcCapAtualL','_calcDoseUnit','calcAbas','calcAbaAtual','calcAbaVizinha','calcAba','_calcPick','calcCfgResumo','_calcFinalizado','tratComponentes','tratTemReceita','_seCompUnidadeNormalizar','_seCompUnidadeOptions','calcVolumeDoEstudo','calcVolumeDoTratamento','calcVolumeAmbiguoHtml','calcConfirmarVolume','_calcRememberInputs','_calcRenderShell','_calcCompute','_calcConfigAtual','calcMemoria','_bioestatP','_bioestatResumoCard'];
+const nomes=['_numBR','_calcNum','_calcVal','_calcCapAtualL','_calcDoseUnit','calcAbas','calcAbaAtual','calcAbaVizinha','calcAba','_calcPick','calcCfgResumo','_calcFinalizado','tratComponentes','tratTemReceita','_seCompUnidadeNormalizar','_seCompUnidadeOptions','calcVolumeDoEstudo','calcVolumeDoTratamento','calcVolumeAmbiguoHtml','calcConfirmarVolume','_calcRememberInputs','_calcRenderShell','_calcCompute','_calcConfigAtual','calcMemoria','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatDecisaoHtml','_bioestatResumoCard'];
 w.eval(nomes.map(pega).join('\n'));
 w.eval(fs.readFileSync('calculadora-drone.js','utf8'));
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
