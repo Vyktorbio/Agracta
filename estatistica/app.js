@@ -5,9 +5,9 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-10";
+const APP_VERSION = "bioensaio-auditoria-12";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v44-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -406,6 +406,30 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 /* ----------------------------------------------------------------------- */
 /* Modo: Análise geral × Mortalidade no tempo                              */
 /* ----------------------------------------------------------------------- */
+/* O importador abre na PRIMEIRA data. Para o modo Geral isso está certo — uma
+   ANOVA por avaliação. Para o modo Tempo é fatal: ele recebia um ponto só e o
+   eixo do tempo continuava sem existir mesmo com a coluna chegando. Ao entrar
+   em Tempo passa a "todas as datas"; ao sair, devolve a data que estava —
+   senão o Geral passaria a empilhar as leituras como se fossem repetições. */
+let _matrizDataAntesTempo=null;
+function _matrizAjustarDataPorModo(m){
+  const dataSel=$("#matriz-data");
+  if(!dataSel || typeof MATRIZ_IMPORT==="undefined" || !MATRIZ_IMPORT) return;
+  if(m==="tempo"){
+    const temTodas=[...dataSel.options].some(o=>o.value==="__todas");
+    if(!temTodas || dataSel.value==="__todas") return;
+    _matrizDataAntesTempo=dataSel.value;
+    dataSel.value="__todas";
+  } else if(_matrizDataAntesTempo!=null){
+    dataSel.value=_matrizDataAntesTempo;
+    _matrizDataAntesTempo=null;
+  } else return;
+  atualizarMatrizFiltros();
+  const lv=matrizLinhasFiltradas(); if(!lv.length) return;
+  const resposta=($("#matriz-variavel") && $("#matriz-variavel").value) || lv[0].variavel || "valor";
+  COLUNAS=colunasBioensaioDeMatriz(lv, resposta, false);
+  renderPreview();
+}
 function setModo(m){
   if(MODO !== m) invalidarResultado("Modo de análise alterado");
   MODO = m;
@@ -419,6 +443,7 @@ function setModo(m){
   $("#card-opcoes-forense").classList.toggle("oculto", m!=="forense");
   $("#card-resultados").classList.add("oculto");
   setNavTravado("resultados", true);
+  _matrizAjustarDataPorModo(m);
   if(COLUNAS.length){ renderPapeis(MODO==="tempo" ? adivinharPapeisTempo() : (MODO==="validacao" ? adivinharPapeisValidacao() : (MODO==="forense" ? adivinharPapeisForense() : adivinharPapeis()))); }
   preencherExemplosPorModo();
   atualizarPipeline();
@@ -734,7 +759,16 @@ function linhasMatrizDeAoa(aoa){
       repeticao:textoLimpo(valorLinha(obj,["Repeticao","Repetição","Bloco"])) || "1",
       produto:textoLimpo(valorLinha(obj,["Produto"])),
       variavel:variavel,
-      valor:valor
+      valor:valor,
+      /* Estes quatro existiam na tabela do Agracta e morriam aqui: a lista de
+         campos era fixa e não os conhecia. Sem dose, a rota de dose-resposta
+         nunca era escolhida (decide.py exige tem_dose) apesar de o Agracta já
+         montar a coluna; sem tempo e sem as contagens, o modo Tempo abria com
+         três papéis obrigatórios ausentes e o botão Analisar morto. */
+      dose:textoLimpo(valorLinha(obj,["Dose"])),
+      tempo:textoLimpo(valorLinha(obj,["Tempo"])),
+      n_total:textoLimpo(valorLinha(obj,["N_total","N total"])),
+      n_vivos:textoLimpo(valorLinha(obj,["N_vivos","N vivos"]))
     });
   });
   return linhas;
@@ -854,6 +888,15 @@ function colunasBioensaioDeMatriz(linhas, resposta, incluirProduto, repetidas){
     {nome:"data_avaliacao", valores:linhas.map(r=>r.data)}
   ];
   if(repetidas) cols.push({nome:'parcela',valores:linhas.map(r=>JSON.stringify([r.local,r.quadra,r.estudo,r.tratamento,r.repeticao]))});
+  /* Só entram quando existem de verdade: coluna vazia vira papel adivinhado
+     errado e muda a rota da análise sem ninguém pedir. Os nomes com prefixo
+     "tempo_" são de propósito — ver a guarda em adivinharPapeis(). */
+  const temCampo=(k)=>linhas.some(r=>String(r[k]==null?"":r[k]).trim()!=="");
+  const coluna=(nome,k)=>cols.push({nome, valores:linhas.map(r=>String(r[k]==null?"":r[k]))});
+  if(temCampo("dose")) coluna("dose","dose");
+  if(temCampo("tempo")) coluna("tempo","tempo");
+  if(temCampo("n_total")) coluna("tempo_n_total","n_total");
+  if(temCampo("n_vivos")) coluna("tempo_n_vivos","n_vivos");
   return cols;
 }
 function usarMatrizNoBioensaio(){
@@ -991,7 +1034,12 @@ function adivinharPapeis(){
   COLUNAS.forEach(col=>{
     const n = col.nome.toLowerCase();
     let papel = "ignorar";
-    if(/dose|dosagem|conc|ppm|concentra/.test(n)) papel="dose";
+    /* "tempo_n_vivos" casaria com /viv/ mais abaixo e viraria uma SEGUNDA
+       resposta: a análise geral do mesmo estudo mudaria de resultado só
+       porque alguém passou pela aba Tempo. Estas colunas servem ao modo
+       Tempo e a mais nada. */
+    if(/^tempo(_|$)/.test(n)) papel="ignorar";
+    else if(/dose|dosagem|conc|ppm|concentra/.test(n)) papel="dose";
     else if(/^n$|total|testad|n_?test|num_?test|n_?total/.test(n)) papel="n_total";
     else if(/bloco|block|repet|^rep$|^rep\d/.test(n)) papel="bloco";
     else if(/^parcela$|^unidade$|^subject$|^plot$/.test(n)) papel="unidade";
@@ -3328,6 +3376,11 @@ function renderRelatorioForense(rel){
 /* Render — Mortalidade no tempo                                           */
 /* ----------------------------------------------------------------------- */
 function renderRelatorioTempo(rel){
+  /* Sem isto o modo Tempo era um beco: rodava, desenhava na tela do motor e
+     nada voltava para o Agracta — então o painel do estudo não tinha como
+     mostrar sobrevivência sozinho, e só sobrava o caminho manual. As rotas
+     de análise e de forense já devolviam; esta ficou de fora. */
+  _agractaEmitirResultado(rel);
   const out=$("#resultados"); out.innerHTML="";
   $("#card-resultados").classList.remove("oculto");
   setNavTravado("resultados", false);
@@ -3720,6 +3773,16 @@ function __agractaHandoff(payload){
     if(!linhas.length){ avisar('Não encontrei valores (Tratamento/Variável/Valor) para analisar.'); return false; }
     MATRIZ_IMPORT = { arquivo: payload.titulo || 'Agracta', sheet: 'Dados', linhas: linhas,controle:payload.controle||'',tipos:payload.tipos||{},sentidos:payload.sentidos||{} };
     renderMatrizImportador(); /* seletor de estudo/data/variável continua disponível p/ re-escolher */
+    /* O importador abre na PRIMEIRA data. O modo Tempo precisa das leituras
+       todas — e as colunas são montadas AQUI, antes de setModo, então ajustar
+       o filtro só lá dentro chegaria tarde: `carregarColunas` logo abaixo
+       sobrescreveria com as colunas de uma data só. */
+    if(modo==='tempo'){
+      var _ds=document.getElementById('matriz-data');
+      if(_ds && [].some.call(_ds.options,function(o){return o.value==='__todas';})){
+        _ds.value='__todas'; atualizarMatrizFiltros();
+      }
+    }
     var lv = matrizLinhasFiltradas();
     var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
@@ -3737,6 +3800,11 @@ function __agractaHandoff(payload){
         preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
         var papeis = (modo === 'analise') ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null;
+        /* A dose só viaja quando o Agracta já provou que o ensaio É uma série
+           de doses (mesmo item, 3+ níveis, mesma unidade). Chegando, ela tem
+           de vir com papel: sem isso a coluna existe e a rota continua sendo
+           comparação de médias. */
+        if(papeis && cols.some(function(c){ return c.nome==='dose'; })) papeis.dose='dose';
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
         $('#opt-modelo').value='auto';
         $('#opt-comparacao').value='todos';
