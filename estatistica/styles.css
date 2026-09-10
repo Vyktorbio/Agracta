@@ -796,3 +796,11 @@ canvas{max-width:100%;background:#fff;border:1px solid var(--line);border-radius
   main{max-width:none;padding:0}
   .card{box-shadow:none;border:0}
 }
+
+/* Planejamento da análise: escolhas e detalhes legíveis no campo. */
+#card-opcoes .opcoes-grid label{font-size:.875rem;line-height:1.5}
+#card-opcoes .opcoes-grid select{min-height:44px;font-size:1rem}
+#modelo-dica{font-size:.875rem;line-height:1.5;margin:0}
+.analise-secundaria,.comparacoes-detalhe{margin:16px 0;border:1px solid var(--line);border-radius:10px;padding:0 14px}
+.analise-secundaria>summary,.comparacoes-detalhe>summary{min-height:44px;padding:12px 0;cursor:pointer;font-size:.875rem;font-weight:600}
+.analise-secundaria table,.comparacoes-detalhe table{font-size:.875rem}
