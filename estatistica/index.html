@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <title>Estatística — Agracta</title>
 <link rel="apple-touch-icon" href="icons/icon-180.png" />
-<link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-9" />
-<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-9" />
+<link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-10" />
+<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-10" />
 <script>
   /* A casca fica oculta somente na análise automática. Correção também identificada no PR 53. */
   if(new URLSearchParams(location.search).get('agracta_engine')==='1') document.documentElement.classList.add('agracta-motor');
@@ -19,7 +19,8 @@
      Os dados, o modo (Geral/Forense) e o disparo vêm do Agracta. */
   .agracta-motor .appbar, .agracta-motor .brand-footer, .agracta-motor .appnav, .agracta-motor .acao-fixa,
   .agracta-motor #card-dados, .agracta-motor #card-papeis, .agracta-motor #card-pipeline,
-  .agracta-motor #card-opcoes, .agracta-motor #card-opcoes-tempo, .agracta-motor #card-opcoes-validacao, .agracta-motor #card-opcoes-forense { display:none !important; }
+  .agracta-motor #card-opcoes, .agracta-motor #card-opcoes-tempo, .agracta-motor #card-opcoes-validacao, .agracta-motor #card-opcoes-forense,
+  .agracta-motor #card-planejar { display:none !important; }
   /* só o painel de resultados aparece (o app remove o .oculto quando termina) */
   .agracta-motor #card-resultados .export-acoes #btn-audit-json,
   .agracta-motor #card-resultados .export-acoes #btn-audit-verificar { display:none !important; }
@@ -166,15 +167,31 @@
           <option value="auto">Uma avaliação — ANOVA / GLM</option>
           <option value="misto">Modelo misto — blocos / locais aleatórios</option>
           <option value="repetidas">Mesmas parcelas em várias datas</option>
+          <option value="curva">Curva de dose — resposta contínua (DE50)</option>
         </select>
       </label>
       <label>Comparar tratamentos
-        <select id="opt-comparacao"><option value="todos">Todos entre si</option><option value="controle">Cada um contra a testemunha</option></select>
+        <select id="opt-comparacao">
+          <option value="todos">Todos entre si</option>
+          <option value="controle">Cada um contra a testemunha</option>
+          <option value="equivalencia">É tão bom quanto a referência? (equivalência)</option>
+          <option value="nao_inferioridade">Não é pior que a referência? (não-inferioridade)</option>
+        </select>
       </label>
-      <label>Testemunha / controle
+      <label>Testemunha / referência
         <select id="opt-testemunha"><option value="">Selecione o tratamento</option></select>
       </label>
+      <label id="lbl-margem" hidden>Margem — a maior perda que ainda não muda sua decisão
+        <span class="campo-duplo">
+          <input type="number" id="opt-margem" step="any" min="0" placeholder="ex.: 5" />
+          <select id="opt-margem-tipo">
+            <option value="unidade">na unidade da variável</option>
+            <option value="percent">% da referência</option>
+          </select>
+        </span>
+      </label>
       <p class="dica linha-toda" id="modelo-dica">Escolha a pergunta antes de analisar. A testemunha é usada quando a comparação é contra controle.</p>
+      <p class="dica linha-toda" id="dica-margem" hidden>A margem é decisão agronômica, não estatística, e precisa ser declarada <b>antes</b> de ver o resultado — ajustá-la depois invalida o teste. Não dar diferença não é equivalência: o resultado pode sair <b>inconclusivo</b>, e isso é resposta.</p>
       <label>Nível de significância (α)
         <select id="opt-alfa">
           <option value="0.05" selected>0,05 (5%)</option>
@@ -216,6 +233,57 @@
       </label>
     </div>
   </section>
+<section class="card oculto" id="card-planejar">
+  <h2>Planejar o próximo ensaio</h2>
+  <p class="dica">Esta é a única pergunta que se faz <b>antes</b>: com quantas repetições este ensaio enxerga a diferença que importa? Responder depois não adianta — o dinheiro já foi gasto.</p>
+  <div class="opcoes-grid">
+    <label>Tratamentos (incluindo a testemunha)
+      <input type="number" id="pl-k" min="2" step="1" value="4" />
+    </label>
+    <label>Diferença que mudaria sua decisão
+      <input type="number" id="pl-delta" step="any" min="0" placeholder="ex.: 8" />
+    </label>
+    <label>Variabilidade esperada
+      <span class="campo-duplo">
+        <input type="number" id="pl-var" step="any" min="0" placeholder="ex.: 10" />
+        <select id="pl-var-tipo">
+          <option value="dp">desvio-padrão</option>
+          <option value="cv">CV %</option>
+        </select>
+      </span>
+    </label>
+    <label>Média esperada <small>(só para CV %)</small>
+      <input type="number" id="pl-media" step="any" placeholder="ex.: 40" />
+    </label>
+    <label>Delineamento
+      <select id="pl-desenho">
+        <option value="dbc">Blocos ao acaso</option>
+        <option value="dic">Inteiramente casualizado</option>
+      </select>
+    </label>
+    <label>Pergunta
+      <select id="pl-familia">
+        <option value="todos">Todos entre si (Tukey)</option>
+        <option value="controle">Cada um contra a testemunha (Dunnett)</option>
+      </select>
+    </label>
+    <label>Poder desejado
+      <select id="pl-poder">
+        <option value="0.8" selected>80%</option>
+        <option value="0.9">90%</option>
+        <option value="0.7">70%</option>
+      </select>
+    </label>
+    <label>Nível de significância (α)
+      <select id="pl-alfa"><option value="0.05" selected>0,05</option><option value="0.01">0,01</option><option value="0.10">0,10</option></select>
+    </label>
+  </div>
+  <p class="dica" id="pl-fonte" hidden></p>
+  <button class="btn" id="btn-planejar">Calcular repetições</button>
+  <button class="btn-sec" id="btn-planejar-daqui" hidden>Usar a variabilidade da análise feita</button>
+  <div id="pl-saida"></div>
+</section>
+
 
   <!-- 4T. OPÇÕES — MORTALIDADE NO TEMPO -->
   <section class="card oculto" id="card-opcoes-tempo">
@@ -361,7 +429,7 @@
 
 <script src="lib/xlsx.full.min.js"></script>
 <script src="pyodide/pyodide.js"></script>
-<script src="exemplos.js?v=bioensaio-auditoria-9"></script>
-<script src="app.js?v=bioensaio-auditoria-9"></script>
+<script src="exemplos.js?v=bioensaio-auditoria-10"></script>
+<script src="app.js?v=bioensaio-auditoria-10"></script>
 </body>
 </html>

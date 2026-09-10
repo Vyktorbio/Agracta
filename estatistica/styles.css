@@ -804,3 +804,15 @@ canvas{max-width:100%;background:#fff;border:1px solid var(--line);border-radius
 .analise-secundaria,.comparacoes-detalhe{margin:16px 0;border:1px solid var(--line);border-radius:10px;padding:0 14px}
 .analise-secundaria>summary,.comparacoes-detalhe>summary{min-height:44px;padding:12px 0;cursor:pointer;font-size:.875rem;font-weight:600}
 .analise-secundaria table,.comparacoes-detalhe table{font-size:.875rem}
+
+/* Planejamento e equivalência: campos compostos e a linha da resposta. */
+.campo-duplo{display:flex;gap:6px;align-items:stretch}
+/* O seletor tem largura intrínseca grande ("desvio-padrão") e esmagava o
+   número até virar uma fatia. Os dois precisam poder encolher, e o número
+   fica com o dobro do espaço. */
+.campo-duplo>input{flex:2 1 90px;min-width:0}
+.campo-duplo>select{flex:1 1 90px;min-width:0}
+.opcoes-grid label>small{font-weight:400;opacity:.75}
+#pl-saida{margin-top:10px}
+#pl-saida table tr.linha-alvo{background:var(--accent-soft)}
+#pl-saida table tr.linha-alvo td{font-weight:700}
