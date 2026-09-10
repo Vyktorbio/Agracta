@@ -11065,6 +11065,63 @@ function _bioestatEnsureFrame(){
   document.body.appendChild(f);
   return f;
 }
+/* ===== CACHE DA ESTATÍSTICA NO APARELHO (IndexedDB, por assinatura) =======
+   `_bioAutoCache` só existia em memória: fechar o app jogava fora minutos de
+   Pyodide e o estudo reabria recalculando tudo do zero — no celular, com a
+   tela travada durante isso. A assinatura do estudo já diz quando o resultado
+   continua valendo (`_bioestatSignature` cobre desenho, repetições,
+   tratamentos, avaliações e notas, mais a versão do motor), então o resultado
+   passa a sobreviver ao fechamento. Dado mudou → assinatura muda → o cache
+   antigo é ignorado e recalculado. Best-effort: sem IndexedDB nada muda. */
+var _BIOC_DB='agracta-bioestat', _BIOC_STORE='cache', _BIOC_MAX=60;
+function _biocOpen(){
+  return new Promise(function(res,rej){
+    try{
+      if(typeof indexedDB==='undefined'||!indexedDB){ rej('sem indexedDB'); return; }
+      var rq=indexedDB.open(_BIOC_DB,1);
+      rq.onupgradeneeded=function(e){ var db=e.target.result; if(!db.objectStoreNames.contains(_BIOC_STORE)){ var os=db.createObjectStore(_BIOC_STORE,{keyPath:'k'}); os.createIndex('ts','ts'); } };
+      rq.onsuccess=function(){ res(rq.result); };
+      rq.onerror=function(){ rej(rq.error); };
+    }catch(e){ rej(e); }
+  });
+}
+function _biocLer(key){
+  return _biocOpen().then(function(db){
+    return new Promise(function(res){
+      try{
+        var tx=db.transaction(_BIOC_STORE,'readonly'), rq=tx.objectStore(_BIOC_STORE).get(key);
+        rq.onsuccess=function(){ res(rq.result||null); };
+        rq.onerror=function(){ res(null); };
+        tx.oncomplete=function(){ try{db.close();}catch(_){} };
+      }catch(e){ try{db.close();}catch(_){} res(null); }
+    });
+  }, function(){ return null; });
+}
+function _biocGravar(key,sig,results){
+  try{
+    _biocOpen().then(function(db){
+      try{
+        var tx=db.transaction(_BIOC_STORE,'readwrite'), os=tx.objectStore(_BIOC_STORE);
+        os.put({k:key,sig:sig,ts:Date.now(),motor:MOTOR_VERSAO,results:results});
+        /* poda pelo mais antigo: isto é conveniência de abertura, não arquivo.
+           O que precisa durar está no estudo e na planilha exportada. */
+        var cq=os.count(); cq.onsuccess=function(){ var n=cq.result; if(n>_BIOC_MAX){ var sobra=n-_BIOC_MAX; var cur=os.index('ts').openCursor(); cur.onsuccess=function(e){ var c=e.target.result; if(c&&sobra>0){ c.delete(); sobra--; c.continue(); } }; } };
+        tx.oncomplete=function(){ try{db.close();}catch(_){} };
+        tx.onerror=function(){ try{db.close();}catch(_){} };
+      }catch(_){ try{db.close();}catch(__){} }
+    }, function(){});
+  }catch(e){}
+}
+/* Só grava cache PRONTO. Meio cálculo gravado reabriria como relatório
+   completo com cartões faltando — e ninguém teria como saber disso. */
+function _bioestatPersistir(c){
+  if(!c||c.status!=='ready'||!c.results||!c.qid||!c.sid) return;
+  /* Job que estourou o relógio não vira cache: guardá-lo faria o estudo
+     reabrir com o erro cravado e nunca mais tentar de novo. */
+  var ks=Object.keys(c.results);
+  for(var i=0;i<ks.length;i++){ var r=c.results[ks[i]]; if(r&&r.ok===false&&r.erro==='tempo esgotado') return; }
+  _biocGravar(c.qid+'|'+c.sid, c.sig, c.results);
+}
 function _bioestatEnsureStudy(qid,sid){
   var q=data[qid]||{}, study=(q.estudos||[]).find(function(s){return s.id===sid;}); if(!study)return;
   study=normalizeStudy(study);
@@ -11073,6 +11130,22 @@ function _bioestatEnsureStudy(qid,sid){
   var total=jobs.length*2; /* por avaliação/variável: análise + triagem forense */
   c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
   if(!jobs.length)return;
+  /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
+     guardado do uso anterior. Estando completo, o estudo abre com a
+     estatística já na tela e nada roda. */
+  _biocLer(key).then(function(sav){
+    if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
+    if(sav&&sav.sig===sig&&sav.motor===MOTOR_VERSAO&&sav.results){
+      var res=sav.results, n=0;
+      jobs.forEach(function(j){ if(res[j.jobKey])n++; if(res[j.jobKey+'|F'])n++; });
+      if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
+    }
+    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c);
+  });
+}
+/* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
+   consulta ao cache em disco é assíncrona e precisa vir antes. */
+function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
   function _ftipo(j){ var t=String(j.tipo||j.variavel||'').toLowerCase(); return /sever|incid|fitotox|efic|propor|%|altura|produ|peso|di[âa]m|massa|cont[íi]nu/.test(t)?'cont':'count'; }
@@ -11103,7 +11176,7 @@ function _bioestatPump(){
   clearTimeout(_bioAutoWd);
   _bioAutoWd=setTimeout(function(){ /* job travou: marca erro e segue (não trava a fila) */
     if(_bioAutoBusy!==item.requestId)return;
-    var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total)c.status='ready'; }
+    var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total){ c.status='ready'; _bioestatPersistir(c); } }
     delete _bioAutoPending[item.requestId]; _bioAutoBusy=null; _bioestatPump(); _bioestatRefreshOpen(c);
   },70000);
   f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin);
@@ -11113,9 +11186,104 @@ function _bioestatP(rel){
   for(var i=0;i<tab.length;i++)if(tab[i].p!=null&&/f1|trat/i.test(String(tab[i].fonte||'')))return tab[i].p;
   return null;
 }
-function _bioestatResumoCard(job,rel){
+/* ===== O QUE O MOTOR CALCULAVA E A TELA JOGAVA FORA ========================
+   Quase nunca era o motor que deixava de calcular: era este cartão, que lia
+   meia dúzia de chaves do relatório e ignorava o resto. Três blocos inteiros
+   nasciam prontos no objeto e não chegavam a olho nenhum:
+
+     - a CURVA DE DOSE-RESPOSTA. Num ensaio de série de doses o motor devolve
+       CL50/CL90 com intervalo de Fieller, inclinação, aderência e razão de
+       potência — e o cartão mostrava uma TABELA VAZIA com dois ✗ vermelhos de
+       pressuposto, porque essa rota não devolve descritiva nem normalidade e
+       `undefined` caía no mesmo ramo de "falhou". Pior que omitir: afirmava
+       que os pressupostos falharam num teste que nunca rodou;
+     - a DECISÃO e os AVISOS. O motor explica qual teste escolheu, por quê, e o
+       que teve de contornar. Isso existia só na planilha exportada — e é
+       exatamente o que se precisa para defender o número numa auditoria;
+     - a comparação CONTRA CONTROLE (`comparacao_medias.controle`), que não
+       estava na lista de chaves lidas: Dunnett rodava e sumia.
+   ========================================================================= */
+
+/* p=0,5 → "CL50"; p=0,9 → "CL90". */
+function _bioestatRotuloDose(p){
+  var pct=Math.round(Number(p)*1000)/10;
+  return 'CL'+String(pct).replace('.',',');
+}
+/* Aceita os DOIS formatos que `decide.py` devolve: curva única (doses_letais
+   na raiz da análise) e várias curvas (`curvas` + `comparacao`). */
+function _bioestatDoseHtml(a,nf,pf){
+  var curvas=(a&&a.curvas)||(a&&a.doses_letais?[a]:null);
+  if(!curvas||!curvas.length) return '';
+  var un=(a.comparacao&&a.comparacao.unidade)||'';
+  var blocos=curvas.map(function(c){
+    /* Um CL50 sem intervalo parece exato. Quando Fieller não fecha, isso é
+       resultado — e tem de aparecer escrito, não como célula em branco. */
+    var linhas=(c.doses_letais||[]).map(function(d){
+      var ic=(d.ic_inf!=null&&d.ic_sup!=null)?(nf(d.ic_inf,3)+' – '+nf(d.ic_sup,3)):'não estimável';
+      return '<tr><td class="av-tname">'+esc(_bioestatRotuloDose(d.p))+'</td><td>'+nf(d.dose,3)+(un?(' '+esc(un)):'')+'</td><td style="color:#7a877f">'+esc(ic)+'</td></tr>';
+    }).join('');
+    var meta=[];
+    if(c.slope!=null) meta.push('inclinação '+nf(c.slope,3)+(c.slope_se!=null?(' ±'+nf(c.slope_se,3)):''));
+    if(c.link) meta.push('ligação '+c.link);
+    if(c.p_qui_quadrado!=null) meta.push('aderência χ²'+(c.gl!=null?('('+c.gl+')'):'')+'='+nf(c.qui_quadrado,2)+' p'+pf(c.p_qui_quadrado));
+    if(c.heterogeneo) meta.push('heterogênea (h='+nf(c.heterogeneidade_h,2)+') — IC alargado por '+(c.criterio_ic||'t de Student'));
+    if(c.abbott_aplicado) meta.push('Abbott sobre a testemunha');
+    return '<div style="margin-top:6px">'+
+      (curvas.length>1?'<div style="font-size:10.5px;color:#486053"><b>'+esc(c.grupo||'curva')+'</b></div>':'')+
+      (linhas?'<div class="av-scroll" style="margin-top:3px"><table class="av-table"><thead><tr><th>Dose letal</th><th>Estimativa</th><th>IC 95% (Fieller)</th></tr></thead><tbody>'+linhas+'</tbody></table></div>':'')+
+      (meta.length?'<div style="font-size:10px;color:#728078;margin-top:2px">'+esc(meta.join(' · '))+'</div>':'')+'</div>';
+  }).join('');
+  var cmp=a.comparacao||null, cmpHtml='';
+  if(cmp){
+    var par=cmp.paralelismo||{}, pot=cmp.diferenca_potencia||{}, l=[];
+    if(par.p!=null) l.push('paralelismo χ²('+par.gl+')='+nf(par.qui2,2)+' p'+pf(par.p)+(par.paralelo?' — curvas paralelas':' — inclinações diferentes'));
+    if(par.erro) l.push('paralelismo não testado: '+String(par.erro));
+    if(pot.p!=null) l.push('potência χ²('+pot.gl+')='+nf(pot.qui2,2)+' p'+pf(pot.p)+(pot.difere?' — potências diferentes':' — sem diferença de potência'));
+    var rz=(cmp.razoes||[]).map(function(r){
+      return '<tr><td class="av-tname">'+esc(r.grupo)+'</td><td>'+nf(r.lc50,3)+'</td><td>'+nf(r.rr,2)+'×</td><td style="color:#7a877f">'+nf(r.ic_inf,2)+' – '+nf(r.ic_sup,2)+'</td><td>'+(r.referencia?'referência':(r.significativo?'difere':'ns'))+'</td></tr>';
+    }).join('');
+    cmpHtml='<div style="margin-top:7px;border-top:1px dashed #d9e5dc;padding-top:6px">'+
+      '<div style="font-size:10.5px;color:#486053"><b>Comparação de curvas</b>'+(cmp.referencia?(' <span style="font-weight:400;color:#8a948e">· referência '+esc(cmp.referencia)+'</span>'):'')+'</div>'+
+      (l.length?'<div style="font-size:10px;color:#728078;margin-top:2px">'+esc(l.join(' · '))+'</div>':'')+
+      (rz?'<div class="av-scroll" style="margin-top:4px"><table class="av-table"><thead><tr><th>Grupo</th><th>CL50</th><th>Razão de potência</th><th>IC 95%</th><th></th></tr></thead><tbody>'+rz+'</tbody></table></div>':'')+
+    '</div>';
+  }
+  return '<div style="margin-top:7px;padding:7px 9px;border:1px solid #d9e5dc;border-radius:8px;background:#fff">'+
+    '<div style="font-size:10.5px;color:#26352c"><b>Curva de dose-resposta</b>'+(a.escala_dose?(' <span style="font-weight:400;color:#8a948e">· dose em '+esc(a.escala_dose)+'</span>'):'')+'</div>'+
+    blocos+cmpHtml+'</div>';
+}
+/* O LOG DE DECISÃO, na tela e ao lado do número que ele justifica. Recolhido,
+   porque no talhão o que importa é a letra; aberto, porque numa auditoria o
+   que importa é por que aquele teste e não outro. */
+function _bioestatDecisaoHtml(rel){
+  var d=String((rel&&rel.decisao)||'').trim(), av=((rel&&rel.avisos)||[]).filter(Boolean);
+  if(!d&&!av.length) return '';
+  return '<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Como esta análise foi decidida'+(av.length?(' · '+av.length+' aviso'+(av.length>1?'s':'')):'')+'</summary>'+
+    (d?'<div style="font-size:10px;color:#5f6f66;line-height:1.55;margin-top:4px">'+esc(d)+'</div>':'')+
+    (av.length?'<ul style="margin:4px 0 0;padding-left:16px;font-size:10px;color:#8a6d18;line-height:1.5">'+av.map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul>':'')+
+  '</details>';
+}
+/* Nenhuma tela cabe o relatório inteiro, e quem confere um laudo precisa do que
+   a tela resumiu. O objeto sai como o motor devolveu, com a assinatura dos
+   dados que o produziram — sem ela o JSON não prova de qual grade ele veio. */
+function _bioestatBaixarJson(qid,sid,jobKey){
+  try{
+    var c=_bioAutoCache[qid+'|'+sid], rel=c&&c.results&&c.results[jobKey];
+    if(!rel){ alert('Este resultado ainda não está pronto.'); return; }
+    var lim=function(s){ return String(s==null?'':s).replace(/[^\w.-]+/g,'_').slice(0,40); };
+    _sinergistaSaveBlob(new Blob([JSON.stringify({
+      quadra:qid, estudo:sid, jobKey:jobKey, assinatura:c.sig, motor:MOTOR_VERSAO,
+      geradoEm:new Date().toISOString(), relatorio:rel
+    },null,2)],{type:'application/json'}), 'agracta-estatistica-'+lim(sid)+'-'+lim(jobKey)+'.json');
+  }catch(e){ alert('Não foi possível baixar o relatório: '+e); }
+}
+function _bioestatResumoCard(job,rel,qid,sid){
   if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
-  var a=rel.analise||{}, cm=rel.comparacao_medias||{}, cmp=cm.ajustadas||cm.tukey||cm.scott_knott||cm.dunn||null;
+  var a=rel.analise||{}, cm=rel.comparacao_medias||{};
+  /* `controle` faltava nesta lista: com comparação contra testemunha o
+     relatório traz só essa chave, então Dunnett/Dunn saía calculado e o cartão
+     caía no ramo "sem comparação". */
+  var cmp=cm.controle||cm.ajustadas||cm.tukey||cm.scott_knott||cm.dunn||null;
   var nf=function(x,d){ return (x==null||isNaN(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(d==null?1:d)}); };
   var pf=function(x){ return x==null?'—':(x<0.001?'<0,001':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3})); };
   var ok=function(b){ return b?'<span style="color:#1f6f43">✓</span>':'<span style="color:#b07d18">✗</span>'; };
@@ -11137,12 +11305,23 @@ function _bioestatResumoCard(job,rel){
   var anova=(a.tabela_anova||[]).map(function(r){ return '<tr><td class="av-tname">'+esc(r.fonte)+'</td><td>'+(r.gl!=null?r.gl:'—')+'</td><td>'+nf(r.sq,2)+'</td><td>'+nf(r.qm,3)+'</td><td>'+(r.F!=null?nf(r.F,1):'—')+'</td><td>'+pf(r.p)+'</td></tr>'; }).join('');
   var statTxt=p==null?'modelo calculado':('p='+pf(p)+(p<.05?' · significativo':' · ns'));
   var transf=a.transformacao? (typeof a.transformacao==='string'?a.transformacao:(a.transformacao.nome||a.transformacao.tipo||'aplicada')) : null;
+  /* Pressuposto NÃO TESTADO não é pressuposto REPROVADO. Antes o ✗ aparecia
+     sozinho nas rotas que nem chegam a testar normalidade (dose-resposta, GLM),
+     e um ✗ vermelho na tela desqualifica um resultado que estava certo. */
+  var press=[];
+  if(nr.teste||nr.p!=null) press.push('normalidade '+ok(nr.normal)+' <span style="color:#9aa69e">('+esc(nr.teste||'?')+' p'+pf(nr.p)+')</span>');
+  if(hm.teste||hm.p!=null) press.push('homogeneidade '+ok(hm.homogenea)+' <span style="color:#9aa69e">('+esc(hm.teste||'?')+' p'+pf(hm.p)+')</span>');
+  var pressHtml=press.length?('<div style="font-size:10px;color:#728078;margin-top:1px">Pressupostos: '+press.join(' · ')+(a.pressupostos_ok===false?' <span style="color:#b07d18">· revisar pressupostos</span>':'')+'</div>'):'';
+  var jsonBtn=(qid&&sid&&job&&job.jobKey)?('<button type="button" onclick="_bioestatBaixarJson('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+','+esc(JSON.stringify(job.jobKey))+')" style="margin-top:6px;padding:4px 8px;border:1px solid #cfdfd5;background:#fff;color:#486053;border-radius:7px;font:600 10px system-ui;cursor:pointer">Baixar relatório completo (JSON)</button>'):'';
   return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
-    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV residual '+nf(cv,1)+'%':'')+' · comparação <b>'+esc(metodoCmp)+'</b>'+(transf?' · transf. '+esc(transf):'')+'</div>'+
-    '<div style="font-size:10px;color:#728078;margin-top:1px">Pressupostos: normalidade '+ok(nr.normal)+' <span style="color:#9aa69e">('+esc(nr.teste||'?')+' p'+pf(nr.p)+')</span> · homogeneidade '+ok(hm.homogenea)+' <span style="color:#9aa69e">('+esc(hm.teste||'?')+' p'+pf(hm.p)+')</span>'+(a.pressupostos_ok===false?' <span style="color:#b07d18">· revisar pressupostos</span>':'')+'</div>'+
-    '<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV residual '+nf(cv,1)+'%':'')+(cmp?' · comparação <b>'+esc(metodoCmp)+'</b>':'')+(transf?' · transf. '+esc(transf):'')+'</div>'+
+    pressHtml+
+    (rows?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')+
+    _bioestatDoseHtml(a,nf,pf)+
     (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
+    _bioestatDecisaoHtml(rel)+
+    jsonBtn+
   '</div>';
 }
 function _bioestatRapidoCard(job,study){
@@ -11243,7 +11422,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
        sem esperar a triagem forense (que no Pyodide frio pode demorar ~1 min). */
     var res=(c&&c.results)||{}, faltamAnalise=0, faltamForense=0;
     jobs.forEach(function(j){
-      if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey]); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
+      if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey],qid,sid); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
       if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
     });
     if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
@@ -11293,7 +11472,7 @@ function _bioestatRefreshOpen(c){
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
-  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total)c.status='ready';} /* ignora job órfão de cálculo substituído */
+  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
   delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
   var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
   _bioestatPump();
