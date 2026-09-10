@@ -31,6 +31,7 @@ function avisoDeFrasco(r){
 console.log('\n--- O caso real: 318 mL de calda, frasco declarado 1.900 L ---');
 var r=mix(1900);
 ck(r.sprayTotalMl===318,'a calda continua 318 mL (o aviso não mexe na conta)');
+ck(r.components[0].total===159,'receita com campos dose/unit conserva os 159 mL de produto');
 var a=avisoDeFrasco(r);
 ck(!!a,'o frasco implausível é apontado');
 ck(/1,9 L/.test(a||''),'e a mensagem oferece a leitura em mililitros: '+JSON.stringify(a));

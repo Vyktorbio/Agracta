@@ -49,6 +49,13 @@ near(r.aplicadoMl,264);near(r.residualMl,1436);assert.equal(r.aplicacaoConferida
 near(mem.tratamentos[1].caldaTotalMl,564);assert.equal(mem.tratamentos[1].drone,null);
 // O primeiro tratamento não é uma testemunha implícita na memória.
 assert.equal(r.testemunha,false);assert.ok(r.componentes.length);
+estudos.s1.tratamentos[0].dose='1,5 L/ha + 0.033%';w._calcCompute();
+near(w.calcMemoria(estudos.s1,w._calcConfigAtual()).tratamentos[0].componentes[1].total,.561);
+assert.match(html(),/561 µL/,'dose com ponto conserva a quantidade na tela');
+near(w._calcNum('0.125'),.125);
+w.calcDroneSet('minimumOperatingMl','1.700');
+near(w.calcMemoria(estudos.s1,w._calcConfigAtual()).tratamentos[0].caldaTotalMl,1700);
+w.calcDroneSet('minimumOperatingMl','1700');
 // A alteração de parcela e unidade permanece ao trocar de aba ou estudo.
 w.document.getElementById('calcLen').value='25';
 w.document.getElementById('calcCap').value='1900';

@@ -10,7 +10,7 @@
     if(!drone(study,t,qid)) return 0;
     var v=(config||cfg()).minimumOperatingMl;
     if(v==null||String(v).trim()==='') return 0;
-    var n=Number(String(v).replace(',','.'));
+    var n=BioCalculoCampo.parseStrictNumber(v);
     return Number.isFinite(n)&&n>=0?n:0;
   };
   window.calcDroneSet=function(field,value){

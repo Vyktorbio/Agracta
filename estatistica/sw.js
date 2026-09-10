@@ -1,9 +1,9 @@
 /* Service worker - cache local do app.
    App shell, ícones, fontes, bioengine e Pyodide ficam em cache para uso offline. */
-const CACHE = "bioensaio-v42-auditoria";
+const CACHE = "bioensaio-v43-auditoria";
 const SHELL = [
-  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-8", "./app.js?v=bioensaio-auditoria-8", "./exemplos.js?v=bioensaio-auditoria-8",
-  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-8",
+  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-9", "./app.js?v=bioensaio-auditoria-9", "./exemplos.js?v=bioensaio-auditoria-9",
+  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-9",
   "./fonts/inter.woff2", "./fonts/sora.woff2",
   "./lib/xlsx.full.min.js",
   "./pyodide/pyodide.js", "./pyodide/pyodide.asm.js", "./pyodide/pyodide.asm.wasm",

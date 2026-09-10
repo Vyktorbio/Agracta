@@ -15,7 +15,8 @@
     app:null,auth:null,db:null,user:null,unsub:null,
     ready:false,pulling:false,pushing:false,resyncing:false,remoteFlat:null,
     lastRev:0,timer:null,checkpointTimer:null,checkpointPending:null,
-    checkpointWaiters:[],checkpointChain:Promise.resolve(),pendingWrites:0
+    checkpointWaiters:[],checkpointChain:Promise.resolve(),pendingWrites:0,
+    queuedState:null,pushPromise:null
   };
   var ROOT='workspaces/agracta';
   var ADMIN_EMAILS={
@@ -722,8 +723,8 @@
       });
     }
     if(FB.pushing){
-      clearTimeout(FB.timer);FB.timer=setTimeout(function(){commitState(localState());},500);
-      return Promise.resolve(false);
+      FB.queuedState=st;
+      return FB.pushPromise||Promise.resolve(false);
     }
     FB.pushing=true;window._cloudSavingActive=true;
     var next=splitState(st),ops=queueOps(next),batches=[];
@@ -742,26 +743,40 @@
     },{merge:true});
     FB.pendingWrites=ops.length;
     cloudBadge('saving',ops.length?('· '+ops.length+' alterações'):'');
-    var all=Promise.all(batches.map(function(b){return b.commit();}));
+    /* O último lote publica a revisão: só pode sair após os anteriores.
+       Uma rede lenta mantém um único envio ativo e conserva a edição seguinte. */
+    var all=batches.reduce(function(p,b){return p.then(function(){return b.commit();});},Promise.resolve());
     var watchdog=setTimeout(function(){
       if(FB.pushing){
-        FB.pushing=false;window._cloudSavingActive=false;
+        window._cloudSavingActive=false;
         cloudBadge('offline','=⌁ '+FB.pendingWrites+' alterações aguardando envio');
       }
     },15000);
-    all.then(function(){
+    FB.pushPromise=all.then(function(){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
+      FB.pushPromise=null;
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
-      window._cloudRev=newRev;setUnsavedChanges(false);cloudBadge('saved');
-      checkpointPut(st).catch(checkpointFalhou);
+      window._cloudRev=newRev;
+      var latest=localState()||FB.queuedState||st;
+      FB.queuedState=null;
+      var changed=stable(splitState(latest))!==stable(next);
+      setUnsavedChanges(changed);cloudBadge(changed?'saving':'saved');
+      /* Uma resposta antiga da rede nunca substitui o cofre com estado antigo. */
+      checkpointPut(latest).catch(checkpointFalhou);
       // O portal recebe somente a cópia confirmada, nunca lançamentos em edição.
       try{window.dispatchEvent(new CustomEvent('agracta:sincronizado',{detail:{state:st,rev:newRev}}));}catch(_e){}
-    }).catch(function(e){
+      clearTimeout(FB.timer);FB.timer=null;
+      if(changed)return commitState(latest);
+    },function(e){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
+      FB.pushPromise=null;setUnsavedChanges(true);
       cloudBadge('error','— salvo localmente');
       console.error('[Agracta Firebase] gravação:',e);
+      throw e;
     });
-    return all;
+    /* Mantém a rejeição para quem aguarda; chamadas de autosave podem não aguardar. */
+    FB.pushPromise.catch(function(){});
+    return FB.pushPromise;
   }
 
   window.cloudInit=function(){return firebaseInit();};

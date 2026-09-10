@@ -2,23 +2,23 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v211';
+var CACHE = 'agracta-app-v213';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
-  './vendor/drone-core.js?v=1', './calculadora-drone.js?v=1',
+  './vendor/drone-core.js?v=2', './calculadora-drone.js?v=2',
   './', './index.html',
   './integracoes.css?v=1', './integracoes.js?v=1', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
   './vendor/conhecimento-core.js?v=1', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=122',
+  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=123',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
-  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=4', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
+  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=5', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
-  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=12',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=13',
   './acesso-horario.js?v=3', './ui-campo.js?v=17', './alvos-catalogo.js?v=2',
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
