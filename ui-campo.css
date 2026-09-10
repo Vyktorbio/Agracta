@@ -227,6 +227,8 @@ body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{d
 .calc-box .calc-mixr{border-color:var(--gp-line)!important}
 .calc-box .calc-kv b{color:var(--gp-text)!important;font-variant-numeric:tabular-nums}
 .calc-box .calc-kv span,.calc-box .calc-eq{color:var(--gp-text-2)!important}
+.bio-configurar{display:block;width:100%;margin:12px 0;padding:14px;text-align:left;min-height:48px;border:1px solid var(--gp-line-2);border-radius:10px;background:var(--gp-s2);color:var(--gp-text);font:600 1rem/1.4 var(--ag-font);cursor:pointer}
+.bio-configurar span{display:block;margin-top:4px;font-size:.875rem;font-weight:400;color:var(--gp-text-2)}
 .calc-drone{margin:12px 0;border:1px solid var(--gp-line);border-radius:12px;overflow:hidden}
 .calc-drone>summary{padding:14px;cursor:pointer;font-weight:650;font-size:1rem}
 .calc-drone>summary span{display:block;margin:4px 0 0 18px;font-size:.875rem;font-weight:400;color:var(--gp-text-2)}

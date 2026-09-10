@@ -10162,6 +10162,12 @@ function openBioestat(qid, sid, modo){
   var payload={ aoa:aoa, modo:(modo||'analise'), titulo:(s.codigo||s.nome||s.id),
     responsavel:resp, tipo:tipo, doseUnit:doseUnit, local:(loc.nome||''),
     quadra:(typeof quadraNome==='function'?quadraNome(qid):qid) };
+  var controles=(s.tratamentos||[]).filter(function(t){return !!t.testemunha;});
+  payload.controle=controles.length===1?controles[0].id:'';
+  payload.tipos={};payload.sentidos={};
+  (s.avaliacoes||[]).forEach(function(av){(av.variaveis||[]).forEach(function(v){
+    payload.tipos[v]=_avTipo(av,v);payload.sentidos[v]=_avSentido(av,v)==='maior';
+  });});
   try{ localStorage.setItem('agracta-bioestat-handoff', JSON.stringify(payload)); }
   catch(e){ alert('Não consegui preparar os dados para a análise.'); return; }
   _openBioestatFrame(modo);
@@ -11029,7 +11035,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-7';
+var MOTOR_VERSAO='agracta-8';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -11210,6 +11216,7 @@ function _bioestatForenseCard(job,rel){
 }
 function _bioestatIntegratedHtml(qid,sid,study){
   var jobs=_bioestatJobs(qid,study);
+  var abrir=study.desenho==='faixas'?'':'<button class="bio-configurar" onclick="openBioestat('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')">Configurar análise <span>Testemunha, modelos mistos e evolução no tempo</span></button>';
   /* Nenhum job NÃO é o mesmo que nada a dizer. Antes o painel inteiro sumia da
      tela do estudo — e sumir é a única resposta que a pessoa não consegue
      interpretar. Se há avaliação lançada, ela merece saber o que falta. */
@@ -11218,7 +11225,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
     if(!_pendHtml) return '';
     return '<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
       '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Nenhuma avaliação fecha a grade ainda. O que falta para a análise nascer sozinha:</div>'+
-      _pendHtml+'</div>';
+      abrir+_pendHtml+'</div>';
   }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
@@ -11263,7 +11270,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+
     /* As avaliações descartadas entram DEPOIS das analisadas. Um estudo com três
        datas em que só uma fecha mostrava uma análise e duas ausências mudas. */
-    body+_pendHtml+_btnPrancha+'</div>';
+    abrir+body+_pendHtml+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;

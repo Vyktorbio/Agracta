@@ -25,7 +25,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import detect, diagnostics as diag, doseresponse, anova as anova_mod, glmcount
-from . import posthoc
+from . import posthoc, contrastes, mistos
 
 
 def _col(dados, nome):
@@ -81,7 +81,7 @@ def _chaves_tratamento(dados, fatores):
 
 
 # --------------------------------------------------------------------------- #
-def analisar(dados, papeis, opcoes=None):
+def _analisar(dados, papeis, opcoes=None):
     opcoes = opcoes or {}
     alfa = float(opcoes.get("alfa", 0.05))
     avisos = []
@@ -129,6 +129,14 @@ def analisar(dados, papeis, opcoes=None):
 
     tipo = rinfo["tipo"]
     relatorio["deteccao"]["tipo_resposta"] = tipo
+
+    modelo=opcoes.get('modelo','auto')
+    if modelo in ('misto','repetidas'):
+        if tipo not in ('continua','proporcao'):
+            return {'ok':False,'erro':'Este modelo misto é gaussiano. Declare uma medida contínua/proporção contínua; contagens e x de n exigem outro modelo.'}
+        return mistos.analisar_misto(dados,{**papeis,'tipo_resposta':tipo},opcoes)
+    if papeis.get('unidade') or papeis.get('tempo') or papeis.get('local'):
+        return {'ok':False,'erro':'Há unidade, tempo ou local no delineamento. Selecione Modelo misto ou Medidas repetidas para preservar essa estrutura.'}
 
     # ----------------------------------------------------------------- #
     # ROTA A — DOSE-RESPOSTA (resposta binária/binomial + preditor de dose)
@@ -336,6 +344,17 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
     relatorio["decisao"] = decisao
     relatorio["analise"] = {k: v for k, v in res_anova.items() if not k.startswith("_")}
 
+    if opcoes.get('comparacao')=='controle':
+        if res_anova['kruskal'] is not None:
+            cmp=contrastes.restringir_controle(posthoc.dunn(valores,chaves,alfa,maior_melhor=maior_melhor),opcoes.get('controle'))
+            cmp['metodo']='Dunn — controle / Holm'
+        else:
+            cmp=contrastes.dunnett_modelo(res_anova,opcoes.get('controle'),alfa)
+            cmp['escala_teste']=res_anova['escala_usada']
+            cmp['medias_exibicao']={d['tratamento']:d['media'] for d in relatorio['descritiva']} if res_anova['transformacao'] else cmp['medias']
+        relatorio['comparacao_medias']={'controle':cmp}
+        return relatorio
+
     # comparação de médias: SEMPRE Tukey + Scott-Knott (paramétrico);
     # Dunn quando não-paramétrico for indicado.
     medias = {d["tratamento"]: d["media"] for d in relatorio["descritiva"]}
@@ -379,3 +398,19 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
 
     relatorio["comparacao_medias"] = comparacoes
     return relatorio
+
+
+def analisar(dados,papeis,opcoes=None):
+    opcoes=opcoes or {}
+    try:
+        if not 0<float(opcoes.get('alfa',.05))<1:
+            raise ValueError('O nível de significância deve estar entre zero e um.')
+        if opcoes.get('comparacao')=='controle' and not str(opcoes.get('controle') or '').strip():
+            raise ValueError('Escolha a testemunha/controle antes de analisar.')
+        rel=_analisar(dados,papeis,opcoes)
+        a=rel.get('analise',{})
+        if opcoes.get('comparacao')=='controle' and (a.get('medias_estimadas') or a.get('proporcoes_estimadas')):
+            rel['analise']=contrastes.restringir_controle(a,opcoes['controle'])
+        return rel
+    except (ValueError, np.linalg.LinAlgError) as e:
+        return {'ok':False,'erro':str(e)}

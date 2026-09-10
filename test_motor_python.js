@@ -9,5 +9,6 @@ const {loadPyodide}=require('./estatistica/pyodide/pyodide.js');
     py.FS.writeFile('/home/pyodide/bioengine/'+name,fs.readFileSync('estatistica/bioengine/'+name,'utf8'));
   }
   await py.runPythonAsync(fs.readFileSync('tests/motor_blocos.py','utf8'));
+  await py.runPythonAsync(fs.readFileSync('tests/motor_mistos.py','utf8'));
   console.log('Motor Python: cálculos, blocos, faltantes e modelos verificados.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

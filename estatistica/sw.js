@@ -1,9 +1,9 @@
 /* Service worker - cache local do app.
    App shell, ícones, fontes, bioengine e Pyodide ficam em cache para uso offline. */
-const CACHE = "bioensaio-v41-auditoria";
+const CACHE = "bioensaio-v42-auditoria";
 const SHELL = [
-  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-7", "./app.js?v=bioensaio-auditoria-7", "./exemplos.js?v=bioensaio-auditoria-7",
-  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-7",
+  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-8", "./app.js?v=bioensaio-auditoria-8", "./exemplos.js?v=bioensaio-auditoria-8",
+  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-8",
   "./fonts/inter.woff2", "./fonts/sora.woff2",
   "./lib/xlsx.full.min.js",
   "./pyodide/pyodide.js", "./pyodide/pyodide.asm.js", "./pyodide/pyodide.asm.wasm",
@@ -20,7 +20,7 @@ const SHELL = [
   "./pyodide/statsmodels-0.14.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
   "./bioengine/__init__.py", "./bioengine/detect.py", "./bioengine/diagnostics.py",
   "./bioengine/doseresponse.py", "./bioengine/posthoc.py", "./bioengine/anova.py",
-  "./bioengine/glmcount.py", "./bioengine/decide.py", "./bioengine/tempo.py", "./bioengine/validacao.py", "./bioengine/forense.py",
+  "./bioengine/contrastes.py", "./bioengine/mistos.py", "./bioengine/glmcount.py", "./bioengine/decide.py", "./bioengine/tempo.py", "./bioengine/validacao.py", "./bioengine/forense.py",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-512-maskable.png"
 ];
 

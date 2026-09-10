@@ -4,7 +4,7 @@
   "description": "Análise estatística para bioensaios.",
   "lang": "pt-BR",
   "id": "./",
-  "start_url": "./index.html?v=bioensaio-auditoria-7",
+  "start_url": "./index.html?v=bioensaio-auditoria-8",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],

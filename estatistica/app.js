@@ -2,11 +2,11 @@
 "use strict";
 
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
-                    "posthoc.py","anova.py","glmcount.py","decide.py","tempo.py",
+                    "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-7";
+const APP_VERSION = "bioensaio-auditoria-8";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v41-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v42-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -748,7 +748,7 @@ function matrizLinhasFiltradas(){
   const variavel=$("#matriz-variavel") ? $("#matriz-variavel").value : "";
   return MATRIZ_IMPORT.linhas.filter(r=>
     (!estudo || matrizKey(r)===estudo) &&
-    (!data || r.data===data) &&
+    (!data || data==='__todas' || r.data===data) &&
     (!variavel || r.variavel===variavel)
   );
 }
@@ -763,11 +763,12 @@ function atualizarMatrizFiltros(){
   const dataAtual=dataSel.value;
   dataSel.innerHTML="";
   datas.forEach(d=>addOpcao(dataSel,d,d));
-  if(datas.includes(dataAtual)) dataSel.value=dataAtual;
+  if(datas.length>1) addOpcao(dataSel,'__todas','Todas as datas — mesmas parcelas');
+  if(datas.includes(dataAtual) || dataAtual==='__todas'&&datas.length>1) dataSel.value=dataAtual;
 
   const data=dataSel.value;
   const vars=unicoOrdenado(linhas.filter(r=>
-    (!estudo || matrizKey(r)===estudo) && (!data || r.data===data)
+    (!estudo || matrizKey(r)===estudo) && (!data || data==='__todas' || r.data===data)
   ).map(r=>r.variavel));
   const varAtual=varSel.value;
   varSel.innerHTML="";
@@ -832,8 +833,8 @@ function renderMatrizImportador(){
   produto.addEventListener("change", atualizarMatrizPreview);
   atualizarMatrizFiltros();
 }
-function colunasBioensaioDeMatriz(linhas, resposta, incluirProduto){
-  return [
+function colunasBioensaioDeMatriz(linhas, resposta, incluirProduto, repetidas){
+  const cols = [
     {nome:"tratamento", valores:linhas.map(r=>(incluirProduto && r.produto) ? `${r.tratamento} - ${r.produto}` : r.tratamento)},
     {nome:"bloco", valores:linhas.map(r=>r.repeticao || "1")},
     {nome:resposta, valores:linhas.map(r=>String(r.valor))},
@@ -841,20 +842,23 @@ function colunasBioensaioDeMatriz(linhas, resposta, incluirProduto){
     {nome:"estudo", valores:linhas.map(r=>r.estudo)},
     {nome:"data_avaliacao", valores:linhas.map(r=>r.data)}
   ];
+  if(repetidas) cols.push({nome:'parcela',valores:linhas.map(r=>JSON.stringify([r.local,r.quadra,r.estudo,r.tratamento,r.repeticao]))});
+  return cols;
 }
 function usarMatrizNoBioensaio(){
   const linhas=matrizLinhasFiltradas();
   if(!linhas.length){ avisar("Escolha um estudo/data/variável com valores numéricos."); return; }
   const resposta=$("#matriz-variavel").value || "valor";
   const incluirProduto=$("#matriz-produto") && $("#matriz-produto").checked;
-  const cols=colunasBioensaioDeMatriz(linhas, resposta, incluirProduto);
+  const repetidas=$("#matriz-data")?.value==='__todas';
+  const cols=colunasBioensaioDeMatriz(linhas, resposta, incluirProduto,repetidas);
   const ref=linhas[0] || {};
   preencherIdentificacaoSeVazia(
     gerarIdAuditoria("MATRIZ", [ref.estudo, ref.data, resposta].filter(Boolean).join(" ")),
     "Importação Matriz"
   );
   setModo("analise");
-  carregarColunas(cols, {resposta:resposta, fatores:["tratamento"], bloco:"bloco"}, {
+  carregarColunas(cols, {resposta:resposta, fatores:["tratamento"], bloco:"bloco",...(repetidas?{unidade:'parcela',tempo:'data_avaliacao'}:{})}, {
     origem: "matriz",
     arquivo: MATRIZ_IMPORT?.arquivo || "",
     aba: MATRIZ_IMPORT?.sheet || "",
@@ -863,6 +867,11 @@ function usarMatrizNoBioensaio(){
     variavel: resposta,
     incluir_produto: !!incluirProduto,
   });
+  $('#opt-modelo').value=repetidas?'repetidas':'auto';
+  $('#opt-tipo').value=_agTipoResp((MATRIZ_IMPORT.tipos||{})[resposta])||_agTipoResp(resposta);
+  window.__agractaMaiorMelhor=(MATRIZ_IMPORT.sentidos||{})[resposta]??null;
+  popularTestemunha();
+  atualizarPipeline();
 }
 const entradaMatriz=$("#entrada-matriz");
 if(entradaMatriz){
@@ -974,6 +983,8 @@ function adivinharPapeis(){
     if(/dose|dosagem|conc|ppm|concentra/.test(n)) papel="dose";
     else if(/^n$|total|testad|n_?test|num_?test|n_?total/.test(n)) papel="n_total";
     else if(/bloco|block|repet|^rep$|^rep\d/.test(n)) papel="bloco";
+    else if(/^parcela$|^unidade$|^subject$|^plot$/.test(n)) papel="unidade";
+    else if(/^local$|^site$|^ambiente$/.test(n)) papel="local";
     else if(/trat|produto|isolad|meio|lote|cultivar|variedad|fungic|inset|herbic|fator|grupo|especie|esp\b/.test(n)) papel="fator";
     else if(/mort|afet|resp|incid|doente|germin|viv|event|sever|sobreviv|nota|diam|cresc|peso|altura|colon|conta|num/.test(n)) papel="resposta";
     papeis[col.nome]=papel; usado[papel]=(usado[papel]||0)+1;
@@ -1033,6 +1044,7 @@ function papeisDeExemplo(p){
   if(p.n_total) map[p.n_total]="n_total";
   if(p.dose) map[p.dose]="dose";
   if(p.bloco) map[p.bloco]="bloco";
+  ['local','unidade','tempo'].forEach(k=>{if(p[k])map[p[k]]=k;});
   (p.fatores||[]).forEach(f=>map[f]="fator");
   return map;
 }
@@ -1073,7 +1085,7 @@ function renderPreview(){
   wrap.appendChild(cap);
   const rol=el("div","tab-rolavel"); rol.appendChild(tab); wrap.appendChild(rol);
 }
-const PAPEL_OPCOES = [["resposta","Resposta"],["dose","Dose/concentração"],["fator","Fator/tratamento"],["bloco","Bloco/repetição"],["n_total","n total (x de n)"],["ignorar","Ignorar"]];
+const PAPEL_OPCOES = [["resposta","Resposta"],["dose","Dose/concentração"],["fator","Fator/tratamento"],["bloco","Bloco/repetição"],["local","Local / ambiente"],["unidade","Parcela / unidade independente"],["tempo","Data / tempo (repetidas)"],["n_total","n total (x de n)"],["ignorar","Ignorar"]];
 const PAPEL_OPCOES_TEMPO = [["tratamento","Tratamento"],["tempo","Tempo (dia/hora)"],["n_total","N total (inicial)"],["n_vivos","N vivos"],["repeticao","Repetição"],["item_teste","Item/produto"],["ignorar","Ignorar"]];
 const PAPEL_OPCOES_VALIDACAO = [
   ["resposta","Resposta/resultado"],
@@ -1103,12 +1115,25 @@ function renderPapeis(papeis){
     opcoes.forEach(([v,t])=>{ const o=el("option"); o.value=v; o.textContent=t; if(papeis[col.nome]===v)o.selected=true; sel.appendChild(o); });
     sel.addEventListener("change", ()=>{
       if(MODO==="tempo") popularControleNeg();
+      if(MODO==="analise") popularTestemunha();
       invalidarResultado("Papéis das colunas alterados");
       atualizarPipeline();
     });
     item.appendChild(sel); lista.appendChild(item);
   });
   if(MODO==="tempo") popularControleNeg();
+  if(MODO==="analise") popularTestemunha();
+}
+
+function popularTestemunha(){
+  const sel=$('#opt-testemunha');if(!sel)return;
+  const atual=sel.value || MATRIZ_IMPORT?.controle || '';
+  const fatores=[];document.querySelectorAll('#papeis-lista select').forEach(s=>{if(s.value==='fator')fatores.push(s.dataset.coluna);});
+  const n=COLUNAS[0]?.valores.length||0;
+  const grupos=fatores.length?[...new Set(Array.from({length:n},(_,i)=>fatores.map(f=>String(COLUNAS.find(c=>c.nome===f).valores[i]??'').trim()).join(' × ')))].filter(Boolean):[];
+  sel.innerHTML='<option value="">Selecione o tratamento</option>';
+  grupos.forEach(g=>addOpcao(sel,g,g));
+  if(grupos.includes(atual))sel.value=atual;
 }
 function adivinharPapeisTempo(){
   const papeis={};
@@ -1198,6 +1223,7 @@ function lerPapeis(){
     if(p==="resposta") r.resposta=col;
     else if(p==="dose") r.dose=col;
     else if(p==="bloco") r.bloco=col;
+    else if(['local','unidade','tempo'].includes(p)) r[p]=col;
     else if(p==="n_total") r.n_total=col;
     else if(p==="fator") r.fatores.push(col);
   });
@@ -1371,6 +1397,8 @@ function inferirTipoResposta(papeis){
   return "continua";
 }
 function rotaGeral(papeis, tipo){
+  const modelo=$('#opt-modelo')?.value||'auto';
+  if(modelo==='misto'||modelo==='repetidas')return {titulo:modelo==='repetidas'?'Medidas repetidas por parcela':'Modelo misto',descricao:'REML, componentes de variância e contrastes com graus de liberdade aproximados de Satterthwaite.',chips:['REML','unidades independentes']};
   const temDose=!!papeis.dose;
   const fatores=(papeis.fatores||[]).length;
   if(temDose && ["binario","binomial"].includes(tipo)){
@@ -1420,13 +1448,18 @@ function avaliarPipelineGeral(){
   const nLin=COLUNAS[0]?.valores.length || 0;
   pushCheck(checks,"ok","Dados carregados",`${nLin} linha(s) e ${COLUNAS.length} coluna(s).`);
 
-  ["resposta","dose","bloco","n_total"].forEach(p=>{
+  ["resposta","dose","bloco","n_total","local","unidade","tempo"].forEach(p=>{
     if((sel.porPapel[p]||[]).length>1) pushCheck(checks,"critico","Papéis conflitantes",`Mais de uma coluna marcada como ${p}: ${sel.porPapel[p].join(", ")}.`, true);
   });
   if(!papeis.resposta) pushCheck(checks,"critico","Resposta ausente","Marque uma coluna como Resposta.", true);
 
   const tipo=papeis.resposta ? inferirTipoResposta(papeis) : "";
   const rota=rotaGeral(papeis, tipo);
+  const modelo=$('#opt-modelo')?.value||'auto';
+  if($('#opt-comparacao')?.value==='controle'&&!$('#opt-testemunha')?.value) pushCheck(checks,'critico','Controle não definido','Selecione a testemunha antes de comparar.',true);
+  if(modelo==='repetidas'&&(!papeis.unidade||!papeis.tempo))pushCheck(checks,'critico','Identifique a parcela e o tempo','Marque as colunas de unidade independente e data/tempo.',true);
+  if(modelo==='misto'&&!papeis.bloco&&!papeis.local)pushCheck(checks,'critico','Efeito aleatório ausente','Marque a coluna de bloco ou local.',true);
+  if(modelo==='auto'&&(papeis.unidade||papeis.tempo||papeis.local))pushCheck(checks,'critico','Preserve o delineamento','Selecione modelo misto ou medidas repetidas para usar unidade, tempo ou local.',true);
 
   if(papeis.resposta){
     const resp=valoresColuna(papeis.resposta);
@@ -2401,7 +2434,7 @@ function anexarTrilhaAuditoria(out, rel){
     bloco.innerHTML = `<h3>Trilha de auditoria GLP/BPL/ISO/IEC 27001</h3><p class="dica">Não foi possível gerar o registro de auditoria: ${esc(e.message || e)}</p>`;
   });
 }
-["#opt-tipo","#opt-alfa","#opt-unidade","#opt-niveis","#opt-controle","#opt-logdose",
+["#opt-modelo","#opt-comparacao","#opt-testemunha","#opt-tipo","#opt-alfa","#opt-unidade","#opt-niveis","#opt-controle","#opt-logdose",
 	 "#opt-controle-neg","#opt-sk","#opt-alfa-tempo","#opt-ctrlmax",
 	 "#opt-alfa-valid","#opt-horwitz-c","#opt-robustez","#opt-valid-branco",
    "#opt-crit-r2","#opt-crit-rec-min","#opt-crit-rec-max","#opt-crit-cv-max","#opt-crit-horrat-min","#opt-crit-horrat-max"].forEach(sel=>{
@@ -2451,6 +2484,9 @@ $("#btn-analisar").addEventListener("click", async () => {
   const papeis = lerPapeis();
   if(!papeis.resposta){ avisar("Defina qual coluna é a Resposta."); return; }
   const opcoes = { alfa: parseFloat($("#opt-alfa").value), log_dose: $("#opt-logdose").checked };
+  opcoes.modelo=$('#opt-modelo').value;
+  opcoes.comparacao=$('#opt-comparacao').value;
+  if(opcoes.comparacao==='controle')opcoes.controle=$('#opt-testemunha').value;
   /* Lado do "melhor": a letra 'a' vai para o MELHOR tratamento, e qual lado é o
      melhor depende da variável — severidade quanto menos melhor, mortalidade
      quanto mais melhor. Vem do Agracta junto com os dados; sem informação,
@@ -2553,7 +2589,8 @@ function renderRelatorio(rel){
   if(rel.descritiva) out.appendChild(secao("Estatística descritiva", tabelaDescritiva(rel.descritiva)));
 
   const a = rel.analise || {};
-  if(a.doses_letais || a.curvas) renderDose(out, a);
+  if(a.modelo_misto) renderMisto(out,rel);
+  else if(a.doses_letais || a.curvas) renderDose(out, a);
   else if(a.tabela_anova) renderAnova(out, rel);
   else if(a.medias_estimadas || a.proporcoes_estimadas) renderGlm(out, a);
   else if(a.normalidade) out.appendChild(secao("Normalidade", tabelaNormalidade(a.normalidade)));
@@ -2685,35 +2722,59 @@ function renderGlm(out, a){
   if(a.formula) head += `<p class="dica">Modelo: ${esc(a.formula)}. ${esc(a.escala_medias||'')}.</p>`;
   out.appendChild(secao(a.tipo_analise, head));
 
-  let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${esc(rotulo)}</th><th>Grupo</th></tr></thead><tbody>`;
-  a.ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(medias[t],3)}</td><td><span class="letra">${esc(a.letras[t]||"")}</span></td></tr>`);
-  h+=`</tbody></table></div><p class="dica">Compartilhar uma letra indica que não se detectou diferença (α=${a.alfa}); não comprova equivalência.</p>`;
+  const comLetras=!a.contra_controle && Object.keys(a.letras||{}).length>0;
+  let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${esc(rotulo)}</th>${comLetras?'<th>Grupo</th>':''}</tr></thead><tbody>`;
+  a.ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(medias[t],3)}</td>${comLetras?`<td><span class="letra">${esc(a.letras[t]||"")}</span></td>`:''}</tr>`);
+  h+='</tbody></table></div>';
+  if(comLetras)h+=`<p class="dica">Compartilhar uma letra indica que não se detectou diferença (α=${a.alfa}); não comprova equivalência.</p>`;
+  if(a.contra_controle)h+=`<p class="dica">${esc(a.nota)}</p><div class="tab-rolavel"><table><thead><tr><th>Tratamento − controle</th><th>Diferença na escala de ligação</th><th>p ajustado</th></tr></thead><tbody>`+(a.comparacoes||[]).map(c=>`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td><td>${fmt(c.diferenca,3)}</td><td>${fmt(c.p,4)}</td></tr>`).join('')+'</tbody></table></div>';
   const b=secao("Comparação de tratamentos", h);
   const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);
   out.appendChild(b);
   desenharBarras(cv, a.ordem, medias, a.letras, rotulo);
 }
 
+function renderMisto(out,rel){
+  const a=rel.analise;
+  out.appendChild(secao(a.tipo_analise,`<p>${a.n_unidades} unidades independentes · ${a.n_observacoes} observações</p><p class="dica">${esc(a.inferencia)}</p>`));
+  const rows=(a.testes_efeitos||[]).map(e=>`<tr><td>${esc(e.efeito)}</td><td>${fmt(e.F,3)}</td><td>${fmt(e.gl_num,0)} / ${fmt(e.gl_den,2)}</td><td>${fmt(e.p,4)}</td></tr>`).join('');
+  if(rows)out.appendChild(secao('Efeitos do ensaio','<div class="tab-rolavel"><table><thead><tr><th>Efeito</th><th>F</th><th>GL numerador / denominador</th><th>p</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(a.testes_efeitos||[]).filter(e=>e.motivo).map(e=>`<p class="dica">${esc(e.efeito)}: ${esc(e.motivo)}</p>`).join('')));
+  if(a.serie?.length){
+    const trats=[...new Set(a.serie.map(s=>s.tratamento))],tempos=[...new Set(a.serie.map(s=>s.tempo))];
+    const linhas=tempos.map((d,i)=>({tempo:i,rotulo:d,medias:Object.fromEntries(a.serie.filter(s=>s.tempo===d).map(s=>[s.tratamento,s.media]))}));
+    const b=secao('Evolução por parcela', '<p class="dica">Médias ajustadas por data; o modelo reconhece observações da mesma parcela. As datas são categorias.</p>');
+    const cv=el('canvas');cv.width=800;cv.height=350;b.appendChild(cv);out.appendChild(b);
+    desenharLinhasTempo(cv,linhas,trats,'Média ajustada',true);
+    const det=el('details');det.innerHTML='<summary>Valores por tratamento e data</summary><div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>Data / tempo</th><th>Média ajustada</th><th>EP</th></tr></thead><tbody>'+a.serie.map(s=>`<tr><td>${esc(s.tratamento)}</td><td>${esc(s.tempo)}</td><td>${fmt(s.media,3)}</td><td>${fmt(s.ep,3)}</td></tr>`).join('')+'</tbody></table></div>';b.appendChild(det);
+  }
+  renderComparacoes(out,rel.comparacao_medias,rel.descritiva);
+  const det=el('details','analise-secundaria');
+  det.innerHTML='<summary>Modelo e componentes de variância</summary><p class="dica">'+esc(a.formula)+'</p><div class="tab-rolavel"><table><thead><tr><th>Componente</th><th>Variância</th></tr></thead><tbody>'+Object.entries(a.componentes_variancia||{}).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${fmt(v,4)}</td></tr>`).join('')+'</tbody></table></div>';
+  out.appendChild(det);
+}
+
 function renderComparacoes(out, cm, descritiva){
   const medias={}, erros={};
   (descritiva||[]).forEach(d=>{ medias[d.tratamento]=d.media; if(d.ep!=null) erros[d.tratamento]=d.ep; });
   let principal=true;
-  ["ajustadas","tukey","scott_knott","dunn"].forEach(metodo=>{
+  ["controle","misto","ajustadas","tukey","scott_knott","dunn"].forEach(metodo=>{
     const r=cm[metodo]; if(!r) return;
     const ordem = r.ordem || Object.keys(r.letras);
     const valores = r.medias_exibicao || r.medias || r.medianas || medias;
     const ajustadaOriginal=r.ajustadas && (!r.escala_teste || r.escala_teste==='original');
     const ep=ajustadaOriginal?r.erros_padrao||{}:erros;
     const rotuloValor = r.medianas ? "Mediana" : ajustadaOriginal ? "Média ajustada" : (r.escala_teste && r.escala_teste !== "original" ? "Média (escala original)" : "Média");
-    let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotuloValor}</th>${r.medianas?"":"<th>± EP</th>"}<th>Grupo</th></tr></thead><tbody>`;
-    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${ep[t]!=null?"± "+fmt(ep[t],2):"—"}</td>`}<td><span class="letra">${esc(r.letras[t]||"")}</span></td></tr>`);
-    h+=`</tbody></table></div><p class="dica">Compartilhar uma letra indica que não se detectou diferença (α=${r.alfa}); não comprova equivalência.${r.medianas?"":" Barras = média ± erro-padrão."}`+
-      (r.escala_teste && r.escala_teste !== "original" ? ` Agrupamento calculado na escala ${esc(r.escala_teste)}; valores exibidos na escala original.` : "")+
+    const comLetras=!r.contra_controle && Object.keys(r.letras||{}).length>0;
+    let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotuloValor}</th>${r.medianas?"":"<th>± EP</th>"}${comLetras?'<th>Grupo</th>':''}</tr></thead><tbody>`;
+    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${ep[t]!=null?"± "+fmt(ep[t],2):"—"}</td>`}${comLetras?`<td><span class="letra">${esc(r.letras[t]||"")}</span></td>`:''}</tr>`);
+    h+=`</tbody></table></div><p class="dica">${r.contra_controle?'Comparações somente contra '+esc(r.controle)+'.':comLetras?`Compartilhar uma letra indica que não se detectou diferença (α=${r.alfa}); não comprova equivalência.`:'Estimativas sem agrupamento por letras.'}${r.medianas?"":" Barras = média ± erro-padrão."}`+
+      (r.escala_teste && r.escala_teste !== "original" ? ` Comparações calculadas na escala ${esc(r.escala_teste)}; valores exibidos na escala original.` : "")+
       `</p>`;
     if(r.comparacoes?.length){
-      h+='<details class="comparacoes-detalhe"><summary>Diferenças entre tratamentos</summary><div class="tab-rolavel"><table><thead><tr><th>Comparação</th><th>Diferença (2 − 1)</th><th>IC simultâneo</th><th>p ajustado</th></tr></thead><tbody>';
-      r.comparacoes.forEach(c=>{h+=`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td><td>${fmt(c.diferenca,3)}</td><td>${c.ic_inf!=null?fmt(c.ic_inf,3)+' a '+fmt(c.ic_sup,3):'—'}</td><td>${fmt(c.p_ajustado??c.p,4)}</td></tr>`;});
-      h+='</tbody></table></div><p class="dica">Diferenças na escala do modelo. IC simultâneo disponível para Tukey.</p></details>';
+      const comDiferenca=r.comparacoes.some(c=>c.diferenca!=null),comIntervalo=r.comparacoes.some(c=>c.ic_inf!=null);
+      h+='<details class="comparacoes-detalhe"'+(r.contra_controle?' open':'')+'><summary>Comparações entre tratamentos</summary><div class="tab-rolavel"><table><thead><tr><th>Comparação</th>'+(comDiferenca?'<th>Diferença (2 − 1)</th>':'')+(comIntervalo?'<th>IC simultâneo</th>':'')+'<th>p ajustado</th></tr></thead><tbody>';
+      r.comparacoes.forEach(c=>{h+=`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td>${comDiferenca?`<td>${fmt(c.diferenca,3)}</td>`:''}${comIntervalo?`<td>${c.ic_inf!=null?fmt(c.ic_inf,3)+' a '+fmt(c.ic_sup,3):'—'}</td>`:''}<td>${fmt(c.p_ajustado??c.p,4)}</td></tr>`;});
+      h+='</tbody></table></div><p class="dica">'+(comDiferenca?'Diferenças na escala do modelo. ':'')+esc(r.nota||'')+'</p></details>';
     }
     const b=secao(r.metodo, h);
     const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);
@@ -3191,18 +3252,19 @@ function desenharKM(cv, curvas, tempos){
 }
 
 const CORES_CAT=["#0d9488","#0891b2","#4338ca","#b45309","#9333ea","#0e7490","#be123c","#15803d"];
-function desenharLinhasTempo(cv, linhas, tratamentos, ylabel){
+function desenharLinhasTempo(cv, linhas, tratamentos, ylabel, categorias){
   const ctx=cv.getContext("2d"); const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
   const ml=46,mr=120,mt=14,mb=40, pw=W-ml-mr, ph=H-mt-mb;
   const tempos=linhas.map(l=>l.tempo); const tmin=Math.min(...tempos), tmax=Math.max(...tempos);
   let vmax=0; linhas.forEach(l=>tratamentos.forEach(t=>{ const m=(l.medias||{})[t]; if(m!=null&&m>vmax)vmax=m; }));
   vmax=Math.max(vmax*1.1,1);
-  const X=t=> ml+(tmax===tmin?0.5:(t-tmin)/(tmax-tmin))*pw, Y=v=> mt+ph-(v/vmax)*ph;
+  const vmin=Math.min(0,...linhas.flatMap(l=>tratamentos.map(t=>l.medias?.[t]??0)));
+  const X=t=> ml+(tmax===tmin?0.5:(t-tmin)/(tmax-tmin))*pw, Y=v=> mt+ph-((v-vmin)/(vmax-vmin))*ph;
   ctx.strokeStyle="#cbd5e1"; ctx.beginPath(); ctx.moveTo(ml,mt); ctx.lineTo(ml,mt+ph); ctx.lineTo(ml+pw,mt+ph); ctx.stroke();
   ctx.fillStyle="#64748b"; ctx.font="11px sans-serif"; ctx.textAlign="right";
-  for(let i=0;i<=4;i++){ const v=vmax*i/4, y=Y(v); ctx.fillText(fmt(v,0),ml-5,y+4); ctx.strokeStyle="#eef2f7"; ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(ml+pw,y); ctx.stroke(); }
+  for(let i=0;i<=4;i++){ const v=vmin+(vmax-vmin)*i/4, y=Y(v); ctx.fillText(fmt(v,1),ml-5,y+4); ctx.strokeStyle="#eef2f7"; ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(ml+pw,y); ctx.stroke(); }
   ctx.textAlign="center"; ctx.fillStyle="#64748b";
-  tempos.forEach(t=> ctx.fillText("t="+fmt(t,0), X(t), mt+ph+16));
+  linhas.forEach(l=> ctx.fillText(categorias?String(l.rotulo):"t="+fmt(l.tempo,0), X(l.tempo), mt+ph+16));
   tratamentos.forEach((t,i)=>{
     const col=CORES_CAT[i%CORES_CAT.length]; ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
     let started=false;
@@ -3427,6 +3489,9 @@ function _agractaEmitirResultado(rel){
 }
 function _agTipoResp(t){
   t=String(t||'').toLowerCase();
+  if(t==='pct'||t==='proporcao')return 'proporcao';
+  if(t==='continua')return 'continua';
+  if(t==='contagem')return 'contagem';
   if(/sever|incid|fitotox|efic|propor|%/.test(t)) return 'proporcao';
   if(/inset|popula|contag|coloni|n[úu]mero/.test(t)) return 'contagem';
   if(/altura|produ|peso|di[âa]m|stand|compr|massa|cont[íi]nu/.test(t)) return 'continua';
@@ -3438,14 +3503,14 @@ function __agractaHandoff(payload){
     window.__agractaEmbed = true; /* gate do autoteste vira só aviso (análise consultiva no Agracta) */
     window.__agractaRequestId = payload.requestId || '';
     /* sentido da variável, para a letra 'a' cair no melhor tratamento */
-    if(payload.maiorMelhor != null) window.__agractaMaiorMelhor = !!payload.maiorMelhor;
+    window.__agractaMaiorMelhor = payload.maiorMelhor != null ? !!payload.maiorMelhor : null;
     var modo = payload.modo || 'analise';
     var linhas = linhasMatrizDeAoa(payload.aoa);
     if(!linhas.length){ avisar('Não encontrei valores (Tratamento/Variável/Valor) para analisar.'); return false; }
-    MATRIZ_IMPORT = { arquivo: payload.titulo || 'Agracta', sheet: 'Dados', linhas: linhas };
+    MATRIZ_IMPORT = { arquivo: payload.titulo || 'Agracta', sheet: 'Dados', linhas: linhas,controle:payload.controle||'',tipos:payload.tipos||{},sentidos:payload.sentidos||{} };
     renderMatrizImportador(); /* seletor de estudo/data/variável continua disponível p/ re-escolher */
-    var resposta = (linhas[0] && linhas[0].variavel) || 'valor';
-    var lv = linhas.filter(function(r){ return r.variavel === resposta; });
+    var lv = matrizLinhasFiltradas();
+    var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
     var ref = lv[0] || {};
     function _set(id,v){ var el=document.getElementById(id); if(el && v!=null && String(v)!=='' && !String(el.value||'').trim()) el.value=String(v); }
@@ -3462,11 +3527,15 @@ function __agractaHandoff(payload){
         setModo(modo);
         var papeis = (modo === 'analise') ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null;
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
+        $('#opt-modelo').value='auto';
+        $('#opt-comparacao').value='todos';
+        $('#opt-testemunha').value=payload.controle||'';
         /* A natureza registrada tem precedência sobre adivinhar pela aparência
            dos números: uma contagem pequena não vira medida contínua. */
         var tipoEl=document.getElementById('opt-tipo');
         if(tipoEl) tipoEl.value='';
-        _setSel('opt-tipo', _agTipoResp(payload.tipo || resposta));
+        _setSel('opt-tipo', _agTipoResp((payload.tipos||{})[resposta]||payload.tipo)||_agTipoResp(resposta));
+        if((payload.sentidos||{})[resposta]!=null)window.__agractaMaiorMelhor=!!payload.sentidos[resposta];
         _set('opt-unidade', payload.doseUnit);
         if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
         if(typeof atualizarPipeline==='function') atualizarPipeline();
