@@ -4,9 +4,9 @@
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-10";
+const APP_VERSION = "bioensaio-auditoria-11";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v44-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v45-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -3176,6 +3176,11 @@ function renderRelatorioForense(rel){
 /* Render — Mortalidade no tempo                                           */
 /* ----------------------------------------------------------------------- */
 function renderRelatorioTempo(rel){
+  /* Sem isto o modo Tempo era um beco: rodava, desenhava na tela do motor e
+     nada voltava para o Agracta — então o painel do estudo não tinha como
+     mostrar sobrevivência sozinho, e só sobrava o caminho manual. As rotas
+     de análise e de forense já devolviam; esta ficou de fora. */
+  _agractaEmitirResultado(rel);
   const out=$("#resultados"); out.innerHTML="";
   $("#card-resultados").classList.remove("oculto");
   setNavTravado("resultados", false);
@@ -3568,6 +3573,16 @@ function __agractaHandoff(payload){
     if(!linhas.length){ avisar('Não encontrei valores (Tratamento/Variável/Valor) para analisar.'); return false; }
     MATRIZ_IMPORT = { arquivo: payload.titulo || 'Agracta', sheet: 'Dados', linhas: linhas,controle:payload.controle||'',tipos:payload.tipos||{},sentidos:payload.sentidos||{} };
     renderMatrizImportador(); /* seletor de estudo/data/variável continua disponível p/ re-escolher */
+    /* O importador abre na PRIMEIRA data. O modo Tempo precisa das leituras
+       todas — e as colunas são montadas AQUI, antes de setModo, então ajustar
+       o filtro só lá dentro chegaria tarde: `carregarColunas` logo abaixo
+       sobrescreveria com as colunas de uma data só. */
+    if(modo==='tempo'){
+      var _ds=document.getElementById('matriz-data');
+      if(_ds && [].some.call(_ds.options,function(o){return o.value==='__todas';})){
+        _ds.value='__todas'; atualizarMatrizFiltros();
+      }
+    }
     var lv = matrizLinhasFiltradas();
     var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);

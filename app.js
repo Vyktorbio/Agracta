@@ -11092,7 +11092,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-11';
+var MOTOR_VERSAO='agracta-12';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -11103,6 +11103,45 @@ function _bioestatJobs(qid,study){
     jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:av.tipo||v,aoa:aoa});
   }); });
   return jobs;
+}
+/* ===== O CARTÃO DE TEMPO NASCE SOZINHO ====================================
+   O painel calcula UMA avaliação por vez: cada cartão é um par (avaliação,
+   variável). Sobrevivência no tempo é o contrário disso — ela precisa das
+   leituras TODAS juntas —, então nunca teve como virar cartão, e sobrava só o
+   caminho manual: abrir "Configurar análise", trocar para a aba Tempo, mandar
+   rodar. Três botões para a análise que é a razão de existir do bioensaio.
+
+   Este job é do estudo inteiro: uma variável, todas as avaliações. Só nasce
+   quando há eixo de tempo e contagem de verdade — variável razão n/N, porque
+   sobrevivência se conta em indivíduos, não em porcentagem. */
+function _bioestatTempoAoa(qid,study,v){
+  var aoa=_bioestatAoa(qid,study), cab=aoa[0];
+  var iV=cab.indexOf('Variavel'), iT=cab.indexOf('Tempo'),
+      iNT=cab.indexOf('N_total'), iNV=cab.indexOf('N_vivos');
+  if(iV<0||iT<0||iNT<0||iNV<0) return null;
+  var linhas=aoa.slice(1).filter(function(r){
+    return r[iV]===v && r[iT]!=='' && r[iNT]!=='' && r[iNV]!=='';
+  });
+  var tempos={}, trats={};
+  linhas.forEach(function(r){ tempos[String(r[iT])]=1; trats[String(r[7])]=1; });
+  /* Curva pede ao menos dois pontos no tempo e dois tratamentos para comparar. */
+  if(Object.keys(tempos).length<2 || Object.keys(trats).length<2) return null;
+  return [cab].concat(linhas);
+}
+function _bioestatJobsTempo(qid,study){
+  var out=[];
+  if(!study || study.desenho==='faixas') return out;
+  var eixo=null; try{ eixo=_bioestatEixoTempo(study); }catch(e){}
+  if(!eixo) return out;
+  var vars={};
+  (study.avaliacoes||[]).forEach(function(av){ (av.variaveis||[]).forEach(function(v){
+    if(_avTipo(av,v)==='razao') vars[v]=1;
+  }); });
+  Object.keys(vars).forEach(function(v){
+    var aoa=null; try{ aoa=_bioestatTempoAoa(qid,study,v); }catch(e){}
+    if(aoa) out.push({jobKey:'__tempo__|'+v, variavel:v, unidade:eixo.unidade, aoa:aoa});
+  });
+  return out;
 }
 function _bioestatSignature(study){
   var slim={motor:MOTOR_VERSAO,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
@@ -11183,10 +11222,13 @@ function _bioestatEnsureStudy(qid,sid){
   var q=data[qid]||{}, study=(q.estudos||[]).find(function(s){return s.id===sid;}); if(!study)return;
   study=normalizeStudy(study);
   var key=qid+'|'+sid, sig=_bioestatSignature(study), jobs=_bioestatJobs(qid,study), c=_bioAutoCache[key];
+  var jobsT=_bioestatJobsTempo(qid,study);
   if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'))return;
-  var total=jobs.length*2; /* por avaliação/variável: análise + triagem forense */
+  /* por avaliação/variável: análise + triagem forense; mais um por variável
+     com curva de sobrevivência, que é do estudo inteiro e não de uma data */
+  var total=jobs.length*2+jobsT.length;
   c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
-  if(!jobs.length)return;
+  if(!total)return;
   /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
      guardado do uso anterior. Estando completo, o estudo abre com a
      estatística já na tela e nada roda. */
@@ -11195,14 +11237,15 @@ function _bioestatEnsureStudy(qid,sid){
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_VERSAO&&sav.results){
       var res=sav.results, n=0;
       jobs.forEach(function(j){ if(res[j.jobKey])n++; if(res[j.jobKey+'|F'])n++; });
+      jobsT.forEach(function(j){ if(res[j.jobKey])n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
-    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c);
+    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
   });
 }
 /* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
    consulta ao cache em disco é assíncrona e precisa vir antes. */
-function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c){
+function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
   function _ftipo(j){ var t=String(j.tipo||j.variavel||'').toLowerCase(); return /sever|incid|fitotox|efic|propor|%|altura|produ|peso|di[âa]m|massa|cont[íi]nu/.test(t)?'cont':'count'; }
@@ -11223,6 +11266,16 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c){
         maiorMelhor:_mm}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
+  });
+  /* A curva de sobrevivência vai por último: ela é a mais cara e as prévias de
+     cada data já estarão na tela enquanto ela roda. */
+  (jobsT||[]).forEach(function(j,i){
+    var req=key+'|'+sig+'|T'+i+'|'+Date.now();
+    var _mm=true; try{ _mm=(_avSentido(_avCfgDoEstudo(study,j.variavel), j.variavel)==='maior'); }catch(e){}
+    var item={requestId:req,key:key,sig:sig,job:{jobKey:j.jobKey,variavel:j.variavel,unidade:j.unidade},
+      payload:{requestId:req,aoa:j.aoa,modo:'tempo',titulo:tit,responsavel:resp,
+               tipo:j.variavel,doseUnit:doseUnit,local:loc,quadra:qn,maiorMelhor:_mm}};
+    _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
   _bioestatEnsureFrame(); _bioestatPump();
 }
@@ -11381,6 +11434,50 @@ function _bioestatResumoCard(job,rel,qid,sid){
     jsonBtn+
   '</div>';
 }
+/* O cartão da curva de sobrevivência. Fica ao lado dos de ANOVA, sem clique
+   nenhum: é a análise que o bioensaio existe para produzir. */
+function _bioestatTempoCard(job,rel,qid,sid){
+  var un=job.unidade==='HAT'?'h':'d';
+  if(!rel||!rel.ok) return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px">'+
+    '<b style="color:#a33">'+esc(job.variavel)+' · sobrevivência no tempo</b>'+
+    '<div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
+  var nf=function(x,d){ return (x==null||isNaN(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(d==null?1:d)}); };
+  var pf=function(x){ return x==null?'—':(x<0.001?'<0,001':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3})); };
+  var km=rel.kaplan_meier||{}, curvas=km.curvas||[], lr=km.logrank||null;
+  /* letras do ÚLTIMO tempo: é a leitura que fecha o ensaio */
+  var lm=rel.letras_mortalidade||[], ult=lm.length?lm[lm.length-1]:null, letras=(ult&&ult.letras)||{};
+  var linhas=curvas.map(function(c){
+    return '<tr><td class="av-tname">'+esc(c.tratamento)+'</td>'+
+      '<td>'+(c.LT50==null?'—':nf(c.LT50,1)+' '+un)+'</td>'+
+      '<td>'+(c.LT90==null?'—':nf(c.LT90,1)+' '+un)+'</td>'+
+      '<td style="color:#7a877f">'+(c.mortes==null?'—':(c.mortes+'/'+c.n))+'</td>'+
+      '<td><b style="color:#1f6f43">'+esc(letras[c.tratamento]||'—')+'</b></td></tr>';
+  }).join('');
+  var statTxt=lr&&lr.p!=null?('log-rank p='+pf(lr.p)+(lr.significativo?' · significativo':' · ns')):'curva ajustada';
+  var meta=[];
+  if(rel.controle) meta.push('controle '+esc(String(rel.controle)));
+  if(rel.correcao) meta.push('correção '+esc(String(rel.correcao)));
+  if((rel.tempos||[]).length) meta.push(rel.tempos.length+' tempos');
+  /* O QA/QC do motor: sobrevivente que "ressuscita" entre leituras é erro de
+     lançamento, e some se ninguém contar. */
+  var qa=rel.qa_qc||{}, alertas=[];
+  if(qa.impossiveis) alertas.push(qa.impossiveis+' linha(s) com contagem impossível');
+  if(qa.duplicatas) alertas.push(qa.duplicatas+' duplicata(s)');
+  if(qa.monotonicidade) alertas.push(qa.monotonicidade+' vez(es) em que o nº de vivos AUMENTOU no tempo');
+  (qa.controle||[]).forEach(function(x){
+    if(x&&x.ok_mort===false) alertas.push('mortalidade do controle alta em '+nf(x.tempo,0)+' '+un+' ('+nf(x.mort_media,1)+'%)');
+  });
+  var jsonBtn=(qid&&sid)?('<button type="button" onclick="_bioestatBaixarJson('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+','+esc(JSON.stringify(job.jobKey))+')" style="margin-top:6px;padding:4px 8px;border:1px solid #cfdfd5;background:#fff;color:#486053;border-radius:7px;font:600 10px system-ui;cursor:pointer">Baixar relatório completo (JSON)</button>'):'';
+  return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · sobrevivência no tempo</b>'+
+    '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(lr&&lr.significativo?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(rel.tipo_analise||'Mortalidade no tempo')+'</b>'+(meta.length?' · '+esc(meta.join(' · ')):'')+'</div>'+
+    (alertas.length?'<div style="font-size:10px;color:#b07d18;margin-top:2px">⚠ '+esc(alertas.join(' · '))+'</div>':'')+
+    (linhas?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>TL50</th><th>TL90</th><th>mortes</th><th>Grupo</th></tr></thead><tbody>'+linhas+'</tbody></table></div>':'')+
+    (lr&&lr.p!=null?'<div style="font-size:10px;color:#728078;margin-top:3px">Log-rank χ²('+lr.gl+')='+nf(lr.qui2,2)+' · p'+pf(lr.p)+' — compara as curvas inteiras, não só o último ponto.</div>':'')+
+    _bioestatDecisaoHtml(rel)+jsonBtn+
+  '</div>';
+}
 function _bioestatRapidoCard(job,study){
   var av=(study.avaliacoes||[]).find(function(x){return x&&x.id===job.avId;}),st=null;
   try{st=av&&statDBC(study,av,job.variavel);}catch(e){st=null;}
@@ -11482,6 +11579,14 @@ function _bioestatIntegratedHtml(qid,sid,study){
       if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey],qid,sid); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
       if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
     });
+    /* A curva de sobrevivência entra ANTES das análises por data: num
+       bioensaio ela é a resposta, e as leituras avulsas são o caminho. */
+    var _tHtml='';
+    _bioestatJobsTempo(qid,study).forEach(function(j){
+      if(res[j.jobKey]) _tHtml+=_bioestatTempoCard(j,res[j.jobKey],qid,sid);
+      else _tHtml+='<div class="bio-engine-status">Curva de sobrevivência de <b>'+esc(j.variavel)+'</b> em segundo plano…<small>Ela usa as leituras de todas as datas juntas.</small></div>';
+    });
+    body=_tHtml+body;
     if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
     if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
   }
