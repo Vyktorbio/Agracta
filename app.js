@@ -14400,6 +14400,45 @@ function _avTrats(){ var q=data[curV]||{}, st=(q.estudos||[]).find(function(s){r
 
 /* Grava um campo do BRUTO (n, N ou sub-amostra sN) e recalcula o derivado da célula.
    Devolve o valor já normalizado para devolver ao input. */
+/* ===== O N DA PARCELA SOBREVIVE À AVALIAÇÃO ================================
+   Numa razão n/N o N é o DENOMINADOR: quantos indivíduos aquela parcela tem.
+   Em ensaio de coleta — um ramo por parcela, cada ramo com o seu número de
+   insetos — esse número é propriedade DA PARCELA, não da leitura: vale para
+   todas as avaliações seguintes.
+
+   A grade nova herdava variáveis, tipos e varcfg da avaliação anterior, mas
+   `bruto` nascia do `av.bruto` vazio — e o N por parcela mora exatamente ali.
+   Sobrava só o N padrão da variável (varcfg.N), que a tela pintava em todas as
+   linhas: quem lançou 17, 23 e 19 via os três virarem 20 na leitura seguinte,
+   e o percentual saía sobre o denominador errado.
+
+   Herda SÓ o N. O n (mortos/afetados) é a leitura desta avaliação e tem de ser
+   lançado — repetir o n anterior seria inventar dado. A avaliação mais recente
+   ganha, e nada é sobrescrito: N já preenchido nesta grade fica como está. */
+function _avHerdarN(study, av, grid){
+  if(!study||!grid||!grid.bruto) return;
+  var todas=(study.avaliacoes||[]).filter(Boolean), alvo=todas.indexOf(av);
+  var antes=todas.filter(function(x,i){
+    if(x===av) return false;
+    return (alvo>=0) ? (i<alvo) : (String(x.data||'')<=String(av&&av.data||''));
+  });
+  if(!antes.length) return;
+  (grid.variaveis||[]).forEach(function(v){
+    if(_avTipo(grid,v)!=='razao') return;
+    for(var i=antes.length-1;i>=0;i--){          /* da mais recente para trás */
+      var fonte=antes[i].bruto||{};
+      Object.keys(fonte).forEach(function(key){
+        var cel=fonte[key]&&fonte[key][v];
+        var N=cel&&cel.N;
+        if(N==null||String(N).trim()==='') return;
+        if(!grid.bruto[key]) grid.bruto[key]={};
+        if(!grid.bruto[key][v]) grid.bruto[key][v]={};
+        var atual=grid.bruto[key][v].N;
+        if(atual==null||String(atual).trim()==='') grid.bruto[key][v].N=String(N);
+      });
+    }
+  });
+}
 function _avWriteBruto(key,v,campo,val){
   var cfg=_avCfg(_avGrid,v), cel=_avCel(_avGrid,key,v,true);
   var s=String(val==null?'':val).trim().replace(',','.');
@@ -15405,6 +15444,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
     varcfg:avCfg,
     bruto:JSON.parse(JSON.stringify(av.bruto||{}))
   };
+  _avHerdarN(study, av, _avGrid);
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
   var bbchList=bbchListDaQuadra(curV, studyCultura(study,q));
