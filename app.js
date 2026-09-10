@@ -11092,7 +11092,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-12';
+var MOTOR_VERSAO='agracta-13';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;

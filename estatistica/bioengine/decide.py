@@ -25,7 +25,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import detect, diagnostics as diag, doseresponse, anova as anova_mod, glmcount
-from . import posthoc, contrastes, mistos
+from . import posthoc, contrastes, mistos, equivalencia, dosecontinua
 
 
 def _col(dados, nome):
@@ -166,6 +166,25 @@ def _analisar(dados, papeis, opcoes=None):
         if tipo not in ('continua','proporcao'):
             return {'ok':False,'erro':'Este modelo misto é gaussiano. Declare uma medida contínua/proporção contínua; contagens e x de n exigem outro modelo.'}
         return mistos.analisar_misto(dados,{**papeis,'tipo_resposta':tipo},opcoes)
+    if modelo=='curva':
+        if not dinfo['tem_dose']:
+            return {'ok':False,'erro':'A curva de dose exige uma coluna marcada como Dose/concentração.'}
+        if tipo in ('binario','binomial'):
+            return {'ok':False,'erro':'Para mortalidade x de n a rota é a dose-resposta binomial (CL50 por Fieller), '
+                                      'que já é escolhida automaticamente. A curva contínua é para severidade, '
+                                      'controle % ou produtividade.'}
+        dose_v = np.asarray([float(str(v).replace(',','.')) for v in dados[papeis['dose']]], float)
+        relatorio['descritiva'] = _descritiva(rinfo['valores'], [str(v) for v in dose_v])
+        relatorio['decisao'] = ('Resposta contínua com preditor de DOSE: ajustada curva log-logística de quatro '
+                                'parâmetros. As doses efetivas saem com intervalo pelo logaritmo da dose, e a '
+                                'testemunha entra como o patamar da dose zero.')
+        relatorio['analise'] = dosecontinua.analisar_dose_continua(
+            dose_v, np.asarray(rinfo['valores'], float),
+            niveis=opcoes.get('niveis_de') or (10, 50, 90), alfa=alfa,
+            unidade=opcoes.get('unidade_dose','') or '',
+            maior_melhor=bool(opcoes.get('maior_melhor', True)))
+        relatorio['avisos'] = avisos + list(relatorio['analise'].get('avisos') or [])
+        return relatorio
     if papeis.get('unidade') or papeis.get('tempo') or papeis.get('local'):
         return {'ok':False,'erro':'Há unidade, tempo ou local no delineamento. Selecione Modelo misto ou Medidas repetidas para preservar essa estrutura.'}
 
@@ -247,6 +266,21 @@ def _analisar(dados, papeis, opcoes=None):
     relatorio["erro"] = ("Não foi possível decidir a análise para esta combinação "
                          f"de tipo de resposta ('{tipo}') e desenho.")
     return relatorio
+
+
+def _equivalencia(base, opcoes, alfa, maior_melhor):
+    """Aplica a margem declarada aos contrastes que a análise já estimou,
+       preservando erro e graus de liberdade daquele modelo."""
+    cmp = equivalencia.testar(
+        base, opcoes.get('controle'),
+        margem=opcoes.get('margem'), margem_pct=opcoes.get('margem_pct'),
+        alfa=alfa, maior_melhor=maior_melhor,
+        sentido=('equivalencia' if opcoes.get('comparacao')=='equivalencia' else 'nao_inferioridade'),
+        ajuste=opcoes.get('ajuste_equivalencia','nenhum'))
+    for k in ('medias','medias_exibicao','erros_padrao','ordem','ajustadas','escala_teste','df_erro'):
+        if k in base:
+            cmp.setdefault(k, base[k])
+    return cmp
 
 
 # --------------------------------------------------------------------------- #
@@ -375,6 +409,15 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
     relatorio["decisao"] = decisao
     relatorio["analise"] = {k: v for k, v in res_anova.items() if not k.startswith("_")}
 
+    if opcoes.get('comparacao') in ('equivalencia','nao_inferioridade'):
+        relatorio['comparacao_medias'] = {'equivalencia': _equivalencia(
+            posthoc.comparar_modelo(res_anova, alfa, maior_melhor), opcoes, alfa, maior_melhor)}
+        if res_anova['transformacao']:
+            avisos.append('A margem foi julgada na escala ' + str(res_anova['escala_usada']) + ', que é a do '
+                          'modelo. Uma margem declarada em unidade original não vale nessa escala; declare-a '
+                          'na escala transformada ou analise sem transformação.')
+        return relatorio
+
     if opcoes.get('comparacao')=='controle':
         if res_anova['kruskal'] is not None:
             cmp=contrastes.restringir_controle(posthoc.dunn(valores,chaves,alfa,maior_melhor=maior_melhor),opcoes.get('controle'))
@@ -438,10 +481,34 @@ def analisar(dados,papeis,opcoes=None):
             raise ValueError('O nível de significância deve estar entre zero e um.')
         if opcoes.get('comparacao')=='controle' and not str(opcoes.get('controle') or '').strip():
             raise ValueError('Escolha a testemunha/controle antes de analisar.')
+        equiv = opcoes.get('comparacao') in ('equivalencia','nao_inferioridade')
+        if equiv and not str(opcoes.get('controle') or '').strip():
+            raise ValueError('Escolha a referência — a testemunha ou o padrão — contra a qual julgar a equivalência.')
+        if equiv and opcoes.get('margem') in (None,'') and opcoes.get('margem_pct') in (None,''):
+            raise ValueError('Declare a margem de equivalência antes de analisar: a maior perda que ainda não '
+                             'mudaria sua decisão. Sem ela não há pergunta de equivalência.')
         rel=_analisar(dados,papeis,opcoes)
         a=rel.get('analise',{})
         if opcoes.get('comparacao')=='controle' and (a.get('medias_estimadas') or a.get('proporcoes_estimadas')):
             rel['analise']=contrastes.restringir_controle(a,opcoes['controle'])
+        if equiv and rel.get('ok'):
+            cm = rel.get('comparacao_medias') or {}
+            if a.get('medias_estimadas') or a.get('proporcoes_estimadas'):
+                # O contraste do GLM vive na escala de ligação. Uma margem de "5 sacas"
+                # ou "10 pontos de severidade" não é 5 nem 10 ali dentro, e converter
+                # pelas costas entregaria um veredito de equivalência sobre outra
+                # pergunta. Recusar é a resposta certa.
+                return {'ok':False,'erro':'Equivalência ainda não é oferecida para GLM de contagem ou x de n: '
+                                          'os contrastes ficam na escala de ligação, e uma margem declarada em '
+                                          'unidade da variável não vale lá. Declare a resposta como contínua, '
+                                          'ou compare as estimativas com o intervalo mostrado.'}
+            if 'misto' in cm:
+                if not (rel.get('analise') or {}).get('inferencias', True):
+                    return {'ok':False,'erro':'O modelo misto suspendeu a inferência (componente na fronteira ou '
+                                              'curvatura insuficiente). Sem erro confiável não há julgamento de '
+                                              'equivalência.'}
+                rel['comparacao_medias'] = {'equivalencia': _equivalencia(
+                    cm['misto'], opcoes, float(opcoes.get('alfa',.05)), bool(opcoes.get('maior_melhor',True)))}
         return rel
     except (ValueError, np.linalg.LinAlgError) as e:
         return {'ok':False,'erro':str(e)}

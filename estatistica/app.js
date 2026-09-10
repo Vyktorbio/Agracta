@@ -2,11 +2,12 @@
 "use strict";
 
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
-                    "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","decide.py","tempo.py",
+                    "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
+                    "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-11";
+const APP_VERSION = "bioensaio-auditoria-12";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v45-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -109,6 +110,14 @@ def _run_web(dados_json, papeis_json, opcoes_json):
         import traceback
         rel={"ok":False,"erro":str(e),"trace":traceback.format_exc()}
     return json.dumps(_clean(rel))
+
+def _run_planejar(opcoes_json):
+    from bioengine import planejar as _P
+    o=json.loads(opcoes_json)
+    try:
+        return json.dumps(_clean(_P(**o)))
+    except Exception as e:
+        return json.dumps({"ok":False,"erro":str(e)})
 
 def _run_tempo(dados_json, papeis_json, opcoes_json):
     from bioengine import tempo as _T
@@ -427,6 +436,8 @@ function setModo(m){
   document.querySelectorAll(".analysis-mode[data-modo]").forEach(a=>
     a.classList.toggle("ativo", a.dataset.modo===m));
   $("#card-opcoes").classList.toggle("oculto", m!=="analise");
+  /* Planejar não precisa de dados: é a pergunta de antes do ensaio. */
+  if($("#card-planejar")) $("#card-planejar").classList.toggle("oculto", m!=="analise");
   $("#card-opcoes-tempo").classList.toggle("oculto", m!=="tempo");
   $("#card-opcoes-validacao").classList.toggle("oculto", m!=="validacao");
   $("#card-opcoes-forense").classList.toggle("oculto", m!=="forense");
@@ -1458,6 +1469,9 @@ function inferirTipoResposta(papeis){
 function rotaGeral(papeis, tipo){
   const modelo=$('#opt-modelo')?.value||'auto';
   if(modelo==='misto'||modelo==='repetidas')return {titulo:modelo==='repetidas'?'Medidas repetidas por parcela':'Modelo misto',descricao:'REML, componentes de variância e contrastes com graus de liberdade aproximados de Satterthwaite.',chips:['REML','unidades independentes']};
+  if(modelo==='curva')return {titulo:'Curva de dose — resposta contínua',descricao:'Log-logística de quatro parâmetros: DE50 e DE90 com intervalo pelo logaritmo da dose. A testemunha é o patamar da dose zero.',chips:['log-logística 4P','DE50']};
+  const cmp=$('#opt-comparacao')?.value;
+  if(cmp==='equivalencia'||cmp==='nao_inferioridade')return {titulo:cmp==='equivalencia'?'Equivalência contra a referência':'Não-inferioridade contra a referência',descricao:'Margem declarada antes, dois testes unilaterais e o intervalo de 1-2α confrontado com ela. Três respostas possíveis, uma delas é inconclusivo.',chips:['TOST','margem declarada']};
   const temDose=!!papeis.dose;
   const fatores=(papeis.fatores||[]).length;
   if(temDose && ["binario","binomial"].includes(tipo)){
@@ -1516,6 +1530,14 @@ function avaliarPipelineGeral(){
   const rota=rotaGeral(papeis, tipo);
   const modelo=$('#opt-modelo')?.value||'auto';
   if($('#opt-comparacao')?.value==='controle'&&!$('#opt-testemunha')?.value) pushCheck(checks,'critico','Controle não definido','Selecione a testemunha antes de comparar.',true);
+  const _cmp=$('#opt-comparacao')?.value;
+  if((_cmp==='equivalencia'||_cmp==='nao_inferioridade')){
+    if(!$('#opt-testemunha')?.value) pushCheck(checks,'critico','Referência não definida','Escolha o tratamento que serve de referência.',true);
+    const _m=parseFloat($('#opt-margem')?.value);
+    if(!(_m>0)) pushCheck(checks,'critico','Margem não declarada','Diga qual é a maior perda que ainda não mudaria sua decisão. Sem margem não há pergunta de equivalência.',true);
+    if($('#opt-margem-tipo')?.value==='percent'&&$('#opt-modelo')?.value!=='auto') pushCheck(checks,'aviso','Margem em %','A margem em % usa a média da referência estimada pelo modelo.');
+  }
+  if($('#opt-modelo')?.value==='curva'&&!papeis.dose) pushCheck(checks,'critico','Dose ausente','A curva de dose exige uma coluna marcada como Dose/concentração.',true);
   if(modelo==='repetidas'&&(!papeis.unidade||!papeis.tempo))pushCheck(checks,'critico','Identifique a parcela e o tempo','Marque as colunas de unidade independente e data/tempo.',true);
   if(modelo==='misto'&&!papeis.bloco&&!papeis.local)pushCheck(checks,'critico','Efeito aleatório ausente','Marque a coluna de bloco ou local.',true);
   if(modelo==='auto'&&(papeis.unidade||papeis.tempo||papeis.local))pushCheck(checks,'critico','Preserve o delineamento','Selecione modelo misto ou medidas repetidas para usar unidade, tempo ou local.',true);
@@ -2545,7 +2567,13 @@ $("#btn-analisar").addEventListener("click", async () => {
   const opcoes = { alfa: parseFloat($("#opt-alfa").value), log_dose: $("#opt-logdose").checked };
   opcoes.modelo=$('#opt-modelo').value;
   opcoes.comparacao=$('#opt-comparacao').value;
-  if(opcoes.comparacao==='controle')opcoes.controle=$('#opt-testemunha').value;
+  const pedeReferencia=['controle','equivalencia','nao_inferioridade'].includes(opcoes.comparacao);
+  if(pedeReferencia)opcoes.controle=$('#opt-testemunha').value;
+  if(opcoes.comparacao==='equivalencia'||opcoes.comparacao==='nao_inferioridade'){
+    const m=parseFloat($('#opt-margem').value);
+    if($('#opt-margem-tipo').value==='percent')opcoes.margem_pct=m; else opcoes.margem=m;
+  }
+  if(opcoes.modelo==='curva')opcoes.unidade_dose=$('#opt-unidade')?.value||'';
   /* Lado do "melhor": a letra 'a' vai para o MELHOR tratamento, e qual lado é o
      melhor depende da variável — severidade quanto menos melhor, mortalidade
      quanto mais melhor. Vem do Agracta junto com os dados; sem informação,
@@ -2562,7 +2590,9 @@ $("#btn-analisar").addEventListener("click", async () => {
   if(ctrlStr){ const c=parseFloat(ctrlStr.replace(",","."))/100; if(c>0 && c<1) opcoes.controle_mort = c; }
   try{
     registrarExecucao(papeis, opcoes);
-    renderRelatorio(await rodarPython("_run_web", papeis, opcoes));
+    const _rel = await rodarPython("_run_web", papeis, opcoes);
+    renderRelatorio(_rel);
+    try{ ofertarVariabilidadeDaAnalise(_rel); }catch(_e){}
   }catch(e){ esconderOverlay(); renderRelatorio({ok:false, erro:e.message}); console.error(e); }
 });
 
@@ -2648,7 +2678,8 @@ function renderRelatorio(rel){
   if(rel.descritiva) out.appendChild(secao("Estatística descritiva", tabelaDescritiva(rel.descritiva)));
 
   const a = rel.analise || {};
-  if(a.modelo_misto) renderMisto(out,rel);
+  if(a.doses_efetivas) renderCurvaDose(out,a);
+  else if(a.modelo_misto) renderMisto(out,rel);
   else if(a.doses_letais || a.curvas) renderDose(out, a);
   else if(a.tabela_anova) renderAnova(out, rel);
   else if(a.medias_estimadas || a.proporcoes_estimadas) renderGlm(out, a);
@@ -2816,7 +2847,7 @@ function renderComparacoes(out, cm, descritiva){
   const medias={}, erros={};
   (descritiva||[]).forEach(d=>{ medias[d.tratamento]=d.media; if(d.ep!=null) erros[d.tratamento]=d.ep; });
   let principal=true;
-  ["controle","misto","ajustadas","tukey","scott_knott","dunn"].forEach(metodo=>{
+  ["equivalencia","controle","misto","ajustadas","tukey","scott_knott","dunn"].forEach(metodo=>{
     const r=cm[metodo]; if(!r) return;
     const ordem = r.ordem || Object.keys(r.letras);
     const valores = r.medias_exibicao || r.medias || r.medianas || medias;
@@ -2829,6 +2860,10 @@ function renderComparacoes(out, cm, descritiva){
     h+=`</tbody></table></div><p class="dica">${r.contra_controle?'Comparações somente contra '+esc(r.controle)+'.':comLetras?`Compartilhar uma letra indica que não se detectou diferença (α=${r.alfa}); não comprova equivalência.`:'Estimativas sem agrupamento por letras.'}${r.medianas?"":" Barras = média ± erro-padrão."}`+
       (r.escala_teste && r.escala_teste !== "original" ? ` Comparações calculadas na escala ${esc(r.escala_teste)}; valores exibidos na escala original.` : "")+
       `</p>`;
+    if(r.margem!=null&&r.comparacoes?.length){
+      h+=tabelaEquivalencia(r);
+      const b2=secao(r.metodo,h);out.appendChild(principal?b2:b2);principal=false;return;
+    }
     if(r.comparacoes?.length){
       const comDiferenca=r.comparacoes.some(c=>c.diferenca!=null),comIntervalo=r.comparacoes.some(c=>c.ic_inf!=null);
       h+='<details class="comparacoes-detalhe"'+(r.contra_controle?' open':'')+'><summary>Comparações entre tratamentos</summary><div class="tab-rolavel"><table><thead><tr><th>Comparação</th>'+(comDiferenca?'<th>Diferença (2 − 1)</th>':'')+(comIntervalo?'<th>IC simultâneo</th>':'')+'<th>p ajustado</th></tr></thead><tbody>';
@@ -2842,6 +2877,171 @@ function renderComparacoes(out, cm, descritiva){
     desenharBarras(cv, ordem, valores, r.letras, rotuloValor, r.medianas?null:ep);
   });
 }
+
+/* ---- Equivalência: a margem é a personagem principal, então ela aparece em
+       cada linha, e a conclusão vem por extenso -- inclusive "inconclusivo",
+       que é a resposta que mais se perde quando só se olha o p. ---- */
+const _EQ_ROTULO={equivalente:'Equivalente',diferenca_relevante:'Diferença relevante',
+  inconclusivo:'Inconclusivo',nao_inferior:'Não inferior',inferior:'Inferior'};
+const _EQ_CHIP={equivalente:'chip-ok',nao_inferior:'chip-ok',inconclusivo:'chip-info',
+  diferenca_relevante:'chip-alerta',inferior:'chip-alerta'};
+function tabelaEquivalencia(r){
+  const m=r.margem;
+  let h=`<p class="dica">Margem declarada: <b>±${fmt(m,4)}</b>${r.margem_percent!=null?` (${fmt(r.margem_percent,2)}% da referência)`:''} · intervalo de ${fmt(r.nivel_ic*100,0)}% · referência <b>${esc(r.referencia)}</b>.</p>`;
+  h+=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento − ${esc(r.referencia)}</th><th>Diferença</th><th>IC ${fmt(r.nivel_ic*100,0)}%</th><th>Cabe na margem?</th><th>p</th></tr></thead><tbody>`;
+  (r.comparacoes||[]).forEach(c=>{
+    h+=`<tr><td>${esc(c.tratamento)}</td><td>${fmt(c.diferenca,3)}</td>`+
+       `<td>${fmt(c.ic_inf,3)} a ${fmt(c.ic_sup,3)}</td>`+
+       `<td>${chip(_EQ_ROTULO[c.conclusao]||c.conclusao,_EQ_CHIP[c.conclusao]||'chip-info')}</td>`+
+       `<td>${fmt(c.p,4)}</td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  (r.avisos||[]).forEach(a=>{h+=`<p class="dica">${esc(a)}</p>`;});
+  return h+`<p class="dica">${esc(r.nota||'')}</p>`;
+}
+
+/* ---- Curva de dose contínua ---- */
+function renderCurvaDose(out,a){
+  const p=a.parametros,u=a.unidade?' '+a.unidade:'';
+  out.appendChild(secao(a.tipo_analise,
+    `<p class="dica">${esc(a.modelo)} — ${esc(a.nota)}</p>`+
+    `<div class="tab-rolavel"><table><thead><tr><th>Parâmetro</th><th>Estimativa</th><th>EP</th></tr></thead><tbody>`+
+    `<tr><td>Patamar na dose zero (d)</td><td>${fmt(p.patamar_dose_zero_d,3)}</td><td>${fmt(p.patamar_dose_zero_d_ep,3)}</td></tr>`+
+    `<tr><td>Patamar na dose alta (c)</td><td>${fmt(p.patamar_dose_alta_c,3)}</td><td>${fmt(p.patamar_dose_alta_c_ep,3)}</td></tr>`+
+    `<tr><td>Inclinação (b)</td><td>${fmt(p.inclinacao_b,3)}</td><td>${fmt(p.inclinacao_b_ep,3)}</td></tr>`+
+    `<tr><td>DE50 (e)${esc(u)}</td><td>${fmt(p.de50_e,4)}</td><td>${fmt(p.de50_e_ep,4)}</td></tr>`+
+    `</tbody></table></div>`+
+    `<p class="dica">R² = ${fmt(a.r2,4)} · ${a.gl_residual} g.l. residuais · doses testadas de ${fmt(a.faixa_testada.min,4)} a ${fmt(a.faixa_testada.max,4)}${esc(u)}${a.faixa_testada.tem_testemunha?' · com testemunha':''}.</p>`));
+
+  let h='<div class="tab-rolavel"><table><thead><tr><th>Dose efetiva</th><th>Dose</th><th>IC 95%</th><th></th></tr></thead><tbody>';
+  (a.doses_efetivas||[]).forEach(q=>{
+    h+=`<tr><td>DE${fmt(q.nivel,0)}</td><td>${fmt(q.dose,4)}${esc(u)}</td>`+
+       `<td>${q.ic_inf!=null?fmt(q.ic_inf,4)+' a '+fmt(q.ic_sup,4):'—'}</td>`+
+       `<td>${q.extrapolado?chip('fora do testado','chip-alerta'):''}</td></tr>`;
+  });
+  h+='</tbody></table></div><p class="dica">Intervalos assimétricos porque vêm do logaritmo da dose.</p>';
+  const bloco=secao('Doses efetivas',h);
+  if(a.curva?.length){
+    const cv=el('canvas');cv.width=760;cv.height=340;bloco.appendChild(cv);
+    desenharCurvaDose(cv,a);
+  }
+  out.appendChild(bloco);
+  if(a.falta_de_ajuste){
+    const l=a.falta_de_ajuste;
+    out.appendChild(secao('Falta de ajuste',
+      `<p class="dica">F = ${fmt(l.F,3)} (${l.gl_falta} e ${l.gl_puro} g.l.), p = ${fmt(l.p,4)}. `+
+      `${l.ajuste_suficiente?'A curva descreve os pontos dentro do erro puro das repetições.':'A curva NÃO descreve bem os pontos: há padrão além do erro entre repetições.'}</p>`));
+  }
+  (a.avisos||[]).forEach(x=>out.appendChild(secao('Aviso',`<p class="dica">${esc(x)}</p>`)));
+}
+function desenharCurvaDose(cv,a){
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height,ml=64,mb=44,mt=16,mr=16;
+  const pts=(a.curva||[]).filter(p=>p.dose>0);
+  if(!pts.length)return;
+  const xs=pts.map(p=>Math.log10(p.dose)),ys=pts.map(p=>p.ajustado);
+  const x0=Math.min(...xs),x1=Math.max(...xs);
+  let y0=Math.min(...ys),y1=Math.max(...ys);const pad=(y1-y0||1)*.12;y0-=pad;y1+=pad;
+  const px=v=>ml+(v-x0)/((x1-x0)||1)*(W-ml-mr), py=v=>H-mb-(v-y0)/((y1-y0)||1)*(H-mt-mb);
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#c9d3cd';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,H-mb);ctx.lineTo(W-mr,H-mb);ctx.stroke();
+  ctx.fillStyle='#5c6b62';ctx.font='11px system-ui';ctx.textAlign='center';
+  for(let e=Math.ceil(x0);e<=Math.floor(x1);e++){const X=px(e);
+    ctx.fillText(String(Math.pow(10,e)),X,H-mb+15);
+    ctx.strokeStyle='#eef2f0';ctx.beginPath();ctx.moveTo(X,mt);ctx.lineTo(X,H-mb);ctx.stroke();}
+  ctx.textAlign='right';
+  for(let i=0;i<=4;i++){const v=y0+(y1-y0)*i/4,Y=py(v);
+    ctx.fillText(fmt(v,1),ml-6,Y+4);
+    ctx.strokeStyle='#eef2f0';ctx.beginPath();ctx.moveTo(ml,Y);ctx.lineTo(W-mr,Y);ctx.stroke();}
+  ctx.strokeStyle='#1f7a4d';ctx.lineWidth=2;ctx.beginPath();
+  pts.forEach((p,i)=>{const X=px(Math.log10(p.dose)),Y=py(p.ajustado);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+  ctx.stroke();
+  const e50=a.parametros?.de50_e;
+  if(e50>0&&Math.log10(e50)>=x0&&Math.log10(e50)<=x1){
+    const X=px(Math.log10(e50));
+    ctx.strokeStyle='#b0873a';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(X,mt);ctx.lineTo(X,H-mb);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#b0873a';ctx.textAlign='left';ctx.fillText('DE50',X+4,mt+12);
+  }
+  ctx.fillStyle='#5c6b62';ctx.textAlign='center';
+  ctx.fillText('dose'+(a.unidade?' ('+a.unidade+')':'')+' — escala log',(ml+W-mr)/2,H-8);
+}
+
+/* ---- Planejamento: a pergunta de antes do ensaio ---- */
+function atualizarCamposComparacao(){
+  const v=$('#opt-comparacao')?.value, equiv=(v==='equivalencia'||v==='nao_inferioridade');
+  const lbl=$('#lbl-margem'), dica=$('#dica-margem');
+  if(lbl) lbl.hidden=!equiv;
+  if(dica) dica.hidden=!equiv;
+}
+function _plOpcoes(){
+  const tipo=$('#pl-var-tipo').value, v=parseFloat($('#pl-var').value);
+  const familia=$('#pl-familia').value;
+  const o={k:parseInt($('#pl-k').value,10),
+    delta:parseFloat($('#pl-delta').value),
+    desenho:$('#pl-desenho').value,
+    alfa:parseFloat($('#pl-alfa').value),
+    poder_alvo:parseFloat($('#pl-poder').value),
+    familia:familia, ajuste:(familia==='controle'?'dunnett':'tukey')};
+  if(tipo==='cv'){ o.cv=v; o.media=parseFloat($('#pl-media').value); } else { o.dp=v; }
+  if(window.__plFonte){ o.fonte_dp=window.__plFonte.texto||''; if(window.__plFonte.gl) o.gl_desvio=window.__plFonte.gl; }
+  if(o.gl_desvio){ o.gl_dp=o.gl_desvio; delete o.gl_desvio; }
+  return o;
+}
+function renderPlano(p){
+  const box=$('#pl-saida'); box.replaceChildren();
+  if(!p||p.ok===false){ box.innerHTML=`<p class="dica">${esc((p&&p.erro)||'Não foi possível planejar.')}</p>`; return; }
+  const e=p.entradas, u=e.unidade?' '+e.unidade:'';
+  let h=`<p class="dica">${e.tratamentos} tratamentos · diferença relevante <b>${fmt(e.diferenca_relevante,4)}${esc(u)}</b> · desvio-padrão ${fmt(e.desvio_padrao,4)}${e.cv_percent?` (CV ${fmt(e.cv_percent,1)}%)`:''} · ${e.familia==='controle'?'contra a testemunha':'todos entre si'} · poder ${fmt(e.poder_alvo*100,0)}% · α ${e.alfa}.</p>`;
+  h+= p.repeticoes_minimas
+    ? `<p><b>${p.repeticoes_minimas} repetições</b> ${e.desenho==='dbc'?'(blocos)':'(por tratamento)'} para enxergar essa diferença com ${fmt(e.poder_alvo*100,0)}% de poder.</p>`
+    : `<p><b>Nenhum número de repetições resolve</b> dentro do limite testado.</p>`;
+  h+='<div class="tab-rolavel"><table><thead><tr><th>Repetições</th><th>g.l. do erro</th><th>Poder da comparação</th><th>Poder do F geral</th><th>Menor diferença detectável</th></tr></thead><tbody>';
+  (p.curva||[]).forEach(c=>{
+    const alvo=c.repeticoes===p.repeticoes_minimas;
+    h+=`<tr${alvo?' class="linha-alvo"':''}><td>${c.repeticoes}${alvo?' ←':''}</td><td>${c.gl_erro}</td>`+
+       `<td>${fmt(c.poder*100,1)}%</td><td>${c.poder_f!=null?fmt(c.poder_f*100,1)+'%':'—'}</td>`+
+       `<td>${c.diferenca_detectavel!=null?fmt(c.diferenca_detectavel,3)+esc(u):'—'}</td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  h+='<p class="dica">A tabela importa mais que o número: ela mostra o que cada bloco a mais compra, e onde parar.</p>';
+  (p.avisos||[]).forEach(a=>{h+=`<p class="dica">${esc(a)}</p>`;});
+  h+=`<p class="dica">${esc(p.nota)}</p>`;
+  box.innerHTML=h;
+}
+async function planejarEnsaio(){
+  const o=_plOpcoes();
+  if(!(o.k>=2)){ avisar('Informe quantos tratamentos o ensaio terá.'); return; }
+  if(!(o.delta>0)){ avisar('Informe a diferença que mudaria sua decisão.'); return; }
+  mostrarOverlay('Planejando…','Calculando o poder para cada número de repetições.');
+  try{
+    await garantirPyodide();
+    const fn=pyodide.globals.get('_run_planejar');
+    try{ renderPlano(JSON.parse(fn(JSON.stringify(o)))); } finally{ fn.destroy(); }
+  }catch(err){ renderPlano({ok:false,erro:String(err&&err.message||err)}); }
+  finally{ esconderOverlay(); }
+}
+/* A vantagem que só o Agracta tem: a variabilidade não precisa ser chutada,
+   porque o ensaio anterior está no aparelho. */
+function ofertarVariabilidadeDaAnalise(rel){
+  const a=rel&&rel.analise||{}, cm=rel&&rel.comparacao_medias||{};
+  const mse=a.mse!=null?a.mse:(cm.tukey&&cm.tukey.mse), gl=a.df_erro!=null?a.df_erro:(cm.tukey&&cm.tukey.df_erro);
+  const btn=$('#btn-planejar-daqui'), fonte=$('#pl-fonte');
+  if(!btn) return;
+  if(!(mse>0)){ btn.hidden=true; if(fonte) fonte.hidden=true; return; }
+  const dp=Math.sqrt(mse);
+  btn.hidden=false;
+  btn.onclick=()=>{
+    $('#pl-var-tipo').value='dp'; $('#pl-var').value=String(Number(dp.toFixed(6)));
+    const trats=(cm.tukey&&cm.tukey.ordem||cm.ajustadas&&cm.ajustadas.ordem||[]).length;
+    if(trats>=2) $('#pl-k').value=String(trats);
+    window.__plFonte={texto:'QME da análise recém-feita',gl:gl};
+    if(fonte){ fonte.hidden=false; fonte.textContent='Variabilidade vinda do QME da análise recém-feita: desvio-padrão '+fmt(dp,4)+(gl?' com '+gl+' graus de liberdade':'')+'. O plano é tão bom quanto essa estimativa.'; }
+    avisar('Variabilidade preenchida a partir da análise.','ok');
+  };
+}
+if($('#btn-planejar')) $('#btn-planejar').addEventListener('click', planejarEnsaio);
+if($('#opt-comparacao')) $('#opt-comparacao').addEventListener('change', atualizarCamposComparacao);
+atualizarCamposComparacao();
 
 /* ---- Validação de método ---- */
 function chipBool(v, okTxt="OK", alertaTxt="verificar"){

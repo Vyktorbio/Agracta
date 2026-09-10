@@ -11,6 +11,7 @@ via Pyodide.
 """
 
 from .decide import analisar
+from .poder import planejar
 
-__all__ = ["analisar"]
+__all__ = ["analisar", "planejar"]
 __version__ = "0.1.0"

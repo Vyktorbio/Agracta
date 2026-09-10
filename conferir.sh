@@ -9,8 +9,32 @@
 # responde uma coisa só: PODE SUBIR, ou NÃO SUBA e por quê.
 #
 # Chamado pelo "Conferir antes de publicar.command" (duplo clique).
+#
+# Ele responde DUAS perguntas diferentes, e só uma delas é sobre publicar:
+#
+#   sem argumento      "vou arrastar estes arquivos agora" — inclui a pergunta
+#                      da publicação: o CACHE do sw.js precisa estar diferente
+#                      do que está no ar, senão o aparelho instalado não troca.
+#   --pull-request     "este código está sadio" — o CI de pull request. Aqui
+#                      nada está sendo publicado, e o CACHE igual ao do ar é o
+#                      comportamento CORRETO de um PR que não mexe em arquivo
+#                      publicado. Continua aparecendo como aviso, não reprova.
+#
+# A distinção existe porque o CI reprovava PRs sadios: um PR que só corrige um
+# teste nunca sobe o CACHE, e não deveria subir. Reprovar por isso é o mesmo
+# vício de reprovar por biblioteca de teste ausente — o portão gritando por
+# motivo que não é o app, e ensinando a pessoa a ignorar o grito seguinte.
 
 cd "$(dirname "$0")" || exit 1
+
+MODO_PR=0
+for arg in "$@"; do
+  case "$arg" in
+    --pull-request|--pr) MODO_PR=1 ;;
+    "") ;;
+    *) printf "uso: conferir.sh [--pull-request]\n" >&2; exit 2 ;;
+  esac
+done
 
 VERDE=$'\033[0;32m'; VERM=$'\033[0;31m'; AMAR=$'\033[0;33m'; NEG=$'\033[1m'; ZERO=$'\033[0m'
 PROBLEMAS=0
@@ -128,26 +152,38 @@ fi
 # tudo-ou-nada: um unico 404 na lista faz a instalacao inteira falhar, o Service
 # Worker novo nunca ativa e o aparelho fica servindo a versao velha para sempre.
 # Nao aparece erro em lugar nenhum — o app so "nao atualiza".
+#
+# Sao DUAS casas com esse mesmo risco, e o portao so olhava uma. O motor
+# estatistico tem service worker proprio (estatistica/sw.js), com a lista SHELL
+# que carrega o Pyodide e os .py do bioengine — e ela cresce a cada motor novo.
+# Um .py na lista sem arquivo no disco travaria a estatistica no aparelho
+# instalado, calada, com o portao dizendo PODE SUBIR.
 if command -v node >/dev/null 2>&1; then
-  SUMIDOS=$(node -e '
-    var fs=require("fs"), falta=[];
-    function confere(lista){ lista.forEach(function(u){
-      var p=String(u).replace(/^\.\//,"").replace(/[?#].*$/,"");
-      if(!p || /^(https?:)?\/\//.test(p)) return;
-      if(!fs.existsSync(p) && falta.indexOf(p)<0) falta.push(p);
-    }); }
-    var sw=fs.readFileSync("sw.js","utf8");
-    var m=sw.match(/var ASSETS\s*=\s*\[([\s\S]*?)\];/);
-    if(m) confere((m[1].match(/'"'"'[^'"'"']+'"'"'/g)||[]).map(function(s){return s.slice(1,-1);}));
-    var html=fs.readFileSync("index.html","utf8"), r=/(?:src|href)="([^"]+)"/g, x;
-    while((x=r.exec(html))) confere([x[1]]);
-    console.log(falta.join("\n"));
-  ' 2>/dev/null)
+  SUMIDOS=$(node - <<'NODE' 2>/dev/null
+var fs=require("fs"), falta=[];
+function confere(base,lista){ lista.forEach(function(u){
+  var p=String(u).replace(/^\.\//,"").replace(/[?#].*$/,"");
+  if(!p || /^(https?:)?\/\//.test(p) || /^data:/.test(p)) return;
+  var alvo=base?base+"/"+p:p;
+  if(!fs.existsSync(alvo) && falta.indexOf(alvo)<0) falta.push(alvo);
+}); }
+function ler(arq){ return fs.existsSync(arq)?fs.readFileSync(arq,"utf8"):""; }
+[ {base:"",           sw:"sw.js",             lista:/var ASSETS\s*=\s*\[([\s\S]*?)\]/,   html:"index.html"},
+  {base:"estatistica",sw:"estatistica/sw.js", lista:/const SHELL\s*=\s*\[([\s\S]*?)\]/, html:"estatistica/index.html"}
+].forEach(function(c){
+  var m=ler(c.sw).match(c.lista);
+  if(m) confere(c.base,(m[1].match(/["'][^"']+["']/g)||[]).map(function(s){return s.slice(1,-1);}));
+  var html=ler(c.html), r=/(?:src|href)="([^"]+)"/g, x;
+  while((x=r.exec(html))) confere(c.base,[x[1]]);
+});
+console.log(falta.join("\n"));
+NODE
+)
   if [ -z "$SUMIDOS" ]; then
-    ok "todo arquivo pré-carregado existe mesmo"
+    ok "todo arquivo pré-carregado existe mesmo (app e estatística)"
   else
     echo "$SUMIDOS" | while IFS= read -r arq; do
-      [ -n "$arq" ] && avisar "'$arq' é pedido pelo sw.js/index.html mas NÃO existe — com um 404 na lista o Service Worker inteiro não instala e ninguém recebe a versão nova"
+      [ -n "$arq" ] && avisar "'$arq' é pedido por um sw.js/index.html mas NÃO existe — com um 404 na lista o Service Worker inteiro não instala e ninguém recebe a versão nova"
     done
     # o subshell do while nao propaga a contagem; reconta aqui
     PROBLEMAS=$(( PROBLEMAS + $(echo "$SUMIDOS" | grep -c .) ))
@@ -181,7 +217,14 @@ else
   if [ -z "$NOAR" ]; then
     printf "   %s??%s   não consegui ler o sw.js publicado (sem internet?). Confira à mão que o CACHE mudou: aqui está %s\n" "$AMAR" "$ZERO" "$CACHE"
   elif [ "$NOAR" = "$CACHE" ]; then
-    avisar "o CACHE ($CACHE) é IGUAL ao que já está no ar — o app instalado NÃO vai atualizar. Suba o número em sw.js."
+    # A pergunta é da publicação, não do código: ver o cabeçalho sobre os modos.
+    if [ "$MODO_PR" -eq 1 ]; then
+      printf "   %s??%s   o CACHE (%s) é igual ao que está no ar. Num pull request isso é esperado:\n" "$AMAR" "$ZERO" "$CACHE"
+      printf "        nada está sendo publicado aqui. Subir o número é parte de publicar,\n"
+      printf "        e o duplo clique em \"Conferir antes de publicar.command\" cobra isso.\n"
+    else
+      avisar "o CACHE ($CACHE) é IGUAL ao que já está no ar — o app instalado NÃO vai atualizar. Suba o número em sw.js."
+    fi
   else
     ok "CACHE novo: $NOAR (no ar) -> $CACHE (vai subir)"
   fi
