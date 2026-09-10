@@ -9,8 +9,32 @@
 # responde uma coisa só: PODE SUBIR, ou NÃO SUBA e por quê.
 #
 # Chamado pelo "Conferir antes de publicar.command" (duplo clique).
+#
+# Ele responde DUAS perguntas diferentes, e só uma delas é sobre publicar:
+#
+#   sem argumento      "vou arrastar estes arquivos agora" — inclui a pergunta
+#                      da publicação: o CACHE do sw.js precisa estar diferente
+#                      do que está no ar, senão o aparelho instalado não troca.
+#   --pull-request     "este código está sadio" — o CI de pull request. Aqui
+#                      nada está sendo publicado, e o CACHE igual ao do ar é o
+#                      comportamento CORRETO de um PR que não mexe em arquivo
+#                      publicado. Continua aparecendo como aviso, não reprova.
+#
+# A distinção existe porque o CI reprovava PRs sadios: um PR que só corrige um
+# teste nunca sobe o CACHE, e não deveria subir. Reprovar por isso é o mesmo
+# vício de reprovar por biblioteca de teste ausente — o portão gritando por
+# motivo que não é o app, e ensinando a pessoa a ignorar o grito seguinte.
 
 cd "$(dirname "$0")" || exit 1
+
+MODO_PR=0
+for arg in "$@"; do
+  case "$arg" in
+    --pull-request|--pr) MODO_PR=1 ;;
+    "") ;;
+    *) printf "uso: conferir.sh [--pull-request]\n" >&2; exit 2 ;;
+  esac
+done
 
 VERDE=$'\033[0;32m'; VERM=$'\033[0;31m'; AMAR=$'\033[0;33m'; NEG=$'\033[1m'; ZERO=$'\033[0m'
 PROBLEMAS=0
@@ -193,7 +217,14 @@ else
   if [ -z "$NOAR" ]; then
     printf "   %s??%s   não consegui ler o sw.js publicado (sem internet?). Confira à mão que o CACHE mudou: aqui está %s\n" "$AMAR" "$ZERO" "$CACHE"
   elif [ "$NOAR" = "$CACHE" ]; then
-    avisar "o CACHE ($CACHE) é IGUAL ao que já está no ar — o app instalado NÃO vai atualizar. Suba o número em sw.js."
+    # A pergunta é da publicação, não do código: ver o cabeçalho sobre os modos.
+    if [ "$MODO_PR" -eq 1 ]; then
+      printf "   %s??%s   o CACHE (%s) é igual ao que está no ar. Num pull request isso é esperado:\n" "$AMAR" "$ZERO" "$CACHE"
+      printf "        nada está sendo publicado aqui. Subir o número é parte de publicar,\n"
+      printf "        e o duplo clique em \"Conferir antes de publicar.command\" cobra isso.\n"
+    else
+      avisar "o CACHE ($CACHE) é IGUAL ao que já está no ar — o app instalado NÃO vai atualizar. Suba o número em sw.js."
+    fi
   else
     ok "CACHE novo: $NOAR (no ar) -> $CACHE (vai subir)"
   fi

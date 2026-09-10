@@ -18,5 +18,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: npm test
+      # O portao e o mesmo do duplo clique, mas a pergunta aqui e outra: este PR
+      # esta sadio, nao "vou arrastar agora". Sem --pull-request, todo PR que nao
+      # mexe no sw.js reprovava por CACHE igual ao do ar -- que e o correto para ele.
+      - run: npm test -- --pull-request
       - run: npm run test:regras
