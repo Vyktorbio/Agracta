@@ -4,9 +4,9 @@
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-8";
+const APP_VERSION = "bioensaio-auditoria-9";
 const ENGINE_VERSION = APP_VERSION;
-const SW_CACHE_VERSION = "bioensaio-v42-auditoria";
+const SW_CACHE_VERSION = "bioensaio-v43-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
 const SELFTEST_STORAGE_KEY = `bioensaio:selftest:${APP_VERSION}`;
 const CRITERIOS_PADRAO_VALIDACAO = {
@@ -835,7 +835,7 @@ function renderMatrizImportador(){
 }
 function colunasBioensaioDeMatriz(linhas, resposta, incluirProduto, repetidas){
   const cols = [
-    {nome:"tratamento", valores:linhas.map(r=>(incluirProduto && r.produto) ? `${r.tratamento} - ${r.produto}` : r.tratamento)},
+    {nome:"tratamento", valores:linhas.map(r=>(incluirProduto && r.produto) ? `${r.tratamento} - ${r.produto}` : r.tratamento), identificadores:linhas.map(r=>r.tratamento)},
     {nome:"bloco", valores:linhas.map(r=>r.repeticao || "1")},
     {nome:resposta, valores:linhas.map(r=>String(r.valor))},
     {nome:"produto", valores:linhas.map(r=>r.produto)},
@@ -1128,11 +1128,22 @@ function renderPapeis(papeis){
 function popularTestemunha(){
   const sel=$('#opt-testemunha');if(!sel)return;
   const atual=sel.value || MATRIZ_IMPORT?.controle || '';
+  const idAtual=sel.selectedOptions[0]?.dataset.tratamentoId || (!sel.value?MATRIZ_IMPORT?.controle:'') || '';
   const fatores=[];document.querySelectorAll('#papeis-lista select').forEach(s=>{if(s.value==='fator')fatores.push(s.dataset.coluna);});
   const n=COLUNAS[0]?.valores.length||0;
   const grupos=fatores.length?[...new Set(Array.from({length:n},(_,i)=>fatores.map(f=>String(COLUNAS.find(c=>c.nome===f).valores[i]??'').trim()).join(' × ')))].filter(Boolean):[];
   sel.innerHTML='<option value="">Selecione o tratamento</option>';
-  grupos.forEach(g=>addOpcao(sel,g,g));
+  const coluna=fatores.length===1?COLUNAS.find(c=>c.nome===fatores[0]):null;
+  grupos.forEach(g=>{
+    addOpcao(sel,g,g);
+    if(coluna?.identificadores){
+      const ids=[...new Set(coluna.valores.map((v,i)=>String(v).trim()===g?String(coluna.identificadores[i]??''):null).filter(v=>v))];
+      if(ids.length===1){
+        sel.lastElementChild.dataset.tratamentoId=ids[0];
+        if(idAtual===ids[0])sel.value=g;
+      }
+    }
+  });
   if(grupos.includes(atual))sel.value=atual;
 }
 function adivinharPapeisTempo(){
@@ -1466,7 +1477,7 @@ function avaliarPipelineGeral(){
     const faltantes=resp.filter(v=>textoValor(v)==="").length;
     if(faltantes) pushCheck(checks,"aviso","Resposta com vazios",`${faltantes} linha(s) sem valor de resposta.`);
     const taxa=taxaNumerica(resp);
-    if(!["binario"].includes(tipo) && taxa.total && taxa.taxa<.9){
+    if(!["binario"].includes(tipo) && taxa.total && taxa.ok<taxa.total){
       pushCheck(checks,"critico","Resposta não-numérica",`Apenas ${taxa.ok}/${taxa.total} valores da resposta são numéricos.`, true);
     } else {
       pushCheck(checks,"ok","Resposta compatível",`Tipo inferido: ${tipo || "a confirmar"}.`);

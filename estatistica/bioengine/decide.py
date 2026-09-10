@@ -91,6 +91,24 @@ def _analisar(dados, papeis, opcoes=None):
         return {"ok": False, "erro": "Selecione a coluna de resposta."}
 
     resp = dados[resp_col]
+    def ausente(v):
+        return v is None or str(v).strip().lower() in ('', 'na', 'nan', 'null', 'none')
+
+    # Identificadores pertencem ao desenho. Não podem virar uma categoria
+    # "None" nem fazer uma resposta observada desaparecer no dropna do GLM.
+    obrigatorias=list(papeis.get('fatores') or [])+[papeis[k] for k in
+                   ('bloco','local','unidade','tempo','dose','n_total') if papeis.get(k)]
+    for col in obrigatorias:
+        if col not in dados or len(dados[col])!=len(resp):
+            raise ValueError('Resposta e coluna '+str(col)+' precisam existir e ter o mesmo número de linhas.')
+        if any(not ausente(y) and ausente(v) for y,v in zip(resp,dados[col])):
+            raise ValueError('Há resposta observada sem '+str(col)+'. Complete o delineamento/denominador; a linha não foi excluída.')
+
+    faltantes=sum(ausente(v) for v in resp)
+    if faltantes:
+        avisos.append(str(faltantes)+' respostas ausentes foram excluídas; nenhuma foi imputada.')
+        resp=[None if ausente(v) else v for v in resp]
+        dados={**dados,resp_col:resp}
     n_total = _col(dados, papeis.get("n_total"))
     dose = _col(dados, papeis.get("dose"))
     fatores_cols = papeis.get("fatores") or []
@@ -98,6 +116,10 @@ def _analisar(dados, papeis, opcoes=None):
 
     # 1) detecção
     rinfo = detect.detectar_resposta(resp, n_total=n_total, nome=resp_col)
+    invalidas=[str(i+1) for i,(raw,v) in enumerate(zip(resp,rinfo['valores']))
+               if not ausente(raw) and not np.isfinite(v)]
+    if invalidas:
+        raise ValueError('Resposta inválida nas linhas '+', '.join(invalidas[:8])+'. Corrija o texto ou valor não finito; somente ausências podem ser excluídas.')
     fatores_vals = [dados[f] for f in fatores_cols]
     dinfo = detect.detectar_desenho(dose=dose, fatores=fatores_vals, bloco=bloco)
 
@@ -105,6 +127,8 @@ def _analisar(dados, papeis, opcoes=None):
 
     # 1b) override manual do tipo de resposta (usuário confirma/corrige na interface)
     forcado = papeis.get("tipo_resposta") or opcoes.get("tipo_resposta")
+    if n_total is not None and forcado and forcado!='binomial':
+        raise ValueError('Há um total de indivíduos declarado. Use o tipo binomial (x de n) para preservar o denominador.')
     if forcado and forcado != rinfo["tipo"]:
         avisos.append(f"Tipo de resposta definido manualmente como '{forcado}' "
                       f"(detecção automática sugeria '{rinfo['tipo']}').")
@@ -128,6 +152,8 @@ def _analisar(dados, papeis, opcoes=None):
     }
 
     tipo = rinfo["tipo"]
+    if tipo=='proporcao' and any(np.isfinite(v) and (v<0 or v>100) for v in rinfo['valores']):
+        raise ValueError('Uma proporção/porcentagem deve estar entre 0 e 1 ou entre 0 e 100. Confira a escala e os valores.')
     relatorio["deteccao"]["tipo_resposta"] = tipo
 
     modelo=opcoes.get('modelo','auto')

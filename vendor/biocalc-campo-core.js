@@ -12,6 +12,18 @@
     return Number.isFinite(number)?number:0;
   }
 
+  /* Entradas numéricas de receita não admitem sufixos nem conversão parcial.
+     O zero inicial distingue 0.033 (decimal) de 1.500 (milhar PT-BR).
+     Em porcentagem o ponto é sempre decimal. */
+  function parseStrictNumber(value,decimalOnly){
+    if(typeof value==='number')return Number.isFinite(value)?value:NaN;
+    var s=String(value==null?'':value).trim().replace(/\s+/g,'');
+    if(!decimalOnly && /^[+-]?[1-9]\d{0,2}(?:\.\d{3})+(?:,\d+)?$/.test(s))s=s.replace(/\./g,'');
+    if(!/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d+)?$/i.test(s))return NaN;
+    var n=Number(s.replace(',','.'));
+    return Number.isFinite(n)?n:NaN;
+  }
+
   function round(value,places){
     var factor=Math.pow(10,places===undefined?8:places);
     return Math.round((value+Number.EPSILON)*factor)/factor;
@@ -23,7 +35,7 @@
   function normalizeDoseUnit(unit){
     var raw=String(unit==null?"":unit).trim();
     var s=raw.toLowerCase().replace(/\s+/g,"");
-    if(s.indexOf("%")>=0)return"%";
+    if(s==="%"||s==="%v/v"||s==="%vv")return"%";
     if(s==="l"||s==="l/ha"||s==="lha")return"L/ha";
     if(s==="ml"||s==="ml/ha"||s==="mlha")return"mL/ha";
     if(s==="kg"||s==="kg/ha"||s==="kgha")return"kg/ha";
@@ -205,21 +217,13 @@
   function parseDose(raw,fallbackUnit){
     var s=String(raw==null?"":raw).trim();
     if(!s)return null;
-    /* milhar PT-BR ("1.500 g" = 1500) antes de qualquer coisa — mesma regra do app */
-    var limpo=s.replace(/\s/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"");
-    var valor=parseNum(limpo);
-    var u=limpo.toLowerCase();
-    var unidade;
-    if(/%/.test(u))                       unidade="%";
-    else if(/m\s*l/.test(u))              unidade="mL/ha";
-    else if(/k\s*g/.test(u))              unidade="kg/ha";
-    else if(/(^|[^k])g(\b|ramas|\/|$)/.test(u)) unidade="g/ha";
-    else if(/l/.test(u))                  unidade="L/ha";
-    else{
-      var fallback=normalizeDoseUnit(fallbackUnit);
-      unidade=(DOSE_UNITS.indexOf(fallback)>=0?fallback:"L/ha");
-    }
-    return{valor:valor,unidade:unidade,texto:s};
+    var m=s.replace(/\s/g,'').match(/^([+-]?(?:\d+(?:[.,]\d+)*|[.,]\d+)(?:e[+-]?\d+)?)(.*)$/i);
+    if(!m)return{valor:NaN,unidade:'',texto:s,erro:'Dose inválida: "'+s+'".'};
+    var unidade=normalizeDoseUnit(m[2]||fallbackUnit||'L/ha');
+    var valor=parseStrictNumber(m[1],unidade==='%');
+    var erro=DOSE_UNITS.indexOf(unidade)<0?'Unidade não reconhecida em "'+s+'". Use L/ha, mL/ha, g/ha, kg/ha ou % v/v.':null;
+    if(!Number.isFinite(valor))erro='Número inválido na dose "'+s+'".';
+    return{valor:valor,unidade:unidade,texto:s,erro:erro};
   }
 
   /* Casa "A + B" com "1,5 L + 0,033%". Devolve {components, problems}.
@@ -243,6 +247,7 @@
     for(var i=0;i<n;i++){
       var d=parseDose(doses[i],fallbackUnit);
       if(!d)continue;
+      if(d.erro)problems.push(d.erro);
       if(!(d.valor>0))problems.push("Dose \""+(doses[i]||"")+"\" não é um número maior que zero.");
       comps.push({nome:nomes[i]||("Componente "+(i+1)),valor:d.valor,unidade:d.unidade,texto:d.texto});
     }
@@ -260,8 +265,8 @@
       c=c||{};
       var nome=String(c.nome||c.name||("Componente "+(i+1))).trim()||("Componente "+(i+1));
       var raw=(c.valor!==undefined&&c.valor!==null)?c.valor:c.dose;
-      var valor=parseNum(raw);
       var unidade=normalizeDoseUnit(c.unidade||c.unit||c.type||fallbackUnit);
+      var valor=parseStrictNumber(raw,unidade==='%');
       if(DOSE_UNITS.indexOf(unidade)<0){
         problems.push("Unidade \""+(c.unidade||c.unit||c.type||"")+"\" não reconhecida em "+nome+".");
         unidade=normalizeDoseUnit(fallbackUnit);
@@ -297,6 +302,12 @@
     var carrier=String(input.carrier||"Água").trim()||"Água";
 
     if(!comps.length)throw new Error("Nenhum componente para calcular.");
+    comps.forEach(function(c){
+      var un=normalizeDoseUnit(c.unidade);
+      if(DOSE_UNITS.indexOf(un)<0)throw new Error('Unidade não reconhecida em '+(c.nome||'componente')+'.');
+      if(!(parseStrictNumber(c.valor,un==='%')>0))throw new Error('A dose de '+(c.nome||'componente')+' precisa ser um número válido maior que zero.');
+    });
+    comps=comps.map(function(c){return Object.assign({},c,{valor:parseStrictNumber(c.valor,normalizeDoseUnit(c.unidade)==='%'),unidade:normalizeDoseUnit(c.unidade)});});
     if(sprayVolume<=0)throw new Error("O volume de calda deve ser maior que zero.");
     if(plotLength<=0||plotWidth<=0)throw new Error("As dimensões da parcela devem ser maiores que zero.");
 
@@ -422,11 +433,12 @@
   /* Versao do motor. Vai gravada na memoria de calculo de cada aplicacao: sem
      ela, um resultado guardado em 2026 nao teria como ser reconferido depois que
      a formula mudasse. Subir aqui sempre que o calculo mudar de resultado. */
-  var VERSION="1.2.0";
+  var VERSION="1.2.1";
 
   return{
     VERSION:VERSION,
     parseNum:parseNum,
+    parseStrictNumber:parseStrictNumber,
     calculateTreatment:calculateTreatment,
     calculateCalibration:calculateCalibration,
     parseDose:parseDose,

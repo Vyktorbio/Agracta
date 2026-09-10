@@ -105,6 +105,14 @@ def detectar_resposta(serie, n_total=None, nome=None):
     Retorna dict com chaves: tipo, detalhe, valores (np.array float quando
     aplicável), positivo (rótulo tido como "evento" em dados binários).
     """
+    # O denominador declarado manda sobre a aparência 0/1 dos eventos.
+    # Um evento entre 30 indivíduos não é um indivíduo com evento certo.
+    if n_total is not None:
+        arr, _ = _numerico(serie)
+        nt, _ = _numerico(n_total)
+        return {"tipo": "binomial", "detalhe": "sucessos de um total (x de n) -> regressão binomial",
+                "valores": arr, "n_total": nt, "positivo": "evento"}
+
     # 1) binário categórico (texto morto/vivo, sim/não)
     eh_bin, positivo = _eh_binario_categorico(serie)
     if eh_bin:
@@ -124,13 +132,6 @@ def detectar_resposta(serie, n_total=None, nome=None):
     if validos.size == 0:
         return {"tipo": "desconhecido", "detalhe": "coluna sem valores numéricos válidos",
                 "valores": arr, "positivo": None}
-
-    # 2) com n_total -> dados binomiais x de n
-    if n_total is not None:
-        nt, _ = _numerico(n_total)
-        return {"tipo": "binomial",
-                "detalhe": "sucessos de um total (x de n) -> regressão binomial",
-                "valores": arr, "n_total": nt, "positivo": "evento"}
 
     todos_inteiros = np.all(np.isclose(validos, np.round(validos)))
     minimo, maximo = float(np.min(validos)), float(np.max(validos))
