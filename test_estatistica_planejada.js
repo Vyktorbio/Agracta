@@ -35,6 +35,11 @@ assert.equal(w.document.getElementById('opt-testemunha').value,'T3','testemunha 
 assert.equal(w.document.getElementById('opt-modelo').value,'auto');
 assert.equal(w.document.getElementById('opt-tipo').value,'proporcao');
 assert.equal(w.__agractaMaiorMelhor,false);
+w.document.getElementById('matriz-produto').checked=true;w.usarMatrizNoBioensaio();
+assert.equal(w.document.getElementById('opt-testemunha').value,'T3 - T3','nome do produto não perde a testemunha cadastrada');
+w.document.getElementById('opt-testemunha').value='T2 - T2';
+w.document.getElementById('matriz-produto').checked=false;w.usarMatrizNoBioensaio();
+assert.equal(w.document.getElementById('opt-testemunha').value,'T2','trocar o rótulo preserva o controle escolhido manualmente');
 w.document.getElementById('matriz-data').value='__todas';w.atualizarMatrizFiltros();w.usarMatrizNoBioensaio();
 assert.equal(w.COLUNAS[0].valores.length,24);
 assert.equal(w.document.getElementById('opt-modelo').value,'repetidas');

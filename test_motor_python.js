@@ -10,5 +10,6 @@ const {loadPyodide}=require('./estatistica/pyodide/pyodide.js');
   }
   await py.runPythonAsync(fs.readFileSync('tests/motor_blocos.py','utf8'));
   await py.runPythonAsync(fs.readFileSync('tests/motor_mistos.py','utf8'));
+  await py.runPythonAsync(fs.readFileSync('tests/motor_entradas.py','utf8'));
   console.log('Motor Python: cálculos, blocos, faltantes e modelos verificados.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

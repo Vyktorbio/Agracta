@@ -8,28 +8,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <title>Estatística — Agracta</title>
 <link rel="apple-touch-icon" href="icons/icon-180.png" />
-<link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-8" />
-<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-8" />
+<link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-9" />
+<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-9" />
 <script>
-  /* MODO MOTOR — o BioEstat roda escondido e mostra SÓ o resultado (sem virar um app à parte).
-     Os dados, o modo (Geral/Forense) e o disparo vêm do Agracta.
-
-     Vale SÓ quando o Agracta abre esta página como engrenagem, com ?agracta_engine=1.
-     Este script roda antes do <style> abaixo, então no embed a casca já nasce
-     escondida — não há piscada.
-
-     A regra era incondicional, e por isso escondia a tela inteira SEMPRE. O
-     "Configurar análise" abre esta mesma página sem o parâmetro, de propósito —
-     mas só aparecia o painel de resultados. Os seletores de testemunha, modelo
-     misto e medidas repetidas vivem dentro de #card-opcoes: ninguém tinha como
-     alcançá-los. Nenhum teste pegou porque nenhum deles renderiza CSS. */
-  if(/[?&]agracta_engine=1(?:&|$)/.test(location.search)) document.documentElement.classList.add('agracta-motor');
+  /* A casca fica oculta somente na análise automática. Correção também identificada no PR 53. */
+  if(new URLSearchParams(location.search).get('agracta_engine')==='1') document.documentElement.classList.add('agracta-motor');
 </script>
 <style id="agracta-embed">
+  /* MODO MOTOR — o BioEstat roda escondido e mostra SÓ o resultado (sem virar um app à parte).
+     Os dados, o modo (Geral/Forense) e o disparo vêm do Agracta. */
   .agracta-motor .appbar, .agracta-motor .brand-footer, .agracta-motor .appnav, .agracta-motor .acao-fixa,
   .agracta-motor #card-dados, .agracta-motor #card-papeis, .agracta-motor #card-pipeline,
-  .agracta-motor #card-opcoes, .agracta-motor #card-opcoes-tempo, .agracta-motor #card-opcoes-validacao,
-  .agracta-motor #card-opcoes-forense { display:none !important; }
+  .agracta-motor #card-opcoes, .agracta-motor #card-opcoes-tempo, .agracta-motor #card-opcoes-validacao, .agracta-motor #card-opcoes-forense { display:none !important; }
   /* só o painel de resultados aparece (o app remove o .oculto quando termina) */
   .agracta-motor #card-resultados .export-acoes #btn-audit-json,
   .agracta-motor #card-resultados .export-acoes #btn-audit-verificar { display:none !important; }
@@ -371,7 +361,7 @@
 
 <script src="lib/xlsx.full.min.js"></script>
 <script src="pyodide/pyodide.js"></script>
-<script src="exemplos.js?v=bioensaio-auditoria-8"></script>
-<script src="app.js?v=bioensaio-auditoria-8"></script>
+<script src="exemplos.js?v=bioensaio-auditoria-9"></script>
+<script src="app.js?v=bioensaio-auditoria-9"></script>
 </body>
 </html>

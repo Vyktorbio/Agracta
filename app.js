@@ -7401,7 +7401,7 @@ function _calcNum(v){
   if(typeof v==='number') return isFinite(v)?v:0;
   /* normaliza separador de milhar PT-BR (ponto antes de 3 dígitos seguido de não-dígito/fim) ANTES
      de parsear — senão "1.500 g/ha" virava 1,5 (dose 1000× menor). Mesma regra do import (_protoNum). */
-  var s=String(v==null?'':v).replace(/\s/g,'').replace(/\.(?=\d{3}(?:\D|$))/g,'');
+  var s=String(v==null?'':v).replace(/\s/g,'').replace(/^([+-]?[1-9]\d{0,2}(?:\.\d{3})+)(?=,|[^\d.]|$)/,function(n){return n.replace(/\./g,'');});
   var BC=window.BioCalculoCampo;
   return BC?BC.parseNum(s):(parseFloat(s.replace(',','.'))||0);
 }
@@ -11035,7 +11035,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-9';
+var MOTOR_VERSAO='agracta-10';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;

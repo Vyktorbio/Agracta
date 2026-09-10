@@ -10,6 +10,10 @@ assert.equal(B.calculateMixture({...receita,bottleCapacity:1}).canPrepare,false)
 const input={rate:3,speed:20.2,width:11,height:3,minFlow:1.111,maxFlow:16,tankCapacity:20,minimumOperatingMl:1700,observedFlow:1.111,swathConfirmed:true,plotLength:20,plotWidth:11,preparedMl:1700};
 const d=D.calculate(input);near(d.requiredFlow,1.111);near(d.actualRate,3);near(d.minSpeed,20.2);near(d.usefulVolumeMl,66);near(d.secondsPerPass,20*3.6/20.2);
 assert.equal(d.canApply,true);
+assert.equal(D.calculate({...input,preparedMl:100}).canApply,false,'carga abaixo do mínimo não fica conferida');
+assert.equal(D.calculate({...input,preparedMl:''}).canApply,false,'carga ausente não fica conferida');
+assert.equal(D.calculate({...input,minimumOperatingMl:'1.700',minFlow:'1.111',observedFlow:'1.111'}).minimumOperatingMl,1700);
+assert.equal(D.calculate({...input,minimumOperatingMl:'1.700',minFlow:'1.111',observedFlow:'1.111'}).canApply,true,'milhar na carga e decimal na vazão');
 assert.equal(D.calculate({...input,speed:10}).canApply,false);
 assert.equal(D.calculate({...input,observedFlow:''}).status,'pendente');
 assert.equal(D.calculate({...input,minimumOperatingMl:''}).minimumOperatingMl,null);
