@@ -120,6 +120,11 @@ def _analisar(dados, papeis, opcoes=None):
                if not ausente(raw) and not np.isfinite(v)]
     if invalidas:
         raise ValueError('Resposta inválida nas linhas '+', '.join(invalidas[:8])+'. Corrija o texto ou valor não finito; somente ausências podem ser excluídas.')
+    for papel in ('dose','n_total'):
+        if papeis.get(papel):
+            valores,_=detect._numerico(dados[papeis[papel]])
+            if any(not ausente(y) and not np.isfinite(v) for y,v in zip(resp,valores)):
+                raise ValueError('Há valor não numérico ou não finito na coluna '+str(papeis[papel])+'. Corrija a entrada; nenhuma resposta observada foi excluída.')
     fatores_vals = [dados[f] for f in fatores_cols]
     dinfo = detect.detectar_desenho(dose=dose, fatores=fatores_vals, bloco=bloco)
 

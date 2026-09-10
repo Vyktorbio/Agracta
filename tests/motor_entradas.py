@@ -19,6 +19,9 @@ assert analisar(dados,{'resposta':'y','fatores':['t'],'tipo_resposta':'continua'
 eventos=[0,1,0,1,0,1,1,1,0,0,0,1]
 det=detectar_resposta(eventos,n_total=[30]*12)
 assert det['tipo']=='binomial' and len(det['n_total'])==12
+for total in ('abc',np.inf,None):
+    rejeita=analisar({'y':eventos,'n':[total]+[30]*11,'t':t},{'resposta':'y','n_total':'n','fatores':['t']})
+    assert rejeita['ok'] is False, 'total inválido não pode excluir uma resposta observada'
 rel=analisar({'y':eventos,'n':[30]*12,'t':t},{'resposta':'y','n_total':'n','fatores':['t']})
 assert rel['ok'] and rel['deteccao']['tipo_resposta']=='binomial'
 for i,nome in enumerate(['T1','T2','T3']):
