@@ -302,6 +302,10 @@
     var carrier=String(input.carrier||"Água").trim()||"Água";
 
     if(!comps.length)throw new Error("Nenhum componente para calcular.");
+    comps=comps.map(function(c){return Object.assign({},c,{
+      valor:c.valor!=null?c.valor:c.dose,
+      unidade:normalizeDoseUnit(c.unidade||c.unit||c.type)
+    });});
     comps.forEach(function(c){
       var un=normalizeDoseUnit(c.unidade);
       if(DOSE_UNITS.indexOf(un)<0)throw new Error('Unidade não reconhecida em '+(c.nome||'componente')+'.');
