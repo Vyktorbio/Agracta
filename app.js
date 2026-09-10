@@ -10115,6 +10115,51 @@ function consumoConferir(qid, sid, apid){
 /* ===================== ANÁLISE ESTATÍSTICA (BioEstat embutido em estatistica/) =====================
    Monta a matriz longa (Tratamento/Repeticao/Variavel/Valor + contexto) da avaliação do estudo,
    passa via localStorage e abre o BioEstat num iframe. Modo 'analise' (Geral) ou 'forense'. */
+/* ===== O EIXO DO TEMPO DO ESTUDO ==========================================
+   Bioensaio de bancada lê em HORAS — knockdown a 2, 12 e 24 HAT — e as três
+   leituras caem no MESMO DIA. Pela data elas são o mesmo ponto: a tabela que
+   ia para o motor levava `Data_avaliacao` e mais nada, então as três viravam
+   36 linhas indistinguíveis e o modo Tempo ficava sem o eixo que é a razão de
+   ele existir. O dado sempre esteve lá, em `momento:{valor,unidade}`.
+
+   A unidade sai como o ensaio foi lido: se TODA avaliação declara HAT, o eixo
+   vai em horas (é assim que se lê uma CL/TL de choque); senão vai em dias,
+   contados da primeira avaliação — que é o que o campo espera.
+
+   Devolve null quando não há eixo: um ponto só não é tempo, e mandar a coluna
+   assim mesmo faria o motor aceitar uma curva de um ponto. */
+function _bioestatEixoTempo(study){
+  var avs=(study&&study.avaliacoes||[]).filter(Boolean);
+  if(avs.length<2) return null;
+  var datas=avs.map(function(a){ return pD(isoToBR(a.data))||pD(a.data); });
+  var base=null; datas.forEach(function(d){ if(d&&(!base||d<base)) base=d; });
+  var soHAT=avs.every(function(a){
+    return a.momento && a.momento.unidade==='HAT' &&
+           isFinite(parseFloat(String(a.momento.valor).replace(',','.')));
+  });
+  var mapa={}, distintos={};
+  avs.forEach(function(a,i){
+    var v;
+    if(soHAT) v=avMomento(a,null).valor;
+    else if(a.momento && (a.momento.unidade==='HAT'||a.momento.unidade==='DAT')) v=avMomento(a,null).dias;
+    else v=(datas[i]&&base)?daysBetween(base,datas[i]):0;
+    if(!isFinite(v)) v=0;
+    mapa[a.id||a.data]=v; distintos[String(v)]=1;
+  });
+  if(Object.keys(distintos).length<2) return null;
+  return { valores:mapa, unidade:(soHAT?'HAT':'dias') };
+}
+/* n de mortos/afetados e N de avaliados existem só na variável do tipo RAZÃO
+   (app.js: "Lança n (mortos/afetados) e N (avaliados)"). O modo Tempo conta
+   SOBREVIVENTES, então o que viaja é N e N-n. */
+function _bioestatContagem(av,v,key){
+  if(_avTipo(av,v)!=='razao') return null;
+  var cel=_avCel(av,key,v,false); if(!cel) return null;
+  var n=_numBR(cel.n,NaN), N=_numBR(cel.N,NaN);
+  if(!isFinite(n)||!isFinite(N)||!(N>0)) return null;
+  if(n<0) n=0; if(n>N) n=N;
+  return { total:N, vivos:N-n };
+}
 function _bioestatAoa(qid, study){
   var q=data[qid]||{};
   var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
@@ -10127,17 +10172,29 @@ function _bioestatAoa(qid, study){
      diferentes, a análise manual e a automática partiriam de dados diferentes —
      e a divergência apareceria só no relatório. */
   var serie=null; try{ serie=_doseSerieDoEstudo(study); }catch(e){}
+  var eixo=null; try{ eixo=_bioestatEixoTempo(study); }catch(e){}
+  var temRazao=(study.avaliacoes||[]).some(function(a){
+    return (a.variaveis||[]).some(function(v){ return _avTipo(a,v)==='razao'; });
+  });
   var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'];
   if(serie) header.push('Dose');
+  if(eixo) header.push('Tempo');
+  if(temRazao) header.push('N_total','N_vivos');
   var rows=[header];
   (study.avaliacoes||[]).forEach(function(a){
     (a.variaveis||[]).forEach(function(v){
       trats.forEach(function(t){
         for(var r=1;r<=reps;r++){
-          var val=_avNota(a,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v);
+          var key=_avRowKey(t.id,r);
+          var val=_avNota(a,{key:key,tratId:t.id,rep:r},v);
           if(val==null||String(val).trim()==='') continue;
           var linha=[locNome, qn, studyCultura(study,q), (study.codigo||study.nome||study.id), (isoToBR(a.data)||a.data||''), (a.tipo||''), (a.bbch||''), t.id, r, (t.produto||''), v, val];
           if(serie) linha.push(serie.doses[t.id]!=null?serie.doses[t.id]:'');
+          if(eixo){ var tv=eixo.valores[a.id||a.data]; linha.push(tv==null?'':tv); }
+          if(temRazao){
+            var c=_bioestatContagem(a,v,key);
+            linha.push(c?c.total:'', c?c.vivos:'');
+          }
           rows.push(linha);
         }
       });
@@ -11035,7 +11092,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-10';
+var MOTOR_VERSAO='agracta-11';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -14343,6 +14400,45 @@ function _avTrats(){ var q=data[curV]||{}, st=(q.estudos||[]).find(function(s){r
 
 /* Grava um campo do BRUTO (n, N ou sub-amostra sN) e recalcula o derivado da célula.
    Devolve o valor já normalizado para devolver ao input. */
+/* ===== O N DA PARCELA SOBREVIVE À AVALIAÇÃO ================================
+   Numa razão n/N o N é o DENOMINADOR: quantos indivíduos aquela parcela tem.
+   Em ensaio de coleta — um ramo por parcela, cada ramo com o seu número de
+   insetos — esse número é propriedade DA PARCELA, não da leitura: vale para
+   todas as avaliações seguintes.
+
+   A grade nova herdava variáveis, tipos e varcfg da avaliação anterior, mas
+   `bruto` nascia do `av.bruto` vazio — e o N por parcela mora exatamente ali.
+   Sobrava só o N padrão da variável (varcfg.N), que a tela pintava em todas as
+   linhas: quem lançou 17, 23 e 19 via os três virarem 20 na leitura seguinte,
+   e o percentual saía sobre o denominador errado.
+
+   Herda SÓ o N. O n (mortos/afetados) é a leitura desta avaliação e tem de ser
+   lançado — repetir o n anterior seria inventar dado. A avaliação mais recente
+   ganha, e nada é sobrescrito: N já preenchido nesta grade fica como está. */
+function _avHerdarN(study, av, grid){
+  if(!study||!grid||!grid.bruto) return;
+  var todas=(study.avaliacoes||[]).filter(Boolean), alvo=todas.indexOf(av);
+  var antes=todas.filter(function(x,i){
+    if(x===av) return false;
+    return (alvo>=0) ? (i<alvo) : (String(x.data||'')<=String(av&&av.data||''));
+  });
+  if(!antes.length) return;
+  (grid.variaveis||[]).forEach(function(v){
+    if(_avTipo(grid,v)!=='razao') return;
+    for(var i=antes.length-1;i>=0;i--){          /* da mais recente para trás */
+      var fonte=antes[i].bruto||{};
+      Object.keys(fonte).forEach(function(key){
+        var cel=fonte[key]&&fonte[key][v];
+        var N=cel&&cel.N;
+        if(N==null||String(N).trim()==='') return;
+        if(!grid.bruto[key]) grid.bruto[key]={};
+        if(!grid.bruto[key][v]) grid.bruto[key][v]={};
+        var atual=grid.bruto[key][v].N;
+        if(atual==null||String(atual).trim()==='') grid.bruto[key][v].N=String(N);
+      });
+    }
+  });
+}
 function _avWriteBruto(key,v,campo,val){
   var cfg=_avCfg(_avGrid,v), cel=_avCel(_avGrid,key,v,true);
   var s=String(val==null?'':val).trim().replace(',','.');
@@ -15348,6 +15444,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
     varcfg:avCfg,
     bruto:JSON.parse(JSON.stringify(av.bruto||{}))
   };
+  _avHerdarN(study, av, _avGrid);
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
   var bbchList=bbchListDaQuadra(curV, studyCultura(study,q));
