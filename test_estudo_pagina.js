@@ -15,8 +15,22 @@ change('[data-ep="assessment"]','A0');assert.deepEqual(qa('.ep-rank').map(x=>x.t
 change('[data-ep="variable"]',qa('[data-ep="variable"] option')[1].value);assert.match(q('.ep-ranking li b').textContent,/T3/);assert.equal(JSON.stringify(w.data),before);
 change('[data-ep="variable"]',qa('[data-ep="variable"] option')[0].value);
 if(process.env.EP_PREVIEW){for(const file of ['integracoes.css','estudo-pagina.css']){const style=d.createElement('style');style.textContent=fs.readFileSync(file,'utf8');d.head.appendChild(style);}fs.writeFileSync(process.env.EP_PREVIEW,dom.serialize());}
-s.avaliacoes[2].data='';w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(qa('.ep-line circle').length,6);assert.match(q('.ep-chart').textContent,/sem data/);
+s.avaliacoes[2].data='';w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(qa('.ep-line circle').length,6);assert.match(q('.ep-line').closest('.ep-chart').textContent,/sem data/);
 s.avaliacoes=[];w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.match(q('#ep-charts-body').textContent,/Ainda não há resultados/);
 s.codigo='<img src=x onerror=alert(1)>';w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(qa('.ep-page img').length,0);
-w.close();console.log('Página do estudo: abertura, médias, última data, empates, sentido, valores zero, ausência de data, XSS e leitura sem mutação OK.');
+// Uma repetição e grade parcial produzem valores descritivos e Abbott.
+w.eval(src.match(/function _pctCtrl\([^]*?\n}/)[0]);
+s.codigo='Ensaio único';s.numRepeticoes=1;s.avaliacoes=[{id:'U1',data:'2026-09-10',variaveis:['Severidade'],tipos:{Severidade:'pct'},notas:{T1R1:{Severidade:40},T2R1:{Severidade:10},T3R1:{Severidade:0}}}];
+const single=JSON.stringify(w.data);w.abrirConhecimento({qid:'Q1',sid:'S1'});
+assert.equal(qa('.ep-grouped .ep-bar').length,3);assert.deepEqual(qa('.ep-grouped .ep-bar').map(x=>Number(x.dataset.value)),[40,10,0]);
+assert.match(q('.ep-grouped figcaption').textContent,/Uma repetição/);
+change('[data-ep="barMetric"]','controle');assert.deepEqual(qa('.ep-grouped .ep-bar').map(x=>Number(x.dataset.value)),[75,100]);
+q('.ep-grouped .ep-bar').dispatchEvent(new w.MouseEvent('click',{bubbles:true}));assert.match(q('.ep-bar-detail').textContent,/Abbott: 75 %.*n = 1/);
+assert.equal(JSON.stringify(w.data),single);
+s.numRepeticoes=4;w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.deepEqual(qa('.ep-grouped .ep-bar').map(x=>Number(x.dataset.n)),[1,1]);
+s.avaliacoes[0].notas.T1R1.Severidade=0;w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(qa('.ep-grouped .ep-bar').length,0);assert.equal(qa('.ep-bar-missing').length,3);
+// Páginas de alvo mantêm um gráfico independente por estudo.
+const other=JSON.parse(JSON.stringify(s));other.id='S2';other.codigo='Outro estudo';w.data.Q1.estudos.push(other);
+w.abrirConhecimento({aba:'alvos'});q('[data-con="selecionar"]').click();await new Promise(r=>setTimeout(r,0));assert.equal(qa('.ep-comparison').length,2);
+w.close();console.log('Barras agrupadas: uma repetição, zero, Abbott, grade parcial e estudos separados OK.');console.log('Página do estudo: abertura, médias, última data, empates, sentido, valores zero, ausência de data, XSS e leitura sem mutação OK.');
 })().catch(e=>{console.error(e);process.exit(1)});

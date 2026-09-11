@@ -41,6 +41,50 @@ function lineChart(rows){
  if(dated.length<rows.length)svg+='<p class="con-note">Resultados sem data permanecem nas tabelas e no ranking, mas não entram na curva.</p>';
  return svg;
 }
+/* Barras agrupadas: cada avaliação conserva seu próprio valor e testemunha. */
+function groupedChart(s,rows,metric){
+ if(!rows.length)return empty('Ainda não há resultados para este gráfico.');
+ var control=metric==='controle', evs=evaluations(rows), ts=s.tratamentos.filter(function(t){return rows.some(function(r){return r.tratamento===t.id;});});
+ var value=function(r){return r?(control?r.controle:r.media):null;};
+ var vals=rows.map(value).filter(function(v){return v!==null&&Number.isFinite(v);});
+ var lo=Math.min(0,...vals),hi=Math.max(0,...vals);if(hi===lo)hi=lo+1;
+ var step=(hi-lo)/5,top=hi+step*.5,bottom=lo<0?lo-step*.5:0;
+ var bw=46,gap=5,groupW=Math.max(180,evs.length*(bw+gap)+30),width=86+ts.length*groupW+22,height=465;
+ var y=function(v){return 316-(v-bottom)/(top-bottom)*260;};
+ function whyMissing(t,av,r){
+  if(t.testemunha)return 'Testemunha de referência';
+  if(!r)return 'Sem valor registrado para este tratamento nesta avaliação';
+  var ref=rows.find(function(x){return x.avaliacao===av.avaliacao&&x.testemunha;});
+  if(!ref)return 'Abbott indisponível: sem testemunha com valor nesta avaliação';
+  if(r.sentido==='maior'&&r.tipo==='contagem')return 'Abbott indisponível: mortalidade em contagem sem denominador';
+  if(r.sentido!=='maior'&&ref.media<=0)return 'Abbott indisponível: testemunha menor ou igual a zero';
+  if(r.sentido==='maior'&&(ref.media<0||ref.media>=100))return 'Abbott indisponível: testemunha fora do intervalo de 0 a menos de 100%';
+  return 'Abbott indisponível: correção fora dos limites válidos do método';
+ }
+ var fill=function(i){return 'hsl(32, '+(66+i/Math.max(1,evs.length-1)*18)+'%, '+(75-i/Math.max(1,evs.length-1)*45)+'%)';};
+ var title=control?'Controle por Abbott (%) por tratamento e data':rows[0].variavel+' por tratamento e data';
+ var svg='<svg class="ep-group-svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+e(title)+'"><title>'+e(title)+'</title><desc>Cada grupo é um tratamento e cada cor é uma avaliação. Toque em uma barra para consultar valor, data e número de repetições.</desc>';
+ for(var k=0;k<=5;k++){var v=lo+step*k;svg+='<line class="ep-grid" x1="74" x2="'+(width-16)+'" y1="'+y(v)+'" y2="'+y(v)+'"/><text x="64" y="'+(y(v)+5)+'" text-anchor="end">'+num(v)+'</text>';}
+ svg+='<text x="74" y="25">'+e(control?'Controle por Abbott (%)':rows[0].variavel+(unit(rows[0])?' ('+unit(rows[0])+')':''))+'</text><line class="ep-baseline" x1="74" x2="'+(width-16)+'" y1="'+y(0)+'" y2="'+y(0)+'"/>';
+ function wrap(text,max){var words=String(text||'').split(/\s+/),out=[],line='';words.forEach(function(word){if((line+' '+word).trim().length>max&&line){out.push(line);line='';}while(word.length>max){if(line){out.push(line);line='';}out.push(word.slice(0,max));word=word.slice(max);}line+=(line?' ':'')+word;});if(line)out.push(line);return out;}
+ ts.forEach(function(t,ti){var gx=86+ti*groupW,offset=(groupW-evs.length*(bw+gap))/2;
+  evs.forEach(function(av,ai){var r=rows.find(function(r){return r.tratamento===t.id&&r.avaliacao===av.avaliacao;}),v=value(r),x=gx+offset+ai*(bw+gap),missing=v===null||!Number.isFinite(v);
+   var detail=t.id+' · '+t.produto+' · '+label(av)+' · '+(missing?(control?whyMissing(t,av,r):'Sem valor registrado'):(control?'Abbott: ':r.n===1?'Valor registrado: ':'Média: ')+num(v)+' '+(control?'%':unit(r)))+(r?' · n = '+r.n:'');
+   if(missing){svg+='<text class="ep-bar-missing" x="'+(x+bw/2)+'" y="'+(y(0)-10)+'" text-anchor="middle" tabindex="0" data-ep-detail="'+e(detail)+'">'+(control&&t.testemunha?'Ref.':'—')+'<title>'+e(detail)+'</title></text>';return;}
+   var barY=Math.min(y(0),y(v)),barH=Math.abs(y(0)-y(v));
+   svg+='<g class="ep-bar" tabindex="0" data-ep-detail="'+e(detail)+'" data-value="'+v+'" data-n="'+r.n+'" aria-label="'+e(detail)+'"><title>'+e(detail)+'</title><rect x="'+x+'" y="'+barY+'" width="'+bw+'" height="'+barH+'" fill="'+fill(ai)+'"/><rect class="ep-bar-hit" x="'+x+'" y="'+(barH<8?y(0)-8:barY)+'" width="'+bw+'" height="'+Math.max(16,barH)+'" fill="transparent"/><text x="'+(x+bw/2)+'" y="'+(v<0?y(v)+18:y(v)-9)+'" text-anchor="middle">'+num(v)+'</text></g>';
+  });
+  var lines=[t.id].concat(wrap(t.produto,Math.max(18,Math.floor(groupW/8))).slice(0,3)).concat(wrap(t.dose||'',Math.max(18,Math.floor(groupW/8))).slice(0,2));
+  lines.forEach(function(line,i){svg+='<text class="ep-group-label" x="'+(gx+groupW/2)+'" y="'+(343+i*19)+'" text-anchor="middle">'+e(line)+'</text>';});
+ });
+ svg+='</svg>';
+ var ns=rows.map(function(r){return r.n;}),minN=Math.min(...ns),maxN=Math.max(...ns);
+ return '<figure class="ep-grouped"><div class="ep-legend ep-date-legend">'+evs.map(function(av,i){return '<span><i style="background:'+fill(i)+'"></i>'+e(label(av))+'</span>';}).join('')+'</div><div class="ep-group-scroll" tabindex="0" role="region" aria-label="'+e(title)+'; role para os lados para ver todos os tratamentos">'+svg+'</div><output class="ep-bar-detail" aria-live="polite">Toque em uma barra para ver os detalhes. Deslize o gráfico para os lados.</output><figcaption>'+(control?'Controle calculado com a testemunha da mesma avaliação. ':'Resultados registrados por tratamento em cada avaliação. ')+(minN===maxN?'n = '+minN:'n = '+minN+' a '+maxN)+' por resultado. '+(maxN===1?'Uma repetição: cada barra mostra o resultado individual.':'Com uma repetição, mostra o valor individual; com duas ou mais, a média dos valores disponíveis.')+' Figura descritiva, sem teste de médias. Ausências não são representadas como zero.'+(control?' Ref. = testemunha. — = sem correção válida.':'')+'</figcaption></figure>';
+}
+function comparison(s,rows){
+ var gs=[];rows.forEach(function(r){var key=signature(r);if(!gs.some(function(g){return g.key===key;}))gs.push({key:key,r:r});});
+ return gs.map(function(g){return '<article class="ep-chart ep-comparison"><p class="ep-eyebrow">'+e(s.codigo)+'</p><h4>'+e(g.r.variavel)+' · resultados por data</h4>'+groupedChart(s,rows.filter(function(r){return signature(r)===g.key;}),'media')+'</article>';}).join('');
+}
 function ranking(rows){
  var rs=rows.filter(function(r){return r.avaliacao===state.assessment;}).slice(),dir=rows[0].sentido==='maior'?-1:1;
  rs.sort(function(a,b){return dir*(a.media-b.media)||String(a.tratamento).localeCompare(String(b.tratamento));});
@@ -51,7 +95,7 @@ function ranking(rows){
 function charts(){
  var gs=groups(state.s);if(!gs.length)return empty('Ainda não há resultados numéricos. Os gráficos aparecerão aqui após o registro das avaliações.');
  var rows=selected(),evs=evaluations(rows);if(!evs.some(function(r){return r.avaliacao===state.assessment;}))state.assessment=evs[evs.length-1].avaliacao;
- return '<div class="ep-controls"><label>Variável<select data-ep="variable">'+gs.map(function(g){return '<option value="'+e(g.key)+'"'+(g.key===state.variable?' selected':'')+'>'+e(g.r.variavel)+' · '+e(unit(g.r)||g.r.tipo)+' · '+(g.r.sentido==='maior'?'maior primeiro':'menor primeiro')+'</option>';}).join('')+'</select></label><label>Avaliação do ranking<select data-ep="assessment">'+evs.map(function(r){return '<option value="'+e(r.avaliacao)+'"'+(r.avaliacao===state.assessment?' selected':'')+'>'+e(label(r))+'</option>';}).join('')+'</select></label></div><div class="ep-charts"><article class="ep-chart"><p class="ep-eyebrow">EVOLUÇÃO DO ENSAIO</p><h4>'+e(rows[0].variavel)+' por data</h4>'+lineChart(rows)+'</article><article class="ep-chart"><p class="ep-eyebrow">COMPARAÇÃO DOS TRATAMENTOS</p><h4>Ranking · '+e(rows[0].variavel)+'</h4><p class="ep-caption">'+e(label(evs.find(function(r){return r.avaliacao===state.assessment;})))+'</p>'+ranking(rows)+'</article></div>';
+ return '<div class="ep-controls"><label>Variável<select data-ep="variable">'+gs.map(function(g){return '<option value="'+e(g.key)+'"'+(g.key===state.variable?' selected':'')+'>'+e(g.r.variavel)+' · '+e(unit(g.r)||g.r.tipo)+' · '+(g.r.sentido==='maior'?'maior primeiro':'menor primeiro')+'</option>';}).join('')+'</select></label><label>Avaliação do ranking<select data-ep="assessment">'+evs.map(function(r){return '<option value="'+e(r.avaliacao)+'"'+(r.avaliacao===state.assessment?' selected':'')+'>'+e(label(r))+'</option>';}).join('')+'</select></label><label>Barras por data<select data-ep="barMetric"><option value="media"'+(state.barMetric!=='controle'?' selected':'')+'>Resultado registrado</option><option value="controle"'+(state.barMetric==='controle'?' selected':'')+'>Controle por Abbott (%)</option></select></label></div><article class="ep-chart ep-comparison"><p class="ep-eyebrow">TODAS AS AVALIAÇÕES</p><h4>'+e(state.barMetric==='controle'?'Controle por Abbott (%)':rows[0].variavel)+' por tratamento e data</h4>'+groupedChart(state.s,rows,state.barMetric)+'</article><div class="ep-charts"><article class="ep-chart"><p class="ep-eyebrow">EVOLUÇÃO DO ENSAIO</p><h4>'+e(rows[0].variavel)+' por data</h4>'+lineChart(rows)+'</article><article class="ep-chart"><p class="ep-eyebrow">COMPARAÇÃO DOS TRATAMENTOS</p><h4>Ranking · '+e(rows[0].variavel)+'</h4><p class="ep-caption">'+e(label(evs.find(function(r){return r.avaliacao===state.assessment;})))+'</p>'+ranking(rows)+'</article></div>';
 }
 function rawTable(st,s){
  var rows=[];arr(st.avaliacoes).forEach(function(av,ai){s.tratamentos.forEach(function(t){for(var rep=1;rep<=Math.max(1,parseInt(st.numRepeticoes,10)||1);rep++){arr(av.variaveis).forEach(function(v){var row={key:t.id+'R'+rep,tratId:t.id,rep:rep};var value=typeof w._avNota==='function'?w._avNota(av,row,v):((av.notas||{})[row.key]||{})[v];var val=C.numero(value);rows.push([e(date(av.data))+'<small>'+e(av.hora||'')+' · '+e(av.id||'av-'+ai)+'</small>',e(t.id)+' · '+e(t.produto),'R'+rep,e(v),val===null?'—':num(val)]);});}});});
@@ -84,7 +128,9 @@ function render(s,parts){
  h+=section('historico','Histórico do estudo',(s.finalizado?'<p>Finalizado em '+e(s.finalizadoEm)+' · '+e(s.finalizadoPor||'Responsável não informado')+'</p>':'')+(audits.length?table(['Quando','Responsável','Ação'],audits.map(function(a){var dt=new Date(a.iso||a.ts);return [e(Number.isFinite(dt.getTime())?dt.toLocaleString('pt-BR'):'Sem data'),e(a.user||a.nome||'Não identificado'),e(a.action||a.acao||'Registro')];})):empty('Nenhum evento de auditoria disponível neste estudo.')));
  return h+'</div>';
 }
- document.addEventListener('change',function(ev){if(!state||!ev.target.matches('#conhecimentoOvl [data-ep]'))return;var k=ev.target.dataset.ep;if(k==='variable'){state.variable=ev.target.value;state.assessment='';}else state.assessment=ev.target.value;var el=document.getElementById('ep-charts-body');if(el){el.innerHTML=charts();var select=el.querySelector('[data-ep="'+k+'"]');if(select)select.focus();}});
+ document.addEventListener('change',function(ev){if(!state||!ev.target.matches('#conhecimentoOvl [data-ep]'))return;var k=ev.target.dataset.ep;if(k==='variable'){state.variable=ev.target.value;state.assessment='';}else if(k==='barMetric')state.barMetric=ev.target.value;else state.assessment=ev.target.value;var el=document.getElementById('ep-charts-body');if(el){el.innerHTML=charts();var select=el.querySelector('[data-ep="'+k+'"]');if(select)select.focus();}});
  document.addEventListener('click',function(ev){var link=ev.target.closest&&ev.target.closest('[data-ep-scroll]');if(link){ev.preventDefault();var el=document.getElementById(link.dataset.epScroll);if(el)el.scrollIntoView({behavior:w.matchMedia&&w.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});}});
- w.AgEstudoPagina={render:render};
+ document.addEventListener('click',showBar);document.addEventListener('focusin',showBar);
+ function showBar(ev){var bar=ev.target.closest&&ev.target.closest('#conhecimentoOvl [data-ep-detail]');if(!bar)return;var output=bar.closest('.ep-grouped').querySelector('.ep-bar-detail');if(output)output.textContent=bar.dataset.epDetail;}
+ w.AgEstudoPagina={render:render,comparar:comparison};
 })(window);
