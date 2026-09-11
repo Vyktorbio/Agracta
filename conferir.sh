@@ -231,6 +231,9 @@ else
 fi
 
 # ------------------------------------------------------------- 4. o veredito
+if [ "${CI:-}" = "true" ] && [ "$PULADOS" -gt 0 ]; then
+  avisar "CI incompleto: $PULADOS teste(s) não rodaram. Instale as dependências e execute novamente."
+fi
 printf "\n%s\n" "======================================================"
 if [ "$PROBLEMAS" -eq 0 ]; then
   printf "  %s%sPODE SUBIR.%s  Nada quebrado encontrado.\n" "$VERDE" "$NEG" "$ZERO"

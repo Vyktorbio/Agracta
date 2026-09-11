@@ -28,6 +28,8 @@
     var height=n('height','a altura de aplicação (m)',true);
     var capacity=n('tankCapacity','a capacidade do tanque (L)'),minimum=n('minimumOperatingMl','a carga mínima inicial (mL)');
     var length=n('plotLength','o comprimento da parcela (m)',true),cross=n('plotWidth','a largura da parcela (m)',true);
+    var plots=input.numPlots==null?1:n('numPlots','o número de parcelas',true);
+    if(plots!==null&&!Number.isInteger(plots))errors.push('O número de parcelas precisa ser inteiro.');
     var prepared=n('preparedMl','o volume preparado (mL)');
     if(prepared===null)pending.push('Informe o volume preparado para conferir a carga.');
     if(prepared!==null&&minimum!==null&&prepared<minimum-1e-6)errors.push('O volume preparado é menor que a carga mínima inicial.');
@@ -47,7 +49,8 @@
     var passes=width>0&&cross>0?Math.ceil(cross/width-1e-10):null;
     var routeArea=passes&&length>0?passes*width*length:null;
     var plotArea=length>0&&cross>0?length*cross:null;
-    if(prepared!==null&&plotArea>0&&rate>0&&prepared<plotArea*rate/10-1e-6)errors.push('O volume preparado não atende uma parcela na taxa informada.');
+    var totalUseful=plotArea>0&&rate>0&&plots>0?plotArea*rate*plots/10:null;
+    if(prepared!==null&&totalUseful!==null&&prepared<totalUseful-1e-6)errors.push('O volume preparado não atende todas as parcelas do tratamento na taxa informada.');
     var excess=routeArea!==null?Math.max(0,routeArea-plotArea):null;
     if(excess>1e-6) warnings.push('A faixa não encaixa na parcela. Há pulverização além dos limites; reveja rotas e bordaduras antes de aplicar.');
     var complete=!errors.length&&!pending.length&&!warnings.length;
@@ -56,6 +59,7 @@
       speedKmH:speed,speedMS:speed===null?null:speed/3.6,routeSpacingM:width,heightM:height,
       minSpeed:rate>0&&width>0&&minFlow!==null?600*minFlow/(rate*width):null,
       maxSpeed:rate>0&&width>0&&maxFlow!==null?600*maxFlow/(rate*width):null,
+      numPlots:plots,totalUsefulVolumeMl:totalUseful,
       passesPerPlot:passes,plotAreaM2:plotArea,routeAreaM2:routeArea,excessAreaM2:excess,
       routeVolumeMl:routeArea!==null&&rate>0?routeArea*rate/10:null,
       usefulVolumeMl:plotArea!==null&&rate>0?plotArea*rate/10:null,

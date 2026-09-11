@@ -1,9 +1,9 @@
 /* Service worker - cache local do app.
    App shell, ícones, fontes, bioengine e Pyodide ficam em cache para uso offline. */
-const CACHE = "bioensaio-v46-auditoria";
+const CACHE = "bioensaio-v47-auditoria";
 const SHELL = [
-  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-11", "./app.js?v=bioensaio-auditoria-11", "./exemplos.js?v=bioensaio-auditoria-11",
-  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-11",
+  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-12", "./app.js?v=bioensaio-auditoria-12", "./exemplos.js?v=bioensaio-auditoria-12",
+  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-12",
   "./fonts/inter.woff2", "./fonts/sora.woff2",
   "./lib/xlsx.full.min.js",
   "./pyodide/pyodide.js", "./pyodide/pyodide.asm.js", "./pyodide/pyodide.asm.wasm",
@@ -25,15 +25,16 @@ const SHELL = [
 ];
 
 async function cacheMatch(req) {
-  const hit = await caches.match(req);
+  const cache = await caches.open(CACHE);
+  const hit = await cache.match(req);
   if (hit) return hit;
   const url = new URL(req.url);
   if (url.search) {
     url.search = "";
-    const semBusca = await caches.match(url.href);
+    const semBusca = await cache.match(url.href);
     if (semBusca) return semBusca;
   }
-  if (req.mode === "navigate") return caches.match("./index.html");
+  if (req.mode === "navigate") return cache.match("./index.html");
   return undefined;
 }
 
@@ -41,7 +42,7 @@ self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => /^bioensaio-v/.test(k) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", (e) => {
   const req = e.request;
