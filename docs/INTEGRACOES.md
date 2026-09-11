@@ -10,6 +10,14 @@ O controle usa a função existente do aplicativo e exige testemunha explicitame
 
 Produtos ligados ao banco têm identidade pelo ID. Ativos usam a tabela ISO já embarcada. Nomes livres permanecem separados; a consulta não faz associação aproximada. Vínculos históricos confirmados no banco são respeitados sem editar estudos finalizados. Códigos cegos ocultam o nome e os ativos na consulta e na projeção do cliente.
 
+## A aba Estudos
+
+A aba lista todos os estudos do acervo com a situação de cada um — **Em execução** ou **Finalizado** — e um filtro por situação com a contagem de cada grupo. A contagem é do acervo inteiro, não do que o filtro mostra. Em execução vem primeiro: a lista é de trabalho pendente, e o arquivo vem depois. Estudos finalizados exibem a data da finalização e quem assinou.
+
+Cada estudo oferece **Abrir**, **Finalizar** ou **Reabrir** (conforme a situação) e **Excluir**. Nenhuma dessas ações é implementada aqui: cada botão fecha a consulta e chama a mesma função do aplicativo que a ficha do estudo chama, com a senha, a rubrica e o motivo que ela já exige. Uma segunda porta de exclusão, sem trilha, seria pior do que não ter botão nenhum — por isso o teste `test_conhecimento_estudos.js` verifica que a ação chamada é a do aplicativo, com o estudo certo, e que a tela de conhecimento continua apenas lendo.
+
+Estudo finalizado não pode ser excluído direto. A exclusão passa a exigir **Reabrir** antes, que pede senha e registra o motivo na auditoria — sem isso a baixa de um estudo assinado e com a estatística congelada não deixaria rastro do porquê. O aviso diz esse caminho. As demais listas de estudos (histórico da área, estudos do projeto, resultados filtrados) continuam sem botões de ação.
+
 ## Ambiente, solo, laboratório e custo
 
 - Aplicações e avaliações mostram o clima registrado, origem, leitura instantânea/resumo diário e defasagem. Chuva pós-aplicação informa cobertura e janelas parciais. NDVI é contexto da área, com a data da imagem, sem atribuição a uma parcela menor que sua resolução.
@@ -17,7 +25,7 @@ Produtos ligados ao banco têm identidade pelo ID. Ativos usam a tabela ISO já 
 - Projeto, material biológico, origem, lote/geração/passagem e método ligam laboratório e campo. São metadados auditados; não autorizam combinar estatisticamente experimentos distintos.
 - Quantidades baixadas dos lotes recebem preço na unidade registrada. A interface identifica baixas derivadas da memória de cálculo; elas não são mensurações independentes de consumo. Não há conversão entre massa e volume sem dados. Custos de equipe, equipamento e serviços podem ser registrados e estornados. Há subtotal por estudo, tratamento e aplicação; despesas gerais não são rateadas automaticamente.
 
-Contexto e custos são eventos com ID, responsável e timestamp. A sincronização une eventos por ID para preservar lançamentos concorrentes. Estudos finalizados permanecem em leitura; é preciso usar o fluxo existente de reabertura para editar.
+Contexto e custos são eventos com ID, responsável e timestamp. A sincronização une eventos por ID para preservar lançamentos concorrentes. Estudos finalizados permanecem em leitura; é preciso usar o fluxo existente de reabertura para editar ou excluir.
 
 ## Consulta do cliente
 

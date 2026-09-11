@@ -6253,6 +6253,9 @@ function saveStudy(){
 }
 
 function deleteStudy(qid,sid,skipConfirm){
+  /* Estudo finalizado esta assinado e com a estatistica congelada: apagar sem
+     passar por Reabrir deixaria a trilha sem o motivo da baixa. */
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
   requireDeletePassword('Excluir este estudo e seus resultados.', function(){
     safetyBackup('antes de excluir estudo');
     var q=data[qid];if(!q||!q.estudos)return;
@@ -12331,6 +12334,9 @@ function removeAvaliacaoV2(id){
 }
 
 function confirmDeleteStudy(qid,sid){
+  /* Estudo finalizado esta assinado e com a estatistica congelada: apagar sem
+     passar por Reabrir deixaria a trilha sem o motivo da baixa. */
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
   requireDeletePassword('Excluir este estudo e seus resultados.', function(){
     safetyBackup('antes de excluir estudo');
     var q=data[qid];
