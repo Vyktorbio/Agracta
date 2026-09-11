@@ -1,0 +1,147 @@
+/* Agracta — elevação compartilhada. Somente apresentação, sem mover o mapa,
+   redefinir z-index, transformar painéis ou interferir em controles de dados. */
+:root{
+  --depth-canvas:#101a20;
+  --depth-surface:#1b2931;
+  --depth-edge:rgba(171,208,223,.16);
+  --depth-highlight:rgba(221,244,255,.10);
+  --depth-wash:rgba(98,154,162,.075);
+  --depth-recess:rgba(0,0,0,.22);
+  --depth-raised:inset 0 1px 0 var(--depth-highlight),0 2px 3px rgba(0,0,0,.22),0 9px 18px -9px rgba(0,0,0,.55);
+  --depth-card:inset 0 1px 0 var(--depth-highlight),0 2px 4px rgba(0,0,0,.18),0 14px 26px -12px rgba(0,0,0,.48);
+  --depth-float:inset 0 1px 0 var(--depth-highlight),0 0 0 1px rgba(0,0,0,.14),0 8px 16px -8px rgba(0,0,0,.42),0 26px 60px -18px rgba(0,0,0,.64);
+  --depth-pressed:inset 0 2px 4px var(--depth-recess),inset 0 -1px 0 var(--depth-highlight);
+  --depth-green:inset 0 1px 0 rgba(255,255,255,.19),0 2px 0 #095331,0 9px 18px -7px rgba(0,0,0,.48);
+  --depth-sheen:linear-gradient(155deg,var(--depth-highlight),transparent 52%);
+  --gp-shadow:var(--depth-float);
+  --ag-card-shadow:var(--depth-card);
+}
+html.light,html.ag-depth-light{
+  --depth-canvas:#e9eef2;
+  --depth-surface:#fff;
+  --depth-edge:rgba(38,67,83,.15);
+  --depth-highlight:rgba(255,255,255,.88);
+  --depth-wash:rgba(51,118,107,.055);
+  --depth-recess:rgba(29,55,71,.12);
+  --depth-raised:inset 0 1px 0 #fff,0 2px 2px rgba(33,57,74,.09),0 7px 14px -6px rgba(33,57,74,.19);
+  --depth-card:inset 0 1px 0 #fff,0 2px 3px rgba(33,57,74,.06),0 13px 25px -11px rgba(33,57,74,.22);
+  --depth-float:inset 0 1px 0 #fff,0 0 0 1px rgba(33,57,74,.025),0 8px 18px -9px rgba(33,57,74,.20),0 26px 58px -19px rgba(33,57,74,.32);
+  --depth-pressed:inset 0 2px 4px var(--depth-recess),inset 0 -1px 0 rgba(255,255,255,.95);
+  --depth-green:inset 0 1px 0 rgba(255,255,255,.25),0 2px 0 #095331,0 9px 18px -7px rgba(20,103,67,.35);
+  --depth-sheen:linear-gradient(155deg,rgba(255,255,255,.38),transparent 52%);
+  --gp-shadow:var(--depth-float);
+  --ag-card-shadow:var(--depth-card);
+}
+/* Fundo abaixo das superfícies: o contraste de planos dá volume real à UI. */
+.sd-overlay,.today-overlay,.studies-overlay,.con-overlay{
+  background-color:var(--depth-canvas)!important;
+  background-image:radial-gradient(ellipse at 0 0,var(--depth-wash),transparent 65%)!important;
+}
+/* Nível 3: janelas, menus e ferramentas acima do mapa. Sem transform: os
+   descendentes fixos conservam sua referência ao viewport. */
+.panel,.edit-panel,.se-panel,.loc-box,.ndvi-panel,.gr-panel,.agenda-panel,
+.legend-panel,.main-menu,.loc-menu,.search-wrap,.auth-box,.calc-box,
+.ag-drawer,.ag-ndvibar,.tb-brand,.top-bar-right,.leaflet-control-zoom,
+.leaflet-popup-content-wrapper{
+  box-shadow:var(--depth-float)!important;
+  border-color:var(--depth-edge)!important;
+}
+.ag-drawer{background-image:var(--depth-sheen);box-shadow:inset 1px 0 0 var(--depth-highlight),-12px 0 24px -10px rgba(0,0,0,.22),-30px 0 60px -25px rgba(0,0,0,.28)!important}
+.auth-box,.calc-box{background-image:var(--depth-sheen)!important}
+.ag-dw-head,.panel-header,.calc-top,.se-head{border-bottom-color:var(--depth-edge)!important}
+/* Nível 2: cartões de trabalho. As cores de estado continuam vindo do módulo. */
+.study-card,.study-card-v2,.today-card,.today-sum-item,.clima-card,
+.study-plan-card,.study-dossier,.study-finalized-card,.studies-summary-card,
+.studies-dashboard-summary>div,.con-estudo,.con-btn.card,.con-painel,
+.ep-chart,.ep-stats>div,.calc-card,.calc-barrares,.calc-mem,.calclab-out,
+.bio-fast-card,.evento-item,.se-trat,.ag-item{
+  box-shadow:var(--depth-card)!important;
+  border-color:var(--depth-edge)!important;
+  background-image:var(--depth-sheen)!important;
+}
+/* Cartões dentro de cartões ficam no mesmo plano, sem empilhar sombras. */
+.con-estudo>.con-btn.card{box-shadow:none!important;background-image:none!important}
+.con-estudo{border-radius:18px}
+.con-acoes{background-image:linear-gradient(180deg,var(--depth-wash),transparent)}
+.con-painel,.ep-chart,.calc-card{border-radius:18px!important}
+.sd-meta,.sd-descricao,.study-protocol-origin,.trat-table,.con-scroll,.ep-facts{
+  box-shadow:inset 0 1px 0 var(--depth-highlight),0 3px 9px -5px var(--depth-recess)!important;
+  border-color:var(--depth-edge)!important;
+}
+.ep-hero{box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 3px 0 #0b3128,0 20px 38px -17px rgba(9,50,41,.42)!important}
+/* Nível 1: controles com uma borda iluminada e uma pequena sombra de contato. */
+.btn-sm,.btn-save,.btn-cancel,.studies-dashboard-new,.studies-dashboard-close,
+.study-filter-btn,.con-btn,.calc-copy,.calc-navb,.calc-edit,.auth-btn,
+.se-add-trat,.sd-add,.ag-dw-x,.ag-ndvi-date,.btn-tools{
+  box-shadow:var(--depth-raised)!important;
+  background-image:var(--depth-sheen)!important;
+}
+.btn-save,.auth-btn,.con-btn.ativo,.con-btn.primary,.studies-dashboard-new{
+  box-shadow:var(--depth-green)!important;
+  background-image:linear-gradient(180deg,rgba(255,255,255,.12),rgba(0,0,0,.06))!important;
+}
+.con-btn.link{box-shadow:none!important;background-image:none!important}
+.top-bar .btn-sm{box-shadow:none!important;background-image:none!important}
+.top-bar .btn-sm.active,.top-bar .btn-tools.on{box-shadow:var(--depth-pressed)!important}
+.ag-row{border-radius:12px}
+.ag-row.on{box-shadow:inset 0 1px 0 var(--depth-highlight),0 3px 8px -5px var(--depth-recess)}
+.ag-row .ag-chk{box-shadow:var(--depth-pressed)}
+.ag-row .ag-chk::after{box-shadow:0 1px 3px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.35)}
+/* Campos rebaixados com contorno legível. Não inclui caixas de seleção,
+   controles deslizantes, arquivos ou superfícies de desenho. */
+.auth-i,.calc-inp,.calc-sel,.calc-inpi,.calc-seli,
+.se-field :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea),
+.con-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea),
+.study-filter-search input{
+  box-shadow:var(--depth-pressed)!important;
+  border-color:var(--depth-edge)!important;
+}
+:is(.auth-i,.calc-inp,.calc-sel,.con-shell input,.con-shell select,.con-shell textarea):focus-visible{
+  outline:3px solid #328967!important;outline-offset:2px!important;
+  box-shadow:var(--depth-pressed)!important;
+}
+/* A consulta do cliente compartilha os cartões, sem carregar o casco do mapa. */
+html.ag-depth-light:not(.ag-depth-stat) body{background:var(--depth-canvas)}
+.cli-report{background:var(--depth-surface);border:1px solid var(--depth-edge);border-radius:20px;padding:22px;box-shadow:var(--depth-card)}
+.cli-report h2{border-top:0;padding-top:0}
+/* Estatística é um documento próprio, inclusive quando aberta em iframe.
+   Somente seu casco recebe elevação; matrizes e gráficos mantêm geometria. */
+.ag-depth-stat{--bg:var(--depth-canvas);--shadow:var(--depth-float);--shadow-sm:var(--depth-card)}
+.ag-depth-stat body{background:radial-gradient(ellipse at top left,var(--depth-wash),transparent 65%),var(--depth-canvas)}
+.ag-depth-stat :is(.appnav,.card,.custodia-panel,.painel,.papel-item,.preview){
+  box-shadow:var(--depth-card);border-color:var(--depth-edge);border-radius:16px;
+}
+.ag-depth-stat .card{background-image:var(--depth-sheen)}
+.ag-depth-stat :is(.btn,.btn-principal,.btn-mini,.btn-sec,.tab,.analysis-mode,.appnav-item,.install-btn,.selftest-btn){box-shadow:var(--depth-raised);background-image:var(--depth-sheen)}
+.ag-depth-stat :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea){box-shadow:var(--depth-pressed)}
+/* Retorno tátil sem deslocar os painéis ou o mapa. */
+:is(.btn-sm,.btn-save,.btn-cancel,.con-btn,.calc-copy,.calc-navb,.auth-btn):not(:disabled):active{
+  box-shadow:var(--depth-pressed)!important;
+}
+.ag-depth-stat :is(.btn,.btn-principal,.tab,.analysis-mode):not(:disabled):active{box-shadow:var(--depth-pressed)}
+:is(.btn-sm,.btn-save,.btn-cancel,.con-btn,.calc-copy,.calc-navb,.auth-btn):disabled{
+  box-shadow:none!important;background-image:none!important;cursor:not-allowed;
+}
+@media(hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
+  .con-btn,.study-card-v2,.today-card,.calc-copy,.calc-navb,.ag-row{transition:box-shadow .18s ease,border-color .18s ease,background-color .18s ease}
+  .con-btn:not(.link):not(:disabled):hover,.study-card-v2:hover,.today-card:hover{box-shadow:var(--depth-float)!important}
+  .ag-row:not(.on):hover{box-shadow:var(--depth-raised);background-image:var(--depth-sheen)}
+}
+@media(max-width:600px){
+  .con-estudo,.con-painel,.ep-chart,.calc-card,.cli-report{border-radius:15px!important}
+  .cli-report{padding:16px}
+  /* Sem desfoque adicional no celular: as superfícies permanecem leves. */
+  .ag-depth-stat :is(.card,.painel,.preview){border-radius:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .con-btn,.study-card-v2,.today-card,.calc-copy,.calc-navb,.ag-row{transition:none!important}
+}
+@media(forced-colors:active){
+  .con-estudo,.con-btn,.panel,.ag-drawer,.calc-card,.ep-chart{border:1px solid CanvasText!important;box-shadow:none!important;background-image:none!important}
+}
+/* Relatórios impressos continuam limpos e sem sombras que gastam tinta. */
+@media print{
+  *,*::before,*::after{box-shadow:none!important;text-shadow:none!important}
+  .sd-overlay,.today-overlay,.studies-overlay,.con-overlay,.ag-depth-stat body,.cli-report{background:#fff!important}
+  .con-btn,.con-estudo,.ep-chart,.calc-card,.ag-depth-stat .card{background-image:none!important}
+}
