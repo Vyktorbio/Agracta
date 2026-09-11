@@ -194,7 +194,7 @@
     if(!selected)return vazio('Este registro não está mais disponível.');
     if(view.aba==='produtos')op.produto=selected.key;else if(view.aba==='alvos')op.alvo=selected.nome;else op.projeto=selected.nome;
     var base=C.selecionar(acervo,op),xs=C.selecionar(acervo,Object.assign({},op,view.filtro));
-    return bot('voltar','‹ '+(view.aba==='produtos'?'Produtos':view.aba==='alvos'?'Alvos':'Projetos'))+'<h2>'+e(selected.nome)+'</h2>'+filtros(base)+listaEstudos(xs)+tabela(C.resultados(xs,Object.assign({},op,view.filtro)));
+    return bot('voltar','‹ '+(view.aba==='produtos'?'Produtos':view.aba==='alvos'?'Alvos':'Projetos'))+'<h2>'+e(selected.nome)+'</h2>'+filtros(base)+listaEstudos(xs)+(w.AgEstudoPagina?xs.map(function(s){return w.AgEstudoPagina.comparar(s,C.resultados([s],Object.assign({},op,view.filtro)));}).join(''):'')+tabela(C.resultados(xs,Object.assign({},op,view.filtro)));
   }
   function climaHtml(c){
     if(!c)return '<span>Sem clima registrado</span>';

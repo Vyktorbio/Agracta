@@ -5,3 +5,20 @@
 @media print{body:has(.ep-page)>*:not(#conhecimentoOvl){display:none!important}.ep-hero{background:#fff;color:#111;box-shadow:none;border:1px solid #aaa}.ep-hero .ep-eyebrow,.ep-location{color:#333}.ep-top,.ep-nav{display:none!important}.ep-page .con-scroll{max-height:none;overflow:visible}.ep-charts{grid-template-columns:1fr}.ep-chart{break-inside:avoid;box-shadow:none}.ep-page .con-scroll thead{position:static}}
 .con-shell:has(.ep-page)>.con-head{border-bottom:1px solid var(--border,#d5e1da);padding-bottom:12px}.con-shell:has(.ep-page)>.con-head h1{font-size:1rem;margin:4px 0 0}.con-shell:has(.ep-page)>nav{display:none}
 .ep-photo{display:block;max-width:100%;max-height:440px;object-fit:contain;border-radius:12px;margin-top:16px}
+/* A prancha por data conserva tamanho legível: rolagem, em vez de reduzir
+   onze tratamentos a barras de poucos pixels na tela do celular. */
+.ep-comparison{margin:18px 0;min-width:0;max-width:100%}
+.ep-grouped{margin:16px 0 0;min-width:0}
+.ep-group-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;border:1px solid var(--border,#d5e1da);border-radius:12px;padding:8px 0;margin:16px 0}
+.ep-group-svg{display:block;max-width:none;background:var(--surface,#fff)}
+.ep-group-svg text{font:14px Inter,system-ui,sans-serif;fill:var(--text,#1d3028)}
+.ep-group-svg .ep-group-label{font-size:14px}
+.ep-baseline{stroke:var(--text-2,#617468);stroke-width:1}
+.ep-bar{cursor:pointer}.ep-bar:hover>rect:first-of-type,.ep-bar:focus>rect:first-of-type{stroke:var(--text,#1d3028);stroke-width:2}
+.ep-bar:focus-visible{outline:2px solid #328967;outline-offset:3px}
+.ep-date-legend{font-size:.875rem;gap:10px 18px}
+.ep-date-legend i{border:1px solid rgba(0,0,0,.12);width:12px;height:12px}
+.ep-bar-detail{display:block;min-height:44px;font-size:.9375rem;line-height:1.5;padding:10px 12px;border-radius:10px;background:var(--bg,#edf3ef);overflow-wrap:anywhere}
+.ep-grouped figcaption{font-size:.9375rem;line-height:1.6;color:var(--text-2,#587165);margin:14px 0 0}
+@media(min-width:900px){.ep-controls{grid-template-columns:repeat(3,minmax(0,1fr));max-width:none}}
+@media print{.ep-group-scroll{overflow:visible;border:0}.ep-group-svg{width:100%;height:auto;max-width:100%}.ep-bar-detail{display:none}}
