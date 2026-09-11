@@ -2151,7 +2151,7 @@ function cloudState(){
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
     var s=document.createElement('style'); s.id='cloudBadgeCss';
-    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
+    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 14px/1.4 -apple-system,system-ui,sans-serif;max-width:calc(100vw - 32px);box-sizing:border-box;text-align:center;overflow-wrap:anywhere;letter-spacing:.3px;padding:10px 14px;border-radius:16px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
@@ -16031,6 +16031,7 @@ function safetySnap(){
   try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
   try{ if(typeof ensureCfgTS==='function') ensureCfgTS(); }catch(e){}
   try{ if(typeof ensureItens==='function') ensureItens(); }catch(e){}
+  try{ if(typeof ensureNotas==='function') ensureNotas(); }catch(e){}
   return { ts:Date.now(),
     data:(typeof data!=='undefined'?data:{}),
     qgeo:(typeof QGEO!=='undefined'?QGEO:null),
@@ -16045,14 +16046,19 @@ function safetySnap(){
     itens:(typeof ITENS!=='undefined'?ITENS:{}),
     itensts:(typeof ITENS_TS!=='undefined'?ITENS_TS:{}),
     _deletedItens:(typeof _delItens!=='undefined'?_delItens:{}),
-    randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[]) };
+    randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[]),
+    georefts:(typeof GEOREF_TS!=='undefined'?GEOREF_TS:0),
+    notas_campo:(typeof NOTAS_CAMPO!=='undefined'?NOTAS_CAMPO:[]),
+    _deletedQuadras:(typeof _delQuadras!=='undefined'?_delQuadras:{}),
+    _deletedLocais:(typeof _delLocais!=='undefined'?_delLocais:{}),
+    _deletedNotas:(typeof _delNotas!=='undefined'?_delNotas:{}) };
 }
 function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
   Object.keys(d).forEach(function(k){ (d[k].estudos||[]).forEach(function(e){ est++; ap+=(e.aplicacoes||[]).length; av+=(e.avaliacoes||[]).length; }); });
   return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0),
            itens:(s.itens?Object.keys(s.itens).length:0), estudos:est, aplic:ap, aval:av };
 }
-function safetyList(){ try{ return JSON.parse(localStorage.getItem('iracema-safety')||'[]'); }catch(e){ return []; } }
+function safetyList(){ try{ var arr=JSON.parse(localStorage.getItem('iracema-safety')||'[]'); return Array.isArray(arr)?arr:[]; }catch(e){ return []; } }
 function safetyBackup(motivo){
   try{
     var arr=safetyList();
@@ -16060,17 +16066,29 @@ function safetyBackup(motivo){
     snap.motivo=motivo||''; snap.counts=_safetyCounts(snap);
     arr.push(snap);
     while(arr.length>10) arr.shift();
-    try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); }
-    catch(e){ while(arr.length>2){ arr.shift(); try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); break; }catch(e2){} } }
+    while(arr.length){
+      try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); return true; }
+      catch(e){ arr.shift(); }
+    }
   }catch(e){}
+  return false;
 }
 function safetyApply(snap){
-  if(!snap) return;
-  safetyBackup('antes de restaurar');
+  if(!snap || !snap.data || typeof snap.data!=='object' || Array.isArray(snap.data))return false;
+  if(!safetyBackup('antes de restaurar')){
+    alert('Não foi possível guardar o estado atual neste aparelho. Exporte os dados e libere espaço antes de restaurar.');
+    return false;
+  }
   try{
     if(snap.data){ data=snap.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
     if(snap.qgeo){ QGEO=snap.qgeo; if(typeof saveQGEO==='function') saveQGEO(); }
-    if(snap.georef){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+    if(Object.prototype.hasOwnProperty.call(snap,'georef')){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+    if(snap.georefts!=null){ GEOREF_TS=snap.georefts; if(typeof saveGeorefTS==='function')saveGeorefTS(); }
+    if(Array.isArray(snap.notas_campo)){ NOTAS_CAMPO=snap.notas_campo; localStorage.setItem(NOTAS_CAMPO_KEY,JSON.stringify(NOTAS_CAMPO)); }
+    if(snap._deletedNotas){ _delNotas=snap._deletedNotas; localStorage.setItem(DELN_KEY,JSON.stringify(_delNotas)); }
+    if(snap._deletedQuadras)_delQuadras=snap._deletedQuadras;
+    if(snap._deletedLocais)_delLocais=snap._deletedLocais;
+    if(typeof saveDelTombs==='function')saveDelTombs();
     if(snap.locais){ LOCAIS=snap.locais; if(typeof saveLocais==='function') saveLocais(); }
     if(snap.qlocal){ QLOCAL=snap.qlocal; if(typeof saveQLocal==='function') saveQLocal(); }
     if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
@@ -16088,14 +16106,16 @@ function safetyApply(snap){
     if(Array.isArray(snap.randomizacoes)){ RZLIB=normalizeRZLib(snap.randomizacoes); saveRZLib(); }
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
     _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
-    save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
-  }catch(e){ alert('Erro ao restaurar: '+e.message); }
+    var restored=save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+    if(restored===false){ alert('A restauração ainda não foi confirmada no armazenamento local. Mantenha o app aberto e confira o aviso de gravação.'); return false; }
+    return true;
+  }catch(e){ alert('Erro ao restaurar: '+e.message); return false; }
 }
 /* ===================== HISTÓRICO DA NUVEM (restaurar versões) ===================== */
 function _chShell(inner){
   return '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Histórico da nuvem</b><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cada gravação guarda a versão anterior na nuvem. Restaurar guarda o estado atual antes — nada se perde.</div>'+
+    '<div style="font-size:14px;color:#8aa88a;margin-top:4px">'+(window.AgractaFirebase?'A sincronização guarda o estado atual. As cópias de recuperação deste aparelho ficam em Backups locais.':'Consulte as versões disponíveis antes de restaurar.')+'</div>'+
     inner+
     '<div style="margin-top:12px"><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
   '</div>';
@@ -16105,6 +16125,10 @@ function openCloudHistory(){
   if(!m){ m=document.createElement('div'); m.id='chModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   m.style.display='flex';
   m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
+  if(window.AgractaFirebase){
+    m.innerHTML=_chShell('<p>O histórico de versões na nuvem ainda não está disponível neste ambiente.</p><button onclick="document.getElementById(\'chModal\').style.display=\'none\';openBackups()" style="padding:12px;font-size:14px">Abrir backups deste aparelho</button>');
+    return;
+  }
   if(!cloudInit()){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora — tente de novo com internet.</div>'); return; }
   try{
     SB.rpc('app_state_history_list', { n: 60 }).then(function(res){
@@ -16188,11 +16212,11 @@ function openBackups(){
     return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
       '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
       '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
-      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){safetyApply(safetyList().slice().reverse()['+i+']);document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){if(!safetyApply(safetyList().slice().reverse()['+i+']))return;document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
   }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — nada é perdido.</div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). A restauração exige espaço para guardar o estado atual antes. Exporte uma cópia para recuperação em outro aparelho.</div>'+
     rows+
     '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">💾 Exportar tudo agora (arquivo)</button></div>'+
   '</div>';

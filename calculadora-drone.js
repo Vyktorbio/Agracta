@@ -25,7 +25,7 @@
     if(!drone(study,t,inputs&&inputs.qid)) return null;
     inputs=inputs||_calcConfigAtual();
     var vr=calcVolumeDoTratamento(t,inputs.volumeCaldaLHa);
-    return DroneCore.calculate(Object.assign({},config||cfg(),{rate:vr.ambiguo?'':vr.valor,plotLength:inputs.parcelaComprimento,plotWidth:inputs.parcelaLargura,preparedMl:preparedMl}));
+    return DroneCore.calculate(Object.assign({},config||cfg(),{rate:vr.ambiguo?'':vr.valor,plotLength:inputs.parcelaComprimento,plotWidth:inputs.parcelaLargura,numPlots:inputs.parcelas,preparedMl:preparedMl}));
   };
   window.calcDroneHtml=function(study){
     if(!(study.tratamentos||[]).some(function(t){return drone(study,t);})) return '';

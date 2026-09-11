@@ -202,10 +202,8 @@
     return run;
   }
   /* ===== A FALHA DO COFRE OFFLINE PRECISA APARECER ==========================
-     Seis pontos mandavam esta falha so para o console. O estado da nuvem
-     continua salvo, entao nao ha perda de dado — mas o COFRE deste aparelho
-     fica defasado, e isso so se descobre no campo, sem sinal, que e o pior
-     lugar possivel para descobrir.
+     A cópia local pode falhar mesmo com uma gravação na nuvem pendente.
+     O aviso identifica a falha sem confirmar o estado da nuvem.
 
      O mesmo erro ja aparecia na tela no caminho puramente offline ("falha ao
      salvar neste aparelho"); era so aqui que ficava mudo. Silencio e a unica
@@ -219,12 +217,17 @@
     /* Em pagehide/visibilitychange a pagina esta indo embora: pintar selo ali
        nao adianta, mas registrar que o cofre ficou para tras adianta. */
     try{ if(typeof document==='undefined' || !document.hidden)
-      cloudBadge('offline','=⌁ nuvem em dia · o cofre offline deste aparelho não atualizou'); }catch(_e){}
+      cloudBadge('offline','=⌁ o cofre offline deste aparelho não atualizou · mantenha o app aberto para tentar novamente'); }catch(_e){}
   }
   function checkpointOk(){
     if(!FB.cofreDefasado) return;
     FB.cofreDefasado=false;
-    try{ if(typeof document==='undefined' || !document.hidden) cloudBadge('saved'); }catch(_e){}
+    try{ if(typeof document==='undefined' || !document.hidden){
+      if(FB.pushing || FB.pendingWrites || (typeof window!=='undefined' && window._unsavedChanges))
+        cloudBadge('offline','=⌁ salvo neste aparelho · envio à nuvem pendente');
+      else if(!FB.user) cloudBadge('offline','=⌁ salvo neste aparelho · sem sincronização');
+      else cloudBadge('saved');
+    } }catch(_e){}
   }
   function checkpointPut(st,immediate){
     if(!st)return Promise.resolve(false);
@@ -815,8 +818,10 @@
   }
   window.cloudPull=function(){
     if(!FB.user){showAuthGate();return Promise.resolve(false);}
+    if(FB.pushing)return FB.pushPromise.then(function(){return cloudPull();},function(){return false;});
+    if(FB.pullPromise)return FB.pullPromise;
     cloudBadge('saving');
-    return readRemote().then(function(r){
+    FB.pullPromise=readRemote().then(function(r){
       /* Só um login que também conseguiu ler o workspace autoriza a futura
          entrada offline. Conta inativa/sem permissão não transforma o aparelho
          em confiável apenas por existir no Firebase Auth. */
@@ -848,6 +853,9 @@
       }
       return false;
     });
+    var pendingPull=FB.pullPromise;
+    pendingPull.then(function(){FB.pullPromise=null;},function(){FB.pullPromise=null;});
+    return pendingPull;
   };
   /* Resync barato: 1 leitura (o doc raiz) para conferir o 'rev' e só então decidir.
      Antes isto chamava cloudPull() direto, e cloudPull relê todas as coleções INTEIRAS.
@@ -855,7 +863,8 @@
      relido dezenas de vezes por dia por aparelho — foi o que estourou a cota. */
   window.cloudResync=function(){
     if(!FB.user){showAuthGate();return;}
-    if(window._unsavedChanges){cloudSave();return;}
+    if(FB.pushing)return FB.pushPromise;
+    if(window._unsavedChanges)return cloudPull();
     if(!FB.db||FB.resyncing){return;}
     FB.resyncing=true;
     FB.db.doc(ROOT).get().then(function(snap){
@@ -876,7 +885,7 @@
       if(!snap.exists||snap.metadata.hasPendingWrites)return;
       var rev=(snap.data()||{}).rev||0;
       if(rev>FB.lastRev&&!FB.pushing){
-        FB.lastRev=rev;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
+        clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
       }
     },function(){cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');});
   };
