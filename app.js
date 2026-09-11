@@ -11093,6 +11093,24 @@ function _bioestatJobAoa(qid,study,av,v){
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
 var MOTOR_VERSAO='agracta-13';
+/* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
+   (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
+   (2) entrar na assinatura do cache, invalidando o que está guardado.
+
+   Publicar tela nova no motor exige (1). Mas (1) arrastava (2) junto, e o
+   resultado apareceu no campo: subir de agracta-12 para -13 -- que só
+   acrescentou telas de planejamento, equivalência e curva -- apagou a
+   estatística guardada de TODO aparelho. Quem abriu um estudo viu o painel
+   sem gráfico nenhum, esperando o Pyodide recalcular do zero, minutos com a
+   tela ocupada. Nada estava quebrado; estava recalculando o que já sabia.
+
+   Então a assinatura passa a usar este outro número, que só muda quando o
+   CÁLCULO muda -- rota diferente, fórmula diferente, correção de conta.
+   Mexer só na tela do motor não mexe aqui.
+
+   Fica em agracta-12 de propósito: é o valor com que os aparelhos gravaram,
+   então a estatística guardada volta a valer sem recalcular nada. */
+var MOTOR_CALCULO='agracta-12';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -11144,7 +11162,7 @@ function _bioestatJobsTempo(qid,study){
   return out;
 }
 function _bioestatSignature(study){
-  var slim={motor:MOTOR_VERSAO,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
+  var slim={motor:MOTOR_CALCULO,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
     a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.variaveis,a.notas];})};
   return String(_hashSeed(JSON.stringify(slim)));
 }
@@ -11198,7 +11216,7 @@ function _biocGravar(key,sig,results){
     _biocOpen().then(function(db){
       try{
         var tx=db.transaction(_BIOC_STORE,'readwrite'), os=tx.objectStore(_BIOC_STORE);
-        os.put({k:key,sig:sig,ts:Date.now(),motor:MOTOR_VERSAO,results:results});
+        os.put({k:key,sig:sig,ts:Date.now(),motor:MOTOR_CALCULO,results:results});
         /* poda pelo mais antigo: isto é conveniência de abertura, não arquivo.
            O que precisa durar está no estudo e na planilha exportada. */
         var cq=os.count(); cq.onsuccess=function(){ var n=cq.result; if(n>_BIOC_MAX){ var sobra=n-_BIOC_MAX; var cur=os.index('ts').openCursor(); cur.onsuccess=function(e){ var c=e.target.result; if(c&&sobra>0){ c.delete(); sobra--; c.continue(); } }; } };
@@ -11234,7 +11252,7 @@ function _bioestatEnsureStudy(qid,sid){
      estatística já na tela e nada roda. */
   _biocLer(key).then(function(sav){
     if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
-    if(sav&&sav.sig===sig&&sav.motor===MOTOR_VERSAO&&sav.results){
+    if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
       jobs.forEach(function(j){ if(res[j.jobKey])n++; if(res[j.jobKey+'|F'])n++; });
       jobsT.forEach(function(j){ if(res[j.jobKey])n++; });
