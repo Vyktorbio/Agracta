@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agracta</title>
 <link rel="stylesheet" href="styles.css?v=27">
-<link rel="stylesheet" href="integracoes.css?v=1">
+<link rel="stylesheet" href="integracoes.css?v=2">
 <!-- Porta de entrada: nada do app é pintado antes da autenticação. A classe entra
      no <html> antes de qualquer folha de estilo do app, então não existe o
      "flash" do mapa/menus para quem não tem senha. -->
@@ -32,7 +32,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=3">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=174').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=175').catch(function(){});});}</script>
 </head>
 <body>
 <div class="top-bar">
@@ -148,7 +148,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script src="alvos-catalogo.js?v=2"></script>
-<script src="app.js?v=127"></script>
+<script src="app.js?v=128"></script>
 <script src="calculadora-drone.js?v=2"></script>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>
@@ -159,7 +159,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
 <script src="acesso-horario.js?v=3"></script>
 <script src="ui-campo.js?v=17"></script>
-<script src="integracoes.js?v=1"></script>
+<script src="integracoes.js?v=2"></script>
 <script src="integracoes-fontes.js?v=1"></script>
 <script src="integracoes-clientes.js?v=1"></script>
 </body>

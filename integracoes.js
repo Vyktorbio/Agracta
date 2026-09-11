@@ -3,7 +3,11 @@
  */
 (function(w){
   'use strict';
-  var C=w.ConhecimentoCore, view={aba:'produtos',busca:'',filtro:{},selecionado:'',estudo:''}, acervo=null, ultimoFoco=null;
+  var C=w.ConhecimentoCore, view=viewLimpa(), acervo=null, ultimoFoco=null;
+  /* A aba Estudos tem filtro proprio de situacao: ele sobrevive a troca de
+     aba e a ida-e-volta para a ficha, senao quem abre um estudo finalizado
+     volta para a lista e nao o encontra mais. */
+  function viewLimpa(){return {aba:'produtos',busca:'',filtro:{},selecionado:'',estudo:'',estadoEstudo:'todos'};}
   function e(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function n(x){return x==null?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3});}
   function dataBR(x){return /^\d{4}-\d{2}-\d{2}$/.test(String(x))?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):e(x||'Sem data');}
@@ -61,6 +65,7 @@
       cultura:st.cultura||q.cultura||'',alvo:st.alvo||p.alvo||'',tipoEstudo:st.tipoEstudo||'',
       local:loc&&loc.nome||'Sem local',quadra:typeof w.quadraNome==='function'?w.quadraNome(qid):qid,
       ambiente:lab?'laboratorio':'campo',inicio:st.dataInicio||'',finalizado:!!(st.finalizacao&&st.finalizacao.em),
+      finalizadoEm:(st.finalizacao&&st.finalizacao.em)||'',finalizadoPor:(st.finalizacao&&(st.finalizacao.nome||st.finalizacao.por))||'',
       desenho:st.desenho==='faixas'?'Faixas / unidades registradas':st.desenho==='dbc'?'Blocos ao acaso':'Não informado',metodo:metodo(st,qid),
       tratamentos:[],resultados:[],aplicacoes:[],consumos:[],integracoes:st.integracoes||null,
       solo:q.solo||null,atualizadoEm:isoTimestamp(st._ts)};
@@ -113,7 +118,7 @@
   function abrir(op){
     if(document.documentElement.classList.contains('pre-auth'))return;
     construir();ultimoFoco=document.activeElement;
-    view={aba:'produtos',busca:'',filtro:{},selecionado:'',estudo:''};
+    view=viewLimpa();
     if(typeof op==='string'){view.selecionado='item:'+op;}
     else if(op){view.busca=op.busca||'';if(op.qid&&op.sid)view.estudo=C.chave(op.qid,op.sid);if(op.aba)view.aba=op.aba;}
     var ov=document.getElementById('conhecimentoOvl');
@@ -138,7 +143,49 @@
       return '<tr><td>'+bot('estudo',e(r.codigo),'data-key="'+e(r.estudo)+'"','link')+'<small>'+e(r.tratamento)+' · '+e(r.local)+'</small></td><td>'+e(r.produto)+'<small>'+e(r.dose)+' · '+e(r.metodo)+'</small></td><td>'+e(r.variavel)+'<small>'+dataBR(r.data)+(r.momento?' · '+e(r.momento):' · momento não declarado')+'</small></td><td>'+n(r.n)+'</td><td>'+n(r.media)+(r.unidade?' '+e(r.unidade):'')+'</td><td>'+n(r.dp)+'</td><td>'+(r.testemunha?'Testemunha':r.controle==null?'—':n(r.controle)+'%')+'</td></tr>';
     }).join('')+'</tbody></table></div><p class="con-note">n = unidades com valor registrado. DP = desvio-padrão dessas unidades, não intervalo de confiança. Faixas e subamostras exigem conferir o delineamento. O controle usa somente testemunha explicitamente marcada; resultados de estudos distintos não são combinados.</p>';
   }
-  function listaEstudos(xs){return xs.length?'<div class="con-estudos">'+xs.map(function(s){return bot('estudo','<b>'+e(s.codigo)+'</b><span>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+'</span><small>'+e(s.local)+' · '+e(s.ambiente==='laboratorio'?'Laboratório':'Campo')+' · '+s.resultados.length+' resultados</small>','data-key="'+e(s.key)+'"','card');}).join('')+'</div>':vazio('Nenhum estudo corresponde aos filtros.');}
+  function dataHoraBR(x){var d=new Date(x);return x&&Number.isFinite(d.getTime())?d.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'data não registrada';}
+  function selo(s){
+    if(!s.finalizado)return '<span class="con-selo em-execucao">Em execução</span>';
+    return '<span class="con-selo finalizado">Finalizado</span>';
+  }
+  function cartaoEstudo(s){
+    var rodape=s.finalizado
+      ? 'Finalizado em '+dataHoraBR(s.finalizadoEm)+(s.finalizadoPor?' por '+e(s.finalizadoPor):'')
+      : e(s.local)+' · '+(s.ambiente==='laboratorio'?'Laboratório':'Campo')+' · '+s.resultados.length+' resultados';
+    return bot('estudo','<b>'+e(s.codigo)+'</b><span>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+'</span>'+selo(s)+
+      '<small>'+rodape+'</small>','data-key="'+e(s.key)+'"','card');
+  }
+  /* Nenhuma destas acoes escreve daqui: cada uma chama a mesma funcao do
+     Agracta que a ficha do estudo ja chama, com senha, rubrica e motivo.
+     Duplicar o fluxo aqui seria criar uma segunda porta sem trilha. */
+  function acoesEstudo(s){
+    return '<div class="con-acoes">'+bot('original','Abrir','data-key="'+e(s.key)+'"')+
+      (s.finalizado?bot('estReabrir','Reabrir','data-key="'+e(s.key)+'"')
+                   :bot('estFinalizar','Finalizar','data-key="'+e(s.key)+'"'))+
+      bot('estExcluir','Excluir','data-key="'+e(s.key)+'"','perigo')+'</div>';
+  }
+  function listaEstudos(xs,op){
+    if(!xs.length)return vazio((op&&op.vazio)||'Nenhum estudo corresponde aos filtros.');
+    return '<div class="con-estudos">'+xs.map(function(s){
+      return op&&op.acoes?'<div class="con-estudo">'+cartaoEstudo(s)+acoesEstudo(s)+'</div>':cartaoEstudo(s);
+    }).join('')+'</div>';
+  }
+  var ESTADOS=[['todos','Todos'],['andamento','Em execução'],['finalizados','Finalizados']];
+  function noEstado(s,estado){return estado==='todos'||(estado==='finalizados'?!!s.finalizado:!s.finalizado);}
+  function abaEstudos(){
+    var todos=lista(acervo.estudos);
+    var conta=function(k){return todos.filter(function(s){return noEstado(s,k);}).length;};
+    /* Em execucao primeiro: e a lista de quem ainda tem trabalho pendente. */
+    var xs=todos.filter(function(s){return noEstado(s,view.estadoEstudo);}).sort(function(a,b){
+      if(!a.finalizado!==!b.finalizado)return a.finalizado?1:-1;
+      return String(b.inicio||'').localeCompare(String(a.inicio||''));
+    });
+    return '<div class="con-estado" role="group" aria-label="Situação dos estudos">'+ESTADOS.map(function(p){
+        return bot('estado',e(p[1])+' <b>'+conta(p[0])+'</b>','data-estado="'+p[0]+'" aria-pressed="'+(view.estadoEstudo===p[0])+'"',view.estadoEstudo===p[0]?'ativo':'');
+      }).join('')+'</div>'+
+      listaEstudos(xs,{acoes:true,vazio:view.estadoEstudo==='finalizados'?'Nenhum estudo finalizado até agora.':view.estadoEstudo==='andamento'?'Nenhum estudo em execução.':'Nenhum estudo cadastrado.'})+
+      '<p class="con-note">Finalizar congela a estatística e deixa o estudo em leitura; reabrir exige motivo registrado. Um estudo finalizado só pode ser excluído depois de reaberto. As três ações pedem a senha e ficam na trilha de auditoria com autor e data.</p>';
+  }
   function selecao(){
     var idx=acervo[view.aba]||[],query=C.normal(view.busca),vis=idx.filter(function(x){return !query||C.normal(x.nome).indexOf(query)>=0;});
     if(!view.selecionado)return '<label class="con-busca">Buscar '+(view.aba==='produtos'?'produto ou ingrediente ativo':view.aba==='alvos'?'alvo':'projeto')+'<input id="conBusca" type="search" value="'+e(view.busca)+'" autocomplete="off" placeholder="Digite um nome ou código"></label>'+
@@ -201,7 +248,7 @@
     var abas=[['produtos','Produtos e ativos'],['alvos','Alvos'],['projetos','Projetos'],['estudos','Estudos'],['fontes','Fontes']];
     if(typeof w.isAdmin==='function'&&w.isAdmin())abas.push(['clientes','Clientes']);
     ov.innerHTML='<section class="con-shell"><header class="con-head"><div><p>AGRACTA</p><h1>Conhecimento experimental</h1></div>'+bot('fechar','Fechar ×')+'</header><nav aria-label="Conhecimento">'+abas.map(function(a){return bot('aba',a[1],'data-aba="'+a[0]+'" aria-current="'+(view.aba===a[0]?'page':'false')+'"',view.aba===a[0]?'ativo':'');}).join('')+'</nav><p id="conhecimentoAviso" role="status" aria-live="polite"></p><main>'+
-      (view.estudo?ficha():view.aba==='estudos'?listaEstudos(acervo.estudos):view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):view.aba==='clientes'?(w.agClientesHtml?w.agClientesHtml(acervo):vazio('Gestão de clientes indisponível.')):selecao())+'</main></section>';
+      (view.estudo?ficha():view.aba==='estudos'?abaEstudos():view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):view.aba==='clientes'?(w.agClientesHtml?w.agClientesHtml(acervo):vazio('Gestão de clientes indisponível.')):selecao())+'</main></section>';
   }
   function adicionar(key,eventos){
     var s=achar(key);if(!s)throw Error('Estudo não encontrado.');
@@ -224,6 +271,14 @@
     if(a==='selecionar'){view.selecionado=key;view.filtro={};pintar();return;}
     if(a==='estudo'){view.estudo=key;pintar();return;}
     if(a==='original'){var st=achar(key);fechar();if(st)w.openStudyDetail(st.qid,st.sid);return;}
+    if(a==='estado'){view.estadoEstudo=b.dataset.estado;pintar();return;}
+    if(a==='estFinalizar'||a==='estReabrir'||a==='estExcluir'){
+      var alvo=achar(key);if(!alvo)throw Error('Este estudo não está mais disponível.');
+      var fn=w[{estFinalizar:'finalizarEstudo',estReabrir:'reabrirEstudo',estExcluir:'confirmDeleteStudy'}[a]];
+      if(typeof fn!=='function')throw Error('Esta ação não está disponível nesta tela.');
+      /* Fecha antes: senha, rubrica e a ficha do estudo vivem na tela do Agracta. */
+      fechar();fn(alvo.qid,alvo.sid);return;
+    }
     if(a==='salvarCampos'){
       var dados=form('conCampos'),at=C.estado(achar(key).integracoes).campos;
       var changes=campos.filter(function(p){return (dados[p[0]]||'')!==(at[p[0]]||'');}).map(function(p){return {tipo:'campo',chave:p[0],valor:dados[p[0]]||''};});
