@@ -91,7 +91,7 @@
         if(test&&t.id!==test.id&&ref&&ref.n&&typeof w._pctCtrl==='function')ctrl=w._pctCtrl(ref.media,s.media,sentido,tipo);
         var m=av.momento,momento=m&&C.numero(m.valor)!==null&&['HAT','DAT'].indexOf(m.unidade)>=0?n(C.numero(m.valor))+' '+m.unidade:'';
         out.resultados.push(Object.assign({},s,{avaliacao:av.id||'av-'+ai,tratamento:t.id,variavel:v,tipo:tipo,
-          unidade:cfg.unidade||(['razao','escala'].indexOf(tipo)>=0?'%':''),sentido:sentido,controle:ctrl,testemunha:!!(test&&t.id===test.id),
+          unidade:cfg.unidade||(['pct','razao','escala'].indexOf(tipo)>=0?'%':''),sentido:sentido,controle:ctrl,testemunha:!!(test&&t.id===test.id),
           momento:momento,data:av.data||'',hora:av.hora||'',clima:clima(av.carimbo&&av.carimbo.clima),ndvi:av.carimbo&&av.carimbo.ndvi||null}));
       });});
     });
@@ -159,7 +159,7 @@
      Agracta que a ficha do estudo ja chama, com senha, rubrica e motivo.
      Duplicar o fluxo aqui seria criar uma segunda porta sem trilha. */
   function acoesEstudo(s){
-    return '<div class="con-acoes">'+bot('original','Abrir','data-key="'+e(s.key)+'"')+
+    return '<div class="con-acoes">'+bot('estudo','Abrir','data-key="'+e(s.key)+'"')+
       (s.finalizado?bot('estReabrir','Reabrir','data-key="'+e(s.key)+'"')
                    :bot('estFinalizar','Finalizar','data-key="'+e(s.key)+'"'))+
       bot('estExcluir','Excluir','data-key="'+e(s.key)+'"','perigo')+'</div>';
@@ -240,6 +240,7 @@
   }
   function ficha(){
     var s=achar(view.estudo);if(!s)return vazio('O estudo não está disponível.');
+    if(w.AgEstudoPagina)return w.AgEstudoPagina.render(s,{tabela:tabela(C.resultados([s],{})),contexto:contextoHtml(s),integracoes:integracoesHtml(s),custos:custosHtml(s)});
     return bot('voltar','‹ Conhecimento')+'<div class="con-titulo"><div><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+' · '+e(s.local)+' · '+e(s.quadra)+'</p></div>'+bot('original','Abrir estudo','data-key="'+e(s.key)+'"')+'</div><p class="con-note">'+e(s.desenho)+' · '+e(s.metodo)+' · '+(s.finalizado?'Finalizado':'Em execução')+'</p>'+tabela(C.resultados([s],{}))+
       contextoHtml(s)+integracoesHtml(s)+custosHtml(s);
   }
@@ -269,7 +270,7 @@
     if(a==='aba'){view.aba=b.dataset.aba;view.estudo='';view.selecionado='';view.filtro={};view.busca='';pintar();return;}
     if(a==='voltar'){if(view.estudo)view.estudo='';else view.selecionado='';pintar();return;}
     if(a==='selecionar'){view.selecionado=key;view.filtro={};pintar();return;}
-    if(a==='estudo'){view.estudo=key;pintar();return;}
+    if(a==='estudo'){view.estudo=key;pintar();var ov=document.getElementById('conhecimentoOvl');if(ov)ov.scrollTop=0;return;}
     if(a==='original'){var st=achar(key);fechar();if(st)w.openStudyDetail(st.qid,st.sid);return;}
     if(a==='estado'){view.estadoEstudo=b.dataset.estado;pintar();return;}
     if(a==='estFinalizar'||a==='estReabrir'||a==='estExcluir'){
