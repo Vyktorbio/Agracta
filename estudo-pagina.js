@@ -98,8 +98,8 @@ function charts(){
  return '<div class="ep-controls"><label>Variável<select data-ep="variable">'+gs.map(function(g){return '<option value="'+e(g.key)+'"'+(g.key===state.variable?' selected':'')+'>'+e(g.r.variavel)+' · '+e(unit(g.r)||g.r.tipo)+' · '+(g.r.sentido==='maior'?'maior primeiro':'menor primeiro')+'</option>';}).join('')+'</select></label><label>Avaliação do ranking<select data-ep="assessment">'+evs.map(function(r){return '<option value="'+e(r.avaliacao)+'"'+(r.avaliacao===state.assessment?' selected':'')+'>'+e(label(r))+'</option>';}).join('')+'</select></label><label>Barras por data<select data-ep="barMetric"><option value="media"'+(state.barMetric!=='controle'?' selected':'')+'>Resultado registrado</option><option value="controle"'+(state.barMetric==='controle'?' selected':'')+'>Controle por Abbott (%)</option></select></label></div><article class="ep-chart ep-comparison"><p class="ep-eyebrow">TODAS AS AVALIAÇÕES</p><h4>'+e(state.barMetric==='controle'?'Controle por Abbott (%)':rows[0].variavel)+' por tratamento e data</h4>'+groupedChart(state.s,rows,state.barMetric)+'</article><div class="ep-charts"><article class="ep-chart"><p class="ep-eyebrow">EVOLUÇÃO DO ENSAIO</p><h4>'+e(rows[0].variavel)+' por data</h4>'+lineChart(rows)+'</article><article class="ep-chart"><p class="ep-eyebrow">COMPARAÇÃO DOS TRATAMENTOS</p><h4>Ranking · '+e(rows[0].variavel)+'</h4><p class="ep-caption">'+e(label(evs.find(function(r){return r.avaliacao===state.assessment;})))+'</p>'+ranking(rows)+'</article></div>';
 }
 function rawTable(st,s){
- var rows=[];arr(st.avaliacoes).forEach(function(av,ai){s.tratamentos.forEach(function(t){for(var rep=1;rep<=Math.max(1,parseInt(st.numRepeticoes,10)||1);rep++){arr(av.variaveis).forEach(function(v){var row={key:t.id+'R'+rep,tratId:t.id,rep:rep};var value=typeof w._avNota==='function'?w._avNota(av,row,v):((av.notas||{})[row.key]||{})[v];var val=C.numero(value);rows.push([e(date(av.data))+'<small>'+e(av.hora||'')+' · '+e(av.id||'av-'+ai)+'</small>',e(t.id)+' · '+e(t.produto),'R'+rep,e(v),val===null?'—':num(val)]);});}});});
- return rows.length?table(['Avaliação','Tratamento','Repetição','Variável','Valor registrado'],rows)+ '<p class="con-note">— = sem valor numérico registrado; zero é uma observação válida. Valores exibidos na escala registrada, antes de transformações estatísticas.</p>':empty('Nenhuma avaliação cadastrada.');
+ var rows=[];arr(st.avaliacoes).forEach(function(av,ai){if(state&&state.rawAv&&av.id!==state.rawAv)return;s.tratamentos.forEach(function(t){for(var rep=1;rep<=Math.max(1,parseInt(st.numRepeticoes,10)||1);rep++){arr(av.variaveis).forEach(function(v){var row={key:t.id+'R'+rep,tratId:t.id,rep:rep};var value=typeof w._avNota==='function'?w._avNota(av,row,v):((av.notas||{})[row.key]||{})[v];var val=C.numero(value);rows.push([e(date(av.data))+'<small>'+e(av.hora||'')+' · '+e(av.id||'av-'+ai)+'</small>',e(t.id)+' · '+e(t.produto),'R'+rep,e(v),val===null?'—':num(val)]);});}});});
+ return (state&&state.rawAv?'<button class="con-btn" data-ep-source="">Mostrar todas as avaliações</button>':'')+(rows.length?table(['Avaliação','Tratamento','Repetição','Variável','Valor registrado'],rows)+ '<p class="con-note">— = sem valor numérico registrado; zero é uma observação válida. Valores exibidos na escala registrada, antes de transformações estatísticas.</p>':empty('Nenhuma avaliação cadastrada.'));
 }
 function storedStats(st,s){
  var snap=st.estatisticaFinal;if(!snap)return '';
@@ -111,16 +111,91 @@ function fieldNotes(st,s){
  var notes=typeof w.notasDoEstudo==='function'?w.notasDoEstudo(s.qid,st):[];
  return notes.length?'<h4>Observações da área no período do estudo</h4>'+notes.map(function(note){var photo=typeof note.foto==='string'&&/^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=\s]+$/i.test(note.foto)?'<img class="ep-photo" loading="lazy" src="'+e(note.foto)+'" alt="'+e(note.titulo||'Registro fotográfico')+'">':'';return '<article class="con-painel"><h4>'+e(note.titulo||'Observação')+'</h4><p>'+e(date(String(note.criadoEm||'').slice(0,10)))+' · '+(note.resolvido?'Resolvida':'Aberta')+'</p><p class="ep-description">'+e(note.descricao||'')+'</p>'+(note.recomendacao?'<p>'+e(note.recomendacao)+'</p>':'')+photo+'</article>';}).join(''):'';
 }
+/* Relatórios completos, preservando as identidades projetadas do Conhecimento. */
+function protectedReport(value,st,s){
+ var hidden=[];
+ arr(st.tratamentos).forEach(function(t){var safe=tr(s,t.id).produto;if(t.produto&&safe!==t.produto)hidden.push([t.produto,safe]);});
+ Object.keys(w.ITENS||{}).forEach(function(k){var it=w.ITENS[k];if(it&&it.codigoCego){[it.nome,it.ativos].forEach(function(name){if(typeof name==='string'&&name)hidden.push([name,it.codigoCego]);});}});
+ hidden.sort(function(a,b){return b[0].length-a[0].length;});
+ function clean(x){if(typeof x==='string'){hidden.forEach(function(p){x=x.split(p[0]).join(p[1]);});return x;}if(Array.isArray(x))return x.map(clean);if(x&&typeof x==='object'){var out=Object.create(null);Object.keys(x).forEach(function(k){out[clean(k)]=clean(x[k]);});return out;}return x;}
+ return clean(value);
+}
+function reportTree(value){
+ if(value===null||value===undefined)return '<span>Não disponível</span>';
+ if(typeof value!=='object')return '<span>'+e(typeof value==='boolean'?(value?'Sim':'Não'):value)+'</span>';
+ var keys=Object.keys(value);if(!keys.length)return '<span>Sem registros</span>';
+ var names={analise:'Análise',comparacao_medias:'Comparação de médias',descritiva:'Estatística descritiva',normalidade:'Normalidade',homogeneidade:'Homogeneidade',decisao:'Decisão do método',avisos:'Avisos',achados:'Achados',veredito:'Resumo da triagem',parametros:'Parâmetros',explicacao_inocente:'Explicação alternativa',executado:'Teste executado',na:'Inconclusivo'};
+ return '<dl class="ep-report">'+keys.map(function(k){return '<div><dt>'+e(Array.isArray(value)?Number(k)+1:names[k]||k.replace(/_/g,' '))+'</dt><dd>'+reportTree(value[k])+'</dd></div>';}).join('')+'</dl>';
+}
+function analysisData(st,s){
+ if(s.finalizado)return st.estatisticaFinal&&st.estatisticaFinal.avancado||null;
+ return typeof w._bioestatSnapshotAvancado==='function'?w._bioestatSnapshotAvancado(s.qid,st):null;
+}
+function analyses(st,s){
+ var a=analysisData(st,s), html='';
+ if(!s.finalizado&&typeof w._bioestatEnsureStudy==='function')setTimeout(function(){if(state&&state.s.key===s.key)w._bioestatEnsureStudy(s.qid,s.sid);},0);
+ if(!a)return empty(s.finalizado?'Este fechamento antigo não preservou o relatório avançado. A estatística disponível continua na seção Resultados.':'Motor estatístico indisponível nesta versão.');
+ a=protectedReport(a,st,s);
+ html+='<p class="con-note">'+(s.finalizado?'Relatórios preservados no fechamento de '+date(a.geradoEm.slice(0,10))+'.':'Resultados atualizados conforme cada análise termina.')+' Uma repetição mantém o resultado e Abbott quando aplicável; comparações estatísticas dependem do delineamento e dos dados.</p>';
+ var count={calculado:0,pendente:0,erro:0};arr(a.jobs).forEach(function(j){var r=a.results[j.jobKey];count[!r?'pendente':r.ok===true?'calculado':'erro']++;});
+ html+='<div class="ep-analysis-counts" role="status">'+count.calculado+' calculados · '+count.pendente+' pendentes · '+count.erro+' com erro · '+arr(a.indisponiveis).length+' sem comparação</div>';
+ if(!s.finalizado&&count.erro&&!count.pendente)html+='<button class="con-btn" data-ep-action="retry">Tentar os cálculos novamente</button>';
+ html+='<button class="con-btn" data-ep-action="download">Baixar dossiê de análises</button>';
+ arr(a.jobs).forEach(function(j){
+  var r=a.results[j.jobKey], status=!r?'Pendente':r.ok===true?'Calculado':'Erro de cálculo', title=(j.modo==='forense'?'Triagem forense':j.modo==='tempo'?'Sobrevivência no tempo':'Estatística')+' · '+j.variavel+(j.date?' · '+date(j.date):'');
+  html+='<article class="ep-analysis-card"><h4>'+e(title)+'</h4><p class="ep-analysis-status">'+status+'</p>';
+  if(j.avId)html+='<button class="con-btn" data-ep-source="'+e(j.avId)+'">Ver repetições desta avaliação</button>';
+  if(!r)html+='<p>'+(s.finalizado?'Não estava calculado no fechamento.':'Aguardando o motor estatístico. O resultado aparecerá aqui automaticamente.')+'</p>';
+  else if(r.ok!==true)html+='<p>'+e(r.erro||'O motor não retornou um relatório válido.')+'</p>';
+  else{
+   if(j.modo==='forense'){
+    var v=r.veredito||{};
+    html+='<p>'+e(v.resumo||'Consulte os testes e sua cobertura abaixo.')+'</p>';
+    html+='<p>Testes executados: '+e(v.testes_executados==null?'Não informado':v.testes_executados)+' · Inconclusivos: '+e(v.testes_inconclusivos==null?'Não informado':v.testes_inconclusivos)+'</p>';
+    html+=arr(r.achados).map(function(f){return '<details class="ep-finding"><summary>'+e(f.nome)+' · '+e(f.executado===false?'Inconclusivo':f.severidade==='clear'?'Sem sinal neste teste':f.severidade||'Conferir')+'</summary><p>'+e(f.leitura||'')+'</p><p>'+e(f.explicacao_inocente||'')+'</p></details>';}).join('');
+   }else if(j.modo==='tempo'&&typeof w._bioestatTempoCard==='function')html+=w._bioestatTempoCard(j,r);
+   else if(typeof w._bioestatResumoCard==='function')html+=w._bioestatResumoCard(j,r);
+   html+='<details data-report-key="'+e(j.jobKey)+'"><summary>Relatório completo e parâmetros</summary>'+reportTree(r)+'</details>';
+  }
+  html+='</article>';
+ });
+ html+=arr(a.indisponiveis).map(function(j){return '<p class="con-note"><b>'+e(j.variavel)+' · '+e(date(j.date))+'</b>: '+e(j.motivo)+'</p>';}).join('');
+ return html;
+}
+function localForensics(st,s){
+ var out=[], globalFindings=typeof w._forenseAchadosEstudo==='function'?w._forenseAchadosEstudo(st,s.qid):[];
+ arr(globalFindings).forEach(function(f){out.push({title:'Condução do estudo',f:f});});
+ if(typeof w._forenseAchados==='function')arr(st.avaliacoes).concat(arr(st.aplicacoes)).forEach(function(av){arr(w._forenseAchados(av)).forEach(function(f){out.push({title:date(av.data),avId:arr(st.avaliacoes).includes(av)?av.id:null,f:f});});});
+ out=protectedReport(out,st,s);
+ return '<p>Conferências dos registros de campo. A triagem estatística aparece junto de cada análise acima. Os sinais pedem revisão e não comprovam fraude.</p>'+(out.length?out.map(function(x){return '<article class="ep-analysis-card"><h4>'+e(x.title)+'</h4><p>'+e(x.f.texto)+'</p>'+(x.avId?'<button class="con-btn" data-ep-source="'+e(x.avId)+'">Conferir valores desta avaliação</button>':'')+'</article>';}).join(''):empty('Nenhum alerta nas verificações locais disponíveis. Isso não indica que todos os testes forenses foram executados.'));
+}
+function timeline(st,s){
+ var events=s.aplicacoes.map(function(a){var c=a.clima||{};return {data:a.data,tipo:'Aplicação',det:[c.temp==null?'':num(c.temp)+' °C',c.ur==null?'':'UR '+num(c.ur)+'%',c.vento==null?'':'Vento '+num(c.vento),c.fonte||''].filter(Boolean).join(' · ')||'Sem clima registrado'};});
+ arr(st.avaliacoes).forEach(function(a){events.push({data:a.data,tipo:'Avaliação',det:arr(a.variaveis).join(' · ')});});
+ events.sort(function(a,b){return String(a.data||'').localeCompare(String(b.data||''));});
+ return '<p>Aplicações previstas: '+e(st.numAplicacoes||'Não informado')+' · registradas: '+s.aplicacoes.length+'. Avaliações cadastradas: '+arr(st.avaliacoes).length+'.</p>'+table(['Data','Evento','Registro'],events.map(function(x){return [e(date(x.data)),e(x.tipo),e(x.det)];}));
+}
+function updateAnalyses(c){
+ var ov=document.getElementById('conhecimentoOvl'),box=document.getElementById('ep-analysis-body');
+ if(!state||!ov||ov.hidden||!box||state.s.qid!==c.qid||state.s.sid!==c.sid||state.s.finalizado)return;
+ var st=arr((w.data[c.qid]||{}).estudos).find(function(x){return x.id===c.sid;});if(!st)return;
+ var open=Array.from(box.querySelectorAll('details[open][data-report-key]')).map(function(x){return x.dataset.reportKey;});
+ box.innerHTML=analyses(st,state.s);box.querySelectorAll('[data-report-key]').forEach(function(x){x.open=open.includes(x.dataset.reportKey);});
+}
+
 function render(s,parts){
  var st=arr((w.data[s.qid]||{}).estudos).find(function(x){return x.id===s.sid;})||{},p=st.protocolo||{},gs=groups(s);
  if(!state||state.s.key!==s.key)state={s:s,variable:gs[0]&&gs[0].key,assessment:''};else{state.s=s;if(!gs.some(function(g){return g.key===state.variable;}))state.variable=gs[0]&&gs[0].key;}
  var avs=arr(st.avaliacoes),reps=Math.max(1,parseInt(st.numRepeticoes,10)||1),count=s.resultados.reduce(function(a,r){return a+r.n;},0),expected=avs.reduce(function(a,av){return a+arr(av.variaveis).length*s.tratamentos.length*reps;},0),pct=expected?Math.min(100,Math.round(count/expected*100)):0;
- var h='<div class="ep-page"><div class="ep-top">'+w.agConhecimento.bot('voltar','‹ Estudos e conhecimento')+w.agConhecimento.bot('original','Ficha operacional','data-key="'+e(s.key)+'"')+'</div><header class="ep-hero"><div><p class="ep-eyebrow">DOSSIÊ EXPERIMENTAL · '+(s.ambiente==='laboratorio'?'LABORATÓRIO':'CAMPO')+'</p><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+'</p><p class="ep-location">'+e(s.local)+' / '+e(s.quadra)+'</p></div><div class="ep-progress"><span class="con-selo '+(s.finalizado?'finalizado':'em-execucao')+'">'+(s.finalizado?'Finalizado':'Em execução')+'</span><strong>'+pct+'<small>%</small></strong><span>dos valores previstos nas avaliações cadastradas</span><progress value="'+pct+'" max="100" aria-label="Preenchimento das avaliações">'+pct+'%</progress></div></header><div class="ep-stats">'+[['Tratamentos',s.tratamentos.length],['Repetições previstas',reps],['Avaliações',avs.length],['Valores registrados',count]].map(function(x){return '<div><strong>'+num(x[1])+'</strong><span>'+x[0]+'</span></div>';}).join('')+'</div><nav class="ep-nav" aria-label="Seções do estudo">'+[['graficos','Gráficos'],['protocolo','Protocolo'],['resultados','Resultados'],['brutos','Repetições'],['ambiente','Ambiente'],['contexto','Contexto'],['custos','Custos'],['historico','Histórico']].map(function(x){return '<a href="#ep-'+x[0]+'" data-ep-scroll="ep-'+x[0]+'">'+x[1]+'</a>';}).join('')+'</nav>';
+ var h='<div class="ep-page"><div class="ep-top">'+w.agConhecimento.bot('voltar','‹ Estudos e conhecimento')+w.agConhecimento.bot('original','Ficha operacional','data-key="'+e(s.key)+'"')+'</div><header class="ep-hero"><div><p class="ep-eyebrow">DOSSIÊ EXPERIMENTAL · '+(s.ambiente==='laboratorio'?'LABORATÓRIO':'CAMPO')+'</p><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+'</p><p class="ep-location">'+e(s.local)+' / '+e(s.quadra)+'</p></div><div class="ep-progress"><span class="con-selo '+(s.finalizado?'finalizado':'em-execucao')+'">'+(s.finalizado?'Finalizado':'Em execução')+'</span><strong>'+pct+'<small>%</small></strong><span>dos valores previstos nas avaliações cadastradas</span><progress value="'+pct+'" max="100" aria-label="Preenchimento das avaliações">'+pct+'%</progress></div></header><div class="ep-stats">'+[['Tratamentos',s.tratamentos.length],['Repetições previstas',reps],['Avaliações',avs.length],['Valores registrados',count]].map(function(x){return '<div><strong>'+num(x[1])+'</strong><span>'+x[0]+'</span></div>';}).join('')+'</div><nav class="ep-nav" aria-label="Seções do estudo">'+[['graficos','Gráficos'],['protocolo','Protocolo'],['resultados','Resultados'],['analises','Estatística e forense'],['brutos','Repetições'],['conducao','Linha do tempo'],['ambiente','Ambiente'],['contexto','Contexto'],['custos','Custos'],['historico','Histórico']].map(function(x){return '<a href="#ep-'+x[0]+'" data-ep-scroll="ep-'+x[0]+'">'+x[1]+'</a>';}).join('')+'</nav>';
  h+=section('graficos','Resultados em perspectiva','<div id="ep-charts-body">'+charts()+'</div>');
  var facts=fact('Início',date(s.inicio))+fact('Delineamento',s.desenho)+fact('Método de aplicação',s.metodo)+fact('Cultivar',st.variedade||st.cultivar||p.cultivar)+fact('Aplicações previstas',st.numAplicacoes)+fact('Intervalo entre aplicações (dias)',st.intervaloDias)+fact('Parcela',p.tamanhoParcela)+fact('Volume de calda',p.volumeCalda||p.volumeCaldaLHa&&p.volumeCaldaLHa+' L/ha')+fact('Protocolo de origem',st.protocoloOrigem&&st.protocoloOrigem.nome);
  h+=section('protocolo','Protocolo e tratamentos',(st.descricao?'<p class="ep-description">'+e(st.descricao)+'</p>':'')+'<dl class="ep-facts">'+facts+'</dl>'+table(['Tratamento','Produto','Dose','Método','Referência'],s.tratamentos.map(function(t){return [e(t.id),e(t.produto),e(t.dose||'Não informada'),e(t.metodo),t.testemunha?'Testemunha':'—'];})));
  h+=section('resultados','Todos os resultados',parts.tabela+storedStats(st,s));
- h+=section('brutos','Dados por repetição',rawTable(st,s));
+ h+=section('analises','Estatística e forense','<div id="ep-analysis-body">'+analyses(st,s)+'</div>');
+ h+=section('forense','Conferência dos registros',localForensics(st,s));
+ h+=section('brutos','Dados por repetição','<div id="ep-raw-body">'+rawTable(st,s)+'</div>');
+ h+=section('conducao','Linha do tempo e execução',timeline(st,s));
  h+=section('ambiente','Ambiente e condução',parts.contexto+fieldNotes(st,s));
  h+=section('contexto','Identificação e vínculos',parts.integracoes);
  h+=section('custos','Consumo e custos',parts.custos);
@@ -132,5 +207,15 @@ function render(s,parts){
  document.addEventListener('click',function(ev){var link=ev.target.closest&&ev.target.closest('[data-ep-scroll]');if(link){ev.preventDefault();var el=document.getElementById(link.dataset.epScroll);if(el)el.scrollIntoView({behavior:w.matchMedia&&w.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});}});
  document.addEventListener('click',showBar);document.addEventListener('focusin',showBar);
  function showBar(ev){var bar=ev.target.closest&&ev.target.closest('#conhecimentoOvl [data-ep-detail]');if(!bar)return;var output=bar.closest('.ep-grouped').querySelector('.ep-bar-detail');if(output)output.textContent=bar.dataset.epDetail;}
- w.AgEstudoPagina={render:render,comparar:comparison};
+ document.addEventListener('click',function(ev){
+ var b=ev.target.closest&&ev.target.closest('#conhecimentoOvl [data-ep-action],#conhecimentoOvl [data-ep-source]');if(!b||!state)return;
+ var s=state.s,st=arr((w.data[s.qid]||{}).estudos).find(function(x){return x.id===s.sid;});if(!st)return;
+ if(b.hasAttribute('data-ep-source')){state.rawAv=b.dataset.epSource;var box=document.getElementById('ep-raw-body');box.innerHTML=rawTable(st,s);box.scrollIntoView({block:'start'});return;}
+ if(b.dataset.epAction==='retry'&&typeof w._bioestatRepetir==='function')w._bioestatRepetir(s.qid,s.sid);
+ if(b.dataset.epAction==='download'){
+  var report=protectedReport(analysisData(st,s),st,s);if(!report)return;
+  w._sinergistaSaveBlob(new Blob([JSON.stringify({estudo:s.codigo,tratamentos:s.tratamentos.map(function(t){return {id:t.id,produto:t.produto,dose:t.dose};}),analises:report},null,2)],{type:'application/json'}),'agracta-dossie-'+String(s.codigo).replace(/[^a-z0-9_-]/gi,'_')+'.json');
+ }
+});
+ w.AgEstudoPagina={render:render,comparar:comparison,atualizarAnalises:updateAnalyses};
 })(window);
