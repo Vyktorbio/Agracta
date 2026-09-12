@@ -19,7 +19,7 @@ const Store=require('./vendor/fotos-store.js'),Pptx=require('./vendor/fotos-pptx
  assert.match(html,/connect-src 'none'/);assert.match(html,/form-action 'none'/);
  assert.doesNotMatch(child,/\b(fetch|XMLHttpRequest|WebSocket|sendBeacon|postMessage|save|outboxAdd|dbUpsertEstudo)\s*\(/);
  assert.doesNotMatch(child+bridge,/\.foto\s*=/);
- assert.match(bridge,/galeria-local\.html\?v=1/);assert.match(bridge,/frame\.remove\(\)/);
+ assert.match(bridge,/galeria-local\.html\?v=2/);assert.match(bridge,/frame\.remove\(\)/);
  // O iframe tem cache próprio, inclusive na primeira abertura offline.
  const handlers={},puts=[],scope={URL,Promise,self:{addEventListener:(type,fn)=>handlers[type]=fn},fetch:()=>Promise.reject(Error('offline')),caches:{match:key=>Promise.resolve(key==='https://agracta.test/galeria-local.html'?'galeria':'app'),open:()=>Promise.resolve({put:(key)=>puts.push(key)})}};
  vm.runInNewContext(fs.readFileSync('sw.js','utf8'),scope);

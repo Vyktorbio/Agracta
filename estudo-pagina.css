@@ -36,3 +36,5 @@
 .ep-photo-dialog[open]{display:flex;flex-direction:column}.ep-photo-dialog::backdrop{background:#0b2018bb}
 .ep-photo-dialog-head{display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;gap:1rem;background:#183f2e;color:white;box-shadow:0 3px 12px #142e2525}
 .ep-photo-dialog-head strong{overflow-wrap:anywhere}.ep-photo-dialog iframe{border:0;width:100%;flex:1;min-height:0}
+
+.av-photo-btn{min-height:44px;padding:.65rem 1rem;border:1px solid #82b294;border-radius:.65rem;background:#e5f2e9;color:#174d30;font:650 .9rem system-ui;cursor:pointer}.av-photo-btn:focus-visible{outline:3px solid #ed9a38;outline-offset:2px}
