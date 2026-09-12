@@ -5753,7 +5753,7 @@ async function downloadStudyWorkbook(qid,sid){
     _bioestatEnsureStudy(qid,sid);
     /* A planilha agora é também o dossiê de análise: espera análise + forense.
        Se o limite for atingido, as abas ainda saem e marcam cada linha pendente. */
-    var _aJobs=_bioestatJobs(qid,s), _dossieOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey] && c.results[j.jobKey+'|F']; }); };
+    var _aJobs=_bioestatManifesto(qid,s), _dossieOk=function(c){ return !!c && c.sig===_bioestatSignature(s) && _aJobs.length>0 && _aJobs.every(function(j){ return _bioestatEstadoResultado(c.results&&c.results[j.jobKey])==='calculado'; }); };
     /* Exportar não pode prender o usuário por até 90 s esperando a triagem. O
        motor continua em segundo plano e a planilha já sabe marcar PENDENTE ou
        ERRO nas abas correspondentes. Quatro segundos preservam a resposta
@@ -11164,9 +11164,37 @@ function _bioestatJobsTempo(qid,study){
   });
   return out;
 }
+/* Conclusão da fila não significa sucesso científico. Cada retorno tem estado próprio. */
+function _bioestatEstadoResultado(r){
+  if(!r) return 'pendente';
+  if(r.ok===true) return 'calculado';
+  return 'erro';
+}
+function _bioestatManifesto(qid,s){
+  var out=[];
+  _bioestatJobs(qid,s).forEach(function(j){
+    ['analise','forense'].forEach(function(m){out.push({jobKey:j.jobKey+(m==='forense'?'|F':''),avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:m});});
+  });
+  _bioestatJobsTempo(qid,s).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,unidade:j.unidade,modo:'tempo'});});
+  return out;
+}
+function _bioestatSnapshotAvancado(qid,s){
+  var sig=_bioestatSignature(s), c=_bioAutoCache[qid+'|'+s.id], results={}, jobs=_bioestatManifesto(qid,s);
+  if(c&&c.sig===sig) jobs.forEach(function(j){if(c.results[j.jobKey])results[j.jobKey]=c.results[j.jobKey];});
+  var pendencias=jobs.filter(function(j){return _bioestatEstadoResultado(results[j.jobKey])!=='calculado';}).map(function(j){return {jobKey:j.jobKey,estado:_bioestatEstadoResultado(results[j.jobKey]),motivo:(results[j.jobKey]||{}).erro||'Não calculado no fechamento'};});
+  var indisponiveis=_bioestatPendentes(qid,s).map(function(j){return {avId:j.avId||'',date:j.date||'',variavel:j.variavel,motivo:'Sem comparação automática: delineamento ou repetições insuficientes. Resultados descritivos preservados.'};});
+  return JSON.parse(JSON.stringify({versao:1,geradoEm:new Date().toISOString(),motor:MOTOR_CALCULO,assinatura:sig,jobs:jobs,results:results,pendencias:pendencias,indisponiveis:indisponiveis,completo:jobs.length>0&&!pendencias.length&&!indisponiveis.length}));
+}
+function _bioestatRepetir(qid,sid){
+  var s=_estudoDe(qid,sid),c=_bioAutoCache[qid+'|'+sid];
+  if(!s||estudoFinalizado(s)||(c&&c.status==='loading'))return;
+  delete _bioAutoCache[qid+'|'+sid];
+  _bioestatEnsureStudy(qid,sid);
+  _bioestatRefreshOpen(_bioAutoCache[qid+'|'+sid]);
+}
 function _bioestatSignature(study){
-  var slim={motor:MOTOR_CALCULO,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
-    a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.variaveis,a.notas];})};
+  var slim={motor:MOTOR_CALCULO,config:study.estatisticaPlanejada,protocolo:study.protocolo,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
+    a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.tipos,a.varcfg,a.momento,a.variaveis,a.notas];})};
   return String(_hashSeed(JSON.stringify(slim)));
 }
 function _bioestatEnsureFrame(){
@@ -11233,10 +11261,9 @@ function _biocGravar(key,sig,results){
    completo com cartões faltando — e ninguém teria como saber disso. */
 function _bioestatPersistir(c){
   if(!c||c.status!=='ready'||!c.results||!c.qid||!c.sid) return;
-  /* Job que estourou o relógio não vira cache: guardá-lo faria o estudo
-     reabrir com o erro cravado e nunca mais tentar de novo. */
+  /* Relatório com erro ou retorno inválido não vira cache reutilizável. */
   var ks=Object.keys(c.results);
-  for(var i=0;i<ks.length;i++){ var r=c.results[ks[i]]; if(r&&r.ok===false&&r.erro==='tempo esgotado') return; }
+  for(var i=0;i<ks.length;i++){ if(_bioestatEstadoResultado(c.results[ks[i]])!=='calculado') return; }
   _biocGravar(c.qid+'|'+c.sid, c.sig, c.results);
 }
 function _bioestatEnsureStudy(qid,sid){
@@ -11257,8 +11284,8 @@ function _bioestatEnsureStudy(qid,sid){
     if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
-      jobs.forEach(function(j){ if(res[j.jobKey])n++; if(res[j.jobKey+'|F'])n++; });
-      jobsT.forEach(function(j){ if(res[j.jobKey])n++; });
+      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; if(_bioestatEstadoResultado(res[j.jobKey+'|F'])==='calculado')n++; });
+      jobsT.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
     _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
@@ -11555,12 +11582,12 @@ function _bioestatPendentesHtml(qid,study){
   return pend.map(function(j){ return _bioestatPendenteCard(j,study,j.av); }).join('');
 }
 function _bioestatForenseCard(job,rel){
-  if(!rel||!rel.ok) return '';
+  if(!rel||!rel.ok) return _bioestatResumoCard(job,rel);
   var v=rel.veredito||{}, flags=v.flags||0, watches=v.watches||0;
   var achados=(rel.achados||[]).filter(function(a){ return a.severidade && a.severidade!=='clear' && a.severidade!=='ok'; });
   var cor=flags?'#a33':(watches?'#8a6d12':'#1f6f43'), bd=flags?'#edc8c8':(watches?'#ece2b8':'#d9e5dc'), bg=flags?'#fff7f7':(watches?'#fffdf3':'#f7fbf8'), chipbg=flags?'#f3dede':(watches?'#f1ead0':'#e1f3e8');
-  var rot=flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
-  var lis=achados.slice(0,5).map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
+  var rot=(!v.cobertura_suficiente||achados.some(function(a){return a.executado===false;}))?'Triagem parcial / inconclusiva':flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
+  var lis=achados.map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
   return '<div style="padding:9px 11px;border:1px solid '+bd+';background:'+bg+';border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
     '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+chipbg+';color:'+cor+';white-space:nowrap">'+esc(rot)+'</span></div>'+
@@ -11645,6 +11672,7 @@ var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
   /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
      aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
+  if(c&&window.AgEstudoPagina&&window.AgEstudoPagina.atualizarAnalises)window.AgEstudoPagina.atualizarAnalises(c);
   if(!c||curV!==c.qid||curSid!==c.sid)return;
   var ov=document.getElementById('sdOvl');
   var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
@@ -11655,12 +11683,12 @@ function _bioestatRefreshOpen(c){
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
-  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
+  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{ok:false,erro:'Motor não devolveu um relatório'};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
   delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
   var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
   _bioestatPump();
-  /* re-renderiza quando termina uma ANÁLISE (não a cada forense) ou quando tudo fica pronto */
-  if(c && (c.status==='ready' || !/\|F$/.test((item.job&&item.job.jobKey)||''))) _bioestatRefreshOpen(c);
+  /* Atualiza também cada triagem forense na página de Conhecimento. */
+  if(c) _bioestatRefreshOpen(c);
 });
 
 /* ===================== IMPORTAR PROTOCOLO DA PLANILHA (modelo.xls) → ESTUDO =====================
@@ -15715,10 +15743,11 @@ function _studyFinalizationReview(qid,s){
     });
   });
   if(missing) issues.push(missing+' nota(s) de parcela em branco');
-  var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,s):[], cache=_bioAutoCache[qid+'|'+s.id], rr=cache&&cache.results||{};
+  var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,s):[];
   if(feitas && !jobs.length) issues.push('Nenhuma comparação estatística válida');
-  else if(jobs.some(function(j){return !rr[j.jobKey];})) notes.push('Há análise estatística ainda em processamento');
-  if(jobs.some(function(j){return !rr[j.jobKey+'|F'];})) notes.push('Há triagem forense ainda em processamento');
+  var avancado=_bioestatSnapshotAvancado(qid,s);
+  avancado.pendencias.forEach(function(p){notes.push(p.jobKey+': '+(p.estado==='erro'?'Erro de cálculo — ':'Pendente — ')+p.motivo);});
+  if(avancado.indisponiveis.length)notes.push(avancado.indisponiveis.length+' avaliação(ões)/variável(is) sem comparação automática; resultados descritivos preservados.');
   try{ if(!_currentUserName()) notes.push('O nome do responsável será solicitado na assinatura'); }catch(e){}
   return {issues:issues,notes:notes,ok:issues.length===0};
 }
@@ -15740,12 +15769,15 @@ function finalizarEstudo(qid,sid){
       if(!url){ alert('Sem a rubrica o estudo não é finalizado.'); return; }
       var st=_estudoDe(qid,sid); if(!st) return;
       st.estatisticaFinal=_statSnapshot(st);   /* recalcula na hora do aceite, não a prévia */
+      st.estatisticaFinal.avancado=_bioestatSnapshotAvancado(qid,st);
+      st.estatisticaFinal.revisao=_studyFinalizationReview(qid,st);
       st.finalizacao={
         em:new Date().toISOString(),
         por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
         nome:_nomeParaAssinatura(),
         rubrica:url,
-        significado:'Estudo finalizado — dados conferidos e estatística congelada',
+        significado:'Estudo finalizado — relatórios disponíveis e pendências preservados',
+        analiseCompleta:st.estatisticaFinal.avancado.completo,
         fuso:AGRACTA_TIME_ZONE,
         nAvaliacoes:(st.avaliacoes||[]).length,
         nResultados:(st.estatisticaFinal.itens||[]).length

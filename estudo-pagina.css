@@ -22,3 +22,12 @@
 .ep-grouped figcaption{font-size:.9375rem;line-height:1.6;color:var(--text-2,#587165);margin:14px 0 0}
 @media(min-width:900px){.ep-controls{grid-template-columns:repeat(3,minmax(0,1fr));max-width:none}}
 @media print{.ep-group-scroll{overflow:visible;border:0}.ep-group-svg{width:100%;height:auto;max-width:100%}.ep-bar-detail{display:none}}
+
+/* Dossiê: leitura confortável dos relatórios em celular e desktop. */
+.ep-analysis-card{margin:1rem 0;padding:1rem;border:1px solid var(--border,#d8e2dd);border-radius:1rem;background:var(--surface,#fff);box-shadow:0 8px 22px #153d2912;overflow-wrap:anywhere}
+.ep-analysis-counts{padding:1rem;border-radius:.75rem;background:#dfeee7;color:#184d37;margin-bottom:1rem;font-weight:700}
+.ep-analysis-status{font-weight:700}.ep-analysis-card summary{cursor:pointer;padding:.65rem 0}
+.ep-analysis-card [style*="font-size"]{font-size:.875rem!important}
+.ep-analysis-card .con-btn,#ep-analysis-body>.con-btn{margin:.25rem .5rem .5rem 0}
+.ep-report{margin:.5rem 0}.ep-report>div{padding:.5rem 0;border-bottom:1px solid #879d8b40}.ep-report dt{font-weight:600}.ep-report dd{margin:.3rem 0 .3rem .75rem;overflow-wrap:anywhere}.ep-report .ep-report{padding-left:.5rem;border-left:2px solid #879d8b40}
+.ep-finding{border-top:1px solid #879d8b40}
