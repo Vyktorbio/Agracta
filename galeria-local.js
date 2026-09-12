@@ -91,6 +91,14 @@ window.addEventListener('message',async function(ev){
   for(let r=1;r<=context.reps;r++)$('rep').add(new Option('R'+r,String(r)));
   (c.avaliacoes||[]).forEach(a=>{$('assessment').add(new Option(br(a.data)+' · '+a.id,a.id));});
   const now=new Date();$('date').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  const initial=c.initial;
+  if(initial&&treatment(initial.treatment)&&Number(initial.rep)>=1&&Number(initial.rep)<=context.reps){
+   $('treatment').value=initial.treatment;$('rep').value=String(initial.rep);
+   const av=(c.avaliacoes||[]).find(a=>a.id===initial.assessment);
+   $('assessment').value=av?av.id:'';
+   if(/^\d{4}-\d{2}-\d{2}$/.test(initial.date||''))$('date').value=initial.date;
+   $('plot').value=String(initial.plot||'').slice(0,40);
+  }
   photos=await storage.list();photos.forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();message('Galeria pronta. Armazenamento exclusivo deste aparelho.');
  }catch(err){message('Galeria indisponível: '+err.message,true);}
 });

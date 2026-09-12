@@ -25,3 +25,7 @@ As fotos permanecem neste navegador, neste aparelho e nesta conta. Limpar os dad
 test_fotos_locais.js cobre persistência e separação de contas/estudos, originais, ordenação, falha de armazenamento e estrutura/legendas/proporções do PPTX.
 test_fotos_fluxo.js cobre contexto externo recusado, captura simulada, prévia, exportação, exclusão e fechamento ao sair, com APIs de rede bloqueadas.
 A renderização dos três layouts foi conferida com imagens sintéticas de teste. Câmera física Android e abertura no PowerPoint nativo não foram executadas nesta sessão.
+
+## Fotos durante a avaliação
+
+Na grade, use **Foto** na linha da parcela. No modo automático, use **Fotografar esta parcela**. A nota atual é persistida e a galeria abre com tratamento, repetição, avaliação, data e parcela preenchidos. Toque em **Tirar foto** para capturar. Ao fechar a galeria, a avaliação continua na mesma posição. O armazenamento das fotos permanece exclusivamente local.

@@ -14786,7 +14786,7 @@ function renderAvGrid(){
         html+='<td><input class="av-cell av-cell-num" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)"></td>';
       }
     });
-    html+='<td></td></tr>';
+    html+='<td><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button></td></tr>';
   });
   html+='</tbody></table></div>';
   if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button></div>';
@@ -15059,6 +15059,7 @@ function renderAvAutoBox(){
     '<div class="av-auto-prog"><div class="av-auto-prog-fill" style="width:'+pctDone+'%"></div></div>'+
     '<div class="av-auto-progtxt">'+filled+' de '+a.total+' preenchidas'+(filled>=a.total?' ✓':'')+'</div>'+
     '<div class="av-auto-card"><div><div class="av-auto-main">'+passo+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div>'+der+'</div>'+input+'</div>'+
+    '<button type="button" class="av-photo-btn" data-av-photo-auto="1">Fotografar esta parcela</button>'+
     '<div class="av-auto-presets">'+presetHtml+'</div>'+
     '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">‹ Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo ›</button></div>'+
   '</div>';
