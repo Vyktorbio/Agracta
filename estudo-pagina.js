@@ -120,6 +120,21 @@ function protectedReport(value,st,s){
  function clean(x){if(typeof x==='string'){hidden.forEach(function(p){x=x.split(p[0]).join(p[1]);});return x;}if(Array.isArray(x))return x.map(clean);if(x&&typeof x==='object'){var out=Object.create(null);Object.keys(x).forEach(function(k){out[clean(k)]=clean(x[k]);});return out;}return x;}
  return clean(value);
 }
+/* Snapshot de leitura: um estudo, sem credenciais nem acervo de outros clientes. */
+function exportContext(st,s){
+ var hidden=[];
+ arr(st.tratamentos).forEach(function(t){var safe=tr(s,t.id).produto;if(safe!==t.produto){[t.produto,t.ia,t.ingredienteAtivo].forEach(function(v){if(typeof v==='string'&&v)hidden.push([v,safe]);});arr(t.componentes).forEach(function(c){[c.nome,c.ia,c.ingredienteAtivo].forEach(function(v){if(typeof v==='string'&&v)hidden.push([v,safe]);});});}});
+ hidden.sort(function(a,b){return b[0].length-a[0].length;});
+ function clean(v){
+  if(typeof v==='string'){if(/^data:|^blob:/.test(v))return '[Arquivo binário não incluído nos campos; fotos locais são opcionais na exportação]';hidden.forEach(function(p){v=v.split(p[0]).join(p[1]);});return v;}
+  if(Array.isArray(v))return v.map(clean);
+  if(v&&typeof v==='object'){var out=Object.create(null);Object.keys(v).forEach(function(k){if(/^(password|senha|access_token|refresh_token|token|apiKey|apikey|secret|credenciais)$/i.test(k))return;out[k]=clean(v[k]);});return out;}return v;
+ }
+ var q=w.data[s.qid]||{},lid=(w.QLOCAL||{})[s.qid],loc=(w.LOCAIS||{})[lid]||{};
+ var context={local:{id:lid,nome:loc.nome},quadra:{id:s.qid,nome:s.quadra,tipo:q.tipo,cultura:q.cultura,solo:q.solo},geometria:(w.QGEO||{})[s.qid],vinculos:s.integracoes,consumos:s.consumos,custos:C.custo(s.consumos,s.integracoes),notas:typeof w.notasDoEstudo==='function'?w.notasDoEstudo(s.qid,st):[]};
+ var findings=typeof w._forenseAchadosEstudo==='function'?w._forenseAchadosEstudo(st,s.qid):[];
+ return clean(protectedReport({schema:'agracta-relatorio-1',generated:new Date().toISOString(),projection:s,study:st,context:context,analysis:analysisData(st,s),forensics:{estudo:findings,eventos:arr(st.avaliacoes).concat(arr(st.aplicacoes)).map(function(a){return {id:a.id,data:a.data,achados:typeof w._forenseAchados==='function'?w._forenseAchados(a):[]};})}},st,s));
+}
 function reportTree(value){
  if(value===null||value===undefined)return '<span>Não disponível</span>';
  if(typeof value!=='object')return '<span>'+e(typeof value==='boolean'?(value?'Sim':'Não'):value)+'</span>';
@@ -188,7 +203,7 @@ function render(s,parts){
  if(!state||state.s.key!==s.key)state={s:s,variable:gs[0]&&gs[0].key,assessment:''};else{state.s=s;if(!gs.some(function(g){return g.key===state.variable;}))state.variable=gs[0]&&gs[0].key;}
  var avs=arr(st.avaliacoes),reps=Math.max(1,parseInt(st.numRepeticoes,10)||1),count=s.resultados.reduce(function(a,r){return a+r.n;},0),expected=avs.reduce(function(a,av){return a+arr(av.variaveis).length*s.tratamentos.length*reps;},0),pct=expected?Math.min(100,Math.round(count/expected*100)):0;
  var h='<div class="ep-page"><div class="ep-top">'+w.agConhecimento.bot('voltar','‹ Estudos e conhecimento')+w.agConhecimento.bot('original','Ficha operacional','data-key="'+e(s.key)+'"')+'</div><header class="ep-hero"><div><p class="ep-eyebrow">DOSSIÊ EXPERIMENTAL · '+(s.ambiente==='laboratorio'?'LABORATÓRIO':'CAMPO')+'</p><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+'</p><p class="ep-location">'+e(s.local)+' / '+e(s.quadra)+'</p></div><div class="ep-progress"><span class="con-selo '+(s.finalizado?'finalizado':'em-execucao')+'">'+(s.finalizado?'Finalizado':'Em execução')+'</span><strong>'+pct+'<small>%</small></strong><span>dos valores previstos nas avaliações cadastradas</span><progress value="'+pct+'" max="100" aria-label="Preenchimento das avaliações">'+pct+'%</progress></div></header><div class="ep-stats">'+[['Tratamentos',s.tratamentos.length],['Repetições previstas',reps],['Avaliações',avs.length],['Valores registrados',count]].map(function(x){return '<div><strong>'+num(x[1])+'</strong><span>'+x[0]+'</span></div>';}).join('')+'</div><nav class="ep-nav" aria-label="Seções do estudo">'+[['fotos','Slides e fotos'],['graficos','Gráficos'],['protocolo','Protocolo'],['resultados','Resultados'],['analises','Estatística e forense'],['brutos','Repetições'],['conducao','Linha do tempo'],['ambiente','Ambiente'],['contexto','Contexto'],['custos','Custos'],['historico','Histórico']].map(function(x){return '<a href="#ep-'+x[0]+'" data-ep-scroll="ep-'+x[0]+'">'+x[1]+'</a>';}).join('')+'</nav>';
- h+=section('fotos','Gráficos, slides e fotos','<p>Configure os gráficos e baixe as figuras e os slides deste estudo. As fotos das parcelas ficam na galeria exclusiva deste aparelho.</p><button type="button" class="con-btn" data-ep-action="charts">Gráficos e slides</button> <button type="button" class="con-btn" data-ep-action="photos">Abrir galeria local e montar slides</button>');
+ h+=section('fotos','Gráficos, slides e fotos','<p>Configure os gráficos e baixe as figuras e os slides deste estudo. As fotos das parcelas ficam na galeria exclusiva deste aparelho.</p><button type="button" class="con-btn" data-ep-action="charts">Gráficos e slides</button> <button type="button" class="con-btn" data-ep-action="report">Relatório completo e R</button> <button type="button" class="con-btn" data-ep-action="photos">Abrir galeria local e montar slides</button>');
  h+=section('graficos','Resultados em perspectiva','<div id="ep-charts-body">'+charts()+'</div>');
  var facts=fact('Início',date(s.inicio))+fact('Delineamento',s.desenho)+fact('Método de aplicação',s.metodo)+fact('Cultivar',st.variedade||st.cultivar||p.cultivar)+fact('Aplicações previstas',st.numAplicacoes)+fact('Intervalo entre aplicações (dias)',st.intervaloDias)+fact('Parcela',p.tamanhoParcela)+fact('Volume de calda',p.volumeCalda||p.volumeCaldaLHa&&p.volumeCaldaLHa+' L/ha')+fact('Protocolo de origem',st.protocoloOrigem&&st.protocoloOrigem.nome);
  h+=section('protocolo','Protocolo e tratamentos',(st.descricao?'<p class="ep-description">'+e(st.descricao)+'</p>':'')+'<dl class="ep-facts">'+facts+'</dl>'+table(['Tratamento','Produto','Dose','Método','Referência'],s.tratamentos.map(function(t){return [e(t.id),e(t.produto),e(t.dose||'Não informada'),e(t.metodo),t.testemunha?'Testemunha':'—'];})));
@@ -216,6 +231,7 @@ function render(s,parts){
   var rows=selected();w.openPranchaEstudo(s.qid,s.sid,rows.length?rows[0].variavel:undefined);
   var ov=document.getElementById('prOvl');if(ov)ov.style.zIndex='4001';
  }
+ if(b.dataset.epAction==='report'&&typeof w.abrirRelatorioEstudo==='function')w.abrirRelatorioEstudo(exportContext(st,w.agConhecimento.projetar(s.qid,st,w.data[s.qid])));
  if(b.dataset.epAction==='photos'&&typeof w.abrirGaleriaFotos==='function')w.abrirGaleriaFotos(s);
  if(b.dataset.epAction==='retry'&&typeof w._bioestatRepetir==='function')w._bioestatRepetir(s.qid,s.sid);
  if(b.dataset.epAction==='download'){

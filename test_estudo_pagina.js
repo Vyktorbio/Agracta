@@ -15,6 +15,8 @@ w.abrirConhecimento({aba:'estudos'});q('.con-acoes [data-con="estudo"]').click()
 const openedCharts=[];w.openPranchaEstudo=(...args)=>openedCharts.push(args);
 const overlay=d.createElement('div');overlay.id='prOvl';d.body.prepend(overlay);
 q('[data-ep-action="charts"]').click();assert.deepEqual(openedCharts[0],['Q1','S1','Severidade']);assert.equal(overlay.style.zIndex,'4001');assert(q('.ep-page'));assert.equal(JSON.stringify(w.data),before);
+let exportado;w.abrirRelatorioEstudo=c=>exportado=c;
+q('[data-ep-action="report"]').click();assert.equal(exportado.study.id,'S1');assert.equal(exportado.projection.sid,'S1');assert.equal(JSON.stringify(w.data),before);
 change('[data-ep="assessment"]','A0');assert.deepEqual(qa('.ep-rank').map(x=>x.textContent),['1','1','1']);
 change('[data-ep="variable"]',qa('[data-ep="variable"] option')[1].value);assert.match(q('.ep-ranking li b').textContent,/T3/);q('[data-ep-action="charts"]').click();assert.deepEqual(openedCharts[1],['Q1','S1','Produção']);assert.equal(JSON.stringify(w.data),before);
 change('[data-ep="variable"]',qa('[data-ep="variable"] option')[0].value);
@@ -36,5 +38,12 @@ s.avaliacoes[0].notas.T1R1.Severidade=0;w.abrirConhecimento({qid:'Q1',sid:'S1'})
 // Páginas de alvo mantêm um gráfico independente por estudo.
 const other=JSON.parse(JSON.stringify(s));other.id='S2';other.codigo='Outro estudo';w.data.Q1.estudos.push(other);
 w.abrirConhecimento({aba:'alvos'});q('[data-con="selecionar"]').click();await new Promise(r=>setTimeout(r,0));assert.equal(qa('.ep-comparison').length,2);
+// Exportação preserva cegamento e não inclui o acervo de outro estudo.
+s.tratamentos[1].produto='SEGREDO PRODUTO';s.tratamentos[1].itemId='blind';s.tratamentos[1].ia='SEGREDO ATIVO';
+w.ITENS.blind={id:'blind',nome:'SEGREDO PRODUTO',ativos:'SEGREDO ATIVO',codigoCego:'SC CEGO'};
+s.access_token='NAO_EXPORTAR_TOKEN';s.protocolo={observacao:'SEGREDO PRODUTO e SEGREDO ATIVO'};
+other.descricao='DADOS OUTRO ESTUDO';w.abrirConhecimento({qid:'Q1',sid:'S1'});
+const unchanged=JSON.stringify(w.data);q('[data-ep-action="report"]').click();
+const serialized=JSON.stringify(exportado);assert(!serialized.includes('SEGREDO'));assert(!serialized.includes('NAO_EXPORTAR_TOKEN'));assert(!serialized.includes('DADOS OUTRO ESTUDO'));assert(serialized.includes('SC CEGO'));assert.equal(JSON.stringify(w.data),unchanged);
 w.close();console.log('Barras agrupadas: uma repetição, zero, Abbott, grade parcial e estudos separados OK.');console.log('Página do estudo: abertura, médias, última data, empates, sentido, valores zero, ausência de data, XSS e leitura sem mutação OK.');
 })().catch(e=>{console.error(e);process.exit(1)});
