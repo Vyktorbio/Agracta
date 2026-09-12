@@ -1,0 +1,62 @@
+/* Interface neutra. As cores dos dados, alertas, culturas e gráficos pertencem
+   aos módulos; estes tokens cuidam somente de superfícies e ações. */
+:root,html.light,html.ag-depth-light{
+ --bg:#fff;--surface:#fff;--surface-2:#f7f7f8;--surface-3:#eeeef0;
+ --border:#dcdce0;--border-soft:#ededf0;--text:#202124;--text-2:#555860;--text-3:#666a73;
+ --gp-bg:#fff;--gp-s1:#fff;--gp-s2:#f7f7f8;--gp-s3:#eeeef0;
+ --gp-line:#dedee2;--gp-line-2:#c3c5ca;--gp-text:#202124;--gp-text-2:#555860;--gp-text-3:#666a73;
+ --gp-green:#292b30;--gp-green-deep:#18191c;--gp-green-hover:#35373c;
+ --ag-green:#292b30;--ag-green-strong:#18191c;--ag-focus:0 0 0 4px #1477e526;
+ --gp-glass:rgba(255,255,255,.96);--gp-glass-strong:#fff;
+ --accent:#202124;--accent-d:#101114;--accent-deep:#fff;--accent-soft:#2021240d;
+ --depth-canvas:#fff;--depth-surface:#fff;--depth-edge:#dedee2;--depth-highlight:#ffffff80;--depth-wash:transparent;--depth-recess:#1618200a;
+ --depth-sheen:none;--depth-raised:0 1px 2px #1011140a,0 5px 12px -6px #10111430;
+ --depth-card:0 2px 3px #10111405,0 10px 24px -12px #10111425;
+ --depth-float:0 4px 12px #10111414,0 24px 56px -16px #10111438;
+ --depth-pressed:inset 0 1px 3px #10111412;--depth-green:var(--depth-raised);
+ --gp-shadow:var(--depth-float);--ag-card-shadow:var(--depth-card);
+}
+/* O tema escuro existente também perde o tom esverdeado. */
+html:not(.light):has(#authGate){
+ --bg:#151619;--surface:#202125;--surface-2:#27282d;--surface-3:#33353b;--border:#41434b;--border-soft:#33353b;
+ --text:#f6f6f7;--text-2:#c4c6cc;--text-3:#a9adb7;
+ --gp-bg:#151619;--gp-s1:#202125;--gp-s2:#27282d;--gp-s3:#33353b;--gp-line:#41434b;--gp-line-2:#5b5e68;
+ --gp-text:#f6f6f7;--gp-text-2:#c4c6cc;--gp-text-3:#a9adb7;--gp-green:#e6e7ea;--ag-green:#e6e7ea;
+ --gp-glass:#202125;--gp-glass-strong:#202125;--depth-canvas:#151619;--depth-surface:#202125;--depth-edge:#41434b;--depth-highlight:#ffffff08;
+}
+/* Navegação escura, independente da superfície de trabalho. */
+html :is(.main-menu,.loc-menu,.ag-drawer){
+ --gp-text:#fafafa;--gp-text-2:#d3d4d8;--gp-text-3:#b5b8c0;--gp-s1:#202125;--gp-s2:#2c2e33;--gp-s3:#373940;
+ --gp-line:#41434b;--gp-line-2:#5d6069;--gp-green:#fff;--ag-green:#fff;--depth-surface:#2c2e33;
+ background:#202125!important;background-image:none!important;color:#fafafa!important;border-color:#41434b!important;
+}
+html :is(.main-menu button,.loc-mi,.ag-row,.ag-dw-x){color:var(--gp-text)!important}
+html :is(.main-menu button,.loc-mi,.ag-row):hover{background:#373940!important;color:#fff!important}
+html .ag-row.on{background:#36383f!important;border-color:#626772!important;color:#fff!important}
+html .ag-row.on .ag-chk{background:#fff!important}html .ag-row.on .ag-chk::after{background:#202125!important}
+html :is(.ag-dw-head,.ag-sec-t,.mm-user,.mm-user b){color:var(--gp-text)!important}
+/* Cabeçalhos e controles principais. */
+html .ep-hero{background:linear-gradient(125deg,#18191c,#34363c);box-shadow:var(--depth-card);color:#fff}
+html .ep-hero :is(.ep-eyebrow,.ep-location,small){color:#d3d5dc}
+html .ep-progress progress{accent-color:#fff}
+html :is(.con-btn.ativo,.con-btn.primary,.btn-save,.auth-btn,.av-photo-btn,.calc-copy,.btn-principal){background:#18191c!important;background-image:none!important;border-color:#18191c!important;color:#fff!important;box-shadow:var(--depth-raised)!important}
+html :is(.con-btn.ativo,.con-btn.primary,.btn-save,.auth-btn,.av-photo-btn,.calc-copy,.btn-principal):hover{background:#35373c!important}
+html :is(.btn-cancel,.con-btn:not(.ativo):not(.primary):not(.perigo):not(.link),.calc-navb){background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
+html .con-estudo>.con-btn.card{background:transparent!important}
+html .con-btn.link{color:var(--text)!important;text-decoration:underline;text-underline-offset:3px}
+html :is(.con-btn,.btn-cancel):hover{box-shadow:0 0 0 2px #77777725}
+html :is(.ep-facts>div,.ep-analysis-card,.av-auto-box,.bio-fast-card,.bio-engine-status,.av-schema-inherited){background:var(--surface-2)!important;border-color:var(--border)!important;color:var(--text)!important}
+html :is(.con-overlay,.sd-overlay,.today-overlay,.studies-overlay){background:var(--bg)!important;background-image:none!important}
+html :is(input,select,textarea){accent-color:#25272c}
+html :is(button,input,select,textarea,a):focus-visible{outline:3px solid #1477e5!important;outline-offset:3px}
+/* Janelas locais de fotos e relatórios: mesmas superfícies, sem recolorir figuras. */
+html:has(#include-photos) body,html:has(#camera) body{background:#fff;color:#202124}
+html:has(#camera) :is(h1,h2,.subtitle,.hint){color:#292b30}
+html:has(#camera) :is(button,.button),html:has(#include-photos) button{background:#202124;color:#fff;border-color:#202124;box-shadow:var(--depth-raised)}
+html:has(#camera) :is(.secondary){background:#fff;color:#292b30;border-color:#c3c5ca}
+html:has(#camera) .danger{background:#fff;color:#a12e21;border-color:#d8bdbb}
+html:has(#camera) :is(form,.export,.photo,input,select){border-color:#dcdce0;background:#fff;box-shadow:var(--depth-card)}
+/* Estatística usa as mesmas ações neutras e mantém cores dos achados. */
+html.ag-depth-stat :is(.btn-principal,.appnav-item.active,.tab.active,.analysis-mode.active){background:#202124;color:#fff;border-color:#202124}
+@media print{html .ep-hero{background:#fff;color:#111;box-shadow:none}html .ep-hero :is(.ep-eyebrow,.ep-location,small){color:#333}}
+@media(forced-colors:active){html :is(button,.con-btn,.ag-row){forced-color-adjust:auto;box-shadow:none!important}}

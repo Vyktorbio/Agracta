@@ -3279,12 +3279,12 @@ function render(){
     var hasAlert=quadraHasAlert(id);
     var isEd=(editMode && id===editId);
 
-    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.08);
+    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.26);
     var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':_zc,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
     (function(qid,zfo,zona){
       if(!drawMode){
         poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
-        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.25,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
+        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.38,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
       }
     })(id,_zfo,_zona);
     poly.addTo(_qLayer);
@@ -17407,7 +17407,7 @@ function toggleTheme(){
   r.classList.add('theming'); clearTimeout(window._thT); window._thT=setTimeout(function(){r.classList.remove('theming');},420);
   r.classList.toggle('light', light);
   try{ localStorage.setItem('agracta-theme', light?'light':'dark'); }catch(e){}
-  try{ var m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#f2f3f1':'#101513'; }catch(e){}
+  try{ var m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#ffffff':'#151619'; }catch(e){}
   try{ closeMainMenu(); }catch(e){}
   if(typeof _stxToast==='function') _stxToast(light?'◐ Tema claro ativado':'◑ Tema escuro ativado');
 }
