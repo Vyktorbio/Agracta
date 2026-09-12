@@ -2,11 +2,12 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v223';
+var CACHE = 'agracta-app-v224';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
+  './galeria-fotos.js?v=1', './galeria-local.html', './galeria-local.js?v=1', './galeria-local.css?v=1', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=1',
   './profundidade.css?v=1',
-  './estudo-pagina.js?v=3', './estudo-pagina.css?v=3',
+  './estudo-pagina.js?v=4', './estudo-pagina.css?v=4',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=2',
   './', './index.html',
   './integracoes.css?v=2', './integracoes.js?v=4', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
@@ -67,7 +68,7 @@ self.addEventListener('fetch', function(e){
      que grava a resposta na chave './index.html' — ou seja, abrir a prancha
      sobrescrevia o app no cache. Rede primeiro, cache só como reserva offline,
      cada uma na sua própria chave. */
-  if(/\/(prancha|croqui|cliente)\.html$/.test(u.pathname)){
+  if(/\/(prancha|croqui|cliente|galeria-local)\.html$/.test(u.pathname)){
     var chave = u.origin + u.pathname;
     e.respondWith(
       fetch(e.request).then(function(resp){
