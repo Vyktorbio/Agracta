@@ -31,3 +31,8 @@
 .ep-analysis-card .con-btn,#ep-analysis-body>.con-btn{margin:.25rem .5rem .5rem 0}
 .ep-report{margin:.5rem 0}.ep-report>div{padding:.5rem 0;border-bottom:1px solid #879d8b40}.ep-report dt{font-weight:600}.ep-report dd{margin:.3rem 0 .3rem .75rem;overflow-wrap:anywhere}.ep-report .ep-report{padding-left:.5rem;border-left:2px solid #879d8b40}
 .ep-finding{border-top:1px solid #879d8b40}
+
+.ep-photo-dialog{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;background:#edf2ef;color:#203a2a}
+.ep-photo-dialog[open]{display:flex;flex-direction:column}.ep-photo-dialog::backdrop{background:#0b2018bb}
+.ep-photo-dialog-head{display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;gap:1rem;background:#183f2e;color:white;box-shadow:0 3px 12px #142e2525}
+.ep-photo-dialog-head strong{overflow-wrap:anywhere}.ep-photo-dialog iframe{border:0;width:100%;flex:1;min-height:0}

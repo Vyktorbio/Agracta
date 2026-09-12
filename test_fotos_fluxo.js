@@ -1,0 +1,36 @@
+/* Integração de captura local, rejeição de contexto externo, exportação e saída. */
+'use strict';
+const assert=require('node:assert/strict'),fs=require('fs'),{JSDOM}=require('jsdom'),{indexedDB}=require('fake-indexeddb');
+const Store=require('./vendor/fotos-store.js'),Pptx=require('./vendor/fotos-pptx.js');
+const tick=()=>new Promise(r=>setTimeout(r,30));
+(async()=>{
+ const dom=new JSDOM(fs.readFileSync('galeria-local.html','utf8'),{url:'https://agracta.test/galeria-local.html',runScripts:'outside-only'}),w=dom.window,d=w.document;
+ const downloads=[],blobs=new Map();let serial=0,network=0;
+ w.indexedDB=indexedDB;w.FotosStore=Store;w.FotosPptx=Pptx;w.Blob=Blob;w.TextEncoder=TextEncoder;w.Uint8Array=Uint8Array;
+ w.fetch=w.XMLHttpRequest=w.WebSocket=()=>{network++;throw Error('Rede proibida');};
+ w.URL.createObjectURL=b=>{const u='blob:test-'+(++serial);blobs.set(u,b);return u;};w.URL.revokeObjectURL=()=>{};
+ w.HTMLAnchorElement.prototype.click=function(){downloads.push({name:this.download,blob:blobs.get(this.href)});};
+ w.HTMLElement.prototype.scrollIntoView=function(){};
+ w.HTMLCanvasElement.prototype.getContext=()=>({fillRect(){},drawImage(){}});
+ w.HTMLCanvasElement.prototype.toBlob=function(cb){cb(new Blob(['imagem normalizada'],{type:'image/jpeg'}));};
+ w.Image=class{constructor(){this.naturalWidth=1200;this.naturalHeight=600;}set src(v){setTimeout(()=>this.onload(),0);}};
+ w.confirm=()=>true;
+ w.eval(fs.readFileSync('galeria-local.js','utf8'));
+ const context={owner:'fluxo-user',qid:'Q',sid:'S',codigo:'SC 193',reps:2,tratamentos:[{id:'T1',produto:'SC <cego>'}],avaliacoes:[{id:'A',data:'2026-09-12'}]};
+ w.dispatchEvent(new w.MessageEvent('message',{origin:'https://malicioso.test',source:w,data:{type:'agracta:fotos-local-context',context}}));await tick();assert(d.getElementById('workspace').hidden);
+ w.dispatchEvent(new w.MessageEvent('message',{origin:'https://agracta.test',source:w,data:{type:'agracta:fotos-local-context',context}}));await tick();assert.equal(d.getElementById('workspace').hidden,false);
+ const file=new Blob(['original sem alteração'],{type:'image/jpeg'});
+ Object.defineProperty(d.getElementById('files'),'files',{value:[file],configurable:true});d.getElementById('files').dispatchEvent(new w.Event('change'));await tick();await tick();
+ const saved=await Store.create(indexedDB,JSON.stringify(['fluxo-user','Q','S'])).list();assert.equal(saved.length,1);assert.equal(await saved[0].blob.text(),'original sem alteração');
+ assert.equal(d.querySelectorAll('.photo').length,1);assert.equal(d.querySelectorAll('.photo script').length,0);assert.match(d.querySelector('.photo').textContent,/SC <cego>/);
+ d.getElementById('preview-button').click();assert.equal(d.querySelectorAll('.preview-slide').length,1);
+ d.getElementById('pptx').click();await tick();await tick();assert.equal(downloads[0].name,'SC_193_fotos.pptx');
+ d.getElementById('originals').click();await tick();assert.equal(downloads[1].name,'SC_193_originais.zip');assert.equal(network,0);
+ d.querySelector('[data-delete]').click();await tick();assert.equal((await Store.create(indexedDB,JSON.stringify(['fluxo-user','Q','S'])).list()).length,0);
+ dom.window.close();
+ const parent=new JSDOM('<!doctype html><html><body><button id="open">Abrir</button></body></html>',{url:'https://agracta.test',runScripts:'outside-only'}),p=parent.window;
+ p.HTMLDialogElement.prototype.showModal=function(){this.open=true;};p.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new p.Event('close'));};
+ p._authUser={uid:'owner'};p.data={Q:{estudos:[{id:'S',numRepeticoes:1,avaliacoes:[]}]}};p.eval(fs.readFileSync('galeria-fotos.js','utf8'));
+ p.abrirGaleriaFotos({qid:'Q',sid:'S',codigo:'Teste',tratamentos:[{id:'T1',produto:'Cego'}]});assert(p.document.querySelector('iframe'));p._authUser=null;await new Promise(r=>setTimeout(r,350));assert.equal(p.document.querySelector('iframe'),null);
+ parent.window.close();console.log('Fluxo local: contexto externo recusado, captura, originais, prévia, PPTX/ZIP, exclusão e fechamento ao sair OK; zero transmissões.');
+})().catch(err=>{console.error(err);process.exit(1);});
