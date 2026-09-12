@@ -11,8 +11,12 @@ const s={id:'S1',codigo:'SC 024 193',cultura:'Soja',alvo:'Phakopsora pachyrhizi'
 w.data={Q1:{estudos:[s]}};const before=JSON.stringify(w.data);
 const q=x=>d.querySelector(x),qa=x=>Array.from(d.querySelectorAll(x)),change=(sel,val)=>{q(sel).value=val;q(sel).dispatchEvent(new w.Event('change',{bubbles:true}));};
 w.abrirConhecimento({aba:'estudos'});q('.con-acoes [data-con="estudo"]').click();await new Promise(r=>setTimeout(r,0));assert.equal(opened,0);assert(q('.ep-page'));assert.equal(qa('.ep-line circle').length,9);assert.match(q('.ep-ranking li b').textContent,/T2/);assert.match(q('.ep-ranking li strong').textContent,/11,5/);assert.match(q('.ep-caption').textContent,/05\/09\/2026/);
+// Reutiliza a prancha do estudo correto, inclusive se o overlay já existia.
+const openedCharts=[];w.openPranchaEstudo=(...args)=>openedCharts.push(args);
+const overlay=d.createElement('div');overlay.id='prOvl';d.body.prepend(overlay);
+q('[data-ep-action="charts"]').click();assert.deepEqual(openedCharts[0],['Q1','S1','Severidade']);assert.equal(overlay.style.zIndex,'4001');assert(q('.ep-page'));assert.equal(JSON.stringify(w.data),before);
 change('[data-ep="assessment"]','A0');assert.deepEqual(qa('.ep-rank').map(x=>x.textContent),['1','1','1']);
-change('[data-ep="variable"]',qa('[data-ep="variable"] option')[1].value);assert.match(q('.ep-ranking li b').textContent,/T3/);assert.equal(JSON.stringify(w.data),before);
+change('[data-ep="variable"]',qa('[data-ep="variable"] option')[1].value);assert.match(q('.ep-ranking li b').textContent,/T3/);q('[data-ep-action="charts"]').click();assert.deepEqual(openedCharts[1],['Q1','S1','Produção']);assert.equal(JSON.stringify(w.data),before);
 change('[data-ep="variable"]',qa('[data-ep="variable"] option')[0].value);
 if(process.env.EP_PREVIEW){for(const file of ['integracoes.css','estudo-pagina.css']){const style=d.createElement('style');style.textContent=fs.readFileSync(file,'utf8');d.head.appendChild(style);}fs.writeFileSync(process.env.EP_PREVIEW,dom.serialize());}
 s.avaliacoes[2].data='';w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(qa('.ep-line circle').length,6);assert.match(q('.ep-line').closest('.ep-chart').textContent,/sem data/);
