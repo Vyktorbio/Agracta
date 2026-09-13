@@ -80,11 +80,16 @@ a malha tiver mudado, e apagado quando o download termina.
   "local": "Iracema",
   "bbox": [minLat, minLng, maxLat, maxLng],
   "nrows": 48, "ncols": 42,
-  "passoLat": 0.00026949, "passoLng": 0.00029388,
+  "passoLat": 0.0002694934, "passoLng": 0.0002938767,
   "fonte": "SRTM 30m via Open Topo Data",
+  "datum": "EGM96 (geoide)",
+  "origem": {"lat": -23.5045, "lng": -50.096},
+  "baixadoEm": "2026-09-13T19:46:05Z",
   "z": [443.0, 444.0, null, ...]
 }
 ```
+
+### `z` — ordem row-major
 
 `z` é achatado em **row-major, com a linha 0 no sul e a coluna 0 no oeste**:
 
@@ -99,6 +104,33 @@ do script, e trancada em `test_relevo_malha.py`.
 
 Elevação em metros com uma casa decimal. `null` onde a API não devolveu valor
 (fora da cobertura do SRTM, que vai de 60°N a 56°S).
+
+### `origem` — a mesma referência para o relevo e para as quadras
+
+É o **meio da caixa** (não a média dos vértices das quadras; num retângulo as
+duas coincidem, num polígono assimétrico não).
+
+Serve para converter graus em metros locais. Gravá-la não é comodidade: se o
+relevo for convertido a partir de um ponto e as quadras a partir de outro, os
+dois planos saem deslocados entre si. E o erro **não aparece** — o deslocamento
+é constante e suave, então nada fica torto; a quadra só fica no lugar errado do
+terreno, e o desenho continua plausível.
+
+### `datum` — cota de SRTM não é altitude de GPS
+
+As cotas do SRTM são ortométricas sobre o **geoide EGM96**. Um GPS mostra
+altitude elipsoidal, e no Brasil as duas diferem de dezenas de metros (o geoide
+fica abaixo do elipsoide), variando devagar pelo território.
+
+Para desenhar o relevo isso não muda nada, porque o **desnível** é o mesmo. Para
+comparar uma cota deste arquivo com uma leitura de GPS, muda tudo. Por isso vai
+escrito no arquivo em vez de ficar subentendido.
+
+### `baixadoEm`
+
+Instante do download, em UTC (ISO 8601). O SRTM é de 2000 e não muda, mas o
+arquivo pode ser regerado com outro passo, outra margem ou outra área — e aí
+saber qual cópia é a mais nova importa.
 
 ### Por que os dois passos são diferentes
 
@@ -161,7 +193,9 @@ repositório é:
 `test_relevo_malha.py` roda no portão e não toca a rede. Tranca o passo nos dois
 eixos (incluindo os casos-limite do equador e de 60°, onde a resposta é
 conhecida de antemão), a folga de 200 m nos quatro lados medida por haversine
-com outro raio terrestre, a cobertura da caixa, a ordem row-major, o
+com outro raio terrestre, a cobertura da caixa, a ordem row-major, a `origem`
+no meio da caixa (com um polígono em L, porque num retângulo ela coincide com a
+média dos vértices e o teste não provaria nada), o `datum` declarado, o
 fatiamento em blocos de 100 e as recusas.
 
 O caminho de rede foi exercitado contra a API real com um polígono sintético:

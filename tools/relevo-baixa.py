@@ -34,6 +34,10 @@ Achatado em row-major, com a LINHA 0 NO SUL e a COLUNA 0 NO OESTE:
 Quem for renderizar o terreno em 3D precisa desta convenção; ela não está
 gravada no JSON (o formato é fixo e compacto), está aqui e na documentação.
 
+O arquivo também grava `origem` (o centro da caixa) para que o relevo e as
+quadras sejam convertidos para metros locais a partir do MESMO ponto, e
+`datum`, porque cota de SRTM não é altitude de GPS.
+
 LIMITES DA API PÚBLICA (api.opentopodata.org)
 ---------------------------------------------
 100 pontos por requisição · 1 chamada/s · 1000 chamadas/dia. O script espera
@@ -43,6 +47,7 @@ parcial a cada poucos blocos: se a rede cair, rodar de novo continua de onde
 parou em vez de recomeçar.
 """
 import argparse
+import datetime
 import hashlib
 import json
 import math
@@ -58,6 +63,12 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 API = 'https://api.opentopodata.org/v1/srtm30m'
 FONTE = 'SRTM 30m via Open Topo Data'
+# As cotas do SRTM são ortométricas sobre o geoide EGM96 — NÃO são a altitude
+# elipsoidal que um GPS mostra. No Brasil as duas diferem de dezenas de metros
+# (o geoide fica abaixo do elipsoide), e a diferença varia devagar pelo país.
+# Para desenhar o relevo isso não muda nada, porque o desnível é o mesmo; para
+# comparar com uma leitura de GPS, muda tudo. Por isso vai escrito no arquivo.
+DATUM = 'EGM96 (geoide)'
 POR_CHAMADA = 100          # limite da API pública
 PAUSA_PADRAO = 1.1         # 1 chamada/s, com folga
 MAX_PONTOS_PADRAO = 90000  # 900 chamadas — abaixo das 1000/dia
@@ -238,6 +249,19 @@ def desvio_do_passo(bbox, passo_lng_graus, passo_m):
     min_lat, _, max_lat, _ = bbox
     reais = [passo_lng_graus * m_por_grau_lng(lat) for lat in (min_lat, max_lat)]
     return max(abs(v - passo_m) for v in reais)
+
+
+def origem_local(bbox):
+    """Centro da caixa: a referência para converter graus em metros locais.
+
+    Gravar isto no arquivo não é comodidade, é evitar um erro que não aparece:
+    quem converter as quadras para metros a partir de uma origem e o relevo a
+    partir de outra recebe dois planos deslocados entre si. O deslocamento é
+    constante e suave, então nada fica torto — a quadra só fica no lugar errado
+    do terreno, e o desenho continua plausível.
+    """
+    return {'lat': round((bbox[0] + bbox[2]) / 2.0, 8),
+            'lng': round((bbox[1] + bbox[3]) / 2.0, 8)}
 
 
 # --------------------------------------------------------------- download ---
@@ -426,6 +450,10 @@ def main():
         'nrows': nrows, 'ncols': ncols,
         'passoLat': round(passo_lat, 10), 'passoLng': round(passo_lng, 10),
         'fonte': FONTE,
+        'datum': DATUM,
+        'origem': origem_local(bbox),
+        'baixadoEm': datetime.datetime.now(datetime.timezone.utc)
+                             .replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
         'z': z,
     }, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     parcial.unlink(missing_ok=True)

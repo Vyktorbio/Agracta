@@ -102,6 +102,30 @@ ck(pts[1][0] == pts[0][0] and pts[1][1] > pts[0][1],
 ck(pts[ncols][0] > pts[0][0] and abs(pts[ncols][1] - pts[0][1]) < 1e-12,
    'e o ponto ncols adiante é a linha de cima, mesma coluna')
 
+# ------------------------------------------------- origem comum ao relevo e às quadras
+# Se o relevo converter graus em metros a partir de um ponto e as quadras a
+# partir de outro, os dois planos saem deslocados entre si. O deslocamento é
+# constante e suave, então nada fica torto: a quadra só fica no lugar errado do
+# terreno, e o desenho continua plausível. Por isso a origem vai no arquivo.
+o = R.origem_local(bbox)
+ck(abs(o['lat'] - (bbox[0] + bbox[2]) / 2) < 1e-8, 'a origem é o centro da caixa em latitude')
+ck(abs(o['lng'] - (bbox[1] + bbox[3]) / 2) < 1e-8, 'e o centro da caixa em longitude')
+ck(bbox[0] < o['lat'] < bbox[2] and bbox[1] < o['lng'] < bbox[3], 'e cai dentro da caixa')
+# É o meio da CAIXA, não a média dos vértices. Num retângulo os dois coincidem,
+# então a distinção só aparece num polígono assimétrico — como este, em L, com
+# vértices amontoados a oeste.
+EM_L = [(-23.5000, -50.1000), (-23.5000, -50.0990), (-23.5010, -50.0990),
+        (-23.5010, -50.0995), (-23.5020, -50.0995), (-23.5020, -50.0900)]
+o_l = R.origem_local(R.caixa_com_margem(EM_L, 200.0))
+media_l = sum(q[1] for q in EM_L) / len(EM_L)
+ck(abs(o_l['lng'] - media_l) > 1e-5,
+   'é o meio da CAIXA, não a média dos vértices (%.6f vs %.6f)' % (o_l['lng'], media_l))
+ck(R.origem_local([-1.0, -2.0, 1.0, 2.0]) == {'lat': 0.0, 'lng': 0.0},
+   'caixa simétrica dá origem no zero')
+
+# O datum é declarado: cota de SRTM é ortométrica (geoide), não a do GPS.
+ck(R.DATUM == 'EGM96 (geoide)', 'o datum vertical vai escrito no arquivo (%s)' % R.DATUM)
+
 # ------------------------------------------------------------- blocos de 100
 gs = R.blocos(pts, R.POR_CHAMADA)
 ck(all(len(g) <= 100 for g in gs), 'nenhum bloco passa de 100 pontos (limite da API)')
