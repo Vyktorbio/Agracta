@@ -101,10 +101,19 @@ function referenceControl(){
  if(state.barMetric!=='controle')return '';
  return '<label>Testemunha para este gráfico<select data-ep="reference"><option value="">Usar cadastro do estudo</option>'+state.s.tratamentos.map(function(t){return '<option value="'+e(t.id)+'"'+(state.reference===t.id?' selected':'')+'>'+e(t.id+' · '+t.produto)+'</option>';}).join('')+'</select></label><p class="con-note">Escolha a referência para consultar Abbott. Esta escolha vale somente para este gráfico e não altera o cadastro, o relatório ou os slides.</p>';
 }
+/* O botão herda o contexto do painel: a variável e a avaliação já escolhidas
+   aqui abrem selecionadas na vista. Fazer escolher de novo o que já foi
+   escolhido é o jeito mais barato de a tela parecer outra ferramenta. */
+function campoBotao(rows){
+ if(!rows.length||!state)return '';
+ return '<p class="ep-campo-acao"><button type="button" class="con-btn" data-ep-action="campo"'+
+   ' data-ep-variavel="'+e(rows[0].variavel)+'" data-ep-avaliacao="'+e(state.assessment||'')+'">Ver no campo</button>'+
+   '<span class="ep-campo-dica">As mesmas parcelas na posição da grade, com o tempo em dias após a aplicação.</span></p>';
+}
 function charts(){
  var gs=groups(state.s);if(!gs.length)return empty('Ainda não há resultados numéricos. Os gráficos aparecerão aqui após o registro das avaliações.');
  var rows=selected(),evs=evaluations(rows);if(!evs.some(function(r){return r.avaliacao===state.assessment;}))state.assessment=evs[evs.length-1].avaliacao;
- return '<div class="ep-controls"><label>Variável<select data-ep="variable">'+gs.map(function(g){return '<option value="'+e(g.key)+'"'+(g.key===state.variable?' selected':'')+'>'+e(g.r.variavel)+' · '+e(unit(g.r)||g.r.tipo)+' · '+(g.r.sentido==='maior'?'maior primeiro':'menor primeiro')+'</option>';}).join('')+'</select></label><label>Avaliação do ranking<select data-ep="assessment">'+evs.map(function(r){return '<option value="'+e(r.avaliacao)+'"'+(r.avaliacao===state.assessment?' selected':'')+'>'+e(label(r))+'</option>';}).join('')+'</select></label><label>Barras por data<select data-ep="barMetric"><option value="media"'+(state.barMetric!=='controle'?' selected':'')+'>Resultado registrado</option><option value="controle"'+(state.barMetric==='controle'?' selected':'')+'>Controle por Abbott (%)</option></select></label>'+referenceControl()+'</div><article class="ep-chart ep-comparison"><p class="ep-eyebrow">TODAS AS AVALIAÇÕES</p><h4>'+e(state.barMetric==='controle'?'Controle por Abbott (%)':rows[0].variavel)+' por tratamento e data</h4>'+groupedChart(state.s,rows,state.barMetric)+'</article><div class="ep-charts"><article class="ep-chart"><p class="ep-eyebrow">EVOLUÇÃO DO ENSAIO</p><h4>'+e(rows[0].variavel)+' por data</h4>'+lineChart(rows)+'</article><article class="ep-chart"><p class="ep-eyebrow">COMPARAÇÃO DOS TRATAMENTOS</p><h4>Ranking · '+e(rows[0].variavel)+'</h4><p class="ep-caption">'+e(label(evs.find(function(r){return r.avaliacao===state.assessment;})))+'</p>'+ranking(rows)+'</article></div>';
+ return '<div class="ep-controls"><label>Variável<select data-ep="variable">'+gs.map(function(g){return '<option value="'+e(g.key)+'"'+(g.key===state.variable?' selected':'')+'>'+e(g.r.variavel)+' · '+e(unit(g.r)||g.r.tipo)+' · '+(g.r.sentido==='maior'?'maior primeiro':'menor primeiro')+'</option>';}).join('')+'</select></label><label>Avaliação do ranking<select data-ep="assessment">'+evs.map(function(r){return '<option value="'+e(r.avaliacao)+'"'+(r.avaliacao===state.assessment?' selected':'')+'>'+e(label(r))+'</option>';}).join('')+'</select></label><label>Barras por data<select data-ep="barMetric"><option value="media"'+(state.barMetric!=='controle'?' selected':'')+'>Resultado registrado</option><option value="controle"'+(state.barMetric==='controle'?' selected':'')+'>Controle por Abbott (%)</option></select></label>'+referenceControl()+'</div><article class="ep-chart ep-comparison"><p class="ep-eyebrow">TODAS AS AVALIAÇÕES</p><h4>'+e(state.barMetric==='controle'?'Controle por Abbott (%)':rows[0].variavel)+' por tratamento e data</h4>'+groupedChart(state.s,rows,state.barMetric)+'</article><div class="ep-charts"><article class="ep-chart"><p class="ep-eyebrow">EVOLUÇÃO DO ENSAIO</p><h4>'+e(rows[0].variavel)+' por data</h4>'+lineChart(rows)+campoBotao(rows)+'</article><article class="ep-chart"><p class="ep-eyebrow">COMPARAÇÃO DOS TRATAMENTOS</p><h4>Ranking · '+e(rows[0].variavel)+'</h4><p class="ep-caption">'+e(label(evs.find(function(r){return r.avaliacao===state.assessment;})))+'</p>'+ranking(rows)+'</article></div>';
 }
 function rawTable(st,s){
  var rows=[];arr(st.avaliacoes).forEach(function(av,ai){if(state&&state.rawAv&&av.id!==state.rawAv)return;s.tratamentos.forEach(function(t){for(var rep=1;rep<=Math.max(1,parseInt(st.numRepeticoes,10)||1);rep++){arr(av.variaveis).forEach(function(v){var row={key:t.id+'R'+rep,tratId:t.id,rep:rep};var value=typeof w._avNota==='function'?w._avNota(av,row,v):((av.notas||{})[row.key]||{})[v];var val=C.numero(value);rows.push([e(date(av.data))+'<small>'+e(av.hora||'')+' · '+e(av.id||'av-'+ai)+'</small>',e(t.id)+' · '+e(t.produto),'R'+rep,e(v),val===null?'—':num(val)]);});}});});
@@ -242,11 +251,36 @@ function render(s,parts){
  }
  if(b.dataset.epAction==='report'&&typeof w.abrirRelatorioEstudo==='function')w.abrirRelatorioEstudo(exportContext(st,w.agConhecimento.projetar(s.qid,st,w.data[s.qid])));
  if(b.dataset.epAction==='photos'&&typeof w.abrirGaleriaFotos==='function')w.abrirGaleriaFotos(s);
+ if(b.dataset.epAction==='campo')abrirCampo(s,st,b.dataset.epVariavel,b.dataset.epAvaliacao);
  if(b.dataset.epAction==='retry'&&typeof w._bioestatRepetir==='function')w._bioestatRepetir(s.qid,s.sid);
  if(b.dataset.epAction==='download'){
   var report=protectedReport(analysisData(st,s),st,s);if(!report)return;
   w._sinergistaSaveBlob(new Blob([JSON.stringify({estudo:s.codigo,tratamentos:s.tratamentos.map(function(t){return {id:t.id,produto:t.produto,dose:t.dose};}),analises:report},null,2)],{type:'application/json'}),'agracta-dossie-'+String(s.codigo).replace(/[^a-z0-9_-]/gi,'_')+'.json');
  }
 });
+ /* SOB DEMANDA. campo-3d.js e .css NÃO estão no index.html: quem só trabalha
+    no campo nunca os baixa nem os interpreta. Entram no primeiro clique, e o
+    service worker os pré-carrega para o segundo clique funcionar offline. */
+ var campoCarregando=null;
+ function carregarCampo(){
+  if(w.abrirCampo3D)return Promise.resolve();
+  if(campoCarregando)return campoCarregando;
+  campoCarregando=new Promise(function(ok,falha){
+   if(!document.querySelector('link[data-ag="campo-3d"]')){
+    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=1';
+    css.dataset.ag='campo-3d';document.head.appendChild(css);
+   }
+   var js=document.createElement('script');js.src='campo-3d.js?v=1';
+   js.onload=function(){w.abrirCampo3D?ok():falha(Error('O módulo carregou sem registrar a vista.'));};
+   js.onerror=function(){campoCarregando=null;falha(Error('Não foi possível carregar a vista do campo. Sem conexão, ela só abre depois de ter sido aberta uma vez neste aparelho.'));};
+   document.head.appendChild(js);
+  });
+  return campoCarregando;
+ }
+ function abrirCampo(s,st,variavel,avaliacao){
+  carregarCampo().then(function(){
+   w.abrirCampo3D(s,st,{variavel:variavel||undefined,avaliacao:avaliacao||undefined});
+  }).catch(function(err){w.agConhecimento.msg(err.message||'Não foi possível abrir a vista do campo.');});
+ }
  w.AgEstudoPagina={render:render,comparar:comparison,atualizarAnalises:updateAnalyses};
 })(window);

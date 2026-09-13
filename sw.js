@@ -2,14 +2,19 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v233';
+var CACHE = 'agracta-app-v234';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './interface-neutra.css?v=1',
   './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=1', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=1', './vendor/relatorio-docx.js?v=1',
   './galeria-fotos.js?v=2', './galeria-local.html', './galeria-local.js?v=2', './galeria-local.css?v=1', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=1',
   './profundidade.css?v=1',
-  './estudo-pagina.js?v=8', './estudo-pagina.css?v=5',
+  './estudo-pagina.js?v=9', './estudo-pagina.css?v=6',
+  /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
+     no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
+     Sem aspas neste comentario: o portao le strings entre aspas como se fossem
+     arquivos da lista. */
+  './campo-3d.js?v=1', './campo-3d.css?v=1',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=2',
   './', './index.html',
   './integracoes.css?v=2', './integracoes.js?v=5', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
@@ -17,7 +22,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=135',
+  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=136',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
