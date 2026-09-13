@@ -2,21 +2,26 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v219';
+var CACHE = 'agracta-app-v233';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
+  './interface-neutra.css?v=1',
+  './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=1', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=1', './vendor/relatorio-docx.js?v=1',
+  './galeria-fotos.js?v=2', './galeria-local.html', './galeria-local.js?v=2', './galeria-local.css?v=1', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=1',
+  './profundidade.css?v=1',
+  './estudo-pagina.js?v=8', './estudo-pagina.css?v=5',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=2',
   './', './index.html',
-  './integracoes.css?v=2', './integracoes.js?v=2', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
+  './integracoes.css?v=2', './integracoes.js?v=5', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
   './vendor/conhecimento-core.js?v=1', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=128',
+  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=135',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
-  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=5', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
+  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=6', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=13',
   './acesso-horario.js?v=3', './ui-campo.js?v=17', './alvos-catalogo.js?v=2',
@@ -65,7 +70,7 @@ self.addEventListener('fetch', function(e){
      que grava a resposta na chave './index.html' — ou seja, abrir a prancha
      sobrescrevia o app no cache. Rede primeiro, cache só como reserva offline,
      cada uma na sua própria chave. */
-  if(/\/(prancha|croqui|cliente)\.html$/.test(u.pathname)){
+  if(/\/(prancha|croqui|cliente|galeria-local|relatorio-local)\.html$/.test(u.pathname)){
     var chave = u.origin + u.pathname;
     e.respondWith(
       fetch(e.request).then(function(resp){

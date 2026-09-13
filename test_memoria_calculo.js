@@ -85,6 +85,7 @@ ctx._calcSel={qid:'Q1', sid:'s1'};
 
 vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcCapAtualL'), pega('_calcDoseUnit'),
+  pega('doseUnidades'), pega('doseUnidadeDeclarada'), pega('doseSemUnidade'), pega('doseUnidadePendente'), pega('doseUnidadeDe'),
   pega('_calcConfigAtual'), pega('calcMemoria'), pega('calcMemoriaTexto'),
   pega('calcAplicacoesDoEstudo'), pega('calcGravarMemoria'),
   pega('_calcMemSync'), pega('calcMemoriaBoxHtml'), pega('aplicacaoMemoriaResumo')

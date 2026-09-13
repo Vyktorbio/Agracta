@@ -3279,12 +3279,12 @@ function render(){
     var hasAlert=quadraHasAlert(id);
     var isEd=(editMode && id===editId);
 
-    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.08);
+    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.26);
     var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':_zc,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
     (function(qid,zfo,zona){
       if(!drawMode){
         poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
-        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.25,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
+        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.38,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
       }
     })(id,_zfo,_zona);
     poly.addTo(_qLayer);
@@ -5256,9 +5256,16 @@ function buildStudyModelo(qid, s, opts){
       /* unidade declarada no estudo quando a dose veio só com o número. 'ppm' não
          é dose por área e o motor de campo não sabe o que fazer com ela — esta
          planilha é a de campo, então cai no padrão. */
-      var dunit=(typeof doseUnidadeDe==='function')?doseUnidadeDe(s,t.dose):'L/ha';
-      if(dunit==='ppm') dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
-      if(dval>0 && vol>0){
+      var dunit=(typeof doseUnidadeDe==='function')?doseUnidadeDe(s,t.dose):'';
+      if(dunit==='ppm') dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'';
+      /* Sem unidade declarada não se preenche coluna de conta nenhuma. Esta
+         planilha vai impressa para a equipe de campo: um número plausível na
+         coluna "Produto/parcela" é seguido sem conferência. O aviso ocupa o
+         lugar da conta para que a falta seja vista, não deduzida do branco. */
+      if(dval>0 && !dunit){
+        put(rr,9,'⚠ Unidade da dose não declarada no estudo — sem unidade não há conta. '+
+                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha).');
+      }else if(dval>0 && vol>0){
         /* Mistura também aqui: esta planilha é a que vai para a equipe de campo,
            e usava o motor de produto único — "1,5 L + 0,2%" saía como 1,5 L/ha e
            o adjuvante não aparecia em coluna nenhuma. Agora cada componente sai
@@ -5753,7 +5760,7 @@ async function downloadStudyWorkbook(qid,sid){
     _bioestatEnsureStudy(qid,sid);
     /* A planilha agora é também o dossiê de análise: espera análise + forense.
        Se o limite for atingido, as abas ainda saem e marcam cada linha pendente. */
-    var _aJobs=_bioestatJobs(qid,s), _dossieOk=function(c){ return !c || c.status==='ready' || c.status==='empty' || _aJobs.every(function(j){ return c.results && c.results[j.jobKey] && c.results[j.jobKey+'|F']; }); };
+    var _aJobs=_bioestatManifesto(qid,s), _dossieOk=function(c){ return !!c && c.sig===_bioestatSignature(s) && _aJobs.length>0 && _aJobs.every(function(j){ return _bioestatEstadoResultado(c.results&&c.results[j.jobKey])==='calculado'; }); };
     /* Exportar não pode prender o usuário por até 90 s esperando a triagem. O
        motor continua em segundo plano e a planilha já sabe marcar PENDENTE ou
        ERRO nas abas correspondentes. Quatro segundos preservam a resposta
@@ -6433,7 +6440,14 @@ function newStudy(){
        tabela dizerem "500 mL/ha" em vez de chutar L/ha, e o que decide qual
        receita a calculadora do laboratório abre. */
     doseModo:'campo',     /* campo | ppm */
-    doseUnidade:'L/ha',   /* L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo' */
+    /* '' | L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo'.
+       VAZIO É ESTADO LEGÍTIMO: quer dizer "ninguém declarou ainda", e não se
+       resolve por chute. O padrão era 'L/ha', e o chute não ficava no rótulo:
+       o motor de campo lê L/ha como valor×1000 em mL de LÍQUIDO, então um
+       tratamento escrito só como "10", pensado em g/ha, virava 10.000 mL/ha —
+       mil vezes maior e sólido virando líquido. Agora quem não declarou é
+       PERGUNTADO antes de calcular. Ver doseUnidadePendente(). */
+    doseUnidade:'',
     /* ===== DESENHO EXPERIMENTAL ==========================================
        'dbc'    — blocos ao acaso dentro de UMA quadra. É tudo que existia.
        'faixas' — cada tratamento ocupa uma FAIXA/área própria, possivelmente
@@ -6595,7 +6609,11 @@ function normalizeStudy(s){
       });
     }
     var _uk=Object.keys(_un);
-    s.doseUnidade=(_uk.length===1)?_uk[0]:'L/ha';
+    /* Sem acordo entre os tratamentos, fica VAZIA. Cravar 'L/ha' aqui era o
+       chute que se disfarçava de dado: o estudo passava a "declarar" uma
+       unidade que ninguém escolheu, e ela ia junto para a figura e para a
+       conta da calda. Vazio faz a pergunta aparecer na hora de calcular. */
+    s.doseUnidade=(_uk.length===1)?_uk[0]:'';
   }
   if(typeof s.testemunha!=="string")s.testemunha="";
   /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
@@ -7416,14 +7434,48 @@ function _calcDoseUnit(raw){
   if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
   return 'L/ha';
 }
+/* A unidade que o ESTUDO declarou, ou '' se não declarou. Uma função só para
+   que "não declarada" tenha um nome, em vez de ser o `else` de um if. */
+/* Função e não constante: os testes recortam funções nomeadas do app.js para
+   rodar sem navegador, e uma `var` no topo do arquivo não vai junto no recorte. */
+function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha']; }
+function doseUnidadeDeclarada(study){
+  var d=study&&study.doseUnidade;
+  return (doseUnidades().indexOf(d)>=0)?d:'';
+}
+/* Dose escrita só com número: "10". Quem escreveu "10 g/ha" ou "0,2%" já disse
+   a unidade e não depende do estudo. Mistura conta componente a componente:
+   em "1,5 + 0,2%" o adjuvante se resolve sozinho e o produto NÃO — e é o
+   produto que vai para a balança. */
+function doseSemUnidade(raw){
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return false;
+  return s.split(/\s\+\s/).some(function(p){
+    p=p.trim();
+    return !!p && !/[a-zA-Z%]/.test(p);
+  });
+}
+/* O estudo tem dose que só o número diz, e nenhuma unidade declarada para
+   completá-la. Este é o estado em que o app ANTES chutava L/ha; agora é o
+   estado em que ele pergunta. Testemunha sem dose não conta — não há o que
+   calcular nela. */
+function doseUnidadePendente(study){
+  if(!study) return false;
+  if(study.doseModo==='ppm') return false;      /* ppm é concentração, não dose por área */
+  if(doseUnidadeDeclarada(study)) return false;
+  return (study.tratamentos||[]).some(function(t){
+    return t && !t.testemunha && doseSemUnidade(t.dose);
+  });
+}
 /* Unidade que o RÓTULO deve mostrar para esta dose, neste estudo.
-   Ordem: o que o usuário escreveu na dose > o que o estudo declarou > L/ha.
-   Estudo em ppm não tem unidade por área — a dose É a concentração. */
+   Ordem: o que o usuário escreveu na dose > o que o estudo declarou > NADA.
+   Estudo em ppm não tem unidade por área — a dose É a concentração.
+   Devolver '' é resposta legítima e significa "não sei" — quem chama trata,
+   ninguém inventa. */
 function doseUnidadeDe(study, raw){
   if(study && study.doseModo==='ppm') return 'ppm';
   if(/[a-zA-Z]/.test(String(raw||''))) return _calcDoseUnit(raw);   /* usuário escreveu a unidade */
-  var d=study&&study.doseUnidade;
-  return (['L/ha','mL/ha','g/ha','kg/ha'].indexOf(d)>=0)?d:'L/ha';
+  return doseUnidadeDeclarada(study);
 }
 /* Dose pronta para impressão: "500 mL/ha". Dose que já vem com unidade sai como
    está. Mistura ("500 + 300") recebe a unidade em CADA componente — rotuloTratamento
@@ -7433,6 +7485,11 @@ function doseTextoDe(study, raw){
   var s=String(raw==null?'':raw).trim();
   if(!s) return '';
   var u=doseUnidadeDe(study, s);
+  /* Sem unidade declarada, o rótulo sai com o NÚMERO CRU. Era aqui que "10"
+     virava "10 L/ha" no eixo do gráfico e na tabela — uma unidade que ninguém
+     escreveu, impressa com a mesma autoridade das que foram escolhidas. Número
+     sem unidade é incômodo e é para ser: mostra que falta declarar. */
+  if(!u) return s;
   return s.split(/\s\+\s/).map(function(p){
     p=p.trim();
     if(!p || /[a-zA-Z]/.test(p)) return p;
@@ -8433,6 +8490,51 @@ function calcConfirmarVolume(valor){
   try{ _calcRenderShell(); }catch(e){}
 }
 
+/* A pessoa declara a unidade da dose do estudo. Mesma forma da confirmação de
+   volume: escolha explícita, registrada na auditoria, e nada é calculado antes. */
+function calcConfirmarUnidadeDose(u){
+  var st=_calcStudy(); if(!st) return;
+  if(doseUnidades().indexOf(u)<0) return;
+  var antes=st.doseUnidade||'(não declarada)';
+  st.doseUnidade=u;
+  try{
+    logStudyAuditInObject(st,'Unidade da dose declarada',
+      'Os tratamentos traziam só o número. Unidade declarada como '+u+
+      ' (antes: '+antes+'). É ela que passa a completar toda dose escrita sem unidade.',
+      {origem:'confirmada'});
+  }catch(e){}
+  st._ts=Date.now();
+  try{ save(); }catch(e){}
+  try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
+  try{ _calcRenderShell(); }catch(e){}
+}
+
+/* O bloco que pergunta a unidade. SUBSTITUI a receita, pelo mesmo motivo do
+   volume ambíguo: uma receita calculada com unidade adivinhada é pior que
+   receita nenhuma, porque parece pronta. Aqui a diferença entre L/ha e g/ha
+   não é de rótulo — é de mil vezes, e de líquido para sólido. */
+function calcUnidadeDosePendenteHtml(study){
+  if(!doseUnidadePendente(study)) return '';
+  var exemplos=(study.tratamentos||[]).filter(function(t){
+    return t && !t.testemunha && doseSemUnidade(t.dose);
+  }).slice(0,3).map(function(t){ return (t.produto||t.id||'?')+' = '+String(t.dose).trim(); });
+  var h='<div class="calc-card"><div class="calc-prep bad"><span>DECLARE A UNIDADE DA DOSE</span>'+
+        '<b>'+esc(exemplos.join(' · '))+'</b>'+
+        '<small>a dose está só com o número, e o estudo não diz de que unidade é</small></div>';
+  h+='<div class="calc-warn" style="margin:0 0 7px">Nada é calculado enquanto isto não for '+
+     'resolvido. Não é escolha de rótulo: em L/ha o motor prepara mil vezes mais produto que '+
+     'em g/ha, e como líquido em vez de sólido. As doses continuam como estão — o que se '+
+     'declara aqui é de que unidade elas são.</div>';
+  h+='<div class="calc-actions" style="flex-wrap:wrap">';
+  doseUnidades().forEach(function(u){
+    h+='<button class="calc-close" onclick="calcConfirmarUnidadeDose(\''+u+'\')">'+esc(u)+'</button>';
+  });
+  h+='</div>';
+  h+='<div class="calc-eq" style="margin-top:6px">Vale para todo tratamento escrito só com o '+
+     'número. Quem já traz a unidade na dose (ex.: "500 mL/ha") continua mandando na sua.</div>';
+  return h+'</div>';
+}
+
 /* O bloco que pergunta. Ele SUBSTITUI a receita: enquanto o volume não estiver
    resolvido não existe conta a mostrar, e mostrar uma seria voltar ao erro. */
 function calcVolumeAmbiguoHtml(amb){
@@ -8476,6 +8578,13 @@ function _calcCompute(){
   var _metVariam=false;
   try{ _metVariam=studyMetodosVariam(study,(_calcSel||{}).qid); }catch(e){}
   var html='';
+  /* Unidade da dose por declarar: vem ANTES do volume porque é mais fundo. Sem
+     saber se "10" é litro ou grama não existe receita nenhuma para mostrar —
+     nem errada por pouco: errada por mil, e sólido no lugar de líquido. */
+  if(doseUnidadePendente(study)){
+    box.innerHTML=calcUnidadeDosePendenteHtml(study);
+    return;
+  }
   /* Volume de calda por resolver: a receita inteira depende dele, então não se
      mostra receita nenhuma. Meia conta na bancada é pior que conta nenhuma. */
   if(_calcVolAmbiguo && !(volDef>0)){
@@ -8492,7 +8601,14 @@ function _calcCompute(){
   });
   _lista.forEach(function(t){
     var _isWitness=!!t.testemunha;
-    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
+    /* doseUnidadeDe, não _calcDoseUnit: o parser de texto devolve 'L/ha' para
+       qualquer coisa sem unidade escrita, e era ele que reintroduzia o chute
+       aqui dentro mesmo com o estudo declarando outra. O portão acima garante
+       que, nesta altura, a unidade existe. */
+    var dunit=doseUnidadeDe(study,t.dose), dval=_calcNum(t.dose);
+    /* ppm é concentração, não dose por área: esta é a calculadora de CAMPO, e
+       o motor dela não sabe o que fazer com ppm. Mesma saída da planilha. */
+    if(dunit==='ppm') dunit=_calcDoseUnit(t.dose);
     /* O mesmo cuidado no volume do TRATAMENTO: texto com mais de um número não
        vira conta. O cartão daquele tratamento diz o que falta, e só ele. */
     var _tv=calcVolumeDoTratamento(t,volDef);
@@ -9668,7 +9784,13 @@ function calcMemoria(study, cfg){
 
   (study.tratamentos||[]).forEach(function(t){
     var testemunha=!!t.testemunha;
-    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
+    /* A memória é o registro BPL do preparo: é o papel que diz, três anos
+       depois, com que número se calculou. Ela lia a unidade com o parser de
+       TEXTO, que devolve 'L/ha' para qualquer dose escrita só com número —
+       então gravava "L/ha" como se fosse dado do estudo, inclusive num estudo
+       declarado em g/ha. Agora vale o que o estudo declarou. */
+    var dunit=doseUnidadeDe(study,t.dose), dval=_calcNum(t.dose);
+    if(dunit==='ppm') dunit=_calcDoseUnit(t.dose);
     var volumeResolvido=typeof calcVolumeDoTratamento==='function'?calcVolumeDoTratamento(t,cfg.volumeCaldaLHa):null;
     var vol=volumeResolvido?(volumeResolvido.ambiguo?0:volumeResolvido.valor):(t.volume?_calcNum(t.volume):cfg.volumeCaldaLHa);
     var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
@@ -9683,6 +9805,18 @@ function calcMemoria(study, cfg){
     /* Testemunha sem dose não gera calda — e isso é resultado, não falta de dado. */
     if(testemunha && !(dval>0)){
       reg.semPreparo=true;
+      mem.tratamentos.push(reg);
+      return;
+    }
+
+    /* Unidade não declarada: a memória registra a PENDÊNCIA. Gravar um preparo
+       calculado com unidade adivinhada seria o pior dos dois mundos — a conta
+       errada ganharia a autoridade de um registro assinado. */
+    if(!dunit && dval>0){
+      reg.erro='Unidade da dose não declarada no estudo. "'+String(t.dose||'').trim()+
+               '" tanto pode ser L/ha quanto g/ha, e entre as duas há mil vezes de diferença. '+
+               'Declare a unidade da dose no cadastro do estudo antes de preparar.';
+      reg.liberado=false;
       mem.tratamentos.push(reg);
       return;
     }
@@ -10690,6 +10824,13 @@ function _pranchaPayload(qid, sid, variavel){
   var avs=dts.usadas;
   /* avisos: a folha sai, mas o usuário precisa saber o que ficou de fora */
   var avisos=[];
+  /* Abrir gráfico é leitura e não se interrompe com pergunta (ver
+     openPranchaEstudo). Então a figura sai com a dose em número cru, e o aviso
+     diz por quê — antes, o eixo estampava "10 L/ha" numa dose que ninguém
+     declarou, e a figura ia para o relatório do cliente com essa autoridade. */
+  if(doseUnidadePendente(s)) avisos.push('Unidade da dose não declarada no estudo: as doses saem '+
+    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha) '+
+    'e gere a figura de novo.');
   if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
     dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
   if(dts.descartadasPreAplicacao) avisos.push(dts.descartadasPreAplicacao+' avaliação(ões) anterior(es) à aplicação ficaram de fora (linha de base).');
@@ -11095,7 +11236,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-13';
+var MOTOR_VERSAO='agracta-15';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -11111,9 +11252,9 @@ var MOTOR_VERSAO='agracta-13';
    CÁLCULO muda -- rota diferente, fórmula diferente, correção de conta.
    Mexer só na tela do motor não mexe aqui.
 
-   Fica em agracta-12 de propósito: é o valor com que os aparelhos gravaram,
-   então a estatística guardada volta a valer sem recalcular nada. */
-var MOTOR_CALCULO='agracta-12';
+   A versão 14 corrige a natureza da variável e os papéis forenses.
+   Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
+var MOTOR_CALCULO='agracta-15';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -11121,7 +11262,7 @@ function _bioestatJobs(qid,study){
     var aoa=_bioestatJobAoa(qid,study,av,v), groups={};
     aoa.slice(1).forEach(function(r){groups[r[7]]=(groups[r[7]]||0)+1;});
     if(Object.keys(groups).filter(function(k){return groups[k]>=2;}).length<2)return;
-    jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:av.tipo||v,aoa:aoa});
+    jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa});
   }); });
   return jobs;
 }
@@ -11164,9 +11305,37 @@ function _bioestatJobsTempo(qid,study){
   });
   return out;
 }
+/* Conclusão da fila não significa sucesso científico. Cada retorno tem estado próprio. */
+function _bioestatEstadoResultado(r){
+  if(!r) return 'pendente';
+  if(r.ok===true) return 'calculado';
+  return 'erro';
+}
+function _bioestatManifesto(qid,s){
+  var out=[];
+  _bioestatJobs(qid,s).forEach(function(j){
+    ['analise','forense'].forEach(function(m){out.push({jobKey:j.jobKey+(m==='forense'?'|F':''),avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:m});});
+  });
+  _bioestatJobsTempo(qid,s).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,unidade:j.unidade,modo:'tempo'});});
+  return out;
+}
+function _bioestatSnapshotAvancado(qid,s){
+  var sig=_bioestatSignature(s), c=_bioAutoCache[qid+'|'+s.id], results={}, jobs=_bioestatManifesto(qid,s);
+  if(c&&c.sig===sig) jobs.forEach(function(j){if(c.results[j.jobKey])results[j.jobKey]=c.results[j.jobKey];});
+  var pendencias=jobs.filter(function(j){return _bioestatEstadoResultado(results[j.jobKey])!=='calculado';}).map(function(j){return {jobKey:j.jobKey,estado:_bioestatEstadoResultado(results[j.jobKey]),motivo:(results[j.jobKey]||{}).erro||'Não calculado no fechamento'};});
+  var indisponiveis=_bioestatPendentes(qid,s).map(function(j){return {avId:j.avId||'',date:j.date||'',variavel:j.variavel,motivo:'Sem comparação automática: delineamento ou repetições insuficientes. Resultados descritivos preservados.'};});
+  return JSON.parse(JSON.stringify({versao:1,geradoEm:new Date().toISOString(),motor:MOTOR_CALCULO,assinatura:sig,jobs:jobs,results:results,pendencias:pendencias,indisponiveis:indisponiveis,completo:jobs.length>0&&!pendencias.length&&!indisponiveis.length}));
+}
+function _bioestatRepetir(qid,sid){
+  var s=_estudoDe(qid,sid),c=_bioAutoCache[qid+'|'+sid];
+  if(!s||estudoFinalizado(s)||(c&&c.status==='loading'))return;
+  delete _bioAutoCache[qid+'|'+sid];
+  _bioestatEnsureStudy(qid,sid);
+  _bioestatRefreshOpen(_bioAutoCache[qid+'|'+sid]);
+}
 function _bioestatSignature(study){
-  var slim={motor:MOTOR_CALCULO,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
-    a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.variaveis,a.notas];})};
+  var slim={motor:MOTOR_CALCULO,config:study.estatisticaPlanejada,protocolo:study.protocolo,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
+    a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.tipos,a.varcfg,a.momento,a.variaveis,a.notas];})};
   return String(_hashSeed(JSON.stringify(slim)));
 }
 function _bioestatEnsureFrame(){
@@ -11233,10 +11402,9 @@ function _biocGravar(key,sig,results){
    completo com cartões faltando — e ninguém teria como saber disso. */
 function _bioestatPersistir(c){
   if(!c||c.status!=='ready'||!c.results||!c.qid||!c.sid) return;
-  /* Job que estourou o relógio não vira cache: guardá-lo faria o estudo
-     reabrir com o erro cravado e nunca mais tentar de novo. */
+  /* Relatório com erro ou retorno inválido não vira cache reutilizável. */
   var ks=Object.keys(c.results);
-  for(var i=0;i<ks.length;i++){ var r=c.results[ks[i]]; if(r&&r.ok===false&&r.erro==='tempo esgotado') return; }
+  for(var i=0;i<ks.length;i++){ if(_bioestatEstadoResultado(c.results[ks[i]])!=='calculado') return; }
   _biocGravar(c.qid+'|'+c.sid, c.sig, c.results);
 }
 function _bioestatEnsureStudy(qid,sid){
@@ -11257,8 +11425,8 @@ function _bioestatEnsureStudy(qid,sid){
     if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
-      jobs.forEach(function(j){ if(res[j.jobKey])n++; if(res[j.jobKey+'|F'])n++; });
-      jobsT.forEach(function(j){ if(res[j.jobKey])n++; });
+      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; if(_bioestatEstadoResultado(res[j.jobKey+'|F'])==='calculado')n++; });
+      jobsT.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
     _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
@@ -11269,7 +11437,7 @@ function _bioestatEnsureStudy(qid,sid){
 function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
-  function _ftipo(j){ var t=String(j.tipo||j.variavel||'').toLowerCase(); return /sever|incid|fitotox|efic|propor|%|altura|produ|peso|di[âa]m|massa|cont[íi]nu/.test(t)?'cont':'count'; }
+  function _ftipo(j){ return j.tipo==='contagem'?'count':'cont'; }
   var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
     [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
@@ -11555,12 +11723,12 @@ function _bioestatPendentesHtml(qid,study){
   return pend.map(function(j){ return _bioestatPendenteCard(j,study,j.av); }).join('');
 }
 function _bioestatForenseCard(job,rel){
-  if(!rel||!rel.ok) return '';
+  if(!rel||!rel.ok) return _bioestatResumoCard(job,rel);
   var v=rel.veredito||{}, flags=v.flags||0, watches=v.watches||0;
   var achados=(rel.achados||[]).filter(function(a){ return a.severidade && a.severidade!=='clear' && a.severidade!=='ok'; });
   var cor=flags?'#a33':(watches?'#8a6d12':'#1f6f43'), bd=flags?'#edc8c8':(watches?'#ece2b8':'#d9e5dc'), bg=flags?'#fff7f7':(watches?'#fffdf3':'#f7fbf8'), chipbg=flags?'#f3dede':(watches?'#f1ead0':'#e1f3e8');
-  var rot=flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
-  var lis=achados.slice(0,5).map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
+  var rot=(!v.cobertura_suficiente||achados.some(function(a){return a.executado===false;}))?'Triagem parcial / inconclusiva':flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
+  var lis=achados.map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
   return '<div style="padding:9px 11px;border:1px solid '+bd+';background:'+bg+';border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
     '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+chipbg+';color:'+cor+';white-space:nowrap">'+esc(rot)+'</span></div>'+
@@ -11645,6 +11813,7 @@ var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
   /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
      aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
+  if(c&&window.AgEstudoPagina&&window.AgEstudoPagina.atualizarAnalises)window.AgEstudoPagina.atualizarAnalises(c);
   if(!c||curV!==c.qid||curSid!==c.sid)return;
   var ov=document.getElementById('sdOvl');
   var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
@@ -11655,12 +11824,12 @@ function _bioestatRefreshOpen(c){
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
-  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
+  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{ok:false,erro:'Motor não devolveu um relatório'};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
   delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
   var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
   _bioestatPump();
-  /* re-renderiza quando termina uma ANÁLISE (não a cada forense) ou quando tudo fica pronto */
-  if(c && (c.status==='ready' || !/\|F$/.test((item.job&&item.job.jobKey)||''))) _bioestatRefreshOpen(c);
+  /* Atualiza também cada triagem forense na página de Conhecimento. */
+  if(c) _bioestatRefreshOpen(c);
 });
 
 /* ===================== IMPORTAR PROTOCOLO DA PLANILHA (modelo.xls) → ESTUDO =====================
@@ -13095,12 +13264,20 @@ function renderStudyEditModal(){
       '<option value="ppm"'+(_dm==='ppm'?' selected':'')+'>Concentração (ppm)</option>'+
       '</select></div>';
   }
+  /* "Não declarada" é opção de verdade, e é o padrão de estudo novo. Antes a
+     lista começava em L/ha e o estudo saía declarando uma unidade que ninguém
+     escolheu. Quem não escolhe fica sem — e a calculadora pergunta na hora. */
+  var _du=(typeof doseUnidadeDeclarada==='function')?doseUnidadeDeclarada(s):(s.doseUnidade||'');
   h+='<div class="se-field" id="seDoseUnidWrap"'+(_dm==='ppm'?' style="display:none"':'')+'><label>Unidade da dose</label><select id="seDoseUnid">'+
+    '<option value=""'+(_du?'':' selected')+'>— não declarada —</option>'+
     ['L/ha','mL/ha','g/ha','kg/ha'].map(function(u){
-      return '<option value="'+u+'"'+(u===s.doseUnidade?' selected':'')+'>'+u+'</option>';
+      return '<option value="'+u+'"'+(u===_du?' selected':'')+'>'+u+'</option>';
     }).join('')+'</select></div>';
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
+  if(typeof doseUnidadePendente==='function' && doseUnidadePendente(s)){
+    h+='<div class="se-warn" style="font-size:11px;margin:-4px 0 8px;color:#d08a3a">⚠ Há tratamento com a dose escrita só com o número e nenhuma unidade declarada. Enquanto ficar assim, o gráfico mostra o número sem unidade e a calculadora não prepara — ela pergunta. Não é chute que resolve: entre L/ha e g/ha há mil vezes de diferença.</div>';
+  }
 
   /* Desenho experimental. Em faixas cada tratamento ocupa uma área própria,
      possivelmente em outra quadra — e aí a "repetição" passa a ser o treço. */
@@ -13423,7 +13600,8 @@ function syncStudyInputs(){
   if(isQuadraLab(curV)){ workingStudy.desenho='dbc'; workingStudy.faixas=[]; }
   _seFaixasLer();
   x=el("seDoseModo"); if(x) workingStudy.doseModo=(x.value==='ppm')?'ppm':'campo';
-  x=el("seDoseUnid"); if(x && ['L/ha','mL/ha','g/ha','kg/ha'].indexOf(x.value)>=0) workingStudy.doseUnidade=x.value;
+  /* '' entra: é "não declarada", escolha legítima e não ausência de leitura. */
+  x=el("seDoseUnid"); if(x && (x.value==='' || doseUnidades().indexOf(x.value)>=0)) workingStudy.doseUnidade=x.value;
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
   /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
@@ -13761,7 +13939,11 @@ function saveStudyV2(){
     if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
     if(String(old.labDensidade||'') !== String(s.labDensidade||'')) changes.push('Densidade (lab): "' + (old.labDensidade||'—') + '" -> "' + (s.labDensidade||'—') + '"');
     if((old.doseModo||'campo') !== s.doseModo) changes.push('Definição da dose: "' + (old.doseModo||'campo') + '" -> "' + s.doseModo + '"');
-    if((old.doseUnidade||'L/ha') !== s.doseUnidade) changes.push('Unidade da dose: "' + (old.doseUnidade||'L/ha') + '" -> "' + s.doseUnidade + '"');
+    /* "(não declarada)" precisa aparecer com todas as letras na auditoria: a
+       passagem de não-declarada para g/ha é justamente a decisão que se quer
+       poder reler depois, e um par de aspas vazias não conta essa história. */
+    var _duAntes=(old.doseUnidade||'(não declarada)'), _duDepois=(s.doseUnidade||'(não declarada)');
+    if(_duAntes !== _duDepois) changes.push('Unidade da dose: "' + _duAntes + '" -> "' + _duDepois + '"');
     if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
     details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
   } else {
@@ -14758,7 +14940,7 @@ function renderAvGrid(){
         html+='<td><input class="av-cell av-cell-num" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)"></td>';
       }
     });
-    html+='<td></td></tr>';
+    html+='<td><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button></td></tr>';
   });
   html+='</tbody></table></div>';
   if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button></div>';
@@ -15031,6 +15213,7 @@ function renderAvAutoBox(){
     '<div class="av-auto-prog"><div class="av-auto-prog-fill" style="width:'+pctDone+'%"></div></div>'+
     '<div class="av-auto-progtxt">'+filled+' de '+a.total+' preenchidas'+(filled>=a.total?' ✓':'')+'</div>'+
     '<div class="av-auto-card"><div><div class="av-auto-main">'+passo+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div>'+der+'</div>'+input+'</div>'+
+    '<button type="button" class="av-photo-btn" data-av-photo-auto="1">Fotografar esta parcela</button>'+
     '<div class="av-auto-presets">'+presetHtml+'</div>'+
     '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">‹ Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo ›</button></div>'+
   '</div>';
@@ -15715,10 +15898,11 @@ function _studyFinalizationReview(qid,s){
     });
   });
   if(missing) issues.push(missing+' nota(s) de parcela em branco');
-  var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,s):[], cache=_bioAutoCache[qid+'|'+s.id], rr=cache&&cache.results||{};
+  var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,s):[];
   if(feitas && !jobs.length) issues.push('Nenhuma comparação estatística válida');
-  else if(jobs.some(function(j){return !rr[j.jobKey];})) notes.push('Há análise estatística ainda em processamento');
-  if(jobs.some(function(j){return !rr[j.jobKey+'|F'];})) notes.push('Há triagem forense ainda em processamento');
+  var avancado=_bioestatSnapshotAvancado(qid,s);
+  avancado.pendencias.forEach(function(p){notes.push(p.jobKey+': '+(p.estado==='erro'?'Erro de cálculo — ':'Pendente — ')+p.motivo);});
+  if(avancado.indisponiveis.length)notes.push(avancado.indisponiveis.length+' avaliação(ões)/variável(is) sem comparação automática; resultados descritivos preservados.');
   try{ if(!_currentUserName()) notes.push('O nome do responsável será solicitado na assinatura'); }catch(e){}
   return {issues:issues,notes:notes,ok:issues.length===0};
 }
@@ -15740,12 +15924,15 @@ function finalizarEstudo(qid,sid){
       if(!url){ alert('Sem a rubrica o estudo não é finalizado.'); return; }
       var st=_estudoDe(qid,sid); if(!st) return;
       st.estatisticaFinal=_statSnapshot(st);   /* recalcula na hora do aceite, não a prévia */
+      st.estatisticaFinal.avancado=_bioestatSnapshotAvancado(qid,st);
+      st.estatisticaFinal.revisao=_studyFinalizationReview(qid,st);
       st.finalizacao={
         em:new Date().toISOString(),
         por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
         nome:_nomeParaAssinatura(),
         rubrica:url,
-        significado:'Estudo finalizado — dados conferidos e estatística congelada',
+        significado:'Estudo finalizado — relatórios disponíveis e pendências preservados',
+        analiseCompleta:st.estatisticaFinal.avancado.completo,
         fuso:AGRACTA_TIME_ZONE,
         nAvaliacoes:(st.avaliacoes||[]).length,
         nResultados:(st.estatisticaFinal.itens||[]).length
@@ -17374,7 +17561,7 @@ function toggleTheme(){
   r.classList.add('theming'); clearTimeout(window._thT); window._thT=setTimeout(function(){r.classList.remove('theming');},420);
   r.classList.toggle('light', light);
   try{ localStorage.setItem('agracta-theme', light?'light':'dark'); }catch(e){}
-  try{ var m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#f2f3f1':'#101513'; }catch(e){}
+  try{ var m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#ffffff':'#151619'; }catch(e){}
   try{ closeMainMenu(); }catch(e){}
   if(typeof _stxToast==='function') _stxToast(light?'◐ Tema claro ativado':'◑ Tema escuro ativado');
 }

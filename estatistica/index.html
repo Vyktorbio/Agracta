@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="ag-depth-light ag-depth-stat">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png" />
 <link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-12" />
 <link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-12" />
+<link rel="stylesheet" href="../profundidade.css?v=1" />
 <script>
   /* A casca fica oculta somente na análise automática. Correção também identificada no PR 53. */
   if(new URLSearchParams(location.search).get('agracta_engine')==='1') document.documentElement.classList.add('agracta-motor');
@@ -27,6 +28,7 @@
   .agracta-motor #card-resultados > h2 .num { display:none !important; } /* tira o badge "5" do passo */
   .agracta-motor main { padding:10px !important; }
 </style>
+<link rel="stylesheet" href="../interface-neutra.css?v=1">
 </head>
 <body>
 <header class="appbar" aria-label="BioEnsaio">
@@ -430,6 +432,6 @@
 <script src="lib/xlsx.full.min.js"></script>
 <script src="pyodide/pyodide.js"></script>
 <script src="exemplos.js?v=bioensaio-auditoria-12"></script>
-<script src="app.js?v=bioensaio-auditoria-12"></script>
+<script src="app.js?v=bioensaio-auditoria-14"></script>
 </body>
 </html>

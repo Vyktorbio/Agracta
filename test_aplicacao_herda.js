@@ -59,6 +59,7 @@ ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
 vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'), pega('_numBR'),
+  pega('doseUnidades'), pega('doseUnidadeDeclarada'), pega('doseSemUnidade'), pega('doseUnidadePendente'), pega('doseUnidadeDe'),
   pega('_parseParcelaDim'),
   pega('calcConfigDoEstudo'), pega('calcConfigCompleta'),
   pega('aplicacaoMemoriaAuto'), pega('calcMemoria'), pega('calcMemoriaTexto')

@@ -70,9 +70,9 @@
       tratamentos:[],resultados:[],aplicacoes:[],consumos:[],integracoes:st.integracoes||null,
       solo:q.solo||null,atualizadoEm:isoTimestamp(st._ts)};
     lista(st.tratamentos).forEach(function(t){if(!t)return;var ids=identidades(t,qid,st.id,ctx);
-      out.tratamentos.push({id:t.id,produto:ids.nome,identidades:ids.ids,dose:t.dose||'',metodo:metodo(st,qid,t),testemunha:t.testemunha===true});
+      out.tratamentos.push({id:t.id,produto:ids.nome,identidades:ids.ids,dose:t.dose||'',metodo:metodo(st,qid,t),testemunha:t.testemunha===true||(!lista(st.tratamentos).some(function(x){return x&&x.testemunha;})&&st.testemunha===t.id)});
     });
-    var test=out.tratamentos.find(function(t){return t.testemunha;});
+    var test=out.tratamentos.find(function(t){return t.testemunha&&t.id===st.testemunha;})||out.tratamentos.find(function(t){return t.testemunha;});
     var reps=Math.max(1,parseInt(st.numRepeticoes,10)||1);
     lista(st.avaliacoes).forEach(function(av,ai){
       if(!av||typeof av!=='object')return;
@@ -91,7 +91,7 @@
         if(test&&t.id!==test.id&&ref&&ref.n&&typeof w._pctCtrl==='function')ctrl=w._pctCtrl(ref.media,s.media,sentido,tipo);
         var m=av.momento,momento=m&&C.numero(m.valor)!==null&&['HAT','DAT'].indexOf(m.unidade)>=0?n(C.numero(m.valor))+' '+m.unidade:'';
         out.resultados.push(Object.assign({},s,{avaliacao:av.id||'av-'+ai,tratamento:t.id,variavel:v,tipo:tipo,
-          unidade:cfg.unidade||(['razao','escala'].indexOf(tipo)>=0?'%':''),sentido:sentido,controle:ctrl,testemunha:!!(test&&t.id===test.id),
+          unidade:cfg.unidade||(['pct','razao','escala'].indexOf(tipo)>=0?'%':''),sentido:sentido,controle:ctrl,testemunha:!!(test&&t.id===test.id),
           momento:momento,data:av.data||'',hora:av.hora||'',clima:clima(av.carimbo&&av.carimbo.clima),ndvi:av.carimbo&&av.carimbo.ndvi||null}));
       });});
     });
@@ -141,7 +141,7 @@
     if(!linhas.length)return vazio('Nenhum resultado lançado para esta seleção.');
     return '<div class="con-scroll"><table><caption>Resultados por estudo, avaliação e tratamento</caption><thead><tr><th>Estudo / tratamento</th><th>Produto e dose</th><th>Avaliação</th><th>n</th><th>Média</th><th>DP</th><th>Controle / eficácia</th></tr></thead><tbody>'+linhas.map(function(r){
       return '<tr><td>'+bot('estudo',e(r.codigo),'data-key="'+e(r.estudo)+'"','link')+'<small>'+e(r.tratamento)+' · '+e(r.local)+'</small></td><td>'+e(r.produto)+'<small>'+e(r.dose)+' · '+e(r.metodo)+'</small></td><td>'+e(r.variavel)+'<small>'+dataBR(r.data)+(r.momento?' · '+e(r.momento):' · momento não declarado')+'</small></td><td>'+n(r.n)+'</td><td>'+n(r.media)+(r.unidade?' '+e(r.unidade):'')+'</td><td>'+n(r.dp)+'</td><td>'+(r.testemunha?'Testemunha':r.controle==null?'—':n(r.controle)+'%')+'</td></tr>';
-    }).join('')+'</tbody></table></div><p class="con-note">n = unidades com valor registrado. DP = desvio-padrão dessas unidades, não intervalo de confiança. Faixas e subamostras exigem conferir o delineamento. O controle usa somente testemunha explicitamente marcada; resultados de estudos distintos não são combinados.</p>';
+    }).join('')+'</tbody></table></div><p class="con-note">n = unidades com valor registrado. DP = desvio-padrão dessas unidades, não intervalo de confiança. Faixas e subamostras exigem conferir o delineamento. O controle usa a testemunha marcada ou a referência selecionada no estudo; resultados de estudos distintos não são combinados.</p>';
   }
   function dataHoraBR(x){var d=new Date(x);return x&&Number.isFinite(d.getTime())?d.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'data não registrada';}
   function selo(s){
@@ -159,7 +159,7 @@
      Agracta que a ficha do estudo ja chama, com senha, rubrica e motivo.
      Duplicar o fluxo aqui seria criar uma segunda porta sem trilha. */
   function acoesEstudo(s){
-    return '<div class="con-acoes">'+bot('original','Abrir','data-key="'+e(s.key)+'"')+
+    return '<div class="con-acoes">'+bot('estudo','Abrir','data-key="'+e(s.key)+'"')+
       (s.finalizado?bot('estReabrir','Reabrir','data-key="'+e(s.key)+'"')
                    :bot('estFinalizar','Finalizar','data-key="'+e(s.key)+'"'))+
       bot('estExcluir','Excluir','data-key="'+e(s.key)+'"','perigo')+'</div>';
@@ -194,7 +194,7 @@
     if(!selected)return vazio('Este registro não está mais disponível.');
     if(view.aba==='produtos')op.produto=selected.key;else if(view.aba==='alvos')op.alvo=selected.nome;else op.projeto=selected.nome;
     var base=C.selecionar(acervo,op),xs=C.selecionar(acervo,Object.assign({},op,view.filtro));
-    return bot('voltar','‹ '+(view.aba==='produtos'?'Produtos':view.aba==='alvos'?'Alvos':'Projetos'))+'<h2>'+e(selected.nome)+'</h2>'+filtros(base)+listaEstudos(xs)+tabela(C.resultados(xs,Object.assign({},op,view.filtro)));
+    return bot('voltar','‹ '+(view.aba==='produtos'?'Produtos':view.aba==='alvos'?'Alvos':'Projetos'))+'<h2>'+e(selected.nome)+'</h2>'+filtros(base)+listaEstudos(xs)+(w.AgEstudoPagina?xs.map(function(s){return w.AgEstudoPagina.comparar(s,C.resultados([s],Object.assign({},op,view.filtro)));}).join(''):'')+tabela(C.resultados(xs,Object.assign({},op,view.filtro)));
   }
   function climaHtml(c){
     if(!c)return '<span>Sem clima registrado</span>';
@@ -240,6 +240,7 @@
   }
   function ficha(){
     var s=achar(view.estudo);if(!s)return vazio('O estudo não está disponível.');
+    if(w.AgEstudoPagina)return w.AgEstudoPagina.render(s,{tabela:tabela(C.resultados([s],{})),contexto:contextoHtml(s),integracoes:integracoesHtml(s),custos:custosHtml(s)});
     return bot('voltar','‹ Conhecimento')+'<div class="con-titulo"><div><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+' · '+e(s.local)+' · '+e(s.quadra)+'</p></div>'+bot('original','Abrir estudo','data-key="'+e(s.key)+'"')+'</div><p class="con-note">'+e(s.desenho)+' · '+e(s.metodo)+' · '+(s.finalizado?'Finalizado':'Em execução')+'</p>'+tabela(C.resultados([s],{}))+
       contextoHtml(s)+integracoesHtml(s)+custosHtml(s);
   }
@@ -269,7 +270,7 @@
     if(a==='aba'){view.aba=b.dataset.aba;view.estudo='';view.selecionado='';view.filtro={};view.busca='';pintar();return;}
     if(a==='voltar'){if(view.estudo)view.estudo='';else view.selecionado='';pintar();return;}
     if(a==='selecionar'){view.selecionado=key;view.filtro={};pintar();return;}
-    if(a==='estudo'){view.estudo=key;pintar();return;}
+    if(a==='estudo'){view.estudo=key;pintar();var ov=document.getElementById('conhecimentoOvl');if(ov)ov.scrollTop=0;return;}
     if(a==='original'){var st=achar(key);fechar();if(st)w.openStudyDetail(st.qid,st.sid);return;}
     if(a==='estado'){view.estadoEstudo=b.dataset.estado;pintar();return;}
     if(a==='estFinalizar'||a==='estReabrir'||a==='estExcluir'){

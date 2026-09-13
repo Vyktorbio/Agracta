@@ -69,8 +69,8 @@ await clicar(q('.con-estado [data-estado="todos"]'));
 const acoes=el=>qa('.con-acoes [data-con]').filter(b=>el.contains(b)).map(b=>b.dataset.con);
 /* pintar() reescreve a lista a cada clique: procurar de novo, nunca guardar nó. */
 const cartao=texto=>qa('.con-estudo').find(x=>x.textContent.includes(texto));
-assert.deepEqual(acoes(cartao('EM CURSO')),['original','estFinalizar','estExcluir'],'em execução: finalizar');
-assert.deepEqual(acoes(cartao('JÁ FECHADO')),['original','estReabrir','estExcluir'],'finalizado: reabrir, nunca finalizar de novo');
+assert.deepEqual(acoes(cartao('EM CURSO')),['estudo','estFinalizar','estExcluir'],'em execução: finalizar');
+assert.deepEqual(acoes(cartao('JÁ FECHADO')),['estudo','estReabrir','estExcluir'],'finalizado: reabrir, nunca finalizar de novo');
 
 /* ---------- 4. a ação é a do Agracta, com o estudo certo ---------- */
 await clicar(cartao('EM CURSO').querySelector('[data-con="estFinalizar"]'));

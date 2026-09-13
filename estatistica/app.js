@@ -3787,7 +3787,9 @@ function __agractaHandoff(payload){
     var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
     var ref = lv[0] || {};
-    function _set(id,v){ var el=document.getElementById(id); if(el && v!=null && String(v)!=='' && !String(el.value||'').trim()) el.value=String(v); }
+    /* Cada handoff é uma nova execução, inclusive quando reutiliza o iframe.
+       Campo ausente também substitui o anterior: a custódia pertence ao estudo atual. */
+    function _set(id,v){ var el=document.getElementById(id); if(el) el.value=v==null?'':String(v); }
     function _setSel(id,v){ var el=document.getElementById(id); if(el && v && [].some.call(el.options,function(o){return o.value===v;})) el.value=v; }
     function _carrega(){
       try{
@@ -3797,9 +3799,12 @@ function __agractaHandoff(payload){
         _setSel('audit-origem-bruta','matriz');
         _set('audit-registro-bruto', [payload.local, payload.quadra, payload.titulo].filter(Boolean).join(' · '));
         _set('audit-coletor', payload.responsavel);
+        _set('audit-data-coleta', '');
+        _set('audit-local-equipamento', '');
+        _set('audit-observacao-custodia', '');
         preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
-        var papeis = (modo === 'analise') ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null;
+        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
         /* A dose só viaja quando o Agracta já provou que o ensaio É uma série
            de doses (mesmo item, 3+ níveis, mesma unidade). Chegando, ela tem
            de vir com papel: sem isso a coluna existe e a rota continua sendo
@@ -3819,7 +3824,15 @@ function __agractaHandoff(payload){
         if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
         if(typeof atualizarPipeline==='function') atualizarPipeline();
         /* auto-roda a análise quando nada bloqueia (autoteste é só aviso no embed) */
-        setTimeout(function(){ var b=document.getElementById('btn-analisar'); if(b && !b.disabled) b.click(); }, 400);
+        setTimeout(function(){
+          var info=atualizarPipeline(), b=document.getElementById('btn-analisar');
+          if(info&&info.bloqueia){
+            _agractaEmitirResultado({ok:false,erro:'Conferência da análise: '+info.checks.filter(function(c){return c.severidade==='critico';}).map(function(c){return c.titulo+': '+c.detalhe;}).join('; ')});
+            return;
+          }
+          if(b&&!b.disabled)b.click();
+          else _agractaEmitirResultado({ok:false,erro:'Motor indisponível para iniciar esta análise.'});
+        }, 400);
       }catch(e){ console.error('[Agracta handoff carrega]', e); }
     }
     _carrega();
