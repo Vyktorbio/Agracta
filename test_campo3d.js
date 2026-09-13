@@ -226,6 +226,95 @@ function todas(valor,excecoes){
   assert.equal(m.semData,1,'e a tela sabe quantas ficaram de fora para avisar');
 }
 
+/* ============ MODO HISTÓRICO: o eixo vertical passa a ser o TEMPO ============
+   Mesma exigência do outro modo, vista de outro ângulo: a altura de cada trecho
+   é proporcional aos DIAS que ele cobre. Trechos de altura igual desenhariam um
+   ensaio que não existiu — e continuariam parecendo certos. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-01-19',todas('20')),
+    av('A3','2026-01-26',todas('30')), av('A4','2026-02-12',todas('40'))
+  ]),'sev');
+  const tr=M.trajetoria(m,parcela('T2',1));
+
+  assert.equal(tr.vao,31,'a torre cobre o vão inteiro do ensaio, em dias');
+  assert.equal(tr.trechos.length,3);
+  assert.deepEqual([...tr.trechos.map(t=>t.dias)],[7,7,17]);
+  // 7/31, 7/31 e 17/31 — nada de um terço para cada.
+  const alturas=tr.trechos.map(t=>t.z1-t.z0);
+  alturas.forEach((h,i)=>assert.ok(Math.abs(h-tr.trechos[i].dias/31)<1e-9,
+    'altura proporcional aos dias: trecho '+i+' deu '+h));
+  assert.ok(Math.abs(alturas[2]/alturas[0]-17/7)<1e-9,
+    'o trecho de 17 dias é 2,43× o de 7 — não igual aos outros');
+  assert.notEqual(Number(alturas[0].toFixed(6)),Number((1/3).toFixed(6)),
+    'e não é um terço, que é o que degraus iguais dariam');
+  // A soma das alturas fecha em 1: a torre vai do primeiro ao último DAA.
+  assert.ok(Math.abs(alturas.reduce((a,b)=>a+b,0)-1)<1e-9);
+  // Os pontos são as MEDIÇÕES, e a posição de cada um é o DAA dele.
+  assert.deepEqual([...tr.pontos.map(x=>x.daa)],[0,7,14,31]);
+  tr.pontos.forEach(x=>assert.ok(Math.abs(x.z-x.daa/31)<1e-9,'o anel fica no DAA real'));
+  assert.equal(tr.buracos,0);
+  assert.equal(tr.vazios.length,0);
+}
+
+/* O buraco vira vão na torre, e o vão continua existindo como espaço. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-01-19',todas('20')),
+    av('A3','2026-01-26',todas('30',{'T3R2':''})), av('A4','2026-02-12',todas('40'))
+  ]),'sev');
+  const tr=M.trajetoria(m,parcela('T3',2));
+  assert.equal(tr.trechos.length,1,'só o trecho 0→7 tem as duas pontas');
+  assert.equal(tr.buracos,2);
+  assert.equal(tr.pontos[2].valor,null,'e a medição que falta aparece como falta, não como zero');
+  // Os trechos vazios são devolvidos COM a altura que ocupariam: sem isso a
+  // parcela mal lançada vira um toco que as torres inteiras escondem, e some
+  // justo da vista de quem foi procurar problema.
+  assert.equal(tr.vazios.length,2);
+  assert.deepEqual([...tr.vazios.map(v=>v.dias)],[7,17]);
+  const total=tr.trechos.concat(tr.vazios).reduce((a,t)=>a+(t.z1-t.z0),0);
+  assert.ok(Math.abs(total-1)<1e-9,'cheios e vazios juntos cobrem a torre inteira');
+  // Nenhum trecho emenda por cima do buraco: não existe trecho de 0 a 31.
+  assert.ok(!tr.trechos.some(t=>t.daa0===0&&t.daa1===31),'a torre não emenda por cima da falta');
+}
+
+/* Ordinal: o trecho inteiro segura a nota de baixo, e o salto é na medição. */
+{
+  const cfg={escalaMax:9};
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('0'),'escala',cfg), av('A2','2026-01-19',todas('33,3'),'escala',cfg),
+    av('A3','2026-02-12',todas('66,7'),'escala',cfg)
+  ]),'sev');
+  const tr=M.trajetoria(m,parcela('T2',1));
+  tr.trechos.forEach(t=>assert.equal(t.v0,t.v1,'no ordinal o trecho não caminha: v0 === v1'));
+  assert.deepEqual([...tr.trechos.map(t=>t.v0)],[0,33.3]);
+  // Mas as alturas continuam sendo os dias reais: 7 e 24 de 31.
+  assert.deepEqual([...tr.trechos.map(t=>t.dias)],[7,24]);
+}
+
+/* Sem avaliação nenhuma, a trajetória é vazia em vez de explodir. */
+{
+  const m=M.modelo(estudo([]),'sev');
+  const tr=M.trajetoria(m,parcela('T1',1));
+  assert.equal(tr.trechos.length,0);
+  assert.equal(tr.pontos.length,0);
+  assert.equal(tr.vao,0);
+}
+
+/* Os dois modos existem na tela e dizem o que cada um mede. */
+{
+  const c3=fs.readFileSync('campo-3d.js','utf8');
+  assert.ok(/\['dia','Estado no dia'/.test(c3)&&/\['historico','Histórico 3D'/.test(c3),
+    'faltam os dois modos na lista que monta os botões');
+  assert.ok(/data-modo="/.test(c3),'os botões precisam carregar qual modo acionam');
+  assert.ok(/altura = valor/.test(c3)&&/altura = tempo/.test(c3),
+    'cada botão precisa dizer o que a altura significa naquele modo');
+  // No histórico o tempo é o eixo: não pode sobrar um controle de tempo
+  // competindo com ele e sugerindo que ainda há um instante escolhido.
+  assert.ok(/estado\.modo==='dia'\s*\n?\s*\?/.test(c3)||/estado\.modo==='dia'/.test(c3),
+    'os controles de tempo precisam ser condicionais ao modo');
+}
+
 /* ==================== o módulo NÃO é carregado no arranque do app ============ */
 {
   const index=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
@@ -247,4 +336,4 @@ function todas(valor,excecoes){
 }
 
 w.close();
-console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável e carga sob demanda OK.');
+console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias e carga sob demanda OK.');

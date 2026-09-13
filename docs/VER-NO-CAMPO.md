@@ -21,6 +21,42 @@ tempo. Quem já escolheu não escolhe de novo.
 
 ---
 
+## Dois modos, duas perguntas
+
+| Modo | Altura | O tempo | Responde |
+|---|---|---|---|
+| **Estado no dia** | o **valor** da variável | anda no controle | *como estava o ensaio no dia X* |
+| **Histórico 3D** | o **tempo** (DAA) | é o próprio eixo vertical | *como o ensaio inteiro evoluiu* |
+
+Misturar os dois numa tela só faria a altura significar duas coisas ao mesmo
+tempo. O botão de modo diz, embaixo do nome, o que a altura mede em cada um.
+
+No **Histórico 3D** cada parcela vira uma torre que sobe de 0 ao último DAA, com
+a cor caminhando junto com o valor: a trajetória da parcela inteira, de uma vez.
+Os controles de tempo somem — o tempo virou o eixo, e um controle ali competiria
+com ele sugerindo que ainda há um instante escolhido.
+
+### O que a torre marca, e o que ela não finge
+
+- **A altura de cada trecho é proporcional aos dias que ele cobre.** Num ensaio
+  com avaliações aos 0, 7, 14 e 31 dias, o último trecho ocupa 17/31 da torre.
+  Trechos iguais desenhariam um ensaio que não existiu — e continuariam
+  parecendo certos.
+- **Anéis marcam as medições.** O que está entre dois anéis é interpolação, não
+  dado. Sem a marca, a torre inteira pareceria medida de ponta a ponta.
+- **O trecho sem lançamento vira gaiola tracejada**, ocupando a altura que teria.
+  Vaza a vista, então o buraco continua evidente — e mantém a torre alcançável
+  pelo toque. Sem isso, a parcela mal lançada virava um toco perto do chão que
+  as torres inteiras escondiam: sumia justo da vista de quem foi procurar
+  problema. As 20 parcelas do ensaio de referência foram conferidas como
+  alcançáveis, incluindo a que tem buraco.
+- **A cor sozinha não dá número**, então o painel da parcela traz a série
+  completa: cada DAA com o seu valor, ou *sem lançamento*.
+- No **ordinal**, o trecho inteiro segura a nota de baixo e o salto acontece na
+  medição seguinte — mas as alturas continuam sendo os dias reais.
+
+---
+
 ## Onde esta tela poderia mentir
 
 Uma vista 3D erra bonito. As colunas continuam saindo, coloridas e plausíveis,
@@ -203,3 +239,10 @@ abrindo o painel com valor e AACPD.
 A vista lê `notas`, que para `razao` e `escala` já é o valor derivado — as
 sub-amostras e o `n/N` bruto ficam na tela de avaliação, não aqui. Não há
 exportação da figura, e a vista não entra no relatório nem nas pranchas.
+
+No **Histórico 3D** a magnitude é lida pela cor e pelo painel da parcela, não
+pela forma: a altura já é o tempo. Codificar o valor também na largura da torre
+(uma silhueta que engrossa onde a severidade sobe) daria leitura quantitativa
+sem gastar o eixo, e fica anotado como passo seguinte — não foi feito aqui
+porque largura variável complica a ordenação de profundidade entre torres
+vizinhas, e errar isso desenha parcela por cima de parcela.

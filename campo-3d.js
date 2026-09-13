@@ -152,6 +152,53 @@ function aacpd(m,p){
   return usados?{valor:soma,intervalos:usados,pulados:pulados}:null;
 }
 
+/* TRAJETÓRIA — o modo "Histórico": o eixo vertical é o TEMPO, não o valor.
+ *
+ * Devolve os trechos entre avaliações consecutivas, com a altura de cada um
+ * proporcional aos DIAS REAIS que ele cobre. É a mesma exigência do outro modo
+ * vista de outro ângulo: num ensaio com avaliações aos 0, 7, 14 e 31 dias, o
+ * último trecho ocupa 17/31 da torre. Trechos de altura igual desenhariam um
+ * ensaio que não existiu.
+ *
+ * Trecho com qualquer das pontas faltando NÃO entra: vira um buraco na torre,
+ * que é exatamente o que aconteceu no campo. Emendar por cima esconderia a
+ * falta, e é a falta que o revisor precisa enxergar.
+ *
+ * `pontos` são as medições: só elas foram observadas. O que está entre duas
+ * medições é interpolação — modelo, não dado — e a tela marca a diferença.
+ */
+function trajetoria(m,p){
+  var avs=m.avs, trechos=[], pontos=[], i;
+  if(!avs.length)return {trechos:trechos,pontos:pontos,vazios:[],vao:0,buracos:0};
+  var vao=avs[avs.length-1].daa-avs[0].daa;
+  for(i=0;i<avs.length;i++){
+    var v=leValor(avs[i].av,p.tratId,p.rep,m.variavel);
+    pontos.push({daa:avs[i].daa,valor:v,
+                 z:vao>0?(avs[i].daa-avs[0].daa)/vao:0, avId:avs[i].id});
+  }
+  var buracos=0, vazios=[];
+  for(i=0;i<avs.length-1;i++){
+    var a=pontos[i].valor, b=pontos[i+1].valor;
+    if(a===null||b===null){
+      buracos++;
+      /* O trecho que falta também é devolvido, com a altura que ele OCUPARIA.
+         Sem isso a torre de uma parcela mal lançada vira um toco perto do chão,
+         que as torres inteiras escondem — a parcela com problema some justo da
+         vista de quem foi procurar problema. */
+      vazios.push({daa0:avs[i].daa,daa1:avs[i+1].daa,z0:pontos[i].z,z1:pontos[i+1].z,
+                   dias:avs[i+1].daa-avs[i].daa});
+      continue;
+    }
+    trechos.push({daa0:avs[i].daa,daa1:avs[i+1].daa,v0:a,
+                  /* Ordinal não caminha entre notas: o trecho inteiro vale a
+                     nota de baixo, e o salto acontece na medição seguinte. */
+                  v1:m.ordinal?a:b,
+                  z0:pontos[i].z,z1:pontos[i+1].z,
+                  dias:avs[i+1].daa-avs[i].daa});
+  }
+  return {trechos:trechos,pontos:pontos,vazios:vazios,vao:vao,buracos:buracos};
+}
+
 /* Fração 0..1 do valor dentro da escala da variável, e quanto disso é RUIM.
    O sentido inverte a cor; o valor devolvido para exibição não muda. */
 function fracao(m,v){
@@ -194,7 +241,7 @@ function esc(v){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
 }
 
-w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,fracao:fracao,fracaoRuim:fracaoRuim,
+w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fracao:fracao,fracaoRuim:fracaoRuim,
              numero:numero,leValor:leValor,diasEntre:diasEntre,corDe:corDe,mostra:mostra};
 
 /* =========================================================== a tela ===== */
@@ -226,6 +273,7 @@ function abrir(s,st,op){
   }
   ov.hidden=false;
   estado={s:s,st:st,vars:vars,variavel:variavel,t:0,rot:34*Math.PI/180,rodando:false,
+          modo:op.modo==='historico'?'historico':'dia',
           sel:null,vivo:true,foco:d.activeElement,ultimo:0,alvos:[]};
   /* A avaliação herdada do painel vira o instante inicial: quem já escolheu uma
      avaliação lá não escolhe de novo aqui. */
@@ -256,11 +304,28 @@ function pintar(){
     '<button type="button" class="c3-btn" data-c3="fechar">Fechar ×</button></header>'+
     '<div class="c3-controles"><label>Variável<select data-c3="variavel">'+
       estado.vars.map(function(v){return '<option value="'+esc(v)+'"'+(v===estado.variavel?' selected':'')+'>'+esc(v)+'</option>';}).join('')+
-    '</select></label></div>'+
+    '</select></label>'+
+    /* Dois modos, duas perguntas. No modo dia a altura é o VALOR e o tempo anda
+       no slider; no histórico a altura é o TEMPO e a cor caminha com o valor.
+       Misturar os dois eixos numa tela só faria altura significar duas coisas. */
+    '<div class="c3-modos" role="group" aria-label="Modo da vista">'+
+      [['dia','Estado no dia','altura = valor · o tempo anda no controle'],
+       ['historico','Histórico 3D','altura = tempo · o ensaio inteiro de uma vez']]
+      .map(function(x){
+        return '<button type="button" class="c3-btn'+(estado.modo===x[0]?' ativo':'')+'" data-c3="modo" data-modo="'+x[0]+
+               '" aria-pressed="'+(estado.modo===x[0])+'"><b>'+esc(x[1])+'</b><span>'+esc(x[2])+'</span></button>';
+      }).join('')+
+    '</div></div>'+
     '<canvas id="c3cv" width="700" height="380" aria-label="Vista do campo: cada coluna é uma parcela na posição da grade; a altura e a cor mostram '+esc(estado.variavel)+'."></canvas>'+
-    '<div class="c3-tempo"><button type="button" class="c3-btn acao" data-c3="rodar">'+(estado.rodando?'Parar':'Rodar')+'</button>'+
-      '<input type="range" data-c3="tempo" min="0" max="'+(m.daaMax||0)+'" step="0.5" value="'+estado.t+'" aria-label="Dias após a aplicação">'+
-      '<span class="c3-daa">'+mostra(estado.t,0)+' DAA</span></div>'+
+    (estado.modo==='dia'
+      ? '<div class="c3-tempo"><button type="button" class="c3-btn acao" data-c3="rodar">'+(estado.rodando?'Parar':'Rodar')+'</button>'+
+        '<input type="range" data-c3="tempo" min="0" max="'+(m.daaMax||0)+'" step="0.5" value="'+estado.t+'" aria-label="Dias após a aplicação">'+
+        '<span class="c3-daa">'+mostra(estado.t,0)+' DAA</span></div>'
+      /* No histórico o tempo É o eixo: um controle de tempo aqui competiria com
+         ele e faria parecer que ainda há um instante escolhido. */
+      : '<p class="c3-nota">O eixo vertical é o tempo, de 0 a '+mostra(m.daaMax,0)+' DAA. '+
+        'A altura de cada trecho é proporcional aos dias que ele cobre, e os anéis marcam as avaliações — '+
+        'entre dois anéis o que se vê é interpolação, não medição.</p>')+
     '<div class="c3-tempo"><label for="c3rot">Girar</label>'+
       '<input id="c3rot" type="range" data-c3="girar" min="0" max="360" step="1" value="'+Math.round(((estado.rot*180/Math.PI)%360+360)%360)+'"></div>'+
     legenda(m)+
@@ -297,9 +362,31 @@ function painel(m){
   /* O NOME do produto sai da projeção do Conhecimento, que já aplica o
      cegamento; o estudo cru entra só com os valores por parcela. */
   var nome=proj?proj.produto:'';
+  var quem='<p class="c3-onde">'+esc(p.tratId)+(nome?' · '+esc(nome):'')+' · repetição '+esc(p.repLabel);
+  if(estado.modo==='historico'){
+    /* Aqui não existe "o instante": a torre é o ensaio inteiro. O painel mostra
+       a série medida, que é o que a cor sozinha não sabe dizer em número. */
+    var tr=trajetoria(m,p), medidos=tr.pontos.filter(function(x){return x.valor!==null;});
+    var hh=quem+' · '+medidos.length+' de '+tr.pontos.length+' avaliações lançadas</p>';
+    hh+='<p class="c3-valor">'+(medidos.length
+      ? mostra(medidos[medidos.length-1].valor,m.ordinal?0:1)+(m.escala.definida&&m.escala.max===100?'%':'')
+      : 'sem avaliação')+'</p>';
+    hh+='<ul class="c3-serie">'+tr.pontos.map(function(x){
+      return '<li><b>'+mostra(x.daa,0)+' DAA</b> '+(x.valor===null
+        ? '<i>sem lançamento</i>'
+        : mostra(x.valor,m.ordinal?0:1)+(m.escala.definida&&m.escala.max===100?'%':''))+'</li>';
+    }).join('')+'</ul>';
+    if(tr.buracos)hh+='<p class="c3-nota">'+tr.buracos+' trecho(s) sem as duas pontas: a torre fica vazada ali, '+
+      'em vez de emendar por cima e esconder a falta.</p>';
+    if(m.ordinal)return hh+'<p class="c3-nota">Escala ordinal: o valor segura entre uma avaliação e a seguinte, e a AACPD não se aplica.</p>';
+    var qq=aacpd(m,p);
+    return hh+'<p class="c3-nota">'+(qq===null
+      ? 'AACPD indisponível: não sobrou nenhum intervalo com as duas pontas lançadas.'
+      : 'AACPD da parcela: '+mostra(qq.valor,0)+' · '+qq.intervalos+' intervalo(s) usado(s)'+
+        (qq.pulados?' · '+qq.pulados+' ignorado(s) por falta de lançamento':''))+'</p>';
+  }
   var v=valorEm(m,p,estado.t);
-  var h='<p class="c3-onde">'+esc(p.tratId)+(nome?' · '+esc(nome):'')+' · repetição '+esc(p.repLabel)+
-        ' · '+mostra(estado.t,0)+' DAA</p>';
+  var h=quem+' · '+mostra(estado.t,0)+' DAA</p>';
   if(v===null)
     return h+'<p class="c3-valor">sem avaliação</p><p class="c3-nota">Esta parcela não foi avaliada neste instante. '+
            'Ausência não é zero — a coluna some em vez de ir ao chão, e a interpolação não atravessa o buraco.</p>';
@@ -366,6 +453,69 @@ function poli(ctx,p,preencher,traco,esp){
   if(preencher){ctx.fillStyle=preencher;ctx.fill();}
   if(traco){ctx.strokeStyle=traco;ctx.lineWidth=esp||1;ctx.stroke();}
 }
+/* Torre do modo Histórico: os trechos empilhados na altura do TEMPO, com a cor
+   caminhando junto com o valor. Cada trecho é fatiado para a cor variar dentro
+   dele — sem isso, a torre viraria uma escada de blocos chapados e sugeriria
+   degraus onde há transição contínua. No ordinal a fatia é uma só, porque lá o
+   degrau é verdade. */
+function desenharTorre(ctx,m,o,marcada){
+  var tr=trajetoria(m,o.p), desenhou=false;
+  tr.trechos.forEach(function(t){
+    var fatias=m.ordinal?1:4;
+    for(var k=0;k<fatias;k++){
+      var f0=k/fatias, f1=(k+1)/fatias;
+      var z0=(t.z0+(t.z1-t.z0)*f0)*HMAX, z1=(t.z0+(t.z1-t.z0)*f1)*HMAX;
+      var vm=t.v0+(t.v1-t.v0)*((f0+f1)/2);
+      var c=corDe(fracaoRuim(m,vm));
+      var arestas=[[[o.x0,o.y0],[o.x1,o.y0]],[[o.x1,o.y0],[o.x1,o.y1]],
+                   [[o.x1,o.y1],[o.x0,o.y1]],[[o.x0,o.y1],[o.x0,o.y0]]];
+      arestas.map(function(e,i){
+        return {e:e,i:i,prof:prj(m,(e[0][0]+e[1][0])/2,(e[0][1]+e[1][1])/2,0)[2]};
+      }).sort(function(a,b){return b.prof-a.prof;}).forEach(function(g){
+        poli(ctx,[prj(m,g.e[0][0],g.e[0][1],z0),prj(m,g.e[1][0],g.e[1][1],z0),
+                  prj(m,g.e[1][0],g.e[1][1],z1),prj(m,g.e[0][0],g.e[0][1],z1)],
+             sombra(c,g.i%2===0?.74:.58),marcada?'#1a1c1e':null,1.2);
+      });
+      var topo=[prj(m,o.x0,o.y0,z1),prj(m,o.x1,o.y0,z1),prj(m,o.x1,o.y1,z1),prj(m,o.x0,o.y1,z1)];
+      if(k===fatias-1)poli(ctx,topo,c,marcada?'#1a1c1e':null,1.2);
+      estado.alvos.push({o:o,p:topo});
+      desenhou=true;
+    }
+  });
+  /* O trecho que falta fica como gaiola tracejada, ocupando a altura que teria.
+     Vaza a vista (o buraco continua evidente), mantém a torre alcançável pelo
+     toque e marca onde o lançamento deveria estar. */
+  ctx.setLineDash([4,4]);
+  tr.vazios.forEach(function(t){
+    var z0=t.z0*HMAX, z1=t.z1*HMAX;
+    [[o.x0,o.y0],[o.x1,o.y0],[o.x1,o.y1],[o.x0,o.y1]].forEach(function(c){
+      var p0=prj(m,c[0],c[1],z0), p1=prj(m,c[0],c[1],z1);
+      ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);
+      ctx.strokeStyle=marcada?'#1a1c1e':'rgba(26,28,30,0.42)';ctx.lineWidth=marcada?1.6:1;ctx.stroke();
+    });
+    var tampa=[prj(m,o.x0,o.y0,z1),prj(m,o.x1,o.y0,z1),prj(m,o.x1,o.y1,z1),prj(m,o.x0,o.y1,z1)];
+    poli(ctx,tampa,null,marcada?'#1a1c1e':'rgba(26,28,30,0.42)',marcada?1.6:1);
+    estado.alvos.push({o:o,p:tampa});
+    desenhou=true;
+  });
+  /* Anel em cada MEDIÇÃO: o que está entre dois anéis é interpolação, não dado.
+     Sem essa marca, a torre inteira pareceria medida de ponta a ponta. */
+  ctx.setLineDash([]);
+  tr.pontos.forEach(function(pt){
+    if(pt.valor===null)return;
+    var z=pt.z*HMAX;
+    poli(ctx,[prj(m,o.x0,o.y0,z),prj(m,o.x1,o.y0,z),prj(m,o.x1,o.y1,z),prj(m,o.x0,o.y1,z)],
+         null,'rgba(26,28,30,0.55)',1);
+  });
+  if(!desenhou){
+    /* Nenhum trecho completo: só o contorno no chão, como no outro modo. */
+    ctx.setLineDash([3,3]);
+    var base=[prj(m,o.x0,o.y0,0),prj(m,o.x1,o.y0,0),prj(m,o.x1,o.y1,0),prj(m,o.x0,o.y1,0)];
+    poli(ctx,base,null,marcada?'#1a1c1e':'rgba(26,28,30,0.30)',marcada?1.5:1);
+    ctx.setLineDash([]);
+    estado.alvos.push({o:o,p:base});
+  }
+}
 function desenhar(){
   if(!estado||!estado.ctx||!estado.m)return;
   var ctx=estado.ctx, m=estado.m;
@@ -383,8 +533,9 @@ function desenhar(){
   }).sort(function(a,b){return b.prof-a.prof;});
 
   colunas.forEach(function(o){
-    var base=[prj(m,o.x0,o.y0,0),prj(m,o.x1,o.y0,0),prj(m,o.x1,o.y1,0),prj(m,o.x0,o.y1,0)];
     var marcada=estado.sel&&estado.sel.chave===o.p.chave;
+    if(estado.modo==='historico')return desenharTorre(ctx,m,o,marcada);
+    var base=[prj(m,o.x0,o.y0,0),prj(m,o.x1,o.y0,0),prj(m,o.x1,o.y1,0),prj(m,o.x0,o.y1,0)];
     if(o.v===null){
       /* Ausência: contorno tracejado no chão, altura nenhuma. Não é zero, é vazio. */
       ctx.setLineDash([3,3]);
@@ -492,6 +643,11 @@ d.addEventListener('click',function(ev){
   var b=ev.target.closest&&ev.target.closest('#campo3dOvl [data-c3]');if(!b)return;
   if(b.dataset.c3==='fechar')return fechar();
   if(b.dataset.c3==='rodar'){estado.rodando=!estado.rodando;b.textContent=estado.rodando?'Parar':'Rodar';}
+  if(b.dataset.c3==='modo'&&b.dataset.modo!==estado.modo){
+    estado.modo=b.dataset.modo;estado.rodando=false;
+    /* A seleção sobrevive à troca: é a mesma parcela, vista de outro jeito. */
+    pintar();
+  }
 });
 d.addEventListener('keydown',function(ev){
   var ov=d.getElementById('campo3dOvl');

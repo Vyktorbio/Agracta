@@ -15,8 +15,19 @@
 .c3-btn.acao{background:var(--text,#1a1c1e);border-color:var(--text,#1a1c1e);color:#fff}
 .c3-btn:focus-visible,.c3-overlay select:focus-visible,.c3-overlay input:focus-visible{
   outline:3px solid #479eda;outline-offset:3px}
-.c3-controles{margin:18px 0 10px}
 .c3-controles label{display:block;max-width:360px;font-size:.8125rem;color:var(--text-2,#4a4f55)}
+.c3-controles{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:end;margin:18px 0 10px}
+.c3-modos{display:flex;gap:8px;flex-wrap:wrap}
+.c3-modos .c3-btn{flex:1 1 190px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  text-align:left;padding:9px 12px;min-height:52px}
+.c3-modos .c3-btn b{font-size:.9375rem}
+.c3-modos .c3-btn span{font-weight:400;font-size:.75rem;color:var(--text-2,#4a4f55)}
+.c3-btn.ativo{background:var(--text,#1a1c1e);border-color:var(--text,#1a1c1e);color:#fff}
+.c3-btn.ativo span{color:#d4d7da}
+.c3-serie{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.875rem}
+.c3-serie li{color:var(--text-2,#4a4f55)}
+.c3-serie b{color:var(--text,#1a1c1e);font-weight:600}
+.c3-serie i{font-style:normal;opacity:.75}
 .c3-overlay select{display:block;box-sizing:border-box;width:100%;margin-top:6px;padding:10px 12px;
   background:var(--surface,#fff);color:inherit;border:1px solid var(--border,#b9bdc1);
   border-radius:8px;font:inherit;min-height:44px}
@@ -36,6 +47,8 @@
 .c3-valor{font-size:1.625rem;font-weight:700;margin:0 0 3px;letter-spacing:-.02em}
 .c3-nota{font-size:.875rem;color:var(--text-2,#4a4f55);margin:8px 0 0;line-height:1.6}
 @media(max-width:600px){
+  .c3-controles{grid-template-columns:1fr}
+  .c3-modos .c3-btn{flex:1 1 100%}
   .c3-overlay{padding:16px 12px}
   .c3-head{flex-direction:column}
   #c3cv{height:300px}
