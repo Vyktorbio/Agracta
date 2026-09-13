@@ -13,5 +13,12 @@ assert.equal(a.produtos.some(p=>p.nome==='Cego 01'),true);assert.equal(JSON.stri
 w.abrirConhecimento();assert(w.document.querySelector('#conhecimentoOvl'));assert.equal(w.document.querySelectorAll('[data-aba="clientes"]').length,0);
 w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(w.document.querySelectorAll('#conhecimentoOvl img').length,0);assert.equal(JSON.stringify(w.data),antes);
 delete w.data.Q1.estudos[0].tratamentos[0].testemunha;assert.equal(w.agConhecimento.construir().estudos[0].resultados[1].controle,null);
+w.data.Q1.estudos[0].testemunha='T1';
+const refAntes=JSON.stringify(w.data);
+assert(Math.abs(w.agConhecimento.construir().estudos[0].resultados[1].controle-100*10/15)<1e-10,'referência selecionada no estudo também vale');
+assert.equal(JSON.stringify(w.data),refAntes,'não grava marcações de testemunha');
+w.data.Q1.estudos[0].testemunha='inexistente';
+assert.equal(w.agConhecimento.construir().estudos[0].resultados[1].controle,null,'referência ausente não vira T1');
+delete w.data.Q1.estudos[0].testemunha;
 const snap=JSON.parse(JSON.stringify({data:w.data,qlocal:w.QLOCAL,locais:w.LOCAIS,itens:w.ITENS}));w.ITENS.i.codigoCego='Alterado depois';assert.equal(w.agConhecimento.projetar('Q1',snap.data.Q1.estudos[0],snap.data.Q1,snap).tratamentos[1].produto,'Cego 01');
 dom.window.close();console.log('Interface: leitura sem mutação, notas reais, cegamento histórico, XSS e cópia sincronizada OK.');

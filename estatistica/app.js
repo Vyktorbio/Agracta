@@ -3799,7 +3799,7 @@ function __agractaHandoff(payload){
         _set('audit-coletor', payload.responsavel);
         preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
-        var papeis = (modo === 'analise') ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null;
+        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
         /* A dose só viaja quando o Agracta já provou que o ensaio É uma série
            de doses (mesmo item, 3+ níveis, mesma unidade). Chegando, ela tem
            de vir com papel: sem isso a coluna existe e a rota continua sendo
@@ -3819,7 +3819,15 @@ function __agractaHandoff(payload){
         if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
         if(typeof atualizarPipeline==='function') atualizarPipeline();
         /* auto-roda a análise quando nada bloqueia (autoteste é só aviso no embed) */
-        setTimeout(function(){ var b=document.getElementById('btn-analisar'); if(b && !b.disabled) b.click(); }, 400);
+        setTimeout(function(){
+          var info=atualizarPipeline(), b=document.getElementById('btn-analisar');
+          if(info&&info.bloqueia){
+            _agractaEmitirResultado({ok:false,erro:'Conferência da análise: '+info.checks.filter(function(c){return c.severidade==='critico';}).map(function(c){return c.titulo+': '+c.detalhe;}).join('; ')});
+            return;
+          }
+          if(b&&!b.disabled)b.click();
+          else _agractaEmitirResultado({ok:false,erro:'Motor indisponível para iniciar esta análise.'});
+        }, 400);
       }catch(e){ console.error('[Agracta handoff carrega]', e); }
     }
     _carrega();

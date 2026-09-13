@@ -11095,7 +11095,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-13';
+var MOTOR_VERSAO='agracta-14';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -11111,9 +11111,9 @@ var MOTOR_VERSAO='agracta-13';
    CÁLCULO muda -- rota diferente, fórmula diferente, correção de conta.
    Mexer só na tela do motor não mexe aqui.
 
-   Fica em agracta-12 de propósito: é o valor com que os aparelhos gravaram,
-   então a estatística guardada volta a valer sem recalcular nada. */
-var MOTOR_CALCULO='agracta-12';
+   A versão 14 corrige a natureza da variável e os papéis forenses.
+   Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
+var MOTOR_CALCULO='agracta-14';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -11121,7 +11121,7 @@ function _bioestatJobs(qid,study){
     var aoa=_bioestatJobAoa(qid,study,av,v), groups={};
     aoa.slice(1).forEach(function(r){groups[r[7]]=(groups[r[7]]||0)+1;});
     if(Object.keys(groups).filter(function(k){return groups[k]>=2;}).length<2)return;
-    jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:av.tipo||v,aoa:aoa});
+    jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa});
   }); });
   return jobs;
 }
@@ -11296,7 +11296,7 @@ function _bioestatEnsureStudy(qid,sid){
 function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
-  function _ftipo(j){ var t=String(j.tipo||j.variavel||'').toLowerCase(); return /sever|incid|fitotox|efic|propor|%|altura|produ|peso|di[âa]m|massa|cont[íi]nu/.test(t)?'cont':'count'; }
+  function _ftipo(j){ return j.tipo==='contagem'?'count':'cont'; }
   var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
     [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
