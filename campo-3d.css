@@ -1,0 +1,56 @@
+/* "Ver no campo" — tema neutro do app: branco, cinza-chumbo, ações pretas.
+   Carregado sob demanda junto do campo-3d.js. */
+.c3-overlay[hidden]{display:none!important}
+.c3-overlay{position:fixed;inset:0;z-index:4100;overflow:auto;background:var(--surface,#fff);
+  color:var(--text,#1a1c1e);font:400 1rem/1.5 Inter,system-ui,sans-serif;padding:24px;
+  font-variant-numeric:tabular-nums}
+.c3-shell{max-width:820px;margin:auto;padding-bottom:48px}
+.c3-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.c3-eyebrow{margin:0;font-size:.75rem;font-weight:800;letter-spacing:.16em;color:var(--text-2,#4a4f55)}
+.c3-head h2{font-size:1.4rem;margin:4px 0 2px}
+.c3-sub{margin:0;font-size:.9375rem;color:var(--text-2,#4a4f55)}
+.c3-btn{background:var(--surface,#fff);border:1px solid var(--border,#b9bdc1);color:inherit;
+  border-radius:8px;padding:9px 14px;font:inherit;font-size:.9375rem;font-weight:600;
+  cursor:pointer;min-height:44px}
+.c3-btn.acao{background:var(--text,#1a1c1e);border-color:var(--text,#1a1c1e);color:#fff}
+.c3-btn:focus-visible,.c3-overlay select:focus-visible,.c3-overlay input:focus-visible{
+  outline:3px solid #479eda;outline-offset:3px}
+.c3-controles label{display:block;max-width:360px;font-size:.8125rem;color:var(--text-2,#4a4f55)}
+.c3-controles{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:end;margin:18px 0 10px}
+.c3-modos{display:flex;gap:8px;flex-wrap:wrap}
+.c3-modos .c3-btn{flex:1 1 190px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  text-align:left;padding:9px 12px;min-height:52px}
+.c3-modos .c3-btn b{font-size:.9375rem}
+.c3-modos .c3-btn span{font-weight:400;font-size:.75rem;color:var(--text-2,#4a4f55)}
+.c3-btn.ativo{background:var(--text,#1a1c1e);border-color:var(--text,#1a1c1e);color:#fff}
+.c3-btn.ativo span{color:#d4d7da}
+.c3-serie{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.875rem}
+.c3-serie li{color:var(--text-2,#4a4f55)}
+.c3-serie b{color:var(--text,#1a1c1e);font-weight:600}
+.c3-serie i{font-style:normal;opacity:.75}
+.c3-overlay select{display:block;box-sizing:border-box;width:100%;margin-top:6px;padding:10px 12px;
+  background:var(--surface,#fff);color:inherit;border:1px solid var(--border,#b9bdc1);
+  border-radius:8px;font:inherit;min-height:44px}
+#c3cv{display:block;width:100%;height:380px;background:var(--bg,#f4f5f6);
+  border:1px solid var(--border,#dfe1e3);border-radius:10px;touch-action:none}
+.c3-tempo{display:flex;align-items:center;gap:12px;margin:14px 0 6px}
+.c3-tempo label{font-size:.875rem;color:var(--text-2,#4a4f55);min-width:40px}
+.c3-tempo input[type=range]{flex:1;min-width:0;accent-color:var(--text,#1a1c1e);min-height:44px}
+.c3-daa{font-size:.9375rem;font-weight:700;min-width:72px;text-align:right}
+.c3-legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:.8125rem;
+  color:var(--text-2,#4a4f55);margin:12px 0 18px}
+.c3-chip{display:inline-flex;align-items:center;gap:6px}
+.c3-chip i{width:11px;height:11px;border-radius:2px;display:inline-block}
+.c3-chip i.c3-vazio{border:1px dashed #8c9095}
+.c3-painel{border:1px solid var(--border,#dfe1e3);border-radius:10px;padding:14px 16px}
+.c3-onde{font-size:.8125rem;color:var(--text-2,#4a4f55);margin:0 0 4px}
+.c3-valor{font-size:1.625rem;font-weight:700;margin:0 0 3px;letter-spacing:-.02em}
+.c3-nota{font-size:.875rem;color:var(--text-2,#4a4f55);margin:8px 0 0;line-height:1.6}
+@media(max-width:600px){
+  .c3-controles{grid-template-columns:1fr}
+  .c3-modos .c3-btn{flex:1 1 100%}
+  .c3-overlay{padding:16px 12px}
+  .c3-head{flex-direction:column}
+  #c3cv{height:300px}
+  .c3-daa{min-width:64px}
+}

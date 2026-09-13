@@ -14445,6 +14445,39 @@ function _avCfg(src,v){
     escalaNome:c.escalaNome||''
   };
 }
+/* ESCALA DA VARIÁVEL — o mínimo e o máximo em que o valor pode cair.
+ *
+ * Existe para qualquer tela que pinte cor por valor. Escala tirada do máximo
+ * OBSERVADO no estudo faz o pior tratamento parecer vermelho sempre, mesmo num
+ * estudo em que ninguém passou de 4% de severidade, e deixa dois estudos
+ * incomparáveis entre si. A escala tem de vir da variável, não dos dados.
+ *
+ * Não há cadastro novo: o que já existe é em CAMADAS, e a resposta sai delas.
+ *   1. varcfg[v] da avaliação — o que foi declarado ali (escalaMax já mora aqui)
+ *   2. o TIPO da variável     — a escala natural de cada um
+ *   3. CATALOGO_AVAL          — o cadastro central, que semeia 1 e 2 na criação
+ * Um quarto lugar dessincronizaria, porque varcfg é o que a avaliação seguinte
+ * herda (ver _avHerdar) e o que a sincronização funde.
+ *
+ * `definida:false` é resposta, não falha: contagem não tem teto, e a tela tem de
+ * DIZER isso em vez de inventar um máximo.
+ */
+function _avEscala(src,v){
+  var c=(src&&src.varcfg&&src.varcfg[v])||{}, cfg=_avCfg(src,v);
+  var min=_numBR(c.escalaMin,NaN); if(!isFinite(min)) min=0;
+  var max=_numBR(c.escalaMaxValor,NaN);   /* teto declarado à mão, p/ contagem */
+  if(isFinite(max)&&max>min) return {min:min,max:max,definida:true,tipo:cfg.tipo,porque:'declarada na avaliação'};
+  /* pct: 0 a 100 por definição. razão n/N e escala guardam PERCENTUAL em notas
+     (ver _avDerivar: razão vira n/N×100 e escala vira o índice de McKinney),
+     então as três caem na mesma escala, e não na escala da nota crua. */
+  if(cfg.tipo==='pct'||cfg.tipo==='razao'||cfg.tipo==='escala')
+    return {min:0,max:100,definida:true,tipo:cfg.tipo,
+            porque:cfg.tipo==='escala'?'índice de McKinney (0 a 100), derivado das notas de 0 a '+cfg.escalaMax
+                  :cfg.tipo==='razao'?'razão n/N em porcentagem':'porcentagem'};
+  /* contagem: não existe teto. Quem pinta cor precisa saber que não sabe. */
+  return {min:min,max:null,definida:false,tipo:cfg.tipo,
+          porque:'contagem não tem teto: declare o máximo na avaliação para haver escala de cor'};
+}
 /* Só as variáveis novas (razão/escala) e as com sub-amostra guardam bruto — pct e
    contagem simples continuam exatamente como antes, direto em notas[][]. */
 function _avUsaBruto(cfg){ return cfg.tipo==='razao'||cfg.tipo==='escala'||cfg.sub>1; }
