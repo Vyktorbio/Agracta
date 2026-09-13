@@ -3787,7 +3787,9 @@ function __agractaHandoff(payload){
     var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
     var ref = lv[0] || {};
-    function _set(id,v){ var el=document.getElementById(id); if(el && v!=null && String(v)!=='' && !String(el.value||'').trim()) el.value=String(v); }
+    /* Cada handoff é uma nova execução, inclusive quando reutiliza o iframe.
+       Campo ausente também substitui o anterior: a custódia pertence ao estudo atual. */
+    function _set(id,v){ var el=document.getElementById(id); if(el) el.value=v==null?'':String(v); }
     function _setSel(id,v){ var el=document.getElementById(id); if(el && v && [].some.call(el.options,function(o){return o.value===v;})) el.value=v; }
     function _carrega(){
       try{
@@ -3797,6 +3799,9 @@ function __agractaHandoff(payload){
         _setSel('audit-origem-bruta','matriz');
         _set('audit-registro-bruto', [payload.local, payload.quadra, payload.titulo].filter(Boolean).join(' · '));
         _set('audit-coletor', payload.responsavel);
+        _set('audit-data-coleta', '');
+        _set('audit-local-equipamento', '');
+        _set('audit-observacao-custodia', '');
         preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
         var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
