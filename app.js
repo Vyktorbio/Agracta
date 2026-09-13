@@ -11095,7 +11095,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-14';
+var MOTOR_VERSAO='agracta-15';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -11113,7 +11113,7 @@ var MOTOR_VERSAO='agracta-14';
 
    A versão 14 corrige a natureza da variável e os papéis forenses.
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-14';
+var MOTOR_CALCULO='agracta-15';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
