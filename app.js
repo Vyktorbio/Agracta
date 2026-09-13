@@ -5256,9 +5256,16 @@ function buildStudyModelo(qid, s, opts){
       /* unidade declarada no estudo quando a dose veio só com o número. 'ppm' não
          é dose por área e o motor de campo não sabe o que fazer com ela — esta
          planilha é a de campo, então cai no padrão. */
-      var dunit=(typeof doseUnidadeDe==='function')?doseUnidadeDe(s,t.dose):'L/ha';
-      if(dunit==='ppm') dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'L/ha';
-      if(dval>0 && vol>0){
+      var dunit=(typeof doseUnidadeDe==='function')?doseUnidadeDe(s,t.dose):'';
+      if(dunit==='ppm') dunit=(typeof _calcDoseUnit==='function')?_calcDoseUnit(t.dose):'';
+      /* Sem unidade declarada não se preenche coluna de conta nenhuma. Esta
+         planilha vai impressa para a equipe de campo: um número plausível na
+         coluna "Produto/parcela" é seguido sem conferência. O aviso ocupa o
+         lugar da conta para que a falta seja vista, não deduzida do branco. */
+      if(dval>0 && !dunit){
+        put(rr,9,'⚠ Unidade da dose não declarada no estudo — sem unidade não há conta. '+
+                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha).');
+      }else if(dval>0 && vol>0){
         /* Mistura também aqui: esta planilha é a que vai para a equipe de campo,
            e usava o motor de produto único — "1,5 L + 0,2%" saía como 1,5 L/ha e
            o adjuvante não aparecia em coluna nenhuma. Agora cada componente sai
@@ -6433,7 +6440,14 @@ function newStudy(){
        tabela dizerem "500 mL/ha" em vez de chutar L/ha, e o que decide qual
        receita a calculadora do laboratório abre. */
     doseModo:'campo',     /* campo | ppm */
-    doseUnidade:'L/ha',   /* L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo' */
+    /* '' | L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo'.
+       VAZIO É ESTADO LEGÍTIMO: quer dizer "ninguém declarou ainda", e não se
+       resolve por chute. O padrão era 'L/ha', e o chute não ficava no rótulo:
+       o motor de campo lê L/ha como valor×1000 em mL de LÍQUIDO, então um
+       tratamento escrito só como "10", pensado em g/ha, virava 10.000 mL/ha —
+       mil vezes maior e sólido virando líquido. Agora quem não declarou é
+       PERGUNTADO antes de calcular. Ver doseUnidadePendente(). */
+    doseUnidade:'',
     /* ===== DESENHO EXPERIMENTAL ==========================================
        'dbc'    — blocos ao acaso dentro de UMA quadra. É tudo que existia.
        'faixas' — cada tratamento ocupa uma FAIXA/área própria, possivelmente
@@ -6595,7 +6609,11 @@ function normalizeStudy(s){
       });
     }
     var _uk=Object.keys(_un);
-    s.doseUnidade=(_uk.length===1)?_uk[0]:'L/ha';
+    /* Sem acordo entre os tratamentos, fica VAZIA. Cravar 'L/ha' aqui era o
+       chute que se disfarçava de dado: o estudo passava a "declarar" uma
+       unidade que ninguém escolheu, e ela ia junto para a figura e para a
+       conta da calda. Vazio faz a pergunta aparecer na hora de calcular. */
+    s.doseUnidade=(_uk.length===1)?_uk[0]:'';
   }
   if(typeof s.testemunha!=="string")s.testemunha="";
   /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
@@ -7416,14 +7434,48 @@ function _calcDoseUnit(raw){
   if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
   return 'L/ha';
 }
+/* A unidade que o ESTUDO declarou, ou '' se não declarou. Uma função só para
+   que "não declarada" tenha um nome, em vez de ser o `else` de um if. */
+/* Função e não constante: os testes recortam funções nomeadas do app.js para
+   rodar sem navegador, e uma `var` no topo do arquivo não vai junto no recorte. */
+function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha']; }
+function doseUnidadeDeclarada(study){
+  var d=study&&study.doseUnidade;
+  return (doseUnidades().indexOf(d)>=0)?d:'';
+}
+/* Dose escrita só com número: "10". Quem escreveu "10 g/ha" ou "0,2%" já disse
+   a unidade e não depende do estudo. Mistura conta componente a componente:
+   em "1,5 + 0,2%" o adjuvante se resolve sozinho e o produto NÃO — e é o
+   produto que vai para a balança. */
+function doseSemUnidade(raw){
+  var s=String(raw==null?'':raw).trim();
+  if(!s) return false;
+  return s.split(/\s\+\s/).some(function(p){
+    p=p.trim();
+    return !!p && !/[a-zA-Z%]/.test(p);
+  });
+}
+/* O estudo tem dose que só o número diz, e nenhuma unidade declarada para
+   completá-la. Este é o estado em que o app ANTES chutava L/ha; agora é o
+   estado em que ele pergunta. Testemunha sem dose não conta — não há o que
+   calcular nela. */
+function doseUnidadePendente(study){
+  if(!study) return false;
+  if(study.doseModo==='ppm') return false;      /* ppm é concentração, não dose por área */
+  if(doseUnidadeDeclarada(study)) return false;
+  return (study.tratamentos||[]).some(function(t){
+    return t && !t.testemunha && doseSemUnidade(t.dose);
+  });
+}
 /* Unidade que o RÓTULO deve mostrar para esta dose, neste estudo.
-   Ordem: o que o usuário escreveu na dose > o que o estudo declarou > L/ha.
-   Estudo em ppm não tem unidade por área — a dose É a concentração. */
+   Ordem: o que o usuário escreveu na dose > o que o estudo declarou > NADA.
+   Estudo em ppm não tem unidade por área — a dose É a concentração.
+   Devolver '' é resposta legítima e significa "não sei" — quem chama trata,
+   ninguém inventa. */
 function doseUnidadeDe(study, raw){
   if(study && study.doseModo==='ppm') return 'ppm';
   if(/[a-zA-Z]/.test(String(raw||''))) return _calcDoseUnit(raw);   /* usuário escreveu a unidade */
-  var d=study&&study.doseUnidade;
-  return (['L/ha','mL/ha','g/ha','kg/ha'].indexOf(d)>=0)?d:'L/ha';
+  return doseUnidadeDeclarada(study);
 }
 /* Dose pronta para impressão: "500 mL/ha". Dose que já vem com unidade sai como
    está. Mistura ("500 + 300") recebe a unidade em CADA componente — rotuloTratamento
@@ -7433,6 +7485,11 @@ function doseTextoDe(study, raw){
   var s=String(raw==null?'':raw).trim();
   if(!s) return '';
   var u=doseUnidadeDe(study, s);
+  /* Sem unidade declarada, o rótulo sai com o NÚMERO CRU. Era aqui que "10"
+     virava "10 L/ha" no eixo do gráfico e na tabela — uma unidade que ninguém
+     escreveu, impressa com a mesma autoridade das que foram escolhidas. Número
+     sem unidade é incômodo e é para ser: mostra que falta declarar. */
+  if(!u) return s;
   return s.split(/\s\+\s/).map(function(p){
     p=p.trim();
     if(!p || /[a-zA-Z]/.test(p)) return p;
@@ -8433,6 +8490,51 @@ function calcConfirmarVolume(valor){
   try{ _calcRenderShell(); }catch(e){}
 }
 
+/* A pessoa declara a unidade da dose do estudo. Mesma forma da confirmação de
+   volume: escolha explícita, registrada na auditoria, e nada é calculado antes. */
+function calcConfirmarUnidadeDose(u){
+  var st=_calcStudy(); if(!st) return;
+  if(doseUnidades().indexOf(u)<0) return;
+  var antes=st.doseUnidade||'(não declarada)';
+  st.doseUnidade=u;
+  try{
+    logStudyAuditInObject(st,'Unidade da dose declarada',
+      'Os tratamentos traziam só o número. Unidade declarada como '+u+
+      ' (antes: '+antes+'). É ela que passa a completar toda dose escrita sem unidade.',
+      {origem:'confirmada'});
+  }catch(e){}
+  st._ts=Date.now();
+  try{ save(); }catch(e){}
+  try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
+  try{ _calcRenderShell(); }catch(e){}
+}
+
+/* O bloco que pergunta a unidade. SUBSTITUI a receita, pelo mesmo motivo do
+   volume ambíguo: uma receita calculada com unidade adivinhada é pior que
+   receita nenhuma, porque parece pronta. Aqui a diferença entre L/ha e g/ha
+   não é de rótulo — é de mil vezes, e de líquido para sólido. */
+function calcUnidadeDosePendenteHtml(study){
+  if(!doseUnidadePendente(study)) return '';
+  var exemplos=(study.tratamentos||[]).filter(function(t){
+    return t && !t.testemunha && doseSemUnidade(t.dose);
+  }).slice(0,3).map(function(t){ return (t.produto||t.id||'?')+' = '+String(t.dose).trim(); });
+  var h='<div class="calc-card"><div class="calc-prep bad"><span>DECLARE A UNIDADE DA DOSE</span>'+
+        '<b>'+esc(exemplos.join(' · '))+'</b>'+
+        '<small>a dose está só com o número, e o estudo não diz de que unidade é</small></div>';
+  h+='<div class="calc-warn" style="margin:0 0 7px">Nada é calculado enquanto isto não for '+
+     'resolvido. Não é escolha de rótulo: em L/ha o motor prepara mil vezes mais produto que '+
+     'em g/ha, e como líquido em vez de sólido. As doses continuam como estão — o que se '+
+     'declara aqui é de que unidade elas são.</div>';
+  h+='<div class="calc-actions" style="flex-wrap:wrap">';
+  doseUnidades().forEach(function(u){
+    h+='<button class="calc-close" onclick="calcConfirmarUnidadeDose(\''+u+'\')">'+esc(u)+'</button>';
+  });
+  h+='</div>';
+  h+='<div class="calc-eq" style="margin-top:6px">Vale para todo tratamento escrito só com o '+
+     'número. Quem já traz a unidade na dose (ex.: "500 mL/ha") continua mandando na sua.</div>';
+  return h+'</div>';
+}
+
 /* O bloco que pergunta. Ele SUBSTITUI a receita: enquanto o volume não estiver
    resolvido não existe conta a mostrar, e mostrar uma seria voltar ao erro. */
 function calcVolumeAmbiguoHtml(amb){
@@ -8476,6 +8578,13 @@ function _calcCompute(){
   var _metVariam=false;
   try{ _metVariam=studyMetodosVariam(study,(_calcSel||{}).qid); }catch(e){}
   var html='';
+  /* Unidade da dose por declarar: vem ANTES do volume porque é mais fundo. Sem
+     saber se "10" é litro ou grama não existe receita nenhuma para mostrar —
+     nem errada por pouco: errada por mil, e sólido no lugar de líquido. */
+  if(doseUnidadePendente(study)){
+    box.innerHTML=calcUnidadeDosePendenteHtml(study);
+    return;
+  }
   /* Volume de calda por resolver: a receita inteira depende dele, então não se
      mostra receita nenhuma. Meia conta na bancada é pior que conta nenhuma. */
   if(_calcVolAmbiguo && !(volDef>0)){
@@ -8492,7 +8601,14 @@ function _calcCompute(){
   });
   _lista.forEach(function(t){
     var _isWitness=!!t.testemunha;
-    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
+    /* doseUnidadeDe, não _calcDoseUnit: o parser de texto devolve 'L/ha' para
+       qualquer coisa sem unidade escrita, e era ele que reintroduzia o chute
+       aqui dentro mesmo com o estudo declarando outra. O portão acima garante
+       que, nesta altura, a unidade existe. */
+    var dunit=doseUnidadeDe(study,t.dose), dval=_calcNum(t.dose);
+    /* ppm é concentração, não dose por área: esta é a calculadora de CAMPO, e
+       o motor dela não sabe o que fazer com ppm. Mesma saída da planilha. */
+    if(dunit==='ppm') dunit=_calcDoseUnit(t.dose);
     /* O mesmo cuidado no volume do TRATAMENTO: texto com mais de um número não
        vira conta. O cartão daquele tratamento diz o que falta, e só ele. */
     var _tv=calcVolumeDoTratamento(t,volDef);
@@ -9668,7 +9784,13 @@ function calcMemoria(study, cfg){
 
   (study.tratamentos||[]).forEach(function(t){
     var testemunha=!!t.testemunha;
-    var dunit=_calcDoseUnit(t.dose), dval=_calcNum(t.dose);
+    /* A memória é o registro BPL do preparo: é o papel que diz, três anos
+       depois, com que número se calculou. Ela lia a unidade com o parser de
+       TEXTO, que devolve 'L/ha' para qualquer dose escrita só com número —
+       então gravava "L/ha" como se fosse dado do estudo, inclusive num estudo
+       declarado em g/ha. Agora vale o que o estudo declarou. */
+    var dunit=doseUnidadeDe(study,t.dose), dval=_calcNum(t.dose);
+    if(dunit==='ppm') dunit=_calcDoseUnit(t.dose);
     var volumeResolvido=typeof calcVolumeDoTratamento==='function'?calcVolumeDoTratamento(t,cfg.volumeCaldaLHa):null;
     var vol=volumeResolvido?(volumeResolvido.ambiguo?0:volumeResolvido.valor):(t.volume?_calcNum(t.volume):cfg.volumeCaldaLHa);
     var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
@@ -9683,6 +9805,18 @@ function calcMemoria(study, cfg){
     /* Testemunha sem dose não gera calda — e isso é resultado, não falta de dado. */
     if(testemunha && !(dval>0)){
       reg.semPreparo=true;
+      mem.tratamentos.push(reg);
+      return;
+    }
+
+    /* Unidade não declarada: a memória registra a PENDÊNCIA. Gravar um preparo
+       calculado com unidade adivinhada seria o pior dos dois mundos — a conta
+       errada ganharia a autoridade de um registro assinado. */
+    if(!dunit && dval>0){
+      reg.erro='Unidade da dose não declarada no estudo. "'+String(t.dose||'').trim()+
+               '" tanto pode ser L/ha quanto g/ha, e entre as duas há mil vezes de diferença. '+
+               'Declare a unidade da dose no cadastro do estudo antes de preparar.';
+      reg.liberado=false;
       mem.tratamentos.push(reg);
       return;
     }
@@ -10690,6 +10824,13 @@ function _pranchaPayload(qid, sid, variavel){
   var avs=dts.usadas;
   /* avisos: a folha sai, mas o usuário precisa saber o que ficou de fora */
   var avisos=[];
+  /* Abrir gráfico é leitura e não se interrompe com pergunta (ver
+     openPranchaEstudo). Então a figura sai com a dose em número cru, e o aviso
+     diz por quê — antes, o eixo estampava "10 L/ha" numa dose que ninguém
+     declarou, e a figura ia para o relatório do cliente com essa autoridade. */
+  if(doseUnidadePendente(s)) avisos.push('Unidade da dose não declarada no estudo: as doses saem '+
+    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha) '+
+    'e gere a figura de novo.');
   if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
     dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
   if(dts.descartadasPreAplicacao) avisos.push(dts.descartadasPreAplicacao+' avaliação(ões) anterior(es) à aplicação ficaram de fora (linha de base).');
@@ -13123,12 +13264,20 @@ function renderStudyEditModal(){
       '<option value="ppm"'+(_dm==='ppm'?' selected':'')+'>Concentração (ppm)</option>'+
       '</select></div>';
   }
+  /* "Não declarada" é opção de verdade, e é o padrão de estudo novo. Antes a
+     lista começava em L/ha e o estudo saía declarando uma unidade que ninguém
+     escolheu. Quem não escolhe fica sem — e a calculadora pergunta na hora. */
+  var _du=(typeof doseUnidadeDeclarada==='function')?doseUnidadeDeclarada(s):(s.doseUnidade||'');
   h+='<div class="se-field" id="seDoseUnidWrap"'+(_dm==='ppm'?' style="display:none"':'')+'><label>Unidade da dose</label><select id="seDoseUnid">'+
+    '<option value=""'+(_du?'':' selected')+'>— não declarada —</option>'+
     ['L/ha','mL/ha','g/ha','kg/ha'].map(function(u){
-      return '<option value="'+u+'"'+(u===s.doseUnidade?' selected':'')+'>'+u+'</option>';
+      return '<option value="'+u+'"'+(u===_du?' selected':'')+'>'+u+'</option>';
     }).join('')+'</select></div>';
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
+  if(typeof doseUnidadePendente==='function' && doseUnidadePendente(s)){
+    h+='<div class="se-warn" style="font-size:11px;margin:-4px 0 8px;color:#d08a3a">⚠ Há tratamento com a dose escrita só com o número e nenhuma unidade declarada. Enquanto ficar assim, o gráfico mostra o número sem unidade e a calculadora não prepara — ela pergunta. Não é chute que resolve: entre L/ha e g/ha há mil vezes de diferença.</div>';
+  }
 
   /* Desenho experimental. Em faixas cada tratamento ocupa uma área própria,
      possivelmente em outra quadra — e aí a "repetição" passa a ser o treço. */
@@ -13451,7 +13600,8 @@ function syncStudyInputs(){
   if(isQuadraLab(curV)){ workingStudy.desenho='dbc'; workingStudy.faixas=[]; }
   _seFaixasLer();
   x=el("seDoseModo"); if(x) workingStudy.doseModo=(x.value==='ppm')?'ppm':'campo';
-  x=el("seDoseUnid"); if(x && ['L/ha','mL/ha','g/ha','kg/ha'].indexOf(x.value)>=0) workingStudy.doseUnidade=x.value;
+  /* '' entra: é "não declarada", escolha legítima e não ausência de leitura. */
+  x=el("seDoseUnid"); if(x && (x.value==='' || doseUnidades().indexOf(x.value)>=0)) workingStudy.doseUnidade=x.value;
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
   /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
@@ -13789,7 +13939,11 @@ function saveStudyV2(){
     if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
     if(String(old.labDensidade||'') !== String(s.labDensidade||'')) changes.push('Densidade (lab): "' + (old.labDensidade||'—') + '" -> "' + (s.labDensidade||'—') + '"');
     if((old.doseModo||'campo') !== s.doseModo) changes.push('Definição da dose: "' + (old.doseModo||'campo') + '" -> "' + s.doseModo + '"');
-    if((old.doseUnidade||'L/ha') !== s.doseUnidade) changes.push('Unidade da dose: "' + (old.doseUnidade||'L/ha') + '" -> "' + s.doseUnidade + '"');
+    /* "(não declarada)" precisa aparecer com todas as letras na auditoria: a
+       passagem de não-declarada para g/ha é justamente a decisão que se quer
+       poder reler depois, e um par de aspas vazias não conta essa história. */
+    var _duAntes=(old.doseUnidade||'(não declarada)'), _duDepois=(s.doseUnidade||'(não declarada)');
+    if(_duAntes !== _duDepois) changes.push('Unidade da dose: "' + _duAntes + '" -> "' + _duDepois + '"');
     if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
     details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
   } else {

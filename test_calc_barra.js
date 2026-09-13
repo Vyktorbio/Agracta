@@ -78,6 +78,7 @@ ctx._calcStudy=function(){ return ESTUDO; };
 
 vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcCapAtualL'), pega('_calcDoseUnit'),
+  pega('doseUnidades'), pega('doseUnidadeDeclarada'), pega('doseSemUnidade'), pega('doseUnidadePendente'), pega('doseUnidadeDe'),
   'var CALC_BARRA_EQUIP='+JSON.stringify({tractor:'Trator — sider', co2:'Costal pressurizado a CO₂'})+';',
   'var APLIC_METODOS='+JSON.stringify({tractor:'Trator — sider',co2:'Costal pressurizado a CO₂',drone:'Drone',atomizer:'Atomizador costal motorizado',lab:'Torre de Potter — bancada'})+';',
   "var _CALC_BARRA_FORA={drone:'drone', atomizer:'atomizador', lab:'Torre de Potter'};",
