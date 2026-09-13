@@ -10,7 +10,7 @@ function date(v){return /^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.slice(8,10)+'/'+v.sl
 function stamp(r){var d=/^\d{4}-\d{2}-\d{2}$/.test(r.data||'')?Date.parse(r.data+'T'+(/^\d{2}:\d{2}/.test(r.hora||'')?r.hora.slice(0,5):'00:00')+':00Z'):NaN;return Number.isFinite(d)?d:null;}
 function signature(r){return JSON.stringify([r.variavel,r.tipo,r.unidade,r.sentido]);}
 function unit(r){return r.unidade||(r.tipo==='pct'?'%':r.tipo==='contagem'?'contagem':'');}
-function label(r){return date(r.data)+(r.hora?' · '+r.hora:'')+(r.momento?' · '+r.momento:'')+' · '+r.avaliacao;}
+function label(r){return date(r.data)+(r.hora?' · '+r.hora:'')+(r.momento?' · '+r.momento:'');}
 function tr(s,id){return s.tratamentos.find(function(t){return t.id===id;})||{id:id,produto:'Sem produto'};}
 function color(s,id){return colors[Math.max(0,s.tratamentos.findIndex(function(t){return t.id===id;}))%colors.length];}
 function section(id,title,body){return '<section id="ep-'+id+'" class="ep-section"><h3>'+title+'</h3>'+body+'</section>';}

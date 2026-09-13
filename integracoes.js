@@ -70,9 +70,9 @@
       tratamentos:[],resultados:[],aplicacoes:[],consumos:[],integracoes:st.integracoes||null,
       solo:q.solo||null,atualizadoEm:isoTimestamp(st._ts)};
     lista(st.tratamentos).forEach(function(t){if(!t)return;var ids=identidades(t,qid,st.id,ctx);
-      out.tratamentos.push({id:t.id,produto:ids.nome,identidades:ids.ids,dose:t.dose||'',metodo:metodo(st,qid,t),testemunha:t.testemunha===true});
+      out.tratamentos.push({id:t.id,produto:ids.nome,identidades:ids.ids,dose:t.dose||'',metodo:metodo(st,qid,t),testemunha:t.testemunha===true||(!lista(st.tratamentos).some(function(x){return x&&x.testemunha;})&&st.testemunha===t.id)});
     });
-    var test=out.tratamentos.find(function(t){return t.testemunha;});
+    var test=out.tratamentos.find(function(t){return t.testemunha&&t.id===st.testemunha;})||out.tratamentos.find(function(t){return t.testemunha;});
     var reps=Math.max(1,parseInt(st.numRepeticoes,10)||1);
     lista(st.avaliacoes).forEach(function(av,ai){
       if(!av||typeof av!=='object')return;
@@ -141,7 +141,7 @@
     if(!linhas.length)return vazio('Nenhum resultado lançado para esta seleção.');
     return '<div class="con-scroll"><table><caption>Resultados por estudo, avaliação e tratamento</caption><thead><tr><th>Estudo / tratamento</th><th>Produto e dose</th><th>Avaliação</th><th>n</th><th>Média</th><th>DP</th><th>Controle / eficácia</th></tr></thead><tbody>'+linhas.map(function(r){
       return '<tr><td>'+bot('estudo',e(r.codigo),'data-key="'+e(r.estudo)+'"','link')+'<small>'+e(r.tratamento)+' · '+e(r.local)+'</small></td><td>'+e(r.produto)+'<small>'+e(r.dose)+' · '+e(r.metodo)+'</small></td><td>'+e(r.variavel)+'<small>'+dataBR(r.data)+(r.momento?' · '+e(r.momento):' · momento não declarado')+'</small></td><td>'+n(r.n)+'</td><td>'+n(r.media)+(r.unidade?' '+e(r.unidade):'')+'</td><td>'+n(r.dp)+'</td><td>'+(r.testemunha?'Testemunha':r.controle==null?'—':n(r.controle)+'%')+'</td></tr>';
-    }).join('')+'</tbody></table></div><p class="con-note">n = unidades com valor registrado. DP = desvio-padrão dessas unidades, não intervalo de confiança. Faixas e subamostras exigem conferir o delineamento. O controle usa somente testemunha explicitamente marcada; resultados de estudos distintos não são combinados.</p>';
+    }).join('')+'</tbody></table></div><p class="con-note">n = unidades com valor registrado. DP = desvio-padrão dessas unidades, não intervalo de confiança. Faixas e subamostras exigem conferir o delineamento. O controle usa a testemunha marcada ou a referência selecionada no estudo; resultados de estudos distintos não são combinados.</p>';
   }
   function dataHoraBR(x){var d=new Date(x);return x&&Number.isFinite(d.getTime())?d.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'data não registrada';}
   function selo(s){
