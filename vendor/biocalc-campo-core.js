@@ -219,9 +219,16 @@
     if(!s)return null;
     var m=s.replace(/\s/g,'').match(/^([+-]?(?:\d+(?:[.,]\d+)*|[.,]\d+)(?:e[+-]?\d+)?)(.*)$/i);
     if(!m)return{valor:NaN,unidade:'',texto:s,erro:'Dose inválida: "'+s+'".'};
-    var unidade=normalizeDoseUnit(m[2]||fallbackUnit||'L/ha');
+    /* Sem `||'L/ha'`. O fallback é o que o ESTUDO declarou; quando o estudo não
+       declarou nada ele chega vazio, e vazio tem de virar recusa, não litro.
+       Era este `||'L/ha'`, no fundo do motor, que fazia uma dose de 10 g/ha
+       ser preparada como 10 L/ha mesmo depois de a tela parar de chutar. */
+    var unidade=normalizeDoseUnit(m[2]||fallbackUnit||'');
     var valor=parseStrictNumber(m[1],unidade==='%');
-    var erro=DOSE_UNITS.indexOf(unidade)<0?'Unidade não reconhecida em "'+s+'". Use L/ha, mL/ha, g/ha, kg/ha ou % v/v.':null;
+    var erro=null;
+    if(!unidade) erro='A dose "'+s+'" está sem unidade e o estudo não declarou nenhuma. '+
+      'Declare a unidade da dose (L/ha, mL/ha, g/ha ou kg/ha) — entre L/ha e g/ha há mil vezes de diferença.';
+    else if(DOSE_UNITS.indexOf(unidade)<0) erro='Unidade não reconhecida em "'+s+'". Use L/ha, mL/ha, g/ha, kg/ha ou % v/v.';
     if(!Number.isFinite(valor))erro='Número inválido na dose "'+s+'".';
     return{valor:valor,unidade:unidade,texto:s,erro:erro};
   }
@@ -268,9 +275,17 @@
       var unidade=normalizeDoseUnit(c.unidade||c.unit||c.type||fallbackUnit);
       var valor=parseStrictNumber(raw,unidade==='%');
       if(DOSE_UNITS.indexOf(unidade)<0){
-        problems.push("Unidade \""+(c.unidade||c.unit||c.type||"")+"\" não reconhecida em "+nome+".");
+        var _escrita=String(c.unidade||c.unit||c.type||"").trim();
+        problems.push(_escrita
+          ? "Unidade \""+_escrita+"\" não reconhecida em "+nome+"."
+          : "O componente "+nome+" está sem unidade e o estudo não declarou nenhuma. "+
+            "Declare a unidade da dose (L/ha, mL/ha, g/ha ou kg/ha).");
+        /* Antes o último recurso era `unidade="L/ha"`: o problema ia para a
+           lista E a conta seguia em litros assim mesmo. Componente sem unidade
+           reconhecida fica SEM unidade; `problems` já barra o preparo, e agora
+           nenhum número sai calculado por baixo do aviso. */
         unidade=normalizeDoseUnit(fallbackUnit);
-        if(DOSE_UNITS.indexOf(unidade)<0)unidade="L/ha";
+        if(DOSE_UNITS.indexOf(unidade)<0)unidade="";
       }
       if(!(valor>0))problems.push("A dose de "+nome+" deve ser maior que zero.");
       comps.push({

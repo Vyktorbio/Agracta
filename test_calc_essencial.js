@@ -84,6 +84,7 @@ vm.runInContext([
   /* O Modo Preparo mostra um tratamento por vez; aqui a aba nasce nula, que
      equivale a "Todos" — este teste cobre a receita, não a navegação. */
   pega('_numBR'), pega('_calcNum'), pega('_calcVal'), pega('_calcCapAtualL'), pega('_calcDoseUnit'),
+  pega('doseUnidades'), pega('doseUnidadeDeclarada'), pega('doseSemUnidade'), pega('doseUnidadePendente'), pega('doseUnidadeDe'),
   /* A receita agora tem dose editável na linha: o compute pergunta se o
      tratamento tem receita estruturada e monta o seletor de unidade. */
   'var TRAT_COMP_UNIDADES=[[\'L/ha\',\'L/ha\'],[\'mL/ha\',\'mL/ha\'],[\'g/ha\',\'g/ha\'],[\'kg/ha\',\'kg/ha\'],[\'% v/v\',\'% v/v\']];',
