@@ -33,6 +33,13 @@ assert.match(q('.ep-grouped figcaption').textContent,/Uma repetição/);
 change('[data-ep="barMetric"]','controle');assert.deepEqual(qa('.ep-grouped .ep-bar').map(x=>Number(x.dataset.value)),[75,100]);
 q('.ep-grouped .ep-bar').dispatchEvent(new w.MouseEvent('click',{bubbles:true}));assert.match(q('.ep-bar-detail').textContent,/Abbott: 75 %.*n = 1/);
 assert.equal(JSON.stringify(w.data),single);
+s.tratamentos[0].testemunha=false;
+const noReference=JSON.stringify(s);w.abrirConhecimento({qid:'Q1',sid:'S1'});
+assert.equal(qa('.ep-grouped .ep-bar').length,0);
+change('[data-ep="reference"]','T1');
+assert.deepEqual(qa('.ep-grouped .ep-bar').map(x=>Number(x.dataset.value)),[75,100]);
+assert.equal(JSON.stringify(s),noReference,'referência do gráfico não altera estudo');
+change('[data-ep="reference"]','');s.tratamentos[0].testemunha=true;
 s.numRepeticoes=4;w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.deepEqual(qa('.ep-grouped .ep-bar').map(x=>Number(x.dataset.n)),[1,1]);
 s.avaliacoes[0].notas.T1R1.Severidade=0;w.abrirConhecimento({qid:'Q1',sid:'S1'});assert.equal(qa('.ep-grouped .ep-bar').length,0);assert.equal(qa('.ep-bar-missing').length,3);
 // Páginas de alvo mantêm um gráfico independente por estudo.
