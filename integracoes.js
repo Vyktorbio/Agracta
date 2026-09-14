@@ -7,7 +7,7 @@
   /* A aba Estudos tem filtro proprio de situacao: ele sobrevive a troca de
      aba e a ida-e-volta para a ficha, senao quem abre um estudo finalizado
      volta para a lista e nao o encontra mais. */
-  function viewLimpa(){return {aba:'produtos',busca:'',filtro:{},selecionado:'',estudo:'',estadoEstudo:'todos'};}
+  function viewLimpa(){return {aba:'produtos',busca:'',filtro:{},selecionado:'',estudo:'',estadoEstudo:'todos',fEstudo:{ordem:'recente'}};}
   function e(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function n(x){return x==null?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:3});}
   function dataBR(x){return /^\d{4}-\d{2}-\d{2}$/.test(String(x))?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):e(x||'Sem data');}
@@ -68,6 +68,7 @@
       finalizadoEm:(st.finalizacao&&st.finalizacao.em)||'',finalizadoPor:(st.finalizacao&&(st.finalizacao.nome||st.finalizacao.por))||'',
       desenho:st.desenho==='faixas'?'Faixas / unidades registradas':st.desenho==='dbc'?'Blocos ao acaso':'Não informado',metodo:metodo(st,qid),
       tratamentos:[],resultados:[],aplicacoes:[],consumos:[],integracoes:st.integracoes||null,
+      repeticoes:Math.max(1,parseInt(st.numRepeticoes,10)||1),avaliacoes:[],
       solo:q.solo||null,atualizadoEm:isoTimestamp(st._ts)};
     lista(st.tratamentos).forEach(function(t){if(!t)return;var ids=identidades(t,qid,st.id,ctx);
       out.tratamentos.push({id:t.id,produto:ids.nome,identidades:ids.ids,dose:t.dose||'',metodo:metodo(st,qid,t),testemunha:t.testemunha===true||(!lista(st.tratamentos).some(function(x){return x&&x.testemunha;})&&st.testemunha===t.id)});
@@ -84,7 +85,14 @@
         }
         sums[t.id][v]=C.resumo(xs);
       });});
-      lista(av.variaveis).forEach(function(v){out.tratamentos.forEach(function(t){
+        /* Avaliação CADASTRADA e avaliação LANÇADA são coisas diferentes: a lista
+         precisa saber quantas das previstas já têm nota, e quais estão
+         atrasadas. Sem isso o cartão mostra progresso inventado. */
+      var temNota=Object.keys(sums).some(function(tid){
+        return Object.keys(sums[tid]).some(function(vv){return sums[tid][vv].n>0;});});
+      out.avaliacoes.push({id:av.id||'av-'+ai,data:av.data||'',lancada:temNota,
+                           variaveis:lista(av.variaveis).length});
+    lista(av.variaveis).forEach(function(v){out.tratamentos.forEach(function(t){
         var s=sums[t.id][v];if(!s.n)return;
         var cfg=(av.varcfg||{})[v]||{},tipo=(av.tipos||{})[v]||'pct',sentido=cfg.sentido==='maior'?'maior':'menor';
         var ref=test&&sums[test.id]&&sums[test.id][v],ctrl=null;
@@ -172,19 +180,228 @@
   }
   var ESTADOS=[['todos','Todos'],['andamento','Em execução'],['finalizados','Finalizados']];
   function noEstado(s,estado){return estado==='todos'||(estado==='finalizados'?!!s.finalizado:!s.finalizado);}
+  /* ---------------------------------------------------------- a aba Estudos ---
+     Painel de trabalho: o que está atrasado, o que está pronto para assinar, e o
+     que cada ensaio ainda deve. Tudo sai da projeção — a tela continua só lendo.
+     Os números de progresso usam avaliação LANÇADA, não cadastrada: as duas
+     coisas são diferentes, e confundi-las mostra progresso inventado. */
+  function hoje(){var d=new Date();return d.toISOString().slice(0,10);}
+  function diasDe(iso){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||'')))return null;
+    var d=Date.parse(iso+'T00:00:00Z'), h=Date.parse(hoje()+'T00:00:00Z');
+    return Number.isFinite(d)?Math.round((d-h)/86400000):null;
+  }
+  function desdeQuando(iso){
+    var t=Date.parse(iso||'');if(!Number.isFinite(t))return 'sem registro de atualização';
+    var min=Math.round((Date.now()-t)/60000);
+    if(min<1)return 'agora mesmo';
+    if(min<60)return 'há '+min+' min';
+    if(min<1440)return 'há '+Math.round(min/60)+' h';
+    return 'há '+Math.round(min/1440)+' dia'+(Math.round(min/1440)===1?'':'s');
+  }
+  /* Situação do ensaio: finalizado, atrasado, ou em execução. "Atrasado" é
+     avaliação com data no passado e sem nenhuma nota lançada — não é opinião,
+     é o que está cadastrado contra o calendário. */
+  function pendencia(s){
+    var atrasadas=0, proxima=null;
+    lista(s.avaliacoes).forEach(function(av){
+      if(av.lancada)return;
+      var d=diasDe(av.data);if(d===null)return;
+      if(d<0)atrasadas++;
+      else if(proxima===null||d<proxima.dias)proxima={dias:d,av:av};
+    });
+    return {atrasadas:atrasadas,proxima:proxima};
+  }
+  function situacao(s){
+    if(s.finalizado)return {chave:'finalizado',rot:'Finalizado'};
+    var p=pendencia(s);
+    if(p.atrasadas)return {chave:'atrasado',rot:p.atrasadas+' atrasada'+(p.atrasadas===1?'':'s')};
+    return {chave:'em-execucao',rot:'Em execução'};
+  }
+  function progresso(s){
+    var avs=lista(s.avaliacoes), feitas=avs.filter(function(a){return a.lancada;}).length;
+    return {feitas:feitas,total:avs.length,pct:avs.length?Math.round(feitas/avs.length*100):0};
+  }
+  function clienteDe(s){var c=C.estado(s.integracoes).campos;return c.cliente||'';}
+  /* Faixa do cartão: a cultura vira cor por hash. Não há foto de lavoura no
+     repositório, e enfeitar com imagem genérica faria o cartão prometer uma
+     foto daquele ensaio que ele não tem. */
+  function tomDaCultura(nome){
+    var t=String(nome||'sem cultura').toLowerCase(), h=0;
+    for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))%360;
+    return h;
+  }
+  /* Mini-curva da variável com mais registros: a forma da evolução, sem eixo e
+     sem número. Serve para bater o olho, não para ler valor — por isso não tem
+     rótulo e o texto alternativo diz o que ela é. */
+  function faisca(s){
+    var porVar={};
+    lista(s.resultados).forEach(function(r){(porVar[r.variavel]=porVar[r.variavel]||[]).push(r);});
+    var nomes=Object.keys(porVar);if(!nomes.length)return '';
+    nomes.sort(function(a,b){return porVar[b].length-porVar[a].length;});
+    var rs=porVar[nomes[0]], porAv={};
+    rs.forEach(function(r){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(String(r.data||'')))return;
+      (porAv[r.data]=porAv[r.data]||[]).push(r.media);
+    });
+    var datas=Object.keys(porAv).sort();
+    if(datas.length<3)return '';
+    var vals=datas.map(function(d){var a=porAv[d];return a.reduce(function(x,y){return x+y;},0)/a.length;});
+    var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+    if(hi===lo)hi=lo+1;
+    var pts=vals.map(function(v,i){
+      return (i/(vals.length-1)*68).toFixed(1)+','+(18-(v-lo)/(hi-lo)*16).toFixed(1);}).join(' ');
+    var sobe=vals[vals.length-1]>=vals[0];
+    return '<svg class="con-faisca" viewBox="0 0 68 20" role="img" aria-label="Forma da evolução de '+
+      e(nomes[0])+' ao longo das avaliações. Os valores estão na página do estudo.">'+
+      '<polyline points="'+pts+'" fill="none" stroke="'+(sobe?'#b3521a':'#176743')+'" stroke-width="2" '+
+      'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  /* Cartão grande da aba Estudos. O cartão simples (cartaoEstudo) continua
+     servindo as listas embutidas — histórico da área, estudos do projeto —
+     onde um painel deste tamanho afogaria a página. */
+  function cartaoGrande(s){
+    var st=situacao(s), pr=progresso(s), cli=clienteDe(s);
+    var linhas=[['local',s.local],['cliente',cli],['inicio',s.inicio?'Início em '+dataBR(s.inicio):'']]
+      .filter(function(x){return x[1];});
+    return '<article class="con-cartao">'+
+      '<div class="con-cartao-faixa" style="--tom:'+tomDaCultura(s.cultura)+'">'+
+        '<span class="con-cultura">'+e(s.cultura||'Sem cultura')+'</span>'+
+        '<span class="con-selo '+st.chave+'">'+e(st.rot)+'</span></div>'+
+      bot('estudo','<b>'+e(s.codigo)+'</b><span>'+e(s.alvo||'Sem alvo')+'</span>'+
+        '<small>'+linhas.map(function(x){return e(x[1]);}).join('<br>')+'</small>','data-key="'+e(s.key)+'"','cartao-corpo')+
+      '<div class="con-medidas">'+
+        '<div><b>'+(s.tratamentos.length*s.repeticoes)+'</b><span>parcelas</span></div>'+
+        '<div><b>'+pr.feitas+' de '+pr.total+'</b><span>avaliações lançadas</span></div>'+
+        faisca(s)+'</div>'+
+      '<div class="con-barra" role="img" aria-label="'+pr.pct+'% das avaliações cadastradas já têm nota lançada">'+
+        '<span style="width:'+pr.pct+'%"></span></div>'+
+      /* Num estudo assinado o que importa é quando e por quem, não há quanto
+         tempo alguém mexeu: o que valia mudar já não muda mais. */
+      '<p class="con-cartao-pe">'+(s.finalizado
+        ? 'Finalizado em '+dataHoraBR(s.finalizadoEm)+(s.finalizadoPor?' por '+e(s.finalizadoPor):'')
+        : 'Atualizado '+e(desdeQuando(s.atualizadoEm)))+'</p>'+
+      acoesEstudo(s)+'</article>';
+  }
+
+  function resumoGeral(todos){
+    var emAndamento=todos.filter(function(s){return !s.finalizado;});
+    var atrasados=emAndamento.filter(function(s){return pendencia(s).atrasadas;}).length;
+    var proximas=0;
+    emAndamento.forEach(function(s){
+      lista(s.avaliacoes).forEach(function(av){
+        if(av.lancada)return;var d=diasDe(av.data);
+        if(d!==null&&d>=0&&d<=7)proximas++;});
+    });
+    var cartoes=[
+      ['Em execução',emAndamento.length,'de '+todos.length+' estudos'],
+      ['Com avaliação atrasada',atrasados,atrasados?'precisam de campo':'nenhum atrasado'],
+      ['Avaliações em 7 dias',proximas,'já cadastradas'],
+      ['Finalizados',todos.length-emAndamento.length,'estatística congelada']
+    ];
+    return '<h3>Resumo geral</h3><div class="con-resumo">'+cartoes.map(function(c){
+      return '<div'+(c[0]==='Com avaliação atrasada'&&c[1]?' class="alerta"':'')+
+             '><strong>'+c[1]+'</strong><b>'+e(c[0])+'</b><span>'+e(c[2])+'</span></div>';
+    }).join('')+'</div>';
+  }
+
+  function proximasAvaliacoes(todos){
+    var itens=[];
+    todos.forEach(function(s){
+      if(s.finalizado)return;
+      lista(s.avaliacoes).forEach(function(av){
+        if(av.lancada)return;var d=diasDe(av.data);
+        if(d===null||d>14)return;
+        itens.push({s:s,av:av,dias:d});});
+    });
+    itens.sort(function(a,b){return a.dias-b.dias;});
+    if(!itens.length)return '<h3>Próximas avaliações</h3>'+vazio('Nenhuma avaliação cadastrada para os próximos 14 dias.');
+    return '<h3>Próximas avaliações</h3><ul class="con-agenda">'+itens.slice(0,8).map(function(x){
+      var quando=x.dias<0?'atrasada '+Math.abs(x.dias)+' d':x.dias===0?'hoje':'em '+x.dias+' d';
+      return '<li'+(x.dias<0?' class="atrasada"':'')+'>'+
+        bot('estudo','<b>'+e(x.s.codigo)+'</b><span>'+e(x.s.cultura||'')+' · '+dataBR(x.av.data)+'</span>',
+            'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(quando)+'</em></li>';
+    }).join('')+'</ul>'+
+    (itens.length>8?'<p class="con-note">e mais '+(itens.length-8)+' nas próximas duas semanas.</p>':'');
+  }
+
+  function atividadeRecente(todos){
+    var evs=[];
+    todos.forEach(function(s){
+      if(!s.atualizadoEm)return;
+      evs.push({s:s,quando:s.atualizadoEm});
+    });
+    evs.sort(function(a,b){return String(b.quando).localeCompare(String(a.quando));});
+    if(!evs.length)return '';
+    return '<h3>Mexido por último</h3><ul class="con-agenda">'+evs.slice(0,6).map(function(x){
+      return '<li>'+bot('estudo','<b>'+e(x.s.codigo)+'</b><span>'+e(x.s.alvo||x.s.cultura||'')+'</span>',
+        'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(desdeQuando(x.quando))+'</em></li>';
+    }).join('')+'</ul>';
+  }
+
+  function filtrosEstudo(todos){
+    function sel(chave,rot,vs){
+      var uniq=Array.from(new Set(vs.filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+      if(!uniq.length)return '';
+      return '<label>'+rot+'<select data-con-festudo="'+chave+'"><option value="">Todos</option>'+
+        uniq.map(function(v){return '<option value="'+e(v)+'"'+(view.fEstudo[chave]===v?' selected':'')+'>'+e(v)+'</option>';}).join('')+
+        '</select></label>';
+    }
+    var ativos=['cultura','alvo','local','cliente'].filter(function(k){return view.fEstudo[k];}).length;
+    /* No celular os quatro seletores empurravam a lista para fora da tela —
+       justo o contrário do que quem está no campo precisa ver primeiro. Aqui
+       ficam recolhidos.
+       A decisão é no render, não no CSS: o navegador esconde o conteúdo de um
+       <details> fechado por um caminho que `display` não sobrepõe, então um
+       media query sozinho deixava o computador SEM filtro nenhum. */
+    var largo=!(w.matchMedia&&w.matchMedia('(max-width:900px)').matches);
+    return '<details class="con-filtro-caixa"'+(largo||ativos?' open':'')+'><summary>Filtrar e ordenar'+
+      (ativos?' <b>'+ativos+'</b>':'')+'</summary><div class="con-filtros">'+
+      sel('cultura','Cultura',todos.map(function(s){return s.cultura;}))+
+      sel('alvo','Alvo',todos.map(function(s){return s.alvo;}))+
+      sel('local','Local',todos.map(function(s){return s.local;}))+
+      sel('cliente','Cliente',todos.map(clienteDe))+
+      '<label>Ordenar por<select data-con-festudo="ordem">'+
+        [['recente','Última atualização'],['codigo','Código'],['inicio','Início do estudo']]
+        .map(function(o){return '<option value="'+o[0]+'"'+(view.fEstudo.ordem===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+
+      '</select></label></div></details>';
+  }
+  function passaFiltro(s){
+    var f=view.fEstudo;
+    return (!f.cultura||s.cultura===f.cultura)&&(!f.alvo||s.alvo===f.alvo)&&
+           (!f.local||s.local===f.local)&&(!f.cliente||clienteDe(s)===f.cliente);
+  }
+
   function abaEstudos(){
     var todos=lista(acervo.estudos);
-    var conta=function(k){return todos.filter(function(s){return noEstado(s,k);}).length;};
-    /* Em execucao primeiro: e a lista de quem ainda tem trabalho pendente. */
-    var xs=todos.filter(function(s){return noEstado(s,view.estadoEstudo);}).sort(function(a,b){
+    var conta=function(k){return todos.filter(function(s){return noEstado(s,k)&&passaFiltro(s);}).length;};
+    var xs=todos.filter(function(s){return noEstado(s,view.estadoEstudo)&&passaFiltro(s);});
+    var ordem=view.fEstudo.ordem||'recente';
+    xs.sort(function(a,b){
+      /* Em execução antes de finalizado, sempre: a lista é de trabalho pendente
+         e o arquivo vem depois, seja qual for a ordenação escolhida. */
       if(!a.finalizado!==!b.finalizado)return a.finalizado?1:-1;
-      return String(b.inicio||'').localeCompare(String(a.inicio||''));
+      if(ordem==='codigo')return String(a.codigo).localeCompare(String(b.codigo),'pt-BR');
+      if(ordem==='inicio')return String(b.inicio||'').localeCompare(String(a.inicio||''));
+      return String(b.atualizadoEm||'').localeCompare(String(a.atualizadoEm||''));
     });
-    return '<div class="con-estado" role="group" aria-label="Situação dos estudos">'+ESTADOS.map(function(p){
-        return bot('estado',e(p[1])+' <b>'+conta(p[0])+'</b>','data-estado="'+p[0]+'" aria-pressed="'+(view.estadoEstudo===p[0])+'"',view.estadoEstudo===p[0]?'ativo':'');
-      }).join('')+'</div>'+
-      listaEstudos(xs,{acoes:true,vazio:view.estadoEstudo==='finalizados'?'Nenhum estudo finalizado até agora.':view.estadoEstudo==='andamento'?'Nenhum estudo em execução.':'Nenhum estudo cadastrado.'})+
-      '<p class="con-note">Finalizar congela a estatística e deixa o estudo em leitura; reabrir exige motivo registrado. Um estudo finalizado só pode ser excluído depois de reaberto. As três ações pedem a senha e ficam na trilha de auditoria com autor e data.</p>';
+    var grade=xs.length
+      ? '<div class="con-cartoes">'+xs.map(cartaoGrande).join('')+'</div>'
+      : vazio(view.estadoEstudo==='finalizados'?'Nenhum estudo finalizado nesta seleção.'
+             :view.estadoEstudo==='andamento'?'Nenhum estudo em execução nesta seleção.'
+             :'Nenhum estudo corresponde aos filtros.');
+    return '<div class="con-pagina">'+
+      '<div class="con-principal">'+
+        filtrosEstudo(todos)+
+        '<div class="con-estado" role="group" aria-label="Situação dos estudos">'+ESTADOS.map(function(p){
+          return bot('estado',e(p[1])+' <b>'+conta(p[0])+'</b>','data-estado="'+p[0]+'" aria-pressed="'+(view.estadoEstudo===p[0])+'"',view.estadoEstudo===p[0]?'ativo':'');
+        }).join('')+'</div>'+
+        grade+
+        '<p class="con-note">Progresso conta avaliação LANÇADA, não cadastrada. Atrasada é avaliação com data no passado e nenhuma nota — o calendário contra o registro, não opinião. Finalizar congela a estatística; reabrir exige motivo; um estudo finalizado só sai depois de reaberto. As três ações pedem senha e ficam na trilha de auditoria.</p>'+
+      '</div>'+
+      '<aside class="con-lado">'+resumoGeral(todos)+proximasAvaliacoes(todos)+atividadeRecente(todos)+'</aside>'+
+      '</div>';
   }
   function selecao(){
     var idx=acervo[view.aba]||[],query=C.normal(view.busca),vis=idx.filter(function(x){return !query||C.normal(x.nome).indexOf(query)>=0;});
@@ -312,7 +529,10 @@
   document.addEventListener('input',function(ev){if(ev.target.id!=='conBusca')return;view.busca=ev.target.value;
     var old=document.getElementById('conLista'),tmp=document.createElement('div');tmp.innerHTML=selecao();var next=tmp.querySelector('#conLista');if(old&&next)old.innerHTML=next.innerHTML;
   });
-  document.addEventListener('change',function(ev){var f=ev.target.dataset.conFiltro;if(f){view.filtro[f]=ev.target.value;pintar();}});
+  document.addEventListener('change',function(ev){
+    var f=ev.target.dataset.conFiltro;if(f){view.filtro[f]=ev.target.value;pintar();return;}
+    var g=ev.target.dataset.conFestudo;if(g){view.fEstudo[g]=ev.target.value;pintar();}
+  });
   document.addEventListener('keydown',function(ev){
     var ov=document.getElementById('conhecimentoOvl');if(!ov||ov.hidden)return;
     if(ev.key==='Escape'){ev.preventDefault();fechar();}

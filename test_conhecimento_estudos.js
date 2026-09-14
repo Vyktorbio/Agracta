@@ -44,31 +44,31 @@ w.abrirConhecimento({aba:'estudos'});
 const contagem=()=>Object.fromEntries(qa('.con-estado .con-btn')
   .map(b=>[b.dataset.estado, Number(b.querySelector('b').textContent)]));
 assert.deepEqual(contagem(),{todos:2,andamento:1,finalizados:1},'os três grupos e suas contas');
-assert.equal(qa('.con-estudo').length,2,'sem filtro, os dois estudos aparecem');
+assert.equal(qa('.con-cartao').length,2,'sem filtro, os dois estudos aparecem');
 assert.equal(qa('.con-selo.em-execucao').length,1);
 assert.equal(qa('.con-selo.finalizado').length,1);
 /* Quem finalizou e quando: é isso que diferencia a lista de um mero rótulo. */
-const fechado=qa('.con-estudo').find(x=>x.textContent.includes('JÁ FECHADO'));
+const fechado=qa('.con-cartao').find(x=>x.textContent.includes('JÁ FECHADO'));
 assert.match(fechado.textContent,/Finalizado em .*por Maria Souza/,fechado.textContent);
 /* Em execução primeiro: a lista é de trabalho pendente, não de arquivo. */
-assert.ok(qa('.con-estudo')[0].textContent.includes('EM CURSO'),'em execução vem antes');
+assert.ok(qa('.con-cartao')[0].textContent.includes('EM CURSO'),'em execução vem antes');
 /* O código do estudo continua sendo texto, nunca HTML. */
 assert.equal(qa('#conhecimentoOvl img').length,0,'nada de tag vinda do código do estudo');
 
 /* ---------- 2. o filtro separa de verdade ---------- */
 await clicar(q('.con-estado [data-estado="finalizados"]'));
-assert.equal(qa('.con-estudo').length,1);
-assert.ok(q('.con-estudo').textContent.includes('JÁ FECHADO'));
+assert.equal(qa('.con-cartao').length,1);
+assert.ok(q('.con-cartao').textContent.includes('JÁ FECHADO'));
 assert.deepEqual(contagem(),{todos:2,andamento:1,finalizados:1},'a conta é do acervo, não do filtro');
 await clicar(q('.con-estado [data-estado="andamento"]'));
-assert.equal(qa('.con-estudo').length,1);
-assert.ok(q('.con-estudo').textContent.includes('EM CURSO'));
+assert.equal(qa('.con-cartao').length,1);
+assert.ok(q('.con-cartao').textContent.includes('EM CURSO'));
 await clicar(q('.con-estado [data-estado="todos"]'));
 
 /* ---------- 3. cada estudo oferece a ação que cabe no estado dele ---------- */
 const acoes=el=>qa('.con-acoes [data-con]').filter(b=>el.contains(b)).map(b=>b.dataset.con);
 /* pintar() reescreve a lista a cada clique: procurar de novo, nunca guardar nó. */
-const cartao=texto=>qa('.con-estudo').find(x=>x.textContent.includes(texto));
+const cartao=texto=>qa('.con-cartao').find(x=>x.textContent.includes(texto));
 assert.deepEqual(acoes(cartao('EM CURSO')),['estudo','estFinalizar','estExcluir'],'em execução: finalizar');
 assert.deepEqual(acoes(cartao('JÁ FECHADO')),['estudo','estReabrir','estExcluir'],'finalizado: reabrir, nunca finalizar de novo');
 
@@ -82,8 +82,51 @@ await clicar(cartao('JÁ FECHADO').querySelector('[data-con="estReabrir"]'));
 assert.deepEqual(chamadas.pop(),['reabrirEstudo','Q1','S2']);
 
 w.abrirConhecimento({aba:'estudos'});
-await clicar(q('.con-estudo [data-con="estExcluir"]'));
+await clicar(q('.con-cartao [data-con="estExcluir"]'));
 assert.deepEqual(chamadas.pop(),['confirmDeleteStudy','Q1','S1'],'excluir passa pela porta com senha');
+
+/* ---------- 4b. progresso conta avaliação LANÇADA, não cadastrada ----------
+   Duas avaliações cadastradas e uma lançada tem de dizer "1 de 2". Contar as
+   cadastradas mostraria 100% num estudo em que ninguém foi a campo, e o cartão
+   ficaria verde justamente no ensaio abandonado. */
+const ontem=d=>new Date(Date.now()+d*864e5).toISOString().slice(0,10);
+{
+  const semNota={id:'A9',data:ontem(-5),variaveis:['Dano'],tipos:{Dano:'contagem'},notas:{}};
+  w.data.Q1.estudos[0].avaliacoes=[aval[0],semNota];
+  w.abrirConhecimento({aba:'estudos'});
+  const cartao=qa('.con-cartao').find(x=>x.textContent.includes('EM CURSO'));
+  assert.match(cartao.textContent,/1 de 2\s*avaliações lançadas/,cartao.textContent);
+  /* E a que está no passado sem nota é ATRASADA — calendário contra registro. */
+  assert.ok(cartao.querySelector('.con-selo.atrasado'),'avaliação vencida sem nota é atrasada');
+  assert.match(cartao.textContent,/1 atrasada/);
+  /* O resumo lateral conta o mesmo estudo uma vez só. */
+  const resumo=qa('.con-resumo strong').map(x=>Number(x.textContent));
+  assert.equal(resumo[1],1,'um estudo com atraso, não um por avaliação');
+  /* E ele aparece na agenda marcado como atrasado. */
+  assert.ok(q('.con-agenda li.atrasada'),'a avaliação vencida entra na agenda em destaque');
+}
+
+/* Avaliação futura sem nota NÃO é atraso: é agenda. */
+{
+  const futura={id:'A8',data:ontem(3),variaveis:['Dano'],tipos:{Dano:'contagem'},notas:{}};
+  w.data.Q1.estudos[0].avaliacoes=[aval[0],futura];
+  w.abrirConhecimento({aba:'estudos'});
+  const cartao=qa('.con-cartao').find(x=>x.textContent.includes('EM CURSO'));
+  assert.ok(!cartao.querySelector('.con-selo.atrasado'),'o que ainda vai acontecer não está atrasado');
+  assert.ok(cartao.textContent.includes('Em execução'));
+  assert.equal(qa('.con-resumo strong').map(x=>Number(x.textContent))[1],0,'nenhum atraso');
+}
+
+/* Avaliação sem data não vira atraso nem agenda: sem data não há prazo. */
+{
+  const semData={id:'A7',data:'',variaveis:['Dano'],tipos:{Dano:'contagem'},notas:{}};
+  w.data.Q1.estudos[0].avaliacoes=[aval[0],semData];
+  w.abrirConhecimento({aba:'estudos'});
+  const cartao=qa('.con-cartao').find(x=>x.textContent.includes('EM CURSO'));
+  assert.ok(!cartao.querySelector('.con-selo.atrasado'),'sem data não há prazo para vencer');
+  assert.match(cartao.textContent,/1 de 2\s*avaliações lançadas/,'mas ela continua contando como cadastrada');
+}
+w.data.Q1.estudos[0].avaliacoes=aval;
 
 /* ---------- 5. e nada disso escreveu no acervo ---------- */
 assert.equal(JSON.stringify(w.data),antes,'a tela de conhecimento continua só lendo');
