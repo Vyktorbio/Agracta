@@ -1,0 +1,60 @@
+/* Clima como página. Herda a caixa do .con-overlay (mesma superfície e o mesmo
+   recuo diante da coluna da mesa); aqui só o conteúdo.
+
+   Os dois temas são escolhidos, não invertidos: as cores das séries têm um
+   valor próprio para o claro e outro para o escuro, conferidos pelo validador
+   de paleta em cada superfície. */
+.cp-shell{max-width:1180px;margin-inline:auto}
+.cp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.cp-head p{margin:0;font:700 .75rem/1.4 Inter,system-ui,sans-serif;letter-spacing:.16em;color:var(--text-2,#555860)}
+.cp-head h1{margin:2px 0 4px;font:800 1.9rem/1.1 Archivo,Inter,system-ui,sans-serif}
+.cp-local{font-weight:500!important;letter-spacing:0!important;color:var(--text-3,#666a73)!important}
+.cp-overlay nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+
+.cp-linha{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px}
+.cp-card{min-width:0;background:var(--surface,#fff);border:1px solid var(--border,#dcdce0);border-radius:18px;padding:20px;margin-bottom:16px}
+.cp-card h3{margin:0 0 12px;font:700 1.05rem/1.2 Archivo,Inter,system-ui,sans-serif}
+.cp-olho{margin:0 0 10px;font:800 .6875rem/1.3 Inter,system-ui,sans-serif;letter-spacing:.12em;color:var(--text-2,#555860)}
+.cp-temp{display:block;font:800 3rem/1 Archivo,Inter,system-ui,sans-serif;margin:2px 0 14px}
+.cp-temp small{font-size:1.25rem;color:var(--text-2,#555860)}
+.cp-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.cp-num{min-width:0;padding:12px 14px;border-radius:12px;background:var(--surface-2,#f7f7f8);border:1px solid var(--border-soft,#ededf0)}
+.cp-num span{display:block;font:600 .75rem/1.3 Inter,system-ui,sans-serif;color:var(--text-2,#555860)}
+.cp-num strong{display:block;margin-top:4px;font:800 1.4rem/1.15 Archivo,Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.cp-num strong small{font-size:.8rem;font-weight:600;color:var(--text-2,#555860)}
+.cp-fonte{margin:10px 0 0;font:400 .75rem/1.45 Inter,system-ui,sans-serif;color:var(--text-3,#666a73)}
+.cp-num .cp-fonte{margin-top:5px;font-size:.6875rem}
+
+.cp-svg{display:block;width:100%;height:auto;min-width:520px}
+.cp-card:has(.cp-svg){overflow-x:auto}
+.cp-svg text{fill:var(--text-3,#666a73);font:12px Inter,system-ui,sans-serif}
+.cp-svg .cp-unid{font-weight:700}
+.cp-svg .cp-ponta{font-weight:700;fill:var(--text-2,#555860)}
+.cp-grid{stroke:var(--border-soft,#ededf0);stroke-dasharray:3 5}
+.cp-svg [tabindex]:focus-visible{outline:3px solid #1477e5;outline-offset:2px}
+.cp-legenda{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:8px;font:500 .8125rem/1.3 Inter,system-ui,sans-serif}
+.cp-legenda span{display:flex;align-items:center;gap:7px}
+.cp-legenda i{width:10px;height:10px;border-radius:3px;flex:none}
+
+.cp-tab{width:100%;border-collapse:collapse;font:500 .875rem/1.4 Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.cp-tab th,.cp-tab td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--border-soft,#ededf0)}
+.cp-tab thead th{text-align:right;font-size:.75rem;color:var(--text-2,#555860);text-transform:uppercase;letter-spacing:.05em}
+.cp-tab th[scope=row],.cp-tab thead th:first-child{text-align:left}
+.cp-horas{max-width:900px}
+.cp-horas tr.ok th,.cp-horas tr.ok td{background:var(--surface-2,#f7f7f8)}
+.cp-tabela{margin-top:6px}
+.cp-tabela summary{cursor:pointer;font:600 .875rem/1.4 Inter,system-ui,sans-serif;padding:8px 0}
+
+.cp-selo{display:inline-block;margin:0 0 6px;padding:5px 11px;border-radius:999px;font:700 .8125rem/1.3 Inter,system-ui,sans-serif}
+.cp-selo.ok{background:#16805b1f;color:#0f6244}
+.cp-selo.ruim{background:#c0392b14;color:#9a3323}
+.cp-faixas{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.cp-faixas li{padding:8px 12px;border-radius:12px;background:var(--surface-2,#f7f7f8);border:1px solid var(--border-soft,#ededf0);font-size:.875rem}
+.cp-vazio{margin:0;padding:16px;border-radius:12px;background:var(--surface-2,#f7f7f8);color:var(--text-2,#555860);font-size:.9375rem}
+
+/* Tema escuro: o selo precisa do seu próprio passo, senão o texto some no fundo. */
+html:not(.light) .cp-selo.ok{background:#3aa67626;color:#7ddab5}
+html:not(.light) .cp-selo.ruim{background:#e4695c26;color:#f3a79e}
+
+@media(max-width:900px){.cp-linha{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:no-preference){.cp-card{transition:border-color .15s ease}}
