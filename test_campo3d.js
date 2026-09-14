@@ -430,7 +430,46 @@ function todas(valor,excecoes){
     'os cortes saem da escala da variável, não de números fixos de severidade');
 }
 
-/* ============================ 11. a caixa manda nas DUAS medidas do desenho */
+/* =================== 11. nunca desistir calado: o estudo que não tem o que mostrar
+   Dois casos faziam a vista simplesmente RETORNAR: estudo sem avaliação e
+   avaliação sem variável declarada. No celular o botão não respondia; no
+   dossiê o topo ficava preso em "Montando a vista do campo…" para sempre. A
+   tela existia, o estudo existia, e nada acontecia — do lado de quem usa, isso
+   é o app quebrado. Um aviso é resposta; sumir não é. */
+{
+  const proj={codigo:'24-200',cultura:'Soja',alvo:'Ferrugem'};
+  const texto=el=>el.textContent.replace(/\s+/g,' ');
+
+  /* Avaliação cadastrada, nenhuma variável declarada — o caso que apareceu no uso. */
+  const semVariavel=[{id:'A1',data:'2026-01-20',variaveis:[],tipos:{},notas:{}}];
+  w.abrirCampo3D(proj,estudo(semVariavel),{});
+  let ov=w.document.getElementById('campo3dOvl');
+  assert.ok(ov&&!ov.hidden,'a janela abre mesmo sem ter o que desenhar');
+  assert.match(texto(ov),/não declaram nenhuma variável/,'e diz exatamente o que falta');
+  assert.equal(ov.querySelector('#c3cv'),null,'sem cena: não há o que pôr nela');
+  assert.ok(ov.querySelector('[data-c3="fechar"]'),'e dá saída — aviso sem fechar é beco');
+
+  /* Estudo sem avaliação nenhuma. */
+  w.abrirCampo3D(proj,estudo([]),{});
+  ov=w.document.getElementById('campo3dOvl');
+  assert.match(texto(ov),/ainda não tem avaliação cadastrada/);
+
+  /* Embutida no dossiê: o aviso vai para o hospedeiro, e sem botão de fechar,
+     que ali deixaria um buraco no topo da página. */
+  const host=w.document.createElement('div');
+  w.document.body.appendChild(host);
+  w.abrirCampo3D(proj,estudo(semVariavel),{hospedeiro:host});
+  assert.match(texto(host),/não declaram nenhuma variável/,'o dossiê recebe o motivo no lugar do "Montando a vista…"');
+  assert.equal(host.querySelector('[data-c3="fechar"]'),null);
+
+  /* E a função não pode voltar a sair calada. */
+  const src=fs2.readFileSync('campo-3d.js','utf8');
+  const ab=src.slice(src.indexOf('function abrir(s,st,op){'),src.indexOf('\n}',src.indexOf('function abrir(s,st,op){')));
+  assert.ok(!/^\s*if\([^)]*\)return;\s*$/m.test(ab),'nenhuma saída silenciosa em abrir()');
+  assert.equal((ab.match(/semVista\(/g)||[]).length,2,'os dois casos respondem com aviso');
+}
+
+/* ============================ 12. a caixa manda nas DUAS medidas do desenho */
 {
   const c3=fs.readFileSync('campo-3d.js','utf8');
   const lig=c3.slice(c3.indexOf('function ligarCanvas('),c3.indexOf('\n}',c3.indexOf('function ligarCanvas(')));

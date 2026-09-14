@@ -360,10 +360,10 @@ function render(s,parts){
   if(campoCarregando)return campoCarregando;
   campoCarregando=new Promise(function(ok,falha){
    if(!document.querySelector('link[data-ag="campo-3d"]')){
-    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=5';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=6';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
-   var js=document.createElement('script');js.src='campo-3d.js?v=5';
+   var js=document.createElement('script');js.src='campo-3d.js?v=6';
    js.onload=function(){w.abrirCampo3D?ok():falha(Error('O módulo carregou sem registrar a vista.'));};
    js.onerror=function(){campoCarregando=null;falha(Error('Não foi possível carregar a vista do campo. Sem conexão, ela só abre depois de ter sido aberta uma vez neste aparelho.'));};
    document.head.appendChild(js);
@@ -377,7 +377,10 @@ function render(s,parts){
   var host=document.getElementById('ep-campo3d');
   if(!host||host.dataset.montado==='1'||!state)return;
   var s=state.s, st=arr((w.data[s.qid]||{}).estudos).find(function(x){return x.id===s.sid;});
-  if(!st||!arr(st.avaliacoes).length){host.innerHTML='<p class="con-empty">Nenhuma avaliação cadastrada: não há campo para mostrar ainda.</p>';return;}
+  /* Estudo sem avaliação e avaliação sem variável são respondidos pela PRÓPRIA
+     vista, com o motivo escrito lá. Duplicar a checagem aqui criaria duas
+     explicações para a mesma falta, e uma delas envelheceria. */
+  if(!st){host.innerHTML='<p class="con-empty">Este estudo não está mais disponível neste aparelho.</p>';return;}
   host.dataset.montado='1';
   var rows=selected();
   carregarCampo().then(function(){

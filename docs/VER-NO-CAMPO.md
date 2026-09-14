@@ -48,6 +48,18 @@ mesmo laço de animação.
 
 ---
 
+## Quando não há o que mostrar
+
+Dois casos existem de verdade no campo: **estudo sem avaliação cadastrada** e
+**avaliação que não declara variável**. Nos dois, a vista abre assim mesmo e
+diz o que falta.
+
+Antes ela simplesmente voltava sem fazer nada — no celular o botão *Ver no
+campo* não respondia, e no dossiê o topo ficava preso em "Montando a vista do
+campo…". A tela existia, o estudo existia, e nada acontecia: do lado de quem
+usa, isso é o app quebrado. **Um aviso é resposta; sumir não é**, e o teste
+cobra que nenhuma saída de `abrir()` seja silenciosa.
+
 ## A cor anda em faixas
 
 Cinco faixas, não degradê contínuo. O degradê parecia mais fino e lia pior:
