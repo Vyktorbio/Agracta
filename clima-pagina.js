@@ -122,6 +122,7 @@ function linhas(dias,series,unidade,titulo){
   }
   return svg;
 }
+function rolar(t){ return '<div class="cp-rolagem">'+t+'</div>'; }
 function vazio(t){ return '<p class="cp-vazio">'+e(t)+'</p>'; }
 function cartao(rot,val,unid,nota){
   return '<div class="cp-num"><span>'+e(rot)+'</span><strong>'+val+(unid?'<small> '+e(unid)+'</small>':'')+'</strong>'+
@@ -235,9 +236,9 @@ function previsao(){
     return '<tr><th scope="row">'+e(hora(h.t))+'</th><td>'+n(h.temp,0)+' °C</td><td>'+n(h.ur,0)+' %</td><td>'+n(h.vento,0)+' km/h</td><td>'+n(h.chuva,1)+' mm</td></tr>';
   }).join('');
   return '<section class="cp-card"><h3>Sete dias</h3><p class="cp-olho">PREVISTO · MODELO</p>'+
-    '<table class="cp-tab"><thead><tr><th scope="col">Dia</th><th scope="col">Mín / Máx</th><th scope="col">Chuva</th><th scope="col">Prob.</th></tr></thead><tbody>'+linhas7+'</tbody></table></section>'+
+    rolar('<table class="cp-tab"><thead><tr><th scope="col">Dia</th><th scope="col">Mín / Máx</th><th scope="col">Chuva</th><th scope="col">Prob.</th></tr></thead><tbody>'+linhas7+'</tbody></table>')+'</section>'+
     '<section class="cp-card"><h3>Próximas 24 horas</h3>'+
-    '<table class="cp-tab"><thead><tr><th scope="col">Hora</th><th scope="col">Temp.</th><th scope="col">UR</th><th scope="col">Vento</th><th scope="col">Chuva</th></tr></thead><tbody>'+horas+'</tbody></table></section>';
+    rolar('<table class="cp-tab"><thead><tr><th scope="col">Hora</th><th scope="col">Temp.</th><th scope="col">UR</th><th scope="col">Vento</th><th scope="col">Chuva</th></tr></thead><tbody>'+horas+'</tbody></table>')+'</section>';
 }
 function historico(){
   var dd=(estado.passado&&estado.passado.daily)||{},t=(dd.time||[]).slice(0,30);
@@ -256,7 +257,7 @@ function historico(){
     '<section class="cp-card"><h3>Precipitação</h3>'+
       barras(t,(dd.precipitation_sum||[]).slice(0,30),c.frio,'mm','Precipitação diária dos últimos 30 dias')+'</section>'+
     '<details class="cp-tabela"><summary>Ver a tabela destes 30 dias</summary>'+
-      '<table class="cp-tab"><thead><tr><th scope="col">Dia</th><th scope="col">Mín (°C)</th><th scope="col">Máx (°C)</th><th scope="col">UR (%)</th><th scope="col">Chuva (mm)</th></tr></thead><tbody>'+tabela+'</tbody></table></details>';
+      rolar('<table class="cp-tab"><thead><tr><th scope="col">Dia</th><th scope="col">Mín (°C)</th><th scope="col">Máx (°C)</th><th scope="col">UR (%)</th><th scope="col">Chuva (mm)</th></tr></thead><tbody>'+tabela+'</tbody></table>')+'</details>';
 }
 function janela(){
   var linhasH=estado.horas.slice(0,48).map(function(h){
@@ -274,8 +275,8 @@ function janela(){
     ' % · temperatura entre '+LIMITES.tempMin+' e '+LIMITES.tempMax+' °C · sem chuva na hora. '+
     'Esta é uma leitura da PREVISÃO, hora a hora. A janela declarada de um protocolo vive no estudo e vence estes limites; '+
     'quem confere o declarado contra o ocorrido é a ficha do estudo, não esta página.</p></section>'+
-    '<section class="cp-card"><h3>Hora a hora · 48 h</h3><table class="cp-tab cp-horas"><thead><tr><th scope="col">Quando</th>'+
-    '<th scope="col">Temp.</th><th scope="col">UR</th><th scope="col">Vento</th><th scope="col">Chuva</th><th scope="col">Situação</th></tr></thead><tbody>'+linhasH+'</tbody></table></section>';
+    '<section class="cp-card"><h3>Hora a hora · 48 h</h3>'+rolar('<table class="cp-tab cp-horas"><thead><tr><th scope="col">Quando</th>'+
+    '<th scope="col">Temp.</th><th scope="col">UR</th><th scope="col">Vento</th><th scope="col">Chuva</th><th scope="col">Situação</th></tr></thead><tbody>'+linhasH+'</tbody></table>')+'</section>';
 }
 function estacoes(){
   var lista=estado.estacoes||[];
@@ -290,7 +291,7 @@ function estacoes(){
       '<td>'+(estado.estacao&&estado.estacao.mac===s.mac?'<span class="cp-selo ok">em uso</span>':'')+'</td></tr>';
   }).join('');
   return '<section class="cp-card"><h3>Estações Ecowitt</h3><p class="cp-olho">MEDIDO · SENSOR EM CAMPO</p>'+
-    '<table class="cp-tab"><thead><tr><th scope="col">Estação</th><th scope="col">Coordenada</th><th scope="col">Distância</th><th scope="col"></th></tr></thead><tbody>'+linhasE+'</tbody></table>'+
+    rolar('<table class="cp-tab"><thead><tr><th scope="col">Estação</th><th scope="col">Coordenada</th><th scope="col">Distância</th><th scope="col"></th></tr></thead><tbody>'+linhasE+'</tbody></table>')+
     '<p class="cp-fonte">A estação em uso é a mais próxima do centro do mapa. Fora do raio dela, o clima exibido passa a ser do modelo.</p></section>';
 }
 

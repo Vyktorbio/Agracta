@@ -151,7 +151,41 @@ const texto=el=>el.textContent.replace(/\s+/g,' ');
  w.close();
 }
 
-/* ------------------------------ 4. a porta na mesa ------------------------ */
+/* --------------------- 4. no telefone: mesma página, sem tabela vazando ---- */
+{
+ const {w,d}=montar();
+ w.abrirClimaPagina({aba:'janela'});
+ await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));
+ const ov=d.getElementById('climaPaginaOvl');
+ const tabelas=Array.from(ov.querySelectorAll('table'));
+ assert.ok(tabelas.length,'a aba da janela tem tabela');
+ tabelas.forEach(t=>assert.ok(t.closest('.cp-rolagem'),
+   'toda tabela mora num container que rola na horizontal: seis colunas não cabem em 390 px, e página que anda de lado faz perder o lugar da leitura'));
+ /* As outras abas também. */
+ for(const aba of ['previsao','historico','estacoes']){
+  w.abrirClimaPagina({aba:aba});
+  await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));
+  Array.from(d.getElementById('climaPaginaOvl').querySelectorAll('table')).forEach(t=>
+   assert.ok(t.closest('.cp-rolagem'),'tabela sem container rolável na aba '+aba));
+ }
+ w.close();
+}
+{
+ /* O cartão do telefone leva à página — e só oferece o caminho se o módulo
+    estiver carregado: botão que não responde é pior que botão nenhum. */
+ const app=fs.readFileSync('app.js','utf8');
+ const i=app.indexOf('function buildClimaPanel(');
+ const corpo=app.slice(i,app.indexOf('\n}',i));
+ assert.match(corpo,/typeof abrirClimaPagina==='function'/,'o cartão confere se a página carregou');
+ assert.match(corpo,/onclick="abrirClimaPagina\(\)"/,'e abre a mesma página da mesa, não uma cópia');
+ const css=fs.readFileSync('clima-pagina.css','utf8');
+ assert.match(css,/@media\(max-width:700px\)/,'a página tem passo próprio para telefone');
+ assert.match(css,/\.cp-rolagem\{overflow-x:auto/,'o container de tabela rola');
+ assert.ok(!/@media\(min-width:1100px\)/.test(css),
+   'a página NÃO é exclusiva da mesa: se voltar a ser, o clima some do talhão, que é onde ele decide');
+}
+
+/* ------------------------------ 5. a porta na mesa ------------------------ */
 {
  const mesa=fs.readFileSync('mesa.js','utf8');
  assert.match(mesa,/if\(existe\('abrirClimaPagina'\)\) return w\.abrirClimaPagina\(\)/,
@@ -166,5 +200,5 @@ const texto=el=>el.textContent.replace(/\s+/g,' ');
  });
 }
 
-console.log('Página de Clima: janela por limites declarados, medido ≠ previsto ≠ reanálise, molhamento como estimativa e tabela junto do gráfico OK.');
+console.log('Página de Clima: telefone e mesa, janela por limites declarados, medido ≠ previsto ≠ reanálise, molhamento como estimativa e tabela junto do gráfico OK.');
 })();

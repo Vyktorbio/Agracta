@@ -97,11 +97,20 @@ Três cuidados que o teste tranca:
 
 `clima-pagina.js` · `clima-pagina.css` · `test_clima_pagina.js`
 
-No celular o clima é um cartão flutuante sobre o mapa — de relance, no talhão,
-é o certo. Na mesa, quem decide *quando aplicar* precisa de mais: quanto choveu
-no mês, como a umidade andou, que estações existem por perto e que horas de
-amanhã servem. A seção **Clima** da coluna passa a abrir uma página com cinco
-abas: visão geral, previsão, histórico, janela de aplicação e estações.
+O cartão flutuante sobre o mapa continua sendo o relance — tempo de agora e os
+próximos dias, na altura do polegar. O que não cabe nele virou página, com
+cinco abas: visão geral, previsão, histórico, janela de aplicação e estações.
+
+**Ela não é exclusiva da mesa**, e essa é a única das telas novas que não é:
+clima é a decisão que se toma em pé no talhão, e a janela hora a hora existe
+justamente para isso. São duas portas para a mesma página — a seção **Clima**
+da coluna, e o botão *Ver o clima completo* dentro do cartão, no telefone. O
+cartão só oferece o botão quando o módulo está carregado: botão que não
+responde é pior que botão nenhum.
+
+No telefone muda o layout, nunca o conteúdo. O caso a cuidar é a tabela: seis
+colunas não cabem em 390 px, então cada uma tem o seu próprio container que
+rola na horizontal — página que anda de lado faria perder o lugar da leitura.
 
 ### Três naturezas de dado que não podem se misturar
 
