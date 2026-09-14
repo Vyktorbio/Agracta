@@ -93,6 +93,52 @@ Três cuidados que o teste tranca:
 - **o painel de ferramentas para antes da legenda.** Cobri-la esconderia
   justamente o que explica as cores embaixo dele.
 
+## Clima como página
+
+`clima-pagina.js` · `clima-pagina.css` · `test_clima_pagina.js`
+
+No celular o clima é um cartão flutuante sobre o mapa — de relance, no talhão,
+é o certo. Na mesa, quem decide *quando aplicar* precisa de mais: quanto choveu
+no mês, como a umidade andou, que estações existem por perto e que horas de
+amanhã servem. A seção **Clima** da coluna passa a abrir uma página com cinco
+abas: visão geral, previsão, histórico, janela de aplicação e estações.
+
+### Três naturezas de dado que não podem se misturar
+
+| Rótulo na tela | O que é |
+|---|---|
+| **MEDIDO** | sensor da estação Ecowitt, agora |
+| **PREVISTO** | modelo (Open-Meteo), para frente no tempo |
+| **REANÁLISE** | modelo, para trás no tempo — **não** é a medição do que ocorreu na quadra |
+
+Cada bloco carrega o seu rótulo. Um número de modelo exibido como se fosse do
+sensor é o erro caro desta tela: parece igual, e é a base de uma decisão de
+aplicação.
+
+As **horas de molhamento** são estimativa — horas com UR ≥ 90 % — e a regra
+aparece ao lado do número. Não há sensor de molhamento foliar aqui, e chamar de
+medido um limiar de umidade seria dar autoridade de sensor a uma conta.
+
+### A janela desta página é prospectiva
+
+Ela lê a previsão hora a hora das próximas 48 h contra limites genéricos de
+recomendação (vento ≤ 10 km/h · UR 50–90 % · 15–30 °C · sem chuva na hora), e
+mostra quais limites usou. **Não** substitui a janela declarada de um protocolo:
+essa vive no estudo e é conferida pelo `JanelaCore`, que compara o declarado com
+o ocorrido. Quando as duas discordarem, quem manda é o protocolo — e a página
+diz isso.
+
+### Os gráficos
+
+Três formas simples em SVG inline, sem biblioteca: barras para precipitação,
+duas linhas para temperatura máxima e mínima, uma linha para umidade. As cores
+de série foram conferidas pelo validador de paleta nos **dois** temas (banda de
+luminosidade, croma, separação para daltonismo e contraste com a superfície) —
+o tema escuro tem passos próprios, não é o claro invertido. Verde e azul nunca
+dividem o mesmo gráfico. Cada marca leva título e rótulo acessível, duas séries
+sempre trazem legenda e rótulo direto na ponta, e a tabela dos 30 dias fica a um
+clique: cor sozinha nunca é a única leitura.
+
 ## O que ainda não está aqui
 
 Esta é a primeira etapa (casca + Estudos + Mapa, com Clima e Insights ligados

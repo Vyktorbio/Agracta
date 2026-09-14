@@ -75,7 +75,7 @@ function estudoEmFoco(){
 
 /* --------------------------------------------------------------- portas --- */
 function fecharTelas(){
-  ['closeStudiesPanel','closeToday','closeDetail','closeSearch'].forEach(function(n){ chamar(n); });
+  ['closeStudiesPanel','closeToday','closeDetail','closeSearch','fecharClimaPagina'].forEach(function(n){ chamar(n); });
   var ov=d.getElementById('conhecimentoOvl');
   if(ov&&!ov.hidden){
     /* Pelo botão, não pela marra: é ele que devolve o foco a quem abriu. */
@@ -90,6 +90,10 @@ function irEstudos(){
 }
 function irClima(){
   fecharTelas();
+  /* Na mesa o clima é página: previsão, histórico, estações e janela lado a
+     lado. O cartão flutuante continua sendo a porta do celular, e vira a
+     reserva daqui se a página não tiver carregado. */
+  if(existe('abrirClimaPagina')) return w.abrirClimaPagina();
   if(!existe('toggleClima')) return avisar('O clima não está disponível nesta tela.');
   var p=d.getElementById('climaPanel');
   if(!p||p.style.display!=='block') w.toggleClima();
@@ -157,8 +161,10 @@ function ir(id){
    Conhecimento pelo "Fechar ×" e volta ao mapa sem passar por aqui. */
 function sincronizar(){
   var ov=d.getElementById('conhecimentoOvl'), clima=d.getElementById('climaPanel');
+  var pagina=d.getElementById('climaPaginaOvl');
   var conhecimento=!!(ov&&!ov.hidden);
-  if(conhecimento) ativa=(ativa==='insights'||ativa==='relatorios')?ativa:'estudos';
+  if(pagina&&!pagina.hidden) ativa='clima';
+  else if(conhecimento) ativa=(ativa==='insights'||ativa==='relatorios')?ativa:'estudos';
   else if(clima&&clima.style.display==='block') ativa='clima';
   else if(ativa!=='config') ativa='mapa';
   marcar();
