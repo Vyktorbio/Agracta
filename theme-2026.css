@@ -748,6 +748,9 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .top-bar .btn-sm .ic{width:18px!important;height:18px!important;flex:none!important}
 .tb-nav-label{display:block!important;white-space:nowrap!important}
 .btn-studies{order:1!important}.btn-today{order:2!important}#btnAgenda{order:3!important}.btn-search{order:4!important}
+/* "Conhecimento" mede 71px num botão de 75px no aparelho de 320px: cabe com
+   4px de folga, e qualquer folga menor que isso vira texto cortado. */
+@media(max-width:359px){.btn-studies .tb-nav-label{font-size:9px!important;letter-spacing:0!important}}
 .today-badge,#agendaBadge{
   position:absolute!important;
   top:2px!important;

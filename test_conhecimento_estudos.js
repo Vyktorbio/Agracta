@@ -34,7 +34,7 @@ w.data={Q1:{cultura:'Soja',estudos:[
    numRepeticoes:2,tratamentos:trat,avaliacoes:aval,
    finalizacao:{em:'2026-09-05T12:00:00.000Z',nome:'Maria Souza',por:'maria@agracta'}}
 ]}};
-const antes=JSON.stringify(w.data);
+const antes=JSON.stringify(w.data), antesData=JSON.parse(antes);
 const d=w.document, q=s=>d.querySelector(s), qa=s=>[...d.querySelectorAll(s)];
 const clicar=async b=>{ b.dispatchEvent(new w.MouseEvent('click',{bubbles:true})); await new Promise(r=>setTimeout(r,0)); };
 
@@ -130,6 +130,24 @@ w.data.Q1.estudos[0].avaliacoes=aval;
 
 /* ---------- 5. e nada disso escreveu no acervo ---------- */
 assert.equal(JSON.stringify(w.data),antes,'a tela de conhecimento continua só lendo');
+
+/* ---------- 5b. tela menor NUNCA desce calada ----------
+   Se o dossiê não chega ao aparelho, a ficha do estudo cai numa versão reduzida
+   — sem gráficos, sem a vista do campo, sem estatística. Isso descia sem aviso:
+   a tela abria parecendo normal e quem olhava concluía que os gráficos tinham
+   sumido do aplicativo. Perder função em silêncio é pior que dar erro, porque
+   não deixa pista de por quê nem do que fazer. */
+{
+  /* AgEstudoPagina AUSENTE é o estado de quem não recebeu o arquivo do dossiê. */
+  assert.ok(!w.AgEstudoPagina,'este teste só vale com o dossiê ausente');
+  w.data=antesData;
+  w.abrirConhecimento({qid:'Q1',sid:'S1'});
+  const t=q('#conhecimentoOvl').textContent;
+  assert.match(t,/dossiê completo deste estudo não carregou/,'a ficha reduzida tem de dizer que é reduzida');
+  assert.match(t,/sem gráficos/,'e dizer o que falta nela');
+  assert.match(t,/com conexão/,'e o que fazer para resolver');
+  assert.match(t,/Nada foi perdido/,'e que o dado está intacto — o susto é a metade do problema');
+}
 
 /* ---------- 6. as outras listas de estudo seguem sem botão de ação ---------- */
 w.abrirConhecimento({qid:'Q1',sid:'S1'});
