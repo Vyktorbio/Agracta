@@ -17,6 +17,58 @@
 .con-selo{display:inline-block;align-self:flex-start;font-size:.8125rem;font-weight:700;padding:2px 10px;border-radius:999px;border:1px solid}
 .con-selo.em-execucao{color:#155e3f;border-color:#9fcbb5;background:#e6f4ec}.con-selo.finalizado{color:#4a4a4a;border-color:#cfcfcf;background:#f0f0f0}
 .con-estado{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 4px}.con-estado .con-btn b{font-weight:800}
+
+/* ---- aba Estudos: painel de trabalho em duas colunas ---- */
+.con-pagina{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:24px;align-items:start;margin-top:8px}
+.con-principal{min-width:0}
+.con-lado{min-width:0;position:sticky;top:8px}
+.con-lado h3{font-size:1rem;margin:22px 0 10px}.con-lado h3:first-child{margin-top:0}
+.con-resumo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.con-resumo>div{padding:14px;border:1px solid var(--border,#cfdbd2);border-radius:12px;background:var(--surface,#fff)}
+.con-resumo>div.alerta{border-color:#e0b7b1;background:#fdf6f5}
+.con-resumo strong{display:block;font-size:1.75rem;line-height:1.1;font-weight:800}
+.con-resumo b{display:block;font-size:.8125rem;margin-top:4px}
+.con-resumo span{display:block;font-size:.75rem;color:var(--text-2,var(--muted,#617468));margin-top:2px}
+.con-agenda{list-style:none;padding:0;margin:0}
+.con-agenda li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border,#e3eae5)}
+.con-agenda li:last-child{border-bottom:0}
+.con-agenda li em{font-style:normal;font-size:.8125rem;color:var(--text-2,var(--muted,#617468));white-space:nowrap}
+.con-agenda li.atrasada em{color:#9a2c20;font-weight:700}
+.con-agenda .con-btn.link{min-height:auto}
+.con-agenda .con-btn.link b{display:block;font-size:.9375rem}
+.con-agenda .con-btn.link span{display:block;font-weight:400;font-size:.8125rem;color:var(--text-2,var(--muted,#617468))}
+
+/* ---- cartão do estudo ---- */
+.con-cartoes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(270px,100%),1fr));gap:14px;margin:16px 0}
+.con-cartao{display:flex;flex-direction:column;background:var(--surface,#fff);border:1px solid var(--border,#cad8ce);border-radius:14px;overflow:hidden}
+.con-cartao-faixa{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;
+  background:hsl(var(--tom) 38% 92%);border-bottom:1px solid var(--border,#dfe7e1)}
+.con-cultura{font-size:.8125rem;font-weight:700;color:hsl(var(--tom) 45% 26%);overflow-wrap:anywhere}
+.con-cartao .con-btn.cartao-corpo{flex:1;display:flex;flex-direction:column;align-items:flex-start;text-align:left;
+  gap:4px;padding:14px;border:0;border-radius:0;background:transparent;width:100%}
+.con-cartao .con-btn.cartao-corpo b{font-size:1.0625rem;overflow-wrap:anywhere}
+.con-cartao .con-btn.cartao-corpo span{font-weight:400;font-size:.9375rem}
+.con-cartao .con-btn.cartao-corpo small{font-weight:400;margin-top:2px;line-height:1.5}
+.con-medidas{display:flex;align-items:center;gap:14px;padding:0 14px 8px}
+.con-medidas>div{min-width:0}
+.con-medidas b{display:block;font-size:.9375rem;font-weight:700}
+.con-medidas span{display:block;font-size:.75rem;color:var(--text-2,var(--muted,#617468))}
+.con-faisca{margin-left:auto;width:68px;height:20px;flex:none}
+.con-barra{height:5px;background:var(--bg,#eef3ef);margin:0 14px}
+.con-barra span{display:block;height:100%;background:#176743;border-radius:3px}
+.con-cartao-pe{margin:8px 14px 12px;font-size:.75rem;color:var(--text-2,var(--muted,#617468))}
+.con-cartao .con-acoes{margin-top:auto}
+.con-selo.atrasado{color:#9a2c20;border-color:#e0b7b1;background:#fbeceb}
+
+.con-filtro-caixa{padding:0}
+.con-filtro-caixa>summary{padding:10px 0;font-size:.9375rem}
+.con-filtro-caixa>summary b{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:#176743;color:#fff;font-size:.75rem;text-align:center}
+.con-filtro-caixa .con-filtros{margin:4px 0 0}
+/* No computador não há o que recolher: o render já entrega aberto e o resumo some. */
+@media(min-width:901px){.con-filtro-caixa>summary{display:none}}
+.con-cartao .con-acoes{margin-top:auto;gap:6px;padding:10px}
+.con-cartao .con-acoes .con-btn{flex:1 1 0;min-width:0;padding:8px 6px;font-size:.8125rem}
+@media(max-width:900px){.con-pagina{grid-template-columns:1fr}.con-lado{position:static}}
 .con-btn.card{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:18px;gap:6px}.con-btn.card b{font-size:1rem;overflow-wrap:anywhere}.con-btn.card span{font-weight:400;font-size:.9375rem}.con-btn.card small{font-weight:400}
 .con-busca{display:block;max-width:620px;margin:24px 0;font-size:.9375rem}.con-shell input,.con-shell select,.con-shell textarea{display:block;box-sizing:border-box;width:100%;padding:10px 12px;margin-top:6px;background:var(--surface,#fff);color:inherit;border:1px solid var(--border,#bdcdc2);border-radius:8px;font:inherit;min-height:44px}.con-shell textarea{min-height:130px}
 .con-filtros,.con-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:14px;margin:18px 0}.con-form label,.con-filtros label{font-size:.9375rem}
