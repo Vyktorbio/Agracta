@@ -1,0 +1,87 @@
+/* Agracta — casca de mesa (tela larga).
+ *
+ * O Agracta nasceu para o talhão: uma tela, o mapa, e a navegação no polegar.
+ * Na mesa de trabalho isso cobra um preço que no campo não existe — para
+ * trocar de assunto é preciso fechar o que está aberto e procurar o botão de
+ * novo. Esta folha acrescenta UMA coisa: uma coluna fixa à esquerda, com as
+ * seções que já existem, sempre visível.
+ *
+ * TRÊS REGRAS QUE ESTA FOLHA NÃO QUEBRA
+ * -------------------------------------
+ * 1. Abaixo de 1100px nada aqui vale. O celular no campo continua idêntico:
+ *    todo o arquivo mora dentro da media query, e a classe .mesa no <html> só
+ *    é posta pelo mesa.js quando a tela é larga.
+ * 2. Nada é pintado antes da autenticação. A coluna só entra depois que o
+ *    mesa.js remove a dúvida — ele espera o <html> perder a classe .pre-auth.
+ * 3. A coluna não cria tela nova. Cada item abre a MESMA porta que já existe;
+ *    por isso as portas duplicadas da barra de baixo (Conhecimento e Menu)
+ *    ficam escondidas aqui: duas portas para a mesma tela foi o que já
+ *    confundiu uma vez.
+ *
+ * Posição fixa ignora padding do body: por isso cada painel fixo em tela cheia
+ * precisa do seu próprio deslocamento. A lista abaixo é essa conta, e ela é
+ * conferida pelo test_mesa.js — um painel novo em tela cheia que nasça sem
+ * entrar nela apareceria por baixo da coluna.
+ */
+@media (min-width:1100px){
+
+html.mesa{--mesa-w:244px}
+
+/* ------------------------------------------------------------ a coluna --- */
+html.mesa .ag-mesa{
+  position:fixed;left:0;top:0;bottom:0;width:var(--mesa-w);z-index:2600;
+  display:flex;flex-direction:column;gap:2px;
+  padding:18px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;
+  background:#202125;color:#fafafa;border-right:1px solid #41434b;
+  font:500 14px/1.4 var(--ag-font,Inter,system-ui,-apple-system,sans-serif);
+}
+html.mesa .ag-mesa-marca{display:flex;align-items:center;gap:10px;padding:2px 6px 0}
+html.mesa .ag-mesa-marca svg{flex:0 0 auto;color:#fafafa}
+html.mesa .ag-mesa-marca b{font:800 21px/1 var(--ag-font,Inter,system-ui,sans-serif);letter-spacing:-.2px}
+html.mesa .ag-mesa-lema{
+  margin:8px 6px 16px;font:700 8.5px/1.5 var(--ag-font,Inter,system-ui,sans-serif);
+  letter-spacing:.16em;text-transform:uppercase;color:#9a9ea8;
+}
+html.mesa .ag-mesa-nav{display:flex;flex-direction:column;gap:2px}
+html.mesa .ag-mesa-item{
+  display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;
+  padding:10px 12px;border:0;border-left:3px solid transparent;border-radius:10px;
+  background:transparent;color:#d3d4d8;cursor:pointer;text-align:left;
+  font:600 13.5px/1.2 var(--ag-font,Inter,system-ui,sans-serif);
+}
+html.mesa .ag-mesa-item svg{flex:0 0 auto;opacity:.92}
+html.mesa .ag-mesa-item:hover{background:#373940;color:#fff}
+html.mesa .ag-mesa-item[aria-current="page"]{background:#36383f;border-left-color:#fff;color:#fff}
+html.mesa .ag-mesa-item:focus-visible{outline:3px solid #1477e5;outline-offset:2px}
+html.mesa .ag-mesa-rodape{margin-top:auto;padding:16px 8px 0;border-top:1px solid #33353b}
+html.mesa .ag-mesa-rodape p{margin:0;font:600 11.5px/1.55 var(--ag-font,Inter,system-ui,sans-serif);color:#b5b8c0}
+html.mesa .ag-mesa-rodape span{display:block;margin-top:10px;font:800 12px/1 var(--ag-font,Inter,system-ui,sans-serif);color:#fafafa}
+
+/* ------------------------------------------------- o app ao lado dela ---- */
+html.mesa body{padding-left:var(--mesa-w)}
+
+/* Painéis em tela cheia: `inset:0` põe a borda esquerda no zero da JANELA, e
+   nenhum padding do body alcança isso. Cada um recua o próprio left. */
+html.mesa :is(.overlay,.sd-overlay,.se-overlay,.today-overlay,.search-overlay,
+               .studies-overlay,.con-overlay,.ndvi-modal,.study-parcelas-ovl,
+               .ag-drawer-bg){left:var(--mesa-w)}
+
+/* Faixas e cartões flutuantes ancorados à esquerda: margem, não left, porque
+   vários também se prendem à direita e trocar o left os esticaria. */
+html.mesa :is(.ndvi-panel,.legend-panel,.ag-ndvibar,.ag-rotbar,.ag-aviso,
+               .gr-panel,.top-bar-right){margin-left:var(--mesa-w)}
+/* A barra de baixo é centrada por transform; metade da coluna a recentraliza
+   na área de trabalho em vez de empurrá-la para fora. */
+html.mesa .top-bar-right{margin-left:calc(var(--mesa-w)/2)}
+/* Uma porta por seção: a coluna assumiu Conhecimento (Estudos) e Menu
+   (Configurações), então os botões correspondentes saem da barra de baixo. */
+html.mesa :is(.btn-studies,.btn-menu){display:none!important}
+
+/* O dossiê e o Conhecimento ganham a largura da mesa sem virar linha infinita. */
+html.mesa .con-shell,html.mesa .ep-page{max-width:1180px;margin-inline:auto}
+
+@media (prefers-reduced-motion:no-preference){
+  html.mesa .ag-mesa-item{transition:background .14s ease,color .14s ease}
+}
+}

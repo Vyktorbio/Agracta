@@ -41,6 +41,21 @@ pertence, como blocos recolhíveis dentro da ficha que já existe.
 Menu Auditoria · Menu Estatística · Menu Amostras. Isso destruiria a simplicidade —
 essas informações já têm dono conceitual.
 
+> **Estado (14/09/2026) — a casca de mesa e esta regra.** Em tela larga
+> (≥ 1100px) existe uma coluna fixa à esquerda com seis seções: Estudos, Mapa,
+> Clima, Insights, Relatórios e Configurações (`mesa.js` / `mesa.css`). Ela
+> **não** contraria a regra acima, e a diferença é a única coisa que importa
+> aqui: a regra proíbe criar um MENU por FUNCIONALIDADE, e a coluna não tem
+> funcionalidade nenhuma — cada item abre a porta que já existia. Estudos abre
+> o Conhecimento na aba Estudos (a mesma do botão da barra, que some na mesa
+> para não haver duas), Clima abre o painel de clima, Insights e Relatórios
+> abrem seções do dossiê do estudo em foco, Configurações abre a gaveta do
+> menu. Nada de novo mora na coluna, e informação alguma saiu de onde morava.
+>
+> No celular — que é onde o trabalho de campo acontece — a coluna não existe:
+> a folha inteira vive dentro da media query, e abaixo de 1100px o app é o
+> mesmo de sempre. Ver `docs/MESA.md`.
+
 ## 3. Estratégia: evoluir sem reescrever
 
 O `app.js` coordena a interface. A lógica sai progressivamente dele para motores

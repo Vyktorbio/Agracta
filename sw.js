@@ -2,10 +2,10 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v240';
+var CACHE = 'agracta-app-v241';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
-  './interface-neutra.css?v=1',
+  './interface-neutra.css?v=1', './mesa.css?v=1', './mesa.js?v=1',
   './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=1', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=1', './vendor/relatorio-docx.js?v=1',
   './galeria-fotos.js?v=2', './galeria-local.html', './galeria-local.js?v=2', './galeria-local.css?v=1', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=1',
   './profundidade.css?v=1',
