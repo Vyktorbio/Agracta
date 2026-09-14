@@ -58,3 +58,41 @@ html:not(.light) .cp-selo.ruim{background:#e4695c26;color:#f3a79e}
 
 @media(max-width:900px){.cp-linha{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:no-preference){.cp-card{transition:border-color .15s ease}}
+
+/* ------------------------------------------------------------- telefone ---
+   A página não é só da mesa: clima é a decisão que se toma em pé no talhão,
+   e a janela hora a hora é justamente para isso. O que muda no telefone é
+   layout, não conteúdo — nenhuma aba, número ou aviso de fonte some.
+
+   A tabela é o caso a cuidar: seis colunas não cabem em 390 px. Cada uma
+   ganhou um container próprio que rola na horizontal, em vez de a página
+   inteira rolar de lado — página que anda de lado faz perder a coluna da
+   esquerda e o lugar da leitura. */
+.cp-rolagem{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.cp-rolagem>table{min-width:max-content}
+
+/* Do cartão flutuante para a página: o atalho do telefone. */
+.clima-mais{
+  display:block;width:100%;margin-top:9px;padding:11px 12px;min-height:44px;
+  border:1px solid var(--gp-line-2,#3c4740);border-radius:12px;
+  background:var(--gp-s2,rgba(255,255,255,.06));color:var(--gp-text,#e9ede9);
+  font:600 12px/1.35 var(--ag-font,Inter,system-ui,sans-serif);cursor:pointer;text-align:left;
+}
+.clima-mais:hover{background:var(--gp-s3,rgba(255,255,255,.1))}
+.clima-mais:focus-visible{outline:3px solid #1477e5;outline-offset:2px}
+
+@media(max-width:700px){
+  .cp-overlay{padding:14px 14px calc(96px + env(safe-area-inset-bottom,0px))}
+  .cp-head{flex-wrap:wrap;gap:10px}
+  .cp-head h1{font-size:1.5rem}
+  .cp-overlay nav{gap:6px}
+  .cp-overlay nav .con-btn{font-size:.8125rem;padding:9px 12px}
+  .cp-card{padding:15px;border-radius:14px}
+  .cp-temp{font-size:2.4rem}
+  .cp-mini{grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px}
+  .cp-num{padding:10px 11px}
+  .cp-num strong{font-size:1.2rem}
+  /* O gráfico encolhe até onde continua legível e, daí em diante, rola. */
+  .cp-svg{min-width:440px}
+  .cp-tab th,.cp-tab td{padding:6px 8px;font-size:.8125rem}
+}

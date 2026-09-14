@@ -4407,9 +4407,16 @@ function buildClimaPanel(){
   var coord=ll?((+ll[0]).toFixed(4)+', '+(+ll[1]).toFixed(4)):'sem coordenada';
   var ctrl='<div class="gr-ctl"><span>Fonte automática</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(fonte)+'</span></div>'+
     '<div style="font-size:10px;color:var(--text-3,#7a8a7a);margin:2px 3px 7px">'+ic('pin',11)+' Centro do mapa · '+esc(coord)+'</div>';
+  /* O cartão é o relance: tempo de agora e os próximos dias, na altura do
+     polegar. O que não cabe nele — 30 dias de histórico, as estações e a
+     janela hora a hora — mora na página, e este é o caminho até ela. Sem o
+     módulo carregado o botão não aparece, em vez de aparecer e não responder. */
+  var maisClima=(typeof abrirClimaPagina==='function')
+    ? '<button type="button" class="clima-mais" onclick="abrirClimaPagina()">Ver o clima completo · histórico, estações e janela</button>'
+    : '';
   p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('weather',14)+' CLIMA</div><button class="gr-x" onclick="toggleClima()" aria-label="Fechar" title="Fechar">×</button></div>'+ctrl+
     '<div id="climaBody"></div>'+
-    '';
+    maisClima;
   p.style.display='block';
 }
 /* Coordenada canônica de um Local: cadastro ou centro das quadras. Também é
