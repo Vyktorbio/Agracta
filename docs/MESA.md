@@ -106,7 +106,10 @@ clima é a decisão que se toma em pé no talhão, e a janela hora a hora existe
 justamente para isso. São duas portas para a mesma página — a seção **Clima**
 da coluna, e o botão *Ver o clima completo* dentro do cartão, no telefone. O
 cartão só oferece o botão quando o módulo está carregado: botão que não
-responde é pior que botão nenhum.
+responde é pior que botão nenhum. E ele fica **acima** das leituras, não
+abaixo: num aparelho menor o cartão cheio passa da altura da tela e rola por
+dentro, então tudo o que vier depois do corpo nasce fora da vista, no fim de
+uma lista que parece terminada — existindo e sendo impossível de achar.
 
 No telefone muda o layout, nunca o conteúdo. O caso a cuidar é a tabela: seis
 colunas não cabem em 390 px, então cada uma tem o seu próprio container que
