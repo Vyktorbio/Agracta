@@ -4410,13 +4410,18 @@ function buildClimaPanel(){
   /* O cartão é o relance: tempo de agora e os próximos dias, na altura do
      polegar. O que não cabe nele — 30 dias de histórico, as estações e a
      janela hora a hora — mora na página, e este é o caminho até ela. Sem o
-     módulo carregado o botão não aparece, em vez de aparecer e não responder. */
+     módulo carregado o botão não aparece, em vez de aparecer e não responder.
+
+     ELE VEM ANTES DO CORPO, e isso não é gosto: num aparelho menor o cartão
+     cheio passa da altura da tela e rola POR DENTRO. Embaixo do corpo, o botão
+     nascia fora da vista, no fim de uma lista que parece terminada — existindo
+     e sendo impossível de achar. */
   var maisClima=(typeof abrirClimaPagina==='function')
     ? '<button type="button" class="clima-mais" onclick="abrirClimaPagina()">Ver o clima completo · histórico, estações e janela</button>'
     : '';
   p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('weather',14)+' CLIMA</div><button class="gr-x" onclick="toggleClima()" aria-label="Fechar" title="Fechar">×</button></div>'+ctrl+
-    '<div id="climaBody"></div>'+
-    maisClima;
+    maisClima+
+    '<div id="climaBody"></div>';
   p.style.display='block';
 }
 /* Coordenada canônica de um Local: cadastro ou centro das quadras. Também é

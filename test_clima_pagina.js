@@ -178,6 +178,11 @@ const texto=el=>el.textContent.replace(/\s+/g,' ');
  const corpo=app.slice(i,app.indexOf('\n}',i));
  assert.match(corpo,/typeof abrirClimaPagina==='function'/,'o cartão confere se a página carregou');
  assert.match(corpo,/onclick="abrirClimaPagina\(\)"/,'e abre a mesma página da mesa, não uma cópia');
+ /* Num aparelho menor o cartão cheio passa da altura da tela e rola por dentro:
+    depois do corpo, o botão nasce fora da vista, no fim de uma lista que
+    parece terminada — existindo e sendo impossível de achar. */
+ assert.ok(corpo.indexOf('maisClima+')<corpo.indexOf("'<div id=\"climaBody\"></div>'"),
+   'o botão vem ANTES do corpo do cartão, onde a rolagem interna não o esconde');
  const css=fs.readFileSync('clima-pagina.css','utf8');
  assert.match(css,/@media\(max-width:700px\)/,'a página tem passo próprio para telefone');
  assert.match(css,/\.cp-rolagem\{overflow-x:auto/,'o container de tabela rola');

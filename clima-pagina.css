@@ -73,7 +73,7 @@ html:not(.light) .cp-selo.ruim{background:#e4695c26;color:#f3a79e}
 
 /* Do cartão flutuante para a página: o atalho do telefone. */
 .clima-mais{
-  display:block;width:100%;margin-top:9px;padding:11px 12px;min-height:44px;
+  display:block;width:100%;margin:2px 0 9px;padding:11px 12px;min-height:44px;
   border:1px solid var(--gp-line-2,#3c4740);border-radius:12px;
   background:var(--gp-s2,rgba(255,255,255,.06));color:var(--gp-text,#e9ede9);
   font:600 12px/1.35 var(--ag-font,Inter,system-ui,sans-serif);cursor:pointer;text-align:left;
