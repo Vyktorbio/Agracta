@@ -821,7 +821,8 @@
         /* O banco de itens e da ORGANIZACAO, nao de uma quadra: por isso mora aqui,
            e nao dentro de um estudo. */
         linha(I.caixa, 'Banco de itens', 'Produtos e doses usados nos protocolos', 'agMenuAcao(\'abrirItens\')')+
-        linha(I.caixa, 'Conhecimento', 'Produtos, alvos, resultados e contexto', 'agMenuAcao(\'abrirConhecimento\')')+
+        /* Conhecimento saiu daqui: tem botão dedicado na barra, ao lado de Hoje
+           e Agenda. Duas portas para a mesma tela é o que já confundiu uma vez. */
       '</div><details class="ag-sec ag-menu-details"><summary>Cópias e recuperação</summary>'+
         linha(I.baixar, 'Salvar cópia', 'Arquivo com os dados do Agracta', 'agMenuAcao(\'exportData\')')+
         linha(I.subir, 'Importar arquivo', 'Restaura de um backup .json', 'agImportar()')+
