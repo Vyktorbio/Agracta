@@ -63,4 +63,6 @@
 /* O dossiê já anuncia o estudo no alto e a seção já se chama Ver no campo:
    repetir os dois aqui seria dizer a mesma coisa três vezes na mesma tela. */
 .c3-embutida .c3-eyebrow,.c3-embutida .c3-head h2{display:none}
-.c3-embutida #c3cv{height:320px}
+/* A caixa manda na altura do desenho (ver ligarCanvas): na mesa ela pode ser
+   maior, e a cena ganha espaço em vez de espremer. */
+.c3-embutida #c3cv{height:420px}

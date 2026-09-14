@@ -213,6 +213,31 @@ function fracaoRuim(m,v){
   return m.sentido==='maior'?1-f:f;
 }
 
+/* ----------------------------------------------------------------- eixo ---
+   A altura sempre significou alguma coisa e nunca dizia quanto: dava para ver
+   que uma coluna é maior que a outra, não QUE VALOR ela tem. Estas marcas são a
+   régua da altura — e ela muda de assunto com o modo, porque a altura muda:
+
+     Estado no dia   altura = VALOR      → marcas na escala da variável
+     Histórico 3D    altura = TEMPO      → marcas em DAA
+
+   Sem escala definida não há régua no modo dia: ali a altura já é fixa por
+   decisão (ver desenhar()), e uma régua sugeriria uma medida que não existe. */
+function eixo(m,modo){
+  if(modo==='historico'){
+    if(!(m.daaMax>0))return null;
+    return {titulo:'DAA',marcas:[0,.25,.5,.75,1].map(function(f){
+      return {f:f,v:m.daaMax*f,texto:mostra(m.daaMax*f,0)};})};
+  }
+  if(!m.escala.definida||m.escala.max===null)return null;
+  var vao=m.escala.max-m.escala.min;
+  if(!(vao>0))return null;
+  return {titulo:m.tipo==='pct'?'%':(m.tipo==='escala'?'índice':''),
+    marcas:[0,.25,.5,.75,1].map(function(f){
+      var v=m.escala.min+vao*f;
+      return {f:f,v:v,texto:mostra(v,vao<5?1:0)};})};
+}
+
 /* ------------------------------------------------------------------ cor ---
    Verde (melhor) -> âmbar -> vermelho (pior), sobre a escala da variável. */
 var BOM=[76,139,43], MEIO=[224,160,32], RUIM=[201,64,60];
@@ -241,7 +266,7 @@ function esc(v){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
 }
 
-w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fracao:fracao,fracaoRuim:fracaoRuim,
+w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fracao:fracao,fracaoRuim:fracaoRuim,eixo:eixo,
              numero:numero,leValor:leValor,diasEntre:diasEntre,corDe:corDe,mostra:mostra};
 
 /* =========================================================== a tela ===== */
@@ -432,8 +457,14 @@ function ligarCanvas(){
   var cv=d.getElementById('c3cv');if(!cv)return;
   estado.cv=cv;estado.ctx=cv.getContext('2d');
   var dpr=w.devicePixelRatio||1;
+  /* A CAIXA manda nas duas medidas. A largura já vinha dela; a altura era fixa
+     em 380, e bastou a vista embutida no dossiê ter 320 de caixa para o desenho
+     inteiro ser espremido 16 % na vertical — colunas mais baixas do que o valor
+     que representam, que é exatamente o tipo de mentira que esta tela não pode
+     contar. */
   LW=cv.clientWidth||700;
-  cv.width=LW*dpr;cv.height=LH*dpr;
+  LH=cv.clientHeight||380;
+  cv.width=Math.round(LW*dpr);cv.height=Math.round(LH*dpr);
   estado.ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 /* Projeção em dois tempos: primeiro a rotação crua, depois escala e deslocamento
@@ -540,6 +571,70 @@ function desenharTorre(ctx,m,o,marcada){
     estado.alvos.push({o:o,p:base});
   }
 }
+/* Sombra de contato: sem ela as colunas pairam sobre o chão e a leitura de
+   altura fica pior justamente onde importa — no pé, que é de onde a altura
+   começa a contar. */
+function sombraNoChao(ctx,m,o){
+  var d=0.45;
+  poli(ctx,[prj(m,o.x0+d,o.y0+d,0),prj(m,o.x1+d,o.y0+d,0),
+            prj(m,o.x1+d,o.y1+d,0),prj(m,o.x0+d,o.y1+d,0)],'rgba(26,28,30,0.13)',null);
+}
+/* A régua fica no canto mais FUNDO da cena, que é o único que nenhuma coluna
+   tapa por inteiro. Ele muda quando o campo gira, então é calculado a cada
+   quadro em vez de fixado num canto qualquer.
+
+   Ela sai em DOIS tempos, e a razão é de leitura: a geometria vai ANTES das
+   colunas, para que elas a tapem quando estão na frente — é assim que a
+   profundidade se lê. Já os NÚMEROS vão depois, por cima de tudo: uma régua
+   com as marcas de baixo escondidas atrás do próprio campo não é régua. */
+function cantoDoFundo(m,ox,oy,larg,alt){
+  var cantos=[[ox,oy],[ox+larg,oy],[ox+larg,oy+alt],[ox,oy+alt]];
+  /* MAIOR profundidade é o canto mais fundo — é o mesmo critério que ordena as
+     colunas (as mais fundas primeiro). Invertido, a régua nasce na frente. */
+  var f=cantos.map(function(c,i){
+    return {c:c,i:i,prof:prj(m,c[0],c[1],0)[2]};
+  }).sort(function(a,b){return b.prof-a.prof;})[0];
+  return {c:f.c, viz:[cantos[(f.i+1)%4],cantos[(f.i+3)%4]]};
+}
+function desenharEixo(ctx,m,ox,oy,larg,alt){
+  var eix=eixo(m,estado.modo);
+  if(!eix)return;
+  var k=cantoDoFundo(m,ox,oy,larg,alt), c=k.c;
+  var base=prj(m,c[0],c[1],0), topo=prj(m,c[0],c[1],HMAX);
+  ctx.strokeStyle='rgba(26,28,30,0.28)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(base[0],base[1]);ctx.lineTo(topo[0],topo[1]);ctx.stroke();
+  eix.marcas.forEach(function(mk){
+    var z=mk.f*HMAX, p=prj(m,c[0],c[1],z);
+    /* O "L" de cada marca corre pelas duas bordas do fundo: dá referência de
+       altura sem riscar linha solta no ar, que sugeriria um plano inexistente. */
+    ctx.strokeStyle='rgba(26,28,30,'+(mk.f===0?0.22:0.12)+')';
+    k.viz.forEach(function(v){
+      var q=prj(m,c[0]+(v[0]-c[0])*0.28,c[1]+(v[1]-c[1])*0.28,z);
+      ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();
+    });
+  });
+}
+function desenharEixoRotulos(ctx,m,ox,oy,larg,alt){
+  var eix=eixo(m,estado.modo);
+  if(!eix)return;
+  var k=cantoDoFundo(m,ox,oy,larg,alt), c=k.c;
+  ctx.fillStyle='#6b7075';
+  ctx.font='500 10px -apple-system, Segoe UI, Roboto, sans-serif';
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  /* Halo claro atrás do número: ele passa por cima de colunas de qualquer cor,
+     e cinza sobre âmbar é ilegível justamente no meio da régua. */
+  ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,0.8)';ctx.lineJoin='round';
+  function marca(txt,x,y){ ctx.strokeText(txt,x,y); ctx.fillText(txt,x,y); }
+  eix.marcas.forEach(function(mk){
+    var p=prj(m,c[0],c[1],mk.f*HMAX);
+    marca(mk.texto,p[0]-6,p[1]);
+  });
+  if(eix.titulo){
+    var topo=prj(m,c[0],c[1],HMAX);
+    ctx.textBaseline='bottom';marca(eix.titulo,topo[0]-6,topo[1]-6);
+  }
+  ctx.textAlign='center';ctx.textBaseline='middle';
+}
 function desenhar(){
   if(!estado||!estado.ctx||!estado.m)return;
   var ctx=estado.ctx, m=estado.m;
@@ -549,6 +644,7 @@ function desenhar(){
   var larg=estado.quadro.larg, alt=estado.quadro.alt, ox=estado.quadro.ox, oy=estado.quadro.oy;
   poli(ctx,[prj(m,ox,oy,0),prj(m,ox+larg,oy,0),prj(m,ox+larg,oy+alt,0),prj(m,ox,oy+alt,0)],
        'rgba(26,28,30,0.045)','rgba(26,28,30,0.18)',1);
+  desenharEixo(ctx,m,ox,oy,larg,alt);
 
   var colunas=m.grade.map(function(p){
     var x0=ox+p.ti*SX, y0=oy+(p.rep-1)*SY;
@@ -558,6 +654,8 @@ function desenhar(){
 
   colunas.forEach(function(o){
     var marcada=estado.sel&&estado.sel.chave===o.p.chave;
+    var sob=!marcada&&estado.hover===o.p.chave;
+    if(sob)ctx.save(),ctx.shadowColor='rgba(26,28,30,.35)',ctx.shadowBlur=10;
     if(estado.modo==='historico')return desenharTorre(ctx,m,o,marcada);
     var base=[prj(m,o.x0,o.y0,0),prj(m,o.x1,o.y0,0),prj(m,o.x1,o.y1,0),prj(m,o.x0,o.y1,0)];
     if(o.v===null){
@@ -572,6 +670,7 @@ function desenhar(){
     /* Sem escala, altura fixa: a altura mentiria tanto quanto a cor. */
     var h=(fr===null?.45:Math.max(.12,fr))*HMAX;
     var c=corDe(fracaoRuim(m,o.v));
+    sombraNoChao(ctx,m,o);
     var arestas=[[[o.x0,o.y0],[o.x1,o.y0]],[[o.x1,o.y0],[o.x1,o.y1]],
                  [[o.x1,o.y1],[o.x0,o.y1]],[[o.x0,o.y1],[o.x0,o.y0]]];
     arestas.map(function(e,i){
@@ -582,9 +681,12 @@ function desenhar(){
            sombra(c,f.i%2===0?.74:.58),marcada?'#1a1c1e':null,1.5);
     });
     var topo=[prj(m,o.x0,o.y0,h),prj(m,o.x1,o.y0,h),prj(m,o.x1,o.y1,h),prj(m,o.x0,o.y1,h)];
-    poli(ctx,topo,c,marcada?'#1a1c1e':null,1.5);
+    poli(ctx,topo,c,marcada?'#1a1c1e':(sob?'rgba(26,28,30,.55)':null),marcada?1.5:1.2);
+    if(sob)ctx.restore();
     estado.alvos.push({o:o,p:topo});
   });
+
+  desenharEixoRotulos(ctx,m,ox,oy,larg,alt);
 
   ctx.fillStyle='#4a4f55';
   ctx.font='500 11px -apple-system, Segoe UI, Roboto, sans-serif';
@@ -633,6 +735,24 @@ var arrastando=false,ultX=0,andou=0;
 d.addEventListener('pointerdown',function(ev){
   if(!estado||!ev.target.closest||!ev.target.closest('#c3cv'))return;
   arrastando=true;andou=0;ultX=ev.clientX;
+});
+/* Passar o ponteiro realça a coluna sob ele. É acréscimo de mesa: no toque não
+   existe "passar por cima", e o gesto de lá — tocar para selecionar — continua
+   igual. */
+d.addEventListener('pointermove',function(ev){
+  if(arrastando||!estado||!estado.cv||ev.pointerType==='touch')return;
+  var ov=caixa();if(!ov||!ev.target.closest||!ev.target.closest('#c3cv')){
+    if(estado.hover){estado.hover=null;desenhar();}
+    return;
+  }
+  var r=estado.cv.getBoundingClientRect();
+  var px=(ev.clientX-r.left)*(LW/r.width), py=(ev.clientY-r.top)*(LH/r.height);
+  var achou=null;
+  for(var i=estado.alvos.length-1;i>=0;i--){
+    if(dentro(px,py,estado.alvos[i].p)){achou=estado.alvos[i].o.p.chave;break;}
+  }
+  estado.cv.style.cursor=achou?'pointer':'grab';
+  if(achou!==estado.hover){estado.hover=achou;desenhar();}
 });
 d.addEventListener('pointermove',function(ev){
   if(!arrastando||!estado)return;

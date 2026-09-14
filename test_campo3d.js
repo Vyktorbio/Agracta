@@ -335,5 +335,53 @@ function todas(valor,excecoes){
   assert.ok(/getContext\('2d'\)/.test(c3),'o desenho é canvas 2D com projeção própria');
 }
 
+/* ====================================== 9. a régua da altura diz o que a altura é
+   A altura sempre significou alguma coisa e não dizia quanto. A régua resolve
+   isso — e só vale se usar a MESMA conta que levanta a coluna. Uma régua com
+   mapeamento próprio seria pior que régua nenhuma: daria autoridade de medida a
+   um desencontro. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))
+  ]),'sev');
+
+  const dia=M.eixo(m,'dia');
+  assert.equal(dia.marcas.length,5,'cinco marcas: 0, 25, 50, 75 e 100 % da altura');
+  assert.equal(dia.marcas[0].v,m.escala.min);
+  assert.equal(dia.marcas[4].v,m.escala.max,'o topo da régua é o topo da escala da variável');
+  /* O laço que importa: a marca em f vale v, e a coluna de valor v sobe até f. */
+  dia.marcas.forEach(mk=>assert.ok(Math.abs(M.fracao(m,mk.v)-mk.f)<1e-9,
+    'a régua e a altura da coluna precisam ser a mesma conta (marca '+mk.texto+')'));
+  assert.equal(dia.titulo,'%','a régua diz a unidade da variável');
+
+  /* No histórico a altura é TEMPO, então a régua muda de assunto junto. */
+  const hist=M.eixo(m,'historico');
+  assert.equal(hist.titulo,'DAA');
+  assert.equal(hist.marcas[4].v,m.daaMax,'o topo é o último DAA do ensaio');
+  assert.equal(hist.marcas[0].v,0);
+  assert.notEqual(dia.marcas[4].texto,hist.marcas[4].texto,
+    'as duas réguas não podem coincidir por acaso neste estudo');
+
+  /* Sem escala definida não há régua no modo dia: ali a altura já é fixa por
+     decisão, e uma régua sugeriria uma medida que não existe. */
+  const semEscala=M.modelo(estudo([av('A1','2026-01-12',todas('3'),'contagem')]),'sev');
+  assert.equal(semEscala.escala.definida,false);
+  assert.equal(M.eixo(semEscala,'dia'),null,'sem escala, sem régua');
+
+  /* Uma avaliação só, no dia zero: não há eixo de tempo para medir. */
+  const umDia=M.modelo(estudo([av('A1','2026-01-12',todas('10'))]),'sev');
+  assert.equal(umDia.daaMax,0);
+  assert.equal(M.eixo(umDia,'historico'),null,'sem tempo decorrido, sem régua de tempo');
+}
+
+/* ============================ 10. a caixa manda nas DUAS medidas do desenho */
+{
+  const c3=fs.readFileSync('campo-3d.js','utf8');
+  const lig=c3.slice(c3.indexOf('function ligarCanvas('),c3.indexOf('\n}',c3.indexOf('function ligarCanvas(')));
+  assert.match(lig,/clientWidth/,'a largura vem da caixa');
+  assert.match(lig,/clientHeight/,
+    'e a altura também: fixa em 380, uma caixa de 320 espremia o desenho 16 % na vertical — coluna mais baixa do que o valor que ela representa');
+}
+
 w.close();
 console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias e carga sob demanda OK.');

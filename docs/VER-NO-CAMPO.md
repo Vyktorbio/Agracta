@@ -48,6 +48,31 @@ mesmo laço de animação.
 
 ---
 
+## A régua da altura
+
+A altura sempre significou alguma coisa e não dizia **quanto**: dava para ver
+que uma coluna é maior que a outra, não que valor ela tem. Um canto da cena
+agora carrega a régua — e ela **muda de assunto com o modo**, porque a altura
+muda:
+
+| Modo | Altura | Régua |
+|---|---|---|
+| Estado no dia | valor da variável | marcas na escala da variável (com a unidade) |
+| Histórico 3D | tempo | marcas em DAA |
+
+Duas condições, e as duas têm teste:
+
+- **a régua usa a mesma conta que levanta a coluna.** Uma régua com mapeamento
+  próprio seria pior que régua nenhuma: daria autoridade de medida a um
+  desencontro;
+- **sem escala definida não há régua** no modo dia. Ali a altura já é fixa por
+  decisão, e uma régua sugeriria uma medida que não existe.
+
+A geometria da régua é desenhada **antes** das colunas, para que elas a tapem
+quando estão na frente — é assim que a profundidade se lê. Os números vão
+**depois**, por cima de tudo, com halo claro: uma régua com as marcas de baixo
+escondidas atrás do próprio campo não é régua.
+
 ## Dois modos, duas perguntas
 
 | Modo | Altura | O tempo | Responde |
