@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v237';
+var CACHE = 'agracta-app-v239';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './interface-neutra.css?v=1',
@@ -17,12 +17,12 @@ var ASSETS = [
   './campo-3d.js?v=2', './campo-3d.css?v=2',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=2',
   './', './index.html',
-  './integracoes.css?v=4', './integracoes.js?v=7', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
+  './integracoes.css?v=4', './integracoes.js?v=9', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
   './vendor/conhecimento-core.js?v=1', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=27', './theme-2026.css?v=7', './ui-campo.css?v=10', './app.js?v=136',
+  './styles.css?v=27', './theme-2026.css?v=8', './ui-campo.css?v=10', './app.js?v=137',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',

@@ -17123,14 +17123,25 @@ function injectTopbarButtons(){
   btnBusca.innerHTML=ic('search',18)+'<span class="tb-nav-label">Buscar</span>';
   btnBusca.setAttribute("aria-label","Buscar");
   btnBusca.onclick=openSearch;
-  var btnEstudos=document.createElement("button");
-  btnEstudos.className="btn-sm btn-studies";
-  btnEstudos.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Estudos</span>';
-  btnEstudos.onclick=openStudiesPanel;
+  /* Este atalho era um segundo painel de estudos, com filtros próprios, e
+     concorria com a aba Estudos do Conhecimento sem oferecer o dossiê: nem
+     gráficos, nem a vista do campo, nem estatística. Duas listas de estudo com
+     poderes diferentes ensinam a pessoa a procurar no lugar errado.
+     Agora ele abre o Conhecimento direto na aba Estudos — mesma posição na
+     barra, mesmo gesto, e de lá se chega a tudo. Criar estudo não passava por
+     aqui: continua no "+ ADICIONAR" de dentro da quadra. */
+  var btnConhec=document.createElement("button");
+  btnConhec.className="btn-sm btn-studies";
+  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Conhecimento</span>';
+  btnConhec.setAttribute("aria-label","Conhecimento experimental");
+  btnConhec.onclick=function(){
+    if(typeof abrirConhecimento==='function')abrirConhecimento({aba:'estudos'});
+    else if(typeof _stxToast==='function')_stxToast('O Conhecimento não carregou neste aparelho. Abra de novo com conexão.');
+  };
   /* Insere antes do botão AGENDA */
   var btnAgenda=document.getElementById("btnAgenda");
   if(btnAgenda){
-    tbr.insertBefore(btnEstudos,btnAgenda);
+    tbr.insertBefore(btnConhec,btnAgenda);
     tbr.insertBefore(btnHoje,btnAgenda);
     tbr.insertBefore(btnBusca,btnHoje);
   }else{

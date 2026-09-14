@@ -462,7 +462,16 @@
   function ficha(){
     var s=achar(view.estudo);if(!s)return vazio('O estudo não está disponível.');
     if(w.AgEstudoPagina)return w.AgEstudoPagina.render(s,{tabela:tabela(C.resultados([s],{})),contexto:contextoHtml(s),integracoes:integracoesHtml(s),custos:custosHtml(s)});
-    return bot('voltar','‹ Conhecimento')+'<div class="con-titulo"><div><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+' · '+e(s.local)+' · '+e(s.quadra)+'</p></div>'+bot('original','Abrir estudo','data-key="'+e(s.key)+'"')+'</div><p class="con-note">'+e(s.desenho)+' · '+e(s.metodo)+' · '+(s.finalizado?'Finalizado':'Em execução')+'</p>'+tabela(C.resultados([s],{}))+
+    /* O dossiê não carregou, e daqui para baixo é a ficha reduzida: sem
+       gráficos, sem "Ver no campo", sem estatística. Isso descia CALADO — quem
+       abria o estudo via uma tela pobre e concluía que os gráficos tinham
+       sumido do aplicativo. Uma tela menor sem aviso é pior que um erro: some
+       função e não deixa pista de por quê nem do que fazer. */
+    return bot('voltar','‹ Conhecimento')+
+      '<p class="con-empty">O dossiê completo deste estudo não carregou, então esta é a ficha reduzida: '+
+      'sem gráficos, sem a vista do campo e sem a estatística. Nada foi perdido — o arquivo do dossiê '+
+      'não chegou a este aparelho. Feche o Agracta por inteiro e abra de novo <b>com conexão</b>; '+
+      'depois disso ele funciona offline.</p>'+'<div class="con-titulo"><div><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+' · '+e(s.local)+' · '+e(s.quadra)+'</p></div>'+bot('original','Abrir estudo','data-key="'+e(s.key)+'"')+'</div><p class="con-note">'+e(s.desenho)+' · '+e(s.metodo)+' · '+(s.finalizado?'Finalizado':'Em execução')+'</p>'+tabela(C.resultados([s],{}))+
       contextoHtml(s)+integracoesHtml(s)+custosHtml(s);
   }
   function pintar(){
