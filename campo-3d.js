@@ -239,15 +239,59 @@ function eixo(m,modo){
 }
 
 /* ------------------------------------------------------------------ cor ---
-   Verde (melhor) -> âmbar -> vermelho (pior), sobre a escala da variável. */
+   Verde (melhor) -> âmbar -> vermelho (pior), sobre a escala da variável.
+
+   A cor anda em FAIXAS, não em degradê contínuo. O degradê parecia mais fino e
+   era menos legível: entre duas parcelas de 31 % e 36 % a diferença de tom não
+   se enxerga, e ninguém consegue dizer, olhando, em que altura da escala uma
+   coluna está. Cinco faixas dão nome ao que se vê — e a legenda mostra os
+   cortes em número, porque faixa sem corte declarado é classificação secreta.
+
+   A PRECISÃO NÃO SE PERDE: quem continua contínua é a ALTURA. A coluna sobe no
+   valor exato e a cor diz em que faixa ele caiu; clicando, o painel mostra o
+   número. Cor categórica com altura contínua lê melhor que as duas contínuas. */
 var BOM=[76,139,43], MEIO=[224,160,32], RUIM=[201,64,60];
+var NFAIXAS=5;
 function mistura(a,b,f){
   return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+Math.round(a[2]+(b[2]-a[2])*f)+')';
+}
+function corContinua(f){
+  return f<.5?mistura(BOM,MEIO,f/.5):mistura(MEIO,RUIM,(f-.5)/.5);
+}
+/* As faixas saem da ESCALA da variável, em quintos — nunca de cortes fixos como
+   5/20/40/60, que valeriam só para severidade em porcentagem e virariam uma
+   classificação inventada em qualquer outra variável. Cada faixa mostra os seus
+   limites na legenda. */
+function faixas(m){
+  if(!m.escala.definida||m.escala.max===null)return null;
+  var vao=m.escala.max-m.escala.min;
+  if(!(vao>0))return null;
+  var out=[];
+  for(var i=0;i<NFAIXAS;i++){
+    var f0=i/NFAIXAS, f1=(i+1)/NFAIXAS;
+    /* A cor vem do MEIO da faixa na mesma rampa de sempre: quantiza o que já
+       existia, em vez de estrear uma paleta. */
+    var meio=(f0+f1)/2;
+    out.push({de:m.escala.min+vao*f0, ate:m.escala.min+vao*f1,
+              f0:f0, f1:f1,
+              cor:corContinua(m.sentido==='maior'?1-meio:meio)});
+  }
+  return out;
+}
+/* Índice da faixa de um valor. O topo da escala pertence à última faixa — sem
+   isso, o pior valor possível cairia fora de todas. */
+function faixaDe(m,v){
+  var fs=faixas(m); if(!fs)return null;
+  var f=fracao(m,v); if(f===null)return null;
+  var i=Math.floor(f*NFAIXAS);
+  return Math.max(0,Math.min(NFAIXAS-1,i));
 }
 function corDe(fr){
   if(fr===null)return 'rgb(150,154,158)';        /* sem escala: cinza, não verde */
   var f=Math.max(0,Math.min(1,fr));
-  return f<.5?mistura(BOM,MEIO,f/.5):mistura(MEIO,RUIM,(f-.5)/.5);
+  /* Recebe a fração RUIM (já invertida pelo sentido): quantiza na mesma rampa. */
+  var i=Math.max(0,Math.min(NFAIXAS-1,Math.floor(f*NFAIXAS)));
+  return corContinua((i+0.5)/NFAIXAS);
 }
 function sombra(c,k){
   var p=c.match(/\d+/g);
@@ -266,7 +310,7 @@ function esc(v){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
 }
 
-w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fracao:fracao,fracaoRuim:fracaoRuim,eixo:eixo,
+w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fracao:fracao,fracaoRuim:fracaoRuim,eixo:eixo,faixas:faixas,faixaDe:faixaDe,
              numero:numero,leValor:leValor,diasEntre:diasEntre,corDe:corDe,mostra:mostra};
 
 /* =========================================================== a tela ===== */
@@ -388,16 +432,29 @@ function pintar(){
   if(!estado.laco){estado.laco=true;w.requestAnimationFrame(laco);}
 }
 
+/* A legenda mostra os CORTES, não adjetivos. "Intermediário" não deixa ninguém
+   conferir em que faixa uma coluna caiu; "20 – 40" deixa. A ordem começa pela
+   pior faixa, que é a que se procura primeiro num ensaio. */
+function rotuloFaixa(m,f,i,casas){
+  if(i===NFAIXAS-1)return '≥ '+mostra(f.de,casas);
+  if(i===0)return '< '+mostra(f.ate,casas);
+  return mostra(f.de,casas)+' – '+mostra(f.ate,casas);
+}
 function legenda(m){
   if(!m.escala.definida)
     return '<div class="c3-legenda"><span class="c3-chip"><i style="background:rgb(150,154,158)"></i>sem escala definida</span>'+
            '<span class="c3-chip"><i class="c3-vazio"></i>sem avaliação</span></div>';
-  var bom=m.sentido==='menor'?m.escala.min:m.escala.max;
-  var mau=m.sentido==='menor'?m.escala.max:m.escala.min;
+  var fs=faixas(m);
+  if(!fs)return '<div class="c3-legenda"><span class="c3-chip"><i class="c3-vazio"></i>sem avaliação</span></div>';
+  var vao=m.escala.max-m.escala.min, casas=vao<5?1:0;
+  var itens=fs.map(function(f,i){
+    return {ruim:m.sentido==='maior'?1-(f.f0+f.f1)/2:(f.f0+f.f1)/2,
+            html:'<span class="c3-chip"><i style="background:'+f.cor+'"></i>'+esc(rotuloFaixa(m,f,i,casas))+'</span>'};
+  }).sort(function(a,b){return b.ruim-a.ruim;});
+  var unid=m.tipo==='pct'?' %':(m.tipo==='escala'?' (índice)':'');
   return '<div class="c3-legenda">'+
-    '<span class="c3-chip"><i style="background:rgb(76,139,43)"></i>'+mostra(bom,0)+' — melhor</span>'+
-    '<span class="c3-chip"><i style="background:rgb(224,160,32)"></i>intermediário</span>'+
-    '<span class="c3-chip"><i style="background:rgb(201,64,60)"></i>'+mostra(mau,0)+' — pior</span>'+
+    '<span class="c3-chip c3-chip-t">'+esc(m.variavel+unid)+'</span>'+
+    itens.map(function(x){return x.html;}).join('')+
     '<span class="c3-chip"><i class="c3-vazio"></i>sem avaliação</span>'+
     '<span class="c3-chip">'+(m.sentido==='maior'?'mais é melhor':'menos é melhor')+'</span></div>';
 }

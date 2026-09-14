@@ -48,6 +48,28 @@ mesmo laço de animação.
 
 ---
 
+## A cor anda em faixas
+
+Cinco faixas, não degradê contínuo. O degradê parecia mais fino e lia pior:
+entre uma parcela de 31 % e outra de 36 % ninguém enxerga a diferença de tom, e
+não dá para dizer, olhando, em que altura da escala uma coluna está.
+
+**A precisão não se perde: quem continua contínua é a ALTURA.** A coluna sobe
+no valor exato, a cor diz em que faixa ele caiu, e o toque mostra o número.
+Cor categórica com altura contínua lê melhor que as duas contínuas.
+
+Duas regras:
+
+- **os cortes saem da escala da variável**, em quintos — nunca de números fixos
+  como 5/20/40/60, que valeriam só para severidade em porcentagem e virariam
+  uma classificação inventada em qualquer outra variável;
+- **a legenda mostra os cortes em número** (`≥ 80`, `60 – 80`, …). Faixa sem
+  corte declarado é classificação secreta, e "intermediário" não deixa ninguém
+  conferir onde a coluna caiu.
+
+O sentido continua invertendo só a cor: com *mais é melhor*, o topo da escala
+fica verde e o piso, vermelho.
+
 ## A régua da altura
 
 A altura sempre significou alguma coisa e não dizia **quanto**: dava para ver
