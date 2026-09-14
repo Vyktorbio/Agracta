@@ -16,6 +16,10 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
 - `ui-campo.js` / `ui-campo.css` — a casca de uso do mapa: um ícone abre a gaveta
   com todas as ferramentas, e ligar os índices abre a faixa de datas no rodapé,
   já na imagem mais recente com céu limpo.
+- `mesa.js` / `mesa.css` — a casca de mesa: em tela larga (≥1100px) e depois de
+  autenticar, uma coluna fixa à esquerda com as seções (Estudos, Mapa, Clima,
+  Insights, Relatórios, Configurações). Cada item abre a porta que já existe;
+  no celular ela não existe. Ver `docs/MESA.md`.
 - `acesso-horario.js` — janela de horário por técnico (tela travada fora do
   expediente, com aviso e sincronização antes) e a porta de entrada: nada do app
   é pintado antes de autenticar.
