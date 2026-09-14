@@ -17179,9 +17179,14 @@ function init(){
   if(window._initDone)return;
   window._initDone=true;
   try{
+    /* A NAVEGAÇÃO VEM PRIMEIRO, e em try próprio. Ela estava depois do render()
+       dentro do mesmo try: um render() que estourasse levava a barra embora
+       junto, e com ela o único atalho para o Conhecimento. Construir os botões
+       só depende do HTML estático, então não há motivo para depender do mapa. */
+    try{ injectTopbarButtons(); }catch(e){}
     document.getElementById("dateInfo").textContent=_agFormatDateTime(Date.now(),{day:'numeric',month:'short',year:'numeric'});
     render();
-  injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
+  updateTodayBadge();renderLeg();updateAgendaBadge();
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
   /* O Local ativo é a reserva; com permissão, o mapa passa para onde a pessoa
      realmente está, como o botão de localização do Maps. */
