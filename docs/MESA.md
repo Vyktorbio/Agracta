@@ -65,13 +65,39 @@ para coluna e tela nunca discordarem) ou o último aberto neste uso. Sem estudo
 nenhum, essas duas seções **dizem isso e levam para Estudos**, em vez de abrir
 uma tela vazia que parece defeito.
 
+## O mapa na mesa
+
+`mapa-mesa.js` · `mapa-mesa.css` · `test_mapa_mesa.js`
+
+No celular o mapa é a tela inteira e todo o resto é janela que cobre — o certo
+com uma mão e cinco polegadas. Na mesa sobra lateral, e o que era janela fica à
+vista o tempo todo. **Nada cobre o mapa inteiro**, e nada aqui é tela nova:
+
+| Painel | O que é, de verdade |
+|---|---|
+| **Ferramentas do mapa** (topo à esquerda) | a própria gaveta do `ui-campo.js`, ancorada e já aberta. Os interruptores e a sincronização continuam sendo os de lá; só muda onde a caixa fica |
+| **Ficha da quadra** (coluna à direita) | o mesmo `#dOvl`, que deixa de ser modal |
+| **Estado das parcelas** (rodapé à esquerda) | a legenda das cores da máscara, com as contagens reais |
+| **Controles** (à direita) | zoom, GPS, norte e tela cheia, chamando `agZoom`, `agGps`, `agRotSet` e `toggleFullscreenMap`; mais a escala métrica do Leaflet |
+
+Três cuidados que o teste tranca:
+
+- **a ficha ancorada não captura o ponteiro.** Ela é o mesmo overlay que era
+  modal: se voltar a capturar, o mapa inteiro morre por baixo de um retângulo
+  transparente — dá para ver o talhão e não dá para clicar nele. O overlay fica
+  com `pointer-events:none` e só o painel recebe cliques;
+- **a legenda conta o que a tela está pintando** — as quadras do local ativo,
+  pelo mesmo motor que pinta os polígonos. Contar o banco inteiro diria um
+  número que o mapa não mostra. Parcelas e quadras aparecem como unidades
+  separadas: somá-las daria um total sem significado;
+- **o painel de ferramentas para antes da legenda.** Cobri-la esconderia
+  justamente o que explica as cores embaixo dele.
+
 ## O que ainda não está aqui
 
 Esta é a primeira etapa (casca + Estudos + Mapa, com Clima e Insights ligados
 às telas que já existem). Continuam fora, e de propósito:
 
-- a coluna de resumo do **Mapa** (parcela selecionada, fotos e anotações como
-  painel lateral fixo, em vez de ficha sobre o mapa);
 - a grade de cartões de estudo com miniatura e o alternador grade/lista;
 - **Equipe** e **Biblioteca de conteúdos técnicos**: não fazem parte do
   Agracta, por decisão do dono do produto.
