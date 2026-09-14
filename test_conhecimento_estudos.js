@@ -134,6 +134,57 @@ assert.equal(JSON.stringify(w.data),antes,'a tela de conhecimento continua só l
 /* ---------- 6. as outras listas de estudo seguem sem botão de ação ---------- */
 w.abrirConhecimento({qid:'Q1',sid:'S1'});
 assert.equal(qa('.con-acoes').length,0,'ação só na aba Estudos; na ficha seria botão dentro de botão');
+/* ---------- 6b. o dado que o campo produz, não o do fixture bonito ----------
+   Nenhum destes quebra a tela de forma visível: eles a sujam. "[object Object]"
+   num filtro, "NaN" num contador, "undefined" num rótulo — a página continua
+   abrindo, e passa a mentir baixinho. */
+{
+  const sujo=t=>/NaN|undefined|Infinity|\[object/.test(t);
+  const casos=[
+    ['acervo vazio',{}],
+    ['quadra sem estudos',{Q1:{estudos:[]}}],
+    ['estudo só com id',{Q1:{estudos:[{id:'S1'}]}}],
+    ['campos nulos',{Q1:{estudos:[{id:'S1',codigo:null,cultura:null,alvo:null,dataInicio:null,
+      numRepeticoes:null,tratamentos:null,avaliacoes:null,integracoes:null}]}}],
+    /* Objeto num campo de nome acontece com dado vindo torto da sincronização.
+       A tela não tem como saber o que ele queria dizer: some, em vez de
+       oferecer "[object Object]" como se fosse uma cultura para filtrar. */
+    ['tipos trocados',{Q1:{estudos:[{id:'S1',codigo:123,cultura:{},alvo:[],numRepeticoes:'muitas',
+      tratamentos:'nada',avaliacoes:'nada'}]}}],
+    ['datas impossíveis',{Q1:{estudos:[{id:'S1',codigo:'X',dataInicio:'ontem',numRepeticoes:4,
+      tratamentos:[{id:'T1'}],avaliacoes:[
+        {id:'A',data:'31/02/2026',variaveis:['V'],tipos:{V:'pct'},notas:{}},
+        {id:'B',data:'',variaveis:['V'],tipos:{V:'pct'},notas:{}},
+        {id:'C',data:'9999-12-31',variaveis:['V'],tipos:{V:'pct'},notas:{}}]}]}}],
+    ['notas com lixo',{Q1:{estudos:[{id:'S1',codigo:'X',dataInicio:'2026-01-01',numRepeticoes:2,
+      tratamentos:[{id:'T1',produto:'P'}],avaliacoes:[{id:'A',data:'2026-01-05',variaveis:['V'],
+      tipos:{V:'pct'},notas:{T1R1:{V:'n/a'},T1R2:{V:null}}}]}]}}]
+  ];
+  for(const [nome,dados] of casos){
+    w.data=dados;
+    w.abrirConhecimento({aba:'estudos'});
+    const t=q('#conhecimentoOvl').textContent;
+    assert.ok(!sujo(t),nome+' sujou a tela: '+(t.match(/.{0,50}(NaN|undefined|Infinity|\[object).{0,50}/)||[''])[0]);
+  }
+  /* XSS em TODO campo de texto, inclusive no cliente, que vem dos eventos. */
+  const x='<img src=x onerror=alert(1)>';
+  w.data={Q1:{cultura:x,estudos:[{id:'S1',codigo:x,cultura:x,alvo:x,dataInicio:'2026-01-01',
+    numRepeticoes:2,tratamentos:[{id:x,produto:x}],
+    avaliacoes:[{id:'A',data:'2026-01-05',variaveis:[x],tipos:{},notas:{}}],
+    integracoes:{eventos:[{id:'e1',ts:1,por:'u',tipo:'campo',chave:'cliente',valor:x}]}}]}};
+  w.abrirConhecimento({aba:'estudos'});
+  assert.equal(qa('#conhecimentoOvl img').length,0,'nenhuma tag pode vir de dado do usuário');
+  /* E a tela aguenta um acervo de verdade sem travar. */
+  const muitos={Q1:{estudos:[]}};
+  for(let i=0;i<300;i++)muitos.Q1.estudos.push({id:'S'+i,codigo:'E'+i,cultura:'C'+(i%9),alvo:'A'+(i%7),
+    dataInicio:'2026-01-01',numRepeticoes:4,tratamentos:[{id:'T1'},{id:'T2'}],
+    avaliacoes:[{id:'A',data:'2026-02-0'+(i%9+1),variaveis:['V'],tipos:{V:'pct'},notas:{T1R1:{V:'5'}}}]});
+  w.data=muitos;
+  const t0=Date.now(); w.abrirConhecimento({aba:'estudos'}); const ms=Date.now()-t0;
+  assert.equal(qa('.con-cartao').length,300,'os 300 estudos aparecem');
+  assert.ok(ms<4000,'300 estudos em '+ms+' ms — acima disso a aba trava no aparelho');
+}
+
 w.close();
 
 /* ---------- 7. excluir estudo finalizado exige reabrir antes ---------- */
@@ -170,5 +221,5 @@ for(const alvo of ['deleteStudy','confirmDeleteStudy']){
   assert.equal(pedidos.length,1,alvo+': estudo em execução continua excluível, com senha');
 }
 
-console.log('Estudos: situação visível, filtro, ações pela porta do Agracta, leitura intacta e finalizado protegido OK.');
+console.log('Estudos: situação visível, progresso pela avaliação lançada, atraso por calendário, ações pela porta do Agracta, dado torto sem sujar a tela, leitura intacta e finalizado protegido OK.');
 })().catch(err=>{console.error(err);process.exit(1);});

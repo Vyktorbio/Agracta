@@ -222,7 +222,12 @@
     var avs=lista(s.avaliacoes), feitas=avs.filter(function(a){return a.lancada;}).length;
     return {feitas:feitas,total:avs.length,pct:avs.length?Math.round(feitas/avs.length*100):0};
   }
-  function clienteDe(s){var c=C.estado(s.integracoes).campos;return c.cliente||'';}
+  /* Nome só é nome se for texto. Um objeto num campo de cultura — que acontece
+     com dado vindo torto da sincronização — virava "[object Object]" no filtro e
+     no cartão: a tela não tem como saber o que ele queria dizer, e fingir um
+     rótulo é pior que admitir que não há. */
+  function rotulo(v){return typeof v==='string'?v.trim():typeof v==='number'&&isFinite(v)?String(v):'';}
+  function clienteDe(s){return rotulo(C.estado(s.integracoes).campos.cliente);}
   /* Faixa do cartão: a cultura vira cor por hash. Não há foto de lavoura no
      repositório, e enfeitar com imagem genérica faria o cartão prometer uma
      foto daquele ensaio que ele não tem. */
@@ -263,14 +268,13 @@
      onde um painel deste tamanho afogaria a página. */
   function cartaoGrande(s){
     var st=situacao(s), pr=progresso(s), cli=clienteDe(s);
-    var linhas=[['local',s.local],['cliente',cli],['inicio',s.inicio?'Início em '+dataBR(s.inicio):'']]
-      .filter(function(x){return x[1];});
+    var linhas=[rotulo(s.local),cli,s.inicio?'Início em '+dataBR(s.inicio):''].filter(Boolean);
     return '<article class="con-cartao">'+
       '<div class="con-cartao-faixa" style="--tom:'+tomDaCultura(s.cultura)+'">'+
-        '<span class="con-cultura">'+e(s.cultura||'Sem cultura')+'</span>'+
+        '<span class="con-cultura">'+e(rotulo(s.cultura)||'Sem cultura')+'</span>'+
         '<span class="con-selo '+st.chave+'">'+e(st.rot)+'</span></div>'+
-      bot('estudo','<b>'+e(s.codigo)+'</b><span>'+e(s.alvo||'Sem alvo')+'</span>'+
-        '<small>'+linhas.map(function(x){return e(x[1]);}).join('<br>')+'</small>','data-key="'+e(s.key)+'"','cartao-corpo')+
+      bot('estudo','<b>'+e(rotulo(s.codigo)||s.sid)+'</b><span>'+e(rotulo(s.alvo)||'Sem alvo')+'</span>'+
+        '<small>'+linhas.map(e).join('<br>')+'</small>','data-key="'+e(s.key)+'"','cartao-corpo')+
       '<div class="con-medidas">'+
         '<div><b>'+(s.tratamentos.length*s.repeticoes)+'</b><span>parcelas</span></div>'+
         '<div><b>'+pr.feitas+' de '+pr.total+'</b><span>avaliações lançadas</span></div>'+
@@ -320,7 +324,7 @@
     return '<h3>Próximas avaliações</h3><ul class="con-agenda">'+itens.slice(0,8).map(function(x){
       var quando=x.dias<0?'atrasada '+Math.abs(x.dias)+' d':x.dias===0?'hoje':'em '+x.dias+' d';
       return '<li'+(x.dias<0?' class="atrasada"':'')+'>'+
-        bot('estudo','<b>'+e(x.s.codigo)+'</b><span>'+e(x.s.cultura||'')+' · '+dataBR(x.av.data)+'</span>',
+        bot('estudo','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.cultura))+' · '+dataBR(x.av.data)+'</span>',
             'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(quando)+'</em></li>';
     }).join('')+'</ul>'+
     (itens.length>8?'<p class="con-note">e mais '+(itens.length-8)+' nas próximas duas semanas.</p>':'');
@@ -335,14 +339,14 @@
     evs.sort(function(a,b){return String(b.quando).localeCompare(String(a.quando));});
     if(!evs.length)return '';
     return '<h3>Mexido por último</h3><ul class="con-agenda">'+evs.slice(0,6).map(function(x){
-      return '<li>'+bot('estudo','<b>'+e(x.s.codigo)+'</b><span>'+e(x.s.alvo||x.s.cultura||'')+'</span>',
+      return '<li>'+bot('estudo','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.alvo)||rotulo(x.s.cultura))+'</span>',
         'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(desdeQuando(x.quando))+'</em></li>';
     }).join('')+'</ul>';
   }
 
   function filtrosEstudo(todos){
     function sel(chave,rot,vs){
-      var uniq=Array.from(new Set(vs.filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+      var uniq=Array.from(new Set(vs.map(rotulo).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
       if(!uniq.length)return '';
       return '<label>'+rot+'<select data-con-festudo="'+chave+'"><option value="">Todos</option>'+
         uniq.map(function(v){return '<option value="'+e(v)+'"'+(view.fEstudo[chave]===v?' selected':'')+'>'+e(v)+'</option>';}).join('')+
@@ -369,8 +373,8 @@
   }
   function passaFiltro(s){
     var f=view.fEstudo;
-    return (!f.cultura||s.cultura===f.cultura)&&(!f.alvo||s.alvo===f.alvo)&&
-           (!f.local||s.local===f.local)&&(!f.cliente||clienteDe(s)===f.cliente);
+    return (!f.cultura||rotulo(s.cultura)===f.cultura)&&(!f.alvo||rotulo(s.alvo)===f.alvo)&&
+           (!f.local||rotulo(s.local)===f.local)&&(!f.cliente||clienteDe(s)===f.cliente);
   }
 
   function abaEstudos(){
