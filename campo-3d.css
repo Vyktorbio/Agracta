@@ -54,3 +54,13 @@
   #c3cv{height:300px}
   .c3-daa{min-width:64px}
 }
+
+/* Embutida no dossiê: a mesma folha, sem a janela. Só o que é de JANELA some
+   (posição fixa, fundo próprio, rolagem e recuo); tudo que é de dentro —
+   controles, canvas, legenda — continua valendo, porque é a mesma tela. */
+.c3-overlay.c3-embutida{position:static;inset:auto;z-index:auto;overflow:visible;padding:0;background:transparent}
+.c3-embutida .c3-shell{max-width:none;margin:0;padding-bottom:0}
+/* O dossiê já anuncia o estudo no alto e a seção já se chama Ver no campo:
+   repetir os dois aqui seria dizer a mesma coisa três vezes na mesma tela. */
+.c3-embutida .c3-eyebrow,.c3-embutida .c3-head h2{display:none}
+.c3-embutida #c3cv{height:320px}

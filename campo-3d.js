@@ -247,11 +247,22 @@ w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fra
 /* =========================================================== a tela ===== */
 var estado=null;
 
+/* A vista tem DUAS casas, e uma variável só diz qual está valendo.
+   1. Modal (#campo3dOvl): o gesto de sempre, "Ver no campo" no celular.
+   2. Embutida: na mesa, ela é o TOPO do dossiê — o estudo abre já mostrando o
+      campo, em vez de esconder isso atrás de um clique.
+   Só existe uma vista por vez em qualquer dos casos: são a mesma tela, e dois
+   estados vivos disputariam o mesmo laço de animação. */
+var raiz=null;
+function caixa(){ return (raiz&&raiz.isConnected)?raiz:null; }
+
 function fechar(){
-  var ov=d.getElementById('campo3dOvl');
-  if(ov)ov.hidden=true;
+  var ov=caixa();
+  /* Embutida não fecha: ela não tem botão de fechar, e esconder o topo do
+     dossiê deixaria um buraco no lugar de uma tela. */
+  if(ov&&!(estado&&estado.embutido))ov.hidden=true;
   if(estado){estado.vivo=false;if(estado.foco&&estado.foco.isConnected)estado.foco.focus();}
-  estado=null;
+  estado=null;raiz=null;
 }
 
 /* s = estudo PROJETADO do Conhecimento (nomes já cegados quando é o caso).
@@ -264,16 +275,27 @@ function abrir(s,st,op){
   if(!vars.length)return;
   var variavel=vars.indexOf(op.variavel)>=0?op.variavel:vars[0];
 
-  var ov=d.getElementById('campo3dOvl');
-  if(!ov){
-    ov=d.createElement('div');ov.id='campo3dOvl';ov.className='c3-overlay';
-    ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');
+  var embutido=!!(op.hospedeiro&&op.hospedeiro.nodeType===1), ov;
+  if(embutido){
+    ov=op.hospedeiro;
+    /* Mesma folha de estilo, outra caixa: a classe c3-overlay carrega tudo que
+       é de dentro (controles, canvas, legenda) e c3-embutida desfaz só o que é
+       de janela — posição fixa, fundo próprio e a barra de rolagem dela. */
+    ov.className='c3-overlay c3-embutida';
+    ov.removeAttribute('role');ov.removeAttribute('aria-modal');
     ov.setAttribute('aria-label','Ver no campo');
-    d.body.appendChild(ov);
+  }else{
+    ov=d.getElementById('campo3dOvl');
+    if(!ov){
+      ov=d.createElement('div');ov.id='campo3dOvl';ov.className='c3-overlay';
+      ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');
+      ov.setAttribute('aria-label','Ver no campo');
+      d.body.appendChild(ov);
+    }
   }
-  ov.hidden=false;
+  ov.hidden=false;raiz=ov;
   estado={s:s,st:st,vars:vars,variavel:variavel,t:0,rot:34*Math.PI/180,rodando:false,
-          modo:op.modo==='historico'?'historico':'dia',
+          modo:op.modo==='historico'?'historico':'dia',embutido:embutido,
           sel:null,vivo:true,foco:d.activeElement,ultimo:0,alvos:[]};
   /* A avaliação herdada do painel vira o instante inicial: quem já escolheu uma
      avaliação lá não escolhe de novo aqui. */
@@ -283,11 +305,13 @@ function abrir(s,st,op){
     if(achou)estado.t=achou.daa;
   }else if(m.avs.length)estado.t=m.avs[m.avs.length-1].daa;
   pintar();
-  var b=ov.querySelector('[data-c3="fechar"]');if(b)b.focus();
+  /* Levar o foco para o botão é certo numa janela que acabou de cobrir a tela.
+     Embutida, isso roubaria o foco de quem está lendo o dossiê. */
+  if(!embutido){var b=ov.querySelector('[data-c3="fechar"]');if(b)b.focus();}
 }
 
 function pintar(){
-  var ov=d.getElementById('campo3dOvl');if(!ov||!estado)return;
+  var ov=caixa();if(!ov||!estado)return;
   var m=modelo(estado.st,estado.variavel);
   estado.m=m;
   var s=estado.s;
@@ -301,7 +325,7 @@ function pintar(){
     '<div><p class="c3-eyebrow">VER NO CAMPO</p><h2>'+esc(s.codigo)+'</h2>'+
     '<p class="c3-sub">'+esc(s.cultura||'Sem cultura')+' · '+esc(s.alvo||'Sem alvo')+' · '+
     m.trats.length+' tratamentos × '+m.reps+' repetições</p></div>'+
-    '<button type="button" class="c3-btn" data-c3="fechar">Fechar ×</button></header>'+
+    (estado.embutido?'':'<button type="button" class="c3-btn" data-c3="fechar">Fechar ×</button>')+'</header>'+
     '<div class="c3-controles"><label>Variável<select data-c3="variavel">'+
       estado.vars.map(function(v){return '<option value="'+esc(v)+'"'+(v===estado.variavel?' selected':'')+'>'+esc(v)+'</option>';}).join('')+
     '</select></label>'+
@@ -614,7 +638,7 @@ d.addEventListener('pointermove',function(ev){
   if(!arrastando||!estado)return;
   var dx=ev.clientX-ultX;andou+=Math.abs(dx);ultX=ev.clientX;
   estado.rot+=dx*.012;
-  var ov=d.getElementById('campo3dOvl');
+  var ov=caixa();
   if(ov){var r=ov.querySelector('[data-c3="girar"]');if(r)r.value=Math.round(((estado.rot*180/Math.PI)%360+360)%360);}
 });
 d.addEventListener('pointerup',function(ev){
@@ -640,7 +664,9 @@ d.addEventListener('change',function(ev){
 });
 d.addEventListener('click',function(ev){
   if(!estado)return;
-  var b=ev.target.closest&&ev.target.closest('#campo3dOvl [data-c3]');if(!b)return;
+  var ov=caixa();
+  var b=ev.target.closest&&ev.target.closest('[data-c3]');
+  if(!b||!ov||!ov.contains(b))return;
   if(b.dataset.c3==='fechar')return fechar();
   if(b.dataset.c3==='rodar'){estado.rodando=!estado.rodando;b.textContent=estado.rodando?'Parar':'Rodar';}
   if(b.dataset.c3==='modo'&&b.dataset.modo!==estado.modo){
@@ -650,8 +676,10 @@ d.addEventListener('click',function(ev){
   }
 });
 d.addEventListener('keydown',function(ev){
-  var ov=d.getElementById('campo3dOvl');
-  if(!ov||ov.hidden||ev.key!=='Escape')return;
+  /* Esc fecha janela. Embutida não é janela: Esc ali fecharia o dossiê inteiro
+     por baixo, que é o oposto do que quem apertou esperava. */
+  var ov=caixa();
+  if(!ov||ov.hidden||ev.key!=='Escape'||(estado&&estado.embutido))return;
   ev.preventDefault();fechar();
 });
 

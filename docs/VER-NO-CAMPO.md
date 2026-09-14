@@ -11,13 +11,40 @@ teste [`test_campo3d.js`](../test_campo3d.js).
 
 ## Onde fica
 
-Botão **Ver no campo** ao lado da curva por data, na seção *Resultados em
-perspectiva* da página do estudo. O rótulo descreve o que a tela mostra, não a
-técnica usada para desenhá-la.
+Depende do tamanho da tela, e a diferença tem um motivo.
+
+**No celular** — botão **Ver no campo** ao lado da curva por data, na seção
+*Resultados em perspectiva* da página do estudo. O rótulo descreve o que a tela
+mostra, não a técnica usada para desenhá-la.
 
 Ele **herda o contexto**: a variável e a avaliação já escolhidas nos seletores
 acima abrem selecionadas na vista, e a avaliação vira o instante inicial do
 tempo. Quem já escolheu não escolhe de novo.
+
+**Na mesa** (tela larga, com a casca de `mesa.js` ligada) — a vista é o **topo
+do dossiê**, aberta junto com o estudo, ao lado do croqui do experimento. Lá o
+botão dos Gráficos **não existe**: duas portas para a mesma tela, uma acima da
+outra, é o tipo de coisa que já ensinou alguém a procurar no lugar errado.
+
+O módulo continua carregando **sob demanda** nos dois casos. Essa distinção é o
+ponto: quem trabalha no campo nunca baixa nem interpreta `campo-3d.js` sem
+pedir, e na mesa — onde a tela é grande, a conexão costuma ser outra e o estudo
+é lido, não lançado — ele entra sozinho.
+
+### Embutida não é janela
+
+A mesma folha de estilo serve às duas casas; a classe `c3-embutida` desfaz só o
+que é de janela (posição fixa, fundo próprio, rolagem). Três diferenças de
+comportamento vêm junto, e cada uma tem teste em `test_estudo_topo.js`:
+
+- **não tem botão de fechar** — fechar deixaria um buraco no topo do dossiê;
+- **`Esc` não a fecha** — ali a tecla fecharia o dossiê por baixo dela, que é o
+  oposto do que quem apertou espera;
+- **não rouba o foco** — a janela leva o foco ao abrir, porque acabou de cobrir
+  a tela; embutida, isso tiraria o foco de quem está lendo.
+
+Existe **uma vista por vez**: as duas casas compartilham o mesmo estado e o
+mesmo laço de animação.
 
 ---
 

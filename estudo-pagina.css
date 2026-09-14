@@ -38,3 +38,26 @@
 .ep-photo-dialog-head strong{overflow-wrap:anywhere}.ep-photo-dialog iframe{border:0;width:100%;flex:1;min-height:0}
 
 .av-photo-btn{min-height:44px;padding:.65rem 1rem;border:1px solid #82b294;border-radius:.65rem;background:#e5f2e9;color:#174d30;font:650 .9rem system-ui;cursor:pointer}.av-photo-btn:focus-visible{outline:3px solid #ed9a38;outline-offset:2px}
+
+/* Fila de destaques e a vista do campo no topo (mesa). A fila rola na
+   horizontal quando não cabe: quebrar cinco números em duas linhas faz a
+   segunda parecer menos importante que a primeira, e ela não é. */
+.ep-kpis{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,1fr);gap:12px;margin:0 0 20px;overflow-x:auto;padding-bottom:4px}
+.ep-kpi{min-width:0;display:flex;flex-direction:column;gap:4px;padding:18px 20px;background:var(--surface,#fff);border:1px solid var(--ep-line);border-radius:16px;box-shadow:0 10px 18px -17px #183b35}
+.ep-kpi strong{font-family:Archivo,Inter,sans-serif;font-size:1.6rem;line-height:1.15;overflow-wrap:anywhere}
+.ep-kpi strong small{display:inline;font-size:.9rem;font-weight:600;color:var(--text-2,#587165)}
+.ep-kpi>span{font-size:.875rem;font-weight:600}
+.ep-kpi small{font-size:.8125rem;color:var(--text-2,#587165);overflow-wrap:anywhere}
+.ep-campo-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px;align-items:start}
+.ep-campo-host{min-width:0;background:var(--surface,#fff);border:1px solid var(--ep-line);border-radius:20px;padding:20px;box-shadow:0 14px 28px -24px #123f35}
+.ep-croqui{min-width:0;background:var(--surface,#fff);border:1px solid var(--ep-line);border-radius:20px;padding:20px;box-shadow:0 14px 28px -24px #123f35}
+.ep-croqui h4{font-size:1.125rem;margin:0 0 14px}
+.ep-croqui-linha{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.ep-croqui-bloco{flex:0 0 26px;font-size:.75rem;font-weight:700;color:var(--text-2,#587165)}
+.ep-croqui-parcela{flex:1 1 0;min-width:0;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-style:normal}
+.ep-croqui-parcela b{font-size:.6875rem;font-weight:800;color:#fff;text-shadow:0 1px 2px #0006}
+.ep-croqui-legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:14px;font-size:.8125rem}
+.ep-croqui-legenda span{display:flex;align-items:center;gap:7px;overflow-wrap:anywhere}
+.ep-croqui-legenda i{width:10px;height:10px;border-radius:3px;flex:none}
+@media(max-width:1200px){.ep-campo-grid{grid-template-columns:1fr}}
+@media print{.ep-kpis{grid-auto-flow:row;grid-auto-columns:auto;overflow:visible}.ep-campo-grid{grid-template-columns:1fr}.ep-campo-host,.ep-croqui{box-shadow:none;break-inside:avoid}}
