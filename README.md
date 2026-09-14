@@ -16,6 +16,10 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
 - `ui-campo.js` / `ui-campo.css` — a casca de uso do mapa: um ícone abre a gaveta
   com todas as ferramentas, e ligar os índices abre a faixa de datas no rodapé,
   já na imagem mais recente com céu limpo.
+- `vendor/mascara-core.js` — a cor da máscara das quadras no mapa: pendente,
+  parcial, avaliada, selecionada ou fora do estudo, com o mesmo vocabulário do
+  croqui da avaliação. Motor puro; o NDVI continua tendo prioridade sobre ela,
+  porque ali a cor é medida do satélite.
 - `mesa.js` / `mesa.css` — a casca de mesa: em tela larga (≥1100px) e depois de
   autenticar, uma coluna fixa à esquerda com as seções (Estudos, Mapa, Clima,
   Insights, Relatórios, Configurações). Cada item abre a porta que já existe;

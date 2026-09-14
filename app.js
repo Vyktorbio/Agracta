@@ -3263,6 +3263,52 @@ function renderQuadraLab(id){
     try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(id); }catch(e2){}
   });
 }
+/* ============ MÁSCARA DAS QUADRAS — a cor diz o estado do lançamento ============
+   O mapa pintava a cor da CULTURA. Saber que a quadra é de soja, olhando o
+   mapa, é informação que o rótulo já dá; o que o rótulo não dava é onde falta
+   trabalho. A máscara passa a responder isso, com o mesmo vocabulário do
+   croqui da avaliação: pendente, parcial, concluída.
+
+   Quem classifica é o motor puro (vendor/mascara-core.js); aqui só se conta,
+   lendo o MESMO lugar de onde a grade de avaliação lê (_avNota por parcela e
+   variável). Sem o motor carregado, o mapa volta à cor da cultura — a máscara
+   é leitura, e leitura que falta não pode apagar a quadra da tela. */
+function _mascaraContagem(qid){
+  var out={done:0,partial:0,empty:0};
+  var estudos=((data[qid]||{}).estudos)||[];
+  for(var i=0;i<estudos.length;i++){
+    var st=(typeof normalizeStudy==='function')?normalizeStudy(estudos[i]):estudos[i];
+    if(!st) continue;
+    var avs=st.avaliacoes||[], rows=_avRowsForStudy(st,false);
+    if(!avs.length||!rows.length) continue;
+    /* Estudo finalizado não admite mais lançamento (reabrir exige motivo e
+       senha). As lacunas que ficaram não são trabalho pendente, e pintá-las de
+       amarelo para sempre ensinaria a ignorar o amarelo. */
+    var fechado=(typeof estudoFinalizado==='function')&&estudoFinalizado(st);
+    for(var r=0;r<rows.length;r++){
+      var previstos=0, lancados=0;
+      for(var a=0;a<avs.length;a++){
+        var vars=avs[a].variaveis||[];
+        for(var v=0;v<vars.length;v++){
+          previstos++;
+          var x=_avNota(avs[a],rows[r],vars[v]);
+          if(x!=null&&String(x).trim()!=='') lancados++;
+        }
+      }
+      if(!previstos) continue;
+      var chave=fechado?'done':MascaraCore.estadoParcela(previstos,lancados);
+      if(chave) out[chave]++;
+    }
+  }
+  return out;
+}
+/* Estilo da máscara de uma quadra. Devolve null quando o motor não carregou,
+   e aí render() mantém o comportamento antigo. */
+function _mascaraEstilo(qid,selecionada){
+  if(typeof MascaraCore!=='object'||!MascaraCore) return null;
+  try{ return MascaraCore.estilo(MascaraCore.estadoQuadra(_mascaraContagem(qid),{selecionada:!!selecionada})); }
+  catch(e){ return null; }
+}
 function render(){
   initMap();
   if(!_qLayer) return;
@@ -3279,12 +3325,21 @@ function render(){
     var hasAlert=quadraHasAlert(id);
     var isEd=(editMode && id===editId);
 
-    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.26);
-    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':_zc,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
+    /* Ordem de quem manda na cor: NDVI primeiro, sempre. Ali a cor É uma
+       medida do satélite, e sobrepor estado de lançamento a ela seria trocar
+       um dado por um andamento. Sem NDVI, manda a máscara de estado; sem o
+       motor da máscara, a cor da cultura, como era. */
+    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _mask=_zona?null:_mascaraEstilo(id,isEd);
+    var _zc=_zona?_ndviColor(ndviMeans[id]):(_mask?_mask.cor:ac);
+    var _zfo=_zona?0.62:(_mask?_mask.preenchimento:(isEd?0.18:0.26));
+    var _borda=isEd?(_mask?_mask.cor:'#ffce00'):_zc;
+    var poly=LF.polygon(latlngs,{className:'q-poly',color:_borda,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
     (function(qid,zfo,zona){
       if(!drawMode){
         poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
-        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.38,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
+        /* O realce do ponteiro soma ao que já está pintado. Fixo em 0.38 ele
+           CLAREAVA uma máscara de estado (0.50) em vez de destacá-la. */
+        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:Math.min(0.82,zfo+0.22),weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
       }
     })(id,_zfo,_zona);
     poly.addTo(_qLayer);
