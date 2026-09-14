@@ -360,10 +360,10 @@ function render(s,parts){
   if(campoCarregando)return campoCarregando;
   campoCarregando=new Promise(function(ok,falha){
    if(!document.querySelector('link[data-ag="campo-3d"]')){
-    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=3';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=5';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
-   var js=document.createElement('script');js.src='campo-3d.js?v=3';
+   var js=document.createElement('script');js.src='campo-3d.js?v=5';
    js.onload=function(){w.abrirCampo3D?ok():falha(Error('O módulo carregou sem registrar a vista.'));};
    js.onerror=function(){campoCarregando=null;falha(Error('Não foi possível carregar a vista do campo. Sem conexão, ela só abre depois de ter sido aberta uma vez neste aparelho.'));};
    document.head.appendChild(js);

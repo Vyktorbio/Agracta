@@ -7,7 +7,7 @@
  * Rodar: node test_campo3d.js
  */
 'use strict';
-const assert=require('node:assert/strict'),fs=require('fs');
+const assert=require('node:assert/strict'),fs=require('fs'),fs2=fs;
 /* Biblioteca ausente não é app quebrado — o portão só sabe pular quem se declara. */
 let JSDOM; try{ ({JSDOM}=require('jsdom')); }
 catch(e){ console.log('PULADO: jsdom não está instalado (npm install jsdom para rodar este teste).'); process.exit(0); }
@@ -333,6 +333,110 @@ function todas(valor,excecoes){
   const c3=fs.readFileSync('campo-3d.js','utf8');
   assert.ok(!/three|THREE|import\s|require\(/.test(c3),'nenhuma biblioteca nova: canvas 2D e pronto');
   assert.ok(/getContext\('2d'\)/.test(c3),'o desenho é canvas 2D com projeção própria');
+}
+
+/* ====================================== 9. a régua da altura diz o que a altura é
+   A altura sempre significou alguma coisa e não dizia quanto. A régua resolve
+   isso — e só vale se usar a MESMA conta que levanta a coluna. Uma régua com
+   mapeamento próprio seria pior que régua nenhuma: daria autoridade de medida a
+   um desencontro. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))
+  ]),'sev');
+
+  const dia=M.eixo(m,'dia');
+  assert.equal(dia.marcas.length,5,'cinco marcas: 0, 25, 50, 75 e 100 % da altura');
+  assert.equal(dia.marcas[0].v,m.escala.min);
+  assert.equal(dia.marcas[4].v,m.escala.max,'o topo da régua é o topo da escala da variável');
+  /* O laço que importa: a marca em f vale v, e a coluna de valor v sobe até f. */
+  dia.marcas.forEach(mk=>assert.ok(Math.abs(M.fracao(m,mk.v)-mk.f)<1e-9,
+    'a régua e a altura da coluna precisam ser a mesma conta (marca '+mk.texto+')'));
+  assert.equal(dia.titulo,'%','a régua diz a unidade da variável');
+
+  /* No histórico a altura é TEMPO, então a régua muda de assunto junto. */
+  const hist=M.eixo(m,'historico');
+  assert.equal(hist.titulo,'DAA');
+  assert.equal(hist.marcas[4].v,m.daaMax,'o topo é o último DAA do ensaio');
+  assert.equal(hist.marcas[0].v,0);
+  assert.notEqual(dia.marcas[4].texto,hist.marcas[4].texto,
+    'as duas réguas não podem coincidir por acaso neste estudo');
+
+  /* Sem escala definida não há régua no modo dia: ali a altura já é fixa por
+     decisão, e uma régua sugeriria uma medida que não existe. */
+  const semEscala=M.modelo(estudo([av('A1','2026-01-12',todas('3'),'contagem')]),'sev');
+  assert.equal(semEscala.escala.definida,false);
+  assert.equal(M.eixo(semEscala,'dia'),null,'sem escala, sem régua');
+
+  /* Uma avaliação só, no dia zero: não há eixo de tempo para medir. */
+  const umDia=M.modelo(estudo([av('A1','2026-01-12',todas('10'))]),'sev');
+  assert.equal(umDia.daaMax,0);
+  assert.equal(M.eixo(umDia,'historico'),null,'sem tempo decorrido, sem régua de tempo');
+}
+
+/* ================================== 10. a cor anda em faixas, com corte visível
+   Degradê contínuo parecia mais fino e lia pior: entre 31 % e 36 % ninguém
+   enxerga a diferença de tom, e não dá para dizer em que altura da escala uma
+   coluna está. O que NÃO pode acontecer é a faixa virar classificação secreta —
+   por isso a legenda mostra os cortes em número — nem os cortes serem fixos em
+   5/20/40/60, que só fariam sentido para severidade em porcentagem. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))
+  ]),'sev');
+  const fs=M.faixas(m);
+  assert.equal(fs.length,5,'cinco faixas');
+  assert.equal(fs[0].de,m.escala.min,'a primeira começa no piso da escala');
+  assert.equal(fs[4].ate,m.escala.max,'e a última termina no teto');
+  fs.forEach((f,i)=>{ if(i)assert.equal(f.de,fs[i-1].ate,'sem buraco nem sobreposição entre faixas'); });
+
+  /* Todo valor da escala cai em exatamente uma faixa, inclusive as pontas. */
+  assert.equal(M.faixaDe(m,m.escala.min),0,'o piso cai na primeira');
+  assert.equal(M.faixaDe(m,m.escala.max),4,'o teto pertence à última — não fica fora de todas');
+  assert.equal(M.faixaDe(m,m.escala.min+(m.escala.max-m.escala.min)*0.5),2,'o meio cai na do meio');
+
+  /* Dois valores da MESMA faixa recebem a mesma cor; de faixas vizinhas, não. */
+  const vao=m.escala.max-m.escala.min, cor=v=>fs[M.faixaDe(m,v)].cor;
+  assert.equal(cor(m.escala.min+vao*0.05),cor(m.escala.min+vao*0.15),'mesma faixa, mesma cor');
+  assert.notEqual(cor(m.escala.min+vao*0.15),cor(m.escala.min+vao*0.25),'faixa vizinha, cor diferente');
+
+  /* O sentido continua invertendo só a COR: com "maior é melhor", o topo da
+     escala fica verde e o piso vermelho. */
+  const maiorAv2=[av('A1','2026-01-12',todas('10'),'pct',{sentido:'maior'})];
+  const mm=M.modelo(estudo(maiorAv2),'sev');
+  assert.equal(mm.sentido,'maior');
+  assert.equal(M.faixas(mm)[4].cor,M.faixas(m)[0].cor,'invertido, o teto usa a cor que o piso usava');
+  assert.equal(M.faixas(mm)[0].cor,M.faixas(m)[4].cor);
+
+  /* A ALTURA continua contínua: quantizar a cor não pode quantizar a medida. */
+  const a=M.fracao(m,m.escala.min+vao*0.11), b=M.fracao(m,m.escala.min+vao*0.19);
+  assert.notEqual(a,b,'dois valores da mesma faixa mantêm alturas diferentes');
+
+  /* Sem escala, sem faixa — e a cor cai no cinza de "sem escala". */
+  const semEscala=M.modelo(estudo([av('A1','2026-01-12',todas('3'),'contagem')]),'sev');
+  assert.equal(M.faixas(semEscala),null);
+  assert.equal(M.faixaDe(semEscala,3),null);
+
+  /* A legenda mostra número, não adjetivo — conferido na função dela, não no
+     arquivo inteiro: "intermediário" aparece num comentário sobre escala
+     ordinal, que é outro assunto. */
+  const src=fs2.readFileSync('campo-3d.js','utf8');
+  const leg=src.slice(src.indexOf('function legenda('),src.indexOf('\n}',src.indexOf('function legenda(')));
+  assert.match(src,/function rotuloFaixa/,'a legenda tem rótulo por faixa');
+  assert.ok(/rotuloFaixa/.test(leg),'e a usa');
+  assert.ok(!/intermediário|melhor<|pior</.test(leg),
+    'adjetivo não deixa ninguém conferir em que faixa a coluna caiu; "20 – 40" deixa');
+  assert.ok(!/[^\w](5|20|40|60)\s*,\s*(20|40|60|80)[^\w]/.test(src),
+    'os cortes saem da escala da variável, não de números fixos de severidade');
+}
+
+/* ============================ 11. a caixa manda nas DUAS medidas do desenho */
+{
+  const c3=fs.readFileSync('campo-3d.js','utf8');
+  const lig=c3.slice(c3.indexOf('function ligarCanvas('),c3.indexOf('\n}',c3.indexOf('function ligarCanvas(')));
+  assert.match(lig,/clientWidth/,'a largura vem da caixa');
+  assert.match(lig,/clientHeight/,
+    'e a altura também: fixa em 380, uma caixa de 320 espremia o desenho 16 % na vertical — coluna mais baixa do que o valor que ela representa');
 }
 
 w.close();

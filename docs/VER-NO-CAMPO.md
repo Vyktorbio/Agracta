@@ -48,6 +48,53 @@ mesmo laço de animação.
 
 ---
 
+## A cor anda em faixas
+
+Cinco faixas, não degradê contínuo. O degradê parecia mais fino e lia pior:
+entre uma parcela de 31 % e outra de 36 % ninguém enxerga a diferença de tom, e
+não dá para dizer, olhando, em que altura da escala uma coluna está.
+
+**A precisão não se perde: quem continua contínua é a ALTURA.** A coluna sobe
+no valor exato, a cor diz em que faixa ele caiu, e o toque mostra o número.
+Cor categórica com altura contínua lê melhor que as duas contínuas.
+
+Duas regras:
+
+- **os cortes saem da escala da variável**, em quintos — nunca de números fixos
+  como 5/20/40/60, que valeriam só para severidade em porcentagem e virariam
+  uma classificação inventada em qualquer outra variável;
+- **a legenda mostra os cortes em número** (`≥ 80`, `60 – 80`, …). Faixa sem
+  corte declarado é classificação secreta, e "intermediário" não deixa ninguém
+  conferir onde a coluna caiu.
+
+O sentido continua invertendo só a cor: com *mais é melhor*, o topo da escala
+fica verde e o piso, vermelho.
+
+## A régua da altura
+
+A altura sempre significou alguma coisa e não dizia **quanto**: dava para ver
+que uma coluna é maior que a outra, não que valor ela tem. Um canto da cena
+agora carrega a régua — e ela **muda de assunto com o modo**, porque a altura
+muda:
+
+| Modo | Altura | Régua |
+|---|---|---|
+| Estado no dia | valor da variável | marcas na escala da variável (com a unidade) |
+| Histórico 3D | tempo | marcas em DAA |
+
+Duas condições, e as duas têm teste:
+
+- **a régua usa a mesma conta que levanta a coluna.** Uma régua com mapeamento
+  próprio seria pior que régua nenhuma: daria autoridade de medida a um
+  desencontro;
+- **sem escala definida não há régua** no modo dia. Ali a altura já é fixa por
+  decisão, e uma régua sugeriria uma medida que não existe.
+
+A geometria da régua é desenhada **antes** das colunas, para que elas a tapem
+quando estão na frente — é assim que a profundidade se lê. Os números vão
+**depois**, por cima de tudo, com halo claro: uma régua com as marcas de baixo
+escondidas atrás do próprio campo não é régua.
+
 ## Dois modos, duas perguntas
 
 | Modo | Altura | O tempo | Responde |

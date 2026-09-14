@@ -37,6 +37,7 @@
 .c3-tempo label{font-size:.875rem;color:var(--text-2,#4a4f55);min-width:40px}
 .c3-tempo input[type=range]{flex:1;min-width:0;accent-color:var(--text,#1a1c1e);min-height:44px}
 .c3-daa{font-size:.9375rem;font-weight:700;min-width:72px;text-align:right}
+.c3-chip-t{font-weight:700;color:var(--text,#1a1c1e)}
 .c3-legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:.8125rem;
   color:var(--text-2,#4a4f55);margin:12px 0 18px}
 .c3-chip{display:inline-flex;align-items:center;gap:6px}
@@ -63,4 +64,6 @@
 /* O dossiê já anuncia o estudo no alto e a seção já se chama Ver no campo:
    repetir os dois aqui seria dizer a mesma coisa três vezes na mesma tela. */
 .c3-embutida .c3-eyebrow,.c3-embutida .c3-head h2{display:none}
-.c3-embutida #c3cv{height:320px}
+/* A caixa manda na altura do desenho (ver ligarCanvas): na mesa ela pode ser
+   maior, e a cena ganha espaço em vez de espremer. */
+.c3-embutida #c3cv{height:420px}
