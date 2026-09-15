@@ -693,6 +693,106 @@ function casco(pts){
   return b.slice(0,-1).concat(t.slice(0,-1));
 }
 
+/* BORDA DE TESOURA É O QUE DENUNCIA DESENHO. Sombra de verdade tem penumbra:
+   a fonte de luz tem tamanho, então o limite entre sombra e chão é uma faixa,
+   não uma linha. Uma mancha de contorno duro lê como adesivo recortado, por
+   mais certo que esteja o rumo dela.
+
+   O caminho barato é ctx.filter, que borra na GPU num traço só. Ele não existe
+   em navegador antigo, e ali a saída é à mão: quatro cópias deslocadas com um
+   quinto da opacidade cada. Não é um borrão de verdade, mas tira a tesoura da
+   borda, que é o que importa. Em nenhum dos dois casos o desenho falha. */
+function preencherMacio(ctx,caminho,cor,raio){
+  ctx.save();
+  ctx.fillStyle=cor;
+  var macio=false;
+  try{ ctx.filter='blur('+raio+'px)'; macio=(ctx.filter!=='none'); }catch(e){}
+  if(macio){
+    ctx.fill(caminho);
+  }else{
+    ctx.filter='none';
+    ctx.globalAlpha=0.32;
+    [[0,0],[-raio*0.6,0],[raio*0.6,0],[0,-raio*0.6],[0,raio*0.6]].forEach(function(o){
+      ctx.save();ctx.translate(o[0],o[1]);ctx.fill(caminho);ctx.restore();
+    });
+  }
+  ctx.restore();
+}
+
+/* GRÃO DO SOLO. Uma chapa de cor lisa não passa por terra em tela nenhuma — a
+   variação miúda é metade do que faz uma superfície parecer superfície.
+
+   Os pontos são SORTEADOS UMA VEZ e guardados em coordenadas do MUNDO, não da
+   tela: assim eles giram junto com o bloco, como grão de terra faria, em vez de
+   ficarem grudados no vidro. E o sorteio é de semente fixa — grão trocando de
+   lugar a cada quadro seria chuvisco de televisão.
+
+   Sorteio sem direção nenhuma, de propósito: qualquer alinhamento viraria linha
+   de plantio, e linha de plantio nesta tela seria informação inventada. */
+function embaralho(n){
+  var x=Math.sin(n*127.1+311.7)*43758.5453;
+  return x-Math.floor(x);
+}
+/* TRAMA. A lateral era cor sólida com degradê, e cor sólida não é material
+   nenhum: é papel colorido. Superfície de verdade tem variação miúda que o olho
+   não decompõe mas percebe — é ela que faz a diferença entre "pintado" e
+   "impresso".
+
+   Um ladrilho de ruído, feito uma vez e repetido como padrão. Fica no espaço da
+   TELA, não no da face, e isso é de propósito: seguir a orientação de cada face
+   custaria um recorte por face e por quadro, e numa trama deste tamanho ninguém
+   enxerga orientação nenhuma. A opacidade é baixíssima de propósito — trama que
+   se nota vira sujeira.
+
+   SÓ NAS LATERAIS. O topo não recebe: a cor dele é o dado, e nem uma trama de
+   três por cento entra na frente disso. */
+var tramaCache;
+function trama(){
+  if(tramaCache!==undefined)return tramaCache;
+  tramaCache=null;
+  try{
+    var c=d.createElement('canvas');c.width=c.height=64;
+    var x=c.getContext('2d');
+    if(!x)return tramaCache;
+    /* A primeira tentativa foi alfa até 24 em metade dos pixels e o resultado
+       foi LIXA: grão visível como grão, e a lateral virou uma parede suja ao
+       lado de um topo liso. Trama é para ser sentida, não vista. Agora só um
+       quarto dos pixels recebe tinta, e no máximo 9 de 255 — o bastante para a
+       superfície deixar de ser chapa e não o bastante para alguém apontar. */
+    var img=x.createImageData(64,64), dt=img.data;
+    for(var i=0;i<64*64;i++){
+      var v=embaralho(i*1.7+7);
+      if(v>0.38&&v<0.62)continue;                 /* maioria fica limpa */
+      dt[i*4]=dt[i*4+1]=dt[i*4+2]=v>=0.5?255:0;
+      dt[i*4+3]=Math.round((Math.abs(v-0.5)-0.12)/0.38*9);
+    }
+    x.putImageData(img,0,0);
+    tramaCache=c;
+  }catch(e){}
+  return tramaCache;
+}
+function padraoTrama(ctx){
+  if(estado&&estado.padrao!==undefined)return estado.padrao;
+  var t=trama(), p=null;
+  try{ if(t)p=ctx.createPattern(t,'repeat'); }catch(e){}
+  if(estado)estado.padrao=p;
+  return p;
+}
+
+var graoCache=null;
+function graos(larg,alt,mg){
+  var chave=larg+'x'+alt+'x'+mg;
+  if(graoCache&&graoCache.chave===chave)return graoCache.pts;
+  var n=Math.min(520,Math.round((larg+2*mg)*(alt+2*mg)*0.55)), pts=[];
+  for(var i=0;i<n;i++){
+    pts.push([-mg+embaralho(i*3+1)*(larg+2*mg),
+              -mg+embaralho(i*3+2)*(alt+2*mg),
+              embaralho(i*3+3)]);
+  }
+  graoCache={chave:chave,pts:pts};
+  return pts;
+}
+
 /* As cores do cenário, por tema. A TINTA (réguas, rótulos, contornos) estava
    fixa em cinza-chumbo desde o começo: no tema escuro a tela desenhava chumbo
    sobre chumbo, e a régua de altura sumia. Agora a tinta vem daqui junto com o
@@ -701,17 +801,22 @@ var PALETAS={
   claro:{ceu:['#dce7f0','#f3f7fa'], solo:[222,213,198], parede:[178,166,146],
          plot:'rgba(70,58,40,0.07)', linha:'rgba(58,48,34,0.18)', borda:'rgba(58,48,34,0.32)',
          chao:'rgba(26,28,30,0.045)', tinta:'#3c4044', tinta2:'#63686e',
-         halo:'rgba(255,255,255,0.85)', sombra:'rgba(48,38,24,0.22)',
-         vazio:'rgba(26,28,30,0.42)', anel:'rgba(26,28,30,0.55)', assento:'rgba(46,36,22,0.16)',
+         halo:'rgba(255,255,255,0.85)', sombra:'rgba(48,38,24,0.34)',
+         vazio:'rgba(26,28,30,0.42)', anel:'rgba(26,28,30,0.55)',
+         /* Mais forte do que quando a borda era dura: borrar espalha a mesma
+            tinta por muito mais área, e o tom de antes sumia. */
+         assento:'rgba(46,36,22,0.30)',
          regua:'rgba(26,28,30,0.28)', marcado:'#1a1c1e', rosa:'rgba(255,255,255,0.72)',
-         aresta:'rgba(26,28,30,0.16)'},
+         aresta:'rgba(26,28,30,0.16)', grao:['rgba(120,104,78,0.22)','rgba(255,252,244,0.30)'],
+         brilhoCeu:'rgba(255,253,240,0.30)'},
   escuro:{ceu:['#12151a','#1e232a'], solo:[62,57,48], parede:[46,42,36],
          plot:'rgba(246,242,232,0.05)', linha:'rgba(236,228,210,0.16)', borda:'rgba(236,228,210,0.30)',
          chao:'rgba(236,238,240,0.06)', tinta:'#e6e8ea', tinta2:'#b6bac0',
-         halo:'rgba(14,16,19,0.85)', sombra:'rgba(0,0,0,0.34)',
-         vazio:'rgba(236,238,240,0.42)', anel:'rgba(236,238,240,0.55)', assento:'rgba(0,0,0,0.28)',
+         halo:'rgba(14,16,19,0.85)', sombra:'rgba(0,0,0,0.48)',
+         vazio:'rgba(236,238,240,0.42)', anel:'rgba(236,238,240,0.55)', assento:'rgba(0,0,0,0.44)',
          regua:'rgba(236,238,240,0.30)', marcado:'#f4f5f6', rosa:'rgba(18,21,26,0.72)',
-         aresta:'rgba(8,10,12,0.30)'}
+         aresta:'rgba(8,10,12,0.30)', grao:['rgba(0,0,0,0.26)','rgba(226,214,190,0.14)'],
+         brilhoCeu:'rgba(150,170,205,0.13)'}
 };
 var temaEscuro=false;
 function P(){ return temaEscuro?PALETAS.escuro:PALETAS.claro; }
@@ -751,6 +856,9 @@ function ligarCanvas(){
   lerTema();
   cv.width=Math.round(LW*dpr);cv.height=Math.round(LH*dpr);
   estado.ctx.setTransform(dpr,0,0,dpr,0,0);
+  /* Mexer em width/height limpa a tela: o próximo quadro tem de redesenhar,
+     mesmo que nada no estado tenha mudado. */
+  estado.sujo=true;
 }
 /* Projeção em dois tempos: primeiro a rotação crua, depois escala e deslocamento
    calculados a partir da cena INTEIRA. Com a escala fixa, girar o campo jogava
@@ -816,11 +924,47 @@ function faceLateral(ctx,quad,cor,k,gTopo,gBase,traco,esp){
   if(dx*dx+dy*dy<1){
     tinta=sombra(cor,k);                    /* coluna rasa: degradê não caberia */
   }else{
+    /* Quatro paradas, e a de baixo é a que mais faz falta quando não está lá:
+       o chão DEVOLVE luz. Numa superfície real o ponto mais escuro não é o pé,
+       é um pouco acima dele — abaixo disso a terra reacende a face de volta.
+       Com o escuro terminando no pé, a coluna parece afundar num buraco. */
     tinta=ctx.createLinearGradient(gTopo[0],gTopo[1],gBase[0],gBase[1]);
-    tinta.addColorStop(0,sombra(cor,k*1.05));
-    tinta.addColorStop(1,sombra(cor,k*0.82));
+    tinta.addColorStop(0,   sombra(cor,k*1.06));
+    tinta.addColorStop(0.22,sombra(cor,k*0.99));
+    tinta.addColorStop(0.80,sombra(cor,k*0.78));
+    tinta.addColorStop(1,   sombra(cor,k*0.89));
   }
   poli(ctx,quad,tinta,traco,esp);
+  var pd=padraoTrama(ctx);
+  if(pd)poli(ctx,quad,pd,null);
+}
+/* CHANFRO. Objeto real não tem quina infinitamente viva: a aresta tem uma
+   lasquinha de largura que pega luz, e é por isso que um canto brilha. Sem esse
+   fio de luz, o encontro de duas faces é só a fronteira entre dois
+   preenchimentos — e é aí que a coluna volta a parecer recorte de papel.
+
+   Vai na quina da FRENTE (a mais perto de quem olha, recalculada a cada quadro
+   porque ela troca quando o campo gira) e nas duas arestas de topo que saem
+   dela. É onde uma quina de verdade pegaria luz. */
+function brilhoDeAresta(ctx,m,o,h,cor){
+  if(!(h>0))return;
+  var cantos=[[o.x0,o.y0],[o.x1,o.y0],[o.x1,o.y1],[o.x0,o.y1]];
+  var perto=cantos.map(function(c,i){return {i:i,prof:prj(m,c[0],c[1],0)[2]};})
+                  .sort(function(a,b){return a.prof-b.prof;})[0].i;
+  var alto=cantos.map(function(c){return prj(m,c[0],c[1],h);});
+  ctx.save();
+  /* 1,18, não 1,30: acima disso o canal estoura nas faixas já claras e o fio
+     vira néon em volta das colunas amarelas. */
+  ctx.strokeStyle=sombra(cor,1.18);ctx.lineWidth=1;ctx.lineCap='round';
+  [[(perto+3)%4,perto],[perto,(perto+1)%4]].forEach(function(e){
+    ctx.beginPath();
+    ctx.moveTo(alto[e[0]][0],alto[e[0]][1]);
+    ctx.lineTo(alto[e[1]][0],alto[e[1]][1]);
+    ctx.stroke();
+  });
+  var pe=prj(m,cantos[perto][0],cantos[perto][1],0);
+  ctx.beginPath();ctx.moveTo(alto[perto][0],alto[perto][1]);ctx.lineTo(pe[0],pe[1]);ctx.stroke();
+  ctx.restore();
 }
 /* Torre do modo Histórico: os trechos empilhados na altura do TEMPO, com a cor
    caminhando junto com o valor. Cada trecho é fatiado para a cor variar dentro
@@ -871,6 +1015,13 @@ function desenharTorre(ctx,m,o,marcada){
     estado.alvos.push({o:o,p:tampa});
     desenhou=true;
   });
+  /* A torre também ganha o fio de luz na quina da frente. A cor sai do trecho
+     mais alto desenhado — a quina atravessa trechos de cores diferentes, e um
+     fio só, de um tom só, lê melhor que um fio remendado. */
+  if(desenhou&&!marcada){
+    var ult=tr.trechos.length?tr.trechos[tr.trechos.length-1]:null;
+    if(ult)brilhoDeAresta(ctx,m,o,ult.z1*HMAX,corDe(fracaoRuim(m,ult.v1)));
+  }
   /* Anel em cada MEDIÇÃO: o que está entre dois anéis é interpolação, não dado.
      Sem essa marca, a torre inteira pareceria medida de ponta a ponta. */
   ctx.setLineDash([]);
@@ -905,6 +1056,16 @@ function desenharCeu(ctx){
   var g=ctx.createLinearGradient(0,0,0,LH), p=P();
   g.addColorStop(0,p.ceu[0]);g.addColorStop(1,p.ceu[1]);
   ctx.fillStyle=g;ctx.fillRect(0,0,LW,LH);
+  /* Clarão no lado de onde a luz vem. Não é sol desenhado — é o céu sendo mais
+     claro perto da fonte, que é o que um céu faz. Custa um degradê e tira a
+     chapa lisa do fundo; sem ele, o "fora do bloco" é uma parede de tinta. */
+  /* Pequeno e fraco. Grande e forte, ele lava o azul do céu inteiro e o que
+     sobra é uma mancha de lente suja atrás do bloco. */
+  var cx=LW*0.14, cy=LH*0.04, r=Math.max(LW,LH)*0.42;
+  var b=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+  b.addColorStop(0,p.brilhoCeu);
+  b.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=b;ctx.fillRect(0,0,LW,LH);
 }
 /* O bloco de solo. Paredes primeiro, superfície depois: as paredes do fundo
    ficam escondidas atrás da superfície, e é assim que a profundidade se lê.
@@ -943,6 +1104,14 @@ function desenharTerreno(ctx,m,ox,oy,larg,alt){
   });
   poli(ctx,[prj(m,ox,oy,0),prj(m,ox+larg,oy,0),prj(m,ox+larg,oy+alt,0),prj(m,ox,oy+alt,0)],
        null,p.borda,1.2);
+  /* O grão vai por último na superfície, e só nela: nas paredes ele ficaria
+     esticado pela projeção e pareceria risco. */
+  graos(larg,alt,MARGEM).forEach(function(g2){
+    var q=prj(m,ox+g2[0],oy+g2[1],0);
+    ctx.fillStyle=p.grao[g2[2]<0.55?0:1];
+    var t=g2[2]<0.28?2:1;
+    ctx.fillRect(q[0],q[1],t,t);
+  });
 }
 /* Sombra de contato: sem ela as colunas pairam sobre o chão e a leitura de
    altura fica pior justamente onde importa — no pé, que é de onde a altura
@@ -985,25 +1154,23 @@ function contorno(ctx,pts){
    chão e a põe DENTRO dele. Sem ela, mesmo com sombra direcional, a coluna
    parece adesivo. A segunda é a mancha projetada, no rumo da luz. */
 function desenharSombras(ctx,m,colunas){
-  var g=0.9, tem=false;
-  ctx.beginPath();
+  var g=0.9, tem=false, cam=new Path2D();
   colunas.forEach(function(o){
     if(!(o.h>0))return;
     tem=true;
-    contorno(ctx,[prj(m,o.x0-g,o.y0-g,0),prj(m,o.x1+g,o.y0-g,0),
+    contorno(cam,[prj(m,o.x0-g,o.y0-g,0),prj(m,o.x1+g,o.y0-g,0),
                   prj(m,o.x1+g,o.y1+g,0),prj(m,o.x0-g,o.y1+g,0)]);
   });
-  if(tem){ctx.fillStyle=P().assento;ctx.fill();}
+  if(tem)preencherMacio(ctx,cam,P().assento,7);
 
-  ctx.beginPath();
+  var cs=new Path2D();
   tem=false;
   colunas.forEach(function(o){
     var c=contornoDaSombra(m,o,o.h);
     if(!c)return;
-    tem=true;contorno(ctx,c);
+    tem=true;contorno(cs,c);
   });
-  if(!tem)return;
-  ctx.fillStyle=P().sombra;ctx.fill();
+  if(tem)preencherMacio(ctx,cs,P().sombra,5);
 }
 /* A rosa da GRADE, não do norte. Depois de meia volta ninguém sabe mais de que
    lado ficou o T1, e a régua de altura não ajuda nisso. Duas setas resolvem:
@@ -1176,6 +1343,7 @@ function desenhar(){
     });
     var topo=[prj(m,o.x0,o.y0,h),prj(m,o.x1,o.y0,h),prj(m,o.x1,o.y1,h),prj(m,o.x0,o.y1,h)];
     poli(ctx,topo,c,marcada?P().marcado:(sob?P().anel:P().aresta),marcada?1.5:1.2);
+    if(!marcada)brilhoDeAresta(ctx,m,o,h,c);
     if(sob)ctx.restore();
     estado.alvos.push({o:o,p:topo});
   });
@@ -1202,6 +1370,14 @@ function desenhar(){
   if(estado.cena)desenharRosa(ctx);
   ctx.textBaseline='alphabetic';
 }
+/* Tudo que muda o que aparece na tela, numa linha. Serve de crivo: quadro em
+   que nada disso mudou é quadro idêntico ao anterior, e redesenhar idêntico
+   sessenta vezes por segundo só gasta bateria de quem está no campo — agora
+   com borrão de sombra e grão de solo no meio, gasta mais ainda. */
+function assinatura(){
+  return [estado.rot,estado.t,estado.hover,estado.sel&&estado.sel.chave,
+          estado.modo,estado.cena,estado.variavel,LW,LH].join('|');
+}
 function laco(ts){
   if(!estado||!estado.vivo){if(estado)estado.laco=false;return;}
   var dt=estado.ultimo?(ts-estado.ultimo)/1000:0;
@@ -1211,7 +1387,8 @@ function laco(ts){
     if(estado.t>estado.m.daaMax)estado.t=0;
     sincronizarTempo();
   }
-  desenhar();
+  var a=assinatura();
+  if(estado.sujo||a!==estado.assin){estado.assin=a;estado.sujo=false;desenhar();}
   w.requestAnimationFrame(laco);
 }
 function sincronizarTempo(){

@@ -214,6 +214,72 @@ A pegada de cada parcela fica marcada na superfície, na medida real do croqui (
 parcelas não se encostam: entre uma e outra há carreador). Assim a parcela sem
 lançamento continua sendo **um lugar**, e não um buraco no meio da grade.
 
+### O que separa render de desenho
+
+Três detalhes carregam quase toda a diferença entre uma cena que parece
+renderizada e uma que parece recorte de papel colado — e nenhum deles tem a ver
+com a geometria, que já estava certa.
+
+**Borda de tesoura.** Sombra de verdade tem penumbra: a fonte de luz tem tamanho,
+então o limite entre sombra e chão é uma faixa, não uma linha. A mancha e o
+assentamento saem borrados (`ctx.filter`, num traço só na GPU). Onde o navegador
+não tem `ctx.filter`, a penumbra é feita à mão com quatro cópias deslocadas a um
+terço da opacidade — não é borrão de verdade, mas tira a tesoura da borda, que é
+o que importa. Borrar espalha a mesma tinta por muito mais área, então a
+opacidade subiu junto: com o valor de quando a borda era dura, a sombra sumia.
+
+**Chanfro.** Objeto real não tem quina infinitamente viva: a aresta tem uma
+lasquinha de largura que pega luz, e é por isso que um canto brilha. Sem esse fio
+de luz, o encontro de duas faces é só a fronteira entre dois preenchimentos. Ele
+vai na quina da frente — recalculada a cada quadro, porque ela troca quando o
+campo gira — e nas duas arestas de topo que saem dela. O fator é 1,18: acima
+disso o canal estoura nas faixas já claras e o fio vira néon em volta das
+colunas amarelas.
+
+**Grão.** Chapa de cor lisa não passa por terra em tela nenhuma. Os pontos são
+sorteados uma vez e guardados em coordenadas do **mundo**, não da tela: giram
+junto com o bloco, como grão de terra faria, em vez de ficarem grudados no vidro.
+Semente fixa, porque grão trocando de lugar a cada quadro é chuvisco de
+televisão. E sorteio sem direção nenhuma: qualquer alinhamento viraria linha de
+plantio, que nesta tela seria informação inventada.
+
+O céu ganhou um clarão fraco do lado de onde a luz vem — não é sol desenhado, é o
+céu sendo mais claro perto da fonte. Pequeno e discreto de propósito: grande e
+forte, ele lava o azul inteiro e o que sobra é mancha de lente suja.
+
+### Material, e não só cor
+
+Lateral de cor sólida com degradê de duas paradas ainda é papel colorido. O que
+a transformou em superfície:
+
+**A luz que o chão devolve.** Numa superfície real o ponto mais escuro **não é o
+pé** — é um pouco acima dele; abaixo disso a terra reacende a face de volta. Com
+o escuro terminando no pé, a coluna parece afundar num buraco. O degradê passou a
+ter quatro paradas: fio de luz no alto, lustro logo abaixo, o mais escuro a
+quatro quintos da altura, e a subida do rebote no último quinto.
+
+**Trama.** Um ladrilho de ruído, feito uma vez e repetido como padrão, só nas
+laterais. Fica no espaço da **tela**, não no da face: seguir a orientação de cada
+face custaria um recorte por face e por quadro, e numa trama deste tamanho
+ninguém enxerga orientação nenhuma.
+
+A primeira tentativa foi alfa até 24 em metade dos pixels, e o resultado foi
+**lixa**: grão visível como grão, lateral virando parede suja ao lado de um topo
+liso. Trama é para ser sentida, não vista. Ficou em um quarto dos pixels e no
+máximo 9 de 255.
+
+**O topo não recebe nada disso.** A cor dele é o dado, e nem uma trama de três
+por cento entra na frente.
+
+### Só redesenha quando muda
+
+O laço de animação redesenhava sessenta vezes por segundo mesmo com a tela
+parada. Com borrão de sombra e grão de solo no meio, isso é bateria de quem está
+no campo indo embora à toa. Agora uma assinatura do estado visível (giro,
+instante, realce, seleção, modo, cenário, variável, tamanho da caixa) decide: se
+nada mudou, o quadro é idêntico e não se desenha. Mexer em `width`/`height` limpa
+a tela, então `ligarCanvas()` marca o próximo quadro como obrigatório.
+
 ### A rosa não é bússola
 
 Depois de meia volta ninguém sabe mais de que lado ficou o T1. Duas setas
