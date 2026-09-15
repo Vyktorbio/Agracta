@@ -107,6 +107,105 @@ quando estão na frente — é assim que a profundidade se lê. Os números vão
 **depois**, por cima de tudo, com halo claro: uma régua com as marcas de baixo
 escondidas atrás do próprio campo não é régua.
 
+A régua fica no canto **mais à esquerda** da cena e, entre os dois da esquerda,
+no mais fundo. Era só "o mais fundo", e o canto mais fundo de uma vista
+isométrica cai no alto e no meio da tela: a régua nascia por cima do campo, com
+os números em cima das colunas. À esquerda ela fica fora do bolo, que é onde se
+procura eixo vertical, e continuando fundo ela não passa na frente de nada.
+
+## O cenário
+
+A vista era um chão cinza com colunas em pé. Lia-se, e não se enxergava volume:
+cada face recebia sombra **por índice** (a primeira e a terceira mais claras, as
+outras mais escuras), então girar o campo não mudava sombreado nenhum e a cena
+parecia recortada em papel.
+
+O cenário é: céu em degradê, um **bloco de solo** com perfil à vista, luz de
+verdade nas faces, sombra de contato no chão e uma rosa de orientação no canto.
+
+### A luz
+
+Cada face é iluminada pela sua **normal** — é daí que vem o relevo: girar o campo
+reacende uma face de cada vez.
+
+Duas decisões carregam a tela inteira:
+
+- **o topo é a face de leitura e fica fora da luz.** Ele sai com a cor da faixa e
+  mais nada por cima. A cor ali é dado, e dado não pode depender do ângulo em que
+  o campo parou — sem essa regra, a mesma parcela mudaria de tom conforme o giro,
+  e duas parcelas de valor igual sairiam de cores diferentes na mesma tela. O
+  topo também é sempre a face **mais clara** da coluna (o teto das laterais fica
+  abaixo dele): quem enxerga um tom cheio sabe que está olhando a face de
+  leitura, e não uma lateral bem iluminada;
+- **a luz fica presa na câmera, sobre o ombro esquerdo de quem olha.** Presa ao
+  mundo, ela ficaria parada enquanto a cena gira, e metade das voltas deixaria as
+  duas faces à vista contra a luz — sem relevo, que era o defeito que o cenário
+  veio consertar. Presa na tela, em qualquer giro uma das duas faces visíveis
+  pega luz cheia e a outra fica no piso.
+
+A faixa de escurecimento das laterais é curta (de 0,72 a 0,97 da cor do topo). A
+primeira tentativa foi de 0,48 a 0,86 e o campo saiu de barro: a coluna é alta e
+estreita, quase todo pixel dela é lateral, e lateral é a cor da faixa
+**multiplicada** — verde e âmbar multiplicados por meio chegam os dois perto do
+mesmo marrom escuro. Quem separa uma coluna da outra passou a ser o contorno
+fraco de cada face, trabalho que antes era do escuro.
+
+A altura cheia da coluna também encolheu (de 26 para 20 unidades, num campo de
+seis tratamentos que tem 26,4 de largura): a coluna cheia ficava tão alta quanto
+o ensaio é largo, a vista virava uma floresta de paredes e o topo sumia atrás
+delas.
+
+### A sombra
+
+Ela corre **no rumo da luz** — a mesma conta que escurece as faces decide para
+onde a mancha aponta. Sombra num rumo e face acesa em outro é o erro que faz cena
+boa parecer colagem.
+
+O comprimento é **limitado**, e isso é licença de desenho assumida: a sombra fiel
+de uma coluna cheia cruzaria meio ensaio e pintaria de cinza as parcelas
+vizinhas — e mancha sobre parcela vira leitura errada de cor. O limite é o
+carreador, o vão entre duas parcelas.
+
+Todas as manchas saem num **traço só**: desenhadas uma a uma com transparência, a
+sobreposição de duas dobraria o tom e nasceria uma mancha mais escura onde só há
+duas colunas perto.
+
+### O bloco de solo é cenário, não terreno
+
+Ele é liso: **sem relevo, sem linha de plantio e sem vegetação**. O estudo não
+guarda a topografia da área nem o sentido das linhas, e desenhar um morro, um
+sulco ou uma soqueira seria pôr na tela o que ninguém mediu — numa vista
+realista, isso passa por informação. O bloco dá chão, profundidade e escala, e
+nada além.
+
+A pegada de cada parcela fica marcada na superfície, na medida real do croqui (as
+parcelas não se encostam: entre uma e outra há carreador). Assim a parcela sem
+lançamento continua sendo **um lugar**, e não um buraco no meio da grade.
+
+### A rosa não é bússola
+
+Depois de meia volta ninguém sabe mais de que lado ficou o T1. Duas setas
+resolvem: **T** para onde os tratamentos crescem, **R** para onde crescem as
+repetições. Norte não entra, porque o estudo não guarda a orientação da área no
+terreno — seta de bússola numa tela que não sabe onde é o norte é mentira
+desenhada. A nota sob a cena diz isso com todas as letras, e some junto com o
+cenário quando ele é desligado: aviso sobre o que não está mais na tela é ruído.
+
+### Desliga no botão
+
+**Cenário** devolve o chão chapado de antes, com a luz nova mantida. A cena é
+ajuda, não pedágio, e a escolha sobrevive a fechar e abrir a vista: quem desligou
+a decoração desligou porque ela atrapalha a leitura dele.
+
+### Tema escuro
+
+As cores da cena — céu, solo, tinta das réguas e dos rótulos, contornos — saem de
+uma paleta por tema, escolhida pela **luminância do token `--bg`** e não por uma
+classe (o app tem mais de um jeito de ligar o modo escuro, e uma classe só
+acertaria um deles). De quebra isso consertou um defeito antigo: a tinta estava
+fixa em cinza-chumbo desde o começo, e no tema escuro a tela desenhava chumbo
+sobre chumbo — a régua de altura sumia.
+
 ## Dois modos, duas perguntas
 
 | Modo | Altura | O tempo | Responde |
@@ -316,9 +415,31 @@ variável sem escala, ordinal em degraus, valor como texto com vírgula e lixo,
 grade 5×4 e 6×3, avaliação sem data, e a ausência do módulo no `index.html` com
 presença no service worker.
 
+Do cenário, cobre o que poderia virar dado sem ninguém notar: o topo recebendo
+luz cheia em **qualquer** giro, nenhuma lateral alcançando a luz do topo nem
+escurecendo a ponto de a matiz da faixa morrer, as duas faces à vista saindo com
+tons diferentes em qualquer ângulo (senão não há volume), a sombra caindo sempre
+para o mesmo lado da tela, a união da mancha num contorno só, e a ressalva de que
+a rosa não aponta o norte.
+
+E um teste que não é sobre a cena, e sim sobre o jeito de quebrá-la: **nenhum
+nome pode ser declarado duas vezes no topo do módulo**. A constante horizontal da
+luz nasceu chamada `LH`, que já era, vinte linhas acima, a altura do canvas. As
+duas viraram a mesma variável, `ligarCanvas()` gravava 420 por cima da luz, todo
+produto escalar virava zero — as quatro laterais saíam do mesmo tom e as sombras
+encolhiam para nada. Nenhum erro no console: a cena simplesmente deixou de ser
+cena. Num arquivo de um IIFE só, duas declarações do mesmo nome no topo nunca são
+de propósito.
+
 Conferido em navegador a 1280 px e 414 px: sem rolagem horizontal, sem erro de
 console, rótulos de tratamento e de repetição legíveis, seleção de parcela
 abrindo o painel com valor e AACPD.
+
+O cenário foi conferido em Chromium nos dois temas e nos dois modos, com uma
+parcela sem lançamento na grade: no claro e no escuro a tinta contrasta com o
+solo, a parcela vazia aparece como pegada tracejada no chão, a régua fica à
+esquerda fora das colunas, e o botão Cenário devolve o chão chapado sem mexer no
+giro nem no instante escolhido.
 
 ## Limites
 
