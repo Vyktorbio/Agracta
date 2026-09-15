@@ -143,17 +143,43 @@ Duas decisões carregam a tela inteira:
   veio consertar. Presa na tela, em qualquer giro uma das duas faces visíveis
   pega luz cheia e a outra fica no piso.
 
-A faixa de escurecimento das laterais é curta (de 0,72 a 0,97 da cor do topo). A
-primeira tentativa foi de 0,48 a 0,86 e o campo saiu de barro: a coluna é alta e
-estreita, quase todo pixel dela é lateral, e lateral é a cor da faixa
-**multiplicada** — verde e âmbar multiplicados por meio chegam os dois perto do
-mesmo marrom escuro. Quem separa uma coluna da outra passou a ser o contorno
-fraco de cada face, trabalho que antes era do escuro.
+### A faixa das laterais, e o erro que foi ao ar
 
-A altura cheia da coluna também encolheu (de 26 para 20 unidades, num campo de
-seis tratamentos que tem 26,4 de largura): a coluna cheia ficava tão alta quanto
-o ensaio é largo, a vista virava uma floresta de paredes e o topo sumia atrás
-delas.
+O que manda no piso e no teto do escurecimento não é "não escurecer demais" — é a
+**separação entre as três faces**. Isso foi errado dos dois lados, e o segundo
+erro chegou a ser publicado:
+
+| Faixa | O que aconteceu |
+|---|---|
+| 0,48 – 0,86, com a luz ainda apontada errado | as **duas** faces à vista caíam no piso e a coluna virava silhueta de barro |
+| 0,72 – 0,97 | a lateral iluminada ficou a **três por cento** do topo (0,97 contra 1,00). A aresta do topo some, e cubo sem aresta de topo não é cubo: é um L chapado |
+| **0,52 – 0,80** (atual) | topo cheio, uma lateral clara, a outra escura — três degraus que se leem de uma vez |
+
+A faixa publicada por engano deixou a vista **menos** tridimensional do que a
+versão que o cenário veio substituir (que tinha 1,00 / 0,74 / 0,58, fixos por
+índice de face). Nenhum teste reclamou: todos perguntavam se a lateral era menor
+que o topo, e 0,97 é menor que 1,00. Agora se exige **folga**, e o teste reprova
+qualquer faixa que encoste a lateral no topo.
+
+A matiz aguenta o piso mais baixo: 0,52 de um verde ainda é verde, e é a face na
+sombra, onde escuro é o que se espera.
+
+A altura cheia da coluna chegou a encolher de 26 para 20 unidades pelo mesmo
+diagnóstico errado — "o topo some atrás das paredes". Ele não sumia por altura,
+sumia por falta de contraste; resolvido isso, a altura voltou para 26. Coluna
+alta mostra **mais** lateral, que é onde mora todo o sombreado: encurtá-la era
+tirar justamente a superfície que dá volume.
+
+### O degradê da face lateral
+
+Quadrilátero de cor chapada é o que faz uma cena render como papel colado.
+Superfície de verdade **escurece perto do chão**, onde a luz do céu chega menos,
+e clareia no alto — dois pontos de parada por face, e a diferença entre uma
+coluna e um retângulo é quase toda essa.
+
+O degradê corre pela geometria da coluna **inteira**, não do trecho desenhado: no
+Histórico a torre é fatiada em vários trechos de cores diferentes, e um degradê
+reiniciando a cada fatia viraria listra.
 
 ### A sombra
 
@@ -169,6 +195,12 @@ carreador, o vão entre duas parcelas.
 Todas as manchas saem num **traço só**: desenhadas uma a uma com transparência, a
 sobreposição de duas dobraria o tom e nasceria uma mancha mais escura onde só há
 duas colunas perto.
+
+Antes dela vem o **assentamento**: uma auréola escura em volta do pé, para todo
+lado. Não é a sombra da luz — é a luz do céu que deixa de chegar no encontro da
+coluna com o chão. É ela que tira a coluna de cima do chão e a põe dentro dele;
+sem ela, mesmo com sombra direcional, a coluna parece adesivo. Duas passadas,
+cada uma num traço só, pelo mesmo motivo de sobreposição.
 
 ### O bloco de solo é cenário, não terreno
 
