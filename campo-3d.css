@@ -24,6 +24,10 @@
 .c3-modos .c3-btn span{font-weight:400;font-size:.75rem;color:var(--text-2,#4a4f55)}
 .c3-btn.ativo{background:var(--text,#1a1c1e);border-color:var(--text,#1a1c1e);color:#fff}
 .c3-btn.ativo span{color:#d4d7da}
+/* Aviso de "não há o que mostrar": ocupa o lugar da cena, com o mesmo peso de
+   texto do resto — some quem some é a cena, não a explicação. */
+.c3-aviso{margin:18px 0 0;padding:16px 18px;border:1px solid var(--border,#dfe1e3);border-radius:12px;
+  background:var(--bg,#f4f5f6);color:var(--text-2,#4a4f55);font-size:.9375rem;line-height:1.5;max-width:620px}
 .c3-serie{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.875rem}
 .c3-serie li{color:var(--text-2,#4a4f55)}
 .c3-serie b{color:var(--text,#1a1c1e);font-weight:600}

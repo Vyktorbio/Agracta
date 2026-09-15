@@ -336,15 +336,10 @@ function fechar(){
 
 /* s = estudo PROJETADO do Conhecimento (nomes já cegados quando é o caso).
    st = estudo cru, de onde saem os valores por parcela. */
-function abrir(s,st,op){
-  op=op||{};
-  if(!st||!Array.isArray(st.avaliacoes)||!st.avaliacoes.length)return;
-  var vars=[];
-  st.avaliacoes.forEach(function(a){(a&&a.variaveis||[]).forEach(function(v){if(vars.indexOf(v)<0)vars.push(v);});});
-  if(!vars.length)return;
-  var variavel=vars.indexOf(op.variavel)>=0?op.variavel:vars[0];
-
-  var embutido=!!(op.hospedeiro&&op.hospedeiro.nodeType===1), ov;
+/* A caixa onde a vista mora — a mesma para a tela cheia e para o aviso de que
+   não há o que mostrar. */
+function prepararCaixa(embutido,op){
+  var ov;
   if(embutido){
     ov=op.hospedeiro;
     /* Mesma folha de estilo, outra caixa: a classe c3-overlay carrega tudo que
@@ -363,6 +358,42 @@ function abrir(s,st,op){
     }
   }
   ov.hidden=false;raiz=ov;
+  return ov;
+}
+/* SEM DESISTIR CALADO.
+   Estes dois casos — estudo sem avaliação, e avaliação sem variável declarada —
+   faziam a função simplesmente RETORNAR. No celular, o botão "Ver no campo" não
+   respondia; no dossiê, o topo ficava preso em "Montando a vista do campo…"
+   para sempre. A tela existia, o estudo existia, e nada acontecia: do lado de
+   quem usa, isso é o app quebrado.
+
+   Agora a vista abre assim mesmo e DIZ o que falta. Um aviso é resposta; sumir
+   não é. */
+function semVista(s,op,motivo){
+  var embutido=!!(op.hospedeiro&&op.hospedeiro.nodeType===1);
+  var ov=prepararCaixa(embutido,op);
+  estado={s:s,st:null,vars:[],embutido:embutido,vivo:false,sel:null,alvos:[],
+          foco:d.activeElement,semVista:true};
+  ov.innerHTML='<section class="c3-shell"><header class="c3-head">'+
+    '<div><p class="c3-eyebrow">VER NO CAMPO</p>'+
+    (embutido?'':'<h2>'+esc(s&&s.codigo||'')+'</h2>')+'</div>'+
+    (embutido?'':'<button type="button" class="c3-btn" data-c3="fechar">Fechar ×</button>')+
+    '</header><p class="c3-aviso">'+esc(motivo)+'</p></section>';
+  if(!embutido){var b=ov.querySelector('[data-c3="fechar"]');if(b)b.focus();}
+}
+
+function abrir(s,st,op){
+  op=op||{};
+  if(!st||!Array.isArray(st.avaliacoes)||!st.avaliacoes.length)
+    return semVista(s,op,'Este estudo ainda não tem avaliação cadastrada. A vista do campo mostra o que foi lançado em cada parcela — sem avaliação, não há o que pôr na grade.');
+  var vars=[];
+  st.avaliacoes.forEach(function(a){(a&&a.variaveis||[]).forEach(function(v){if(vars.indexOf(v)<0)vars.push(v);});});
+  if(!vars.length)
+    return semVista(s,op,'As avaliações deste estudo não declaram nenhuma variável. A vista precisa de uma variável — severidade, nota, contagem — para ter o que mostrar na altura e na cor. Abra a avaliação e declare a variável avaliada.');
+  var variavel=vars.indexOf(op.variavel)>=0?op.variavel:vars[0];
+
+  var embutido=!!(op.hospedeiro&&op.hospedeiro.nodeType===1);
+  var ov=prepararCaixa(embutido,op);
   estado={s:s,st:st,vars:vars,variavel:variavel,t:0,rot:34*Math.PI/180,rodando:false,
           modo:op.modo==='historico'?'historico':'dia',embutido:embutido,
           sel:null,vivo:true,foco:d.activeElement,ultimo:0,alvos:[]};
