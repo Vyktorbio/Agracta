@@ -247,6 +247,30 @@ O céu ganhou um clarão fraco do lado de onde a luz vem — não é sol desenha
 céu sendo mais claro perto da fonte. Pequeno e discreto de propósito: grande e
 forte, ele lava o azul inteiro e o que sobra é mancha de lente suja.
 
+### Material, e não só cor
+
+Lateral de cor sólida com degradê de duas paradas ainda é papel colorido. O que
+a transformou em superfície:
+
+**A luz que o chão devolve.** Numa superfície real o ponto mais escuro **não é o
+pé** — é um pouco acima dele; abaixo disso a terra reacende a face de volta. Com
+o escuro terminando no pé, a coluna parece afundar num buraco. O degradê passou a
+ter quatro paradas: fio de luz no alto, lustro logo abaixo, o mais escuro a
+quatro quintos da altura, e a subida do rebote no último quinto.
+
+**Trama.** Um ladrilho de ruído, feito uma vez e repetido como padrão, só nas
+laterais. Fica no espaço da **tela**, não no da face: seguir a orientação de cada
+face custaria um recorte por face e por quadro, e numa trama deste tamanho
+ninguém enxerga orientação nenhuma.
+
+A primeira tentativa foi alfa até 24 em metade dos pixels, e o resultado foi
+**lixa**: grão visível como grão, lateral virando parede suja ao lado de um topo
+liso. Trama é para ser sentida, não vista. Ficou em um quarto dos pixels e no
+máximo 9 de 255.
+
+**O topo não recebe nada disso.** A cor dele é o dado, e nem uma trama de três
+por cento entra na frente.
+
 ### Só redesenha quando muda
 
 O laço de animação redesenhava sessenta vezes por segundo mesmo com a tela

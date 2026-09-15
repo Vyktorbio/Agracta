@@ -733,6 +733,52 @@ function embaralho(n){
   var x=Math.sin(n*127.1+311.7)*43758.5453;
   return x-Math.floor(x);
 }
+/* TRAMA. A lateral era cor sólida com degradê, e cor sólida não é material
+   nenhum: é papel colorido. Superfície de verdade tem variação miúda que o olho
+   não decompõe mas percebe — é ela que faz a diferença entre "pintado" e
+   "impresso".
+
+   Um ladrilho de ruído, feito uma vez e repetido como padrão. Fica no espaço da
+   TELA, não no da face, e isso é de propósito: seguir a orientação de cada face
+   custaria um recorte por face e por quadro, e numa trama deste tamanho ninguém
+   enxerga orientação nenhuma. A opacidade é baixíssima de propósito — trama que
+   se nota vira sujeira.
+
+   SÓ NAS LATERAIS. O topo não recebe: a cor dele é o dado, e nem uma trama de
+   três por cento entra na frente disso. */
+var tramaCache;
+function trama(){
+  if(tramaCache!==undefined)return tramaCache;
+  tramaCache=null;
+  try{
+    var c=d.createElement('canvas');c.width=c.height=64;
+    var x=c.getContext('2d');
+    if(!x)return tramaCache;
+    /* A primeira tentativa foi alfa até 24 em metade dos pixels e o resultado
+       foi LIXA: grão visível como grão, e a lateral virou uma parede suja ao
+       lado de um topo liso. Trama é para ser sentida, não vista. Agora só um
+       quarto dos pixels recebe tinta, e no máximo 9 de 255 — o bastante para a
+       superfície deixar de ser chapa e não o bastante para alguém apontar. */
+    var img=x.createImageData(64,64), dt=img.data;
+    for(var i=0;i<64*64;i++){
+      var v=embaralho(i*1.7+7);
+      if(v>0.38&&v<0.62)continue;                 /* maioria fica limpa */
+      dt[i*4]=dt[i*4+1]=dt[i*4+2]=v>=0.5?255:0;
+      dt[i*4+3]=Math.round((Math.abs(v-0.5)-0.12)/0.38*9);
+    }
+    x.putImageData(img,0,0);
+    tramaCache=c;
+  }catch(e){}
+  return tramaCache;
+}
+function padraoTrama(ctx){
+  if(estado&&estado.padrao!==undefined)return estado.padrao;
+  var t=trama(), p=null;
+  try{ if(t)p=ctx.createPattern(t,'repeat'); }catch(e){}
+  if(estado)estado.padrao=p;
+  return p;
+}
+
 var graoCache=null;
 function graos(larg,alt,mg){
   var chave=larg+'x'+alt+'x'+mg;
@@ -878,11 +924,19 @@ function faceLateral(ctx,quad,cor,k,gTopo,gBase,traco,esp){
   if(dx*dx+dy*dy<1){
     tinta=sombra(cor,k);                    /* coluna rasa: degradê não caberia */
   }else{
+    /* Quatro paradas, e a de baixo é a que mais faz falta quando não está lá:
+       o chão DEVOLVE luz. Numa superfície real o ponto mais escuro não é o pé,
+       é um pouco acima dele — abaixo disso a terra reacende a face de volta.
+       Com o escuro terminando no pé, a coluna parece afundar num buraco. */
     tinta=ctx.createLinearGradient(gTopo[0],gTopo[1],gBase[0],gBase[1]);
-    tinta.addColorStop(0,sombra(cor,k*1.05));
-    tinta.addColorStop(1,sombra(cor,k*0.82));
+    tinta.addColorStop(0,   sombra(cor,k*1.06));
+    tinta.addColorStop(0.22,sombra(cor,k*0.99));
+    tinta.addColorStop(0.80,sombra(cor,k*0.78));
+    tinta.addColorStop(1,   sombra(cor,k*0.89));
   }
   poli(ctx,quad,tinta,traco,esp);
+  var pd=padraoTrama(ctx);
+  if(pd)poli(ctx,quad,pd,null);
 }
 /* CHANFRO. Objeto real não tem quina infinitamente viva: a aresta tem uma
    lasquinha de largura que pega luz, e é por isso que um canto brilha. Sem esse
