@@ -511,6 +511,16 @@ function todas(valor,excecoes){
     menor=Math.min(menor,b);maior=Math.max(maior,b);
   });
   assert.ok(menor>0.5,'nem tão escura que a matiz da faixa morra: a lateral é a cor MULTIPLICADA, e verde e âmbar escuros demais viram o mesmo marrom');
+  /* E NÃO BASTA "menor que o topo" — precisa de FOLGA. Esta é a regressão que
+     chegou a ir ao ar: a faixa foi aberta até 0,97 e a lateral iluminada ficou
+     a três por cento do topo. Três por cento não se enxerga, a aresta do topo
+     some, e um cubo sem aresta de topo é um L chapado. A vista saiu MENOS
+     tridimensional do que a versão que a cena veio substituir, e sem nenhum
+     teste reclamando — todos só perguntavam se a lateral era menor que 1. */
+  assert.ok(maior<=0.88,
+    'a lateral mais clara precisa ficar visivelmente abaixo do topo: encostada nele, a aresta do topo some e a coluna vira desenho chapado');
+  assert.ok(maior-menor>0.2,
+    'e as duas laterais precisam de degraus distantes entre si, senão a coluna não tem lado claro e lado escuro');
 
   /* RELEVO. De qualquer ângulo enxergam-se duas faces (ou uma, nos ângulos
      retos). Quando são duas, elas não podem sair do mesmo tom: aí a coluna

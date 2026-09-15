@@ -295,7 +295,10 @@ function corDe(fr){
 }
 function sombra(c,k){
   var p=c.match(/\d+/g);
-  return 'rgb('+Math.round(p[0]*k)+','+Math.round(p[1]*k)+','+Math.round(p[2]*k)+')';
+  /* Com corte nos dois extremos: o degradê da face lateral pede fator acima de
+     1 no alto, e sem corte o canal estoura para fora de 0–255. */
+  function q(v){return Math.max(0,Math.min(255,Math.round(v*k)));}
+  return 'rgb('+q(p[0])+','+q(p[1])+','+q(p[2])+')';
 }
 
 /* ------------------------------------------------------------- números ---
@@ -555,11 +558,12 @@ function painel(m){
 
 /* ------------------------------------------------------------- desenho ---
    Canvas 2D com projeção própria. Sem biblioteca. */
-/* HMAX era 26 para 26,4 de campo largo: a coluna cheia ficava tão alta quanto
-   o ensaio inteiro é largo, a vista virava uma floresta de paredes e o TOPO —
-   que é a face onde a cor se lê — sumia atrás delas. Mais baixa, a grade se
-   enxerga por cima e a altura continua tendo resolução de sobra. */
-var TILT=.55, HMAX=20, PW=3, PL=5, SX=4.4, SY=6.8, LW=700, LH=380, PAD=26;
+/* HMAX chegou a baixar para 20 porque o topo sumia atrás das paredes. Só que
+   ele não sumia por altura: sumia porque a lateral iluminada estava quase da
+   cor dele (ver AMB/LADO_MAX). Resolvido lá, a coluna volta a ser alta — e
+   coluna alta mostra MAIS lateral, que é onde mora todo o sombreado.
+   Encurtá-la era tirar justamente a superfície que dá volume. */
+var TILT=.55, HMAX=26, PW=3, PL=5, SX=4.4, SY=6.8, LW=700, LH=380, PAD=26;
 /* ------------------------------------------------------------- cenário ---
    O que a cena acrescenta — e o que ela tem PROIBIDO acrescentar.
 
@@ -613,7 +617,23 @@ var CAM_U=[0,0.663,0.748], CAM_V=[0,-0.748,0.663];
    horizontal aponta para a esquerda e para a frente, de modo que, em qualquer
    giro, uma das duas faces à vista pega luz cheia e a outra fica no piso —
    duas faces do mesmo tom seriam uma silhueta chapada. */
-var LUZ=[-0.416,0.464,0.782], AMB=0.72, LADO_MAX=0.97;
+/* AMB é o piso do escurecimento das laterais e LADO_MAX o teto. O que manda
+   nestes dois números não é "não escurecer demais" — é a SEPARAÇÃO ENTRE AS
+   TRÊS FACES, e isso já foi errado dos dois lados:
+
+     0,48 a 0,86, com a luz ainda errada -> as DUAS faces à vista caíam no piso
+                  e a coluna virava silhueta de barro;
+     0,72 a 0,97 -> a lateral iluminada chegou a 0,97 contra um topo de 1,00.
+                  Três por cento: a ARESTA DO TOPO SOME, e cubo sem aresta de
+                  topo não é cubo, é um L chapado. Ficou MENOS tridimensional
+                  do que a versão que a cena veio substituir.
+
+   O que dá volume é ler três degraus de uma vez: topo cheio, uma lateral
+   clara, a outra escura. Daí 0,52 a 0,80 — mais separação do que o esquema
+   antigo tinha (1,00 / 0,74 / 0,58), e com a vantagem de as laterais trocarem
+   de papel conforme o campo gira. A matiz aguenta: 0,52 de um verde ainda é
+   verde, e é a face na sombra, onde escuro é o que se espera. */
+var LUZ=[-0.416,0.464,0.782], AMB=0.52, LADO_MAX=0.80;
 /* A luz decomposta: quanto ela tem de horizontal e de vertical no mundo já
    girado. O rumo e o comprimento da sombra saem destes dois.
 
@@ -682,14 +702,14 @@ var PALETAS={
          plot:'rgba(70,58,40,0.07)', linha:'rgba(58,48,34,0.18)', borda:'rgba(58,48,34,0.32)',
          chao:'rgba(26,28,30,0.045)', tinta:'#3c4044', tinta2:'#63686e',
          halo:'rgba(255,255,255,0.85)', sombra:'rgba(48,38,24,0.22)',
-         vazio:'rgba(26,28,30,0.42)', anel:'rgba(26,28,30,0.55)',
+         vazio:'rgba(26,28,30,0.42)', anel:'rgba(26,28,30,0.55)', assento:'rgba(46,36,22,0.16)',
          regua:'rgba(26,28,30,0.28)', marcado:'#1a1c1e', rosa:'rgba(255,255,255,0.72)',
          aresta:'rgba(26,28,30,0.16)'},
   escuro:{ceu:['#12151a','#1e232a'], solo:[62,57,48], parede:[46,42,36],
          plot:'rgba(246,242,232,0.05)', linha:'rgba(236,228,210,0.16)', borda:'rgba(236,228,210,0.30)',
          chao:'rgba(236,238,240,0.06)', tinta:'#e6e8ea', tinta2:'#b6bac0',
          halo:'rgba(14,16,19,0.85)', sombra:'rgba(0,0,0,0.34)',
-         vazio:'rgba(236,238,240,0.42)', anel:'rgba(236,238,240,0.55)',
+         vazio:'rgba(236,238,240,0.42)', anel:'rgba(236,238,240,0.55)', assento:'rgba(0,0,0,0.28)',
          regua:'rgba(236,238,240,0.30)', marcado:'#f4f5f6', rosa:'rgba(18,21,26,0.72)',
          aresta:'rgba(8,10,12,0.30)'}
 };
@@ -778,6 +798,30 @@ function poli(ctx,p,preencher,traco,esp){
   if(preencher){ctx.fillStyle=preencher;ctx.fill();}
   if(traco){ctx.strokeStyle=traco;ctx.lineWidth=esp||1;ctx.stroke();}
 }
+/* Face lateral COM DEGRADÊ, e é aqui que mora a maior parte do "não parece
+   desenho". Quadrilátero de cor chapada é exatamente o que faz uma cena render
+   como papel colado: superfície de verdade escurece perto do chão, onde a luz
+   do céu chega menos, e clareia no alto. São dois pontos de parada e custa
+   nada, e a diferença entre uma coluna e um retângulo é quase toda essa.
+
+   O degradê corre pela geometria da coluna INTEIRA (gTopo e gBase vêm de fora),
+   não do trecho desenhado: no Histórico a torre é fatiada em vários trechos de
+   cores diferentes, e um degradê reiniciando a cada fatia viraria listra.
+
+   O fator do alto passa de 1 de propósito — daí o corte dentro de sombra(). Ele
+   nunca alcança o topo: o teto da lateral é LADO_MAX, e LADO_MAX × 1,05 ainda
+   fica abaixo de 1. */
+function faceLateral(ctx,quad,cor,k,gTopo,gBase,traco,esp){
+  var dx=gTopo[0]-gBase[0], dy=gTopo[1]-gBase[1], tinta;
+  if(dx*dx+dy*dy<1){
+    tinta=sombra(cor,k);                    /* coluna rasa: degradê não caberia */
+  }else{
+    tinta=ctx.createLinearGradient(gTopo[0],gTopo[1],gBase[0],gBase[1]);
+    tinta.addColorStop(0,sombra(cor,k*1.05));
+    tinta.addColorStop(1,sombra(cor,k*0.82));
+  }
+  poli(ctx,quad,tinta,traco,esp);
+}
 /* Torre do modo Histórico: os trechos empilhados na altura do TEMPO, com a cor
    caminhando junto com o valor. Cada trecho é fatiado para a cor variar dentro
    dele — sem isso, a torre viraria uma escada de blocos chapados e sugeriria
@@ -797,9 +841,13 @@ function desenharTorre(ctx,m,o,marcada){
       arestas.map(function(e,i){
         return {e:e,i:i,prof:prj(m,(e[0][0]+e[1][0])/2,(e[0][1]+e[1][1])/2,0)[2]};
       }).sort(function(a,b){return b.prof-a.prof;}).forEach(function(g){
-        poli(ctx,[prj(m,g.e[0][0],g.e[0][1],z0),prj(m,g.e[1][0],g.e[1][1],z0),
-                  prj(m,g.e[1][0],g.e[1][1],z1),prj(m,g.e[0][0],g.e[0][1],z1)],
-             sombra(c,brilho(NORMAIS[g.i],estado.rot)),marcada?P().marcado:P().aresta,marcada?1.2:1);
+        var mx=(g.e[0][0]+g.e[1][0])/2, my=(g.e[0][1]+g.e[1][1])/2;
+        faceLateral(ctx,
+          [prj(m,g.e[0][0],g.e[0][1],z0),prj(m,g.e[1][0],g.e[1][1],z0),
+           prj(m,g.e[1][0],g.e[1][1],z1),prj(m,g.e[0][0],g.e[0][1],z1)],
+          c,brilho(NORMAIS[g.i],estado.rot),
+          prj(m,mx,my,HMAX),prj(m,mx,my,0),
+          marcada?P().marcado:P().aresta,marcada?1.2:1);
       });
       var topo=[prj(m,o.x0,o.y0,z1),prj(m,o.x1,o.y0,z1),prj(m,o.x1,o.y1,z1),prj(m,o.x0,o.y1,z1)];
       if(k===fatias-1)poli(ctx,topo,c,marcada?P().marcado:P().aresta,marcada?1.2:1);
@@ -925,16 +973,34 @@ function contornoDaSombra(m,o,h){
   });
   return casco(pts);
 }
+function contorno(ctx,pts){
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  for(var i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.closePath();
+}
+/* Duas passadas, e cada uma num traço só (ver contornoDaSombra sobre por que
+   num traço só). A primeira é o ASSENTAMENTO: uma auréola escura em volta do
+   pé, para todo lado. Não é a sombra da luz — é a luz do céu que deixa de
+   chegar no encontro da coluna com o chão, e é o que tira a coluna de cima do
+   chão e a põe DENTRO dele. Sem ela, mesmo com sombra direcional, a coluna
+   parece adesivo. A segunda é a mancha projetada, no rumo da luz. */
 function desenharSombras(ctx,m,colunas){
+  var g=0.9, tem=false;
   ctx.beginPath();
-  var tem=false;
+  colunas.forEach(function(o){
+    if(!(o.h>0))return;
+    tem=true;
+    contorno(ctx,[prj(m,o.x0-g,o.y0-g,0),prj(m,o.x1+g,o.y0-g,0),
+                  prj(m,o.x1+g,o.y1+g,0),prj(m,o.x0-g,o.y1+g,0)]);
+  });
+  if(tem){ctx.fillStyle=P().assento;ctx.fill();}
+
+  ctx.beginPath();
+  tem=false;
   colunas.forEach(function(o){
     var c=contornoDaSombra(m,o,o.h);
     if(!c)return;
-    tem=true;
-    ctx.moveTo(c[0][0],c[0][1]);
-    for(var i=1;i<c.length;i++)ctx.lineTo(c[i][0],c[i][1]);
-    ctx.closePath();
+    tem=true;contorno(ctx,c);
   });
   if(!tem)return;
   ctx.fillStyle=P().sombra;ctx.fill();
@@ -1100,9 +1166,13 @@ function desenhar(){
     arestas.map(function(e,i){
       return {e:e,i:i,prof:prj(m,(e[0][0]+e[1][0])/2,(e[0][1]+e[1][1])/2,0)[2]};
     }).sort(function(a,b){return b.prof-a.prof;}).forEach(function(f){
-      poli(ctx,[prj(m,f.e[0][0],f.e[0][1],0),prj(m,f.e[1][0],f.e[1][1],0),
-                prj(m,f.e[1][0],f.e[1][1],h),prj(m,f.e[0][0],f.e[0][1],h)],
-           sombra(c,brilho(NORMAIS[f.i],estado.rot)),marcada?P().marcado:P().aresta,marcada?1.5:1);
+      var mx=(f.e[0][0]+f.e[1][0])/2, my=(f.e[0][1]+f.e[1][1])/2;
+      faceLateral(ctx,
+        [prj(m,f.e[0][0],f.e[0][1],0),prj(m,f.e[1][0],f.e[1][1],0),
+         prj(m,f.e[1][0],f.e[1][1],h),prj(m,f.e[0][0],f.e[0][1],h)],
+        c,brilho(NORMAIS[f.i],estado.rot),
+        prj(m,mx,my,h),prj(m,mx,my,0),
+        marcada?P().marcado:P().aresta,marcada?1.5:1);
     });
     var topo=[prj(m,o.x0,o.y0,h),prj(m,o.x1,o.y0,h),prj(m,o.x1,o.y1,h),prj(m,o.x0,o.y1,h)];
     poli(ctx,topo,c,marcada?P().marcado:(sob?P().anel:P().aresta),marcada?1.5:1.2);

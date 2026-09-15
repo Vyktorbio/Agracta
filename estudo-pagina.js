@@ -363,7 +363,7 @@ function render(s,parts){
     var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=7';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
-   var js=document.createElement('script');js.src='campo-3d.js?v=7';
+   var js=document.createElement('script');js.src='campo-3d.js?v=8';
    js.onload=function(){w.abrirCampo3D?ok():falha(Error('O módulo carregou sem registrar a vista.'));};
    js.onerror=function(){campoCarregando=null;falha(Error('Não foi possível carregar a vista do campo. Sem conexão, ela só abre depois de ter sido aberta uma vez neste aparelho.'));};
    document.head.appendChild(js);
