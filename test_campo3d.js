@@ -9,11 +9,19 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('fs'),fs2=fs;
 /* Biblioteca ausente não é app quebrado — o portão só sabe pular quem se declara. */
-let JSDOM; try{ ({JSDOM}=require('jsdom')); }
+let JSDOM,VirtualConsole; try{ ({JSDOM,VirtualConsole}=require('jsdom')); }
 catch(e){ console.log('PULADO: jsdom não está instalado (npm install jsdom para rodar este teste).'); process.exit(0); }
 
+/* jsdom não tem canvas, e a vista do campo tem. Abrir um estudo de verdade aqui
+   faz o jsdom gritar "HTMLCanvasElement.getContext não implementado" uma vez por
+   pintura — barulho que não é falha (o módulo trata contexto ausente e segue
+   desenhando o HTML) e que, solto na saída do portão, passa por erro. Só esse
+   recado é engolido; qualquer outro continua aparecendo. */
+const vc=new VirtualConsole();
+vc.on('jsdomError',e=>{ if(!/getContext/.test(String(e&&e.message)))console.error(e); });
+['log','warn','error','info'].forEach(k=>vc.on(k,(...a)=>console[k](...a)));
 const dom=new JSDOM('<!doctype html><html><body></body></html>',
-  {url:'https://agracta.test',runScripts:'outside-only'}),w=dom.window;
+  {url:'https://agracta.test',runScripts:'outside-only',virtualConsole:vc}),w=dom.window;
 w.requestAnimationFrame=()=>0;
 
 /* As funções reais do app que o módulo consome, extraídas do app.js publicado —
@@ -478,5 +486,141 @@ function todas(valor,excecoes){
     'e a altura também: fixa em 380, uma caixa de 320 espremia o desenho 16 % na vertical — coluna mais baixa do que o valor que ela representa');
 }
 
+/* ======================= 13. o cenário: onde a decoração poderia virar dado
+   A cena chegou para dar volume — céu, bloco de solo, luz nas faces, sombra no
+   chão e a rosa do canto. Nada disso é medição, e é exatamente por isso que
+   tem teste: numa vista realista a decoração PASSA POR informação. O que cada
+   asserção aqui segura é uma maneira de a cena começar a mentir. */
+{
+  const rad=g=>g*Math.PI/180;
+
+  /* O TOPO É A FACE DE LEITURA. A cor dele é a faixa da variável, e faixa é
+     dado. Se a luz mexesse ali, a MESMA parcela mudaria de tom conforme o
+     ângulo em que o campo parou — e duas parcelas de valor igual sairiam de
+     cores diferentes na mesma tela, só porque uma está de um lado da grade. */
+  for(const g of [0,17,34,90,163,270,359])
+    assert.equal(M.brilho([0,0,1],rad(g)),1,'o topo recebe luz cheia em qualquer giro: a cor dele é o dado');
+
+  /* E nenhuma lateral chega à luz do topo. Quem enxerga um tom cheio sabe que
+     está olhando a face de leitura, e não uma lateral bem iluminada. */
+  const N=M.normais();
+  let menor=1, maior=0;
+  for(let g=0;g<360;g+=7) N.forEach(n=>{
+    const b=M.brilho(n,rad(g));
+    assert.ok(b<1,'lateral nunca alcança o topo');
+    menor=Math.min(menor,b);maior=Math.max(maior,b);
+  });
+  assert.ok(menor>0.5,'nem tão escura que a matiz da faixa morra: a lateral é a cor MULTIPLICADA, e verde e âmbar escuros demais viram o mesmo marrom');
+
+  /* RELEVO. De qualquer ângulo enxergam-se duas faces (ou uma, nos ângulos
+     retos). Quando são duas, elas não podem sair do mesmo tom: aí a coluna
+     vira silhueta chapada, que era o defeito de antes — a luz vinha do índice
+     da face, então girar o campo não mudava sombreado nenhum. */
+  /* "À vista" com folga: perto do ângulo reto uma das faces fica quase de
+     perfil e ocupa dois pixels — exigir contraste de uma lasca não diz nada
+     sobre volume. Só entram as faces que o olho realmente lê. */
+  const aVista=g=>{const r=rad(g),si=Math.sin(r),co=Math.cos(r);
+    return N.map(n=>({ry:n[0]*si+n[1]*co,b:M.brilho(n,r)})).filter(f=>f.ry<-0.18);};
+  for(let g=0;g<360;g+=13){
+    const v=aVista(g);
+    if(v.length<2)continue;
+    const dif=Math.max(...v.map(f=>f.b))-Math.min(...v.map(f=>f.b));
+    assert.ok(dif>0.08,'giro '+g+'°: as duas faces à vista precisam de tons diferentes, senão não há volume');
+  }
+
+  /* A LUZ NÃO GIRA COM O CAMPO. Ela fica presa na tela, e o rumo da sombra é
+     devolvido em coordenadas do mundo justamente para compensar o giro: na
+     tela, todas as sombras apontam sempre para o mesmo lado. Girassem junto,
+     metade das voltas deixaria tudo contra a luz. */
+  const naTela=g=>{const r=rad(g),u=M.rumoDaLuz(r),si=Math.sin(r),co=Math.cos(r);
+    const rx=u.x*co-u.y*si, ry=u.x*si+u.y*co, py=-(ry*0.55);
+    const n=Math.hypot(rx,py)||1;return [rx/n,py/n];};
+  const ref=naTela(0);
+  for(const g of [0,31,77,140,222,300]){
+    const t=naTela(g);
+    assert.ok(Math.abs(t[0]-ref[0])<1e-9&&Math.abs(t[1]-ref[1])<1e-9,
+      'giro '+g+'°: a sombra continua caindo para o mesmo lado da tela');
+    assert.ok(Math.abs(Math.hypot(M.rumoDaLuz(rad(g)).x,M.rumoDaLuz(rad(g)).y)-1)<1e-9,'o rumo é unitário');
+  }
+
+  /* A mancha de UMA coluna é a base mais a base deslocada, numa figura só. Em
+     duas figuras com transparência, a sobreposição dobraria o tom e nasceria
+     uma mancha mais escura onde só há uma coluna. */
+  const base=[[0,0],[10,0],[10,10],[0,10]], desl=base.map(p=>[p[0]+4,p[1]+4]);
+  const c=M.casco(base.concat(desl));
+  assert.equal(c.length,6,'a união de um quadrado com ele deslocado é um hexágono');
+  assert.ok(!c.some(p=>p[0]===4&&p[1]===4),'e os pontos de dentro ficam de fora do contorno');
+
+  /* NOME REPETIDO NO TOPO DO MÓDULO — o erro que custou a cena inteira.
+     A constante horizontal da luz nasceu chamada LH, que já era, vinte linhas
+     acima, a ALTURA DO CANVAS. As duas viraram a mesma variável: ligarCanvas()
+     gravava 420 por cima da luz, todo produto escalar virava zero, as quatro
+     laterais saíam do mesmo tom e as sombras encolhiam para nada. Não deu erro
+     nenhum — só deixou de ser cena. Num arquivo de um IIFE só, duas declarações
+     do mesmo nome no topo nunca são de propósito. */
+  {
+    const src=fs2.readFileSync('campo-3d.js','utf8');
+    const nomes=[];
+    src.split('\n').forEach((linha,i)=>{
+      if(!/^var /.test(linha))return;
+      let prof=0,atual='',partes=[],aspa=null;
+      for(const ch of linha.slice(4)){
+        if(aspa){atual+=ch;if(ch===aspa)aspa=null;continue;}
+        if(ch==="'"||ch==='"'){aspa=ch;atual+=ch;continue;}
+        if('(['.includes(ch)||ch==='{')prof++;
+        if(')]'.includes(ch)||ch==='}')prof--;
+        if(ch===','&&prof===0){partes.push(atual);atual='';continue;}
+        atual+=ch;
+      }
+      partes.push(atual);
+      partes.forEach(p=>{const m=p.trim().match(/^([A-Za-z_$][\w$]*)/);if(m)nomes.push([m[1],i+1]);});
+    });
+    assert.ok(nomes.length>20,'o varredor achou as declarações de topo');
+    const visto={};
+    nomes.forEach(([n,l])=>{
+      assert.ok(!visto[n],'"'+n+'" é declarado duas vezes no topo do módulo (linhas '+visto[n]+' e '+l+
+        '): num IIFE só, isso é uma variável sobrescrevendo a outra em silêncio');
+      visto[n]=l;
+    });
+  }
+
+  /* A ROSA NÃO É BÚSSOLA, e o bloco de solo não é terreno. O estudo não guarda
+     nem a orientação da área nem a topografia: seta de norte e morro no fundo
+     seriam desenho no lugar de medida. A tela precisa DIZER isso — cena
+     realista sem ressalva é convite a ler decoração como dado. */
+  {
+    const src=fs2.readFileSync('campo-3d.js','utf8');
+    const pin=src.slice(src.indexOf('function pintar('),src.indexOf('\n}',src.indexOf('function pintar(')));
+    assert.match(pin,/Não é bússola/,'a nota avisa que a rosa não aponta o norte');
+    assert.match(pin,/sem vegetação/,'e que o bloco de solo não tem nada plantado nele');
+    const ro=src.slice(src.indexOf('function desenharRosa('),src.indexOf('\n}',src.indexOf('function desenharRosa(')));
+    assert.ok(!/[^\w](N|norte|Norte)[^\w]/.test(ro.replace(/\/\*[\s\S]*?\*\//g,'')),
+      'e a rosa desenhada não estreia um "N" em lugar nenhum');
+  }
+
+  /* O CENÁRIO DESLIGA. Quem achar que a decoração atrapalha a leitura fica com
+     o chão chapado de antes — a cena é ajuda, não pedágio. */
+  {
+    const trats=[{id:'T1',produto:'A'},{id:'T2',produto:'B'}];
+    const notas={};trats.forEach((t,i)=>{for(let r=1;r<=2;r++)notas[t.id+'R'+r]={sev:String(20+i*20+r)};});
+    const st={dataInicio:'2026-01-01',numRepeticoes:2,tratamentos:trats,
+      avaliacoes:[{id:'A1',data:'2026-01-10',variaveis:['sev'],tipos:{sev:'pct'},notas:notas}]};
+    const host=w.document.createElement('div');
+    w.document.body.appendChild(host);
+    w.abrirCampo3D({codigo:'Z',cultura:'Soja',alvo:'Alvo',tratamentos:trats},st,{hospedeiro:host});
+    const bt=host.querySelector('[data-c3="cena"]');
+    assert.ok(bt,'a vista tem o botão do Cenário');
+    assert.equal(bt.getAttribute('aria-pressed'),'true','e ele já vem ligado');
+    assert.match(host.textContent.replace(/\s+/g,' '),/Não é bússola/,'com a ressalva da rosa junto');
+    bt.click();
+    const bt2=host.querySelector('[data-c3="cena"]');
+    assert.equal(bt2.getAttribute('aria-pressed'),'false','desligar desliga');
+    assert.ok(!/Não é bússola/.test(host.textContent),
+      'e a ressalva sai junto: aviso sobre o que não está mais na tela é ruído');
+    bt2.click();
+    assert.equal(host.querySelector('[data-c3="cena"]').getAttribute('aria-pressed'),'true');
+  }
+}
+
 w.close();
-console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias e carga sob demanda OK.');
+console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias, carga sob demanda e cenário que não vira dado OK.');

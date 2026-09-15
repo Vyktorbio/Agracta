@@ -40,6 +40,9 @@
 .c3-tempo{display:flex;align-items:center;gap:12px;margin:14px 0 6px}
 .c3-tempo label{font-size:.875rem;color:var(--text-2,#4a4f55);min-width:40px}
 .c3-tempo input[type=range]{flex:1;min-width:0;accent-color:var(--text,#1a1c1e);min-height:44px}
+/* O botão do Cenário mora na linha do Girar: sem isto o flex da barra o estica
+   junto com o controle deslizante e ele fica do tamanho de meia tela. */
+.c3-tempo .c3-btn.c3-cena{flex:0 0 auto;padding:9px 12px}
 .c3-daa{font-size:.9375rem;font-weight:700;min-width:72px;text-align:right}
 .c3-chip-t{font-weight:700;color:var(--text,#1a1c1e)}
 .c3-legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:.8125rem;
