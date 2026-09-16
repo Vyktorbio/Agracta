@@ -65,9 +65,13 @@ assert.match(veu,/rgba\(/,'o véu do modo dia é translúcido');
 const alfa=Number((veu.match(/rgba\([^)]*?,\s*([\d.]+)\)/)||[])[1]);
 assert.ok(alfa>0&&alfa<0.4,'no dia o véu só apaga um pouco o que está atrás (alfa '+alfa+')');
 
-/* ------------- 4. a coluna da mesa NÃO entra: é moldura, não gaveta ------- */
-assert.ok(!/html\.light[^{]*\.ag-mesa/.test(css),
-  'a coluna da mesa continua escura nos dois temas — é a moldura do app, como o desenho a define, e não a mesma peça que a gaveta');
+/* ------------- 4. a coluna da mesa saiu do app, e da folha também -------- */
+/* Ela existiu, e esta folha chegou a ter uma regra dizendo que ela ficava fora
+   do acordo de tema. Com a coluna removida (o PC navega pelo dock, igual ao
+   celular), a regra vira endereço de casa demolida: CSS morto que ninguém
+   apaga porque ninguém lembra do que era. */
+assert.ok(!/\.ag-mesa/.test(css),
+  'sem coluna no app, nenhuma regra de tema pode continuar apontando para ela');
 
 /* --------------------------------------- 5. publicação -------------------- */
 const html=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
@@ -75,4 +79,4 @@ const pedido=(html.match(/interface-neutra\.css\?v=\d+/)||[])[0];
 assert.ok(pedido,'o index.html precisa pedir a folha');
 assert.ok(sw.includes(pedido),'o sw.js precisa pré-carregar exatamente "'+pedido+'"');
 
-console.log('Tema da navegação: gaveta clara no dia, escura na noite, véu translúcido e a coluna da mesa fora do acordo OK.');
+console.log('Tema da navegação: gaveta clara no dia, escura na noite, véu translúcido e nenhum resto da coluna removida OK.');

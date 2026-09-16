@@ -1,5 +1,5 @@
 /* Clima como página. Herda a caixa do .con-overlay (mesma superfície e o mesmo
-   recuo diante da coluna da mesa); aqui só o conteúdo.
+   recuo); aqui só o conteúdo.
 
    Os dois temas são escolhidos, não invertidos: as cores das séries têm um
    valor próprio para o claro e outro para o escuro, conferidos pelo validador
@@ -60,7 +60,7 @@ html:not(.light) .cp-selo.ruim{background:#e4695c26;color:#f3a79e}
 @media(prefers-reduced-motion:no-preference){.cp-card{transition:border-color .15s ease}}
 
 /* ------------------------------------------------------------- telefone ---
-   A página não é só da mesa: clima é a decisão que se toma em pé no talhão,
+   A página não é só de computador: clima é a decisão que se toma no talhão,
    e a janela hora a hora é justamente para isso. O que muda no telefone é
    layout, não conteúdo — nenhuma aba, número ou aviso de fonte some.
 

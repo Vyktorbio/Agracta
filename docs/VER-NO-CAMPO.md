@@ -21,15 +21,20 @@ Ele **herda o contexto**: a variável e a avaliação já escolhidas nos seletor
 acima abrem selecionadas na vista, e a avaliação vira o instante inicial do
 tempo. Quem já escolheu não escolhe de novo.
 
-**Na mesa** (tela larga, com a casca de `mesa.js` ligada) — a vista é o **topo
-do dossiê**, aberta junto com o estudo, ao lado do croqui do experimento. Lá o
+**Em tela larga** (≥ 1100px, medido por `matchMedia`) — a vista é o **topo do
+dossiê**, aberta junto com o estudo, ao lado do croqui do experimento. Lá o
 botão dos Gráficos **não existe**: duas portas para a mesma tela, uma acima da
 outra, é o tipo de coisa que já ensinou alguém a procurar no lugar errado.
 
+A medida é a largura, e não uma classe de casca. Enquanto existiu a coluna de
+seções da tela larga, a classe `.mesa` no `<html>` era a resposta mais curta —
+mas era um ATALHO, não a pergunta. A coluna foi removida (o computador voltou a
+navegar pelo dock, como o celular) e a pergunta continuou a mesma.
+
 O módulo continua carregando **sob demanda** nos dois casos. Essa distinção é o
 ponto: quem trabalha no campo nunca baixa nem interpreta `campo-3d.js` sem
-pedir, e na mesa — onde a tela é grande, a conexão costuma ser outra e o estudo
-é lido, não lançado — ele entra sozinho.
+pedir, e na tela larga — onde a conexão costuma ser outra e o estudo é lido,
+não lançado — ele entra sozinho.
 
 ### Embutida não é janela
 
