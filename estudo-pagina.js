@@ -104,12 +104,23 @@ function referenceControl(){
 /* O botão herda o contexto do painel: a variável e a avaliação já escolhidas
    aqui abrem selecionadas na vista. Fazer escolher de novo o que já foi
    escolhido é o jeito mais barato de a tela parecer outra ferramenta. */
-function naMesa(){ try{ return document.documentElement.classList.contains('mesa'); }catch(e){ return false; } }
+/* TELA LARGA, e não mais "está na casca de mesa".
+   A pergunta que este teste sempre fez foi: dá para abrir a vista do campo
+   junto com o dossiê, ou quem abriu está no talhão com dados móveis? Enquanto
+   existiu a coluna de seções, a classe .mesa era a resposta mais curta — mas
+   ela era um ATALHO, não a pergunta. Com a coluna fora do app (o PC voltou a
+   navegar pelo dock, como o celular), o atalho sumiu e a pergunta continua:
+   ela passa a ser medida direto, no mesmo 1100px que a coluna usava. */
+var LARGA='(min-width:1100px)';
+function telaLarga(){
+  try{ return !!(window.matchMedia&&window.matchMedia(LARGA).matches); }
+  catch(e){ return false; }
+}
 function campoBotao(rows){
  if(!rows.length||!state)return '';
- /* Na mesa a vista já é o topo do dossiê: repetir o botão aqui seria uma
-    segunda porta para a tela que está aberta três dedos acima. */
- if(naMesa())return '';
+ /* Em tela larga a vista já é o topo do dossiê: repetir o botão aqui seria
+    uma segunda porta para a tela que está aberta três dedos acima. */
+ if(telaLarga())return '';
  return '<p class="ep-campo-acao"><button type="button" class="con-btn" data-ep-action="campo"'+
    ' data-ep-variavel="'+e(rows[0].variavel)+'" data-ep-avaliacao="'+e(state.assessment||'')+'">Ver no campo</button>'+
    '<span class="ep-campo-dica">As mesmas parcelas na posição da grade, com o tempo em dias após a aplicação.</span></p>';
@@ -303,14 +314,14 @@ function croqui(st,s,reps){
 function render(s,parts){
  var st=arr((w.data[s.qid]||{}).estudos).find(function(x){return x.id===s.sid;})||{},p=st.protocolo||{},gs=groups(s);
  if(!state||state.s.key!==s.key)state={s:s,variable:gs[0]&&gs[0].key,assessment:''};else{state.s=s;if(!gs.some(function(g){return g.key===state.variable;}))state.variable=gs[0]&&gs[0].key;}
- var mesa=naMesa();
+ var larga=telaLarga();
  var avs=arr(st.avaliacoes),reps=Math.max(1,parseInt(st.numRepeticoes,10)||1),count=s.resultados.reduce(function(a,r){return a+r.n;},0),expected=avs.reduce(function(a,av){return a+arr(av.variaveis).length*s.tratamentos.length*reps;},0),pct=expected?Math.min(100,Math.round(count/expected*100)):0;
- var h='<div class="ep-page"><div class="ep-top">'+w.agConhecimento.bot('voltar','‹ Estudos e conhecimento')+w.agConhecimento.bot('original','Ficha operacional','data-key="'+e(s.key)+'"')+'</div><header class="ep-hero"><div><p class="ep-eyebrow">DOSSIÊ EXPERIMENTAL · '+(s.ambiente==='laboratorio'?'LABORATÓRIO':'CAMPO')+'</p><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+'</p><p class="ep-location">'+e(s.local)+' / '+e(s.quadra)+'</p></div><div class="ep-progress"><span class="con-selo '+(s.finalizado?'finalizado':'em-execucao')+'">'+(s.finalizado?'Finalizado':'Em execução')+'</span><strong>'+pct+'<small>%</small></strong><span>dos valores previstos nas avaliações cadastradas</span><progress value="'+pct+'" max="100" aria-label="Preenchimento das avaliações">'+pct+'%</progress></div></header><div class="ep-stats">'+[['Tratamentos',s.tratamentos.length],['Repetições previstas',reps],['Avaliações',avs.length],['Valores registrados',count]].map(function(x){return '<div><strong>'+num(x[1])+'</strong><span>'+x[0]+'</span></div>';}).join('')+'</div>'+destaques(st,s,reps)+'<nav class="ep-nav" aria-label="Seções do estudo">'+(mesa?[['campo','Ver no campo']]:[]).concat([['fotos','Slides e fotos'],['graficos','Gráficos'],['protocolo','Protocolo'],['resultados','Resultados'],['analises','Estatística e forense'],['brutos','Repetições'],['conducao','Linha do tempo'],['ambiente','Ambiente'],['contexto','Contexto'],['custos','Custos'],['historico','Histórico']]).map(function(x){return '<a href="#ep-'+x[0]+'" data-ep-scroll="ep-'+x[0]+'">'+x[1]+'</a>';}).join('')+'</nav>';
- /* A vista do campo abre junto com o dossiê SÓ na mesa. No celular ela continua
+ var h='<div class="ep-page"><div class="ep-top">'+w.agConhecimento.bot('voltar','‹ Estudos e conhecimento')+w.agConhecimento.bot('original','Ficha operacional','data-key="'+e(s.key)+'"')+'</div><header class="ep-hero"><div><p class="ep-eyebrow">DOSSIÊ EXPERIMENTAL · '+(s.ambiente==='laboratorio'?'LABORATÓRIO':'CAMPO')+'</p><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+'</p><p class="ep-location">'+e(s.local)+' / '+e(s.quadra)+'</p></div><div class="ep-progress"><span class="con-selo '+(s.finalizado?'finalizado':'em-execucao')+'">'+(s.finalizado?'Finalizado':'Em execução')+'</span><strong>'+pct+'<small>%</small></strong><span>dos valores previstos nas avaliações cadastradas</span><progress value="'+pct+'" max="100" aria-label="Preenchimento das avaliações">'+pct+'%</progress></div></header><div class="ep-stats">'+[['Tratamentos',s.tratamentos.length],['Repetições previstas',reps],['Avaliações',avs.length],['Valores registrados',count]].map(function(x){return '<div><strong>'+num(x[1])+'</strong><span>'+x[0]+'</span></div>';}).join('')+'</div>'+destaques(st,s,reps)+'<nav class="ep-nav" aria-label="Seções do estudo">'+(larga?[['campo','Ver no campo']]:[]).concat([['fotos','Slides e fotos'],['graficos','Gráficos'],['protocolo','Protocolo'],['resultados','Resultados'],['analises','Estatística e forense'],['brutos','Repetições'],['conducao','Linha do tempo'],['ambiente','Ambiente'],['contexto','Contexto'],['custos','Custos'],['historico','Histórico']]).map(function(x){return '<a href="#ep-'+x[0]+'" data-ep-scroll="ep-'+x[0]+'">'+x[1]+'</a>';}).join('')+'</nav>';
+ /* A vista do campo abre junto com o dossiê SÓ em tela larga. No celular ela continua
     atrás do botão em Gráficos: o módulo pesa, e quem está no talhão não deve
-    baixá-lo sem pedir. Por isso também não há dois botões — na mesa o de
-    Gráficos some, aqui ele nem existe. */
- if(mesa)h+=section('campo','Ver no campo','<div class="ep-campo-grid"><div id="ep-campo3d" class="ep-campo-host" aria-live="polite"><p class="con-empty">Montando a vista do campo…</p></div>'+croqui(st,s,reps)+'</div>');
+    baixá-lo sem pedir. Por isso também não há dois botões — em tela larga o
+    de Gráficos some, aqui ele nem existe. */
+ if(larga)h+=section('campo','Ver no campo','<div class="ep-campo-grid"><div id="ep-campo3d" class="ep-campo-host" aria-live="polite"><p class="con-empty">Montando a vista do campo…</p></div>'+croqui(st,s,reps)+'</div>');
  h+=section('fotos','Gráficos, slides e fotos','<p>Configure os gráficos e baixe as figuras e os slides deste estudo. As fotos das parcelas ficam na galeria exclusiva deste aparelho.</p><button type="button" class="con-btn" data-ep-action="charts">Gráficos e slides</button> <button type="button" class="con-btn" data-ep-action="report">Relatório completo e R</button> <button type="button" class="con-btn" data-ep-action="photos">Abrir galeria local e montar slides</button>');
  h+=section('graficos','Resultados em perspectiva','<div id="ep-charts-body">'+charts()+'</div>');
  var facts=fact('Início',date(s.inicio))+fact('Delineamento',s.desenho)+fact('Método de aplicação',s.metodo)+fact('Cultivar',st.variedade||st.cultivar||p.cultivar)+fact('Aplicações previstas',st.numAplicacoes)+fact('Intervalo entre aplicações (dias)',st.intervaloDias)+fact('Parcela',p.tamanhoParcela)+fact('Volume de calda',p.volumeCalda||p.volumeCaldaLHa&&p.volumeCaldaLHa+' L/ha')+fact('Protocolo de origem',st.protocoloOrigem&&st.protocoloOrigem.nome);
@@ -327,7 +338,7 @@ function render(s,parts){
  h+=section('historico','Histórico do estudo',(s.finalizado?'<p>Finalizado em '+e(s.finalizadoEm)+' · '+e(s.finalizadoPor||'Responsável não informado')+'</p>':'')+(audits.length?table(['Quando','Responsável','Ação'],audits.map(function(a){var dt=new Date(a.iso||a.ts);return [e(Number.isFinite(dt.getTime())?dt.toLocaleString('pt-BR'):'Sem data'),e(a.user||a.nome||'Não identificado'),e(a.action||a.acao||'Registro')];})):empty('Nenhum evento de auditoria disponível neste estudo.')));
  /* O HTML ainda não está na página quando render() devolve: quem monta a
     vista espera o próximo instante, e desiste calado se o dossiê já mudou. */
- if(mesa)w.setTimeout(montarCampo,0);
+ if(larga)w.setTimeout(montarCampo,0);
  return h+'</div>';
 }
  document.addEventListener('change',function(ev){if(!state||!ev.target.matches('#conhecimentoOvl [data-ep]'))return;var k=ev.target.dataset.ep;if(k==='variable'){state.variable=ev.target.value;state.assessment='';}else if(k==='barMetric')state.barMetric=ev.target.value;else if(k==='reference')state.reference=ev.target.value;else state.assessment=ev.target.value;var el=document.getElementById('ep-charts-body');if(el){el.innerHTML=charts();var select=el.querySelector('[data-ep="'+k+'"]');if(select)select.focus();}});
@@ -360,7 +371,7 @@ function render(s,parts){
   if(campoCarregando)return campoCarregando;
   campoCarregando=new Promise(function(ok,falha){
    if(!document.querySelector('link[data-ag="campo-3d"]')){
-    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=7';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=8';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
    var js=document.createElement('script');js.src='campo-3d.js?v=9';
@@ -370,7 +381,7 @@ function render(s,parts){
   });
   return campoCarregando;
  }
- /* Monta a vista embutida do topo. Só na mesa, uma vez por pintura do dossiê,
+ /* Monta a vista embutida do topo. Só em tela larga, uma vez por pintura do dossiê,
     e falha dizendo o que houve — um retângulo vazio no topo pareceria defeito
     do estudo, não do módulo que não chegou. */
  function montarCampo(){

@@ -86,5 +86,7 @@ html.light :is(.ag-dw-head,.ag-sec-t,.mm-user,.mm-user b){color:var(--gp-text)!i
 /* O véu atrás da gaveta escurecia como se fosse noite: no dia ele só precisa
    apagar um pouco o que está atrás, não pintar de preto. */
 html.light .ag-drawer-bg{background:rgba(32,33,36,.28)!important}
-/* A coluna da mesa continua escura nos dois temas: ela é a moldura do app, e é
-   assim que o desenho a define — não é a mesma peça que a gaveta. */
+/* Houve aqui uma ressalva sobre a coluna de seções da tela larga, que ficava
+   escura nos dois temas. A coluna saiu do app — o computador voltou a navegar
+   pelo dock de baixo, igual ao celular — e a ressalva saiu com ela: regra de
+   tema apontando para peça removida é endereço de casa demolida. */

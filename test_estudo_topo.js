@@ -1,8 +1,8 @@
-/* O topo do dossiê na mesa: a vista do campo, a fila de destaques e o croqui.
+/* O topo do dossiê em tela larga: a vista do campo, os destaques e o croqui.
  *
  * O que pode dar errado sem quebrar tela:
  *   1. o celular baixar o módulo 3D sem ninguém pedir — ele é pesado, e quem
- *      está no talhão não deve pagar por uma tela de mesa;
+ *      está no talhão não deve pagar por uma tela de computador;
  *   2. duas portas para a mesma vista (a do topo e o botão dos Gráficos);
  *   3. o croqui inventar a ordem das parcelas, parecendo plano de campo;
  *   4. o croqui vazar o nome comercial que a projeção cegou;
@@ -31,7 +31,12 @@ function montar(op){
    out.push({key:t.id+'R'+r,tratId:t.id,rep:r,campo:t.id+r,produto:t.produto});});
   return out;
  };
- if(op.mesa)d.documentElement.classList.add('mesa');
+ /* A pergunta que decide o topo do dossiê deixou de ser "existe a coluna de
+    seções?" e voltou a ser a original: "a tela é larga?". A coluna foi
+    removida do app (o PC navega pelo dock, igual ao celular), então o teste
+    finge a MEDIDA, não a classe. */
+ w.matchMedia=q=>({matches:!!op.larga&&/min-width:\s*1100px/.test(q),media:q,
+                   addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
  return {w,d};
 }
 function estudo(extra){
@@ -48,18 +53,18 @@ const texto=el=>el.textContent.replace(/\s+/g,' ').trim();
 {
  const {w,d}=montar();w.data={Q1:{estudos:[estudo()]}};
  w.abrirConhecimento({qid:'Q1',sid:'S1'});
- assert.equal(d.getElementById('ep-campo'),null,'sem mesa não existe seção da vista do campo');
+ assert.equal(d.getElementById('ep-campo'),null,'em tela estreita não existe seção da vista do campo');
  assert.equal(d.getElementById('ep-campo3d'),null,'e o módulo 3D não é montado — no talhão ele não se baixa sozinho');
  assert.ok(d.querySelector('[data-ep-action="campo"]'),'o botão "Ver no campo" continua nos Gráficos');
  w.close();
 }
 
-/* ------------------------------------- 2. na mesa, uma porta só ----------- */
+/* -------------------------------- 2. em tela larga, uma porta só ---------- */
 {
- const {w,d}=montar({mesa:true});w.data={Q1:{estudos:[estudo()]}};
+ const {w,d}=montar({larga:true});w.data={Q1:{estudos:[estudo()]}};
  const montagens=[];w.abrirCampo3D=(s,st,o)=>montagens.push({s,st,op:o});
  w.abrirConhecimento({qid:'Q1',sid:'S1'});
- assert.ok(d.getElementById('ep-campo'),'na mesa a vista é seção do topo');
+ assert.ok(d.getElementById('ep-campo'),'em tela larga a vista é seção do topo');
  assert.ok(d.querySelector('[data-ep-scroll="ep-campo"]'),'e entra na navegação do dossiê');
  assert.equal(d.querySelectorAll('[data-ep-action="campo"]').length,0,
    'o botão dos Gráficos some: duas portas para a mesma tela foi o que já confundiu uma vez');
@@ -73,7 +78,7 @@ const texto=el=>el.textContent.replace(/\s+/g,' ').trim();
 
 /* ------------------------------------- 3. o croqui não inventa ordem ------ */
 {
- const {w,d}=montar({mesa:true,semOrdem:true});w.data={Q1:{estudos:[estudo()]}};
+ const {w,d}=montar({larga:true,semOrdem:true});w.data={Q1:{estudos:[estudo()]}};
  w.abrirCampo3D=()=>{};
  w.abrirConhecimento({qid:'Q1',sid:'S1'});
  assert.equal(d.querySelector('.ep-croqui'),null,
@@ -81,7 +86,7 @@ const texto=el=>el.textContent.replace(/\s+/g,' ').trim();
  w.close();
 }
 {
- const {w,d}=montar({mesa:true});w.data={Q1:{estudos:[estudo()]}};
+ const {w,d}=montar({larga:true});w.data={Q1:{estudos:[estudo()]}};
  w.abrirCampo3D=()=>{};
  w.abrirConhecimento({qid:'Q1',sid:'S1'});
  assert.equal(d.querySelectorAll('.ep-croqui-parcela').length,12,'3 tratamentos × 4 repetições');
@@ -98,7 +103,7 @@ const texto=el=>el.textContent.replace(/\s+/g,' ').trim();
 {
  const itens={i:{id:'i',nome:'Segredo comercial',codigoCego:'Cego 01',ativos:'tebuconazol',
    vinculosHistoricos:[{qid:'Q1',estudoId:'S1',tratamentoId:'T2',componenteId:''}]}};
- const {w,d}=montar({mesa:true,itens:itens});w.data={Q1:{estudos:[estudo()]}};
+ const {w,d}=montar({larga:true,itens:itens});w.data={Q1:{estudos:[estudo()]}};
  w.isAdmin=()=>false;w.abrirCampo3D=()=>{};
  w.abrirConhecimento({qid:'Q1',sid:'S1'});
  const croqui=d.querySelector('.ep-croqui');
@@ -111,7 +116,7 @@ const texto=el=>el.textContent.replace(/\s+/g,' ').trim();
 
 /* ------------------------------------- 5. a fila de destaques ------------- */
 {
- const {w,d}=montar({mesa:true});w.data={Q1:{estudos:[estudo()]}};
+ const {w,d}=montar({larga:true});w.data={Q1:{estudos:[estudo()]}};
  w.abrirCampo3D=()=>{};
  w.abrirConhecimento({qid:'Q1',sid:'S1'});
  const kpis=Array.from(d.querySelectorAll('.ep-kpi')).map(texto);
@@ -168,5 +173,5 @@ const texto=el=>el.textContent.replace(/\s+/g,' ').trim();
  w.close();
 }
 
-console.log('Topo do dossiê: vista só na mesa, uma porta, croqui com ordem real e cega, destaques com data e sentido OK.');
+console.log('Topo do dossiê: vista só em tela larga, uma porta, croqui com ordem real e cega, destaques com data e sentido OK.');
 })();

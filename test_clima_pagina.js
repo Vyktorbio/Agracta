@@ -190,13 +190,20 @@ const texto=el=>el.textContent.replace(/\s+/g,' ');
    'a página NÃO é exclusiva da mesa: se voltar a ser, o clima some do talhão, que é onde ele decide');
 }
 
-/* ------------------------------ 5. a porta na mesa ------------------------ */
+/* --------------------------- 5. a porta, e uma só ------------------------- */
+/* A coluna de seções da tela larga foi embora: o PC voltou a navegar pelo dock
+   de baixo, igual ao celular, e com ela sumiu a porta que a coluna dava para o
+   Clima. A porta que SOBRA é a do cartão de clima do mapa, e ela precisa
+   continuar existindo — sem coluna, ela é a única. */
 {
- const mesa=fs.readFileSync('mesa.js','utf8');
- assert.match(mesa,/if\(existe\('abrirClimaPagina'\)\) return w\.abrirClimaPagina\(\)/,
-   'na mesa, Clima abre a página');
- assert.match(mesa,/fecharClimaPagina/,'e o Mapa fecha a página junto com o resto');
- assert.match(mesa,/climaPaginaOvl/,'a marcação da coluna acompanha a página aberta');
+ const pag=fs.readFileSync('clima-pagina.js','utf8');
+ assert.match(pag,/w\.abrirClimaPagina=/,'a página tem porta pública');
+ assert.match(pag,/w\.fecharClimaPagina=/,'e fecha por fora também');
+ const app=fs.readFileSync('app.js','utf8');
+ assert.ok(app.includes("onclick=\"abrirClimaPagina()\""),
+   'o cartão do clima no mapa continua sendo a porta da página — sem a coluna, é a única');
+ assert.ok(!fs.existsSync('mesa.js'),
+   'e a casca de mesa não voltou por baixo dos panos: duas navegações na mesma tela foi o que já confundiu uma vez');
  const html=fs.readFileSync('index.html','utf8'),sw=fs.readFileSync('sw.js','utf8');
  ['clima-pagina.css','clima-pagina.js'].forEach(a=>{
   const pedido=(html.match(new RegExp(a.replace('.','\\.')+'\\?v=\\d+'))||[])[0];

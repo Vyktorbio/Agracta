@@ -20,10 +20,6 @@ e índices de vegetação **NDVI / NDRE / GNDVI** do Sentinel‑2, com série te
   parcial, avaliada, selecionada ou fora do estudo, com o mesmo vocabulário do
   croqui da avaliação. Motor puro; o NDVI continua tendo prioridade sobre ela,
   porque ali a cor é medida do satélite.
-- `mesa.js` / `mesa.css` — a casca de mesa: em tela larga (≥1100px) e depois de
-  autenticar, uma coluna fixa à esquerda com as seções (Estudos, Mapa, Clima,
-  Insights, Relatórios, Configurações). Cada item abre a porta que já existe;
-  no celular ela não existe. Ver `docs/MESA.md`.
 - `acesso-horario.js` — janela de horário por técnico (tela travada fora do
   expediente, com aviso e sincronização antes) e a porta de entrada: nada do app
   é pintado antes de autenticar.

@@ -41,20 +41,26 @@ pertence, como blocos recolhíveis dentro da ficha que já existe.
 Menu Auditoria · Menu Estatística · Menu Amostras. Isso destruiria a simplicidade —
 essas informações já têm dono conceitual.
 
-> **Estado (14/09/2026) — a casca de mesa e esta regra.** Em tela larga
-> (≥ 1100px) existe uma coluna fixa à esquerda com seis seções: Estudos, Mapa,
-> Clima, Insights, Relatórios e Configurações (`mesa.js` / `mesa.css`). Ela
-> **não** contraria a regra acima, e a diferença é a única coisa que importa
-> aqui: a regra proíbe criar um MENU por FUNCIONALIDADE, e a coluna não tem
-> funcionalidade nenhuma — cada item abre a porta que já existia. Estudos abre
-> o Conhecimento na aba Estudos (a mesma do botão da barra, que some na mesa
-> para não haver duas), Clima abre o painel de clima, Insights e Relatórios
-> abrem seções do dossiê do estudo em foco, Configurações abre a gaveta do
-> menu. Nada de novo mora na coluna, e informação alguma saiu de onde morava.
+> **Estado (16/09/2026) — uma navegação só, em qualquer tela.** Entre 14 e 16
+> de setembro existiu uma coluna fixa de seções em tela larga (`mesa.js` /
+> `mesa.css`), com o mapa ganhando painéis ancorados ao lado dela
+> (`mapa-mesa.js` / `mapa-mesa.css`). **Foi removida a pedido**, e o motivo é o
+> mesmo que a regra acima protege: navegação não pode ter duas caras.
 >
-> No celular — que é onde o trabalho de campo acontece — a coluna não existe:
-> a folha inteira vive dentro da media query, e abaixo de 1100px o app é o
-> mesmo de sempre. Ver `docs/MESA.md`.
+> A coluna nunca criou tela nova — cada item abria a porta que já existia — mas
+> criou uma SEGUNDA navegação: no computador o caminho era a coluna, no celular
+> era o dock de baixo, e o dock chegava mutilado (Conhecimento e Menu ficavam
+> escondidos para não haver duas portas). Quem usa os dois aparelhos aprendia
+> dois caminhos para o mesmo lugar.
+>
+> Hoje o dock de baixo é a navegação única, em qualquer largura, e o mapa no
+> computador é o mesmo do celular: tela inteira, gaveta de ferramentas e ficha
+> da quadra como janela. O que a tela larga ainda ganha é o que não é
+> navegação — o dossiê abre com a vista do campo no topo, medida por
+> `matchMedia('(min-width:1100px)')`, porque ali o custo é BAIXAR O MÓDULO 3D,
+> e quem está no talhão não deve pagar por isso sem pedir.
+>
+> O histórico dos arquivos removidos está no git (PRs #78 e #79).
 
 ## 3. Estratégia: evoluir sem reescrever
 

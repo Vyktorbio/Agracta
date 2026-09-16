@@ -6,7 +6,7 @@
 <title>Agracta</title>
 <link rel="stylesheet" href="styles.css?v=27">
 <link rel="stylesheet" href="integracoes.css?v=4">
-<link rel="stylesheet" href="estudo-pagina.css?v=7">
+<link rel="stylesheet" href="estudo-pagina.css?v=8">
 <!-- Porta de entrada: nada do app é pintado antes da autenticação. A classe entra
      no <html> antes de qualquer folha de estilo do app, então não existe o
      "flash" do mapa/menus para quem não tem senha. -->
@@ -34,11 +34,9 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=3">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=254').catch(function(){});});}</script>
-<link rel="stylesheet" href="interface-neutra.css?v=2">
-<link rel="stylesheet" href="mesa.css?v=1">
-<link rel="stylesheet" href="mapa-mesa.css?v=1">
-<link rel="stylesheet" href="clima-pagina.css?v=3">
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=255').catch(function(){});});}</script>
+<link rel="stylesheet" href="interface-neutra.css?v=3">
+<link rel="stylesheet" href="clima-pagina.css?v=4">
 </head>
 <body>
 <div class="top-bar">
@@ -167,16 +165,11 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="acesso-horario.js?v=3"></script>
 <script src="ui-campo.js?v=18"></script>
 <script src="integracoes.js?v=9"></script>
-<script src="estudo-pagina.js?v=15"></script>
+<script src="estudo-pagina.js?v=16"></script>
 <script src="galeria-fotos.js?v=2"></script>
 <script src="relatorio-estudo.js?v=1"></script>
 <script src="integracoes-fontes.js?v=1"></script>
 <script src="integracoes-clientes.js?v=1"></script>
-<!-- Casca de mesa: a coluna de seções da tela larga. Carrega por último porque
-     só reusa portas que os arquivos acima já registraram. -->
-<script src="mesa.js?v=2"></script>
-<!-- O mapa na mesa: painéis ancorados. Depois do mesa.js, que é quem declara a mesa. -->
-<script src="mapa-mesa.js?v=1"></script>
 <script src="clima-pagina.js?v=2"></script>
 </body>
 </html>

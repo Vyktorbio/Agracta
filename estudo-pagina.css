@@ -39,7 +39,7 @@
 
 .av-photo-btn{min-height:44px;padding:.65rem 1rem;border:1px solid #82b294;border-radius:.65rem;background:#e5f2e9;color:#174d30;font:650 .9rem system-ui;cursor:pointer}.av-photo-btn:focus-visible{outline:3px solid #ed9a38;outline-offset:2px}
 
-/* Fila de destaques e a vista do campo no topo (mesa). A fila rola na
+/* Fila de destaques e a vista do campo no topo (tela larga). A fila rola na
    horizontal quando não cabe: quebrar cinco números em duas linhas faz a
    segunda parecer menos importante que a primeira, e ela não é. */
 .ep-kpis{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,1fr);gap:12px;margin:0 0 20px;overflow-x:auto;padding-bottom:4px}
