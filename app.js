@@ -566,11 +566,25 @@ function allUpcomingEvents(windowDays, incluirDispensados){
   return all;
 }
 
-function quadraHasAlert(qid){
+/* OS ESTUDOS QUE O MAPA CONTA.
+   Um estudo finalizado acabou: não tem próximo evento, não tem lançamento
+   pendente e não é trabalho. Enquanto ele contava, o mapa respondia a pergunta
+   errada — o rótulo somava ensaios encerrados, a bolinha ficava vermelha por
+   causa de uma avaliação que ninguém vai mais lançar, e a máscara pintava de
+   "tudo avaliado" uma quadra onde nada está rodando.
+   Ele continua no app, na ficha da quadra, atrás do botão de finalizados. */
+function estudosAtivos(qid){
   var q=data[qid];
-  if(!q||!q.estudos||!q.estudos.length)return false;
-  for(var i=0;i<q.estudos.length;i++){
-    var ne=nextEvent(q.estudos[i]);
+  if(!q||!q.estudos||!q.estudos.length)return [];
+  return q.estudos.filter(function(st){
+    return !((typeof estudoFinalizado==='function')&&estudoFinalizado(st));
+  });
+}
+function quadraHasAlert(qid){
+  var ativos=estudosAtivos(qid);
+  if(!ativos.length)return false;
+  for(var i=0;i<ativos.length;i++){
+    var ne=nextEvent(ativos[i]);
     if(ne){
       var diff=daysBetween(today0(),ne.date);
       if(diff<=2)return true;
@@ -3281,10 +3295,14 @@ function _mascaraContagem(qid){
     if(!st) continue;
     var avs=st.avaliacoes||[], rows=_avRowsForStudy(st,false);
     if(!avs.length||!rows.length) continue;
-    /* Estudo finalizado não admite mais lançamento (reabrir exige motivo e
-       senha). As lacunas que ficaram não são trabalho pendente, e pintá-las de
-       amarelo para sempre ensinaria a ignorar o amarelo. */
-    var fechado=(typeof estudoFinalizado==='function')&&estudoFinalizado(st);
+    /* ESTUDO FINALIZADO NÃO ENTRA NA CONTA — nem como pendente, nem como
+       concluído. Ele já contou como 'done', e o efeito era uma quadra onde só
+       há ensaio encerrado sair VERDE, como se estivesse toda avaliada e em dia.
+       Verde é o fim de um trabalho, não a ausência dele: a quadra sem nada
+       rodando tem de parecer o que é — fora de estudo, como as que nunca
+       tiveram um. As lacunas que ficaram também não são trabalho pendente, e
+       pintá-las de amarelo para sempre ensinaria a ignorar o amarelo. */
+    if((typeof estudoFinalizado==='function')&&estudoFinalizado(st)) continue;
     for(var r=0;r<rows.length;r++){
       var previstos=0, lancados=0;
       for(var a=0;a<avs.length;a++){
@@ -3296,7 +3314,7 @@ function _mascaraContagem(qid){
         }
       }
       if(!previstos) continue;
-      var chave=fechado?'done':MascaraCore.estadoParcela(previstos,lancados);
+      var chave=MascaraCore.estadoParcela(previstos,lancados);
       if(chave) out[chave]++;
     }
   }
@@ -3345,7 +3363,7 @@ function render(){
     poly.addTo(_qLayer);
     if(isEd) _editPoly=poly;
 
-    var nEst=(d.estudos||[]).length, inner='';
+    var nEst=estudosAtivos(id).length, inner='';
     if(hasAlert) inner+='<div class="q-alert"></div>';
     inner+='<div class="q-dot" style="background:'+st.c+'"></div>';
     var _ncult=getCulturas(d).length;
@@ -16832,9 +16850,11 @@ function collectTodayEvents(windowDays, incluirDispensados){
   var now=today0();
   var limit=windowDays||1;
   Object.keys(data).forEach(function(qid){
-    var q=data[qid];
-    if(!q||!Array.isArray(q.estudos))return;
-    q.estudos.forEach(function(study){
+    /* Mesma regra do mapa e da agenda: ensaio encerrado nao gera mais evento.
+       Sem isto o "HOJE" contava avaliacao de estudo terminado e o botao ficava
+       vermelho por um atraso que ninguem vai lancar — a mesma urgencia
+       inventada que aparecia na bolinha da quadra. */
+    estudosAtivos(qid).forEach(function(study){
       study=normalizeStudy(study);
       var evs=studyEventsV2(study);
       evs.forEach(function(ev){
@@ -17066,10 +17086,9 @@ function jumpToStudy(qid,sid){
 /* Substitui a cor da bolinha do contador de estudos pela cor do próximo evento */
 
 function getQuadraUrgency(qid){
-  var q=data[qid]||{};
-  if(!Array.isArray(q.estudos))return null;
+  /* Mesma regra do resto do mapa: ensaio encerrado nao tem proximo evento. */
   var best=null;
-  q.estudos.forEach(function(s){
+  estudosAtivos(qid).forEach(function(s){
     s=normalizeStudy(s);
     var ne=nextEventV2(s);
     if(!ne)return;
@@ -17097,9 +17116,8 @@ render=function(){
   /* Mais simples: vamos redesenhar tudo sobrepondo nas bolinhas existentes */
   var ids=Object.keys(P);
   ids.forEach(function(id){
-    var d=data[id]||{},lb=QPOS[id];
-    var nEst=(d.estudos||[]).length;
-    if(nEst===0)return;
+    var lb=QPOS[id];
+    if(estudosAtivos(id).length===0)return;
     var urg=getQuadraUrgency(id);
     if(!urg)return;
     var color=urgencyColor(urg.diff);
