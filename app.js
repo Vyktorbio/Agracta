@@ -5931,6 +5931,7 @@ function showStudyExportModal(qid,s,from,to){
 }
 
 function showD(id){
+  if(id!==_qFinQuadra){ _qFinQuadra=id; _qFinAberto=false; }
   curV=id;
   var d=data[id]||{},dap=cDAP(d.plantio),st=gS(d.cultura,dap),ac=gC(d.cultura),pd=pD(d.plantio);
   var aHa=quadraAreaHa(id), ctr=quadraCenter(id), dim=quadraDims(id);
@@ -5985,15 +5986,35 @@ function showD(id){
   h+='</div></div>';
   }
 
-  // STUDIES SECTION
-  h+='<div class="studies-wrap"><div class="studies-head"><div class="studies-title">ESTUDOS ('+(d.estudos||[]).length+')</div><button class="studies-add" onclick="openStudyEdit(\''+id+'\',null)">+ ADICIONAR</button></div>';
+  /* ESTUDOS: EM ANDAMENTO PRIMEIRO, FINALIZADOS ATRÁS DE UM BOTÃO.
+     A lista era uma só, em ordem de cadastro, e o encerrado ficava no meio dos
+     que estão rodando. Quem abre a ficha da quadra faz UMA pergunta — "o que
+     está andando aqui?" — e precisava conferir estudo por estudo para
+     responder. O finalizado não sai do app: ele sai da frente. */
+  var _todos=(d.estudos||[]);
+  var _fim=_todos.filter(function(x){ return typeof estudoFinalizado==='function'&&estudoFinalizado(x); });
+  var _vivos=_todos.filter(function(x){ return _fim.indexOf(x)<0; });
 
-  if(!(d.estudos||[]).length){
+  h+='<div class="studies-wrap"><div class="studies-head"><div class="studies-title">ESTUDOS ('+_vivos.length+')</div><button class="studies-add" onclick="openStudyEdit(\''+id+'\',null)">+ ADICIONAR</button></div>';
+
+  if(!_todos.length){
     h+='<div class="q-noest" style="font-size:10px;text-align:center;padding:14px;font-style:italic;border-radius:6px">Nenhum estudo cadastrado nesta quadra</div>';
+  }else if(!_vivos.length){
+    /* Tem estudo, mas nenhum rodando. Dizer "nenhum cadastrado" aqui seria
+       mentira — e esconderia que o histórico está logo abaixo. */
+    h+='<div class="q-noest" style="font-size:10px;text-align:center;padding:14px;font-style:italic;border-radius:6px">Nenhum estudo em andamento nesta quadra</div>';
   }else{
-    (d.estudos||[]).forEach(function(study){
-      h+=renderStudyCard(id,study);
-    });
+    _vivos.forEach(function(study){ h+=renderStudyCard(id,study); });
+  }
+  if(_fim.length){
+    h+='<button type="button" class="studies-fim-t" aria-expanded="'+(_qFinAberto?'true':'false')+'" onclick="toggleEstudosFinalizados()">'+
+       '<span class="studies-fim-c" aria-hidden="true">'+(_qFinAberto?'▾':'▸')+'</span>'+
+       _fim.length+' finalizado'+(_fim.length>1?'s':'')+'</button>';
+    if(_qFinAberto){
+      h+='<div class="studies-fim-lista">';
+      _fim.forEach(function(study){ h+=renderStudyCard(id,study); });
+      h+='</div>';
+    }
   }
   h+='</div>';
 
@@ -6006,6 +6027,15 @@ function showD(id){
   document.getElementById("dOvl").classList.add("open");
 }
 
+/* Recolhido por padrão, e recolhido DE NOVO a cada quadra que se abre: quem
+   abriu o histórico numa quadra não pediu para abri-lo em todas. Dentro da
+   mesma quadra ele fica como foi deixado, senão o clique de abrir se desfaria
+   sozinho na primeira repintura. */
+var _qFinAberto=false, _qFinQuadra=null;
+function toggleEstudosFinalizados(){
+  _qFinAberto=!_qFinAberto;
+  if(typeof curV!=='undefined'&&curV) showD(curV);
+}
 function renderStudyCard(qid,study){
   var ne=nextEvent(study);
   var cls='';
@@ -16712,7 +16742,14 @@ function importData(ev){
 var _origRenderStudyCard=renderStudyCard;
 renderStudyCard=function(qid,study){
   study=normalizeStudy(study);
-  var ne=nextEventV2(study);
+  /* ESTUDO FINALIZADO NÃO TEM PRÓXIMO: ele acabou. nextEventV2() não sabe disso
+     — devolve o primeiro evento ainda não registrado a partir de ontem, e um
+     estudo encerrado hoje com avaliação marcada para hoje aparecia com a
+     etiqueta vermelha "HOJE" no cartão. Etiqueta de urgência em ensaio
+     terminado é a pior forma de ruído: ela compete com o que está rodando
+     de verdade. A regra já valia na ficha do estudo; faltava no cartão. */
+  var fim=(typeof estudoFinalizado==='function')&&estudoFinalizado(study);
+  var ne=fim?null:nextEventV2(study);
   var nextHtml='',cls='normal';
   if(ne){
     var diff=ne.diff;
@@ -16722,9 +16759,9 @@ renderStudyCard=function(qid,study){
     nextHtml='<div class="study-card-v2-next '+cls+'"><span>'+esc(tname)+'</span><span>'+label+'</span></div>';
   }
   var code=study.codigo||study.nome||'(sem código)';
-  var h='<div class="study-card-v2" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
+  var h='<div class="study-card-v2'+(fim?' finalizada':'')+'" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
   h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do estudo + NDVI p/ planilha" aria-label="Copiar estudo '+esc(code)+'" style="float:right;background:rgba(31,36,42,.05);border:1px solid #d7dbe0;color:#3a4149;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">📄</button>';
-  h+='<div class="study-card-v2-codigo">'+esc(code)+'</div>';
+  h+='<div class="study-card-v2-codigo">'+(fim?'<span class="study-lock" aria-hidden="true">🔒</span> ':'')+esc(code)+'</div>';
   if(study.descricao)h+='<div class="study-card-v2-desc">'+esc(study.descricao.slice(0,100))+(study.descricao.length>100?'…':'')+'</div>';
   h+='<div class="study-card-v2-meta">';
   h+='<span>'+study.tratamentos.length+' trat. × '+study.numRepeticoes+' rep.</span>';
@@ -16733,6 +16770,14 @@ renderStudyCard=function(qid,study){
   var _avFt=(study.avaliacoes||[]).filter(function(a){return _avTemNota(a);}).length, _avTt=(study.avaliacoes||[]).length;
   h+='<span>'+(_avTt>_avFt?(_avFt+' de '+_avTt+' aval.'):(_avTt+' aval.'))+'</span>';
   h+='</div>';
+  /* Quando terminou, e por quem. É o que substitui a etiqueta de próximo
+     evento: o cartão continua dizendo algo sobre o tempo, só que a verdade. */
+  if(fim){
+    var _fq=(study.finalizacao&&study.finalizacao.por)||'';
+    var _fe='';
+    try{ _fe=_agFormatDateTime(study.finalizacao.em); }catch(e){ _fe=String(study.finalizacao.em||''); }
+    h+='<div class="study-card-v2-fim">Finalizado em '+esc(_fe)+(_fq?(' · '+esc(_fq)):'')+'</div>';
+  }
   h+=nextHtml;
   h+='</div>';
   return h;
