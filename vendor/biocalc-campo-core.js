@@ -250,15 +250,31 @@
         " dose(s). Escreva na mesma ordem, separados por \" + \".");
     }
     var n=Math.max(nomes.length,doses.length);
-    var comps=[];
+    var comps=[],semDose=[];
     for(var i=0;i<n;i++){
       var d=parseDose(doses[i],fallbackUnit);
-      if(!d)continue;
+      if(!d){
+        /* NOME DECLARADO SEM DOSE AO LADO. Ele não entra na conta — dose nenhuma
+           é quantidade nenhuma, e arbitrar uma seria o pecado que este motor não
+           comete. Mas ele também não pode SUMIR, e sumia: "Azoxistrobina +
+           Benzovindiflupir 300 SC" com uma dose só virava, na receita da
+           bancada, a linha "Azoxistrobina" — metade do nome, sem nada dizendo
+           que era metade. Quem lê prepara o que está escrito.
+
+           Sai daqui NOMEADO, separado dos componentes, para a tela poder
+           mostrá-lo sem quantidade nenhuma. */
+        if(nomes[i])semDose.push(nomes[i]);
+        continue;
+      }
       if(d.erro)problems.push(d.erro);
       if(!(d.valor>0))problems.push("Dose \""+(doses[i]||"")+"\" não é um número maior que zero.");
       comps.push({nome:nomes[i]||("Componente "+(i+1)),valor:d.valor,unidade:d.unidade,texto:d.texto});
     }
-    return{components:comps,problems:problems};
+    if(semDose.length){
+      problems.push("Sem dose ao lado: "+semDose.map(function(x){return '"'+x+'"';}).join(", ")+
+        ". Não entra no cálculo: sem dose não há quantidade, e arbitrar uma seria inventar.");
+    }
+    return{components:comps,problems:problems,semDose:semDose};
   }
 
   /* Receita nova do Agracta: cada componente já tem identidade, dose e unidade.

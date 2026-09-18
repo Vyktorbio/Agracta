@@ -278,6 +278,45 @@ S("Relatório de texto");
 }
 
 /* ============================================================ fecho ==== */
+/* =========================================================================
+   A BANCADA NÃO PODE PREPARAR UM PAREAMENTO QUE NINGUÉM SABE
+
+   "Azoxistrobina + Benzovindiflupir 300 SC" com UMA dose. O motor de campo
+   separa por "+", casa a dose com o primeiro nome e relata o problema — dois
+   produtos, uma dose. Sobra UM componente.
+
+   A tela do laboratório decidia pelo caminho da mistura com a condição
+   "components.length > 1". Com um componente só, ela caía no caminho de
+   PRODUTO ÚNICO: preparava o pote com a dose inteira como se o tratamento
+   fosse um produto só, o segundo nome sumia, e o aviso do parse nunca era
+   pintado, porque só era pintado dentro do ramo da mistura. Silêncio e pote
+   errado — a pior combinação que este código pode produzir.
+
+   Este teste é de FONTE porque o defeito era de fluxo, não de conta: o
+   guarda-corpo precisa estar ANTES da condição que deixava passar.
+   ========================================================================= */
+{
+  const fs = require("fs");
+  const app = fs.readFileSync("app.js", "utf8");
+  const i = app.indexOf("_BC.parseComponents(t.produto, t.dose, _calcDoseUnit(t.dose))");
+  certo("o laboratório lê os componentes do motor de campo", i > 0);
+  const j = app.indexOf("_comps.components.length>1", i);
+  const guarda = app.indexOf("_comps.semDose && _comps.semDose.length", i);
+  certo("e o guarda-corpo do pareamento desconhecido vem ANTES do ramo da mistura",
+        guarda > 0 && guarda < j,
+        "guarda em " + guarda + ", ramo da mistura em " + j);
+
+  const mix = Campo.parseComponents("Azoxistrobina + Benzovindiflupir 300 SC", "0,5 L/ha", "");
+  certo("com dois nomes e uma dose sobra um componente só", mix.components.length === 1);
+  certo("o nome sem dose sai nomeado, para a tela poder mostrá-lo",
+        JSON.stringify(mix.semDose) === '["Benzovindiflupir 300 SC"]', JSON.stringify(mix.semDose));
+  certo("e o problema é relatado", mix.problems.length >= 1);
+  /* A recíproca: escrito do jeito certo, nada disso dispara. */
+  const bom = Campo.parseComponents("Sankari + Silwet", "1,5 L/ha + 0,033 %", "");
+  certo("escrito na mesma ordem, dois nomes e duas doses, não sobra ninguém",
+        bom.components.length === 2 && bom.semDose.length === 0 && bom.problems.length === 0);
+}
+
 console.log("\n" + (falhou === 0
   ? `\x1b[32m${ok} verificações, nenhuma falha.\x1b[0m`
   : `\x1b[31m${falhou} FALHA(S) em ${ok + falhou} verificações.\x1b[0m`));

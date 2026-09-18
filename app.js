@@ -5931,6 +5931,7 @@ function showStudyExportModal(qid,s,from,to){
 }
 
 function showD(id){
+  if(id!==_qFinQuadra){ _qFinQuadra=id; _qFinAberto=false; }
   curV=id;
   var d=data[id]||{},dap=cDAP(d.plantio),st=gS(d.cultura,dap),ac=gC(d.cultura),pd=pD(d.plantio);
   var aHa=quadraAreaHa(id), ctr=quadraCenter(id), dim=quadraDims(id);
@@ -5985,15 +5986,35 @@ function showD(id){
   h+='</div></div>';
   }
 
-  // STUDIES SECTION
-  h+='<div class="studies-wrap"><div class="studies-head"><div class="studies-title">ESTUDOS ('+(d.estudos||[]).length+')</div><button class="studies-add" onclick="openStudyEdit(\''+id+'\',null)">+ ADICIONAR</button></div>';
+  /* ESTUDOS: EM ANDAMENTO PRIMEIRO, FINALIZADOS ATRÁS DE UM BOTÃO.
+     A lista era uma só, em ordem de cadastro, e o encerrado ficava no meio dos
+     que estão rodando. Quem abre a ficha da quadra faz UMA pergunta — "o que
+     está andando aqui?" — e precisava conferir estudo por estudo para
+     responder. O finalizado não sai do app: ele sai da frente. */
+  var _todos=(d.estudos||[]);
+  var _fim=_todos.filter(function(x){ return typeof estudoFinalizado==='function'&&estudoFinalizado(x); });
+  var _vivos=_todos.filter(function(x){ return _fim.indexOf(x)<0; });
 
-  if(!(d.estudos||[]).length){
+  h+='<div class="studies-wrap"><div class="studies-head"><div class="studies-title">ESTUDOS ('+_vivos.length+')</div><button class="studies-add" onclick="openStudyEdit(\''+id+'\',null)">+ ADICIONAR</button></div>';
+
+  if(!_todos.length){
     h+='<div class="q-noest" style="font-size:10px;text-align:center;padding:14px;font-style:italic;border-radius:6px">Nenhum estudo cadastrado nesta quadra</div>';
+  }else if(!_vivos.length){
+    /* Tem estudo, mas nenhum rodando. Dizer "nenhum cadastrado" aqui seria
+       mentira — e esconderia que o histórico está logo abaixo. */
+    h+='<div class="q-noest" style="font-size:10px;text-align:center;padding:14px;font-style:italic;border-radius:6px">Nenhum estudo em andamento nesta quadra</div>';
   }else{
-    (d.estudos||[]).forEach(function(study){
-      h+=renderStudyCard(id,study);
-    });
+    _vivos.forEach(function(study){ h+=renderStudyCard(id,study); });
+  }
+  if(_fim.length){
+    h+='<button type="button" class="studies-fim-t" aria-expanded="'+(_qFinAberto?'true':'false')+'" onclick="toggleEstudosFinalizados()">'+
+       '<span class="studies-fim-c" aria-hidden="true">'+(_qFinAberto?'▾':'▸')+'</span>'+
+       _fim.length+' finalizado'+(_fim.length>1?'s':'')+'</button>';
+    if(_qFinAberto){
+      h+='<div class="studies-fim-lista">';
+      _fim.forEach(function(study){ h+=renderStudyCard(id,study); });
+      h+='</div>';
+    }
   }
   h+='</div>';
 
@@ -6006,6 +6027,15 @@ function showD(id){
   document.getElementById("dOvl").classList.add("open");
 }
 
+/* Recolhido por padrão, e recolhido DE NOVO a cada quadra que se abre: quem
+   abriu o histórico numa quadra não pediu para abri-lo em todas. Dentro da
+   mesma quadra ele fica como foi deixado, senão o clique de abrir se desfaria
+   sozinho na primeira repintura. */
+var _qFinAberto=false, _qFinQuadra=null;
+function toggleEstudosFinalizados(){
+  _qFinAberto=!_qFinAberto;
+  if(typeof curV!=='undefined'&&curV) showD(curV);
+}
 function renderStudyCard(qid,study){
   var ne=nextEvent(study);
   var cls='';
@@ -7697,6 +7727,10 @@ function _calcCss(){
   '.calc-mixr span{color:var(--text-2,#9fb1a5);overflow:hidden;text-overflow:ellipsis}'+
   '.calc-mixr b{color:var(--text,#e8efe9);font-weight:700;text-align:right}'+
   '.calc-mixr.carrier{background:rgba(120,200,150,.06)}.calc-mixr.carrier span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
+  /* Produto declarado sem dose: nome inteiro à vista, e no lugar da quantidade a
+     palavra que impede de confundir a linha com uma medida. */
+  '.calc-mixr.falta{background:rgba(220,205,140,.10)}.calc-mixr.falta span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
+  '.calc-mixr.falta b,.calc-mixr.falta span:not(:first-child){color:#dccd8c;font-weight:700}'+
   '.calc-prep{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin:2px 0 7px;padding:7px 9px;border-radius:8px;background:rgba(74,170,105,.10);border:1px solid rgba(95,190,125,.24)}'+
   '.calc-prep span{font-size:9px;letter-spacing:.7px;font-weight:900;color:#82c99a}.calc-prep b{font-size:15px;color:var(--text,#e8efe9)}.calc-prep small{font-size:10px;color:var(--text-2,#9fb1a5)}'+
   '.calc-prep.bad{background:rgba(210,75,65,.10);border-color:rgba(230,100,85,.32)}.calc-prep.bad span{color:#ff9a8a}'+
@@ -8123,6 +8157,23 @@ function _labCompute(){
            depois de somar todos os líquidos — não o que sobra de um só. */
         var _BC=window.BioCalculoCampo;
         var _comps=(!_ppm && _BC) ? _BC.parseComponents(t.produto, t.dose, _calcDoseUnit(t.dose)) : null;
+        /* PAREAMENTO DESCONHECIDO PARA AQUI, e este era o pior dos dois buracos.
+           Com "A + B" e uma dose só, sobra UM componente — e a condição abaixo,
+           que pede mais de um, deixava passar direto para o caminho de produto
+           único. Resultado: o pote era preparado com a dose inteira como se o
+           tratamento fosse um produto só, o segundo nome sumia da tela e NENHUM
+           aviso aparecia, porque os problemas do parse só eram pintados dentro
+           do ramo da mistura.
+
+           Não se adivinha qual dose é de qual produto. Diz-se o que falta. */
+        if(_comps && _comps.problems.length && _comps.semDose && _comps.semDose.length){
+          html+='<div class="calc-card">'+head+
+            '<div class="calc-terr">⚠ '+esc(_comps.problems.join(' '))+'</div>'+
+            '<div class="calc-warn">Escreva a dose de cada produto na mesma ordem do nome, separadas por " + ". '+
+            'Exemplo: «'+esc(t.produto||'A + B')+'» com «0,5 L/ha + 0,25 %».</div></div>';
+          txt.push(t.id+(t.produto?' · '+t.produto:'')+' — receita não calculada: '+_comps.problems.join(' '));
+          return;
+        }
         if(_comps && _comps.components.length>1 || (_comps && _comps.components.length===1 && _comps.components[0].unidade==='%')){
           var _linhas='', _somaMl=0, _errMix='';
           _comps.components.forEach(function(cp){
@@ -8773,6 +8824,16 @@ function _calcCompute(){
     /* q.s.p. evita o erro operacional de medir o veículo como se volumes de
        formulações fossem perfeitamente aditivos: os itens entram primeiro e o
        veículo completa o volume FINAL marcado. */
+    /* O que foi DECLARADO e ficou sem dose entra aqui, com nome inteiro e sem
+       quantidade nenhuma. Antes ele simplesmente não existia nesta tabela: o
+       tratamento dizia "A + B", a receita da bancada dizia "A", e nada na tela
+       ligava uma coisa à outra. Some o produto, fica a metade — e quem lê
+       prepara a metade achando que preparou tudo. */
+    (mix.semDose||[]).forEach(function(nome){
+      html+='<div class="calc-mixr falta"'+_gc+'><span>'+esc(nome)+'</span>'+
+        (_calcDetalhe?'<span>sem dose</span>':'')+'<b>não entra</b>'+
+        (_calcDetalhe?'<b>—</b>':'')+'</div>';
+    });
     html+='<div class="calc-mixr carrier"'+_gc+'><span>Completar com '+esc(res.carrier.nome)+' até</span>'+
       (_calcDetalhe?'<span>q.s.p.</span>':'')+'<b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
       (_calcDetalhe?('<b>'+a(res.sprayTotalMl,'mL')+'</b>'):'')+'</div>';
@@ -16681,7 +16742,14 @@ function importData(ev){
 var _origRenderStudyCard=renderStudyCard;
 renderStudyCard=function(qid,study){
   study=normalizeStudy(study);
-  var ne=nextEventV2(study);
+  /* ESTUDO FINALIZADO NÃO TEM PRÓXIMO: ele acabou. nextEventV2() não sabe disso
+     — devolve o primeiro evento ainda não registrado a partir de ontem, e um
+     estudo encerrado hoje com avaliação marcada para hoje aparecia com a
+     etiqueta vermelha "HOJE" no cartão. Etiqueta de urgência em ensaio
+     terminado é a pior forma de ruído: ela compete com o que está rodando
+     de verdade. A regra já valia na ficha do estudo; faltava no cartão. */
+  var fim=(typeof estudoFinalizado==='function')&&estudoFinalizado(study);
+  var ne=fim?null:nextEventV2(study);
   var nextHtml='',cls='normal';
   if(ne){
     var diff=ne.diff;
@@ -16691,9 +16759,9 @@ renderStudyCard=function(qid,study){
     nextHtml='<div class="study-card-v2-next '+cls+'"><span>'+esc(tname)+'</span><span>'+label+'</span></div>';
   }
   var code=study.codigo||study.nome||'(sem código)';
-  var h='<div class="study-card-v2" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
+  var h='<div class="study-card-v2'+(fim?' finalizada':'')+'" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
   h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do estudo + NDVI p/ planilha" aria-label="Copiar estudo '+esc(code)+'" style="float:right;background:rgba(31,36,42,.05);border:1px solid #d7dbe0;color:#3a4149;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">📄</button>';
-  h+='<div class="study-card-v2-codigo">'+esc(code)+'</div>';
+  h+='<div class="study-card-v2-codigo">'+(fim?'<span class="study-lock" aria-hidden="true">🔒</span> ':'')+esc(code)+'</div>';
   if(study.descricao)h+='<div class="study-card-v2-desc">'+esc(study.descricao.slice(0,100))+(study.descricao.length>100?'…':'')+'</div>';
   h+='<div class="study-card-v2-meta">';
   h+='<span>'+study.tratamentos.length+' trat. × '+study.numRepeticoes+' rep.</span>';
@@ -16702,6 +16770,14 @@ renderStudyCard=function(qid,study){
   var _avFt=(study.avaliacoes||[]).filter(function(a){return _avTemNota(a);}).length, _avTt=(study.avaliacoes||[]).length;
   h+='<span>'+(_avTt>_avFt?(_avFt+' de '+_avTt+' aval.'):(_avTt+' aval.'))+'</span>';
   h+='</div>';
+  /* Quando terminou, e por quem. É o que substitui a etiqueta de próximo
+     evento: o cartão continua dizendo algo sobre o tempo, só que a verdade. */
+  if(fim){
+    var _fq=(study.finalizacao&&study.finalizacao.por)||'';
+    var _fe='';
+    try{ _fe=_agFormatDateTime(study.finalizacao.em); }catch(e){ _fe=String(study.finalizacao.em||''); }
+    h+='<div class="study-card-v2-fim">Finalizado em '+esc(_fe)+(_fq?(' · '+esc(_fq)):'')+'</div>';
+  }
   h+=nextHtml;
   h+='</div>';
   return h;

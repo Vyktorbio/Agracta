@@ -66,7 +66,12 @@ var ESTUDO={ id:'s1', codigo:'EST-1', numRepeticoes:4,
     /* Strings propositalmente antigas: a receita estruturada deve mandar. */
     {id:'T4',produto:'Texto legado',dose:'99 L/ha',componentes:[
       {id:'cp1',itemId:'adj1',nome:'Adjuvante do banco',valor:.15,unidade:'% v/v'}
-    ]}
+    ]},
+    /* NOME COM "+" E UMA DOSE SÓ. É como chega um produto comercial de marca
+       dupla — "Azoxistrobina + Benzovindiflupir 300 SC" — quando quem cadastrou
+       escreveu uma dose só. O motor separa por "+", sobra um nome sem dose, e a
+       receita da bancada exibia só a primeira metade do nome. */
+    {id:'T5',produto:'Azoxistrobina + Benzovindiflupir 300 SC',dose:'0,5 L/ha'}
   ]};
 ctx._calcStudy=function(){ return ESTUDO; };
 ctx._calcSel={qid:'Q1', sid:'s1'};
@@ -118,6 +123,36 @@ ck(!/>Total</.test(ess),'nem a coluna de total por componente');
 ck(!/Concentração/.test(ess),'nem a concentração');
 ck(!/Calda \/ parcela/.test(ess),'nem a calda por parcela');
 ck(!/calc-eq/.test(ess),'nem a dose relida na outra unidade');
+
+/* ==========================================================================
+   NOME DECLARADO NÃO SOME DA RECEITA
+
+   "Azoxistrobina + Benzovindiflupir 300 SC" com uma dose só: o motor separa em
+   dois nomes, só o primeiro casa com a dose, e o segundo era DESCARTADO em
+   silêncio. A tabela que vai para a bancada dizia "Azoxistrobina" — metade do
+   nome do produto, sem nada na tela ligando uma coisa à outra. Quem lê uma
+   receita prepara o que está escrito nela.
+
+   O nome tem de aparecer nos DOIS modos, e sem quantidade nenhuma ao lado:
+   inventar uma dose seria pior que esconder o nome. */
+console.log('\n--- Produto declarado sem dose ao lado ---');
+[[ess,'essencial'],[comp,'completo']].forEach(function(par){
+  var h=par[0], modo=par[1];
+  ck(/Benzovindiflupir 300 SC/.test(h),
+     'no modo '+modo+', o segundo produto aparece pelo nome inteiro');
+  ck(/calc-mixr falta/.test(h),
+     'no modo '+modo+', ele vem na linha marcada como fora do cálculo');
+  ck(/não entra/.test(h),
+     'no modo '+modo+', no lugar da quantidade está "não entra"');
+  /* E o aviso, que nos dois modos nunca se esconde (regra 1 deste arquivo). */
+  ck(/Sem dose ao lado/.test(h),
+     'no modo '+modo+', o aviso nomeia quem ficou sem dose');
+});
+/* A conta NÃO muda: o nome órfão entra na tela, nunca no cálculo. */
+var semDose=BC.parseComponents('Azoxistrobina + Benzovindiflupir 300 SC','0,5 L/ha','');
+eq(semDose.components.length,1,'o motor continua calculando com um componente só');
+eq(semDose.components[0].valor,0.5,'e com a dose que foi escrita, sem redistribuir nada');
+eq(JSON.stringify(semDose.semDose),'["Benzovindiflupir 300 SC"]','o nome sem dose sai separado, para a tela');
 
 console.log('\n--- O completo traz tudo de volta ---');
 ck(/>Dose</.test(comp),'a dose escrita volta');

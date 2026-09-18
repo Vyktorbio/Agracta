@@ -89,6 +89,21 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .studies-add:hover{filter:brightness(1.2)}
 .study-card{background:#0a110a;border:1px solid #1a2a1a;border-radius:8px;padding:10px 12px;margin-bottom:8px}
 .study-card.next-alert{border-color:#ff5252;background:rgba(255,82,82,0.05)}
+/* Finalizado: recuado de cor, para não disputar atenção com o que está rodando.
+   Ele continua legível — é histórico, não lixo. */
+.study-card-v2.finalizada{opacity:.74;border-style:dashed}
+.study-card-v2.finalizada .study-card-v2-codigo{color:#8d968d;font-weight:600}
+.study-lock{font-size:11px;opacity:.85}
+.study-card-v2-fim{font-size:10px;color:#6f7a6f;margin-top:6px;letter-spacing:.2px}
+/* O botão que guarda o histórico. Pequeno de propósito: ele é uma porta, não
+   uma seção — a seção é a dos que estão em andamento. */
+.studies-fim-t{display:flex;align-items:center;gap:6px;width:100%;margin-top:2px;
+  background:transparent;border:1px dashed rgba(122,140,122,.34);border-radius:6px;
+  padding:7px 10px;color:#7f8c7f;font-size:10px;font-weight:700;letter-spacing:.6px;cursor:pointer}
+.studies-fim-t:hover{background:rgba(122,140,122,.08);color:#9fae9f}
+.studies-fim-t:focus-visible{outline:2px solid #479eda;outline-offset:2px}
+.studies-fim-c{font-size:9px}
+.studies-fim-lista{margin-top:8px}
 .study-card.next-soon{border-color:#ffb300;background:rgba(255,179,0,0.04)}
 .study-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .study-name{font-size:12px;font-weight:700;color:#ddd;flex:1;line-height:1.2}
