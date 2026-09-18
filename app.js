@@ -657,6 +657,7 @@ function initMap(){
   addRotateControl();
   addMenuControl();
   addMapCtlToggle();
+  try{ addCroquiControl(); }catch(e){}
   setTimeout(function(){ try{ _map.invalidateSize(); }catch(e){} }, 200);
   window.addEventListener('resize', function(){ try{ _map.invalidateSize(); }catch(e){} });
   _geo = loadGeoref();
@@ -3327,6 +3328,371 @@ function _mascaraEstilo(qid,selecionada){
   try{ return MascaraCore.estilo(MascaraCore.estadoQuadra(_mascaraContagem(qid),{selecionada:!!selecionada})); }
   catch(e){ return null; }
 }
+/* ============ CROQUI DO ENSAIO NO MAPA =====================================
+   Até aqui o mapa dizia ONDE é a quadra e a ficha dizia COMO é o ensaio. Quem
+   chegava no talhão tinha de juntar as duas coisas de cabeça: "o croqui começa
+   naquele canto, o bloco 1 é essa faixa aqui". Agora o desenho fica no chão
+   certo, na escala certa, do lado do que já está no mapa.
+
+   O QUE É DESENHADO É O QUE JÁ ESTAVA CADASTRADO. Tratamentos, repetições,
+   tamanho da parcela e a ordem sorteada saem do estudo; a geometria sai do
+   motor puro (vendor/croqui-campo-core.js). Aqui só mora a ligação com o mapa:
+   camada, pegadores, painel e o botão que liga e desliga.
+
+   ONDE A POSIÇÃO MORA. Dentro do estudo (`study.croqui`), não num armazém
+   novo. O croqui é do ensaio, não do mapa — se o ensaio for para outra quadra
+   ou for exportado, a posição vai junto. E, de quebra, ela sincroniza pelo
+   caminho que já existe: `_mergeStudy` carrega os campos escalares do estudo e
+   a edição mais nova vence, com o carimbo `_ts` que o salvamento põe.
+
+   POR QUE O CANTO E NÃO O CENTRO. A âncora salva é o canto da primeira parcela
+   do primeiro bloco. É a referência que se acha no campo — ninguém acha o
+   centro de um ensaio andando — e é o ponto que o GPS vai marcar quando essa
+   parte entrar. O centro continua existindo, mas só como pegador de arrastar. */
+
+var _croquiLayer=null, _croquiEditLayer=null, _croquiEdit=null, _croquiHandles=null;
+var CROQUI_ON_KEY='agracta-croqui-on';
+var _croquiOn=(function(){ try{ return localStorage.getItem(CROQUI_ON_KEY)!=='0'; }catch(e){ return true; } })();
+
+/* O EIXO DA QUADRA — para o croqui já nascer alinhado com ela.
+   Mesmo retângulo mínimo de quadraDims, mas guardando a direção do lado maior.
+   Sem isto o croqui nasce apontando para o norte dentro de uma quadra torta, e
+   a primeira coisa que o usuário faz é girar na mão. */
+function quadraEixo(id){
+  ensureQGEO();
+  var pts=QGEO&&QGEO[id]; if(!pts||pts.length<3) return 0;
+  var la0=0,lo0=0; pts.forEach(function(p){la0+=p[0];lo0+=p[1];}); la0/=pts.length; lo0/=pts.length;
+  var k=Math.cos(la0*Math.PI/180);
+  var m=pts.map(function(p){ return {x:(p[1]-lo0)*111320*k, y:(p[0]-la0)*110540}; });
+  var best=null;
+  for(var i=0;i<m.length;i++){
+    var a=m[i], b=m[(i+1)%m.length], ex=b.x-a.x, ey=b.y-a.y, len=Math.sqrt(ex*ex+ey*ey);
+    if(len<1e-9) continue;
+    if(!best||len>best.len) best={len:len, ex:ex/len, ey:ey/len};
+  }
+  if(!best) return 0;
+  /* +y local aponta na direção do lado maior: mesma convenção do motor. */
+  return Math.atan2(-best.ex, best.ey);
+}
+function quadraCentro(id){
+  ensureQGEO();
+  var pts=QGEO&&QGEO[id]; if(!pts||!pts.length) return null;
+  return polyCentroid(pts);
+}
+
+/* A posição salva, limpa de qualquer lixo. Sem lat/lng válidos não há croqui —
+   um par de coordenadas quebrado desenharia o ensaio no meio do oceano. */
+function croquiPos(st){
+  var c=st&&st.croqui; if(!c) return null;
+  var lat=parseFloat(c.lat), lng=parseFloat(c.lng);
+  if(!isFinite(lat)||!isFinite(lng)) return null;
+  return { lat:lat, lng:lng, ang:parseFloat(c.ang)||0,
+    colunas:Math.max(0,parseInt(c.colunas,10)||0),
+    serpentina:(c.serpentina===undefined)?true:!!c.serpentina,
+    espacamento:Math.max(0,parseFloat(c.espacamento)||0),
+    carreador:Math.max(0,parseFloat(c.carreador)||0) };
+}
+/* O desenho experimental que o motor precisa, tirado do estudo. */
+function croquiGrade(st,pos){
+  st=normalizeStudy(st);
+  var dim=(typeof _parseParcelaDim==='function')?_parseParcelaDim((st.protocolo||{}).tamanhoParcela):null;
+  var ordem=null;
+  try{ if(st.randomizado) ordem=ensureStudyRandomizacao(st).ordem; }catch(e){ ordem=null; }
+  return CroquiCore.grade({
+    tratamentos:(st.tratamentos||[]).length, repeticoes:st.numRepeticoes,
+    comprimento:dim?dim.comprimento:0, largura:dim?dim.largura:0,
+    colunas:pos.colunas, serpentina:pos.serpentina,
+    espacamento:pos.espacamento, carreador:pos.carreador,
+    ordem:ordem });
+}
+
+/* O DESENHO. Contorno branco fino, sem preenchimento: o croqui é uma marcação
+   sobre a imagem, não uma camada de cor. Preencher esconderia a lavoura, que é
+   justamente o que se quer ver por baixo das parcelas. */
+function croquiDesenhar(camada,st,pos,emEdicao){
+  var g=croquiGrade(st,pos);
+  if(!g.parcelas.length) return g;
+  var rotulos=(_map&&_map.getZoom()>=18);
+  LF.polygon(CroquiCore.cantosDoConjunto(g,pos),
+    {color:'#fff',weight:emEdicao?2:1.5,opacity:emEdicao?1:.85,dashArray:'6,4',fill:false,interactive:false}).addTo(camada);
+  /* O INÍCIO E O FIM DA CAMINHADA SÃO DESENHADOS SEMPRE, em qualquer zoom.
+     Sem eles o croqui é um tabuleiro simétrico: de pé no talhão não dá para
+     saber por qual ponta se começa, e começar pela errada instala o ensaio
+     espelhado. São as duas marcas que se faz à mão no papel. */
+  var ultima=g.parcelas.length;
+  g.parcelas.forEach(function(p){
+    var inicio=(p.ordem===1), fim=(p.ordem===ultima);
+    var poly=LF.polygon(CroquiCore.cantosDaParcela(p,pos),
+      {color:'#fff',weight:(inicio||fim)?2:1,opacity:emEdicao?.95:.8,
+       fill:true,fillOpacity:inicio?(emEdicao?.30:.22):(emEdicao?.10:.04),fillColor:'#fff'});
+    var nome=p.campo||((p.tratId||('T'+p.tratNum))+' '+(p.repLabel||('R'+p.rep)));
+    /* A PARCELA ENTRA NO MAPA ANTES DO BALÃO. openTooltip() numa camada que
+       ainda não está no mapa não faz nada e não reclama: as marcas de início e
+       fim simplesmente não apareciam, e os rótulos de perto também não. */
+    poly.addTo(camada);
+    if(inicio||fim){
+      poly.bindTooltip(inicio?'1 · início':'fim',
+        {permanent:true,direction:'center',className:'croqui-tip croqui-tip-marco'}).openTooltip();
+    }else if(rotulos){
+      poly.bindTooltip(nome,
+        {permanent:true,direction:'center',className:'croqui-tip croqui-tip-fixa'}).openTooltip();
+    }else{
+      poly.bindTooltip(nome+(p.produto?(' · '+p.produto):'')+' · '+p.ordem+'ª a instalar',
+        {direction:'top',className:'croqui-tip'});
+    }
+  });
+  return g;
+}
+
+function croquiEnsureLayer(){
+  if(!_map) return null;
+  if(!_croquiLayer) _croquiLayer=LF.layerGroup().addTo(_map);
+  /* Os rótulos só aparecem de perto; sem redesenhar no zoom eles ficariam
+     presos no nível em que a tela foi montada. */
+  if(!_map.__croquiZoom){ _map.__croquiZoom=true; _map.on('zoomend',function(){ try{ renderCroquis(); }catch(e){} }); }
+  return _croquiLayer;
+}
+function renderCroquis(){
+  var camada=croquiEnsureLayer(); if(!camada) return;
+  camada.clearLayers();
+  if(!_croquiOn) return;
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config') return;
+    /* Mesma regra do resto do mapa: ensaio encerrado sai do andamento. O
+       croqui dele continua salvo e volta a aparecer se for reaberto. */
+    estudosAtivos(qid).forEach(function(st){
+      if(_croquiEdit && _croquiEdit.qid===qid && _croquiEdit.sid===st.id) return; /* em edição quem desenha é o editor */
+      var pos=croquiPos(st); if(!pos) return;
+      croquiDesenhar(camada,st,pos,false);
+    });
+  });
+}
+function toggleCroquis(){
+  _croquiOn=!_croquiOn;
+  try{ localStorage.setItem(CROQUI_ON_KEY,_croquiOn?'1':'0'); }catch(e){}
+  var b=document.getElementById('croquiRefBtn'); if(b) b.classList.toggle('on',_croquiOn);
+  renderCroquis();
+}
+function addCroquiControl(){
+  if(!_map || _map.__croquiCtl) return; _map.__croquiCtl=true;
+  haCss();
+  /* Mora no agrupador da engrenagem, junto de zoom, camadas e giro: é um
+     filtro de camada, não uma ferramenta — o mapa limpo continua limpo. */
+  var C=LF.control({position:'topleft'});
+  C.onAdd=function(){
+    var d=LF.DomUtil.create('div','ha-ctl');
+    d.innerHTML='<button id="croquiRefBtn" class="'+(_croquiOn?'on':'')+'" title="Mostrar ou esconder os croquis dos ensaios no mapa">Croqui</button>';
+    LF.DomEvent.disableClickPropagation(d);
+    d.querySelector('button').onclick=toggleCroquis;
+    return d;
+  };
+  C.addTo(_map);
+}
+
+/* ---- POSICIONAR: arrastar, girar e conferir antes de salvar ---------------
+   Enquanto o editor está aberto o croqui daquele estudo sai da camada normal e
+   passa a ser redesenhado a cada arrasto. Nada é salvo até o botão — quem
+   abriu para olhar fecha sem mudar nada. */
+function croquiCss(){
+  if(document.getElementById('croquiCss')) return;
+  var s=document.createElement('style'); s.id='croquiCss';
+  /* CORES FIXAS, DE PROPÓSITO. Este painel é vidro escuro por cima do mapa, em
+     qualquer tema — a imagem de satélite não muda de cor quando o app muda.
+     Puxar --text e --accent daqui deu texto escuro em fundo escuro no tema
+     claro (o --accent do app é quase preto, #1f242a): o botão selecionado e o
+     "Salvar" sumiam. Cor de painel sobre mapa não é cor de tema. */
+  s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:9px;padding:2px 4px}.croqui-tip-marco{background:rgba(55,214,132,.92);color:#08130c;font-weight:900;font-size:9px;padding:2px 5px}'+
+  '.croqui-panel{position:fixed;left:12px;bottom:80px;z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
+  '.croqui-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.croqui-title{font-size:12px;font-weight:900;letter-spacing:1px;color:#37d684;text-transform:uppercase}.croqui-x{background:none;border:none;color:#93a599;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
+  '.croqui-sub{font-size:11px;color:#93a599;margin:-4px 0 9px;line-height:1.4}.croqui-sub b{color:#e8efe9}'+
+  '.croqui-seg{display:flex;gap:6px;margin-bottom:9px}.croqui-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.croqui-seg button.on{background:#37d684;border-color:#37d684;color:#08130c}'+
+  '.croqui-mini{font-size:10px;color:#93a599;padding:8px 0 0}.croqui-nums{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}.croqui-nums label{display:block;font-size:9px;color:#93a599;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}.croqui-nums input{width:100%;background:#0c1210;border:1px solid #2c3a32;color:#e8efe9;border-radius:9px;padding:7px 8px;font:600 13px system-ui,sans-serif}'+
+  '.croqui-info{font-size:11px;color:#b9c6bd;background:#0c1210;border:1px solid #2c3a32;border-radius:10px;padding:8px;margin-bottom:9px;line-height:1.45}.croqui-info b{color:#e8efe9}.croqui-info.falta{border-color:#7a3a3a;color:#f0c3c3}'+
+  '.croqui-acts{display:flex;gap:7px}.croqui-acts button{flex:1;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acts button.primary{background:#37d684;border-color:#37d684;color:#08130c}.croqui-acts button.primary:disabled{background:#2a3a32;border-color:#2a3a32;color:#6d7d73;cursor:not-allowed}.croqui-acts button.danger{color:#f0a3a3;border-color:#5a2f2f}';
+  document.head.appendChild(s);
+}
+function croquiEditRedraw(){
+  if(!_croquiEdit) return;
+  if(!_croquiEditLayer) _croquiEditLayer=LF.layerGroup().addTo(_map);
+  _croquiEditLayer.clearLayers();
+  var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
+  var g=croquiDesenhar(_croquiEditLayer,st,_croquiEdit.pos,true);
+  if(_croquiHandles&&g&&g.parcelas.length){
+    _croquiHandles[0].setLatLng(CroquiCore.centro(g,_croquiEdit.pos));
+    _croquiHandles[1].setLatLng(CroquiCore.pegadorDeGiro(g,_croquiEdit.pos));
+  }
+  croquiEditPanel(g);
+}
+function croquiEditPanel(g){
+  var p=document.getElementById('croquiPanel'); if(!p||!_croquiEdit) return;
+  var pos=_croquiEdit.pos;
+  var falta=(g&&g.problemas&&g.problemas.length)?g.problemas:[];
+  var corpo=(g&&g.parcelas.length)
+    ? '<b>'+g.parcelas.length+' parcelas</b> · '+g.colunas+' col. × '+g.linhas+' lin. · '
+      +_croquiNum(g.largura)+' × '+_croquiNum(g.comprimento)+' m · '+_croquiNum(CroquiCore.areaHa(g),3)+' ha'
+      +'<br>Instalação: '+(g.serpentina?'sobe por uma coluna e desce pela seguinte':'todas as colunas no mesmo sentido')
+      +(falta.length?('<br><span style="color:#e8c37a">'+esc(falta.join(' ')) +'</span>'):'')
+    : esc(falta.join(' ')||'Sem dados suficientes para desenhar o croqui.');
+  p.querySelector('.croqui-info').className='croqui-info'+((g&&g.parcelas.length)?'':' falta');
+  p.querySelector('.croqui-info').innerHTML=corpo;
+  p.querySelectorAll('.croqui-seg button').forEach(function(b){
+    b.classList.toggle('on', (b.getAttribute('data-serp')==='1')===!!pos.serpentina);
+  });
+  var salvar=p.querySelector('[data-acao="salvar"]');
+  if(salvar) salvar.disabled=!(g&&g.parcelas.length);
+}
+function _croquiNum(v,casas){
+  var c=(casas==null)?1:casas, n=Math.round((parseFloat(v)||0)*Math.pow(10,c))/Math.pow(10,c);
+  return String(n).replace('.',',');
+}
+function croquiSetColunas(v){
+  if(!_croquiEdit) return;
+  _croquiEdit.pos.colunas=Math.max(0,parseInt(v,10)||0);
+  croquiEditRedraw();
+}
+function croquiSetSerpentina(on){
+  if(!_croquiEdit) return;
+  _croquiEdit.pos.serpentina=!!on;
+  croquiEditRedraw();
+}
+function croquiSetVao(campo,valor){
+  if(!_croquiEdit) return;
+  var v=Math.max(0,parseFloat(String(valor).replace(',','.'))||0);
+  _croquiEdit.pos[campo]=v;
+  croquiEditRedraw();
+}
+function abrirCroquiEditor(qid,sid){
+  if(!_map) initMap();
+  croquiCss(); haCss();
+  fecharCroquiEditor(true);
+  var st=_estudoDe(qid,sid); if(!st){ alert('Estudo não encontrado.'); return; }
+  st=normalizeStudy(st);
+  var pos=croquiPos(st);
+  if(!pos){
+    /* Primeira vez: nasce no meio da quadra, alinhado com o lado maior dela, e
+       recuado meio croqui para que a âncora (o canto) caia no lugar certo. */
+    var ctr=quadraCentro(qid);
+    if(!ctr){ alert('Esta quadra ainda não tem polígono no mapa. Desenhe a quadra antes de posicionar o croqui.'); return; }
+    var ang=quadraEixo(qid);
+    /* Duas colunas e serpentina: é a instalação padrão de campo — sobe por uma
+       coluna e desce pela outra. Quem instala de outro jeito troca aqui, e o
+       croqui lembra da escolha por ensaio. */
+    pos={lat:ctr[0],lng:ctr[1],ang:ang,colunas:2,serpentina:true,espacamento:0,carreador:0};
+    var g0=croquiGrade(st,pos);
+    var canto=CroquiCore.pontoLatLng(-g0.largura/2,-g0.comprimento/2,{lat:ctr[0],lng:ctr[1],ang:ang});
+    pos.lat=canto[0]; pos.lng=canto[1];
+  }
+  _croquiEdit={qid:qid,sid:sid,pos:pos,tinha:!!croquiPos(st)};
+  if(!_croquiEditLayer) _croquiEditLayer=LF.layerGroup().addTo(_map);
+
+  var mv=LF.marker([pos.lat,pos.lng],{draggable:true,zIndexOffset:1200,
+    icon:LF.divIcon({className:'gr-handle',html:'<div class="gr-h gr-move">&#10010;</div>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(_map);
+  mv.on('drag',function(){
+    /* O pegador central move o CONJUNTO: a âncora continua sendo o canto, e é
+       ela que anda junto — senão o croqui giraria em volta do dedo. */
+    var g=croquiGrade(_estudoDe(qid,sid),_croquiEdit.pos), c=mv.getLatLng();
+    var canto=CroquiCore.pontoLatLng(-g.largura/2,-g.comprimento/2,{lat:c.lat,lng:c.lng,ang:_croquiEdit.pos.ang});
+    _croquiEdit.pos.lat=canto[0]; _croquiEdit.pos.lng=canto[1];
+    croquiEditRedraw();
+  });
+  var rot=LF.marker([pos.lat,pos.lng],{draggable:true,zIndexOffset:1200,
+    icon:LF.divIcon({className:'gr-handle',html:'<div class="gr-h gr-rot">&#8635;</div>',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(_map);
+  rot.on('drag',function(){
+    /* Girar em volta do CENTRO, não da âncora: girar pelo canto arrancaria o
+       croqui de onde o usuário acabou de encostá-lo. */
+    var g=croquiGrade(_estudoDe(qid,sid),_croquiEdit.pos);
+    var ctr=CroquiCore.centro(g,_croquiEdit.pos), p=rot.getLatLng();
+    var ang=CroquiCore.anguloPara(p.lat,p.lng,{lat:ctr[0],lng:ctr[1],ang:_croquiEdit.pos.ang});
+    var canto=CroquiCore.pontoLatLng(-g.largura/2,-g.comprimento/2,{lat:ctr[0],lng:ctr[1],ang:ang});
+    _croquiEdit.pos.ang=ang; _croquiEdit.pos.lat=canto[0]; _croquiEdit.pos.lng=canto[1];
+    croquiEditRedraw();
+  });
+  _croquiHandles=[mv,rot];
+
+  var painel=document.createElement('div');
+  painel.id='croquiPanel'; painel.className='croqui-panel';
+  painel.innerHTML='<div class="croqui-head"><div class="croqui-title">Posicionar croqui</div>'
+    +'<button class="croqui-x" onclick="fecharCroquiEditor()" aria-label="Fechar">×</button></div>'
+    +'<div class="croqui-sub">'+esc(st.codigo||st.nome||st.id)+' · '+esc(quadraNome(qid))+'<br>Arraste pelo <b>✛</b> e gire pelo <b>↻</b>. O <b>1</b> marca onde a instalação começa.</div>'
+    +'<div class="croqui-seg"><button data-serp="1" onclick="croquiSetSerpentina(true)">Vai e volta</button>'
+    +'<button data-serp="0" onclick="croquiSetSerpentina(false)">Sempre no mesmo sentido</button></div>'
+    +'<div class="croqui-nums"><div><label>Colunas</label><input type="number" min="1" step="1" value="'+(pos.colunas||2)+'" oninput="croquiSetColunas(this.value)"></div>'
+    +'<div><label>Carreador (m)</label><input type="number" min="0" step="0.5" value="'+pos.carreador+'" oninput="croquiSetVao(\'carreador\',this.value)"></div>'
+    +'<div><label>Entre parcelas (m)</label><input type="number" min="0" step="0.5" value="'+pos.espacamento+'" oninput="croquiSetVao(\'espacamento\',this.value)"></div>'
+    +'<div><label>&nbsp;</label><div class="croqui-mini">âncora = 1ª parcela</div></div></div>'
+    +'<div class="croqui-info"></div>'
+    +'<div class="croqui-acts"><button class="primary" data-acao="salvar" onclick="salvarCroqui()">Salvar</button>'
+    +(_croquiEdit.tinha?'<button class="danger" onclick="removerCroqui()">Remover</button>':'')
+    +'<button onclick="fecharCroquiEditor()">Cancelar</button></div>';
+  document.body.appendChild(painel);
+
+  renderCroquis();
+  croquiEditRedraw();
+  croquiEnquadrar();
+  /* O painel ganha altura final depois do primeiro desenho (a leitura cresce
+     quando há aviso); reenquadra uma vez com a altura que ele realmente tem. */
+  setTimeout(croquiEnquadrar,60);
+}
+/* ENQUADRAR O CROQUI NA PARTE QUE SOBRA DA TELA.
+   Duas coisas obrigam a isto. De longe, os dois pegadores ficam a poucos
+   pixels um do outro e o dedo pega o errado — então é preciso aproximar. E o
+   painel come o rodapé do mapa: centralizar no meio da tela punha o croqui
+   debaixo dele, e o usuário arrastava no escuro. A margem de baixo é medida do
+   painel de verdade, não chutada, porque ele cresce quando falta dado. */
+function croquiEnquadrar(){
+  if(!_croquiEdit||!_map) return;
+  try{
+    var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
+    var g=croquiGrade(st,_croquiEdit.pos);
+    if(!g.parcelas.length){ _map.panTo([_croquiEdit.pos.lat,_croquiEdit.pos.lng]); return; }
+    var cantos=CroquiCore.cantosDoConjunto(g,_croquiEdit.pos)
+      .concat([CroquiCore.pegadorDeGiro(g,_croquiEdit.pos)]);
+    var painel=document.getElementById('croquiPanel');
+    var alturaPainel=painel?(painel.getBoundingClientRect().height+96):380; /* +96: o painel fica 80px acima do rodapé */
+    var alturaMapa=(_map.getSize()?_map.getSize().y:600);
+    /* Nunca comer mais de dois terços da tela: numa tela baixa a margem
+       engoliria o mapa inteiro e o fitBounds não teria onde caber. */
+    var margem=Math.min(alturaPainel, Math.round(alturaMapa*0.62));
+    _map.fitBounds(LF.latLngBounds(cantos),
+      {animate:false, paddingTopLeft:[24,24], paddingBottomRight:[24,margem]});
+  }catch(e){}
+}
+function fecharCroquiEditor(silencioso){
+  if(_croquiHandles){ _croquiHandles.forEach(function(h){ try{ _map.removeLayer(h); }catch(e){} }); _croquiHandles=null; }
+  if(_croquiEditLayer){ try{ _croquiEditLayer.clearLayers(); }catch(e){} }
+  var p=document.getElementById('croquiPanel'); if(p) p.remove();
+  _croquiEdit=null;
+  if(!silencioso) renderCroquis();
+}
+function salvarCroqui(){
+  if(!_croquiEdit) return;
+  var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
+  var g=croquiGrade(st,_croquiEdit.pos);
+  if(!g.parcelas.length){ alert((g.problemas||[]).join('\n')||'Não há o que desenhar.'); return; }
+  var p=_croquiEdit.pos;
+  st.croqui={lat:p.lat,lng:p.lng,ang:p.ang,colunas:g.colunas,serpentina:p.serpentina,
+             espacamento:p.espacamento,carreador:p.carreador};
+  st._ts=Date.now(); /* carimbo: no merge entre aparelhos a edição mais nova vence */
+  save();
+  fecharCroquiEditor();
+  if(typeof _stxToast==='function') _stxToast('Croqui posicionado.');
+}
+function removerCroqui(){
+  if(!_croquiEdit) return;
+  var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
+  if(!confirm('Tirar o croqui deste ensaio do mapa?\nO ensaio e os dados continuam; só a posição é apagada.')) return;
+  delete st.croqui; st._ts=Date.now();
+  save();
+  fecharCroquiEditor();
+  if(typeof _stxToast==='function') _stxToast('Croqui removido do mapa.');
+}
+/* Atalho a partir da ficha do estudo: fecha o painel e mostra o mapa. */
+function posicionarCroquiDoEstudo(qid,sid){
+  try{ if(typeof closeStudyDetail==='function') closeStudyDetail(); }catch(e){}
+  try{ if(typeof closeD==='function') closeD(); }catch(e){}
+  abrirCroquiEditor(qid,sid);
+}
+
 function render(){
   initMap();
   if(!_qLayer) return;
@@ -3377,6 +3743,7 @@ function render(){
   }
   if(editMode) drawVertexHandles();
   if(typeof renderNotas==='function') renderNotas();
+  try{ renderCroquis(); }catch(e){}
 }
 
 /* ============ LEGEND (removida da UI — funções mantidas como no-op seguro) ============ */
@@ -12342,6 +12709,9 @@ function openStudyDetail(qid,sid){
      '<div class="sd-section study-plan-card"><div class="sd-section-title">Planejamento &amp; parcelas</div><div class="study-plan-grid">'+
      '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(_studyRandomOk(study)?'Randomizada':(study.randomizado?'A conferir':'Sequencial'))+'</b></div></div><div class="study-plan-actions">'+
      '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
+     /* O croqui de papel diz a ORDEM; o croqui no mapa diz o LUGAR. Os dois
+        botoes ficam lado a lado porque a pergunta e a mesma, em dois passos. */
+     (!_fin?'<button type="button" class="secondary" onclick="posicionarCroquiDoEstudo(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">'+((study.croqui&&study.croqui.lat!=null)?'Ajustar no mapa':'Posicionar no mapa')+'</button>':'')+
      (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
   /* O que o DESENHO do ensaio tem a dizer sobre si mesmo. Fica junto do
      planejamento porque é ali que se conserta — depois da primeira aplicação,
