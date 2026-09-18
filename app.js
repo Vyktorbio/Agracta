@@ -3530,6 +3530,8 @@ function croquiCss(){
   '.croqui-seg{display:flex;gap:6px;margin-bottom:9px}.croqui-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.croqui-seg button.on{background:#37d684;border-color:#37d684;color:#08130c}'+
   '.croqui-mini{font-size:10px;color:#93a599;padding:8px 0 0}.croqui-nums{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}.croqui-nums label{display:block;font-size:9px;color:#93a599;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}.croqui-nums input{width:100%;background:#0c1210;border:1px solid #2c3a32;color:#e8efe9;border-radius:9px;padding:7px 8px;font:600 13px system-ui,sans-serif}'+
   '.croqui-info{font-size:11px;color:#b9c6bd;background:#0c1210;border:1px solid #2c3a32;border-radius:10px;padding:8px;margin-bottom:9px;line-height:1.45}.croqui-info b{color:#e8efe9}.croqui-info.falta{border-color:#7a3a3a;color:#f0c3c3}'+
+  '.croqui-gps{width:100%;margin-bottom:8px;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-gps:disabled{opacity:.75;cursor:progress}'+
+  '.croqui-acc{font-size:11px;line-height:1.45;border-radius:10px;padding:8px;margin-bottom:9px;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acc.boa{border-color:#2f6b45;color:#a9e6c0}.croqui-acc.limite{border-color:#6b5a2f;color:#e8d3a3}.croqui-acc.ruim{border-color:#7a3a3a;color:#f0c3c3}'+
   '.croqui-acts{display:flex;gap:7px}.croqui-acts button{flex:1;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acts button.primary{background:#37d684;border-color:#37d684;color:#08130c}.croqui-acts button.primary:disabled{background:#2a3a32;border-color:#2a3a32;color:#6d7d73;cursor:not-allowed}.croqui-acts button.danger{color:#f0a3a3;border-color:#5a2f2f}';
   document.head.appendChild(s);
 }
@@ -3539,11 +3541,13 @@ function croquiEditRedraw(){
   _croquiEditLayer.clearLayers();
   var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
   var g=croquiDesenhar(_croquiEditLayer,st,_croquiEdit.pos,true);
+  croquiDesenharPrecisao();
   if(_croquiHandles&&g&&g.parcelas.length){
     _croquiHandles[0].setLatLng(CroquiCore.centro(g,_croquiEdit.pos));
     _croquiHandles[1].setLatLng(CroquiCore.pegadorDeGiro(g,_croquiEdit.pos));
   }
   croquiEditPanel(g);
+  croquiEditPanelAcc();
 }
 function croquiEditPanel(g){
   var p=document.getElementById('croquiPanel'); if(!p||!_croquiEdit) return;
@@ -3615,6 +3619,10 @@ function abrirCroquiEditor(qid,sid){
     var g=croquiGrade(_estudoDe(qid,sid),_croquiEdit.pos), c=mv.getLatLng();
     var canto=CroquiCore.pontoLatLng(-g.largura/2,-g.comprimento/2,{lat:c.lat,lng:c.lng,ang:_croquiEdit.pos.ang});
     _croquiEdit.pos.lat=canto[0]; _croquiEdit.pos.lng=canto[1];
+    /* Arrastou na mão: a âncora deixou de ser a que o GPS leu, e o círculo de
+       incerteza daquela leitura não descreve mais este ponto. Mantê-lo seria
+       carimbar de medida uma posição escolhida no olho. */
+    croquiGpsCancelar();
     croquiEditRedraw();
   });
   var rot=LF.marker([pos.lat,pos.lng],{draggable:true,zIndexOffset:1200,
@@ -3643,6 +3651,8 @@ function abrirCroquiEditor(qid,sid){
     +'<div><label>Entre parcelas (m)</label><input type="number" min="0" step="0.5" value="'+pos.espacamento+'" oninput="croquiSetVao(\'espacamento\',this.value)"></div>'
     +'<div><label>&nbsp;</label><div class="croqui-mini">âncora = 1ª parcela</div></div></div>'
     +'<div class="croqui-info"></div>'
+    +'<button type="button" id="croquiGpsBtn" class="croqui-gps" onclick="croquiAncorarNoGps()">Marcar canto no GPS</button>'
+    +'<div class="croqui-acc" id="croquiAcc" style="display:none"></div>'
     +'<div class="croqui-acts"><button class="primary" data-acao="salvar" onclick="salvarCroqui()">Salvar</button>'
     +(_croquiEdit.tinha?'<button class="danger" onclick="removerCroqui()">Remover</button>':'')
     +'<button onclick="fecharCroquiEditor()">Cancelar</button></div>';
@@ -3655,6 +3665,77 @@ function abrirCroquiEditor(qid,sid){
      quando há aviso); reenquadra uma vez com a altura que ele realmente tem. */
   setTimeout(croquiEnquadrar,60);
 }
+/* ---- ANCORAR O CANTO NO GPS -----------------------------------------------
+   A âncora do croqui é o canto da primeira parcela justamente para isto: é o
+   ponto que se acha andando. Estando nele, um toque põe o croqui no lugar; o
+   giro continua na mão, contra as linhas da lavoura, que é o que o GPS não
+   sabe dizer.
+
+   E A PRECISÃO É MOSTRADA, NÃO ESCONDIDA. Um aparelho comum entrega de ±3 a
+   ±30 m conforme o céu, e ±12 m não posiciona uma parcela de 3 m: o canto cai
+   na vizinha e o croqui inteiro sai deslocado um tratamento — o pior erro
+   possível, porque continua parecendo certo. Por isso o número aparece, o
+   veredito compara com a LARGURA DA PARCELA (e não com um limite fixo), e o
+   círculo de incerteza é desenhado em volta do canto: um círculo de ±12 m ao
+   redor de uma parcela de 3 m conta a história sozinho. */
+function croquiGpsCancelar(){
+  if(_croquiEdit) _croquiEdit.gps=null;
+  var c=document.getElementById('croquiAcc'); if(c) c.remove();
+}
+function croquiAncorarNoGps(){
+  if(!_croquiEdit || typeof gpsBest!=='function') return;
+  var btn=document.getElementById('croquiGpsBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Procurando…'; }
+  _croquiEdit.gps={buscando:true, acc:null};
+  croquiEditRedraw();
+  gpsBest({target:4, maxWait:12000},
+    function(parcial){                       /* cada leitura melhor: mostra já */
+      if(!_croquiEdit||!_croquiEdit.gps) return;
+      _croquiEdit.gps.acc=parcial.acc;
+      if(btn) btn.textContent='Procurando… ±'+Math.round(parcial.acc)+' m';
+      croquiEditPanelAcc();
+    },
+    function(melhor,erro){
+      if(btn){ btn.disabled=false; btn.textContent='Marcar canto no GPS'; }
+      if(!_croquiEdit) return;
+      if(!melhor){
+        _croquiEdit.gps=null;
+        croquiEditRedraw();
+        alert(erro||'Não consegui uma posição.');
+        return;
+      }
+      /* O ponto vira a ÂNCORA — o canto da primeira parcela, onde a pessoa
+         está. O ângulo não é tocado: uma leitura só não diz direção. */
+      _croquiEdit.pos.lat=melhor.lat; _croquiEdit.pos.lng=melhor.lng;
+      _croquiEdit.gps={buscando:false, acc:melhor.acc, em:new Date().toISOString()};
+      croquiEditRedraw();
+      croquiEnquadrar();
+    });
+}
+/* O círculo de incerteza, do tamanho que o aparelho declarou. */
+function croquiDesenharPrecisao(){
+  if(!_croquiEdit||!_croquiEdit.gps||!(_croquiEdit.gps.acc>0)||!_croquiEditLayer) return;
+  try{
+    LF.circle([_croquiEdit.pos.lat,_croquiEdit.pos.lng],
+      {radius:_croquiEdit.gps.acc, color:'#6ec1ff', weight:1, opacity:.9,
+       fillColor:'#6ec1ff', fillOpacity:.10, interactive:false}).addTo(_croquiEditLayer);
+  }catch(e){}
+}
+/* A linha do GPS dentro do painel, separada para poder atualizar sozinha
+   enquanto a leitura melhora, sem redesenhar o croqui a cada segundo. */
+function croquiEditPanelAcc(){
+  var el=document.getElementById('croquiAcc'); if(!el||!_croquiEdit) return;
+  var gps=_croquiEdit.gps;
+  if(!gps){ el.style.display='none'; el.textContent=''; return; }
+  el.style.display='';
+  if(gps.buscando && !(gps.acc>0)){ el.className='croqui-acc'; el.textContent='Procurando sinal…'; return; }
+  var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid);
+  var dim=st?_parseParcelaDim((st.protocolo||{}).tamanhoParcela):null;
+  var q=CroquiCore.qualidadeDaAncora(gps.acc, dim?dim.largura:0);
+  el.className='croqui-acc '+q.nivel;
+  el.textContent=(gps.buscando?'Procurando… ':'')+q.texto;
+}
+
 /* ENQUADRAR O CROQUI NA PARTE QUE SOBRA DA TELA.
    Duas coisas obrigam a isto. De longe, os dois pegadores ficam a poucos
    pixels um do outro e o dedo pega o errado — então é preciso aproximar. E o
@@ -3669,6 +3750,19 @@ function croquiEnquadrar(){
     if(!g.parcelas.length){ _map.panTo([_croquiEdit.pos.lat,_croquiEdit.pos.lng]); return; }
     var cantos=CroquiCore.cantosDoConjunto(g,_croquiEdit.pos)
       .concat([CroquiCore.pegadorDeGiro(g,_croquiEdit.pos)]);
+    /* O CÍRCULO DE INCERTEZA ENTRA NO ENQUADRAMENTO. Ele é a informação: um
+       círculo de ±12 m em volta de uma parcela de 3 m mostra sozinho que
+       aquela âncora não serve. Enquadrar só o croqui deixava o círculo fora
+       da tela justamente quando ele era grande — ou seja, escondia o aviso
+       exatamente no caso em que ele importa. */
+    var _acc=_croquiEdit.gps&&_croquiEdit.gps.acc;
+    if(_acc>0){
+      var _m=CroquiCore.metrosPorGrau(_croquiEdit.pos.lat);
+      var _dLat=_acc/_m.mlat, _dLng=_acc/_m.mlng;
+      cantos=cantos.concat([
+        [_croquiEdit.pos.lat-_dLat,_croquiEdit.pos.lng-_dLng],
+        [_croquiEdit.pos.lat+_dLat,_croquiEdit.pos.lng+_dLng]]);
+    }
     var painel=document.getElementById('croquiPanel');
     var alturaPainel=painel?(painel.getBoundingClientRect().height+96):380; /* +96: o painel fica 80px acima do rodapé */
     var alturaMapa=(_map.getSize()?_map.getSize().y:600);
@@ -3694,6 +3788,12 @@ function salvarCroqui(){
   var p=_croquiEdit.pos;
   st.croqui={lat:p.lat,lng:p.lng,ang:p.ang,colunas:g.colunas,serpentina:p.serpentina,
              espacamento:p.espacamento,carreador:p.carreador};
+  /* DE ONDE VEIO O CANTO. Um croqui marcado no GPS com ±2 m e um arrastado no
+     olho por cima da imagem são coisas diferentes, e daqui a seis meses
+     ninguém lembra qual foi. A procedência fica junto da posição. */
+  var _gps=_croquiEdit.gps;
+  if(_gps && !_gps.buscando && _gps.acc>0) st.croqui.ancora={fonte:'gps',acc:_gps.acc,em:_gps.em||new Date().toISOString()};
+  else st.croqui.ancora={fonte:'mao',em:new Date().toISOString()};
   st._ts=Date.now(); /* carimbo: no merge entre aparelhos a edição mais nova vence */
   save();
   fecharCroquiEditor();

@@ -123,8 +123,58 @@ maior da quadra (`quadraEixo`).
 - `app.js` — camada, pegadores, painel, botão
 - `test_croqui_campo.js` — `node test_croqui_campo.js`
 
-## Ainda não entrou
+## Ancorar o canto no GPS
 
-**Ancoragem por GPS.** A âncora já é o canto justamente para isso: estando no
-campo, marcar o canto da primeira parcela e girar o croqui com o dedo até bater
-com as linhas.
+A âncora é o canto da primeira parcela justamente para isto: é o ponto que se
+acha andando. Estando nele, **Marcar canto no GPS** põe o croqui no lugar. O
+giro continua na mão, contra as linhas da lavoura — uma leitura só diz *onde*,
+nunca *para onde*, e girar por causa dela seria inventar orientação a partir de
+um ponto.
+
+### A precisão é mostrada, não escondida
+
+Um aparelho comum entrega de ±3 a ±30 m conforme o céu. **±12 m não posiciona
+uma parcela de 3 m**: o canto cai na vizinha e o croqui inteiro sai deslocado um
+tratamento — o pior erro possível, porque continua parecendo certo.
+
+Por isso três coisas acontecem juntas:
+
+1. o número aparece por extenso;
+2. o veredito compara com a **largura da parcela**, não com um limite fixo em
+   metros (±4 m é ótimo numa parcela de 20 m e inútil numa de 3 m);
+3. o **círculo de incerteza** é desenhado em volta do canto e entra no
+   enquadramento — um círculo de ±12 m ao redor de um croqui de 6 m conta a
+   história sozinho, sem texto.
+
+| precisão vs. largura da parcela | veredito |
+|---|---|
+| até metade da largura | **boa** — o canto está dentro da parcela certa |
+| até uma largura | **limite** — confira na imagem antes de salvar |
+| acima da largura | **ruim** — pode cair uma parcela fora |
+
+Salvar com sinal ruim continua permitido: é decisão de quem está no campo. O
+que não é permitido é fazê-lo sem saber.
+
+### Procedência
+
+Quem salva guarda também de onde veio o canto:
+
+```js
+study.croqui.ancora = {fonte:'gps', acc:1.5, em:'2026-09-18T23:27:13Z'}
+// ou
+study.croqui.ancora = {fonte:'mao', em:'…'}
+```
+
+Um croqui marcado no GPS com ±2 m e um arrastado no olho por cima da imagem são
+coisas diferentes, e daqui a seis meses ninguém lembra qual foi. **Arrastar na
+mão apaga o carimbo do GPS**: a âncora deixou de ser a lida, e o círculo daquela
+leitura não descreve mais aquele ponto.
+
+### Uma armadilha de teste
+
+O mock de geolocalização do Chromium **não entrega leitura nenhuma** quando a
+precisão declarada é baixa: com `accuracy: 12` vêm zero leituras e um timeout,
+enquanto `accuracy: 1.5` chega na hora. Um aparelho real entrega ±20 m sem
+problema. Para exercitar o caminho do sinal ruim, injete a leitura direto em
+`navigator.geolocation.watchPosition` — assim o teste cobra o código do app, e
+não o mock.
