@@ -3,7 +3,7 @@
  * Aqui a geometria vira posição no terreno, e é por isso que este teste é
  * rigoroso: um erro de sinal ou de eixo não dá exceção nenhuma — dá um croqui
  * bonito no lugar errado. Alguém vai ao campo procurar a parcela onde o
- * desenho mandou e não encontra nada. As quatro mentiras possíveis:
+ * desenho mandou e não encontra nada. As cinco mentiras possíveis:
  *
  *   1. desenhar sem tamanho de parcela (chute com cara de medida);
  *   2. trocar comprimento por largura (parcela deitada no lugar de em pé);
