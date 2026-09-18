@@ -99,9 +99,24 @@ assert.deepEqual(r.contagem,{done:0,partial:0,empty:0});
 assert.equal(r.estilo(false).cor,M.CORES.fora.cor,'estudo sem avaliação não vira vermelho');
 assert.equal(contar([]).estilo(false).cor,M.CORES.fora.cor,'quadra sem estudo fica fora do estudo');
 
-/* Estudo finalizado com lacuna: concluído, não amarelo para sempre. */
+/* ESTUDO FINALIZADO NÃO ENTRA NA CONTA.
+   Ele já contou como 'done', e a intenção era boa: lacuna de ensaio encerrado
+   não é trabalho pendente, e pintá-la de amarelo para sempre ensinaria a
+   ignorar o amarelo. Só que 'done' pinta a quadra de VERDE — "tudo avaliado,
+   em dia" — e uma quadra onde só há ensaio encerrado não está em dia: não está
+   nada. Verde é o fim de um trabalho, não a ausência dele.
+   Agora ele sai da conta inteira, e a quadra fica como as que nunca tiveram
+   estudo: fora de estudo. O ensaio continua no app, na ficha da quadra. */
 r=contar([{finalizado:true,__parcelas:parcelas,avaliacoes:[avaliacao({T1R1:{Severidade:1}})]}]);
-assert.deepEqual(r.contagem,{done:4,partial:0,empty:0},'estudo fechado não admite mais lançamento');
+assert.deepEqual(r.contagem,{done:0,partial:0,empty:0},'estudo finalizado não conta parcela nenhuma');
+assert.equal(r.estilo(false).cor,M.CORES.fora.cor,
+  'e a quadra só com finalizado fica fora do estudo — não verde de "tudo avaliado"');
+/* E não apaga o que ainda está rodando ao lado dele. */
+r=contar([
+  {finalizado:true,__parcelas:[{key:'T1R1'}],avaliacoes:[avaliacao({T1R1:{Severidade:1}})]},
+  {__parcelas:[{key:'T2R1'}],avaliacoes:[avaliacao({})]}]);
+assert.deepEqual(r.contagem,{done:0,partial:0,empty:1},'só o que está rodando pinta a quadra');
+assert.equal(r.estilo(false).cor,M.CORES.pendente.cor,'e a cor é a do que falta lançar nele');
 
 /* Duas execuções na mesma quadra somam parcelas. */
 r=contar([
@@ -109,6 +124,33 @@ r=contar([
   {__parcelas:[{key:'T1R1'}],avaliacoes:[avaliacao({})]}]);
 assert.deepEqual(r.contagem,{done:1,partial:0,empty:1});
 assert.equal(r.estilo(false).cor,M.CORES.parcial.cor);
+
+/* --------------------- 2b. o mapa inteiro segue a mesma regra -------------
+   Não era só a cor. O rótulo da quadra somava os ensaios encerrados, e a
+   bolinha ficava VERMELHA por causa de uma avaliação de estudo finalizado que
+   ninguém vai mais lançar — urgência inventada em cima de trabalho que acabou.
+   Uma função só decide o que conta, e as três leituras passam por ela. */
+{
+  const ativos=pega(app,'estudosAtivos');
+  assert.match(ativos,/estudoFinalizado/,'estudosAtivos filtra pelo finalizado');
+  const rend=pega(app,'render');
+  assert.match(rend,/var nEst=estudosAtivos\(id\)\.length/,
+    'o número no rótulo conta só os que estão rodando');
+  const alerta=pega(app,'quadraHasAlert');
+  assert.match(alerta,/estudosAtivos\(qid\)/,
+    'e o alerta vermelho também — estudo finalizado não tem próximo evento');
+  const urg=pega(app,'getQuadraUrgency');
+  assert.match(urg,/estudosAtivos\(qid\)/,
+    'e a cor por urgencia do badge legado tambem — senao a bolinha voltava a ficar vermelha por ensaio encerrado');
+  const hoje=pega(app,'collectTodayEvents');
+  assert.match(hoje,/estudosAtivos\(qid\)/,
+    'o painel HOJE bebe da mesma fonte: sem isso o botao ficava vermelho por atraso de ensaio encerrado');
+  const cont=pega(app,'_mascaraContagem');
+  assert.match(cont,/estudoFinalizado\(st\)\) continue/,
+    'a máscara pula o finalizado em vez de contá-lo como concluído');
+  assert.ok(!/fechado\?'done'/.test(cont),
+    'e não sobrou o atalho que pintava ensaio encerrado de verde');
+}
 
 /* ------------------------------------------------ 3. quem manda na cor ----- */
 const render=pega(app,'render');
@@ -129,4 +171,4 @@ assert.ok(pedido,'o index.html precisa carregar o motor da máscara');
 assert.ok(sw.includes(pedido),'o sw.js precisa pré-carregar exatamente "'+pedido+'"');
 assert.ok(html.indexOf(pedido)<html.indexOf('app.js?v='),'o motor tem de carregar ANTES do app.js');
 
-console.log('Máscara das quadras: estados, arredondamento, estudo fechado, prioridade do NDVI e reserva da cultura OK.');
+console.log('Máscara das quadras: estados, arredondamento, finalizado fora da conta em cor, rótulo e alerta, prioridade do NDVI e reserva da cultura OK.');

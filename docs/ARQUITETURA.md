@@ -219,6 +219,15 @@ dispositivo e **motivo**.
 Finalizado → bloqueado. Reabrir exige justificativa, permissão e registro. Eventos
 importantes pedem rubrica.
 
+**Finalizado também sai das leituras de andamento.** Uma única função (`estudosAtivos`)
+decide o que ainda conta, e por ela passam o número no rótulo da quadra, a cor da bolinha,
+a máscara de lançamento, a urgência do badge e o painel "HOJE". Sem isso o mapa respondia
+a pergunta errada: somava ensaios encerrados, pintava de vermelho um atraso que ninguém
+vai lançar e deixava verde — "tudo avaliado, em dia" — uma quadra onde nada está rodando.
+Verde é o fim de um trabalho, não a ausência dele; a quadra sem nada rodando aparece como
+o que é, fora de estudo. O ensaio encerrado continua inteiro na ficha da quadra, atrás do
+botão de finalizados.
+
 Status: rascunho · aprovado · em execução · aguardando análise · analisado · finalizado ·
 arquivado.
 
