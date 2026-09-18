@@ -258,6 +258,46 @@ const alvo=C.pontoLatLng(0,30,{lat:anc.lat,lng:anc.lng,ang:0.7});
 perto(C.anguloPara(alvo[0],alvo[1],anc), 0.7, 1e-3, 'o ângulo calculado do arrasto tem de reconstruir o giro');
 assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da âncora não gira nada');
 
+/* ------- 5b. A ÂNCORA DO GPS SERVE PARA ESTA PARCELA? ----------------------
+   O croqui é ancorado pelo canto, e no campo esse canto vem do GPS. Um
+   aparelho comum entrega de ±3 a ±30 m conforme o céu, e ±12 m não posiciona
+   uma parcela de 3 m: o canto cai na parcela vizinha e o croqui inteiro sai
+   deslocado um tratamento — o pior erro possível, porque continua parecendo
+   certo. A régua tem de ser a PRÓPRIA PARCELA: ±4 m é ótimo num ensaio de
+   parcela de 20 m e inútil num de 3 m. */
+{
+  const q=(a,w)=>C.qualidadeDaAncora(a,w).nivel;
+
+  /* Menos de meia parcela: o canto está dentro da parcela certa. */
+  assert.equal(q(1,3),'boa');
+  assert.equal(q(1.5,3),'boa','exatamente meia parcela ainda serve');
+
+  /* Entre meia parcela e uma parcela: pode escorregar, mas dá para conferir
+     na imagem antes de salvar. */
+  assert.equal(q(2.5,3),'limite');
+  assert.equal(q(3,3),'limite','na largura exata ainda é conferível');
+
+  /* Maior que a parcela: o canto pode cair uma parcela fora. */
+  assert.equal(q(3.1,3),'ruim','passou da largura, já troca de vizinha');
+  assert.equal(q(12,3),'ruim');
+
+  /* A MESMA precisão muda de veredito com o tamanho da parcela — é isto que
+     um limite fixo em metros erraria nos dois sentidos. */
+  assert.equal(q(4,20),'boa','±4 m é ótimo numa parcela de 20 m');
+  assert.equal(q(4,3),'ruim','e a MESMA leitura é inútil numa de 3 m');
+
+  /* Sem precisão declarada, ou sem tamanho de parcela, não se inventa nota. */
+  assert.equal(q(null,3),'desconhecida');
+  assert.equal(q(0,3),'desconhecida','precisão zero não existe: é ausência de informação');
+  assert.equal(q(5,0),'desconhecida','sem parcela não há régua para julgar');
+
+  /* O texto tem de dizer o número e a comparação — "ruim" sozinho não ensina
+     ninguém a esperar sinal melhor. */
+  const ruim=C.qualidadeDaAncora(12,3).texto;
+  assert.match(ruim,/12/,'o texto diz a precisão medida');
+  assert.match(ruim,/3/,'e a largura com que ela foi comparada');
+}
+
 /* ------------------------------------------- 6. a ligação com o app -------- */
 /* O motor pode estar certo e o croqui não aparecer. Estas quatro já falharam
    uma vez cada, em silêncio, e é por isso que estão fixadas aqui. */
@@ -292,6 +332,36 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
   /* (d) O desenho precisa ser redesenhado pelo render do mapa, senão só
      aparece depois de mexer em outra coisa. */
   assert.match(app,/renderCroquis\(\);\s*\}catch\(e\)\{\}/,'o render do mapa chama o croqui');
+
+  /* (e) A ÂNCORA DO GPS. Quatro regras, e as quatro são sobre honestidade. */
+  const gps=app.slice(app.indexOf('function croquiAncorarNoGps('));
+  const gpsCorpo=gps.slice(0,gps.indexOf('\nfunction ')).replace(/\/\*[\s\S]*?\*\//g,'');
+  assert.match(gpsCorpo,/gpsBest\(/,'usa o gpsBest que já existe, com filtro de precisão e erro explicado');
+  /* Uma leitura só diz ONDE, nunca PARA ONDE. Girar o croqui por causa dela
+     seria inventar orientação a partir de um ponto. */
+  assert.ok(!/pos\.ang\s*=/.test(gpsCorpo),'uma leitura de GPS não pode mexer no ângulo');
+  assert.match(gpsCorpo,/pos\.lat=melhor\.lat/,'o ponto lido vira a âncora — o canto da primeira parcela');
+
+  /* Arrastar na mão apaga o carimbo do GPS: a âncora deixou de ser a lida, e
+     o círculo daquela leitura não descreve mais este ponto. */
+  const abre=app.slice(app.indexOf('function abrirCroquiEditor('));
+  const abreCorpo=abre.slice(0,abre.indexOf('\nfunction '));
+  const arrasto=abreCorpo.slice(abreCorpo.indexOf("mv.on('drag'"), abreCorpo.indexOf('var rot='));
+  assert.match(arrasto,/croquiGpsCancelar\(\)/,'arrastar na mão tira o carimbo de GPS da posição');
+
+  /* A procedência é salva: "marcado no GPS com ±2 m" e "arrastado no olho"
+     são coisas diferentes, e daqui a seis meses ninguém lembra qual foi. */
+  const salvaGps=app.slice(app.indexOf('function salvarCroqui('));
+  const salvaCorpoGps=salvaGps.slice(0,salvaGps.indexOf('\nfunction '));
+  assert.match(salvaCorpoGps,/ancora=\{fonte:'gps',acc:/,'croqui marcado no GPS guarda fonte e precisão');
+  assert.match(salvaCorpoGps,/fonte:'mao'/,'e o arrastado na mão diz que foi na mão');
+
+  /* O círculo de incerteza entra no enquadramento. Enquadrar só o croqui
+     jogava o círculo para fora da tela justamente quando ele era grande —
+     escondendo o aviso exatamente no caso em que ele importa. */
+  const enq=app.slice(app.indexOf('function croquiEnquadrar('));
+  assert.match(enq.slice(0,enq.indexOf('\nfunction ')),/gps&&_croquiEdit\.gps\.acc/,
+    'o enquadramento inclui o círculo de precisão');
 }
 
 console.log('Croqui no mapa: recusa sem medida, serpentina de instalação, carreador no lugar certo, sorteio manda na posição, e o giro fecha OK.');

@@ -213,6 +213,27 @@ function anguloPara(lat,lng,anc){
   return Math.atan2(-leste, norte);
 }
 
+/* A ÂNCORA VEIO DO GPS: ELA SERVE PARA ESTA PARCELA?
+   Um aparelho comum entrega de ±3 a ±30 m conforme o céu. Uma parcela de 3 m
+   de largura não se posiciona com ±12 m: o canto cairia numa parcela vizinha,
+   e o croqui ficaria deslocado um tratamento inteiro — o pior erro possível,
+   porque continua parecendo certo.
+   A régua é a própria parcela, não um número fixo: ±4 m é ótimo num ensaio de
+   parcela de 20 m e inútil num de 3 m. Por isso a comparação é sempre contra a
+   largura, que é o lado curto e o que troca de vizinho primeiro. */
+function qualidadeDaAncora(acc,larguraParcela){
+  var a=num(acc), w=num(larguraParcela);
+  if(!(a>0)) return {nivel:'desconhecida', texto:'O aparelho não informou a precisão desta leitura.'};
+  if(!(w>0)) return {nivel:'desconhecida', texto:'Sem o tamanho da parcela não dá para julgar a precisão.'};
+  var m=Math.round(a*10)/10;
+  if(a<=w/2) return {nivel:'boa',
+    texto:'GPS ±'+m+' m — menos de meia parcela. Serve para marcar o canto.'};
+  if(a<=w) return {nivel:'limite',
+    texto:'GPS ±'+m+' m — quase a largura da parcela ('+w+' m). Confira o canto na imagem antes de salvar.'};
+  return {nivel:'ruim',
+    texto:'GPS ±'+m+' m é MAIOR que a parcela ('+w+' m): o canto pode cair uma parcela fora, e o croqui inteiro sai deslocado. Espere sinal melhor a céu aberto ou ajuste na mão pela imagem.'};
+}
+
 /* Área ocupada pelo croqui inteiro, em hectares — inclui carreador e
    espaçamento, porque é o chão que o ensaio toma no talhão. */
 function areaHa(g){ return (num(g.largura)*num(g.comprimento))/10000; }
@@ -228,7 +249,8 @@ var api={
   centro:centro,
   pegadorDeGiro:pegadorDeGiro,
   anguloPara:anguloPara,
-  areaHa:areaHa
+  areaHa:areaHa,
+  qualidadeDaAncora:qualidadeDaAncora
 };
 if(typeof module==='object'&&module.exports) module.exports=api;
 root.CroquiCore=api;
