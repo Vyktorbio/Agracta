@@ -160,6 +160,40 @@ function cantosDoConjunto(g,anc){
   ];
 }
 
+/* O CAMINHO — a linha que o autopropelido faz aplicando, e a mesma que se
+   anda avaliando. Não é enfeite: é o sentido da randomização. Quem aplica ou
+   avalia na ordem errada troca os dados de tratamento sem perceber, porque a
+   parcela não tem placa dizendo qual é.
+   Volta os centros das parcelas na ordem de caminhada, em metros locais. */
+function caminho(g){
+  if(!g||!g.parcelas||!g.parcelas.length) return [];
+  return g.parcelas.slice()
+    .sort(function(a,b){ return a.ordem-b.ordem; })
+    .map(function(p){ return [p.x+p.w/2, p.y+p.h/2]; });
+}
+
+/* AS SETAS DO CAMINHO, uma por coluna, no meio do trecho.
+   Desenhadas como GEOMETRIA (três pontos em metros) e não como caractere: o
+   mapa do app gira, e uma seta em texto giraria junto com a tela apontando
+   para o lado errado. Em metros ela gira com o terreno, que é o certo. */
+function setas(g){
+  var out=[];
+  if(!g||!g.parcelas||!g.parcelas.length) return out;
+  var porCol={};
+  g.parcelas.forEach(function(p){ (porCol[p.col]=porCol[p.col]||[]).push(p); });
+  Object.keys(porCol).forEach(function(c){
+    var lista=porCol[c].slice().sort(function(a,b){ return a.ordem-b.ordem; });
+    if(lista.length<2) return;
+    var sobe=(lista[lista.length-1].lin>lista[0].lin)?1:-1;
+    var meio=lista[Math.floor(lista.length/2)];
+    var x=meio.x+meio.w/2, y=meio.y+meio.h/2;
+    var L=Math.min(meio.w,meio.h)*0.35;
+    /* Ponta no ponto, farpas atrás: atrás é o lado de onde se veio. */
+    out.push([[x-L,y-L*sobe],[x,y],[x+L,y-L*sobe]]);
+  });
+  return out;
+}
+
 /* Centro do croqui, em [lat,lng]: onde mora o pegador de arrastar. */
 function centro(g,anc){ return pontoLatLng(g.largura/2, g.comprimento/2, anc); }
 
@@ -187,6 +221,8 @@ var api={
   metrosPorGrau:metrosPorGrau,
   pontoLatLng:pontoLatLng,
   grade:grade,
+  caminho:caminho,
+  setas:setas,
   cantosDaParcela:cantosDaParcela,
   cantosDoConjunto:cantosDoConjunto,
   centro:centro,

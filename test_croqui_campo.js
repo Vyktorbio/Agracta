@@ -139,6 +139,64 @@ assert.ok(D(g.largura,3*3)&&D(g.comprimento,4*5),'vão negativo é tratado como 
   assert.equal(mudou,10,'a serpentina reposiciona a coluna inteira da volta');
 }
 
+/* ------- 4b. O CAMINHO E AS SETAS — o que o autopropelido faz, e o que se
+   anda avaliando. É o sentido da randomização: aplicar ou avaliar na ordem
+   errada troca os dados de tratamento sem ninguém perceber, porque a parcela
+   não tem placa dizendo qual é. */
+{
+  const nT=5, nR=4, fila=[];
+  let j=1;
+  for(let r=1;r<=nR;r++) for(let t=1;t<=nT;t++)
+    fila.push({parcela:j++,rep:r,repLabel:'ABCD'[r-1],tratId:'T'+t,tratNum:t});
+  const s2=C.grade({tratamentos:nT,repeticoes:nR,comprimento:5,largura:3,colunas:2,ordem:fila});
+
+  const cam=C.caminho(s2);
+  assert.equal(cam.length,20,'o caminho passa por todas as parcelas, uma vez cada');
+  /* Ele sobe a primeira coluna... */
+  for(let i=1;i<10;i++) assert.ok(cam[i][1]>cam[i-1][1],'subindo, o passo '+(i+1)+' fica adiante do anterior');
+  /* ...atravessa uma vez, no alto... */
+  assert.ok(cam[10][0]>cam[9][0],'a travessia para a coluna seguinte anda de lado');
+  assert.ok(Math.abs(cam[10][1]-cam[9][1])<1e-9,'e acontece no alto, sem descer no meio do caminho');
+  /* ...e desce a segunda. */
+  for(let i=11;i<20;i++) assert.ok(cam[i][1]<cam[i-1][1],'descendo, o passo '+(i+1)+' fica atrás do anterior');
+  /* Uma travessia só: duas significariam voltar atravessando o ensaio. */
+  let travessias=0;
+  for(let i=1;i<cam.length;i++) if(Math.abs(cam[i][0]-cam[i-1][0])>1e-9) travessias++;
+  assert.equal(travessias,1,'o caminho atravessa o ensaio uma vez só');
+  /* O caminho passa pelo MEIO da parcela — é por onde a barra passa. */
+  const p1=s2.parcelas.find(p=>p.ordem===1);
+  assert.ok(D(cam[0][0],p1.x+p1.w/2)&&D(cam[0][1],p1.y+p1.h/2),'o caminho corre pelo centro das parcelas');
+
+  /* O caminho ORDENA, não confia na ordem em que as parcelas vieram. Hoje a
+     grade já sai em ordem de caminhada, então a ordenação nunca é exercida
+     pelo uso normal — e uma regra que nunca é exercida é uma regra que
+     ninguém percebe quando quebra. Aqui ela é cobrada direto: parcelas
+     embaralhadas têm de sair na ordem do sorteio. */
+  {
+    const baguncado={parcelas:s2.parcelas.slice().reverse()};
+    const c2=C.caminho(baguncado);
+    assert.equal(c2.length,20);
+    const p1=s2.parcelas.find(p=>p.ordem===1), pN=s2.parcelas.find(p=>p.ordem===20);
+    assert.ok(D(c2[0][0],p1.x+p1.w/2)&&D(c2[0][1],p1.y+p1.h/2),'o caminho começa na primeira, venha a lista como vier');
+    assert.ok(D(c2[19][0],pN.x+pN.w/2)&&D(c2[19][1],pN.y+pN.h/2),'e termina na última');
+  }
+
+  /* As setas apontam para onde se anda: uma por coluna, sentidos opostos. */
+  const st=C.setas(s2);
+  assert.equal(st.length,2,'uma seta por coluna');
+  const aponta=seta=>Math.sign(seta[1][1]-seta[0][1]);   /* ponta menos farpa, no eixo y */
+  assert.equal(aponta(st[0]),1,'a seta da primeira coluna aponta para cima');
+  assert.equal(aponta(st[1]),-1,'e a da segunda aponta para baixo — é a volta');
+  st.forEach(seta=>{
+    assert.equal(seta.length,3,'a seta é geometria de três pontos, não um caractere');
+    assert.ok(D(seta[0][1],seta[2][1]),'as duas farpas ficam à mesma altura');
+  });
+  /* Sem serpentina as duas apontam para o mesmo lado — e é o que diferencia. */
+  const reto=C.grade({tratamentos:nT,repeticoes:nR,comprimento:5,largura:3,colunas:2,serpentina:false,ordem:fila});
+  const sr=C.setas(reto);
+  assert.equal(aponta(sr[0]),aponta(sr[1]),'sem serpentina as colunas correm no mesmo sentido');
+}
+
 /* A ordem dentro do caminho é a do SORTEIO, não a de cadastro. */
 {
   const sorteio=[

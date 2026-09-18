@@ -17,9 +17,39 @@ A e depois o B, vira-se no alto, e desce-se instalando C e D.
 É a ordem de caminhada. O motor só deita essa fila sobre a serpentina, e o
 desenho na tela passa a ser o mesmo que se instala no chão.
 
-O croqui marca as duas pontas — `1 · início` e `fim` — em qualquer zoom. Sem
-elas o desenho é um tabuleiro simétrico: de pé no talhão não dá para saber por
-qual ponta se começa, e começar pela errada instala o ensaio espelhado.
+O croqui marca as duas pontas — `1 · início` e `fim`. Sem elas o desenho é um
+tabuleiro simétrico: de pé no talhão não dá para saber por qual ponta se começa,
+e começar pela errada aplica e avalia o ensaio espelhado.
+
+## O caminho amarelo
+
+A linha amarela é a mesma coisa em três usos: é por onde o autopropelido passa
+**aplicando**, é por onde se anda **avaliando**, e é a ordem em que se
+**instala**. É o sentido da randomização. Quem aplica ou avalia na ordem errada
+troca os dados de tratamento sem perceber, porque a parcela não tem placa
+dizendo qual é.
+
+Ela corre pelo centro das parcelas, na ordem do sorteio, e leva uma seta por
+coluna mostrando o sentido. As setas são **geometria em metros**, não
+caracteres: o mapa do app gira, e uma seta de texto giraria junto com a tela
+apontando para o lado errado. Em metros ela gira com o terreno.
+
+## Tamanho real, e quanto dele cabe na tela
+
+O croqui não é esquema: 3 × 5 m são 3 × 5 m. O que muda com o zoom é quanto
+detalhe faz sentido desenhar.
+
+| zoom | parcela 3×5 m | o que é desenhado |
+|---|---|---|
+| 21 | 44 × 73 px | tudo |
+| 20 | 22 × 36 px | tudo — é o zoom de quem está no talhão |
+| 19 | 11 × 18 px | tudo |
+| 18 | 5 × 9 px | parcelas, caminho, início e fim (os nomes entram aqui) |
+| 17 | 3 × 5 px | parcelas e caminho, sem nomes |
+| ≤16 | 1 × 2 px | **só a moldura** — "o ensaio é aqui" |
+
+Abaixo do zoom 16,5 vinte retângulos de 3 px viram uma mancha suja sobre a
+lavoura, que é pior que não desenhar.
 
 ## O que é desenhado, e o que não é inventado
 
@@ -83,7 +113,7 @@ maior da quadra (`quadraEixo`).
   uma camada de cor. Preencher esconderia a lavoura, que é o que se quer ver.
 - Botão **Croqui** no agrupador da engrenagem liga e desliga todos — é filtro de
   camada, não ferramenta.
-- Rótulo de cada parcela aparece a partir do zoom 18; de longe seria mancha.
+- Rótulo de cada parcela aparece a partir do zoom 18 (ver a tabela acima).
 - Ensaio **finalizado** sai do mapa junto com o resto do andamento (`estudosAtivos`).
   O croqui continua salvo e volta se o ensaio for reaberto.
 

@@ -3412,13 +3412,35 @@ function croquiGrade(st,pos){
 function croquiDesenhar(camada,st,pos,emEdicao){
   var g=croquiGrade(st,pos);
   if(!g.parcelas.length) return g;
-  var rotulos=(_map&&_map.getZoom()>=18);
+
+  /* QUANTO DETALHE CABE NESTE ZOOM. Uma parcela de 3 × 5 m mede 22 × 36 px no
+     zoom 20 (o de quem está no talhão) e 5 × 9 px no 18. Abaixo do 17 ela tem
+     3 px: vinte retângulos de 3 px viram uma mancha suja sobre a lavoura, que
+     é pior que não desenhar. Então de longe fica só a moldura — "o ensaio é
+     aqui" —, de perto entram as parcelas e o caminho, e mais perto os nomes. */
+  var z=(_map&&_map.getZoom&&_map.getZoom())||18;
+  var detalhe=(z>=16.5), rotulos=(z>=18);
+
   LF.polygon(CroquiCore.cantosDoConjunto(g,pos),
     {color:'#fff',weight:emEdicao?2:1.5,opacity:emEdicao?1:.85,dashArray:'6,4',fill:false,interactive:false}).addTo(camada);
-  /* O INÍCIO E O FIM DA CAMINHADA SÃO DESENHADOS SEMPRE, em qualquer zoom.
-     Sem eles o croqui é um tabuleiro simétrico: de pé no talhão não dá para
-     saber por qual ponta se começa, e começar pela errada instala o ensaio
-     espelhado. São as duas marcas que se faz à mão no papel. */
+  if(!detalhe) return g;
+
+  /* O CAMINHO. É a linha que o autopropelido faz aplicando e a mesma que se
+     anda avaliando — o sentido da randomização. Vai por baixo das parcelas
+     para não comer o contorno delas. */
+  try{
+    var traco=CroquiCore.caminho(g).map(function(pt){ return CroquiCore.pontoLatLng(pt[0],pt[1],pos); });
+    if(traco.length>1) LF.polyline(traco,
+      {color:'#ffd24a',weight:emEdicao?3:2,opacity:.75,interactive:false}).addTo(camada);
+    CroquiCore.setas(g).forEach(function(seta){
+      LF.polyline(seta.map(function(pt){ return CroquiCore.pontoLatLng(pt[0],pt[1],pos); }),
+        {color:'#ffd24a',weight:emEdicao?3:2,opacity:.95,fill:false,interactive:false}).addTo(camada);
+    });
+  }catch(e){}
+
+  /* O INÍCIO E O FIM SÃO DESENHADOS SEMPRE que há detalhe. Sem eles o croqui é
+     um tabuleiro simétrico: de pé no talhão não dá para saber por qual ponta
+     se começa, e começar pela errada aplica e avalia o ensaio espelhado. */
   var ultima=g.parcelas.length;
   g.parcelas.forEach(function(p){
     var inicio=(p.ordem===1), fim=(p.ordem===ultima);
@@ -3437,7 +3459,7 @@ function croquiDesenhar(camada,st,pos,emEdicao){
       poly.bindTooltip(nome,
         {permanent:true,direction:'center',className:'croqui-tip croqui-tip-fixa'}).openTooltip();
     }else{
-      poly.bindTooltip(nome+(p.produto?(' · '+p.produto):'')+' · '+p.ordem+'ª a instalar',
+      poly.bindTooltip(nome+(p.produto?(' · '+p.produto):'')+' · '+p.ordem+'ª no caminho',
         {direction:'top',className:'croqui-tip'});
     }
   });
