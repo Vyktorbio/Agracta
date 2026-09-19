@@ -85,13 +85,9 @@
         }
         sums[t.id][v]=C.resumo(xs);
       });});
-        /* Avaliação CADASTRADA e avaliação LANÇADA são coisas diferentes: a lista
-         precisa saber quantas das previstas já têm nota, e quais estão
-         atrasadas. Sem isso o cartão mostra progresso inventado. */
-      var temNota=Object.keys(sums).some(function(tid){
-        return Object.keys(sums[tid]).some(function(vv){return sums[tid][vv].n>0;});});
-      out.avaliacoes.push({id:av.id||'av-'+ai,data:av.data||'',lancada:temNota,
-                           variaveis:lista(av.variaveis).length});
+      var progresso=w.AvaliacaoCore.avaliacao(st,av);
+      out.avaliacoes.push({id:av.id||'av-'+ai,data:av.data||'',lancada:progresso.started>0,
+        completa:progresso.complete,progresso:progresso,variaveis:lista(av.variaveis).length});
     lista(av.variaveis).forEach(function(v){out.tratamentos.forEach(function(t){
         var s=sums[t.id][v];if(!s.n)return;
         var cfg=(av.varcfg||{})[v]||{},tipo=(av.tipos||{})[v]||'pct',sentido=cfg.sentido==='maior'?'maior':'menor';
@@ -199,13 +195,11 @@
     if(min<1440)return 'há '+Math.round(min/60)+' h';
     return 'há '+Math.round(min/1440)+' dia'+(Math.round(min/1440)===1?'':'s');
   }
-  /* Situação do ensaio: finalizado, atrasado, ou em execução. "Atrasado" é
-     avaliação com data no passado e sem nenhuma nota lançada — não é opinião,
-     é o que está cadastrado contra o calendário. */
+  /* Avaliação parcial continua pendente até completar os valores previstos. */
   function pendencia(s){
     var atrasadas=0, proxima=null;
     lista(s.avaliacoes).forEach(function(av){
-      if(av.lancada)return;
+      if(av.completa)return;
       var d=diasDe(av.data);if(d===null)return;
       if(d<0)atrasadas++;
       else if(proxima===null||d<proxima.dias)proxima={dias:d,av:av};
@@ -219,7 +213,7 @@
     return {chave:'em-execucao',rot:'Em execução'};
   }
   function progresso(s){
-    var avs=lista(s.avaliacoes), feitas=avs.filter(function(a){return a.lancada;}).length;
+    var avs=lista(s.avaliacoes), feitas=avs.filter(function(a){return a.completa;}).length;
     return {feitas:feitas,total:avs.length,pct:avs.length?Math.round(feitas/avs.length*100):0};
   }
   /* Nome só é nome se for texto. Um objeto num campo de cultura — que acontece
@@ -277,9 +271,9 @@
         '<small>'+linhas.map(e).join('<br>')+'</small>','data-key="'+e(s.key)+'"','cartao-corpo')+
       '<div class="con-medidas">'+
         '<div><b>'+(s.tratamentos.length*s.repeticoes)+'</b><span>parcelas</span></div>'+
-        '<div><b>'+pr.feitas+' de '+pr.total+'</b><span>avaliações lançadas</span></div>'+
+        '<div><b>'+pr.feitas+' de '+pr.total+'</b><span>avaliações concluídas</span></div>'+
         faisca(s)+'</div>'+
-      '<div class="con-barra" role="img" aria-label="'+pr.pct+'% das avaliações cadastradas já têm nota lançada">'+
+      '<div class="con-barra" role="img" aria-label="'+pr.pct+'% das avaliações cadastradas estão completas">'+
         '<span style="width:'+pr.pct+'%"></span></div>'+
       /* Num estudo assinado o que importa é quando e por quem, não há quanto
          tempo alguém mexeu: o que valia mudar já não muda mais. */
@@ -295,7 +289,7 @@
     var proximas=0;
     emAndamento.forEach(function(s){
       lista(s.avaliacoes).forEach(function(av){
-        if(av.lancada)return;var d=diasDe(av.data);
+        if(av.completa)return;var d=diasDe(av.data);
         if(d!==null&&d>=0&&d<=7)proximas++;});
     });
     var cartoes=[
@@ -315,7 +309,7 @@
     todos.forEach(function(s){
       if(s.finalizado)return;
       lista(s.avaliacoes).forEach(function(av){
-        if(av.lancada)return;var d=diasDe(av.data);
+        if(av.completa)return;var d=diasDe(av.data);
         if(d===null||d>14)return;
         itens.push({s:s,av:av,dias:d});});
     });
@@ -324,8 +318,8 @@
     return '<h3>Próximas avaliações</h3><ul class="con-agenda">'+itens.slice(0,8).map(function(x){
       var quando=x.dias<0?'atrasada '+Math.abs(x.dias)+' d':x.dias===0?'hoje':'em '+x.dias+' d';
       return '<li'+(x.dias<0?' class="atrasada"':'')+'>'+
-        bot('estudo','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.cultura))+' · '+dataBR(x.av.data)+'</span>',
-            'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(quando)+'</em></li>';
+        bot('avaliacao','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.cultura))+' · '+dataBR(x.av.data)+'</span>',
+            'data-key="'+e(x.s.key)+'" data-av="'+e(x.av.id)+'"','link')+'<em>'+e(quando)+'</em></li>';
     }).join('')+'</ul>'+
     (itens.length>8?'<p class="con-note">e mais '+(itens.length-8)+' nas próximas duas semanas.</p>':'');
   }
@@ -339,8 +333,8 @@
     evs.sort(function(a,b){return String(b.quando).localeCompare(String(a.quando));});
     if(!evs.length)return '';
     return '<h3>Mexido por último</h3><ul class="con-agenda">'+evs.slice(0,6).map(function(x){
-      return '<li>'+bot('estudo','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.alvo)||rotulo(x.s.cultura))+'</span>',
-        'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(desdeQuando(x.quando))+'</em></li>';
+      return '<li>'+bot('avaliacao','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.alvo)||rotulo(x.s.cultura))+'</span>',
+        'data-key="'+e(x.s.key)+'" data-av="'+e(x.av.id)+'"','link')+'<em>'+e(desdeQuando(x.quando))+'</em></li>';
     }).join('')+'</ul>';
   }
 
@@ -500,6 +494,11 @@
     if(a==='aba'){view.aba=b.dataset.aba;view.estudo='';view.selecionado='';view.filtro={};view.busca='';pintar();return;}
     if(a==='voltar'){if(view.estudo)view.estudo='';else view.selecionado='';pintar();return;}
     if(a==='selecionar'){view.selecionado=key;view.filtro={};pintar();return;}
+    if(a==='avaliacao'){
+      var alvo=acervo.estudos.find(function(s){return s.key===key;});
+      if(!alvo||typeof w.quickRegisterAvaliacao!=='function')return;
+      fechar();w.quickRegisterAvaliacao(alvo.qid,alvo.sid,'',b.getAttribute('data-av'));return;
+    }
     if(a==='estudo'){view.estudo=key;pintar();var ov=document.getElementById('conhecimentoOvl');if(ov)ov.scrollTop=0;return;}
     if(a==='original'){var st=achar(key);fechar();if(st)w.openStudyDetail(st.qid,st.sid);return;}
     if(a==='estado'){view.estadoEstudo=b.dataset.estado;pintar();return;}

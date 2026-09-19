@@ -15,7 +15,7 @@ catch(e){ console.log('PULADO: jsdom não está instalado (npm install jsdom par
 
 (async function(){
 const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'https://agracta.test',runScripts:'outside-only'}),w=dom.window;
-['vendor/dose-core.js','vendor/ativos-en-core.js','vendor/conhecimento-core.js','integracoes.js']
+['vendor/dose-core.js','vendor/ativos-en-core.js','vendor/conhecimento-core.js','vendor/avaliacao-core.js','integracoes.js']
   .forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
 
 w.QLOCAL={Q1:'l'};w.LOCAIS={l:{nome:'Local X'}};w.ITENS={};w.isAdmin=()=>false;w.quadraNome=id=>id;
@@ -95,7 +95,7 @@ const ontem=d=>new Date(Date.now()+d*864e5).toISOString().slice(0,10);
   w.data.Q1.estudos[0].avaliacoes=[aval[0],semNota];
   w.abrirConhecimento({aba:'estudos'});
   const cartao=qa('.con-cartao').find(x=>x.textContent.includes('EM CURSO'));
-  assert.match(cartao.textContent,/1 de 2\s*avaliações lançadas/,cartao.textContent);
+  assert.match(cartao.textContent,/1 de 2\s*avaliações concluídas/,cartao.textContent);
   /* E a que está no passado sem nota é ATRASADA — calendário contra registro. */
   assert.ok(cartao.querySelector('.con-selo.atrasado'),'avaliação vencida sem nota é atrasada');
   assert.match(cartao.textContent,/1 atrasada/);
@@ -124,7 +124,7 @@ const ontem=d=>new Date(Date.now()+d*864e5).toISOString().slice(0,10);
   w.abrirConhecimento({aba:'estudos'});
   const cartao=qa('.con-cartao').find(x=>x.textContent.includes('EM CURSO'));
   assert.ok(!cartao.querySelector('.con-selo.atrasado'),'sem data não há prazo para vencer');
-  assert.match(cartao.textContent,/1 de 2\s*avaliações lançadas/,'mas ela continua contando como cadastrada');
+  assert.match(cartao.textContent,/1 de 2\s*avaliações concluídas/,'mas ela continua contando como cadastrada');
 }
 w.data.Q1.estudos[0].avaliacoes=aval;
 

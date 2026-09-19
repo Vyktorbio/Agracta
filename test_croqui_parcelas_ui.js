@@ -21,6 +21,7 @@ w.data={Q:{estudos:[st]}};w.quadraNome=()=> 'Q';w.todayISO=()=> '2026-09-19';w.a
 w.agConhecimento={projetar:()=>({qid:'Q',sid:'S',codigo:st.codigo,tratamentos:st.tratamentos.map(t=>({id:t.id,produto:'Código cego'}))})};
 let calls=[],redraws=0;
 w.openStudyDetail=(q,s)=>calls.push(['study',q,s]);w.openStudyEditAvaliacao=id=>calls.push(['assessment',id]);w.avCroquiSelect=key=>calls.push(['row',key]);w.abrirGaleriaFotos=(s,initial)=>calls.push(['photos',initial]);w.renderCroquis=()=>redraws++;w.posicionarCroquiDoEstudo=(q,s)=>calls.push(['position',q,s]);
+w.eval(fs.readFileSync('vendor/avaliacao-core.js','utf8'));
 w.eval(fs.readFileSync('croqui-parcelas.js','utf8'));
 const before=JSON.stringify(st),P=w.AgractaParcelas,g=P.layout(st);
 assert.equal(g.parcelas.length,32);assert.equal(g.colunas,2);assert.equal(g.linhas,16);

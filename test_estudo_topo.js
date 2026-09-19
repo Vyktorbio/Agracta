@@ -20,7 +20,7 @@ function montar(op){
  op=op||{};
  const dom=new JSDOM('<!DOCTYPE html><html><body></body></html>',{url:'https://agracta.test',runScripts:'outside-only'});
  const w=dom.window,d=w.document;
- ['vendor/conhecimento-core.js','integracoes.js','estudo-pagina.js'].forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
+ ['vendor/conhecimento-core.js','vendor/avaliacao-core.js','integracoes.js','estudo-pagina.js'].forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
  w.eval(src.match(/function _avNota\([^]*?\n}/)[0]);
  w.QLOCAL={Q1:'l'};w.LOCAIS={l:{nome:'Fazenda Boa Vista'}};w.ITENS=op.itens||{};
  w.save=()=>{throw Error('Leitura não salva');};

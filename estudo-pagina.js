@@ -269,12 +269,7 @@ function destaques(st,s,reps){
   }
  }
  var avs=arr(st.avaliacoes);
- var concluidas=avs.filter(function(av){
-  var esperado=arr(av.variaveis).length*s.tratamentos.length*reps;
-  if(!esperado)return false;
-  var lancados=s.resultados.filter(function(r){return r.avaliacao===av.id;}).reduce(function(a,r){return a+r.n;},0);
-  return lancados>=esperado;
- }).length;
+ var concluidas=w.AvaliacaoCore.estudo(st).concluidas;
  h+=destaque(concluidas+'<small> de '+avs.length+'</small>','Avaliações concluídas','todos os valores previstos lançados');
  h+=destaque(num(s.tratamentos.length*reps),'Parcelas',s.tratamentos.length+' tratamentos × '+reps+' repetições');
  return h?'<div class="ep-kpis">'+h+'</div>':'';

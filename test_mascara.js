@@ -52,7 +52,7 @@ function pega(src,nome){
 }
 function contar(estudos){
   const ctx=vm.createContext({
-    MascaraCore:M, String, Number, Math,
+    MascaraCore:M, AvaliacaoCore:require('./vendor/avaliacao-core'), String, Number, Math,
     data:{Q1:{estudos:estudos}},
     normalizeStudy:x=>x,
     estudoFinalizado:st=>!!st.finalizado,

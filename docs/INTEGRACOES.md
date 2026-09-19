@@ -18,6 +18,26 @@ Cada estudo oferece **Abrir**, **Finalizar** ou **Reabrir** (conforme a situaç�
 
 Estudo finalizado não pode ser excluído direto. A exclusão passa a exigir **Reabrir** antes, que pede senha e registra o motivo na auditoria — sem isso a baixa de um estudo assinado e com a estatística congelada não deixaria rastro do porquê. O aviso diz esse caminho. As demais listas de estudos (histórico da área, estudos do projeto, resultados filtrados) continuam sem botões de ação.
 
+## Progresso das avaliações — v270
+
+Agenda, Hoje, máscara do mapa, croquis, ficha do estudo, Conhecimento, dossiê e
+revisão de fechamento consultam `vendor/avaliacao-core.js`. A primeira nota inicia
+a avaliação; somente a grade prevista completa a conclui. Zero é válido; vazio,
+texto não numérico e notas fora das parcelas previstas não completam a grade.
+Subamostras registradas parcialmente e uma única leitura numa avaliação com dois
+avaliadores permanecem parciais. Registros antigos que só conservam notas derivadas
+continuam legíveis. A consulta não altera notas, datas ou randomização.
+
+Avaliações futuras ainda vazias herdam o esquema da leitura anterior, como a
+própria grade, sem copiar valores. Estudos finalizados saem da agenda mesmo com
+lacunas; as lacunas continuam explícitas no fechamento e no relatório.
+
+Os atalhos da Agenda, do Hoje e das próximas avaliações no Conhecimento abrem a
+avaliação pelo ID original, mantendo sua data. O Hoje oferece **Continuar avaliação**
+para registros parciais. Um lembrete antigo de avaliação removida não cria outro
+registro silenciosamente. Os relatórios mostram o estado e a contagem de valores
+completos por avaliação no instante da exportação.
+
 ## Ambiente, solo, laboratório e custo
 
 - Aplicações e avaliações mostram o clima registrado, origem, leitura instantânea/resumo diário e defasagem. Chuva pós-aplicação informa cobertura e janelas parciais. NDVI é contexto da área, com a data da imagem, sem atribuição a uma parcela menor que sua resolução.

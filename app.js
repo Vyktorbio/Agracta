@@ -3311,17 +3311,14 @@ function _mascaraContagem(qid){
        pintá-las de amarelo para sempre ensinaria a ignorar o amarelo. */
     if((typeof estudoFinalizado==='function')&&estudoFinalizado(st)) continue;
     for(var r=0;r<rows.length;r++){
-      var previstos=0, lancados=0;
+      var previstos=0, lancados=0, iniciados=0;
       for(var a=0;a<avs.length;a++){
-        var vars=avs[a].variaveis||[];
-        for(var v=0;v<vars.length;v++){
-          previstos++;
-          var x=_avNota(avs[a],rows[r],vars[v]);
-          if(x!=null&&String(x).trim()!=='') lancados++;
-        }
+        var fonte=AvaliacaoCore.esquema(st,avs[a]);
+        var progresso=AvaliacaoCore.parcela(fonte,rows[r],fonte.variaveis);
+        previstos+=progresso.total; lancados+=progresso.filled; iniciados+=progresso.started;
       }
       if(!previstos) continue;
-      var chave=MascaraCore.estadoParcela(previstos,lancados);
+      var chave=lancados===previstos?'done':iniciados?'partial':'empty';
       if(chave) out[chave]++;
     }
   }
@@ -4235,7 +4232,7 @@ function renderAgenda(){
       var _btn = e.dispensado
         ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
         : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\',\''+typeLabel+'\')">&times;</button>';
-      gh+='<div class="ag-item '+cls+(e.dispensado?' ag-dispensado':'')+'" onclick="closeAgendaAndOpen(\''+e.qid+'\')">';
+      gh+='<div class="ag-item '+cls+(e.dispensado?' ag-dispensado':'')+'" onclick="closeAgendaAndOpen(\''+esc(_avCroquiEscJs(e.qid))+'\',\''+esc(_avCroquiEscJs(e.study.id))+'\',\''+esc(_avCroquiEscJs(e.event.type==='eval'?e.event.id||'':''))+'\')">';
       gh+='<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(e.qid))+'</span><span class="ag-item-date" style="color:'+color+'">'+dateLabel+'</span>'+_btn+'</div>';
       gh+='<div class="ag-item-name">'+esc(e.study.nome)+'</div>';
       gh+='<div class="ag-item-type" style="color:'+color+'">'+typeLabel+' • '+fD(e.event.date)+'</div>';
@@ -4255,10 +4252,12 @@ function renderAgenda(){
 
   document.getElementById("agendaPanel").innerHTML=h;
 }
-function closeAgendaAndOpen(qid){
+function closeAgendaAndOpen(qid,sid,avid){
   agO=false;
   document.getElementById("agendaPanel").classList.remove("open");
-  showD(qid);
+  if(avid)quickRegisterAvaliacao(qid,sid,'',avid);
+  else if(sid)openStudyDetail(qid,sid);
+  else showD(qid);
 }
 function updateAgendaBadge(){
   var events=allUpcomingEvents(7);
@@ -8065,13 +8064,15 @@ function studyEventsV2(study){
   (study.avaliacoes||[]).forEach(function(a,i){
     var d=pD(isoToBR(a.data))||pD(a.data);
     if(d&&!isNaN(d)){
+      var progresso=AvaliacaoCore.avaliacao(study,a);
       out.push({
         type:'eval',
         idx:i+1,
         id:a.id,
         date:d,
         tipo:a.tipo||"",
-        realizada:(!!a.realizada||_avTemNota(a))  /* registrada (tem nota) => sai do HOJE/agenda automaticamente */
+        progresso:progresso,
+        realizada:progresso.complete
       });
     }
   });
@@ -8280,12 +8281,12 @@ function _studyWorkflow(qid,study){
   var planejamento={id:'planejamento',label:'Planejamento',anchor:'study-stage-planejamento',state:(reps<2||tr.length<2)?'pending':(randomOk||study.desenho==='faixas'?'complete':'ready'),detail:(reps<2?'Definir repetições':(randomOk?'Croqui randomizado':'Conferir croqui'))};
   var nap=Math.max(1,parseInt(study.numAplicacoes)||1), feitas=(study.aplicacoes||[]).length;
   var execucao={id:'execucao',label:'Aplicação',anchor:'study-stage-execucao',state:feitas>=nap?'complete':(feitas?'active':(study.dataInicio?'ready':'pending')),detail:feitas+' de '+nap+' registrada'+(nap===1?'':'s')};
-  var avs=study.avaliacoes||[], avFeitas=avs.filter(_avTemNota).length;
-  var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(avFeitas===avs.length?'complete':(avFeitas?'active':'ready')),detail:avFeitas+' de '+avs.length+' lançada'+(avs.length===1?'':'s')};
+  var avs=study.avaliacoes||[], progresso=AvaliacaoCore.estudo(study), avFeitas=progresso.concluidas;
+  var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(progresso.complete?'complete':(progresso.started?'active':'ready')),detail:avFeitas+' de '+avs.length+' concluídas'+(progresso.parciais?' · '+progresso.parciais+' parciais':'')};
   var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,study):[], c=_bioAutoCache[qid+'|'+study.id], rr=c&&c.results||{};
   var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey+'|F'];});
   var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobs.some(function(j){return rr[j.jobKey+'|F']&&rr[j.jobKey+'|F'].ok===false;});
-  var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!avFeitas?'pending':(anaErr?'attention':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready'))),detail:!avFeitas?'Aguardando dados':(anaErr?'Revisar falha de cálculo':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular')))};
+  var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!progresso.started?'pending':(anaErr?'attention':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready'))),detail:!progresso.started?'Aguardando dados':(anaErr?'Revisar falha de cálculo':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular')))};
   var dossierOk=anaDone&&forDone&&!anaErr&&!forErr;
   var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':((anaErr||forErr)?'attention':(dossierOk?'ready':'pending')),detail:estudoFinalizado(study)?'Finalizado':((anaErr||forErr)?'Revisar pendências':(dossierOk?'Pronto para revisar':'Aguardando resultados'))};
   return {stages:[protocolo,planejamento,execucao,avaliacoes,analise,dossie],protocolo:protocolo,planejamento:planejamento,execucao:execucao,avaliacoes:avaliacoes,analise:analise,dossie:dossie,anaDone:anaDone,forDone:forDone};
@@ -15845,10 +15846,7 @@ function avValidateCell(inp){
 var _avCroquiOpen=true, _avCroquiKey=null;
 function _avCroquiEscJs(v){ return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 function _avCroquiStatus(row, vars){
-  if(!vars.length) return 'empty';
-  var filled=0;
-  vars.forEach(function(v){ var x=_avGrid.notas&&_avGrid.notas[row.key]&&_avGrid.notas[row.key][v]; if(x!=null&&String(x).trim()!=='') filled++; });
-  return filled===0?'empty':(filled===vars.length?'done':'partial');
+  return AvaliacaoCore.parcela(_avGrid,row,vars,true).state;
 }
 function avCroquiHtml(st, rows, vars){
   if(!st||!rows||!rows.length) return '';
@@ -16753,10 +16751,11 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
      evitar recriar “Ferrugem”, tipo e escala em toda data da agenda. */
   var inheritedFrom=null, avVars=(av.variaveis||[]).slice(), avTipos=JSON.parse(JSON.stringify(av.tipos||{})), avCfg=JSON.parse(JSON.stringify(av.varcfg||{}));
   if(!avVars.length){
-    var avIndex=(study.avaliacoes||[]).indexOf(av), candidatos=[];
-    (study.avaliacoes||[]).forEach(function(x,i){if(x&&x!==av&&(x.variaveis||[]).length&&(i<avIndex||String(x.data||'')<=String(av.data||'')))candidatos.push({av:x,i:i});});
-    candidatos.sort(function(a,b){return String(a.av.data||'').localeCompare(String(b.av.data||''))||a.i-b.i;});
-    if(candidatos.length){inheritedFrom=candidatos[candidatos.length-1].av;avVars=(inheritedFrom.variaveis||[]).slice();avTipos=JSON.parse(JSON.stringify(inheritedFrom.tipos||{}));avCfg=JSON.parse(JSON.stringify(inheritedFrom.varcfg||{}));}
+    var herdado=AvaliacaoCore.esquema(study,av);
+    if((herdado.variaveis||[]).length){
+      inheritedFrom=(study.avaliacoes||[]).find(function(a){return a.variaveis===herdado.variaveis;});
+      avVars=herdado.variaveis.slice();avTipos=JSON.parse(JSON.stringify(herdado.tipos||{}));avCfg=JSON.parse(JSON.stringify(herdado.varcfg||{}));
+    }
   }
   /* §10 — em leitura dupla a grade carrega a leitura de QUEM está com a prancheta.
      É aqui que o cegamento acontece: os valores do outro avaliador nem entram no
@@ -16902,16 +16901,14 @@ function _studyFinalizationReview(qid,s){
   if(!test) issues.push('Testemunha de referência não definida');
   var nap=Math.max(1,parseInt(s.numAplicacoes)||1), apl=(s.aplicacoes||[]).length;
   if(apl<nap) issues.push((nap-apl)+' aplicação(ões) ainda não registrada(s)');
-  var avs=s.avaliacoes||[], feitas=avs.filter(_avTemNota).length;
+  var avs=s.avaliacoes||[], progresso=AvaliacaoCore.estudo(s), feitas=progresso.started;
   if(!avs.length) issues.push('Nenhuma avaliação cadastrada');
-  else if(feitas<avs.length) issues.push((avs.length-feitas)+' avaliação(ões) sem lançamento');
-  var missing=0;
-  avs.forEach(function(av){
-    var rows=_avRowsForStudy(s,false); (av.variaveis||[]).forEach(function(v){
-      rows.forEach(function(r){var x=_avNota(av,r,v);if(x==null||String(x).trim()==='')missing++;});
-    });
-  });
-  if(missing) issues.push(missing+' nota(s) de parcela em branco');
+  else {
+    if(progresso.vazias) issues.push(progresso.vazias+' avaliação(ões) sem lançamento');
+    if(progresso.parciais) issues.push(progresso.parciais+' avaliação(ões) parcialmente preenchida(s)');
+    if(progresso.semGrade) issues.push(progresso.semGrade+' avaliação(ões) sem grade definida');
+  }
+  if(progresso.pending) issues.push(progresso.pending+' valor(es) de parcela incompleto(s), incluindo subamostras e leituras previstas');
   var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,s):[];
   if(feitas && !jobs.length) issues.push('Nenhuma comparação estatística válida');
   var avancado=_bioestatSnapshotAvancado(qid,s);
@@ -17621,8 +17618,8 @@ renderStudyCard=function(qid,study){
   h+='<span>'+study.tratamentos.length+' trat. × '+study.numRepeticoes+' rep.</span>';
   if(study.dataInicio)h+='<span>início '+esc(isoToBR(study.dataInicio))+'</span>';
   h+='<span>'+study.aplicacoes.length+' apl. feita(s)</span>';
-  var _avFt=(study.avaliacoes||[]).filter(function(a){return _avTemNota(a);}).length, _avTt=(study.avaliacoes||[]).length;
-  h+='<span>'+(_avTt>_avFt?(_avFt+' de '+_avTt+' aval.'):(_avTt+' aval.'))+'</span>';
+  var _avFt=AvaliacaoCore.estudo(study).concluidas, _avTt=(study.avaliacoes||[]).length;
+  h+='<span>'+_avFt+' de '+_avTt+' aval. concluídas</span>';
   h+='</div>';
   /* Quando terminou, e por quem. É o que substitui a etiqueta de próximo
      evento: o cartão continua dizendo algo sobre o tempo, só que a verdade. */
@@ -17795,12 +17792,13 @@ function renderTodayCard(e){
   h+='<div class="today-card-quadra">'+esc(quadraNome(e.qid))+' · '+esc(studyCultura(e.study,q)||"—")+'</div>';
   h+='<div class="today-card-estudo">'+esc(e.study.codigo||"(sem código)")+'</div>';
   h+='<div class="today-card-evt">'+esc(typeName)+'</div>';
+  if(e.ev.progresso){var pr=e.ev.progresso;h+='<div class="today-card-evt">'+(pr.total?pr.filled+' de '+pr.total+' valores completos':'Definir as variáveis da avaliação')+'</div>';}
   h+='</div>';
   h+='<div class="today-card-actions">';
   if(e.ev.type==='apl'){
     h+='<button class="today-card-quick" onclick="quickRegisterAplicacao(\''+e.qid+'\',\''+e.study.id+'\')">Registrar aplicação</button>';
   }else{
-    h+='<button class="today-card-quick" onclick="quickRegisterAvaliacao(\''+e.qid+'\',\''+e.study.id+'\',\''+esc(e.ev.tipo||"")+'\')">Registrar avaliação</button>';
+    h+='<button class="today-card-quick" onclick="quickRegisterAvaliacao(\''+esc(_avCroquiEscJs(e.qid))+'\',\''+esc(_avCroquiEscJs(e.study.id))+'\',\''+esc(_avCroquiEscJs(e.ev.tipo||""))+'\',\''+esc(_avCroquiEscJs(e.ev.id||""))+'\')">'+(e.ev.progresso&&e.ev.progresso.started?'Continuar avaliação':'Abrir avaliação')+'</button>';
   }
   h+='</div>';
   h+='</div>';
@@ -17824,13 +17822,17 @@ function quickRegisterAplicacao(qid,sid){
   openStudyEditAplicacao("__new__");
 }
 
-function quickRegisterAvaliacao(qid,sid,tipoSugerido){
+function quickRegisterAvaliacao(qid,sid,tipoSugerido,avid){
   curV=qid;curSid=sid;
-  var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
+  var q=data[qid],study=((q||{}).estudos||[]).find(function(s){return s.id===sid});
   if(!study)return;
+  if(estudoFinalizado(study)){openStudyDetail(qid,sid);return;}
+  if(avid && !(study.avaliacoes||[]).some(function(a){return a.id===avid;})){
+    _stxToast('Esta avaliação não está mais no estudo. Confira a agenda atual.');return;
+  }
   normalizeStudy(study);
   closeToday();
-  openStudyEditAvaliacao("__new__",tipoSugerido);
+  openStudyEditAvaliacao(avid||"__new__",tipoSugerido);
 }
 
 /* ============ BUSCA ============ */
@@ -18018,25 +18020,19 @@ function _studyPanelItems(){
   return out;
 }
 function _studyPanelProgress(study){
-  var total=0, filled=0, rows=_avRowsForStudy(study,false);
-  (study.avaliacoes||[]).forEach(function(av){
-    var vars=av.variaveis||[];
-    total+=rows.length*vars.length;
-    rows.forEach(function(row){ vars.forEach(function(v){ var x=_avNota(av,row,v); if(x!=null&&String(x).trim()!=='') filled++; }); });
-  });
-  return {total:total,filled:filled,pct:total?Math.round(filled/total*100):0};
+  return AvaliacaoCore.estudo(study);
 }
 function _studyPanelState(study, progress){
   if(estudoFinalizado(study)) return {key:'final',label:'Finalizado'};
-  var ne=nextEventV2(study), iniciado=!!((study.aplicacoes||[]).length||(progress&&progress.filled));
+  var ne=nextEventV2(study), iniciado=!!((study.aplicacoes||[]).length||(progress&&progress.started));
   if(ne){
     if(ne.diff<=0) return {key:'urgent',label:ne.diff<0?'Atrasado':'Hoje',next:ne};
     if(ne.diff<=3) return {key:'soon',label:'Em '+ne.diff+'d',next:ne};
     if(iniciado) return {key:'go',label:'Em andamento',next:ne};
     return {key:'go',label:'Programado',next:ne};
   }
-  if(progress.total&&progress.filled<progress.total) return {key:'go',label:'Em andamento'};
-  if(progress.total&&progress.filled===progress.total) return {key:'done',label:'Avaliado'};
+  if(progress.complete) return {key:'done',label:'Avaliado'};
+  if(progress.avaliacoes) return {key:'go',label:progress.started?'Em andamento':'Avaliações pendentes'};
   return {key:'go',label:'Sem agenda'};
 }
 function _studyPanelNext(state){
@@ -18064,14 +18060,14 @@ function renderStudiesPanel(){
   var box=document.getElementById('studiesPnl'); if(!box)return;
   var all=_studyPanelItems().map(function(x){ x.progress=_studyPanelProgress(x.study); x.state=_studyPanelState(x.study,x.progress); return x; });
   var now=all.filter(function(x){return x.state.key==='urgent';}).length;
-  var ongoing=all.filter(function(x){return !estudoFinalizado(x.study)&&x.progress.total&&x.progress.filled<x.progress.total;}).length;
+  var ongoing=all.filter(function(x){return !estudoFinalizado(x.study)&&x.progress.started&&!x.progress.complete;}).length;
   var complete=all.filter(function(x){return x.state.key==='done'||x.state.key==='final';}).length;
   var query=_studiesPanelQuery.trim().toLowerCase();
   var visible=all.filter(function(x){
     var f=_studiesPanelFilter;
     if(f==='acao' && x.state.key!=='urgent')return false;
     if(f==='pendentes' && !(x.state.key==='urgent'||x.state.key==='soon'||x.state.key==='go'))return false;
-    if(f==='andamento' && !(x.progress.total&&x.progress.filled<x.progress.total&&!estudoFinalizado(x.study)))return false;
+    if(f==='andamento' && !(x.progress.started&&!x.progress.complete&&!estudoFinalizado(x.study)))return false;
     if(f==='concluidos' && !(x.state.key==='done'||x.state.key==='final'))return false;
     if(query){ var hay=[x.study.codigo,x.study.nome,x.localNome,x.qid,quadraNome(x.qid),studyCultura(x.study,x.q),studyVariedade(x.study,x.q)].join(' ').toLowerCase(); if(hay.indexOf(query)<0)return false; }
     return true;

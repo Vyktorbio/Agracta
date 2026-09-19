@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),fs=require('fs');
 let JSDOM;try{({JSDOM}=require('jsdom'));}catch{console.log('PULADO: jsdom não está instalado.');process.exit(0);}
 (async()=>{
 const dom=new JSDOM('<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body></body></html>',{url:'https://agracta.test',runScripts:'outside-only'}),w=dom.window,d=w.document;
-['vendor/conhecimento-core.js','integracoes.js','estudo-pagina.js'].forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
+['vendor/conhecimento-core.js','vendor/avaliacao-core.js','integracoes.js','estudo-pagina.js'].forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
 const src=fs.readFileSync('app.js','utf8');w.eval(src.match(/function _avNota\([^]*?\n}/)[0]);
 w.ITENS={};w.QLOCAL={Q1:'l'};w.LOCAIS={l:{nome:'Iracemápolis'}};w.save=()=>{throw Error('Leitura não salva')};let opened=0;w.openStudyDetail=()=>opened++;
 const s={id:'S1',codigo:'SC 024 193',cultura:'Soja',alvo:'Phakopsora pachyrhizi',numRepeticoes:4,dataInicio:'2026-08-01',desenho:'dbc',metodoAplicacao:'co2',tratamentos:[{id:'T1',produto:'Testemunha',testemunha:true},{id:'T2',produto:'Experimental A',dose:'1,5 L/ha'},{id:'T3',produto:'Padrão de referência',dose:'0,6 L/ha'}],avaliacoes:['2026-08-15','2026-08-22','2026-09-05'].map((data,i)=>({id:'A'+i,data,variaveis:['Severidade','Produção'],tipos:{Severidade:'pct',Produção:'contagem'},varcfg:{Produção:{sentido:'maior',unidade:'kg/ha'}},notas:Object.fromEntries(['T1','T2','T3'].flatMap((t,j)=>[1,2,3,4].map(r=>[t+'R'+r,{Severidade:[25,5,10][j]*i+r-1,Produção:1000+j*100+r}])))}))};
