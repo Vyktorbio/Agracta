@@ -68,6 +68,27 @@ Do usuário, porque o app não tem como saber:
 Os vãos nascem em **zero** de propósito: zero é visivelmente "não foi
 informado", enquanto um carreador de 1 m inventado passaria por medida.
 
+### Onde se preenche o tamanho da parcela
+
+**Ficha do ensaio → Editar planejamento → etapa Protocolo → Tamanho da parcela**
+(comprimento × largura, em metros).
+
+Até a v262 esse campo **não existia em lugar nenhum**: `protocolo.tamanhoParcela`
+só chegava pela planilha do protocolo importada. Quem cadastrava o estudo na mão
+ficava sem saída — e a recusa do croqui mandava preencher num lugar inexistente.
+Hoje o campo está na etapa *Protocolo* porque foi ali que o usuário foi procurar
+e porque é ali que o dado mora; é o mesmo valor que a calculadora e a planilha
+leem.
+
+Duas regras de gravação, e as duas são sobre não perder dado:
+
+- grava só com **os dois lados** preenchidos — meia medida não é medida;
+- apaga só com **os dois vazios** — um lado em branco é digitação pela metade, e
+  apagar por causa disso perderia o valor que veio da planilha.
+
+O maior dos dois valores é tratado como o **comprimento** (o lado no sentido de
+quem planta e pulveriza), independentemente da ordem em que for digitado.
+
 **Sem tamanho de parcela no protocolo o croqui não é desenhado.** Chutar
 "deve ser 3×5" colocaria no mapa um desenho com cara de medida — alguém iria ao
 campo procurar a estaca onde ele mandou, e a estaca não estaria lá. Um croqui
