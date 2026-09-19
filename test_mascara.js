@@ -162,7 +162,13 @@ assert.match(render,/_mask\?_mask\.cor:ac/,
   'sem o motor da máscara o mapa volta à cor da cultura — leitura que falta não apaga a quadra');
 assert.ok(!/fillOpacity:zona\?0\.8:0\.38/.test(render),
   'o realce do ponteiro não pode ser fixo: em cima de uma máscara de 0.50 ele clareava em vez de destacar');
-assert.match(render,/Math\.min\(0\.82,zfo\+0\.22\)/,'o realce soma ao que já está pintado');
+/* O realce continua somando ao que já está pintado — só que agora "o que já
+   está pintado" passou a depender do controle de opacidade do aparelho, então
+   o número vem de _mascaraFill(this) em vez de um valor preso no fecho. */
+assert.match(render,/Math\.min\(0\.82,_mascaraFill\(this\)\+0\.22\)/,
+  'o realce soma ao que já está pintado');
+assert.match(render,/mouseout[\s\S]{0,90}_mascaraFill\(this\)/,
+  'e o mouseout devolve o valor de agora, não o de antes do ajuste');
 
 /* ------------------------------------------- 4. publicação e pré-cache ----- */
 const html=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
