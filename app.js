@@ -3469,6 +3469,13 @@ function croquiDesenhar(camada,st,pos,emEdicao){
 
 function croquiEnsureLayer(){
   if(!_map) return null;
+  /* O CSS DO CROQUI ENTRA AQUI, e não só ao abrir o painel de posicionar.
+     Ele era injetado apenas dentro de abrirCroquiEditor — então quem só olhava
+     o mapa via os rótulos com o balão PADRÃO do Leaflet: fundo branco, 12px,
+     em vez do meu, escuro e de 9px. Vinte caixas brancas grandes por cima da
+     lavoura, que era justamente o defeito relatado no campo.
+     A camada é o lugar certo: quem desenha croqui precisa do estilo dele. */
+  croquiCss();
   if(!_croquiLayer) _croquiLayer=LF.layerGroup().addTo(_map);
   /* Os rótulos só aparecem de perto; sem redesenhar no zoom eles ficariam
      presos no nível em que a tela foi montada. */
