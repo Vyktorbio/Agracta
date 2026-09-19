@@ -60,6 +60,7 @@ ctx.matchMedia=function(){ return {matches:false,addListener:function(){},addEve
 ctx.fetch=function(){ return Promise.resolve({json:function(){return Promise.resolve({});}}); };
 
 vm.createContext(ctx);
+vm.runInContext(fs.readFileSync('vendor/avaliacao-core.js','utf8'),ctx);
 vm.runInContext(fs.readFileSync('app.js','utf8'), ctx, {filename:'app.js'});
 
 var f=0, p=0;

@@ -40,6 +40,7 @@ var ctx={console:console, Date:Date, String:String, Number:Number, Math:Math, Ob
   Array:Array, JSON:JSON, isFinite:isFinite, parseInt:parseInt,
   estudoFinalizado:function(s){ return !!(s&&s.finalizado); }};
 ctx.window=ctx; ctx.globalThis=ctx;
+ctx.AvaliacaoCore=require('./vendor/avaliacao-core');
 vm.createContext(ctx);
 vm.runInContext([
   pega('pD'), pega('fD'), pega('fDIso'), pega('isoToBR'), pega('today0'), pega('addDays'),

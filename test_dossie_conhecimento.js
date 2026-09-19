@@ -21,7 +21,7 @@ assert(src.includes('estatistica:st.estatisticaFinal||null'),'histórico preserv
 const {JSDOM}=require('jsdom');
 (async()=>{
  const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'https://agracta.test',runScripts:'outside-only'}),w=dom.window,d=w.document;
- ['vendor/conhecimento-core.js','integracoes.js','estudo-pagina.js'].forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
+ ['vendor/conhecimento-core.js','vendor/avaliacao-core.js','integracoes.js','estudo-pagina.js'].forEach(p=>w.eval(fs.readFileSync(p,'utf8')));
  w.HTMLElement.prototype.scrollIntoView=function(){};w.eval(fn('_avNota'));
  w.data={Q:{estudos:[{id:'S',codigo:'Estudo',numRepeticoes:1,tratamentos:[{id:'T1',produto:'Testemunha'},{id:'T2',produto:'Segredo'}],avaliacoes:[{id:'A',data:'2026-09-11',variaveis:['Sev'],notas:{T1R1:{Sev:40},T2R1:{Sev:10}}},{id:'B',data:'2026-09-12',variaveis:['Sev'],notas:{T2R1:{Sev:12}}}]}]}};
  w.QLOCAL={};w.LOCAIS={};w.ITENS={};

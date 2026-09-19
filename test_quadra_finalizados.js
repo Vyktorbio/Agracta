@@ -49,6 +49,7 @@ const ctx={ console, String, Number, Math, JSON, Object, Array, isFinite,
 };
 ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
+vm.runInContext(fs.readFileSync('vendor/avaliacao-core.js','utf8'),ctx);
 vm.runInContext('var renderStudyCard;\n'+CARTAO+';',ctx);
 
 const rodando={id:'S1',codigo:'24-118'};

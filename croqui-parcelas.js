@@ -19,14 +19,7 @@ function chosen(st){
  const today=w.todayISO(),due=avs.filter(a=>a.data&&a.data<=today);
  return due[due.length-1]||avs[0]||null;
 }
-function schema(st,av){
- if(!av)return [];
- if((av.variaveis||[]).length)return av.variaveis;
- const avs=st.avaliacoes||[],idx=avs.indexOf(av);
- const prior=avs.map((a,i)=>({a,i})).filter(x=>x.a!==av&&(x.a.variaveis||[]).length&&(x.i<idx||String(x.a.data||'')<=String(av.data||'')))
-  .sort((x,y)=>String(x.a.data||'').localeCompare(String(y.a.data||''))||x.i-y.i);
- return prior.length?prior[prior.length-1].a.variaveis:[];
-}
+function schema(st,av){return av?w.AvaliacaoCore.esquema(st,av).variaveis||[]:[];}
 function notes(av){
  if(!av)return {};
  // Não inicializa avaliadores durante consulta; mantém a leitura ativa cegada.
@@ -38,10 +31,16 @@ function value(map,row,v){
  if((val==null||val==='')&&row.rep===1)val=(map[row.tratId]||{})[v];
  return val==null?'':val;
 }
-function status(row,vars,map,hasAssessment){
+function status(row,vars,map,hasAssessment,av,singleReader){
  if(!hasAssessment)return 'planned';
- const count=vars.filter(v=>String(value(map,row,v)).trim()!=='').length;
- return !count?'empty':count===vars.length?'done':'partial';
+ return w.AvaliacaoCore.parcela(av||{notas:map},row,vars,singleReader).state;
+}
+function source(st,av,grid){
+ if(grid)return grid;
+ const src=w.AvaliacaoCore.esquema(st,av),who=typeof w.avQuemAtivo==='function'?w.avQuemAtivo():null;
+ // Na consulta cegada só conta a leitura visível, sem revelar o progresso de B.
+ if(src.duplaLeitura&&who)return {notas:notes(av)};
+ return src;
 }
 function layout(st){
  const pos=w.croquiPos(st);
@@ -73,7 +72,7 @@ function diagram(st,g,av,selected,mode,grid){
  const point=p=>p.map(n=>Math.round(n*100)/100).join(',');
  let svg='<svg xmlns="http://www.w3.org/2000/svg" class="pc-svg" width="'+width+'" height="'+height+'" viewBox="'+[minX,minY,width,height].join(' ')+'" aria-label="Disposição física das parcelas e percurso">';
  g.parcelas.forEach((p,i)=>{
-  const state=status(p.row,vars,map,!!av||!!grid);counts[state]=(counts[state]||0)+1;
+  const state=status(p.row,vars,map,!!av||!!grid,source(st,av,grid),!!grid);counts[state]=(counts[state]||0)+1;
   const name=p.row.campo||p.row.label||p.key,center=xy(p.x+p.w/2,p.y+p.h/2);
   svg+='<g role="button" tabindex="0" data-pc-'+mode+'="'+e(p.key)+'" data-order="'+p.ordem+'" data-col="'+p.col+'" data-line="'+p.lin+'" aria-pressed="'+(selected===p.key)+'" aria-label="'+e(name+' · '+p.ordem+'ª no percurso · '+labels[state])+'" class="pc-cell '+state+(selected===p.key?' selected':'')+'"><title>'+e(name+' · '+p.row.tratId+' · '+p.ordem+'ª no percurso · '+labels[state])+'</title><polygon points="'+corners[i].map(point).join(' ')+'"/><text x="'+center[0]+'" y="'+(center[1]-4)+'">'+e(name)+'</text><text class="pc-order" x="'+center[0]+'" y="'+(center[1]+12)+'">'+p.ordem+'º</text></g>';
  });
@@ -92,7 +91,7 @@ function rowList(st,g){
 function rowFor(st,key){return w._avRowsForStudy(JSON.parse(JSON.stringify(st)),false).find(r=>r.key===key);}
 function detail(st){
  const row=rowFor(st,current.key);if(!row)return '<p class="pc-notice">Selecione uma parcela para consultar avaliações e fotos.</p>';
- const av=chosen(st),vars=schema(st,av),map=notes(av),s=status(row,vars,map,!!av);
+ const av=chosen(st),vars=schema(st,av),map=notes(av),s=status(row,vars,map,!!av,source(st,av));
  const projected=w.agConhecimento&&w.agConhecimento.projetar(current.qid,st,w.data[current.qid]);
  const t=projected&&projected.tratamentos.find(t=>t.id===row.tratId);
  let h='<h3 id="pc-detail-title">Parcela '+e(row.campo||row.label)+'</h3><p>'+e(row.tratId)+' · repetição '+e(row.repLabel||row.rep)+(t?'<br>'+e(t.produto)+(t.dose?' · '+e(t.dose):''):'')+'</p><p class="pc-state '+s+'">'+labels[s]+'</p>';
@@ -106,7 +105,7 @@ function detail(st){
  else h+='<p class="pc-hint">Estudo finalizado · avaliações somente para consulta.</p>';
  h+='<button type="button" data-pc-action="photos">Fotos desta parcela</button></div><p class="pc-hint">As fotos ficam neste aparelho e nesta conta.</p><details class="pc-history" open><summary>Histórico de avaliações da parcela</summary>';
  h+=assessments(st).slice().reverse().map(a=>{
-  const vs=schema(st,a),m=notes(a),state=status(row,vs,m,true);
+  const vs=schema(st,a),m=notes(a),state=status(row,vs,m,true,source(st,a));
   return '<article><button type="button" data-pc-assessment="'+e(a.id)+'">'+e(dateText(a))+'</button><span>'+labels[state]+(a.carimbo&&a.carimbo.rubrica?' · Assinada':'')+'</span><p>'+vs.map(v=>e(v)+': '+e(String(value(m,row,v)).trim()===''?'—':value(m,row,v))).join(' · ')+'</p></article>';
  }).join('')||'<p>Nenhuma avaliação cadastrada.</p>';
  return h+'</details>';
@@ -164,7 +163,7 @@ function refreshMap(){if(typeof w.renderCroquis==='function')w.renderCroquis();}
 function mapStyle(st,p){
  const av=chosen(st);if(!av)return null;
  const t=(st.tratamentos||[])[p.tratNum-1],row={tratId:p.tratId||(t&&t.id),rep:p.rep};row.key=w._avRowKey(row.tratId,row.rep);
- const state=status(row,schema(st,av),notes(av),true);
+ const state=status(row,schema(st,av),notes(av),true,source(st,av));
  return {color:colors[state],fillColor:colors[state],fillOpacity:.14,weight:1.5};
 }
 function evaluation(st,rows,vars){

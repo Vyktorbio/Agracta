@@ -66,6 +66,7 @@ context.matchMedia = function(){ return {matches:false, addListener:function(){}
 context.fetch = function(){ return Promise.resolve({json: function(){ return Promise.resolve({}); }}); };
 
 vm.createContext(context);
+vm.runInContext(fs.readFileSync('vendor/avaliacao-core.js','utf8'), context);
 vm.runInContext(fs.readFileSync('vendor/biocalc-lab-core.js', 'utf8'), context, {filename: 'biocalc-lab-core.js'});
 vm.runInContext(fs.readFileSync('app.js', 'utf8'), context, {filename: 'app.js'});
 

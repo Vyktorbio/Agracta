@@ -19,6 +19,9 @@ O anexo mantém os campos estruturados do estudo exportável. Valores binários 
 
 Nomes cegados usam a projeção de Conhecimento. Não se exporta o cadastro inteiro de itens nem credenciais. Não é um exportador de backup para restauração do sistema.
 
+A tabela de avaliações também informa preenchimento pendente, parcial ou completo e
+a contagem de valores completos, usando a mesma leitura da agenda e do croqui.
+
 ## Contrato para R
 
 Uma linha por parcela × avaliação × variável em observacoes.csv. Zero numérico é conservado, ausência tem valor vazio e estado ausente; texto não numérico tem estado nao_numerico. valor_original mantém a escrita. IDs permanecem texto no importador. Parcelas sem identificação de campo ficam vazias, sem randomização nova.
