@@ -352,6 +352,43 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
      aparece depois de mexer em outra coisa. */
   assert.match(app,/renderCroquis\(\);\s*\}catch\(e\)\{\}/,'o render do mapa chama o croqui');
 
+  /* (d2) O RÓTULO ENCOLHE JUNTO COM A PARCELA.
+     Balão de mapa tem tamanho em PIXEL: o croqui encolhe ao afastar o zoom e o
+     texto não, então o rótulo acaba maior que a parcela que ele nomeia. Ligar
+     e desligar num limite de zoom não resolve — só troca "grande demais" por
+     "sumiu". A fonte tem de sair da LARGURA DA PARCELA NA TELA. */
+  const desen=app.slice(app.indexOf('function croquiDesenhar('));
+  const desenCorpo=desen.slice(0,desen.indexOf('\nfunction ')).replace(/\/\*[\s\S]*?\*\//g,'');
+  assert.match(desenCorpo,/larguraPx[\s\S]{0,40}mPorPx/,
+    'a largura da parcela na tela sai de metros por pixel');
+  assert.match(desenCorpo,/fonte=[\s\S]{0,60}larguraPx/,
+    'e a fonte do rótulo sai dessa largura — não de um tamanho fixo');
+  assert.match(desenCorpo,/rotulos=\(fonte>=\d+\)/,
+    'o rótulo some quando não há o que ler, em vez de virar borrão');
+  assert.ok(!/z>=18/.test(desenCorpo),
+    'sem limite de zoom para o rótulo: quem manda é o tamanho da parcela, que varia com o ensaio');
+  /* A folha de estilo tem de ler a variável; um px fixo aqui anularia a conta. */
+  assert.match(app,/croqui-tip-fixa\{[^}]*font-size:var\(--croqui-fonte/,
+    'o CSS do rótulo lê a variável de tamanho');
+  assert.match(app,/croqui-tip-fixa\{[^}]*padding:\.\d+em/,
+    'e o espaçamento vem em em, para acompanhar a fonte');
+
+  /* A conta de metros por pixel é Web Mercator puro, e vale a pena fixá-la:
+     um fator errado aqui faria o rótulo aparecer no zoom errado em silêncio. */
+  {
+    const vm=require('node:vm');
+    const i=app.indexOf('function _croquiMetrosPorPixel(');
+    const ctx=vm.createContext({Math:Math,parseFloat:parseFloat});
+    vm.runInContext(app.slice(i,app.indexOf('\n}',i)+2)+'\nvar r={f:_croquiMetrosPorPixel};',ctx);
+    const f=vm.runInContext('r.f',ctx);
+    perto(f(0,0), 40075016.686/256, 1e-6, 'no equador e zoom 0 são 256 px na volta do mundo');
+    perto(f(0,1), 40075016.686/512, 1e-6, 'cada nível de zoom divide por dois');
+    /* Na latitude do ensaio, no zoom de quem está no talhão. */
+    perto(f(-22.66,20), 0.1378, 0.0005, 'no zoom 20 cada pixel vale ~13,8 cm');
+    /* E é por isso que a parcela de 3 m mede ~22 px ali. */
+    perto(3/f(-22.66,20), 21.8, 0.5, 'a parcela de 3 m dá ~22 px no zoom 20');
+  }
+
   /* O ESTILO DOS RÓTULOS ENTRA COM A CAMADA, não só com o painel de
      posicionar. croquiCss() era chamado apenas dentro de abrirCroquiEditor, e
      quem só olhava o mapa via os rótulos com o balão PADRÃO do Leaflet —

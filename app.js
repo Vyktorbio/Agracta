@@ -3406,6 +3406,24 @@ function croquiGrade(st,pos){
     ordem:ordem });
 }
 
+/* Metros por pixel na tela, na latitude e no zoom dados. É a conta padrão do
+   Web Mercator: a circunferência da Terra encolhe com o cosseno da latitude e
+   se divide em 256 pixels por lado a cada nível de zoom. */
+function _croquiMetrosPorPixel(lat,z){
+  /* ZERO NÃO É AUSÊNCIA. O primeiro rascunho usava `parseFloat(z)||18`, e o
+     zoom 0 — que é falsy — caía no padrão 18: a conta devolvia 0,6 m/px onde
+     o certo são 156 km/px. No mapa do app isso nunca aparece (ele não chega
+     perto do zoom 0), mas é uma conta errada esperando outro uso. */
+  var _z=parseFloat(z); if(!isFinite(_z)) _z=18;
+  var _lat=parseFloat(lat); if(!isFinite(_lat)) _lat=0;
+  return 40075016.686*Math.cos(_lat*Math.PI/180)/Math.pow(2,_z+8);
+}
+/* Um número só manda no tamanho de todos os rótulos: a folha de estilo lê a
+   variável, e o padding vem em `em` para acompanhar a fonte. */
+function _croquiFonte(px){
+  try{ document.documentElement.style.setProperty('--croqui-fonte', px+'px'); }catch(e){}
+}
+
 /* O DESENHO. Contorno branco fino, sem preenchimento: o croqui é uma marcação
    sobre a imagem, não uma camada de cor. Preencher esconderia a lavoura, que é
    justamente o que se quer ver por baixo das parcelas. */
@@ -3419,7 +3437,21 @@ function croquiDesenhar(camada,st,pos,emEdicao){
      é pior que não desenhar. Então de longe fica só a moldura — "o ensaio é
      aqui" —, de perto entram as parcelas e o caminho, e mais perto os nomes. */
   var z=(_map&&_map.getZoom&&_map.getZoom())||18;
-  var detalhe=(z>=16.5), rotulos=(z>=18);
+  var detalhe=(z>=16.5);
+
+  /* O RÓTULO ENCOLHE JUNTO COM A PARCELA.
+     Relato de campo: "não é pra legenda crescer com o zoom". Balão de mapa tem
+     tamanho em PIXEL: o croqui encolhe ao afastar, o texto não, e o rótulo
+     acaba maior que a parcela que ele nomeia. Ligar e desligar num limite de
+     zoom não resolve — só troca "grande demais" por "sumiu".
+     Aqui a fonte é derivada da LARGURA DA PARCELA NA TELA, então o rótulo
+     mantém sempre a mesma proporção com o retângulo, em qualquer zoom. Abaixo
+     de 7 px não há o que ler, e aí ele sai de cena em vez de virar borrão. */
+  var mPorPx=_croquiMetrosPorPixel(pos.lat, z);
+  var larguraPx=(mPorPx>0)?(g.parcelas[0].w/mPorPx):0;
+  var fonte=Math.min(13, Math.round(larguraPx*0.34));
+  var rotulos=(fonte>=7);
+  if(rotulos) _croquiFonte(fonte);
 
   LF.polygon(CroquiCore.cantosDoConjunto(g,pos),
     {color:'#fff',weight:emEdicao?2:1.5,opacity:emEdicao?1:.85,dashArray:'6,4',fill:false,interactive:false}).addTo(camada);
@@ -3531,7 +3563,7 @@ function croquiCss(){
      Puxar --text e --accent daqui deu texto escuro em fundo escuro no tema
      claro (o --accent do app é quase preto, #1f242a): o botão selecionado e o
      "Salvar" sumiam. Cor de painel sobre mapa não é cor de tema. */
-  s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:9px;padding:2px 4px}'+
+  s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:var(--croqui-fonte,9px);padding:.22em .36em;line-height:1.1}'+
   '.croqui-panel{position:fixed;left:12px;bottom:80px;z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
   '.croqui-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.croqui-title{font-size:12px;font-weight:900;letter-spacing:1px;color:#37d684;text-transform:uppercase}.croqui-x{background:none;border:none;color:#93a599;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
   '.croqui-sub{font-size:11px;color:#93a599;margin:-4px 0 9px;line-height:1.4}.croqui-sub b{color:#e8efe9}'+
