@@ -17,9 +17,15 @@ A e depois o B, vira-se no alto, e desce-se instalando C e D.
 É a ordem de caminhada. O motor só deita essa fila sobre a serpentina, e o
 desenho na tela passa a ser o mesmo que se instala no chão.
 
-O croqui marca as duas pontas — `1 · início` e `fim`. Sem elas o desenho é um
-tabuleiro simétrico: de pé no talhão não dá para saber por qual ponta se começa,
-e começar pela errada aplica e avalia o ensaio espelhado.
+**Todas as parcelas são desenhadas iguais, e o rótulo é só o código.** Houve
+aqui um par de etiquetas verdes — `1 · início` e `fim` — desenhadas em qualquer
+zoom para dizer por qual ponta se começa. Relato de campo: balão de mapa tem
+tamanho em **pixel**, não em metro, então ao afastar o zoom elas cresciam por
+cima do croqui e tapavam justamente o que se queria ver.
+
+Eram redundantes: o código de cada parcela já traz o bloco (`5A`, `1D`) e o
+caminho amarelo com as setas já mostra o sentido. Quem precisa do número da
+caminhada toca na parcela e lê no balão (`5A · 12ª no caminho`).
 
 ## O caminho amarelo
 
@@ -44,7 +50,7 @@ detalhe faz sentido desenhar.
 | 21 | 44 × 73 px | tudo |
 | 20 | 22 × 36 px | tudo — é o zoom de quem está no talhão |
 | 19 | 11 × 18 px | tudo |
-| 18 | 5 × 9 px | parcelas, caminho, início e fim (os nomes entram aqui) |
+| 18 | 5 × 9 px | parcelas, caminho e os nomes |
 | 17 | 3 × 5 px | parcelas e caminho, sem nomes |
 | ≤16 | 1 × 2 px | **só a moldura** — "o ensaio é aqui" |
 
