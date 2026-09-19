@@ -612,6 +612,41 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
     assert.ok(new RegExp('function\\s+'+nome+'\\s*\\(').test(app), nome+'() não está declarada em app.js');
   });
 
+  /* (i) O REALCE NÃO PODE FALAR A LÍNGUA DO ANDAMENTO.
+     Desde a v267 a parcela no mapa é pintada pelo estado da avaliação
+     (croqui-parcelas.js): vermelho pendente, âmbar parcial, verde concluída.
+     O realce da caminhada nasceu verde e âmbar — as MESMAS cores, no MESMO
+     desenho, querendo dizer outra coisa. Quem olha de relance lê a cor, não o
+     letreiro. Agora o realce fala azul, que é a cor do GPS neste app, e a
+     certeza se distingue pela forma. */
+  const desenhaEu=app.slice(app.indexOf('function croquiEuDesenhar('));
+  const corpoEu=desenhaEu.slice(0,desenhaEu.indexOf('\nfunction '));
+  if(fs.existsSync('croqui-parcelas.js')){
+    const parcelas=fs.readFileSync('croqui-parcelas.js','utf8');
+    const paleta=(parcelas.match(/const colors=\{([^}]*)\}/)||[])[1]||'';
+    (paleta.match(/#[0-9a-fA-F]{6}/g)||[]).forEach(function(cor){
+      assert.ok(corpoEu.indexOf(cor)<0,
+        'o realce da caminhada usa '+cor+', que no mapa já significa estado da avaliação');
+    });
+  }
+  assert.match(corpoEu,/CROQUI_EU_AZUL/,'o realce fala a cor do GPS, a mesma do círculo de incerteza');
+  assert.match(app,/var CROQUI_EU_AZUL='#6ec1ff'/,'e essa cor é a que a bolinha e o círculo já usam');
+  assert.match(corpoEu,/dashArray/,'certeza e dúvida se distinguem pela FORMA, já que o tom agora é o mesmo');
+
+  /* E ELE NÃO PODE ENTERRAR NEM SER ENTERRADO. A camada do croqui é limpa e
+     redesenhada a cada zoom; sem painel próprio, as parcelas entram depois e
+     passam por cima do realce. E o painel não pode roubar o toque: desde a
+     v267 tocar na parcela abre a ficha dela. */
+  const painelEu=app.slice(app.indexOf('function croquiEuPainel('));
+  const corpoPainel=painelEu.slice(0,painelEu.indexOf('\nfunction '));
+  assert.match(corpoPainel,/createPane\('croquiEu'\)/,'o realce precisa de painel próprio');
+  assert.match(corpoPainel,/zIndex=4[5-9]\d/,'acima do overlay (400) e abaixo dos marcadores (600)');
+  assert.match(corpoPainel,/pointerEvents='none'/,'e sem roubar o toque que abre a ficha da parcela');
+  /* O painel vale para O REALCE DA PARCELA, não só para o círculo: é ele que
+     as parcelas do croqui enterrariam ao serem redesenhadas no zoom. */
+  assert.match(corpoEu,/LF\.polygon\([\s\S]{0,160}?pane:pane/,'o polígono do realce entra no painel próprio');
+  assert.match(corpoEu,/LF\.circle\([\s\S]{0,160}?pane:pane/,'e o círculo de incerteza também');
+
   /* E o motor que ele consome tem de existir no arquivo que o index carrega. */
   const core=fs.readFileSync('vendor/croqui-campo-core.js','utf8');
   ['ondeEstou','nomeDaParcela','metrosLocais'].forEach(function(nome){

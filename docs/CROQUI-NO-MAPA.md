@@ -201,9 +201,34 @@ dessa mesma parcela, ±6 m não responde nada.
 
 O empate não é arredondado para a parcela mais provável. Escolher uma das duas
 em silêncio dá cara de medida a um sorteio — e é exatamente nessa hora que a
-pessoa lança a nota confiante. No mapa as candidatas acendem juntas, em âmbar:
-duas parcelas acesas dizem "não lance ainda" sem depender de ninguém ler o
-texto. Só a resposta com certeza acende em verde, e sozinha.
+pessoa lança a nota confiante. No mapa as candidatas acendem juntas: duas
+parcelas acesas dizem "não lance ainda" sem depender de ninguém ler o texto.
+
+### Por que o realce é azul, e não verde
+
+A primeira versão acendia a parcela em verde e as candidatas em âmbar. Isso
+deixou de poder ser assim na **v267**, quando a parcela no mapa passou a ser
+pintada pelo andamento da avaliação: ali verde já quer dizer *concluída* e
+âmbar já quer dizer *parcial*. Duas coisas diferentes com a mesma cor, no mesmo
+desenho — quem olha de relance lê a cor, não o letreiro.
+
+Azul é a cor do GPS neste app desde antes: a bolinha de "você está aqui" e o
+círculo de incerteza são azuis. Então o realce fala azul, e a **certeza se
+distingue pela forma**:
+
+| leitura | contorno | preenchimento |
+|---|---|---|
+| responde | cheio, grosso | 30 % |
+| não separa as candidatas | tracejado | 8 % |
+
+Assim o andamento continua dono do verde, do âmbar e do vermelho, e o GPS
+continua dono do azul.
+
+O realce mora em **painel próprio** (`createPane('croquiEu')`, z-index 460).
+A camada do croqui é limpa e redesenhada a cada zoom; como as parcelas entram
+no mapa depois, elas passariam por cima do realce e o enterrariam justamente
+com as cores de andamento. O painel não recebe toque (`pointer-events: none`),
+porque tocar na parcela continua sendo o que abre a ficha dela.
 
 Precisão não declarada não é precisão boa: sem o número, o veredito é a dúvida.
 
