@@ -3808,10 +3808,19 @@ function removerCroqui(){
   fecharCroquiEditor();
   if(typeof _stxToast==='function') _stxToast('Croqui removido do mapa.');
 }
-/* Atalho a partir da ficha do estudo: fecha o painel e mostra o mapa. */
+/* Atalho a partir da ficha do estudo: fecha os painéis e mostra o mapa.
+   POSICIONAR É UMA TAREFA DE MAPA. Com a ficha do estudo e a janelinha da
+   quadra abertas por cima, o croqui era desenhado embaixo de duas telas cheias
+   e o usuário não via nada para arrastar.
+
+   E AS DUAS CHAMADAS SÃO DIRETAS, DE PROPÓSITO. Antes elas vinham embrulhadas
+   em `typeof x==='function'`, e uma delas era `closeD` — função que não existe
+   neste app; a certa é `closeDetail`. O guarda transformou um nome errado em
+   silêncio: nada fechava, nada reclamava, e o defeito só apareceu no campo.
+   Chamada direta quebra alto se alguém renomear, que é o que se quer. */
 function posicionarCroquiDoEstudo(qid,sid){
-  try{ if(typeof closeStudyDetail==='function') closeStudyDetail(); }catch(e){}
-  try{ if(typeof closeD==='function') closeD(); }catch(e){}
+  closeStudyDetail();   /* #sdOvl — a ficha do estudo */
+  closeDetail();        /* #dOvl  — a janelinha da quadra */
   abrirCroquiEditor(qid,sid);
 }
 

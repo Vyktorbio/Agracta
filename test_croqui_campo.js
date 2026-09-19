@@ -356,6 +356,30 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
   assert.match(salvaCorpoGps,/ancora=\{fonte:'gps',acc:/,'croqui marcado no GPS guarda fonte e precisão');
   assert.match(salvaCorpoGps,/fonte:'mao'/,'e o arrastado na mão diz que foi na mão');
 
+  /* (f) O ATALHO FECHA OS DOIS PAINÉIS, E CHAMA FUNÇÕES QUE EXISTEM.
+     Este é o defeito que chegou ao campo: o atalho chamava `closeD`, que não
+     existe neste app (a certa é `closeDetail`), embrulhada em
+     `typeof x==='function'`. O guarda virou o nome errado em SILÊNCIO — nada
+     fechava, nada reclamava, e o croqui era desenhado embaixo de duas telas
+     cheias. Posicionar é tarefa de mapa: com a ficha e a janelinha por cima,
+     não há o que arrastar.
+     O teste cobra as duas coisas: que os painéis sejam fechados, e que TODA
+     função chamada ali exista de verdade em app.js. */
+  const atalho=app.slice(app.indexOf('function posicionarCroquiDoEstudo('));
+  const atalhoCorpo=atalho.slice(0,atalho.indexOf('\n}')+2).replace(/\/\*[\s\S]*?\*\//g,'');
+  assert.match(atalhoCorpo,/closeStudyDetail\(\)/,'fecha a ficha do estudo');
+  assert.match(atalhoCorpo,/closeDetail\(\)/,'e fecha a janelinha da quadra — senão o mapa fica coberto');
+  /* Nenhum typeof aqui: ele transformaria o próximo nome errado em silêncio. */
+  assert.ok(!/typeof/.test(atalhoCorpo),
+    'sem guarda typeof no atalho: ela esconde nome de função errado');
+  /* E cada função chamada tem de estar declarada em app.js. */
+  (atalhoCorpo.match(/\b([a-zA-Z_$][\w$]*)\s*\(/g)||[]).forEach(function(m){
+    const nome=m.replace(/\s*\($/,'');
+    if(nome==='function') return;
+    assert.ok(new RegExp('function\\s+'+nome+'\\s*\\(').test(app),
+      'o atalho chama '+nome+'(), que não está declarada em app.js');
+  });
+
   /* O círculo de incerteza entra no enquadramento. Enquadrar só o croqui
      jogava o círculo para fora da tela justamente quando ele era grande —
      escondendo o aviso exatamente no caso em que ele importa. */
