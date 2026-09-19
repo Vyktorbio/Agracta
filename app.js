@@ -191,7 +191,15 @@ function ic(n,sz){ var P={
   sunset:'<path d="M12 10V2M4.9 10.9l1.4 1.4M2 18h2M20 18h2M17.7 12.3l1.4-1.4M22 22H2"/><path d="m16 5-4 5-4-5"/><path d="M16 18a4 4 0 0 0-8 0"/>',
   calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   ruler:'<path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/>',
-  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>'
+  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  /* O laboratório era um emoji 🧪, e emoji quem desenha é o sistema do
+     aparelho: saía colorido e brilhante no iPhone, chapado no Android, e
+     diferente do resto do app em todos. Agora é desenho daqui, no mesmo traço
+     dos outros — e, por herdar currentColor, veste a cor da especialidade. */
+  microscope:'<path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/>',
+  /* Campo anda junto com o laboratório: os dois aparecem lado a lado na
+     escolha do tipo de quadra, e trocar só um deixaria o par desirmanado. */
+  map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>'
 }; var s=sz||16; return '<svg class="ic" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(P[n]||'')+'</svg>'; }
 function todayISO(){var p=_agDateParts(Date.now());return p?(p.year+'-'+p.month+'-'+p.day):''}
 function normStr(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
@@ -1904,10 +1912,10 @@ function novaQuadraTipo(){
     '<div class="calc-sub">O que você vai registrar aqui?</div>'+
     '<div class="qtipo-opts">'+
       '<button class="qtipo-op" onclick="fecharNovaQuadraTipo();startDrawQuadra()">'+
-        '<div class="qtipo-ico">🗺️</div><div><div class="qtipo-t">Campo</div>'+
+        '<div class="qtipo-ico">'+ic('map',22)+'</div><div><div class="qtipo-t">Campo</div>'+
         '<div class="qtipo-d">Desenha o polígono no mapa. Área, NDVI e fenologia funcionam.</div></div></button>'+
       '<button class="qtipo-op" onclick="novaQuadraLabTipo()">'+
-        '<div class="qtipo-ico">🧪</div><div><div class="qtipo-t">Laboratório</div>'+
+        '<div class="qtipo-ico">'+ic('microscope',22)+'</div><div><div class="qtipo-t">Laboratório</div>'+
         '<div class="qtipo-d">Sem desenho. Entomologia, Fitopatologia ou Nematologia.</div></div></button>'+
     '</div></div>';
   ov.style.display='flex';
@@ -2018,7 +2026,9 @@ function labFinalizar(ponto, origem){
   try{ if(_map) _map.setView(ponto, Math.max(_map.getZoom()||16, 17)); }catch(e){}
   /* NÃO abre openE aqui: aquilo é o formulário de cultura/cultivar/plantio, que
      não existe em laboratório — ele cobria o mapa e escondia o marcador novo. */
-  alert('Laboratório "'+p.nome+'"'+(p.labTipo?' ('+p.labTipo+')':'')+' criado ('+origem+').\n\nEstá no mapa como 🧪, no centro da tela. Em modo de edição dá para arrastar o marcador.');
+  /* Texto de alert() é texto puro: aqui não cabe o SVG do ícone, e descrever
+     o desenho ("como 🧪") era justamente o que amarrava a frase ao emoji. */
+  alert('Laboratório "'+p.nome+'"'+(p.labTipo?' ('+p.labTipo+')':'')+' criado ('+origem+').\n\nEstá marcado no mapa, no centro da tela. Em modo de edição dá para arrastar o marcador.');
 }
 
 function startDrawQuadra(){
@@ -2094,11 +2104,11 @@ function buildEditPanel(){
   } else if(editId){
     var _lab=isQuadraLab(editId);
     html+='<div class="gr-hint">Editando <b>'+esc(quadraNome(editId))+'</b>. '+
-      (_lab?'Quadra de <b>laborat&oacute;rio</b>: sem pol&iacute;gono. Arraste o marcador 🧪 para posicionar o lab. (Salva sozinho.)'
+      (_lab?'Quadra de <b>laborat&oacute;rio</b>: sem pol&iacute;gono. Arraste o <b>marcador do laborat&oacute;rio</b> para posicionar o lab. (Salva sozinho.)'
            :'Arraste os <b>pontos amarelos</b>; clique no <b>+</b> para inserir; <b>duplo-clique</b> remove. Clique em outra quadra para troc&aacute;-la. (Salva sozinho.)')+'</div>'+
       '<div class="gr-tipo"><span class="gr-tipo-lbl">Tipo</span>'+
-        '<button class="gr-tipo-op'+(_lab?'':' on')+'" onclick="trocarTipoQuadra(\'campo\')">🗺️ Campo</button>'+
-        '<button class="gr-tipo-op'+(_lab?' on':'')+'" onclick="trocarTipoQuadra(\'lab\')">🧪 Laborat&oacute;rio</button></div>'+
+        '<button class="gr-tipo-op'+(_lab?'':' on')+'" onclick="trocarTipoQuadra(\'campo\')">'+ic('map',13)+' Campo</button>'+
+        '<button class="gr-tipo-op'+(_lab?' on':'')+'" onclick="trocarTipoQuadra(\'lab\')">'+ic('microscope',13)+' Laborat&oacute;rio</button></div>'+
       (_lab?('<div class="gr-tipo"><span class="gr-tipo-lbl">Lab</span>'+
         LAB_TIPOS.map(function(t){
           var on=(quadraLabTipo(editId)===t);
@@ -3253,7 +3263,7 @@ function cloudSubscribeRows(){
   }catch(e){}
 }
 
-/* Quadra de laboratório no mapa: marcador 🧪 em vez de polígono. Sem geometria
+/* Quadra de laboratório no mapa: marcador em vez de polígono. Sem geometria
    não há área nem NDVI, mas o toque é o mesmo (showD) e em modo de edição o
    marcador é arrastável para posicionar o prédio do laboratório. */
 function renderQuadraLab(id){
@@ -3266,10 +3276,17 @@ function renderQuadraLab(id){
      mapa pergunta o que está rodando; o que acabou fica na ficha, atrás do
      botão de finalizados. Sem nada rodando o pino não mostra número nenhum. */
   var n=(typeof estudosAtivos==='function')?estudosAtivos(id).length:((data[id]&&data[id].estudos)||[]).length;
+  /* A COR DIZ QUE LABORATÓRIO É. A ficha do lab já pintava a especialidade
+     (âmbar, roxo, azul) e o mapa ignorava: todo pino era verde, e de longe um
+     laboratório era igual ao outro. Quem tem três no mesmo local tinha de
+     tocar em cada um para saber qual era qual. Lab sem especialidade fica no
+     verde de sempre, que é o que labTipoCor devolve quando não há tipo. */
+  var _c=labTipoCor(quadraLabTipo(id));
   var m=LF.marker(ll,{
     draggable:!!editMode, zIndexOffset:900,
     icon:LF.divIcon({className:'lab-pin'+(isEd?' on':''),
-      html:'<div class="lab-pin-b">🧪</div><div class="lab-pin-t">'+esc(quadraNome(id))+(n?' <b>'+n+'</b>':'')+'</div>',
+      html:'<div class="lab-pin-b" style="color:'+_c+'">'+ic('microscope',14)+'</div>'+
+           '<div class="lab-pin-t">'+esc(quadraNome(id))+(n?' <b style="color:'+_c+'">'+n+'</b>':'')+'</div>',
       iconSize:[0,0], iconAnchor:[13,13]})
   }).addTo(_qLayer);
   m.on('click',function(){
@@ -6753,7 +6770,7 @@ function showD(id){
   if(_lab){
     h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+_labC+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">\u2715</button>'+
       '<div><div class="panel-qlbl" style="color:'+_labC+'">LABORAT\u00d3RIO</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div>'+
-      '<div class="panel-sbox" style="background:'+_labC+'15;border:1px solid '+_labC+'55;margin-right:36px"><div class="panel-scode" style="color:'+_labC+'">\ud83e\uddea</div><div class="panel-slbl" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div></div>';
+      '<div class="panel-sbox" style="background:'+_labC+'15;border:1px solid '+_labC+'55;margin-right:36px"><div class="panel-scode" style="color:'+_labC+'">'+ic('microscope',20)+'</div><div class="panel-slbl" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div></div>';
     h+='<div class="panel-body"><div class="info-grid">'+
       '<div><div class="info-l">ESPECIALIDADE</div><div class="info-v" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div>'+
       '<div><div class="info-l">\u00c1REA</div><div class="info-v">Biologia</div></div>'+

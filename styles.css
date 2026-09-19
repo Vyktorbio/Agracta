@@ -68,6 +68,8 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .panel-qlbl{font-size:10px;font-weight:700;letter-spacing:2px}
 .panel-sbox{border-radius:8px;padding:8px 14px;text-align:center}
 .panel-scode{font-size:20px;font-weight:800;line-height:1}
+/* Na ficha do laboratório este lugar guarda o ícone em vez de uma sigla. */
+.panel-scode svg{display:block;margin:0 auto}
 .panel-slbl{font-size:8px;margin-top:3px;opacity:.8;max-width:100px}
 .panel-body{padding:14px 20px}
 .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px}
@@ -1649,21 +1651,37 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
 .ag-item.ag-dispensado:hover{opacity:.72}
 
 /* ===== QUADRA DE LABORATÓRIO ===================================== */
-/* Sem polígono no mapa: um pino 🧪 no lugar do prédio do laboratório. */
+/* Sem polígono no mapa: um marcador no lugar do prédio do laboratório.
+   ETIQUETA QUADRADA, NÃO BOLINHA. O mapa já fala em bolinha: o ponto azul do
+   GPS, o círculo de incerteza, as notas de campo. O laboratório não é nada
+   disso — é um PRÉDIO, e um canto reto o separa de relance do que é posição.
+   O bico embaixo crava a etiqueta no chão; sem ele o marcador flutuava e não
+   se sabia qual ponto do desenho era o lugar.
+   A cor vem inline, da especialidade (labTipoCor), e tudo aqui a herda por
+   currentColor: a borda, o bico e o traço do microscópio. */
 .lab-pin{background:none;border:none}
 .lab-pin-b{
+  position:relative;
   width:26px;height:26px;display:flex;align-items:center;justify-content:center;
-  font-size:14px;line-height:1;border-radius:50%;
-  background:rgba(12,18,16,.88);border:2px solid #7fd6a6;
-  box-shadow:0 3px 10px rgba(0,0,0,.45);
+  line-height:1;border-radius:7px;color:#21a86b;
+  background:rgba(10,15,13,.92);border:1.5px solid currentColor;
+  box-shadow:0 2px 8px rgba(0,0,0,.55), 0 0 0 3px rgba(0,0,0,.20);
 }
-.lab-pin.on .lab-pin-b{border-color:#ffce00;background:rgba(40,34,8,.9)}
+.lab-pin-b svg{display:block}
+.lab-pin-b::after{
+  content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+  width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;
+  border-top:5px solid currentColor;
+}
+/* Em edição o marcador fica amarelo inteiro — mesmo amarelo dos pontos que se
+   arrastam nas quadras de campo. Como tudo lê currentColor, basta a cor. */
+.lab-pin.on .lab-pin-b{color:#ffce00!important;background:rgba(40,34,8,.92)}
 .lab-pin-t{
   position:absolute;left:32px;top:3px;white-space:nowrap;
   font-size:11px;font-weight:800;color:#dff3e6;
   text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none;
 }
-.lab-pin-t b{color:#7fd6a6;margin-left:2px}
+.lab-pin-t b{margin-left:2px}
 
 /* Seletor campo/lab dentro do painel "Editar quadras" */
 .gr-tipo{display:flex;align-items:center;gap:6px;margin:8px 0 2px;flex-wrap:wrap}
@@ -1672,10 +1690,14 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
   color:var(--text-3,#7c8a80);margin-right:2px;
 }
 .gr-tipo-op{
+  /* O ícone virou SVG: sem o flex, ele e o texto sentavam em linhas de base
+     diferentes e o rótulo ficava torto dentro do botão. */
   flex:1;min-width:96px;padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
   border-radius:8px;border:1px solid var(--border,#26322b);
   background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);
 }
+.gr-tipo-op svg{flex:none}
 .gr-tipo-op:hover{border-color:#3d8f5c;color:#cfe8d8}
 .gr-tipo-op.on{background:#1f5a2a;border-color:#2e7d3e;color:#eafaea}
 
@@ -1688,7 +1710,11 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
   font-family:inherit;transition:border-color .12s,background .12s;
 }
 .qtipo-op:hover{border-color:#2e7d3e;background:var(--surface-3,#eef1ef)}
-.qtipo-ico{font-size:20px;line-height:1.1}
+/* Era um emoji de 20px; agora é um SVG de 22px que herda a cor do texto.
+   A caixa fixa mantém os dois ícones alinhados entre si e com o título. */
+.qtipo-ico{display:flex;align-items:center;justify-content:center;
+  width:24px;height:24px;flex:none;color:var(--text-2,#9fb1a5)}
+.qtipo-op:hover .qtipo-ico{color:#6fd6a4}
 .qtipo-t{font-size:14px;font-weight:800;margin-bottom:2px}
 .qtipo-d{font-size:11px;color:var(--text-2,#9fb1a5);line-height:1.4}
 
