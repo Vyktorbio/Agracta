@@ -75,8 +75,22 @@ assert.equal(c._mascaraFill(pend),0,'em 0% não sobra preenchimento nenhum — f
 c.mascaraSetOpac(1);
 assert.equal(c._mascaraFill(pend),0.5,'e volta inteiro ao padrão');
 
+/* PARA CIMA TAMBÉM, ATÉ O DOBRO.
+   Relato de uso: "quero aumentar a opacidade, pra mim o 100% aí tá no 70%".
+   O máximo era o padrão de fábrica, e o padrão é um palpite sobre uma tela que
+   não é a de quem está no campo. Travar o teto no palpite dizia que o palpite
+   é o limite — o contrário do motivo deste controle existir. */
+assert.equal(c.MASCARA_OPAC_MAX,2,'o curso vai até o dobro do padrão');
+c.mascaraSetOpac(1.5);
+assert.ok(Math.abs(c._mascaraFill(pend)-0.75)<1e-9,'em 150%, "pendente" passa do padrão e vai a 0,75');
+assert.ok(Math.abs(c._mascaraFill(fora)-0.24)<1e-9,'e "fora do estudo" sobe junto, na proporção dela');
+assert.ok(c._mascaraFill(fora)<c._mascaraFill(pend),'sem nunca alcançar quem tem trabalho pendente');
+c.mascaraSetOpac(2);
+assert.equal(c._mascaraFill(pend),1,'no talo, a máscara fica sólida: ali quem olha quer ler estado, não imagem');
+assert.ok(c._mascaraFill(fora)<1,'mas "fora do estudo" continua deixando o satélite aparecer');
+
 /* Entrada fora da faixa não pode virar tinta fora da faixa. */
-c.mascaraSetOpac(3);      assert.equal(c.mascaraOpac,1,'acima de 1 gruda em 1');
+c.mascaraSetOpac(5);      assert.equal(c.mascaraOpac,2,'acima do dobro gruda no dobro');
 c.mascaraSetOpac(-2);     assert.equal(c.mascaraOpac,0,'abaixo de 0 gruda em 0');
 c.mascaraSetOpac('meio'); assert.equal(c.mascaraOpac,0,'texto que não é número não mexe em nada');
 
@@ -91,6 +105,8 @@ assert.equal(c._mascaraFill(zona),0.62,
 assert.equal(c._loja['agracta-mascara-opac-v1'],'0.2','o valor é gravado no localStorage deste aparelho');
 const c2=fazerCtx(0.35);
 assert.ok(Math.abs(c2.mascaraOpac-0.35)<1e-9,'e volta na próxima abertura do app');
+assert.ok(Math.abs(fazerCtx(1.6).mascaraOpac-1.6)<1e-9,
+  'e um valor acima do padrão volta igual: quem subiu o controle não o encontra baixado no dia seguinte');
 assert.equal(fazerCtx(7).mascaraOpac,1,'valor guardado fora da faixa é ignorado, não vira tinta errada');
 assert.equal(fazerCtx('nada').mascaraOpac,1,'lixo no localStorage também cai no padrão');
 assert.ok(!/mascaraOpac/.test(fatia('function dbUpsertQuadra(')||''),
@@ -116,7 +132,8 @@ assert.ok(DOCK.indexOf('toggleMascara')<DOCK.indexOf('tool-fab'),'e antes do bot
 /* ------------------------------------------------------------ 6. o painel --- */
 const PAINEL=fatia('function buildMascaraPanel(){');
 assert.match(PAINEL,/oninput="mascaraSetOpac\(this\.value\)"/,'o controle ajusta enquanto desliza, como o do NDVI');
-assert.match(PAINEL,/min="0" max="1" step="0\.05"/,'de 0 a 100%, em passos de 5');
+assert.match(PAINEL,/min="0" max="'\+MASCARA_OPAC_MAX\+'" step="0\.05"/,
+  'o controle vai até o teto que o motor declara, em vez de repetir o número à mão');
 assert.match(PAINEL,/aria-label="Opacidade da máscara das quadras"/,'o controle se anuncia para quem usa leitor de tela');
 assert.match(PAINEL,/mascaraSetOpac\(1\)/,'e há como voltar ao padrão sem adivinhar o número');
 assert.match(PAINEL,/ndviPanel[\s\S]{0,80}display='none'/,

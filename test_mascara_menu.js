@@ -39,7 +39,9 @@ assert.ok(GAVETA.indexOf('agRowMasc')>GAVETA.indexOf('agRowGirar'),
 /* ------------------------------------------- 3. a régua funciona mesmo --- */
 const BARRA=ui.slice(ui.indexOf('function montarMasc(){'), ui.indexOf('window.agRotBar = function'));
 assert.match(BARRA,/id="agMascRange"/,'a régua tem o controle deslizante');
-assert.match(BARRA,/min="0" max="100" step="5"/,'de 0 a 100%, em passos de 5');
+assert.match(BARRA,/min="0" max="200" step="5"/,
+  'de 0 a 200%, em passos de 5: o padrão de fábrica (100%) fica no MEIO do curso, '+
+  'porque o controle também precisa saber PÔR tinta — "pra mim o 100% aí tá no 70%"');
 assert.match(BARRA,/aria-label="Opacidade da máscara das quadras"/,'anunciada para leitor de tela');
 assert.match(BARRA,/oninput="agMascSet\(this\.value\)"/,'ajusta enquanto desliza');
 assert.match(BARRA,/mascaraSetOpac/,'e chama o motor que já existe no app.js, em vez de recalcular por fora');

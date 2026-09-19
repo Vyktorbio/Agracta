@@ -921,7 +921,7 @@
     var v = Math.round((Number(window.mascaraOpac)||0)*100);
     el.innerHTML =
       '<span class="rb-t">Máscara</span>'+
-      '<input type="range" id="agMascRange" min="0" max="100" step="5" value="'+v+'" '+
+      '<input type="range" id="agMascRange" min="0" max="200" step="5" value="'+v+'" '+
         'oninput="agMascSet(this.value)" aria-label="Opacidade da máscara das quadras">'+
       '<span class="rb-v" id="agMascVal">'+v+'%</span>'+
       '<button onclick="agMascSet(100)">Padrão</button>'+
@@ -930,7 +930,9 @@
     return el;
   }
   window.agMascSet = function(v){
-    var n = Math.max(0, Math.min(100, Math.round(Number(v)||0)));
+    /* Até 200%: o padrão de fábrica (100%) fica no meio do curso, e daí para
+       a direita a máscara ganha mais tinta do que vem de fábrica. */
+    var n = Math.max(0, Math.min(200, Math.round(Number(v)||0)));
     try{ if(window.mascaraSetOpac) window.mascaraSetOpac(n/100); }catch(e){}
     var r = $('agMascRange'); if(r && Number(r.value) !== n) r.value = n;
     var s = $('agMascVal'); if(s) s.textContent = n + '%';

@@ -3373,10 +3373,21 @@ function _mascaraEstilo(qid,selecionada){
    para a nuvem: sincronizá-la seria mandar o ajuste do celular de um para o
    monitor do outro. */
 var MASCARA_OPAC_KEY='agracta-mascara-opac-v1';
+/* O CONTROLE VAI ATÉ O DOBRO, NÃO ATÉ O PADRÃO.
+   Relato de uso: "quero aumentar a opacidade, pra mim o 100% aí tá no 70%".
+   Na primeira versão o máximo era 1 — o padrão de fábrica — e o controle só
+   sabia tirar tinta. Mas o padrão é um palpite meu sobre uma tela que não é a
+   de quem está no campo: com sol batendo, num aparelho mais claro, o 0,50 que
+   aqui parece forte chega lá lavado. Travar o máximo no palpite era dizer que
+   o palpite é o teto, que é exatamente o contrário do motivo deste controle
+   existir.
+   Com 2, o padrão cai no MEIO do curso: para a esquerda tira tinta, para a
+   direita põe, e o meio é de onde todo mundo parte. */
+var MASCARA_OPAC_MAX=2;
 var mascaraOpac=1;
 try{
   var _mo=parseFloat(localStorage.getItem(MASCARA_OPAC_KEY));
-  if(isFinite(_mo)&&_mo>=0&&_mo<=1) mascaraOpac=_mo;
+  if(isFinite(_mo)&&_mo>=0&&_mo<=MASCARA_OPAC_MAX) mascaraOpac=_mo;
 }catch(e){}
 /* As quadras pintadas pela máscara, para o controle deslizar sem redesenhar o
    mapa inteiro a cada pixel: render() refaz polígono, rótulo, nota e croqui, e
@@ -3388,7 +3399,12 @@ var _mascaraPolys=[];
    fecho deixaria o realce devolvendo a opacidade de antes do ajuste. */
 function _mascaraFill(poly){
   var base=(poly&&poly._mfBase!=null)?poly._mfBase:0.26;
-  return poly&&poly._mfMask?Math.max(0,Math.min(0.95,base*mascaraOpac)):base;
+  /* Teto em 1, o máximo que um preenchimento pode ter. Era 0,95, um resto de
+     quando o controle só descia: uma reserva para o satélite nunca sumir de
+     todo. Com o controle subindo a pedido de quem olha, essa reserva virava
+     teimosia — quem pede tinta no talo está dizendo que ali quer ler estado,
+     não imagem, e é uma escolha que se desfaz arrastando de volta. */
+  return poly&&poly._mfMask?Math.max(0,Math.min(1,base*mascaraOpac)):base;
 }
 /* O PAINEL. Mora no mesmo lugar e na mesma folha do painel de índices (o
    .ndvi-panel), porque é o mesmo gesto — abrir pelo menu do mapa, deslizar,
@@ -3419,7 +3435,7 @@ function buildMascaraPanel(){
       '<button class="gr-x" onclick="toggleMascara(false)" aria-label="Fechar" title="Fechar">×</button></div>'+
     '<div class="masc-sub">Quanta tinta o app põe por cima do satélite. Fica guardado <b>neste aparelho</b>.</div>'+
     '<label class="gr-ctl"><span>Opacidade</span>'+
-      '<input type="range" id="mascOpacRange" min="0" max="1" step="0.05" value="'+mascaraOpac+'" '+
+      '<input type="range" id="mascOpacRange" min="0" max="'+MASCARA_OPAC_MAX+'" step="0.05" value="'+mascaraOpac+'" '+
       'oninput="mascaraSetOpac(this.value)" aria-label="Opacidade da máscara das quadras">'+
       '<b id="mascOpacVal" class="masc-val">'+_mascaraPct()+'%</b></label>'+
     _mascaraLegendaHtml()+
@@ -3470,7 +3486,7 @@ function _mascaraPainelValor(){
 function mascaraSetOpac(v){
   var n=parseFloat(v);
   if(!isFinite(n)) return;
-  mascaraOpac=Math.max(0,Math.min(1,n));
+  mascaraOpac=Math.max(0,Math.min(MASCARA_OPAC_MAX,n));
   try{ localStorage.setItem(MASCARA_OPAC_KEY,String(mascaraOpac)); }catch(e){}
   for(var i=0;i<_mascaraPolys.length;i++){
     var q=_mascaraPolys[i];
