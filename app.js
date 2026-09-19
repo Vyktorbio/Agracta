@@ -3678,27 +3678,55 @@ function croquiEuPosicao(p){
     try{ _map.setView([lat,lng], Math.max(_map.getZoom()||18, 19)); }catch(e){}
   }
 }
-/* O REALCE. A parcela em que se está fica cheia; as candidatas, quando o sinal
-   não separa, ficam contornadas em âmbar — a mesma cor do caminho, porque é o
-   mesmo assunto: a ordem em que se anda. Duas parcelas acesas dizem sozinhas
-   "não lance ainda", sem depender de ninguém ler o letreiro. */
+/* O REALCE, E POR QUE ELE É AZUL.
+   A primeira versão acendia a parcela em verde e as candidatas em âmbar. Isso
+   deixou de poder ser assim quando a parcela no mapa passou a ser pintada pelo
+   ANDAMENTO DA AVALIAÇÃO (croqui-parcelas.js): ali verde já quer dizer
+   "concluída" e âmbar já quer dizer "parcial". Duas coisas diferentes com a
+   mesma cor, no mesmo desenho, é exatamente o tipo de mentira silenciosa que
+   este croqui inteiro existe para evitar — quem olha de relance lê a cor, não
+   o letreiro.
+
+   Azul é a cor do GPS neste app desde antes: a bolinha de "você está aqui" e o
+   círculo de incerteza são azuis. Então o realce fala azul, e a CERTEZA se
+   distingue pela FORMA, não pelo tom: contorno cheio e grosso quando a leitura
+   responde; tracejado e apagado quando ela não separa as candidatas. Assim o
+   andamento continua dono do verde, do âmbar e do vermelho, e o GPS continua
+   dono do azul.
+
+   E O REALCE MORA EM PAINEL PRÓPRIO. A camada do croqui é limpa e redesenhada
+   a cada zoom; como as parcelas entram no mapa depois, elas passariam por cima
+   do realce e o enterrariam justamente com as cores de andamento. Um painel
+   acima do overlay resolve de uma vez, sem depender de quem desenha primeiro. */
+var CROQUI_EU_AZUL='#6ec1ff';
+function croquiEuPainel(){
+  if(!_map||!_map.createPane) return undefined;
+  if(!_map.getPane('croquiEu')){
+    var pn=_map.createPane('croquiEu');
+    pn.style.zIndex=460;                 /* acima do overlayPane (400), abaixo dos marcadores (600) */
+    pn.style.pointerEvents='none';       /* o toque continua sendo da parcela, que abre a ficha dela */
+  }
+  return 'croquiEu';
+}
 function croquiEuDesenhar(r){
   if(!_croquiEu||!_croquiEu.camada) return;
   var cam=_croquiEu.camada; cam.clearLayers();
   var l=_croquiEu.leitura; if(!l) return;
+  var pane=croquiEuPainel();
   if(r&&r.alvo&&r.candidatas&&r.candidatas.length){
     var certeza=(r.nivel==='dentro');
     r.candidatas.forEach(function(cel){
       var soUma=(certeza && cel===r.parcela);
       LF.polygon(CroquiCore.cantosDaParcela(cel,r.alvo.pos),
-        {color: soUma?'#37d684':'#ffd24a', weight:2, opacity:.95,
-         fill:true, fillColor: soUma?'#37d684':'#ffd24a',
-         fillOpacity: soUma?.34:.14, interactive:false}).addTo(cam);
+        {pane:pane, color:CROQUI_EU_AZUL, weight: soUma?3.5:2, opacity: soUma?1:.85,
+         dashArray: soUma?null:'5,4',
+         fill:true, fillColor:CROQUI_EU_AZUL, fillOpacity: soUma?.30:.08,
+         interactive:false}).addTo(cam);
     });
   }
   if(l.acc>0){
-    LF.circle([l.lat,l.lng],{radius:l.acc, color:'#6ec1ff', weight:1, opacity:.9,
-      fillColor:'#6ec1ff', fillOpacity:.10, interactive:false}).addTo(cam);
+    LF.circle([l.lat,l.lng],{pane:pane, radius:l.acc, color:CROQUI_EU_AZUL, weight:1, opacity:.9,
+      fillColor:CROQUI_EU_AZUL, fillOpacity:.10, interactive:false}).addTo(cam);
   }
   LF.marker([l.lat,l.lng],{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400, interactive:false}).addTo(cam);
 }
