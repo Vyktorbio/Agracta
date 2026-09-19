@@ -1,0 +1,23 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('fs'),{JSDOM}=require('jsdom'),{indexedDB}=require('fake-indexeddb');
+const Store=require('./vendor/fotos-store.js');
+(async()=>{
+ const owner='teste-filtro',storage=Store.create(indexedDB,JSON.stringify([owner,'Q','S']));
+ const photo=(id,treatment,rep,date,order)=>({id,treatment,rep,date,order,plot:'antigo-'+id,blob:new Blob(['original']),thumb:new Blob(['miniatura'])});
+ await storage.put([photo('a','T1',1,'2026-09-18',0),photo('b','T2',1,'2026-09-18',1),photo('c','T1',2,'2026-09-18',2),photo('d','T1',1,'2026-09-19',3)]);
+ const dom=new JSDOM(fs.readFileSync('galeria-local.html','utf8'),{url:'https://agracta.test/galeria-local.html',runScripts:'outside-only'}),w=dom.window,d=w.document;
+ w.indexedDB=indexedDB;w.FotosStore=Store;w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
+ w.eval(fs.readFileSync('galeria-local.js','utf8'));
+ w.dispatchEvent(new w.MessageEvent('message',{origin:'https://agracta.test',source:w,data:{type:'agracta:fotos-local-context',context:{owner,qid:'Q',sid:'S',codigo:'S',reps:2,tratamentos:[{id:'T1',produto:'A'},{id:'T2',produto:'B'}],initial:{treatment:'T1',rep:1,plot:'1A',filter:true}}}}));
+ await new Promise(r=>setTimeout(r,50));
+ const ids=()=>Array.from(d.querySelectorAll('.photo')).map(el=>el.dataset.id);
+ assert.deepEqual(ids(),['a','d'],'identidade é tratamento + repetição, inclui todas as datas e códigos antigos');
+ assert.match(d.getElementById('selection-count').textContent,/2 foto/);
+ d.querySelector('[data-id="d"] [data-move="-1"]').click();await new Promise(r=>setTimeout(r,40));assert.deepEqual(ids(),['d','a']);
+ assert.equal((await storage.list()).find(p=>p.id==='b').order,1,'reordenar filtro não modifica fotos de outra parcela');
+ d.getElementById('plot-filter').value='all';d.getElementById('plot-filter').dispatchEvent(new w.Event('change'));assert.equal(ids().length,4);assert.match(d.getElementById('selection-count').textContent,/4 foto/);
+ d.getElementById('plot-filter').value='plot';d.getElementById('plot-filter').dispatchEvent(new w.Event('change'));assert.deepEqual(ids(),['d','a']);assert.match(d.getElementById('selection-count').textContent,/2 foto/);
+ d.getElementById('all').click();assert.match(d.getElementById('selection-count').textContent,/0 foto/);
+ assert.equal((await storage.list()).length,4,'filtrar não exclui originais');
+ dom.window.close();console.log('Filtro de fotos por parcela: identidade, datas, seleção, reordenação e originais preservados OK.');
+})().catch(err=>{console.error(err);process.exit(1);});

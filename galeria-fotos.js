@@ -15,10 +15,10 @@ w.abrirGaleriaFotos=function(s,initial){
  const frame=document.createElement('iframe');frame.title='Galeria de fotos local do estudo';
  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads allow-modals');
  frame.referrerPolicy='no-referrer';
- frame.src='galeria-local.html?v=2';
+ frame.src='galeria-local.html?v=3';
  const context={owner:String(owner),qid:s.qid,sid:s.sid,codigo:s.codigo,cultura:s.cultura,alvo:s.alvo,local:s.local,reps:study.numRepeticoes,
    tratamentos:s.tratamentos.map(t=>({id:t.id,produto:t.produto,dose:t.dose})),avaliacoes:(study.avaliacoes||[]).map(a=>({id:a.id,data:a.data}))};
- if(initial)context.initial={treatment:initial.treatment,rep:initial.rep,assessment:initial.assessment,date:initial.date,plot:initial.plot};
+ if(initial)context.initial={treatment:initial.treatment,rep:initial.rep,assessment:initial.assessment,date:initial.date,plot:initial.plot,filter:initial.filter===true};
  const focus=document.activeElement;
  frame.addEventListener('load',()=>{if(dialog.open)frame.contentWindow.postMessage({type:'agracta:fotos-local-context',context},location.origin);},{once:true});
  dialog.append(heading,frame);document.body.appendChild(dialog);dialog.showModal();close.focus();

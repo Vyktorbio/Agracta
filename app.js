@@ -3427,7 +3427,7 @@ function _croquiFonte(px){
 /* O DESENHO. Contorno branco fino, sem preenchimento: o croqui é uma marcação
    sobre a imagem, não uma camada de cor. Preencher esconderia a lavoura, que é
    justamente o que se quer ver por baixo das parcelas. */
-function croquiDesenhar(camada,st,pos,emEdicao){
+function croquiDesenhar(camada,st,pos,emEdicao,qid){
   var g=croquiGrade(st,pos);
   if(!g.parcelas.length) return g;
 
@@ -3483,6 +3483,15 @@ function croquiDesenhar(camada,st,pos,emEdicao){
     var poly=LF.polygon(CroquiCore.cantosDaParcela(p,pos),
       {color:'#fff',weight:1,opacity:emEdicao?.95:.8,
        fill:true,fillOpacity:emEdicao?.10:.04,fillColor:'#fff'});
+    if(!emEdicao&&qid&&window.AgractaParcelas){
+      var estilo=window.AgractaParcelas.mapStyle(st,p);
+      if(estilo)poly.setStyle(estilo);
+      poly.options.bubblingMouseEvents=false;
+      poly.on('click',function(){
+        var t=(st.tratamentos||[])[p.tratNum-1],tid=p.tratId||(t&&t.id);
+        window.AgractaParcelas.open(qid,st.id,_avRowKey(tid,p.rep));
+      });
+    }
     var nome=p.campo||((p.tratId||('T'+p.tratNum))+' '+(p.repLabel||('R'+p.rep)));
     /* A PARCELA ENTRA NO MAPA ANTES DO BALÃO. openTooltip() numa camada que
        ainda não está no mapa não faz nada e não reclama: os rótulos
@@ -3525,7 +3534,7 @@ function renderCroquis(){
     estudosAtivos(qid).forEach(function(st){
       if(_croquiEdit && _croquiEdit.qid===qid && _croquiEdit.sid===st.id) return; /* em edição quem desenha é o editor */
       var pos=croquiPos(st); if(!pos) return;
-      croquiDesenhar(camada,st,pos,false);
+      croquiDesenhar(camada,st,pos,false,qid);
     });
   });
 }
@@ -3808,6 +3817,13 @@ function croquiSetVao(campo,valor){
   _croquiEdit.pos[campo]=v;
   croquiEditRedraw();
 }
+function croquiToggleAjustes(){
+  var painel=document.getElementById('croquiPanel');if(!painel)return;
+  var collapsed=painel.classList.toggle('croqui-compacto');
+  var b=painel.querySelector('.croqui-toggle');
+  b.setAttribute('aria-expanded',String(!collapsed));b.textContent=collapsed?'Ajustes':'Recolher';
+  croquiEnquadrar();
+}
 function abrirCroquiEditor(qid,sid){
   if(!_map) initMap();
   croquiCss(); haCss();
@@ -3865,10 +3881,13 @@ function abrirCroquiEditor(qid,sid){
   _croquiHandles=[mv,rot];
 
   var painel=document.createElement('div');
-  painel.id='croquiPanel'; painel.className='croqui-panel';
+  var compacto=window.matchMedia&&window.matchMedia('(max-width:700px)').matches;
+  painel.id='croquiPanel'; painel.className='croqui-panel pc-position'+(compacto?' croqui-compacto':'');
   painel.innerHTML='<div class="croqui-head"><div class="croqui-title">Posicionar croqui</div>'
+    +'<button type="button" class="croqui-toggle" onclick="croquiToggleAjustes()" aria-controls="croquiAjustes" aria-expanded="'+(!compacto)+'">'+(compacto?'Ajustes':'Recolher')+'</button>'
     +'<button class="croqui-x" onclick="fecharCroquiEditor()" aria-label="Fechar">×</button></div>'
-    +'<div class="croqui-sub">'+esc(st.codigo||st.nome||st.id)+' · '+esc(quadraNome(qid))+'<br>Arraste pelo <b>✛</b> e gire pelo <b>↻</b>. A âncora salva é o canto da primeira parcela.</div>'
+    +'<div class="croqui-sub croqui-resumo">'+esc(st.codigo||st.nome||st.id)+' · '+esc(quadraNome(qid))+' · ✛ mover · ↻ girar</div>'
+    +'<div id="croquiAjustes" class="croqui-ajustes"><div class="croqui-sub">A âncora salva é o canto da primeira parcela.</div>'
     +'<div class="croqui-seg"><button data-serp="1" onclick="croquiSetSerpentina(true)">Vai e volta</button>'
     +'<button data-serp="0" onclick="croquiSetSerpentina(false)">Sempre no mesmo sentido</button></div>'
     +'<div class="croqui-nums"><div><label>Colunas</label><input type="number" min="1" step="1" value="'+(pos.colunas||2)+'" oninput="croquiSetColunas(this.value)"></div>'
@@ -3877,11 +3896,17 @@ function abrirCroquiEditor(qid,sid){
     +'<div><label>&nbsp;</label><div class="croqui-mini">âncora = 1ª parcela</div></div></div>'
     +'<div class="croqui-info"></div>'
     +'<button type="button" id="croquiGpsBtn" class="croqui-gps" onclick="croquiAncorarNoGps()">Marcar canto no GPS</button>'
+    +(_croquiEdit.tinha?'<button class="croqui-remove" onclick="removerCroqui()">Remover croqui do mapa</button>':'')
+    +'</div>'
     +'<div class="croqui-acc" id="croquiAcc" style="display:none"></div>'
     +'<div class="croqui-acts"><button class="primary" data-acao="salvar" onclick="salvarCroqui()">Salvar</button>'
-    +(_croquiEdit.tinha?'<button class="danger" onclick="removerCroqui()">Remover</button>':'')
     +'<button onclick="fecharCroquiEditor()">Cancelar</button></div>';
   document.body.appendChild(painel);
+  if(typeof ResizeObserver!=='undefined'){
+    _croquiEdit.observer=new ResizeObserver(function(){croquiEnquadrar();});
+    _croquiEdit.observer.observe(painel);
+  }
+  window.addEventListener('resize',croquiEnquadrar);
 
   renderCroquis();
   croquiEditRedraw();
@@ -3989,16 +4014,24 @@ function croquiEnquadrar(){
         [_croquiEdit.pos.lat+_dLat,_croquiEdit.pos.lng+_dLng]]);
     }
     var painel=document.getElementById('croquiPanel');
-    var alturaPainel=painel?(painel.getBoundingClientRect().height+96):380; /* +96: o painel fica 80px acima do rodapé */
-    var alturaMapa=(_map.getSize()?_map.getSize().y:600);
-    /* Nunca comer mais de dois terços da tela: numa tela baixa a margem
-       engoliria o mapa inteiro e o fitBounds não teria onde caber. */
-    var margem=Math.min(alturaPainel, Math.round(alturaMapa*0.62));
+    var tamanho=_map.getSize(),mr=_map.getContainer().getBoundingClientRect();
+    var pr=painel&&painel.getBoundingClientRect();
+    var esquerda=24,baixo=96,topo=48;
+    if(pr){
+      var lateral=Math.max(0,pr.right-mr.left)+20;
+      var inferior=Math.max(0,mr.bottom-pr.top)+20;
+      /* Em tela larga cabe melhor AO LADO do painel; no celular, ACIMA.
+         Nunca limita a margem abaixo da altura real e deixa o desenho oculto. */
+      if(tamanho.x-lateral>=240&&(tamanho.x-lateral)*(tamanho.y-baixo-topo)>tamanho.x*(tamanho.y-inferior-topo))esquerda=lateral;
+      else baixo=inferior;
+    }
     _map.fitBounds(LF.latLngBounds(cantos),
-      {animate:false, paddingTopLeft:[24,24], paddingBottomRight:[24,margem]});
+      {animate:false, paddingTopLeft:[esquerda,topo], paddingBottomRight:[24,baixo]});
   }catch(e){}
 }
 function fecharCroquiEditor(silencioso){
+  if(_croquiEdit&&_croquiEdit.observer)_croquiEdit.observer.disconnect();
+  window.removeEventListener('resize',croquiEnquadrar);
   if(_croquiHandles){ _croquiHandles.forEach(function(h){ try{ _map.removeLayer(h); }catch(e){} }); _croquiHandles=null; }
   if(_croquiEditLayer){ try{ _croquiEditLayer.clearLayers(); }catch(e){} }
   var p=document.getElementById('croquiPanel'); if(p) p.remove();
@@ -8240,6 +8273,7 @@ function _studyWorkflowHtml(qid,sid,study){
 }
 function closeStudyParcelas(){var o=document.getElementById('studyParcelasOvl');if(o)o.style.display='none';}
 function openStudyParcelas(qid,sid){
+  if(window.AgractaParcelas)return window.AgractaParcelas.open(qid,sid);
   var q=data[qid]||{},st=(q.estudos||[]).find(function(x){return x.id===sid;});if(!st)return;
   st=normalizeStudy(st);var rows=_avRowsForStudy(st,true),by={},ord=[];
   rows.forEach(function(r){var n=Number(r.rep)||1;if(!by[n]){by[n]=[];ord.push(n);}by[n].push(r);});
@@ -15781,6 +15815,7 @@ function _avCroquiStatus(row, vars){
 }
 function avCroquiHtml(st, rows, vars){
   if(!st||!rows||!rows.length) return '';
+  if(window.AgractaParcelas){var fisico=window.AgractaParcelas.evaluation(st,rows,vars);if(fisico)return fisico;}
   var byRep={}, order=[];
   rows.forEach(function(row){ var rep=Number(row.rep)||1; if(!byRep[rep]){byRep[rep]=[];order.push(rep);} byRep[rep].push(row); });
   var complete=0, partial=0, empty=0;
@@ -15799,11 +15834,14 @@ function avCroquiHtml(st, rows, vars){
     h+='</div></div>';
   });
   h+='<div class="av-croqui-legend"><span><i class="empty"></i> '+empty+' pendente'+(empty===1?'':'s')+'</span><span><i class="partial"></i> '+partial+' parcial</span><span><i class="done"></i> '+complete+' concluída'+(complete===1?'':'s')+'</span></div>'+
-     '<div class="av-croqui-hint">Toque numa parcela para destacá-la na grade. A disposição segue o bloco e a ordem de randomização do ensaio.</div></div></div>';
+     '<div class="av-croqui-hint">Lista por bloco, sem posição física. Posicione o croqui no mapa para ver a disposição no campo. Toque numa parcela para destacá-la na grade.</div></div></div>';
   return h;
 }
 function toggleAvCroqui(){ _avCroquiOpen=!_avCroquiOpen; renderAvGrid(); }
 function avCroquiSelect(key){
+  /* Trocar de parcela não pode perder um valor ainda presente no input. */
+  var fs=document.getElementById('avFs'),locked=fs&&fs.disabled;
+  if(!locked&&typeof _avSyncInputs==='function')_avSyncInputs();
   _avCroquiKey=key;
   var st=_avStudy();
   if(_avAuto.on&&st){
@@ -15814,8 +15852,9 @@ function avCroquiSelect(key){
   renderAvGrid();
   setTimeout(function(){
     var w=document.getElementById('avGridWrap'); if(!w)return;
+    if(_avAuto.on){var auto=document.getElementById('avAutoInput');if(auto){auto.scrollIntoView({block:'center',behavior:'smooth'});if(!locked){auto.focus();auto.select&&auto.select();}return;}}
     var input=Array.prototype.find.call(w.querySelectorAll('.av-cell'),function(el){return el.getAttribute('data-t')===key;});
-    if(input){ input.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); input.focus(); input.select&&input.select(); }
+    if(input){ input.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); if(!locked){input.focus(); input.select&&input.select();} }
   },30);
 }
 
@@ -17171,6 +17210,7 @@ function closeEventEdit(){
   window._avEditing=false;
   try{ if(typeof cloudApplyPending==='function') cloudApplyPending(); }catch(e){}
   try{ if(typeof cloudReadRowsApplyPending==='function') cloudReadRowsApplyPending(); }catch(e){}
+  try{ if(window.AgractaParcelas)window.AgractaParcelas.refresh(); }catch(e){}
 }
 
 

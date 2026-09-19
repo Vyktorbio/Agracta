@@ -1,5 +1,33 @@
 # Croqui do ensaio no mapa
 
+## Consulta e posicionamento no celular — v267
+
+- **Ver croqui das parcelas** e o croqui da avaliação usam a geometria de
+  `CroquiCore`, incluindo serpentina, colunas, vãos e giro. O desenho rola sem
+  reorganizar as parcelas conforme a largura da janela. Norte e início ficam
+  indicados na consulta; os rótulos do mapa continuam proporcionais ao zoom.
+- Tocar numa parcela no mapa ou na consulta abre sua identificação, valores
+  por data, histórico de avaliações e galeria local. A abertura da avaliação
+  mantém tratamento e repetição, incluindo a posição do modo automático.
+- O seletor de avaliação determina as cores: vermelho pendente, amarelo
+  parcial, verde concluída. Azul indica a seleção. Zero conta como preenchido.
+  Ao entrar, usa a data cadastrada mais recente até hoje ou a primeira futura.
+  Variáveis de uma avaliação ainda vazia seguem a mesma herança da ficha.
+- Fotos abertas pela parcela são filtradas por **tratamento + repetição**, em
+  todas as datas. Códigos antigos continuam incluídos. O filtro não altera nem
+  remove fotos, e somente as fotos visíveis selecionadas entram na exportação.
+- O painel de posicionamento começa recolhido em telas de até 700 px.
+  **Ajustes / Recolher** controla os campos; Salvar e Cancelar ficam disponíveis.
+  A precisão do GPS permanece visível mesmo recolhido. O enquadramento usa a
+  área acima do painel no celular ou ao lado dele no computador, e acompanha
+  alterações na altura do painel e na janela.
+
+Arquivos: `croqui-parcelas.js`, `croqui-parcelas.css`, integração no `app.js` e
+filtro na galeria local. Testes: `test_croqui_parcelas_ui.js` e
+`test_fotos_parcela_filtro.js`, além das regressões de geometria e galeria.
+Consulta não salva o estudo, não troca a randomização e respeita a leitura
+ativa dos avaliadores. Estudo finalizado não oferece abrir edição nem posição.
+
 O mapa dizia ONDE é a quadra; a ficha dizia COMO é o ensaio. Quem chegava no
 talhão juntava as duas coisas de cabeça. Agora o croqui fica desenhado no chão
 certo, na escala certa, por cima da imagem de satélite.

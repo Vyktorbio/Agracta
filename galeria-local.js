@@ -1,7 +1,7 @@
 /* Esta página não envia mensagens, fotos, métricas ou requisições de rede. */
 (function(){
 'use strict';
-let context=null,storage=null,photos=[],busy=false,urls=[],selected=new Set();
+let context=null,storage=null,photos=[],busy=false,urls=[],selected=new Set(),filterPlot=null;
 const $=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const br=date=>/^\d{4}-\d{2}-\d{2}$/.test(date||'')?date.slice(8)+'/'+date.slice(5,7)+'/'+date.slice(0,4):'Sem data';
 function message(text,error){$('status').textContent=text;$('status').className=error?'error':'';}
@@ -11,11 +11,12 @@ function url(blob){const u=URL.createObjectURL(blob);urls.push(u);return u;}
 function treatment(id){return context.tratamentos.find(t=>t.id===id);}
 function label(photo){const t=treatment(photo.treatment);return String(photo.treatment)+' · '+(t?t.produto:'Tratamento não disponível no cadastro atual')+(t&&t.dose?' · '+t.dose:'');}
 function detail(photo){return [photo.plot||photo.treatment+'R'+photo.rep,'R'+photo.rep,br(photo.date)].join(' · ');}
-function selection(){return photos.filter(p=>selected.has(p.id));}
-function count(){const n=selection().length,per=Number($('per-slide').value);$('selection-count').textContent=n+' foto(s) selecionada(s) · '+Math.ceil(n/per)+' slide(s).';$('all').textContent=n===photos.length&&n?'Desmarcar todas':'Selecionar todas';$('preview').replaceChildren();}
+function visiblePhotos(){return filterPlot&&$('plot-filter').value==='plot'?photos.filter(p=>p.treatment===filterPlot.treatment&&Number(p.rep)===filterPlot.rep):photos;}
+function selection(){return visiblePhotos().filter(p=>selected.has(p.id));}
+function count(){const n=selection().length,per=Number($('per-slide').value);$('selection-count').textContent=n+' foto(s) selecionada(s) · '+Math.ceil(n/per)+' slide(s).';$('all').textContent=n===visiblePhotos().length&&n?'Desmarcar todas':'Selecionar todas';$('preview').replaceChildren();}
 function draw(){
- revoke();$('gallery-title').textContent=photos.length+' foto(s) salvas neste aparelho';
- $('gallery').innerHTML=photos.length?photos.map((p,i)=>'<article class="photo" data-id="'+esc(p.id)+'"><img loading="lazy" src="'+url(p.thumb)+'" alt="'+esc(label(p)+' · '+detail(p))+'"><label><input type="checkbox" data-select="'+esc(p.id)+'" '+(selected.has(p.id)?'checked':'')+'> '+esc(label(p))+'</label><p class="hint">'+esc(detail(p))+'</p><div class="actions"><button type="button" class="secondary" data-move="-1" '+(!i?'disabled':'')+' aria-label="Mover foto '+(i+1)+' para antes">← Antes</button><button type="button" class="secondary" data-move="1" '+(i===photos.length-1?'disabled':'')+' aria-label="Mover foto '+(i+1)+' para depois">Depois →</button><button type="button" class="danger" data-delete="1">Excluir</button></div></article>').join(''):'<p class="empty">Escolha o tratamento e a repetição acima para adicionar a primeira foto.</p>';
+ const visible=visiblePhotos();revoke();$('gallery-title').textContent=visible.length+' foto(s)'+(filterPlot&&$('plot-filter').value==='plot'?' desta parcela':'')+' salvas neste aparelho';
+ $('gallery').innerHTML=visible.length?visible.map((p,i)=>'<article class="photo" data-id="'+esc(p.id)+'"><img loading="lazy" src="'+url(p.thumb)+'" alt="'+esc(label(p)+' · '+detail(p))+'"><label><input type="checkbox" data-select="'+esc(p.id)+'" '+(selected.has(p.id)?'checked':'')+'> '+esc(label(p))+'</label><p class="hint">'+esc(detail(p))+'</p><div class="actions"><button type="button" class="secondary" data-move="-1" '+(!i?'disabled':'')+' aria-label="Mover foto '+(i+1)+' para antes">← Antes</button><button type="button" class="secondary" data-move="1" '+(i===visible.length-1?'disabled':'')+' aria-label="Mover foto '+(i+1)+' para depois">Depois →</button><button type="button" class="danger" data-delete="1">Excluir</button></div></article>').join(''):'<p class="empty">Nenhuma foto nesta seleção. Confira a identificação acima para adicionar uma foto.</p>';
  count();
 }
 function imageOf(blob){
@@ -98,8 +99,9 @@ window.addEventListener('message',async function(ev){
    $('assessment').value=av?av.id:'';
    if(/^\d{4}-\d{2}-\d{2}$/.test(initial.date||''))$('date').value=initial.date;
    $('plot').value=String(initial.plot||'').slice(0,40);
+   if(initial.filter===true){filterPlot={treatment:initial.treatment,rep:Number(initial.rep)};$('plot-filter-label').hidden=false;$('plot-filter').options[0].textContent=(initial.plot||initial.treatment+' R'+initial.rep)+' · todas as datas';}
   }
-  photos=await storage.list();photos.forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();message('Galeria pronta. Armazenamento exclusivo deste aparelho.');
+  photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();message('Galeria pronta. Armazenamento exclusivo deste aparelho.');
  }catch(err){message('Galeria indisponível: '+err.message,true);}
 });
 $('capture-form').addEventListener('submit',ev=>ev.preventDefault());
@@ -114,12 +116,13 @@ $('gallery').addEventListener('click',async ev=>{
  setBusy(true);
  try{
   if(b.dataset.delete){await storage.remove(p.id);photos=photos.filter(x=>x.id!==p.id);selected.delete(p.id);}
-  else{const i=photos.indexOf(p),j=i+Number(b.dataset.move);if(j<0||j>=photos.length)return;const other=photos[j];const changed=[Object.assign({},p,{order:other.order}),Object.assign({},other,{order:p.order})];await storage.put(changed);photos[i]=changed[1];photos[j]=changed[0];}
+  else{const visible=visiblePhotos(),i=visible.indexOf(p),j=i+Number(b.dataset.move);if(j<0||j>=visible.length)return;const other=visible[j];const changed=[Object.assign({},p,{order:other.order}),Object.assign({},other,{order:p.order})];await storage.put(changed);photos[photos.indexOf(p)]=changed[0];photos[photos.indexOf(other)]=changed[1];photos.sort((a,b)=>a.order-b.order);}
   message('Galeria atualizada neste aparelho.');
  }catch(err){message('Não foi possível alterar: '+err.message,true);}
  finally{setBusy(false);draw();}
 });
-$('all').addEventListener('click',()=>{selected=selection().length===photos.length?new Set():new Set(photos.map(p=>p.id));draw();});
+$('all').addEventListener('click',()=>{selected=selection().length===visiblePhotos().length?new Set():new Set(visiblePhotos().map(p=>p.id));draw();});
+$('plot-filter').addEventListener('change',()=>{selected=new Set(visiblePhotos().map(p=>p.id));draw();});
 $('per-slide').addEventListener('change',count);
 $('preview-button').addEventListener('click',preview);
 $('pptx').addEventListener('click',()=>exportFiles('pptx'));
