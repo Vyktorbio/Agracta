@@ -11,6 +11,11 @@
    está ligado?" (ele lê style.display). Some da tela, mas responde igual. */
 #ndviPanel{display:none!important}
 
+/* Mesma história com o painel da máscara: nesta casca quem regula a opacidade
+   é a linha da gaveta mais a régua do rodapé, onde dá para VER o mapa mudando.
+   O painel continua no app.js como reserva de quem não tem esta folha. */
+#mascaraPanel{display:none!important}
+
 /* ---- botão único no topo ---- */
 .btn-tools{order:0!important;position:relative}
 .btn-tools.on{color:var(--gp-green,#3bd27f)!important;border-color:var(--gp-green,#3bd27f)!important}
@@ -337,6 +342,12 @@ html.light body .clima-chip .cc-v{color:#fff!important}
   border-radius:10px;padding:7px 12px;font:700 11px var(--ag-font,system-ui)
 }
 .ag-rotbar button.ok{background:var(--gp-green,#3bd27f);color:#062015;border-color:transparent}
+/* Rótulo da régua da máscara: a de giro não precisa (a palavra "Norte" no
+   botão já diz do que se trata), esta precisa dizer o que está regulando. */
+.ag-rotbar .rb-t{
+  flex:0 0 auto;font:700 11px var(--ag-font,system-ui);color:var(--gp-text-2,#bdc9c0);
+  letter-spacing:.02em
+}
 @media(min-width:721px){
   .ag-rotbar{left:50%;right:auto;transform:translateX(-50%);width:min(620px,calc(100vw - 24px))}
 }

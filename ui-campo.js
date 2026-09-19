@@ -44,7 +44,8 @@
     lapis:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     ajustes:'<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
     solo:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M3 14h18"/><path d="M8 4v5"/><path d="M15 9v5"/><path d="M11 14v6"/>',
-    x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+    x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    contraste:'<circle cx="12" cy="12" r="9"/><path d="M12 21a9 9 0 0 0 0-18v18Z"/>'
   };
 
   /* ====================================================================== */
@@ -104,6 +105,8 @@
           '</div>'+
           linha('agRowGirar', IC.bussola, 'Girar o mapa',
                 'Abre a régua de giro no rodapé', 'agRotBar(true)')+
+          linha('agRowMasc', IC.contraste, 'Opacidade da máscara',
+                'Quanta tinta o app põe por cima do satélite', 'agMascBar(true)')+
           linha('agRowHa', IC.quadrado, 'Quadrado de 1 hectare',
                 'Referência de 100 × 100 m no centro', 'agAcao(\'toggleHaRef\')')+
           linha('agRowEditar', IC.lapis, 'Editar quadras',
@@ -904,6 +907,49 @@
     var r = $('agRotRange'); if(r && Number(r.value) !== v) r.value = v;
     var s = $('agRotVal'); if(s) s.textContent = v + '°';
   };
+  /* ---- régua da máscara ----
+     MESMO GESTO DA RÉGUA DE GIRO, E PELO MESMO MOTIVO: para escolher a
+     opacidade é preciso VER o mapa mudando, e a gaveta cobre o mapa. Então a
+     linha da gaveta fecha a gaveta e deixa só esta faixa no rodapé.
+
+     O motor (mascaraSetOpac, em app.js) e a persistência no aparelho já
+     existem e não mudam aqui; esta faixa é só a mão que gira o botão. */
+  function montarMasc(){
+    if($('agMascBar')) return $('agMascBar');
+    var el = document.createElement('div');
+    el.id = 'agMascBar'; el.className = 'ag-rotbar ag-mascbar';
+    var v = Math.round((Number(window.mascaraOpac)||0)*100);
+    el.innerHTML =
+      '<span class="rb-t">Máscara</span>'+
+      '<input type="range" id="agMascRange" min="0" max="100" step="5" value="'+v+'" '+
+        'oninput="agMascSet(this.value)" aria-label="Opacidade da máscara das quadras">'+
+      '<span class="rb-v" id="agMascVal">'+v+'%</span>'+
+      '<button onclick="agMascSet(100)">Padrão</button>'+
+      '<button class="ok" onclick="agMascBar(false)">Pronto</button>';
+    document.body.appendChild(el);
+    return el;
+  }
+  window.agMascSet = function(v){
+    var n = Math.max(0, Math.min(100, Math.round(Number(v)||0)));
+    try{ if(window.mascaraSetOpac) window.mascaraSetOpac(n/100); }catch(e){}
+    var r = $('agMascRange'); if(r && Number(r.value) !== n) r.value = n;
+    var s = $('agMascVal'); if(s) s.textContent = n + '%';
+  };
+  window.agMascBar = function(abrir){
+    var el = montarMasc();
+    var vai = (abrir === undefined) ? !el.classList.contains('on') : !!abrir;
+    if(vai){
+      agMenu(false);
+      try{ if(window.agToggleDrawer) window.agToggleDrawer(false); }catch(e){}
+      /* a régua de giro e esta dividem o mesmo pedaço de rodapé */
+      try{ window.agRotBar(false); }catch(e){}
+      var n = Math.round((Number(window.mascaraOpac)||0)*100);
+      var r = $('agMascRange'); if(r) r.value = n;
+      var s = $('agMascVal'); if(s) s.textContent = n + '%';
+    }
+    el.classList.toggle('on', vai);
+  };
+
   window.agRotBar = function(abrir){
     var el = montarRot();
     var vai = (abrir === undefined) ? !el.classList.contains('on') : !!abrir;
@@ -911,6 +957,7 @@
       agMenu(false);
       /* a régua mora no rodapé: qualquer gaveta aberta esconde o mapa que ela gira */
       try{ if(window.agToggleDrawer) window.agToggleDrawer(false); }catch(e){}
+      try{ window.agMascBar(false); }catch(e){}
       var b = 0;
       try{ b = ((Math.round(window._map && window._map.getBearing && window._map.getBearing() || 0) % 360) + 360) % 360; }catch(e){}
       var r = $('agRotRange'); if(r) r.value = b;
@@ -934,7 +981,7 @@
   }
 
   function iniciar(){
-    montarBotao(); montarGaveta(); montarRot();
+    montarBotao(); montarGaveta(); montarRot(); montarMasc();
     setTimeout(montarBotao, 400);
     setTimeout(montarBotao, 1500);
     document.addEventListener('keydown', function(e){
