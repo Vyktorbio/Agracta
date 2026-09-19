@@ -380,6 +380,29 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
       'o atalho chama '+nome+'(), que não está declarada em app.js');
   });
 
+  /* (g) O CAMPO QUE NÃO EXISTIA. O croqui recusava desenhar dizendo "falta o
+     tamanho da parcela no protocolo" — e não havia onde preencher: o valor só
+     chegava pela planilha do protocolo importada. Quem cadastrava o estudo na
+     mão ficava sem saída, mandado a um lugar inexistente. */
+  const render=app.slice(app.indexOf('function renderStudyEditModal('));
+  const etapa1=render.slice(0,render.indexOf('data-step="2"'));
+  assert.ok(etapa1.indexOf('id="seParcelaComp"')>0 && etapa1.indexOf('id="seParcelaLarg"')>0,
+    'o tamanho da parcela se preenche na etapa PROTOCOLO — foi onde o usuário foi procurar, e é onde o dado mora');
+
+  /* Meia medida não é medida, e não pode apagar o que a planilha trouxe. */
+  const sync=app.slice(app.indexOf('function syncStudyInputs('));
+  const syncCorpo=sync.slice(0,sync.indexOf('\nfunction '));
+  assert.match(syncCorpo,/_cOk&&_lOk/,'só grava com os dois lados preenchidos');
+  assert.match(syncCorpo,/!_cOk&&!_lOk[\s\S]{0,120}delete/,
+    'e só apaga com os dois vazios — um lado em branco é digitação pela metade, não intenção de limpar');
+  assert.match(syncCorpo,/tamanhoParcela=/,'grava no mesmo campo que a calculadora e a planilha leem');
+
+  /* A tela diz ONDE se preenche. O motor sabe o QUE falta e não conhece
+     telas; sem esta linha o usuário procura o campo pela ficha inteira. */
+  const painel=app.slice(app.indexOf('function croquiEditPanel('));
+  assert.match(painel.slice(0,painel.indexOf('\nfunction ')),/Editar planejamento.*Protocolo.*Tamanho da parcela/,
+    'a recusa do croqui aponta o caminho exato do campo');
+
   /* O círculo de incerteza entra no enquadramento. Enquadrar só o croqui
      jogava o círculo para fora da tela justamente quando ele era grande —
      escondendo o aviso exatamente no caso em que ele importa. */

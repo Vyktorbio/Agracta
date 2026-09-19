@@ -3552,7 +3552,12 @@ function croquiEditRedraw(){
 function croquiEditPanel(g){
   var p=document.getElementById('croquiPanel'); if(!p||!_croquiEdit) return;
   var pos=_croquiEdit.pos;
-  var falta=(g&&g.problemas&&g.problemas.length)?g.problemas:[];
+  var falta=(g&&g.problemas&&g.problemas.length)?g.problemas.slice():[];
+  /* O motor diz O QUE falta; só a tela sabe ONDE se preenche. Dizer "falta o
+     tamanho da parcela" sem dizer onde mandou o usuário procurar um campo pela
+     ficha inteira — e, por um tempo, procurar um campo que nem existia. */
+  if(falta.some(function(x){ return /tamanho da parcela/i.test(x); }))
+    falta.push('Preencha em: ficha do ensaio → Editar planejamento → etapa Protocolo → Tamanho da parcela.');
   var corpo=(g&&g.parcelas.length)
     ? '<b>'+g.parcelas.length+' parcelas</b> · '+g.colunas+' col. × '+g.linhas+' lin. · '
       +_croquiNum(g.largura)+' × '+_croquiNum(g.comprimento)+' m · '+_croquiNum(CroquiCore.areaHa(g),3)+' ha'
@@ -13790,6 +13795,23 @@ function renderStudyEditModal(){
 
   h+='<div class="se-field"><label>Descrição / objetivo</label>';
   h+='<textarea id="seDescricao" placeholder="Ex: Avaliação de eficácia de fungicidas sistêmicos no controle de ferrugem asiática" rows="3">'+esc(s.descricao)+'</textarea></div>';
+
+  /* TAMANHO DA PARCELA — fica na etapa PROTOCOLO, e não junto das repetições.
+     Até aqui ele só existia vindo da planilha do protocolo importada; quem
+     cadastrava o estudo na mão não tinha onde digitar, e o croqui no mapa
+     recusava desenhar dizendo "falta o tamanho da parcela no protocolo" —
+     mandando preencher num lugar que não existia.
+     Está aqui porque foi aqui que o usuário veio procurar, e porque é aqui que
+     o dado mora (protocolo.tamanhoParcela). É o MESMO campo que a calculadora
+     e a planilha leem: um valor só, uma verdade só. */
+  var _pDim=(typeof _parseParcelaDim==='function')?_parseParcelaDim((s.protocolo||{}).tamanhoParcela):null;
+  h+='<div class="se-field"><label>Tamanho da parcela</label>'+
+     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+     '<input type="number" id="seParcelaComp" value="'+(_pDim?_pDim.comprimento:'')+'" min="0" step="0.1" placeholder="comprimento" style="width:110px">'+
+     '<span style="color:#8aa88a">×</span>'+
+     '<input type="number" id="seParcelaLarg" value="'+(_pDim?_pDim.largura:'')+'" min="0" step="0.1" placeholder="largura" style="width:110px">'+
+     '<span style="color:#8aa88a">m</span></div>'+
+     '<div class="e-hint">Usado pelo croqui no mapa, pela calculadora e pela planilha. O maior valor é tratado como o comprimento — o lado no sentido de quem planta e pulveriza.</div></div>';
   h+='</div><div class="se-step'+(studyEditStep===2?' is-active':'')+'" data-step="2">';
   var _execLoc=_studyPanelLocal(curV);
   h+='<div class="se-section-title">Primeira execução</div><div class="e-hint" style="margin:-2px 0 12px;padding:9px 10px;border:1px solid var(--gp-line,rgba(255,255,255,.09));border-radius:9px">Este protocolo será executado em <b>'+esc(_execLoc.nome)+'</b> · <b>'+esc(quadraNome(curV))+'</b>. Os campos abaixo caracterizam esta execução; o protocolo permanece identificado separadamente na etapa 1.</div>';
@@ -14225,6 +14247,22 @@ function syncStudyInputs(){
   workingStudy.numAplicacoes=intVal("seNumAp",workingStudy.numAplicacoes||1);
   workingStudy.intervaloDias=intVal("seIntervalo",workingStudy.intervaloDias||0);
   workingStudy.numRepeticoes=intVal("seReps",workingStudy.numRepeticoes||4);
+  /* TAMANHO DA PARCELA. Só grava com os DOIS lados preenchidos: meia medida não
+     é medida. Com os dois vazios, apaga — limpar é uma intenção legítima. Com
+     um só, não mexe: é digitação pela metade, e apagar o valor que veio da
+     planilha do protocolo por causa disso seria perder dado do usuário. */
+  (function(){
+    if(!workingStudy.protocolo) workingStudy.protocolo={};
+    var _c=parseFloat(String((document.getElementById('seParcelaComp')||{}).value||'').replace(',','.'));
+    var _l=parseFloat(String((document.getElementById('seParcelaLarg')||{}).value||'').replace(',','.'));
+    var _cOk=isFinite(_c)&&_c>0, _lOk=isFinite(_l)&&_l>0;
+    if(_cOk&&_lOk){
+      var _mai=Math.max(_c,_l), _men=Math.min(_c,_l);
+      workingStudy.protocolo.tamanhoParcela=_mai+'x'+_men+' m';
+    }else if(!_cOk&&!_lOk){
+      delete workingStudy.protocolo.tamanhoParcela;
+    }
+  })();
   x=el("seVolMorto"); if(x) workingStudy.volumeMorto=Math.max(0,_numBR(x.value,0));
   x=el("seNumFrascos"); if(x) workingStudy.numFrascos=Math.max(1,Math.round(_numBR(x.value,1))||1);
   x=el("seCapFrasco"); if(x) workingStudy.capacidadeFrasco=Math.max(0,_capFrascoL(x.value));
