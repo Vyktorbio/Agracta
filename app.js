@@ -199,7 +199,9 @@ function ic(n,sz){ var P={
   microscope:'<path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/>',
   /* Campo anda junto com o laboratório: os dois aparecem lado a lado na
      escolha do tipo de quadra, e trocar só um deixaria o par desirmanado. */
-  map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>'
+  map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
+  /* Meia-lua cheia: o desenho clássico de opacidade/contraste. */
+  contrast:'<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12Z"/>'
 }; var s=sz||16; return '<svg class="ic" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(P[n]||'')+'</svg>'; }
 function todayISO(){var p=_agDateParts(Date.now());return p?(p.year+'-'+p.month+'-'+p.day):''}
 function normStr(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
@@ -3348,6 +3350,134 @@ function _mascaraEstilo(qid,selecionada){
   try{ return MascaraCore.estilo(MascaraCore.estadoQuadra(_mascaraContagem(qid),{selecionada:!!selecionada})); }
   catch(e){ return null; }
 }
+
+/* ============ QUANTO DA MÁSCARA APARECE — REGULAGEM DO APARELHO ============
+   Relato de uso: "quero deslizar e deixar as máscaras mais ou menos
+   transparentes, eu regulo onde eu quero no meu dispositivo".
+
+   A máscara nasceu com preenchimento fixo (0,50 nos estados de trabalho, 0,16
+   fora do estudo). É um bom padrão e continua sendo o padrão — mas quem está
+   conferindo o satélite embaixo dela, no sol, num aparelho que não é o meu,
+   precisa de menos tinta; e quem está de relance procurando o vermelho quer
+   mais. Não há número certo para os dois, e escolher um é escolher contra o
+   outro. Então a escolha passa a ser de quem olha.
+
+   É UM FATOR, NÃO UMA OPACIDADE. O controle multiplica o preenchimento de
+   cada estado em vez de trocá-lo por um valor só, e com isso preserva a
+   diferença que a máscara desenha de propósito: "fora do estudo" é discreta
+   (0,16) para não disputar atenção com quem tem trabalho pendente. Um valor
+   absoluto achataria as duas coisas no mesmo tom e apagaria essa distinção.
+
+   FICA NO APARELHO. A regulagem é de tela e de olho — brilho, tamanho, sol na
+   lavoura — não do ensaio. Vai para o localStorage deste aparelho e não sobe
+   para a nuvem: sincronizá-la seria mandar o ajuste do celular de um para o
+   monitor do outro. */
+var MASCARA_OPAC_KEY='agracta-mascara-opac-v1';
+var mascaraOpac=1;
+try{
+  var _mo=parseFloat(localStorage.getItem(MASCARA_OPAC_KEY));
+  if(isFinite(_mo)&&_mo>=0&&_mo<=1) mascaraOpac=_mo;
+}catch(e){}
+/* As quadras pintadas pela máscara, para o controle deslizar sem redesenhar o
+   mapa inteiro a cada pixel: render() refaz polígono, rótulo, nota e croqui, e
+   fazer isso a cada evento do controle engasga o dedo no aparelho. Aqui só se
+   troca o preenchimento do que já está na tela. */
+var _mascaraPolys=[];
+/* O preenchimento que ESTE polígono deve ter agora. O realce do ponteiro soma
+   a partir daqui, e o mouseout volta para cá: guardar o número calculado no
+   fecho deixaria o realce devolvendo a opacidade de antes do ajuste. */
+function _mascaraFill(poly){
+  var base=(poly&&poly._mfBase!=null)?poly._mfBase:0.26;
+  return poly&&poly._mfMask?Math.max(0,Math.min(0.95,base*mascaraOpac)):base;
+}
+/* O PAINEL. Mora no mesmo lugar e na mesma folha do painel de índices (o
+   .ndvi-panel), porque é o mesmo gesto — abrir pelo menu do mapa, deslizar,
+   fechar — e inventar uma caixa nova para ele só acrescentaria um vocabulário
+   a mais para a mesma coisa.
+
+   A LEGENDA MOSTRA O AJUSTE ACONTECENDO. Sem ela, para ver o efeito era
+   preciso fechar o painel e procurar uma quadra de cada estado na tela; com
+   ela, as quatro cores da máscara estão ali do lado do controle, pintadas com
+   a opacidade do momento, sobre o mesmo verde escuro do satélite. */
+function toggleMascara(force){
+  var p=document.getElementById('mascaraPanel');
+  var aberto=p&&p.style.display==='block';
+  var quer=(force!==undefined)?!!force:!aberto;
+  if(!quer){ if(p) p.style.display='none'; return; }
+  buildMascaraPanel();
+}
+function _mascaraPct(){ return Math.round(mascaraOpac*100); }
+function buildMascaraPanel(){
+  var p=document.getElementById('mascaraPanel');
+  if(!p){ p=document.createElement('div'); p.id='mascaraPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
+  /* Os três painéis do menu do mapa dividem o mesmo canto da tela. Abrir um
+     esconde os outros — esconder é só a vista: o NDVI que estava ligado
+     continua ligado no mapa, e tocar no índice de novo traz o painel de volta. */
+  var _np=document.getElementById('ndviPanel'); if(_np) _np.style.display='none';
+  var _cp=document.getElementById('climaPanel'); if(_cp) _cp.style.display='none';
+  p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('contrast',14)+' MÁSCARA DAS QUADRAS</div>'+
+      '<button class="gr-x" onclick="toggleMascara(false)" aria-label="Fechar" title="Fechar">×</button></div>'+
+    '<div class="masc-sub">Quanta tinta o app põe por cima do satélite. Fica guardado <b>neste aparelho</b>.</div>'+
+    '<label class="gr-ctl"><span>Opacidade</span>'+
+      '<input type="range" id="mascOpacRange" min="0" max="1" step="0.05" value="'+mascaraOpac+'" '+
+      'oninput="mascaraSetOpac(this.value)" aria-label="Opacidade da máscara das quadras">'+
+      '<b id="mascOpacVal" class="masc-val">'+_mascaraPct()+'%</b></label>'+
+    _mascaraLegendaHtml()+
+    '<div class="masc-zero">Em 0% fica só o contorno da quadra — o toque para abrir a ficha continua funcionando.</div>'+
+    '<button class="ndvi-clear-btn" onclick="mascaraSetOpac(1);buildMascaraPanel()">'+ic('refresh',14)+' Voltar ao padrão (100%)</button>';
+  p.style.display='block';
+}
+/* As cores saem do motor (MascaraCore.CORES), não de uma cópia à mão: uma
+   segunda tabela aqui sairia do lugar assim que a primeira mudasse. */
+function _mascaraLegendaHtml(){
+  if(typeof MascaraCore!=='object'||!MascaraCore||!MascaraCore.CORES) return '';
+  var ordem=['pendente','parcial','avaliada','fora'], C=MascaraCore.CORES, h='';
+  for(var i=0;i<ordem.length;i++){
+    var c=C[ordem[i]]; if(!c) continue;
+    h+='<div class="masc-item"><i class="masc-sw" data-base="'+c.preenchimento+'" data-cor="'+c.cor+'" '+
+       'style="background:'+_mascaraSwBg(c.cor,c.preenchimento)+'"></i>'+
+       '<span>'+esc(c.rotulo)+'</span></div>';
+  }
+  return '<div class="masc-leg">'+h+'</div>';
+}
+/* A amostra é um quadradinho chapado sobre o fundo do painel, não um polígono
+   sobre o satélite: o preenchimento vira alfa do fundo dela.
+
+   O ALFA VAI NO FUNDO, NÃO NA OPACIDADE DO ELEMENTO. Com opacity a borda
+   desbotava junto, e em 0% a legenda inteira sumia — uma fileira de rótulos
+   sem nada ao lado, parecendo defeito. Com o alfa no fundo, a borda fica, e em
+   0% restam quatro quadradinhos vazios: exatamente o que o mapa mostra nessa
+   posição, que é só o contorno da quadra. */
+function _mascaraSwBg(cor,base){
+  var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(cor||''));
+  /* Normalizado pelo 0,50 dos estados de trabalho: assim "pendente" no padrão
+     aparece cheio na legenda e "fora do estudo" continua a fração que é dele. */
+  var a=Math.max(0,Math.min(1,(base*mascaraOpac)/0.5));
+  if(!m) return 'rgba(154,160,166,'+a.toFixed(3)+')';
+  return 'rgba('+parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16)+','+a.toFixed(3)+')';
+}
+/* Chamado a cada passo do controle: troca o número e repinta as amostras sem
+   remontar o painel (remontar no oninput derruba o foco do controle e trava o
+   arrasto no meio). */
+function _mascaraPainelValor(){
+  var v=document.getElementById('mascOpacVal'); if(v) v.textContent=_mascaraPct()+'%';
+  var sw=document.querySelectorAll('#mascaraPanel .masc-sw');
+  for(var i=0;i<sw.length;i++){
+    var base=parseFloat(sw[i].getAttribute('data-base'));
+    if(isFinite(base)) sw[i].style.background=_mascaraSwBg(sw[i].getAttribute('data-cor'),base);
+  }
+}
+function mascaraSetOpac(v){
+  var n=parseFloat(v);
+  if(!isFinite(n)) return;
+  mascaraOpac=Math.max(0,Math.min(1,n));
+  try{ localStorage.setItem(MASCARA_OPAC_KEY,String(mascaraOpac)); }catch(e){}
+  for(var i=0;i<_mascaraPolys.length;i++){
+    var q=_mascaraPolys[i];
+    try{ q.setStyle({fillOpacity:_mascaraFill(q)}); }catch(e){}
+  }
+  _mascaraPainelValor();
+}
 /* ============ CROQUI DO ENSAIO NO MAPA =====================================
    Até aqui o mapa dizia ONDE é a quadra e a ficha dizia COMO é o ensaio. Quem
    chegava no talhão tinha de juntar as duas coisas de cabeça: "o croqui começa
@@ -4134,6 +4264,7 @@ function render(){
   initMap();
   if(!_qLayer) return;
   _qLayer.clearLayers();
+  _mascaraPolys=[];   /* a camada foi limpa: as referências de antes são lixo */
   ensureQGEO(); ensureLocais();
   if(!QGEO) return;
   _editPoly=null;
@@ -4152,17 +4283,25 @@ function render(){
        motor da máscara, a cor da cultura, como era. */
     var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _mask=_zona?null:_mascaraEstilo(id,isEd);
     var _zc=_zona?_ndviColor(ndviMeans[id]):(_mask?_mask.cor:ac);
-    var _zfo=_zona?0.62:(_mask?_mask.preenchimento:(isEd?0.18:0.26));
+    /* Base sem o fator: o fator entra em _mascaraFill, um lugar só, de onde o
+       controle e o realce do ponteiro leem o mesmo número. */
+    var _zfoBase=_zona?0.62:(_mask?_mask.preenchimento:(isEd?0.18:0.26));
     var _borda=isEd?(_mask?_mask.cor:'#ffce00'):_zc;
-    var poly=LF.polygon(latlngs,{className:'q-poly',color:_borda,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
-    (function(qid,zfo,zona){
+    var poly=LF.polygon(latlngs,{className:'q-poly',color:_borda,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfoBase,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
+    /* O NDVI fica de fora do controle: ali a cor É medida do satélite, e ele
+       já tem a opacidade dele no painel de índices. O que o controle mexe é a
+       tinta que o app põe por cima do satélite. */
+    poly._mfBase=_zfoBase; poly._mfMask=!_zona;
+    poly.setStyle({fillOpacity:_mascaraFill(poly)});
+    if(!_zona) _mascaraPolys.push(poly);
+    (function(qid,zona){
       if(!drawMode){
         poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
         /* O realce do ponteiro soma ao que já está pintado. Fixo em 0.38 ele
            CLAREAVA uma máscara de estado (0.50) em vez de destacá-la. */
-        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:Math.min(0.82,zfo+0.22),weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
+        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:Math.min(0.82,_mascaraFill(this)+0.22),weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:_mascaraFill(this),weight:2});}); }
       }
-    })(id,_zfo,_zona);
+    })(id,_zona);
     poly.addTo(_qLayer);
     if(isEd) _editPoly=poly;
 
@@ -5218,7 +5357,10 @@ function toggleClima(){
   var p=document.getElementById('climaPanel');
   if(p&&p.style.display==='block'){ p.style.display='none'; _climaPanelSeq++; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
   /* O clima não desliga mais os índices — são leituras complementares e o
-     #ndviPanel virou o interruptor da camada, não uma janela concorrente. */
+     #ndviPanel virou o interruptor da camada, não uma janela concorrente.
+     A máscara é outra história: painel de ajuste, e ajuste não fica de teimoso
+     embaixo de uma leitura. */
+  var mp=document.getElementById('mascaraPanel'); if(mp) mp.style.display='none';
   if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   _climaCss(); buildClimaPanel(); climaModeInit();
 }
@@ -5561,6 +5703,7 @@ function toggleNdvi(){
   var p=document.getElementById('ndviPanel');
   if(p && p.style.display==='block'){ p.style.display='none'; return; }
   var cp=document.getElementById('climaPanel'); if(cp) cp.style.display='none';
+  var mp=document.getElementById('mascaraPanel'); if(mp) mp.style.display='none';
   if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   if(!_map) initMap();
   ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras */
