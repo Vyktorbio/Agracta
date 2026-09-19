@@ -238,6 +238,135 @@ function qualidadeDaAncora(acc,larguraParcela){
    espaçamento, porque é o chão que o ensaio toma no talhão. */
 function areaHa(g){ return (num(g.largura)*num(g.comprimento))/10000; }
 
+/* ================= ONDE EU ESTOU ==========================================
+   O croqui já diz onde cada parcela está. A pergunta que se faz ANDANDO é a
+   inversa: em qual delas eu estou pisando agora?
+
+   Ela não é de conforto. A parcela não tem placa dizendo qual é — é isso que
+   está escrito na razão de ser do caminho amarelo. Quem avalia uma parcela
+   pensando que é a vizinha lança a nota no tratamento errado, e o erro não
+   aparece em lugar nenhum: os dados ficam com cara de dados, a estatística
+   roda, e o resultado é de outro ensaio.
+
+   A REGRA É NÃO CHUTAR PARCELA. O GPS entrega um ponto com um erro declarado;
+   se esse erro alcança a parcela vizinha, a resposta honesta é "5A ou 3A", não
+   "5A". Escolher uma das duas em silêncio é dar a cara de medida a um sorteio
+   — e é exatamente o caso em que a pessoa lança a nota confiante.
+
+   Por isso a comparação não é contra um limite fixo em metros, e nem contra a
+   largura da parcela: é contra a FOLGA, a distância do ponto até a borda mais
+   próxima. No meio de uma parcela de 20 m, ±6 m responde sem dúvida; encostado
+   na divisa da mesma parcela, ±6 m não responde nada. */
+
+/* O nome que aparece na parcela, no balão e no letreiro — um só lugar, para os
+   três não divergirem. */
+function nomeDaParcela(p){
+  if(!p) return '';
+  return p.campo || ((p.tratId||('T'+p.tratNum))+' '+(p.repLabel||('R'+p.rep)));
+}
+
+/* O caminho de volta de pontoLatLng: um ponto do terreno vira (x,y) em metros
+   locais, medidos a partir da âncora e já desgirados pelo ângulo do croqui. */
+function metrosLocais(lat,lng,anc){
+  var ang=num(anc&&anc.ang), ca=Math.cos(ang), sa=Math.sin(ang);
+  var m=metrosPorGrau(anc&&anc.lat);
+  var leste=(num(lng)-num(anc&&anc.lng))*m.mlng;
+  var norte=(num(lat)-num(anc&&anc.lat))*m.mlat;
+  return { x: leste*ca + norte*sa, y: -leste*sa + norte*ca };
+}
+
+/* Distância do ponto até o retângulo da parcela, e a folga até a borda.
+   dist  = 0 quando está dentro; em metros, quando está fora.
+   folga = positiva dentro (o quanto sobra até a borda mais próxima),
+           negativa fora. É ela que decide se a precisão do GPS resolve. */
+function _relacaoComParcela(x,y,p){
+  var dx=Math.max(p.x-x, 0, x-(p.x+p.w));
+  var dy=Math.max(p.y-y, 0, y-(p.y+p.h));
+  return {
+    dist: Math.sqrt(dx*dx+dy*dy),
+    folga: Math.min(x-p.x, (p.x+p.w)-x, y-p.y, (p.y+p.h)-y)
+  };
+}
+
+/* Metro escrito como se escreve em português: vírgula, e uma casa só
+   enquanto ela significa alguma coisa. Acima de 10 m o decímetro é ruído. */
+function _m(v){
+  var n=(Math.abs(v)<10) ? (Math.round(v*10)/10) : Math.round(v);
+  return String(n).replace('.',',');
+}
+/* A lista de candidatas no letreiro para no terceiro nome. Quem está no campo
+   com o celular na mão lê três; a partir daí a informação é outra — "o sinal
+   não serve aqui" — e é essa que precisa caber na tela. A lista completa
+   continua vindo em `candidatas`, para quem desenha o mapa. */
+function _lista(ps){
+  var n=ps.map(nomeDaParcela);
+  if(n.length<2) return n.join('');
+  if(n.length>3) return n.slice(0,3).join(', ')+' e mais '+(n.length-3);
+  return n.slice(0,-1).join(', ')+' ou '+n[n.length-1];
+}
+
+/* A RESPOSTA. Entra a leitura do aparelho (lat, lng e a precisão que ele
+   declarou) e sai o veredito, com os candidatos quando a leitura não separa:
+
+     dentro   o erro do GPS cabe inteiro dentro desta parcela
+     incerta  caiu numa parcela, mas o erro alcança a vizinha
+     vao      está no carreador ou no espaçamento — onde se anda, aliás
+     fora     está fora do croqui; a parcela mais próxima vai junto, com a
+              distância, que é o que serve para caminhar até ela            */
+function ondeEstou(lat,lng,acc,g,anc){
+  if(!g||!g.parcelas||!g.parcelas.length){
+    return {nivel:'fora', parcela:null, candidatas:[], folga:0, distancia:0,
+            precisao:num(acc), texto:'Sem croqui desenhado não há parcela para localizar.'};
+  }
+  var a=num(acc), loc=metrosLocais(lat,lng,anc);
+  var dentro=null, folga=0, perto=null, dPerto=Infinity, alcance=[];
+
+  g.parcelas.forEach(function(p){
+    var r=_relacaoComParcela(loc.x,loc.y,p);
+    if(r.dist<=0 && r.folga>=0){ if(!dentro || r.folga>folga){ dentro=p; folga=r.folga; } }
+    if(r.dist<dPerto){ dPerto=r.dist; perto=p; }
+    if(a>0 && r.dist>0 && r.dist<a) alcance.push({p:p, d:r.dist});
+  });
+  alcance.sort(function(x,y){ return x.d-y.d; });
+  var vizinhas=alcance.map(function(o){ return o.p; });
+
+  if(dentro){
+    /* Precisão desconhecida não é precisão boa. Sem o número declarado não dá
+       para afirmar que a vizinha está fora do erro — e afirmar mesmo assim
+       seria o chute com cara de medida que este motor existe para recusar. */
+    if(!(a>0)){
+      return {nivel:'incerta', parcela:dentro, candidatas:[dentro], folga:folga, distancia:0, precisao:0,
+        texto:'O ponto caiu em '+nomeDaParcela(dentro)+', mas o aparelho não informou a precisão desta leitura: não dá para garantir que a vizinha está fora do erro.'};
+    }
+    if(folga>=a && !vizinhas.length){
+      return {nivel:'dentro', parcela:dentro, candidatas:[dentro], folga:folga, distancia:0, precisao:a,
+        texto:'Você está em '+nomeDaParcela(dentro)+' · '+dentro.ordem+'ª no caminho. GPS ±'+_m(a)+' m, e a borda está a '+_m(folga)+' m.'};
+    }
+    if(vizinhas.length){
+      return {nivel:'incerta', parcela:dentro, candidatas:[dentro].concat(vizinhas), folga:folga, distancia:0, precisao:a,
+        texto:'GPS ±'+_m(a)+' m com a borda a '+_m(folga)+' m: pode ser '+_lista([dentro].concat(vizinhas))+
+              '. Ande para o meio da parcela ou confira a estaca antes de lançar.'};
+    }
+    /* Encostado na borda EXTERNA do croqui: não há parcela vizinha dentro do
+       erro, mas há o lado de fora. Dizer "você está em 1A" aqui seria afirmar
+       que a pessoa está no ensaio quando a leitura admite que ela esteja na
+       rua ao lado — e é a mesma mentira, só que para fora. */
+    return {nivel:'incerta', parcela:dentro, candidatas:[dentro], folga:folga, distancia:0, precisao:a,
+      texto:'O ponto caiu em '+nomeDaParcela(dentro)+', mas a borda do croqui está a '+_m(folga)+
+            ' m e o GPS erra ±'+_m(a)+' m: com esta leitura você também pode estar fora do ensaio.'};
+  }
+
+  var noRetangulo=(loc.x>=0 && loc.x<=num(g.largura) && loc.y>=0 && loc.y<=num(g.comprimento));
+  var cands=vizinhas.slice();
+  if(perto && cands.indexOf(perto)<0) cands.unshift(perto);
+  if(noRetangulo){
+    return {nivel:'vao', parcela:null, candidatas:cands, folga:0, distancia:dPerto, precisao:a,
+      texto:'Você está no vão entre as parcelas — a mais perto é '+nomeDaParcela(perto)+', a '+_m(dPerto)+' m.'};
+  }
+  return {nivel:'fora', parcela:null, candidatas:cands, folga:0, distancia:dPerto, precisao:a,
+    texto:'Você está a '+_m(dPerto)+' m do croqui. A parcela mais próxima é '+nomeDaParcela(perto)+'.'};
+}
+
 var api={
   metrosPorGrau:metrosPorGrau,
   pontoLatLng:pontoLatLng,
@@ -250,7 +379,10 @@ var api={
   pegadorDeGiro:pegadorDeGiro,
   anguloPara:anguloPara,
   areaHa:areaHa,
-  qualidadeDaAncora:qualidadeDaAncora
+  qualidadeDaAncora:qualidadeDaAncora,
+  nomeDaParcela:nomeDaParcela,
+  metrosLocais:metrosLocais,
+  ondeEstou:ondeEstou
 };
 if(typeof module==='object'&&module.exports) module.exports=api;
 root.CroquiCore=api;

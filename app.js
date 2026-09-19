@@ -3531,6 +3531,9 @@ function renderCroquis(){
 }
 function toggleCroquis(){
   _croquiOn=!_croquiOn;
+  /* Apagar a camada com a caminhada ligada deixaria o realce da parcela
+     brilhando sozinho sobre a lavoura, sem o desenho a que ele se refere. */
+  if(!_croquiOn) croquiEuDesligar();
   try{ localStorage.setItem(CROQUI_ON_KEY,_croquiOn?'1':'0'); }catch(e){}
   var b=document.getElementById('croquiRefBtn'); if(b) b.classList.toggle('on',_croquiOn);
   renderCroquis();
@@ -3543,12 +3546,178 @@ function addCroquiControl(){
   var C=LF.control({position:'topleft'});
   C.onAdd=function(){
     var d=LF.DomUtil.create('div','ha-ctl');
-    d.innerHTML='<button id="croquiRefBtn" class="'+(_croquiOn?'on':'')+'" title="Mostrar ou esconder os croquis dos ensaios no mapa">Croqui</button>';
+    /* Dois botões, e eles não são a mesma coisa: o primeiro é filtro de
+       camada (mostra ou esconde), o segundo é uma pergunta que se faz andando
+       ("em que parcela estou?"). Ficam juntos porque respondem sobre o mesmo
+       desenho, e quem liga um costuma querer o outro em seguida. */
+    d.innerHTML='<button id="croquiRefBtn" class="'+(_croquiOn?'on':'')+'" title="Mostrar ou esconder os croquis dos ensaios no mapa">Croqui</button>'
+      +'<button id="croquiEuBtn" class="'+(croquiEuLigado()?'on':'')+'" title="Seguir o GPS e dizer em que parcela do croqui você está">Onde estou</button>';
     LF.DomEvent.disableClickPropagation(d);
-    d.querySelector('button').onclick=toggleCroquis;
+    d.querySelector('#croquiRefBtn').onclick=toggleCroquis;
+    d.querySelector('#croquiEuBtn').onclick=croquiEuAlternar;
     return d;
   };
   C.addTo(_map);
+}
+
+/* ============ ONDE EU ESTOU: A PARCELA DEBAIXO DOS PÉS =====================
+   O croqui já diz onde cada parcela está. Andando no ensaio, a pergunta é a
+   inversa — em qual delas estou pisando agora? —, e ela não é de conforto: a
+   parcela não tem placa dizendo qual é. Quem avalia uma parcela pensando que é
+   a vizinha lança a nota no tratamento errado, e esse erro não aparece em
+   lugar nenhum depois: o dado fica com cara de dado, a estatística roda, e o
+   resultado é de outro ensaio.
+
+   A CONTA É DO MOTOR, A TELA É DAQUI. Quem decide o veredito — e quem se
+   recusa a escolher uma parcela quando o erro do GPS alcança a vizinha — é o
+   `CroquiCore.ondeEstou`. Aqui moram a leitura contínua, o realce no mapa e o
+   letreiro.
+
+   TRÊS COISAS QUE ESTE MODO NÃO FAZ, de propósito:
+   - não escolhe parcela no empate: mostra as candidatas, na tela e no mapa;
+   - não abre avaliação sozinho: ele diz onde você está, não o que fazer;
+   - não persegue o mapa a cada leitura. Centraliza UMA vez, na primeira, e
+     depois deixa o mapa quieto — no campo a tela puxando sozinha a cada
+     segundo tira o mapa da mão de quem está tentando olhar a lavoura. */
+
+var _croquiEu=null;
+var _CROQUI_EU_ORDEM={dentro:0, incerta:1, vao:2, fora:3};
+
+/* Os croquis que valem para esta pergunta: só ensaio em andamento e só quem
+   tem posição salva e desenho possível. Mesma regra do resto do mapa. */
+function croquiEuAlvos(){
+  var out=[];
+  Object.keys(data||{}).forEach(function(qid){
+    if(qid==='__config') return;
+    estudosAtivos(qid).forEach(function(st){
+      var pos=croquiPos(st); if(!pos) return;
+      var g=croquiGrade(st,pos); if(!g.parcelas.length) return;
+      out.push({qid:qid, st:st, pos:pos, g:g});
+    });
+  });
+  return out;
+}
+function croquiEuLigado(){ return !!_croquiEu; }
+function croquiEuAlternar(){ if(_croquiEu) croquiEuDesligar(); else croquiEuLigar(); }
+function croquiEuLigar(){
+  if(_croquiEu) return;
+  if(!_map) initMap();
+  croquiCss();
+  if(!navigator.geolocation){ alert('Este navegador não oferece GPS.'); return; }
+  if(location.protocol==='file:'){ alert('Abrindo o arquivo direto (file://) o navegador bloqueia o GPS. Use o app instalado ou o endereço https.'); return; }
+  var alvos=croquiEuAlvos();
+  if(!alvos.length){
+    alert('Nenhum ensaio em andamento tem croqui posicionado no mapa.\n\nPosicione o croqui na ficha do ensaio antes — sem ele não há parcela para localizar.');
+    return;
+  }
+  /* Localizar contra um desenho invisível seria adivinhação: a camada acende
+     junto, senão o realce da parcela aparece sozinho no meio do nada. */
+  if(!_croquiOn) toggleCroquis();
+  _croquiEu={watch:null, camada:LF.layerGroup().addTo(_map), centrou:false, leitura:null,
+             alvos:alvos, alvosEm:Date.now()};
+  var b=document.getElementById('croquiEuBtn'); if(b) b.classList.add('on');
+  croquiEuHud(null);
+  try{
+    _croquiEu.watch=navigator.geolocation.watchPosition(croquiEuPosicao, croquiEuErro,
+      {enableHighAccuracy:true, maximumAge:1000, timeout:20000});
+  }catch(e){ croquiEuDesligar(); alert('Falha ao iniciar o GPS: '+((e&&e.message)||e)); }
+}
+function croquiEuDesligar(){
+  if(!_croquiEu) return;
+  if(_croquiEu.watch!=null){ try{ navigator.geolocation.clearWatch(_croquiEu.watch); }catch(e){} }
+  if(_croquiEu.camada){ try{ _map.removeLayer(_croquiEu.camada); }catch(e){} }
+  _croquiEu=null;
+  var h=document.getElementById('croquiEuHud'); if(h) h.remove();
+  var b=document.getElementById('croquiEuBtn'); if(b) b.classList.remove('on');
+}
+function croquiEuErro(err){
+  if(!_croquiEu) return;
+  var c=(err&&err.code)|0;
+  if(c===1){ croquiEuDesligar(); alert('Permissão de localização negada. Libere o acesso ao GPS para este site nos ajustes do aparelho.'); return; }
+  /* Erro passageiro não encerra o modo: a leitura seguinte costuma vir boa, e
+     desligar por causa dela deixaria a pessoa sem nada no meio do ensaio. */
+  var t=document.getElementById('croquiEuTxt');
+  if(t) t.textContent=(c===2)?'Sem sinal agora — a última leitura continua na tela.':'O GPS demorou; tentando de novo.';
+}
+/* A LEITURA. Cada posição é comparada com TODOS os croquis em andamento, e
+   fica o melhor veredito: estar dentro de um ensaio vale mais que estar perto
+   de outro. Ensaios vizinhos no mesmo talhão são o caso comum. */
+function croquiEuPosicao(p){
+  if(!_croquiEu) return;
+  var lat=p.coords.latitude, lng=p.coords.longitude;
+  var acc=(p.coords.accuracy==null?0:p.coords.accuracy);
+  /* A LISTA DE CROQUIS NÃO SE REFAZ A CADA LEITURA. Montar os alvos normaliza
+     cada estudo e refaz a randomização — barato uma vez, caro a cada segundo
+     no celular de quem vai passar o dia no talhão. Um ensaio novo aparece no
+     máximo oito segundos depois, o que ninguém percebe andando. */
+  if(!_croquiEu.alvos || (Date.now()-(_croquiEu.alvosEm||0))>8000){
+    _croquiEu.alvos=croquiEuAlvos(); _croquiEu.alvosEm=Date.now();
+  }
+  var melhor=null;
+  _croquiEu.alvos.forEach(function(alvo){
+    var r=CroquiCore.ondeEstou(lat,lng,acc,alvo.g,alvo.pos);
+    r.alvo=alvo;
+    if(!melhor) { melhor=r; return; }
+    var a=_CROQUI_EU_ORDEM[r.nivel], b=_CROQUI_EU_ORDEM[melhor.nivel];
+    if(a<b || (a===b && r.distancia<melhor.distancia)) melhor=r;
+  });
+  _croquiEu.leitura={lat:lat, lng:lng, acc:acc};
+  croquiEuDesenhar(melhor);
+  croquiEuHud(melhor);
+  if(!_croquiEu.centrou){
+    _croquiEu.centrou=true;
+    try{ _map.setView([lat,lng], Math.max(_map.getZoom()||18, 19)); }catch(e){}
+  }
+}
+/* O REALCE. A parcela em que se está fica cheia; as candidatas, quando o sinal
+   não separa, ficam contornadas em âmbar — a mesma cor do caminho, porque é o
+   mesmo assunto: a ordem em que se anda. Duas parcelas acesas dizem sozinhas
+   "não lance ainda", sem depender de ninguém ler o letreiro. */
+function croquiEuDesenhar(r){
+  if(!_croquiEu||!_croquiEu.camada) return;
+  var cam=_croquiEu.camada; cam.clearLayers();
+  var l=_croquiEu.leitura; if(!l) return;
+  if(r&&r.alvo&&r.candidatas&&r.candidatas.length){
+    var certeza=(r.nivel==='dentro');
+    r.candidatas.forEach(function(cel){
+      var soUma=(certeza && cel===r.parcela);
+      LF.polygon(CroquiCore.cantosDaParcela(cel,r.alvo.pos),
+        {color: soUma?'#37d684':'#ffd24a', weight:2, opacity:.95,
+         fill:true, fillColor: soUma?'#37d684':'#ffd24a',
+         fillOpacity: soUma?.34:.14, interactive:false}).addTo(cam);
+    });
+  }
+  if(l.acc>0){
+    LF.circle([l.lat,l.lng],{radius:l.acc, color:'#6ec1ff', weight:1, opacity:.9,
+      fillColor:'#6ec1ff', fillOpacity:.10, interactive:false}).addTo(cam);
+  }
+  LF.marker([l.lat,l.lng],{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1400, interactive:false}).addTo(cam);
+}
+/* O LETREIRO. O nome grande é o que se lê de relance com o celular na mão; o
+   resto é o porquê. Quando o sinal não separa as parcelas, o nome grande passa
+   a ser a dúvida ("5A ou 3A") — nunca uma das duas, porque escolher em
+   silêncio é o erro que este modo existe para evitar. */
+function croquiEuHud(r){
+  var h=document.getElementById('croquiEuHud');
+  if(!h){
+    h=document.createElement('div'); h.id='croquiEuHud'; h.className='croqui-eu';
+    h.innerHTML='<button class="croqui-eu-x" onclick="croquiEuDesligar()">Parar</button>'
+      +'<div class="croqui-eu-nome" id="croquiEuNome">procurando…</div>'
+      +'<div class="croqui-eu-txt" id="croquiEuTxt">Aguardando a primeira leitura do GPS.</div>'
+      +'<div class="croqui-eu-pe" id="croquiEuPe"></div>';
+    document.body.appendChild(h);
+  }
+  if(!r) return;
+  var nome=document.getElementById('croquiEuNome'), txt=document.getElementById('croquiEuTxt'), pe=document.getElementById('croquiEuPe');
+  var titulo;
+  if(r.nivel==='dentro') titulo=CroquiCore.nomeDaParcela(r.parcela);
+  else if(r.nivel==='incerta') titulo=(r.candidatas||[]).slice(0,2).map(CroquiCore.nomeDaParcela).join(' ou ')+((r.candidatas||[]).length>2?' …':'');
+  else if(r.nivel==='vao') titulo='no vão';
+  else titulo='fora do croqui';
+  h.className='croqui-eu '+r.nivel;
+  if(nome) nome.textContent=titulo;
+  if(txt) txt.textContent=r.texto;
+  if(pe&&r.alvo) pe.textContent=(r.alvo.st.codigo||r.alvo.st.nome||r.alvo.st.id)+' · '+quadraNome(r.alvo.qid);
 }
 
 /* ---- POSICIONAR: arrastar, girar e conferir antes de salvar ---------------
@@ -3572,7 +3741,14 @@ function croquiCss(){
   '.croqui-info{font-size:11px;color:#b9c6bd;background:#0c1210;border:1px solid #2c3a32;border-radius:10px;padding:8px;margin-bottom:9px;line-height:1.45}.croqui-info b{color:#e8efe9}.croqui-info.falta{border-color:#7a3a3a;color:#f0c3c3}'+
   '.croqui-gps{width:100%;margin-bottom:8px;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-gps:disabled{opacity:.75;cursor:progress}'+
   '.croqui-acc{font-size:11px;line-height:1.45;border-radius:10px;padding:8px;margin-bottom:9px;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acc.boa{border-color:#2f6b45;color:#a9e6c0}.croqui-acc.limite{border-color:#6b5a2f;color:#e8d3a3}.croqui-acc.ruim{border-color:#7a3a3a;color:#f0c3c3}'+
-  '.croqui-acts{display:flex;gap:7px}.croqui-acts button{flex:1;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acts button.primary{background:#37d684;border-color:#37d684;color:#08130c}.croqui-acts button.primary:disabled{background:#2a3a32;border-color:#2a3a32;color:#6d7d73;cursor:not-allowed}.croqui-acts button.danger{color:#f0a3a3;border-color:#5a2f2f}';
+  '.croqui-eu{position:fixed;left:50%;transform:translateX(-50%);bottom:80px;z-index:1250;width:min(92vw,330px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:11px 12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
+  '.croqui-eu-nome{font-size:24px;font-weight:900;line-height:1.05;letter-spacing:.5px;padding-right:56px}'+
+  '.croqui-eu-txt{font-size:11px;color:#b9c6bd;line-height:1.45;margin-top:5px}'+
+  '.croqui-eu-pe{font-size:10px;color:#93a599;margin-top:5px;text-transform:uppercase;letter-spacing:.4px}'+
+  '.croqui-eu-x{position:absolute;top:10px;right:10px;background:#3a1414;color:#ffb3a8;border:1px solid #7a2b22;border-radius:9px;padding:6px 10px;font:800 11px system-ui,sans-serif;cursor:pointer}'+
+  '.croqui-eu.dentro .croqui-eu-nome{color:#37d684}.croqui-eu.incerta .croqui-eu-nome{color:#ffd24a}.croqui-eu.vao .croqui-eu-nome,.croqui-eu.fora .croqui-eu-nome{color:#b9c6bd;font-size:19px}'+
+  '.croqui-eu.incerta{border-color:#6b5a2f}'+
+    '.croqui-acts{display:flex;gap:7px}.croqui-acts button{flex:1;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acts button.primary{background:#37d684;border-color:#37d684;color:#08130c}.croqui-acts button.primary:disabled{background:#2a3a32;border-color:#2a3a32;color:#6d7d73;cursor:not-allowed}.croqui-acts button.danger{color:#f0a3a3;border-color:#5a2f2f}';
   document.head.appendChild(s);
 }
 function croquiEditRedraw(){
@@ -3635,6 +3811,10 @@ function croquiSetVao(campo,valor){
 function abrirCroquiEditor(qid,sid){
   if(!_map) initMap();
   croquiCss(); haCss();
+  /* Posicionar e caminhar não convivem: um arrasta o croqui, o outro diz onde
+     você está em relação a ele. Com os dois ligados o realce persegue um
+     desenho que está mudando de lugar debaixo dele. */
+  croquiEuDesligar();
   fecharCroquiEditor(true);
   var st=_estudoDe(qid,sid); if(!st){ alert('Estudo não encontrado.'); return; }
   st=normalizeStudy(st);
