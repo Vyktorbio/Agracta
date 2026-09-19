@@ -3259,7 +3259,13 @@ function cloudSubscribeRows(){
 function renderQuadraLab(id){
   var ll=quadraPonto(id); if(!ll) return;
   var isEd=(editMode && id===editId);
-  var n=((data[id]&&data[id].estudos)||[]).length;
+  /* O NÚMERO AO LADO DO PINO É TRABALHO, NÃO HISTÓRICO. Ele somava TODOS os
+     estudos da quadra, e o laboratório com seis ensaios encerrados continuava
+     dizendo "6" no mapa depois de finalizados todos — o mesmo defeito que a
+     quadra de campo já não tem (o badge dela lê estudosAtivos). Quem olha o
+     mapa pergunta o que está rodando; o que acabou fica na ficha, atrás do
+     botão de finalizados. Sem nada rodando o pino não mostra número nenhum. */
+  var n=(typeof estudosAtivos==='function')?estudosAtivos(id).length:((data[id]&&data[id].estudos)||[]).length;
   var m=LF.marker(ll,{
     draggable:!!editMode, zIndexOffset:900,
     icon:LF.divIcon({className:'lab-pin'+(isEd?' on':''),
@@ -6752,7 +6758,10 @@ function showD(id){
     h+='<div class="panel-body"><div class="info-grid">'+
       '<div><div class="info-l">ESPECIALIDADE</div><div class="info-v" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div>'+
       '<div><div class="info-l">\u00c1REA</div><div class="info-v">Biologia</div></div>'+
-      '<div><div class="info-l">ESTUDOS</div><div class="info-v">'+((d.estudos||[]).length)+'</div></div>'+
+      /* Mesma conta do pino no mapa: em andamento. Somar os finalizados aqui
+         punha o painel em contradição com a lista logo abaixo dele, que já
+         conta só os vivos ("ESTUDOS (0)" embaixo de um "ESTUDOS 6"). */
+      '<div><div class="info-l">ESTUDOS</div><div class="info-v">'+((typeof estudosAtivos==='function')?estudosAtivos(id).length:(d.estudos||[]).length)+'</div></div>'+
       '</div>';
     var _lp=quadraPonto(id)||ctr;
     if(_lp) h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--gp-text-3,#727c75);border-top:1px solid var(--gp-line,rgba(255,255,255,.09));padding-top:10px">'+
@@ -17646,12 +17655,19 @@ load=function(){
 };
 
 /* Override quadraHasAlert para usar v2 */
+/* E AQUI O FILTRO DE FINALIZADO TINHA SE PERDIDO. O quadraHasAlert original lê
+   estudosAtivos; este override, escrito depois, voltou a percorrer q.estudos
+   inteiro — e com isso um ensaio encerrado, cuja última avaliação planejada cai
+   perto de hoje, pintava de vermelho a bolinha da quadra no mapa por uma nota
+   que ninguém vai mais lançar. Alerta é chamado para agir; sobre estudo
+   terminado não há o que fazer. */
 var _origQuadraHasAlert=quadraHasAlert;
 quadraHasAlert=function(qid){
   var q=data[qid]||{};
   if(!Array.isArray(q.estudos))return false;
   for(var i=0;i<q.estudos.length;i++){
     var s=normalizeStudy(q.estudos[i]);
+    if(typeof estudoFinalizado==='function' && estudoFinalizado(s)) continue;
     var ne=nextEventV2(s);
     if(ne&&ne.diff<=2)return true;
   }
