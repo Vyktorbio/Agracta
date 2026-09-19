@@ -49,6 +49,8 @@ function fazerCtx(guardado){
      ficam de fora porque mexem em DOM, e o que se mede aqui é a conta. */
   vm.runInContext('var _mascaraPainelValor=function(){};\n'+
     src.slice(src.indexOf("var MASCARA_OPAC_KEY="), src.indexOf("function toggleMascara("))+
+    '\n'+fatia('function mascaraPct(){')+
+    '\n'+fatia('function mascaraSetOpacPct(p){')+
     '\n'+fatia('function mascaraSetOpac(v){'),ctx);
   return ctx;
 }
@@ -89,6 +91,31 @@ c.mascaraSetOpac(2);
 assert.equal(c._mascaraFill(pend),1,'no talo, a máscara fica sólida: ali quem olha quer ler estado, não imagem');
 assert.ok(c._mascaraFill(fora)<1,'mas "fora do estudo" continua deixando o satélite aparecer');
 
+/* ---------------------------------------- 1b. o número na tela é a opacidade ---
+   Relato de uso: "de 0 a 200%, mas podemos trocar pra mostrar 100% lá".
+   200% não é número de opacidade. O curso do controle é o mesmo — de nada até
+   a máscara sólida — mas a régua que o mede passa a medir a coisa certa: o que
+   se lê É o preenchimento da quadra que tem trabalho. */
+[[0,0],[25,0.25],[50,0.5],[70,0.7],[100,1]].forEach(([pct,fill])=>{
+  c.mascaraSetOpacPct(pct);
+  assert.equal(c.mascaraPct(),pct,'o que entra em porcentagem volta igual ('+pct+'%)');
+  assert.ok(Math.abs(c._mascaraFill(pend)-fill)<1e-9,
+    pct+'% na régua é exatamente '+fill.toFixed(2)+' de preenchimento — o número NÃO é porcentagem do padrão');
+});
+c.mascaraSetOpacPct(50);
+assert.equal(c.mascaraOpac,1,'o padrão de fábrica aparece como 50%, no meio do curso');
+c.mascaraSetOpacPct(100);
+assert.equal(c.mascaraOpac,2,'e 100% é o topo, a máscara sólida');
+c.mascaraSetOpacPct(500); assert.equal(c.mascaraPct(),100,'acima de 100% gruda em 100%');
+c.mascaraSetOpacPct(-9);  assert.equal(c.mascaraPct(),0,'abaixo de 0 gruda em 0');
+c.mascaraSetOpacPct('x'); assert.equal(c.mascaraPct(),0,'texto que não é número não mexe em nada');
+/* O GUARDADO CONTINUA SENDO O FATOR. Trocar a unidade no localStorage releria
+   o ajuste de quem já tinha regulado como outro número. */
+c.mascaraSetOpacPct(100);
+assert.equal(c._loja['agracta-mascara-opac-v1'],'2','no aparelho continua indo o fator, não a porcentagem');
+
+c.mascaraSetOpac(0.2); /* volta ao estado que a seção seguinte espera */
+
 /* Entrada fora da faixa não pode virar tinta fora da faixa. */
 c.mascaraSetOpac(5);      assert.equal(c.mascaraOpac,2,'acima do dobro gruda no dobro');
 c.mascaraSetOpac(-2);     assert.equal(c.mascaraOpac,0,'abaixo de 0 gruda em 0');
@@ -102,6 +129,7 @@ assert.equal(c._mascaraFill(zona),0.62,
   'e o painel de índices já tem a opacidade dele');
 
 /* ------------------------------------------------------- 3. fica no aparelho --- */
+c.mascaraSetOpac(0.2);
 assert.equal(c._loja['agracta-mascara-opac-v1'],'0.2','o valor é gravado no localStorage deste aparelho');
 const c2=fazerCtx(0.35);
 assert.ok(Math.abs(c2.mascaraOpac-0.35)<1e-9,'e volta na próxima abertura do app');
@@ -131,11 +159,12 @@ assert.ok(DOCK.indexOf('toggleMascara')<DOCK.indexOf('tool-fab'),'e antes do bot
 
 /* ------------------------------------------------------------ 6. o painel --- */
 const PAINEL=fatia('function buildMascaraPanel(){');
-assert.match(PAINEL,/oninput="mascaraSetOpac\(this\.value\)"/,'o controle ajusta enquanto desliza, como o do NDVI');
-assert.match(PAINEL,/min="0" max="'\+MASCARA_OPAC_MAX\+'" step="0\.05"/,
-  'o controle vai até o teto que o motor declara, em vez de repetir o número à mão');
+assert.match(PAINEL,/oninput="mascaraSetOpacPct\(this\.value\)"/,'o controle ajusta enquanto desliza, como o do NDVI');
+assert.match(PAINEL,/min="0" max="100" step="5"/,'de 0 a 100%, em passos de 5');
+assert.match(PAINEL,/mascaraSetOpacPct\(this\.value\)/,
+  'e fala em porcentagem, deixando a conversão para o fator num lugar só');
 assert.match(PAINEL,/aria-label="Opacidade da máscara das quadras"/,'o controle se anuncia para quem usa leitor de tela');
-assert.match(PAINEL,/mascaraSetOpac\(1\)/,'e há como voltar ao padrão sem adivinhar o número');
+assert.match(PAINEL,/mascaraSetOpacPct\(50\)/,'e há como voltar ao padrão sem adivinhar o número');
 assert.match(PAINEL,/ndviPanel[\s\S]{0,80}display='none'/,
   'abrir este painel esconde o de índices: os dois moram no mesmo canto da tela');
 assert.match(fatia('function toggleNdvi(){'),/mascaraPanel/,'e o de índices esconde este, na volta');
@@ -147,8 +176,10 @@ assert.match(fatia('function toggleClima(){'),/mascaraPanel/,'o clima também');
 const SW=fatia('function _mascaraSwBg(cor,base){');
 const ctxSw=fazerCtx();
 vm.runInContext(SW,ctxSw);
-assert.match(ctxSw._mascaraSwBg('#e0584c',0.5),/^rgba\(224,88,76,1\.000\)$/,
-  'no padrão, "pendente" aparece cheio na amostra');
+assert.match(ctxSw._mascaraSwBg('#e0584c',0.5),/^rgba\(224,88,76,0\.500\)$/,
+  'a amostra usa o MESMO preenchimento que a quadra vai ter: no padrão, meio a meio');
+ctxSw.mascaraSetOpacPct(100);
+assert.match(ctxSw._mascaraSwBg('#e0584c',0.5),/,1\.000\)$/,'no topo da régua ela fica cheia, como a quadra');
 ctxSw.mascaraSetOpac(0);
 assert.match(ctxSw._mascaraSwBg('#e0584c',0.5),/,0\.000\)$/,
   'em 0% o fundo some e sobra a borda da amostra — o mesmo que o mapa mostra: só o contorno');

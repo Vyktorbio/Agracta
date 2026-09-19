@@ -3422,7 +3422,7 @@ function toggleMascara(force){
   if(!quer){ if(p) p.style.display='none'; return; }
   buildMascaraPanel();
 }
-function _mascaraPct(){ return Math.round(mascaraOpac*100); }
+function _mascaraPct(){ return mascaraPct(); }
 function buildMascaraPanel(){
   var p=document.getElementById('mascaraPanel');
   if(!p){ p=document.createElement('div'); p.id='mascaraPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
@@ -3435,12 +3435,12 @@ function buildMascaraPanel(){
       '<button class="gr-x" onclick="toggleMascara(false)" aria-label="Fechar" title="Fechar">×</button></div>'+
     '<div class="masc-sub">Quanta tinta o app põe por cima do satélite. Fica guardado <b>neste aparelho</b>.</div>'+
     '<label class="gr-ctl"><span>Opacidade</span>'+
-      '<input type="range" id="mascOpacRange" min="0" max="'+MASCARA_OPAC_MAX+'" step="0.05" value="'+mascaraOpac+'" '+
-      'oninput="mascaraSetOpac(this.value)" aria-label="Opacidade da máscara das quadras">'+
+      '<input type="range" id="mascOpacRange" min="0" max="100" step="5" value="'+mascaraPct()+'" '+
+      'oninput="mascaraSetOpacPct(this.value)" aria-label="Opacidade da máscara das quadras">'+
       '<b id="mascOpacVal" class="masc-val">'+_mascaraPct()+'%</b></label>'+
     _mascaraLegendaHtml()+
-    '<div class="masc-zero">Em 0% fica só o contorno da quadra — o toque para abrir a ficha continua funcionando.</div>'+
-    '<button class="ndvi-clear-btn" onclick="mascaraSetOpac(1);buildMascaraPanel()">'+ic('refresh',14)+' Voltar ao padrão (100%)</button>';
+    '<div class="masc-zero">Em 0% fica só o contorno da quadra — o toque para abrir a ficha continua funcionando. Em 100% a quadra fica sólida.</div>'+
+    '<button class="ndvi-clear-btn" onclick="mascaraSetOpacPct(50);buildMascaraPanel()">'+ic('refresh',14)+' Voltar ao padrão (50%)</button>';
   p.style.display='block';
 }
 /* As cores saem do motor (MascaraCore.CORES), não de uma cópia à mão: uma
@@ -3466,9 +3466,10 @@ function _mascaraLegendaHtml(){
    posição, que é só o contorno da quadra. */
 function _mascaraSwBg(cor,base){
   var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(cor||''));
-  /* Normalizado pelo 0,50 dos estados de trabalho: assim "pendente" no padrão
-     aparece cheio na legenda e "fora do estudo" continua a fração que é dele. */
-  var a=Math.max(0,Math.min(1,(base*mascaraOpac)/0.5));
+  /* O alfa da amostra é o MESMO preenchimento que a quadra vai ter no mapa —
+     agora que a régua mede opacidade de verdade, normalizar por 0,50 faria a
+     legenda mostrar o dobro do que o mapa pinta. */
+  var a=Math.max(0,Math.min(1,base*mascaraOpac));
   if(!m) return 'rgba(154,160,166,'+a.toFixed(3)+')';
   return 'rgba('+parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16)+','+a.toFixed(3)+')';
 }
@@ -3482,6 +3483,30 @@ function _mascaraPainelValor(){
     var base=parseFloat(sw[i].getAttribute('data-base'));
     if(isFinite(base)) sw[i].style.background=_mascaraSwBg(sw[i].getAttribute('data-cor'),base);
   }
+}
+/* O NÚMERO NA TELA É A OPACIDADE, NÃO UMA PORCENTAGEM DO PADRÃO.
+   Relato de uso: "de 0 a 200%, mas podemos trocar pra mostrar 100% lá".
+
+   Está certo: 200% não é número de opacidade. O curso do controle continua o
+   mesmo — de nada até a máscara sólida — só a régua que o mede muda de escala,
+   e passa a medir a coisa certa. Como os estados de trabalho nascem em 0,50, o
+   fator vezes 0,50 dá justamente o número que aparece dividido por cem:
+
+     mostra    0%      50%           100%
+     fator     0       1 (padrão)    2
+     pendente  0,00    0,50          1,00   <- some/sólida
+
+   Ou seja, o que se lê na régua É o preenchimento da quadra que tem trabalho.
+   "Fora do estudo" continua sendo a fração dela (32% do que estiver ali), que
+   é o que o fator existe para preservar.
+
+   O que está GUARDADO no aparelho continua sendo o fator, de propósito: quem
+   já tinha regulado não pode ter o ajuste relido como outro número. */
+function mascaraPct(){ return Math.round(mascaraOpac*100/MASCARA_OPAC_MAX); }
+function mascaraSetOpacPct(p){
+  var n=parseFloat(p);
+  if(!isFinite(n)) return;
+  mascaraSetOpac(Math.max(0,Math.min(100,n))*MASCARA_OPAC_MAX/100);
 }
 function mascaraSetOpac(v){
   var n=parseFloat(v);
