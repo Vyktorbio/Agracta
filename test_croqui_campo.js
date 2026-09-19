@@ -352,6 +352,15 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
      aparece depois de mexer em outra coisa. */
   assert.match(app,/renderCroquis\(\);\s*\}catch\(e\)\{\}/,'o render do mapa chama o croqui');
 
+  /* O ESTILO DOS RÓTULOS ENTRA COM A CAMADA, não só com o painel de
+     posicionar. croquiCss() era chamado apenas dentro de abrirCroquiEditor, e
+     quem só olhava o mapa via os rótulos com o balão PADRÃO do Leaflet —
+     fundo branco, 12px — em vez do escuro de 9px: vinte caixas brancas
+     grandes por cima da lavoura. Quem desenha croqui precisa do estilo dele. */
+  const camada=app.slice(app.indexOf('function croquiEnsureLayer('));
+  assert.match(camada.slice(0,camada.indexOf('\nfunction ')),/croquiCss\(\)/,
+    'a camada do croqui injeta o próprio CSS — senão o rótulo sai no estilo padrão do Leaflet');
+
   /* (e) A ÂNCORA DO GPS. Quatro regras, e as quatro são sobre honestidade. */
   const gps=app.slice(app.indexOf('function croquiAncorarNoGps('));
   const gpsCorpo=gps.slice(0,gps.indexOf('\nfunction ')).replace(/\/\*[\s\S]*?\*\//g,'');
