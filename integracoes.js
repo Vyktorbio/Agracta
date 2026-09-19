@@ -332,9 +332,16 @@
     });
     evs.sort(function(a,b){return String(b.quando).localeCompare(String(a.quando));});
     if(!evs.length)return '';
+    /* ESTA LISTA NÃO TEM AVALIAÇÃO EM MÃOS, E POR ISSO ABRE O ESTUDO.
+       "Próximas avaliações" percorre as avaliações e empilha {s,av,dias}, então
+       lá o botão pode saltar direto para uma delas. Aqui a pergunta é outra —
+       "em que ensaios eu mexi por último?" — e o que se empilha é {s,quando}:
+       não há `av`, e `x.av.id` lançava TypeError. Não era um item quebrado na
+       lista: era a tela inteira do Conhecimento que deixava de abrir, porque a
+       exceção sobe antes de qualquer coisa ser pintada. */
     return '<h3>Mexido por último</h3><ul class="con-agenda">'+evs.slice(0,6).map(function(x){
-      return '<li>'+bot('avaliacao','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.alvo)||rotulo(x.s.cultura))+'</span>',
-        'data-key="'+e(x.s.key)+'" data-av="'+e(x.av.id)+'"','link')+'<em>'+e(desdeQuando(x.quando))+'</em></li>';
+      return '<li>'+bot('estudo','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.alvo)||rotulo(x.s.cultura))+'</span>',
+        'data-key="'+e(x.s.key)+'"','link')+'<em>'+e(desdeQuando(x.quando))+'</em></li>';
     }).join('')+'</ul>';
   }
 
