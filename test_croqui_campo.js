@@ -312,9 +312,28 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
      openTooltip(), e a busca crua encontrava a explicação em vez do código. */
   const corpo=desenha.slice(0,desenha.indexOf('\nfunction ')).replace(/\/\*[\s\S]*?\*\//g,'');
   assert.ok(corpo.indexOf('poly.addTo(camada)')<corpo.indexOf('.openTooltip()'),
-    'a parcela entra no mapa ANTES de abrir o balão — senão a marca não aparece');
-  assert.match(corpo,/1 · início/,'o croqui marca onde a instalação começa');
-  assert.match(corpo,/'fim'/,'e onde termina — sem as duas pontas o tabuleiro é simétrico');
+    'a parcela entra no mapa ANTES de abrir o balão — senão o rótulo não aparece');
+
+  /* NENHUMA PARCELA TEM ETIQUETA PRÓPRIA. Houve um par de etiquetas verdes
+     "1 · início" e "fim", desenhadas em qualquer zoom. Relato de campo: balão
+     de mapa tem tamanho em PIXEL, não em metro — ao afastar o zoom elas
+     cresciam por cima do croqui e tapavam o que se queria ver. Eram
+     redundantes: o código já traz o bloco (5A, 1D) e o caminho amarelo já
+     mostra o sentido. */
+  assert.ok(!/início|'fim'/.test(corpo),
+    'sem etiqueta fixa de início/fim: em zoom afastado ela cresce e tapa o croqui');
+  /* E o ESTILO do retângulo não pode olhar a posição da parcela no caminho:
+     qualquer `p.ordem` ali dentro é uma parcela desenhada diferente das
+     outras, que foi exatamente o que se pediu para tirar. A primeira versão
+     deste teste só procurava as palavras "início" e "fim", e deixou passar um
+     realce escrito como `p.ordem===1?`. */
+  const estilo=corpo.slice(corpo.indexOf('LF.polygon(CroquiCore.cantosDaParcela'),
+                           corpo.indexOf('var nome='));
+  assert.ok(!/p\.ordem/.test(estilo),
+    'o estilo da parcela não pode depender da posição no caminho — todas iguais');
+  /* Um rótulo só, e só de perto. */
+  assert.equal((corpo.match(/permanent:true/g)||[]).length,1,
+    'existe UM rótulo permanente por parcela, e ele só entra com zoom suficiente');
 
   /* (b) Croqui é leitura de andamento: ensaio encerrado sai do mapa junto com
      o resto, pela mesma função. */

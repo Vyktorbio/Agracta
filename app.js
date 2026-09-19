@@ -3438,24 +3438,25 @@ function croquiDesenhar(camada,st,pos,emEdicao){
     });
   }catch(e){}
 
-  /* O INÍCIO E O FIM SÃO DESENHADOS SEMPRE que há detalhe. Sem eles o croqui é
-     um tabuleiro simétrico: de pé no talhão não dá para saber por qual ponta
-     se começa, e começar pela errada aplica e avalia o ensaio espelhado. */
-  var ultima=g.parcelas.length;
+  /* TODAS AS PARCELAS IGUAIS, e o rótulo é só o código.
+     Houve aqui um par de etiquetas verdes "1 · início" e "fim", desenhadas em
+     qualquer zoom para dizer por qual ponta se começa. Relato de campo: elas
+     não encolhem junto com o croqui — balão de mapa tem tamanho em PIXEL, não
+     em metro —, então ao afastar o zoom cresciam por cima do desenho e
+     tapavam justamente o que se queria ver.
+     E eram redundantes: o código de cada parcela já traz o bloco (5A, 1D), e o
+     caminho amarelo com as setas já mostra o sentido. Quem precisa do número
+     da caminhada toca na parcela e lê no balão. */
   g.parcelas.forEach(function(p){
-    var inicio=(p.ordem===1), fim=(p.ordem===ultima);
     var poly=LF.polygon(CroquiCore.cantosDaParcela(p,pos),
-      {color:'#fff',weight:(inicio||fim)?2:1,opacity:emEdicao?.95:.8,
-       fill:true,fillOpacity:inicio?(emEdicao?.30:.22):(emEdicao?.10:.04),fillColor:'#fff'});
+      {color:'#fff',weight:1,opacity:emEdicao?.95:.8,
+       fill:true,fillOpacity:emEdicao?.10:.04,fillColor:'#fff'});
     var nome=p.campo||((p.tratId||('T'+p.tratNum))+' '+(p.repLabel||('R'+p.rep)));
     /* A PARCELA ENTRA NO MAPA ANTES DO BALÃO. openTooltip() numa camada que
-       ainda não está no mapa não faz nada e não reclama: as marcas de início e
-       fim simplesmente não apareciam, e os rótulos de perto também não. */
+       ainda não está no mapa não faz nada e não reclama: os rótulos
+       simplesmente não apareciam. */
     poly.addTo(camada);
-    if(inicio||fim){
-      poly.bindTooltip(inicio?'1 · início':'fim',
-        {permanent:true,direction:'center',className:'croqui-tip croqui-tip-marco'}).openTooltip();
-    }else if(rotulos){
+    if(rotulos){
       poly.bindTooltip(nome,
         {permanent:true,direction:'center',className:'croqui-tip croqui-tip-fixa'}).openTooltip();
     }else{
@@ -3523,7 +3524,7 @@ function croquiCss(){
      Puxar --text e --accent daqui deu texto escuro em fundo escuro no tema
      claro (o --accent do app é quase preto, #1f242a): o botão selecionado e o
      "Salvar" sumiam. Cor de painel sobre mapa não é cor de tema. */
-  s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:9px;padding:2px 4px}.croqui-tip-marco{background:rgba(55,214,132,.92);color:#08130c;font-weight:900;font-size:9px;padding:2px 5px}'+
+  s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:9px;padding:2px 4px}'+
   '.croqui-panel{position:fixed;left:12px;bottom:80px;z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
   '.croqui-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.croqui-title{font-size:12px;font-weight:900;letter-spacing:1px;color:#37d684;text-transform:uppercase}.croqui-x{background:none;border:none;color:#93a599;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
   '.croqui-sub{font-size:11px;color:#93a599;margin:-4px 0 9px;line-height:1.4}.croqui-sub b{color:#e8efe9}'+
@@ -3648,7 +3649,7 @@ function abrirCroquiEditor(qid,sid){
   painel.id='croquiPanel'; painel.className='croqui-panel';
   painel.innerHTML='<div class="croqui-head"><div class="croqui-title">Posicionar croqui</div>'
     +'<button class="croqui-x" onclick="fecharCroquiEditor()" aria-label="Fechar">×</button></div>'
-    +'<div class="croqui-sub">'+esc(st.codigo||st.nome||st.id)+' · '+esc(quadraNome(qid))+'<br>Arraste pelo <b>✛</b> e gire pelo <b>↻</b>. O <b>1</b> marca onde a instalação começa.</div>'
+    +'<div class="croqui-sub">'+esc(st.codigo||st.nome||st.id)+' · '+esc(quadraNome(qid))+'<br>Arraste pelo <b>✛</b> e gire pelo <b>↻</b>. A âncora salva é o canto da primeira parcela.</div>'
     +'<div class="croqui-seg"><button data-serp="1" onclick="croquiSetSerpentina(true)">Vai e volta</button>'
     +'<button data-serp="0" onclick="croquiSetSerpentina(false)">Sempre no mesmo sentido</button></div>'
     +'<div class="croqui-nums"><div><label>Colunas</label><input type="number" min="1" step="1" value="'+(pos.colunas||2)+'" oninput="croquiSetColunas(this.value)"></div>'
