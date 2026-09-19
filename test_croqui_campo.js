@@ -298,6 +298,106 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
   assert.match(ruim,/3/,'e a largura com que ela foi comparada');
 }
 
+/* ------- 5c. EM QUE PARCELA EU ESTOU? --------------------------------------
+   A pergunta que se faz andando. Ela tem uma resposta errada muito pior que
+   "não sei": dizer 5A quando o GPS não consegue separar 5A de 3A. Quem lança
+   a nota confia no nome que está na tela, e a nota vai para o tratamento
+   errado sem deixar rastro — os dados continuam com cara de dados.
+
+   Por isso o que se testa aqui não é só a geometria: é a RECUSA. */
+{
+  const anc0={lat:-23.5,lng:-46.6,ang:0};
+  const base3={tratamentos:4,repeticoes:3,comprimento:5,largura:3,colunas:2,
+    ordem:Array.from({length:12},(_,i)=>({parcela:i+1,rep:(i%3)+1,tratNum:(i%4)+1,campo:'P'+(i+1)}))};
+  const gg=C.grade(base3);
+  const em=(x,y,acc,g,a)=>{ const ll=C.pontoLatLng(x,y,a||anc0); return C.ondeEstou(ll[0],ll[1],acc,g||gg,a||anc0); };
+
+  /* metrosLocais é o caminho de volta de pontoLatLng: a volta tem de fechar em
+     qualquer ângulo. Um sinal trocado aqui não dá exceção — dá a parcela
+     espelhada, que é a vizinha, que é o erro que ninguém vê. */
+  [0, 0.4, -1.2, 2.9].forEach(ang=>{
+    const a={lat:-23.5,lng:-46.6,ang:ang};
+    const ll=C.pontoLatLng(7.5,13.25,a), volta=C.metrosLocais(ll[0],ll[1],a);
+    perto(volta.x,7.5,0.02,'x não fecha com ângulo '+ang);
+    perto(volta.y,13.25,0.02,'y não fecha com ângulo '+ang);
+  });
+
+  /* No MEIO da primeira parcela, com sinal bom: resposta com nome. */
+  let r=em(1.5,2.5,1);
+  assert.equal(r.nivel,'dentro');
+  assert.equal(r.parcela.ordem,1,'a 1ª do caminho é a que encosta na âncora');
+  assert.equal(r.candidatas.length,1,'com sinal bom não há dúvida a mostrar');
+  assert.match(r.texto,/1ª no caminho/,'a ordem de caminhada vai junto: é ela que evita avaliar fora de ordem');
+
+  /* A SERPENTINA TAMBÉM VALE AQUI. A segunda coluna corre ao contrário, então
+     o topo dela é a parcela seguinte à última da primeira coluna — e não a de
+     número 7. Confundir isso é a mentira nº 5 deste arquivo, agora do lado de
+     quem caminha. */
+  const topoDaSegunda=em(4.5,gg.comprimento-2.5,1);
+  assert.equal(topoDaSegunda.nivel,'dentro');
+  assert.equal(topoDaSegunda.parcela.ordem,7,'subiu a 1ª coluna e desceu a 2ª: a 7ª é o topo da segunda');
+
+  /* ±8 m NUMA PARCELA DE 3 m NÃO RESPONDE. O ponto caiu numa parcela, mas o
+     erro alcança as vizinhas: o veredito é a dúvida, com as candidatas. */
+  r=em(1.5,2.5,8);
+  assert.equal(r.nivel,'incerta');
+  assert.ok(r.candidatas.length>1,'a dúvida tem de vir com as candidatas, não com uma escolha');
+  assert.ok(r.candidatas.indexOf(r.parcela)===0,'a parcela em que o ponto caiu vem primeiro');
+  assert.match(r.texto,/pode ser/,'o texto duvida por extenso — não afirma');
+
+  /* A RÉGUA É A FOLGA ATÉ A BORDA, NÃO UM LIMITE FIXO. A mesma ±6 m que não
+     serve numa parcela de 3 m resolve no meio de uma de 20 m. */
+  const gLargo=C.grade({tratamentos:2,repeticoes:2,comprimento:40,largura:20,colunas:2});
+  assert.equal(em(10,20,6,gLargo).nivel,'dentro','±6 m no meio de uma parcela de 20 m responde');
+  assert.equal(em(1.5,2.5,6).nivel,'incerta','e a MESMA leitura não responde numa de 3 m');
+
+  /* ENCOSTADO NA BORDA EXTERNA não há parcela vizinha — há o lado de fora.
+     Dizer "você está em P1" aqui é a mesma mentira virada para fora. */
+  r=em(0.2,2.5,1.5);
+  assert.equal(r.nivel,'incerta','o erro atravessa a borda do croqui');
+  assert.equal(r.candidatas.length,1,'não há vizinha para listar — a dúvida é estar fora');
+  assert.match(r.texto,/fora do ensaio/,'e é isso que o texto tem de dizer');
+
+  /* PRECISÃO NÃO DECLARADA NÃO É PRECISÃO BOA. */
+  r=em(1.5,2.5,null);
+  assert.equal(r.nivel,'incerta','sem o número declarado não se afirma parcela');
+  assert.equal(C.ondeEstou(anc0.lat,anc0.lng,0,gg,anc0).nivel,'incerta','precisão zero é ausência de informação, não perfeição');
+
+  /* O VÃO É LUGAR LEGÍTIMO: é por ele que se anda. Não é erro, e não vira
+     parcela por aproximação. */
+  const gCarr=C.grade(Object.assign({},base3,{carreador:4}));
+  r=em(5,2.5,1,gCarr);
+  assert.equal(r.nivel,'vao','entre as colunas se está no carreador, não numa parcela');
+  assert.equal(r.parcela,null,'e o vão não tem parcela: aproximar seria inventar');
+  assert.ok(r.distancia>0,'a distância até a mais próxima é o que serve para caminhar');
+
+  /* FORA DO CROQUI: a distância e a parcela mais próxima — é com isso que se
+     anda até o ensaio. */
+  r=em(1.5,-40,5);
+  assert.equal(r.nivel,'fora');
+  perto(r.distancia,40,0.5,'a distância medida é a que se anda');
+  assert.match(r.texto,/mais próxima/,'e o texto diz para onde ir');
+
+  /* SEM CROQUI NÃO HÁ RESPOSTA — e também não há exceção: o modo de caminhada
+     roda a cada leitura do GPS, e uma exceção ali mataria a tela no meio do
+     ensaio. */
+  const vazio=C.grade({tratamentos:4,repeticoes:3});
+  r=C.ondeEstou(anc0.lat,anc0.lng,3,vazio,anc0);
+  assert.equal(r.nivel,'fora');
+  assert.equal(r.parcela,null);
+  assert.doesNotThrow(()=>C.ondeEstou(anc0.lat,anc0.lng,3,null,anc0));
+
+  /* O NOME DA PARCELA É UM SÓ para o mapa, o balão e o letreiro. */
+  assert.equal(C.nomeDaParcela({campo:'5A'}),'5A','o código de campo manda quando existe');
+  assert.equal(C.nomeDaParcela({tratNum:3,rep:2}),'T3 R2','e sem ele, tratamento e repetição');
+
+  /* A lista no letreiro para no terceiro nome: quem está no campo lê três, e
+     a partir daí a informação é "o sinal não serve aqui". */
+  r=em(1.5,2.5,14);
+  assert.ok(r.candidatas.length>3,'±14 m alcança muita parcela');
+  assert.match(r.texto,/e mais \d+/,'o texto resume em vez de despejar a lista inteira');
+}
+
 /* ------------------------------------------- 6. a ligação com o app -------- */
 /* O motor pode estar certo e o croqui não aparecer. Estas quatro já falharam
    uma vez cada, em silêncio, e é por isso que estão fixadas aqui. */
@@ -474,6 +574,49 @@ assert.equal(C.anguloPara(anc.lat,anc.lng,anc),anc.ang,'arrasto em cima da ânco
   const enq=app.slice(app.indexOf('function croquiEnquadrar('));
   assert.match(enq.slice(0,enq.indexOf('\nfunction ')),/gps&&_croquiEdit\.gps\.acc/,
     'o enquadramento inclui o círculo de precisão');
+
+  /* (h) O MODO DE CAMINHADA. Ele liga o GPS em watchPosition e desenha sobre
+     o croqui — três coisas podem falhar caladas, e as três ficam fixadas: */
+
+  /* O botão existe e chama quem deve: sem ele a função é código morto. */
+  const ctl=app.slice(app.indexOf('function addCroquiControl('));
+  const ctlCorpo=ctl.slice(0,ctl.indexOf('\nfunction '));
+  assert.ok(ctlCorpo.indexOf('croquiEuBtn')>0,'o modo "Onde estou" precisa de botão no mapa');
+  assert.match(ctlCorpo,/croquiEuBtn'\)\.onclick=croquiEuAlternar/,'e o botão tem de estar ligado na função');
+
+  /* O watch do GPS tem de ser cancelado ao parar. Um watchPosition esquecido
+     continua acordando o GPS com o app na mão de quem está no campo o dia
+     inteiro — não dá tela de erro nenhuma, só come bateria. */
+  const desliga=app.slice(app.indexOf('function croquiEuDesligar('));
+  const desligaCorpo=desliga.slice(0,desliga.indexOf('\nfunction '));
+  assert.match(desligaCorpo,/clearWatch\(_croquiEu\.watch\)/,'parar o modo tem de cancelar o watch do GPS');
+  assert.match(desligaCorpo,/removeLayer\(_croquiEu\.camada\)/,'e apagar o realce, senão fica parcela acesa sem leitura');
+  assert.match(desligaCorpo,/croquiEuHud'\)/,'e tirar o letreiro da tela');
+
+  /* Caminhar e posicionar não convivem: com os dois ligados o realce persegue
+     um croqui que está mudando de lugar debaixo dele. */
+  const abreEditor=app.slice(app.indexOf('function abrirCroquiEditor('));
+  assert.match(abreEditor.slice(0,abreEditor.indexOf('\nfunction ')),/croquiEuDesligar\(\)/,
+    'abrir o editor de posição tem de encerrar a caminhada');
+
+  /* E apagar a camada com a caminhada ligada deixaria o realce brilhando
+     sozinho sobre a lavoura, sem o desenho a que ele se refere. */
+  const tog=app.slice(app.indexOf('function toggleCroquis('));
+  assert.match(tog.slice(0,tog.indexOf('\nfunction ')),/!_croquiOn\) croquiEuDesligar\(\)/,
+    'desligar a camada do croqui tem de encerrar a caminhada');
+
+  /* Toda função que o modo chama existe de verdade — o mesmo guarda que já
+     pegou um `closeD` que não existia. */
+  ['croquiEuAlternar','croquiEuLigar','croquiEuDesligar','croquiEuPosicao','croquiEuErro',
+   'croquiEuDesenhar','croquiEuHud','croquiEuAlvos','croquiEuLigado'].forEach(function(nome){
+    assert.ok(new RegExp('function\\s+'+nome+'\\s*\\(').test(app), nome+'() não está declarada em app.js');
+  });
+
+  /* E o motor que ele consome tem de existir no arquivo que o index carrega. */
+  const core=fs.readFileSync('vendor/croqui-campo-core.js','utf8');
+  ['ondeEstou','nomeDaParcela','metrosLocais'].forEach(function(nome){
+    assert.ok(core.indexOf(nome+':'+nome)>0, nome+' não está exportado pelo motor');
+  });
 }
 
-console.log('Croqui no mapa: recusa sem medida, serpentina de instalação, carreador no lugar certo, sorteio manda na posição, e o giro fecha OK.');
+console.log('Croqui no mapa: recusa sem medida, serpentina de instalação, carreador no lugar certo, sorteio manda na posição, o giro fecha, e a caminhada não escolhe parcela quando o GPS não separa as duas. OK.');

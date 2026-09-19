@@ -144,10 +144,64 @@ maior da quadra (`quadraEixo`).
 - Ensaio **finalizado** sai do mapa junto com o resto do andamento (`estudosAtivos`).
   O croqui continua salvo e volta se o ensaio for reaberto.
 
+## Em que parcela eu estou?
+
+Com o croqui ancorado, a pergunta se inverte: o desenho diz onde cada parcela
+está, e quem caminha quer saber em qual delas está pisando. **Onde estou**, no
+agrupador da engrenagem ao lado do botão *Croqui*, liga o GPS contínuo e
+responde.
+
+Não é conforto. A parcela não tem placa — é a mesma razão pela qual o caminho
+amarelo existe. Quem avalia uma parcela pensando que é a vizinha lança a nota
+no tratamento errado, e esse erro não aparece depois em lugar nenhum: o dado
+fica com cara de dado, a estatística roda, e o resultado é de outro ensaio.
+
+### A régua é a folga até a borda
+
+A resposta é comparada com a distância do ponto até a **borda mais próxima da
+parcela**, não com um limite fixo em metros nem com a largura da parcela. No
+meio de uma parcela de 20 m, ±6 m responde sem dúvida; encostado na divisa
+dessa mesma parcela, ±6 m não responde nada.
+
+| situação | o que aparece |
+|---|---|
+| o erro do GPS cabe dentro da parcela | **5A** — nome, tratamento e a ordem no caminho |
+| o erro alcança a vizinha | **5A ou 3A** — as candidatas, nunca uma escolhida |
+| o erro alcança a borda externa | o ponto caiu em 5A, **e você pode estar fora do ensaio** |
+| entre as colunas | *no vão* — o carreador é lugar legítimo, é por ele que se anda |
+| longe | *fora do croqui*, com a distância e a parcela mais próxima |
+
+O empate não é arredondado para a parcela mais provável. Escolher uma das duas
+em silêncio dá cara de medida a um sorteio — e é exatamente nessa hora que a
+pessoa lança a nota confiante. No mapa as candidatas acendem juntas, em âmbar:
+duas parcelas acesas dizem "não lance ainda" sem depender de ninguém ler o
+texto. Só a resposta com certeza acende em verde, e sozinha.
+
+Precisão não declarada não é precisão boa: sem o número, o veredito é a dúvida.
+
+### O que este modo não faz
+
+- **Não persegue o mapa.** Centraliza uma vez, na primeira leitura, e depois
+  deixa o mapa quieto: a tela puxando sozinha a cada segundo tira o mapa da mão
+  de quem está tentando olhar a lavoura.
+- **Não abre avaliação.** Ele diz onde você está, não o que fazer.
+- **Não convive com o posicionamento.** Abrir *Posicionar croqui* encerra a
+  caminhada — o realce perseguiria um desenho que está mudando de lugar debaixo
+  dele. Desligar a camada *Croqui* também encerra, senão fica uma parcela acesa
+  sobre a lavoura sem o desenho a que ela se refere.
+- **Não deixa o GPS ligado depois.** Parar cancela o `watchPosition`. Um watch
+  esquecido não dá tela de erro nenhuma; só come a bateria de quem está no campo
+  o dia inteiro.
+
+Erro passageiro do GPS não desliga o modo — a leitura seguinte costuma vir boa,
+e encerrar por causa dela deixaria a pessoa sem nada no meio do ensaio. Só
+permissão negada encerra, porque aí não há leitura seguinte.
+
 ## Arquivos
 
 - `vendor/croqui-campo-core.js` — geometria pura, sem DOM e sem Leaflet
-- `app.js` — camada, pegadores, painel, botão
+  (inclusive `ondeEstou`, que é quem se recusa a escolher parcela no empate)
+- `app.js` — camada, pegadores, painel, botões e a leitura contínua do GPS
 - `test_croqui_campo.js` — `node test_croqui_campo.js`
 
 ## Ancorar o canto no GPS
