@@ -18719,7 +18719,11 @@ function _renderPerfisList(arr, disabledSet){
         '<button onclick="salvarNomePerfil('+i+')" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer">Salvar nome</button>'+
       '</div>'+
       (isAdm?'':'<div style="display:flex;gap:14px;margin-top:6px"><button onclick="redefinirSenhaTecnico('+i+')" style="background:transparent;color:#8a9f90;border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">redefinir senha</button>'+
-        '<button onclick="alternarAcessoTecnico('+i+','+(off?'true':'false')+')" style="background:transparent;color:'+(off?'#37d684':'#ff9a8a')+';border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">'+(off?'reativar acesso':'desativar acesso')+'</button></div>')+
+        '<button onclick="alternarAcessoTecnico('+i+','+(off?'true':'false')+')" style="background:transparent;color:'+(off?'#37d684':'#ff9a8a')+';border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">'+(off?'reativar acesso':'desativar acesso')+'</button>'+
+        /* Apagar fica por último e em vermelho fechado: é o único daqui que não
+           tem volta, e não pode ficar do lado do "desativar" parecendo irmão
+           dele. A margem à esquerda o afasta dos outros dois. */
+        '<button onclick="apagarContaTecnico('+i+')" style="background:transparent;color:#c0392b;border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline;margin-left:auto" title="Apaga a conta e o cadastro de vez. Os lançamentos que a pessoa assinou continuam, com o nome e o e-mail dela.">apagar conta</button></div>')+
     '</div>';
   }).join('');
 }
@@ -18741,6 +18745,87 @@ function alternarAcessoTecnico(i, isOff){
     _carregarPerfis();
   }, function(){ if(typeof _stxToast==='function')_stxToast('Falha de conexão.'); });
 }
+/* ============ APAGAR A CONTA DE VEZ ========================================
+   Relato de uso: "quero excluir e-mails de registro de pessoas, lá no painel
+   admin".
+
+   O servidor já sabia fazer isso (remover-tecnico, action:"delete"): o que
+   faltava era o botão. As proteções de lá valem aqui e não são repetidas por
+   fora — só o servidor tem a service_role, e é ele que recusa apagar o próprio
+   admin, outro admin, ou conta que não existe.
+
+   APAGAR NÃO É DESATIVAR, E A DIFERENÇA IMPORTA.
+     Desativar  bane o login. A conta fica, o nome fica, e o e-mail continua
+                aparecendo na lista, marcado. É o caminho recomendado para
+                quem trabalhou no ensaio: dá para reativar.
+     Apagar     tira a conta do Supabase Auth e, em cascata, o perfil. Não tem
+                volta, e some da lista. É o caminho para quem não devia estar
+                aqui: cadastro de teste, e-mail errado, gente que se registrou
+                e nunca entrou.
+
+   O QUE NÃO SE PERDE. A trilha BPL não depende desta conta: cada avaliação e
+   cada aplicação guardam o nome e o e-mail de quem assinou DENTRO do próprio
+   registro (`por` / `rubricaPor`), gravados no momento em que a coisa
+   aconteceu. Apagar a conta não reescreve nenhum lançamento passado — o que
+   sai é o login e o cadastro, não a autoria. Por isso o aviso diz o que diz:
+   promete só o que é verdade.
+
+   E O E-MAIL SAI TAMBÉM DO ROSTER LOCAL. allowedUsers é outra lista, que vive
+   no aparelho e sincroniza por UNIÃO — some num lugar e volta do outro. Sem a
+   lápide em delUsers, o e-mail apagado aqui ressuscitaria no próximo merge de
+   outro aparelho, e a pessoa reapareceria autorizada. */
+function apagarContaTecnico(i){
+  var p=(window._perfisCache||[])[i]; if(!p) return;
+  var quem=(p.nome||'')+(p.nome?' ':'')+'<'+p.email+'>';
+  if(!confirm('APAGAR DE VEZ a conta de '+quem+'?\n\n'+
+    'Isto NÃO tem volta. A conta e o cadastro somem, e a pessoa deixa de conseguir entrar.\n\n'+
+    'O que CONTINUA: as avaliações e aplicações que ela lançou, com o nome e o e-mail dela\n'+
+    'gravados em cada registro — a trilha de auditoria não é tocada.\n\n'+
+    'Se a intenção é só tirar o acesso de alguém que trabalhou no ensaio, use DESATIVAR:\n'+
+    'mantém a conta e dá para reativar depois.')) return;
+  /* Segunda pergunta, com o e-mail digitado: a primeira é fácil de confirmar no
+     impulso, e esta lista é de gente — errar a linha apaga a pessoa errada. */
+  var conf=prompt('Para confirmar, digite o e-mail que será apagado:\n\n'+p.email);
+  if(conf===null) return;
+  if(String(conf).trim().toLowerCase()!==String(p.email||'').trim().toLowerCase()){
+    if(typeof _stxToast==='function')_stxToast('E-mail não confere — nada foi apagado.');
+    return;
+  }
+  if(!cloudInit()||!SB||!SB.functions){ if(typeof _stxToast==='function')_stxToast('Sem conexão.'); return; }
+  if(typeof _stxToast==='function')_stxToast('Apagando…');
+  SB.functions.invoke('remover-tecnico',{body:{email:p.email, action:'delete'}}).then(function(res){
+    var d=res&&res.data, er=res&&res.error;
+    if(er || !d || d.error){
+      var msg=(d&&d.error)||(er&&er.message)||'Falha.';
+      if(/not found|404|Failed to send|FunctionsFetchError|FunctionsRelayError|non-2xx/i.test(String(msg))) msg='A função "remover-tecnico" ainda não foi publicada no Supabase.';
+      if(typeof _stxToast==='function')_stxToast(msg); return;
+    }
+    _esquecerDoRoster(p.email);
+    if(typeof _stxToast==='function')_stxToast('Conta de '+(p.nome||p.email)+' apagada.');
+    _carregarPerfis();
+  }, function(){ if(typeof _stxToast==='function')_stxToast('Falha de conexão.'); });
+}
+/* Tira o e-mail do roster local e deixa a lápide, para o merge não trazer de
+   volta. Reaproveita a lápide que removeAllowedUser já usa: uma regra só. */
+function _esquecerDoRoster(email){
+  try{
+    ensureConfig();
+    var alvo=String(email||'').trim().toLowerCase(); if(!alvo) return;
+    var arr=data.__config.allowedUsers||[];
+    var antes=arr.length;
+    data.__config.allowedUsers=arr.filter(function(u){
+      return !(u && String(u.email||'').trim().toLowerCase()===alvo);
+    });
+    if(!data.__config.delUsers||typeof data.__config.delUsers!=='object') data.__config.delUsers={};
+    data.__config.delUsers[alvo]=Date.now();
+    if(antes!==data.__config.allowedUsers.length || true){
+      save();
+      if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
+      if(typeof dbUpsertConfig==='function'){ try{ dbUpsertConfig(); }catch(e){} }
+    }
+  }catch(e){}
+}
+
 /* Salva o NOME no perfil (RLS permite admin) — sem mexer na senha, sem republicar nada */
 function salvarNomePerfil(i){
   var p=(window._perfisCache||[])[i]; if(!p||!SB) return;
