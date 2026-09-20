@@ -39,13 +39,16 @@ assert.ok(GAVETA.indexOf('agRowMasc')>GAVETA.indexOf('agRowGirar'),
 /* ------------------------------------------- 3. a régua funciona mesmo --- */
 const BARRA=ui.slice(ui.indexOf('function montarMasc(){'), ui.indexOf('window.agRotBar = function'));
 assert.match(BARRA,/id="agMascRange"/,'a régua tem o controle deslizante');
-assert.match(BARRA,/min="0" max="200" step="5"/,
-  'de 0 a 200%, em passos de 5: o padrão de fábrica (100%) fica no MEIO do curso, '+
-  'porque o controle também precisa saber PÔR tinta — "pra mim o 100% aí tá no 70%"');
+assert.match(BARRA,/min="0" max="100" step="5"/,
+  'de 0 a 100%, em passos de 5, e o número É a opacidade: 0 some, 50 é o padrão de fábrica, '+
+  '100 deixa a quadra sólida — "de 0 a 200%, mas podemos trocar pra mostrar 100% lá"');
+assert.match(BARRA,/agMascSet\(50\)/,'e o botão "Padrão" leva ao meio do curso, que é de onde todo mundo parte');
 assert.match(BARRA,/aria-label="Opacidade da máscara das quadras"/,'anunciada para leitor de tela');
 assert.match(BARRA,/oninput="agMascSet\(this\.value\)"/,'ajusta enquanto desliza');
-assert.match(BARRA,/mascaraSetOpac/,'e chama o motor que já existe no app.js, em vez de recalcular por fora');
-assert.match(BARRA,/agMascSet\(100\)/,'tem como voltar ao padrão sem adivinhar o número');
+assert.match(BARRA,/agMascSet/,'a faixa manda no motor pela mesma porta');
+assert.match(ui,/window\.mascaraSetOpacPct\(n\)/,
+  'e quem converte a porcentagem em fator é o app.js: a conta mora num lugar só');
+assert.match(ui,/function pctAtual\(\)/,'o número de partida também vem de lá, não de uma conta repetida aqui');
 assert.match(BARRA,/ag-rotbar ag-mascbar/,'veste a mesma faixa da régua de giro: uma folha só para as duas');
 
 /* Abrir a régua fecha o que estiver cobrindo o mapa — senão não dá para ver

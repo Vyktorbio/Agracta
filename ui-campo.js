@@ -914,26 +914,33 @@
 
      O motor (mascaraSetOpac, em app.js) e a persistência no aparelho já
      existem e não mudam aqui; esta faixa é só a mão que gira o botão. */
+  /* O numero vem do app.js, que e dono da escala; o calculo aqui e so a
+     reserva para quando esta faixa nascer antes de o app.js estar de pe. */
+  function pctAtual(){
+    try{ if(window.mascaraPct) return window.mascaraPct(); }catch(e){}
+    return Math.round((Number(window.mascaraOpac)||0)*50);
+  }
   function montarMasc(){
     if($('agMascBar')) return $('agMascBar');
     var el = document.createElement('div');
     el.id = 'agMascBar'; el.className = 'ag-rotbar ag-mascbar';
-    var v = Math.round((Number(window.mascaraOpac)||0)*100);
+    var v = pctAtual();
     el.innerHTML =
       '<span class="rb-t">Máscara</span>'+
-      '<input type="range" id="agMascRange" min="0" max="200" step="5" value="'+v+'" '+
+      '<input type="range" id="agMascRange" min="0" max="100" step="5" value="'+v+'" '+
         'oninput="agMascSet(this.value)" aria-label="Opacidade da máscara das quadras">'+
       '<span class="rb-v" id="agMascVal">'+v+'%</span>'+
-      '<button onclick="agMascSet(100)">Padrão</button>'+
+      '<button onclick="agMascSet(50)">Padrão</button>'+
       '<button class="ok" onclick="agMascBar(false)">Pronto</button>';
     document.body.appendChild(el);
     return el;
   }
   window.agMascSet = function(v){
-    /* Até 200%: o padrão de fábrica (100%) fica no meio do curso, e daí para
-       a direita a máscara ganha mais tinta do que vem de fábrica. */
-    var n = Math.max(0, Math.min(200, Math.round(Number(v)||0)));
-    try{ if(window.mascaraSetOpac) window.mascaraSetOpac(n/100); }catch(e){}
+    /* 0 a 100% e o numero E a opacidade: 0 some, 50 e o padrao de fabrica,
+       100 deixa a quadra solida. Quem converte para o fator interno e o
+       proprio app.js, para a conta morar num lugar so. */
+    var n = Math.max(0, Math.min(100, Math.round(Number(v)||0)));
+    try{ if(window.mascaraSetOpacPct) window.mascaraSetOpacPct(n); }catch(e){}
     var r = $('agMascRange'); if(r && Number(r.value) !== n) r.value = n;
     var s = $('agMascVal'); if(s) s.textContent = n + '%';
   };
@@ -945,7 +952,7 @@
       try{ if(window.agToggleDrawer) window.agToggleDrawer(false); }catch(e){}
       /* a régua de giro e esta dividem o mesmo pedaço de rodapé */
       try{ window.agRotBar(false); }catch(e){}
-      var n = Math.round((Number(window.mascaraOpac)||0)*100);
+      var n = pctAtual();
       var r = $('agMascRange'); if(r) r.value = n;
       var s = $('agMascVal'); if(s) s.textContent = n + '%';
     }
