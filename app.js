@@ -9706,9 +9706,16 @@ function _calcCompute(){
        calda pode ser óleo. Produto único cai no mesmo número de sempre. */
     /* A receita estruturada (item, lote, dose e unidade próprios) é a fonte
        principal. As strings continuam como compatibilidade para estudos antigos. */
+    /* QUEM COMPLETA O COMPONENTE SEM UNIDADE É O ESTUDO. `doseUnidadeDe` lê a
+       unidade do texto INTEIRO da dose, e num texto de mistura basta um vizinho
+       escrever a sua para o componente que não escreveu nenhuma herdar aquela:
+       em "1,5 L + 0,2", num estudo declarado em g/ha, o "0,2" virava 0,2 L/ha —
+       mil vezes, e líquido no lugar de sólido. A auditoria da declaração já diz
+       o contrário: "é ela que passa a completar toda dose escrita sem unidade". */
+    var _fbUnidade=doseUnidadeDeclarada(study)||dunit;
     var mix=(Array.isArray(t.componentes)&&t.componentes.length&&BC.parseStructuredComponents)
-      ? BC.parseStructuredComponents(t.componentes,dunit)
-      : BC.parseComponents(t.produto, t.dose, dunit);
+      ? BC.parseStructuredComponents(t.componentes,_fbUnidade)
+      : BC.parseComponents(t.produto, t.dose, _fbUnidade);
     var res=null, err='';
     try{ res=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'), sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap,
       minimumOperatingMl:typeof calcDroneMinimum==='function'?calcDroneMinimum(study,t):0}); }
@@ -9733,9 +9740,20 @@ function _calcCompute(){
        É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
     /* No essencial a tabela tem duas colunas: o que pôr e quanto. A dose escrita, a
        dose relida na outra unidade e o total são conferência, não execução. */
-    var _gc=_calcDetalhe?'':' style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"';
+    /* A COLUNA DA DOSE EDITÁVEL PRECISA EXISTIR NA GRADE. No essencial a grade
+       era de DUAS colunas e a linha com dose editável tinha TRÊS células: o "por
+       frasco" — o único número que se veio ler — caía para uma segunda linha,
+       embaixo do nome do componente e fora da coluna que o cabeçalho anuncia.
+       Quem confere lê a coluna; um número fora dela é um número de outra coisa.
+       O cabeçalho da coluna do meio fica VAZIO de propósito: a dose escrita não
+       volta ao essencial (ela já está no protocolo), e o que há ali é um campo,
+       que se explica sozinho — com o nome do componente ao lado e o rótulo de
+       leitura no próprio input. */
+    var _edCard=(!_calcFinalizado() && tratTemReceita(t));
+    var _colDose=(_calcDetalhe||_edCard);
+    var _gc=_calcDetalhe?'':(' style="grid-template-columns:minmax(0,1.6fr) '+(_edCard?'minmax(0,1fr) ':'')+'minmax(0,1fr)"');
     html+='<div class="calc-mix"><div class="calc-mixh"'+_gc+'><span>Componente</span>'+
-      (_calcDetalhe?'<span>Dose</span>':'')+'<span>Por frasco</span>'+(_calcDetalhe?'<span>Total</span>':'')+'</div>';
+      (_calcDetalhe?'<span>Dose</span>':(_edCard?'<span></span>':''))+'<span>Por frasco</span>'+(_calcDetalhe?'<span>Total</span>':'')+'</div>';
     res.components.forEach(function(c){
       /* A dose escrita e a mesma dose lida do outro jeito. % só vira quantidade
          depois do volume — e é aí que 3 L/ha e 150 L/ha se separam 50×. */
@@ -9767,9 +9785,11 @@ function _calcCompute(){
           (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>';
       }
       /* No modo essencial a dose aparece quando é editável: sem ela a linha vira
-         um número sem o "de quê". */
+         um número sem o "de quê". A célula existe em TODA linha da tabela quando
+         a coluna existe — uma linha com uma célula a menos empurra o resto para
+         fora da coluna, que é o defeito que esta grade veio corrigir. */
       html+='<div class="calc-mixr'+(_ed?' ed':'')+'"'+_gc+'><span>'+esc(c.nome)+'</span>'+
-        ((_calcDetalhe||_ed)?_doseCel:'')+
+        (_colDose?((_ed||_calcDetalhe)?_doseCel:'<span></span>'):'')+
         '<b>'+a(c.perBottle,c.unit)+'</b>'+
         (_calcDetalhe?('<b>'+a(c.total,c.unit)+'</b>'):'')+'</div>';
     });
@@ -9783,11 +9803,11 @@ function _calcCompute(){
        prepara a metade achando que preparou tudo. */
     (mix.semDose||[]).forEach(function(nome){
       html+='<div class="calc-mixr falta"'+_gc+'><span>'+esc(nome)+'</span>'+
-        (_calcDetalhe?'<span>sem dose</span>':'')+'<b>não entra</b>'+
+        (_calcDetalhe?'<span>sem dose</span>':(_edCard?'<span></span>':''))+'<b>não entra</b>'+
         (_calcDetalhe?'<b>—</b>':'')+'</div>';
     });
     html+='<div class="calc-mixr carrier"'+_gc+'><span>Completar com '+esc(res.carrier.nome)+' até</span>'+
-      (_calcDetalhe?'<span>q.s.p.</span>':'')+'<b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
+      (_calcDetalhe?'<span>q.s.p.</span>':(_edCard?'<span></span>':''))+'<b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
       (_calcDetalhe?('<b>'+a(res.sprayTotalMl,'mL')+'</b>'):'')+'</div>';
     html+='</div>';
 
@@ -10938,9 +10958,16 @@ function calcMemoria(study, cfg){
       return;
     }
 
+    /* QUEM COMPLETA O COMPONENTE SEM UNIDADE É O ESTUDO. `doseUnidadeDe` lê a
+       unidade do texto INTEIRO da dose, e num texto de mistura basta um vizinho
+       escrever a sua para o componente que não escreveu nenhuma herdar aquela:
+       em "1,5 L + 0,2", num estudo declarado em g/ha, o "0,2" virava 0,2 L/ha —
+       mil vezes, e líquido no lugar de sólido. A auditoria da declaração já diz
+       o contrário: "é ela que passa a completar toda dose escrita sem unidade". */
+    var _fbUnidade=doseUnidadeDeclarada(study)||dunit;
     var mix=(Array.isArray(t.componentes)&&t.componentes.length&&BC.parseStructuredComponents)
-      ? BC.parseStructuredComponents(t.componentes,dunit)
-      : BC.parseComponents(t.produto, t.dose, dunit);
+      ? BC.parseStructuredComponents(t.componentes,_fbUnidade)
+      : BC.parseComponents(t.produto, t.dose, _fbUnidade);
     (mix.problems||[]).forEach(function(p){ reg.avisos.push(p); });
 
     var r;
