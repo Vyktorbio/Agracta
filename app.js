@@ -8498,7 +8498,16 @@ function studyGoStage(id){
 }
 function _studyWorkflowHtml(qid,sid,study){
   var w=_studyWorkflow(qid,study), q=_avCroquiEscJs(qid), s=_avCroquiEscJs(sid), next=nextEventV2(study), focus={};
-  if(w.protocolo.state!=='complete')focus={title:'Complete o protocolo',text:w.protocolo.detail,button:'Editar protocolo',onclick:"openStudyEditV2('"+q+"','"+s+"')"};
+  /* CONTINUAR DE ONDE PAROU vem antes de tudo, e só existe quando há leitura
+     COMEÇADA e não terminada. Quem largou a prancheta no meio da parcela 23 não
+     quer saber da próxima melhor ação: quer voltar para a parcela 23. Estudo que
+     ninguém tocou não tem de onde retomar, e a linha não aparece — prometer um
+     lugar em que a pessoa nunca esteve é pior que não dizer nada. */
+  var _ret=estudoFinalizado(study)?null:pendRetomada(qid,study);
+  if(_ret) focus={title:_ret.texto, text:_ret.detalhe, button:'Retomar',
+                  onclick:"pendIr('"+q+"','"+s+"','avaliacao','"+_avCroquiEscJs(_ret.avId||'')+"','"+_avCroquiEscJs(_ret.parcela||'')+"')",
+                  marca:'CONTINUE DE ONDE PAROU'};
+  else if(w.protocolo.state!=='complete')focus={title:'Complete o protocolo',text:w.protocolo.detail,button:'Editar protocolo',onclick:"openStudyEditV2('"+q+"','"+s+"')"};
   else if(w.planejamento.state!=='complete')focus={title:'Confira o planejamento',text:'Valide repetições, randomização e posição das parcelas antes de instalar.',button:'Ver croqui',onclick:"openStudyParcelas('"+q+"','"+s+"')"};
   else if(next&&next.ev.type==='apl')focus={title:'Próxima ação: aplicação '+next.ev.idx+'/'+next.ev.total,text:fD(next.ev.date)+(next.diff<0?' · atrasada '+Math.abs(next.diff)+'d':(next.diff===0?' · hoje':'')),button:'Registrar aplicação',onclick:'quickAddAplicacao()'};
   else if(next&&next.ev.type==='eval')focus={title:'Próxima ação: '+(next.ev.tipo||'avaliação'),text:fD(next.ev.date)+(next.diff<0?' · atrasada '+Math.abs(next.diff)+'d':(next.diff===0?' · hoje':'')),button:'Abrir avaliação',onclick:"openStudyEditAvaliacao('"+_avCroquiEscJs(next.ev.id)+"')"};
@@ -8507,7 +8516,7 @@ function _studyWorkflowHtml(qid,sid,study){
   else focus={title:'Monte e revise o dossiê',text:w.dossie.detail,button:'Ir para o dossiê',onclick:"studyGoStage('study-stage-dossie')"};
   var h='<div class="study-workflow" aria-label="Fluxo do estudo"><div class="study-workflow-rail">';
   w.stages.forEach(function(x,i){h+='<button type="button" class="study-workflow-step '+x.state+'" onclick="studyGoStage(\''+x.anchor+'\')"><span class="study-workflow-n">'+(i+1)+'</span><span class="study-workflow-copy"><b>'+esc(x.label)+'</b><small>'+esc(x.detail)+'</small></span></button>';});
-  h+='</div><div class="study-focus"><div><span>PRÓXIMA MELHOR AÇÃO</span><b>'+esc(focus.title)+'</b><small>'+esc(focus.text||'')+'</small></div><button type="button" onclick="'+focus.onclick+'">'+esc(focus.button)+'</button></div></div>';
+  h+='</div><div class="study-focus'+(focus.marca?' retomar':'')+'"><div><span>'+esc(focus.marca||'PRÓXIMA MELHOR AÇÃO')+'</span><b>'+esc(focus.title)+'</b><small>'+esc(focus.text||'')+'</small></div><button type="button" onclick="'+focus.onclick+'">'+esc(focus.button)+'</button></div></div>';
   return h;
 }
 function closeStudyParcelas(){var o=document.getElementById('studyParcelasOvl');if(o)o.style.display='none';}
@@ -8522,6 +8531,84 @@ function openStudyParcelas(qid,sid){
   ord.forEach(function(rep){var set=by[rep],cols=Math.min(Math.max(set.length,1),6);h+='<section><h4>Bloco / repetição '+esc(_repDisplay(rep))+'</h4><div class="av-croqui-grid" style="--croqui-cols:'+cols+'">';set.forEach(function(r){h+='<div class="av-croqui-parcela planned" title="'+esc((r.produto||'')+' · '+(r.campo||r.label||r.key))+'"><span class="n">'+esc(r.campo||r.label||r.key)+'</span><span class="p">'+esc(r.tratId)+(r.produto?' · '+esc(r.produto):'')+'</span></div>';});h+='</div></section>';});
   h+='</div><div class="study-parcelas-actions">'+(!estudoFinalizado(st)?'<button type="button" onclick="closeStudyParcelas();openRandomizacaoModal(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Conferir randomização</button>':'')+'<button type="button" class="secondary" onclick="closeStudyParcelas()">Fechar</button></div></div>';
   ov.innerHTML=h;ov.style.display='flex';
+}
+
+/* ============ PENDÊNCIAS CONCRETAS: O QUE FALTA, E ONDE ELE MORA ============
+   O motor é `vendor/pendencias-core.js` — puro, sem tela. Daqui sai só o que
+   depende do app: o rótulo do momento (que precisa da base de DAA do estudo), a
+   cultura, a testemunha, e o caminho de volta até o registro.
+
+   A LISTA SEMPRE FOI CLICÁVEL NA CABEÇA DE QUEM LÊ. "3 avaliação(ões) sem
+   lançamento" mandava a pessoa procurar quais eram, em qual data, em qual
+   parcela — o app sabia as três coisas e não dizia nenhuma. Agora cada linha diz
+   o registro e leva até ele. ========================================== */
+function avRotuloMomento(st,av){
+  /* Mesma derivação do retrato da estatística: momento declarado quando existe,
+     senão o DAA contado da base do estudo. Uma segunda regra aqui faria a mesma
+     avaliação se chamar "7 DAA" numa tela e "12/09" na outra. */
+  var daa=null;
+  try{
+    var base=(typeof _pranchaBase==='function')?_pranchaBase(st):null;
+    var dt=pD(isoToBR(av.data))||pD(av.data);
+    if(base&&base.data&&dt&&!isNaN(dt)) daa=daysBetween(base.data,dt);
+  }catch(e){}
+  try{ var m=avMomento(av,daa); return m&&m.rotulo?m.rotulo:(isoToBR(av.data)||av.data||''); }
+  catch(e){ return isoToBR(av.data)||av.data||''; }
+}
+function _pendOpts(qid,study){
+  var q=data[qid]||{}, test='';
+  try{ test=studyTestemunha(study)||''; }catch(e){}
+  /* studyTestemunha devolve o primeiro tratamento como recurso para estudos
+     antigos sem marcação. Aqui isso viraria "testemunha definida" sem ninguém
+     ter definido — a mesma armadilha que o preparo já tinha corrigido. */
+  var marcada=(study.tratamentos||[]).some(function(t){ return t&&t.testemunha; });
+  return {
+    lab:(typeof isQuadraLab==='function')?!!isQuadraLab(qid):false,
+    cultura:(typeof studyCultura==='function')?(studyCultura(study,q)||''):'',
+    testemunha:marcada?test:'',
+    rotuloAvaliacao:function(av){ return avRotuloMomento(study,av); },
+    rotuloData:function(d){ return isoToBR(d)||String(d||''); }
+  };
+}
+function pendenciasDoEstudo(qid,study){
+  if(!window.PendenciasCore||!study) return [];
+  try{ return PendenciasCore.listar(normalizeStudy(study),_pendOpts(qid,study)); }catch(e){ return []; }
+}
+function pendRetomada(qid,study){
+  if(!window.PendenciasCore||!study) return null;
+  try{ return PendenciasCore.retomada(normalizeStudy(study),_pendOpts(qid,study)); }catch(e){ return null; }
+}
+/* O caminho de volta. Cada tela tem a sua porta, e a da avaliação abre JÁ na
+   parcela que falta — abrir a avaliação e deixar a pessoa procurar a parcela 23
+   numa grade de 24 seria a metade do favor. */
+function pendIr(qid,sid,tela,id,parcela){
+  if(typeof curV==='undefined'||curV!==qid||curSid!==sid){ try{ openStudyDetail(qid,sid); }catch(e){} }
+  if(tela==='protocolo'){ try{ openStudyEditV2(qid,sid); }catch(e){} return; }
+  if(tela==='aplicacao'){
+    if(id){ try{ openStudyEditAplicacao(id); }catch(e){} }
+    else { try{ quickAddAplicacao(); }catch(e){} }
+    return;
+  }
+  if(tela==='amostra'){ try{ openNemAmostras(qid,sid); }catch(e){} return; }
+  if(tela==='avaliacao'){
+    if(!id){ try{ quickAddAvaliacao(); }catch(e){} return; }
+    try{ openStudyEditAvaliacao(id,null,false,parcela||''); }catch(e){}
+    return;
+  }
+}
+/* A lista pintada. `li` é botão de verdade: teclado e leitor de tela chegam nela
+   pelo mesmo caminho do dedo. */
+function pendListaHtml(qid,sid,pends){
+  if(!pends||!pends.length) return '';
+  var q=_avCroquiEscJs(qid), s=_avCroquiEscJs(sid);
+  return '<ul class="pend-lista">'+pends.map(function(p){
+    var a=p.alvo||{};
+    var ir="pendIr('"+q+"','"+s+"','"+_avCroquiEscJs(a.tela||'')+"','"+_avCroquiEscJs(a.id||'')+"','"+_avCroquiEscJs(a.parcela||'')+"')";
+    return '<li><button type="button" class="pend-item pend-'+esc(p.tipo)+'" onclick="'+ir+'">'+
+           '<span class="pend-txt">'+esc(p.texto)+'</span>'+
+           (p.detalhe?('<span class="pend-det">'+esc(p.detalhe)+'</span>'):'')+
+           '<span class="pend-ir" aria-hidden="true">›</span></button></li>';
+  }).join('')+'</ul>';
 }
 
 /* ===================== CALCULADORA DE APLICAÇÃO (motor BioCalculo campo, embutida) =====================
@@ -13463,9 +13550,18 @@ function openStudyDetail(qid,sid){
        '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">🔓 Reabrir estudo</button>';
   }else{
     var _closeReview=_studyFinalizationReview(qid,study);
+    /* CONFERÊNCIA ANTES DE FINALIZAR. Antes daqui saía a contagem — "3
+       avaliação(ões) sem lançamento" — e a pessoa ia procurar quais. O app já
+       sabia: sabe a avaliação, sabe a parcela, sabe a aplicação sem horário.
+       Agora cada pendência é uma linha que leva ao registro dela.
+       As contagens continuam existindo no registro assinado (`revisao.issues`),
+       que é o que o dossiê guarda; a tela mostra o que se pode consertar. */
+    var _closePend=pendenciasDoEstudo(qid,study);
     h+='<div class="sd-section-title">Finalização</div>'+
        '<div class="study-close-check '+(_closeReview.ok?'ready':'attention')+'"><b>'+(_closeReview.ok?'Pronto para finalizar':'Revise antes de finalizar')+'</b>'+
-       (_closeReview.ok?'<span>Aplicações, avaliações e notas estão completas.</span>':'<ul>'+_closeReview.issues.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>')+
+       (_closeReview.ok?'<span>Aplicações, avaliações e notas estão completas.</span>'
+                       :(_closePend.length?('<span class="pend-cab">'+_closePend.length+' pendência'+(_closePend.length===1?'':'s')+' — toque para ir ao registro</span>'+pendListaHtml(qid,sid,_closePend))
+                                          :('<ul>'+_closeReview.issues.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>')))+
        (_closeReview.notes.length?'<small>'+esc(_closeReview.notes.join(' · '))+'</small>':'')+'</div>'+
        '<div style="font-size:11px;color:#9a8;line-height:1.55;margin:9px 0 8px">Finalizar pede senha e rubrica, carimba data e hora e <b>congela a estatística</b>. O estudo passa a somente-leitura e sai da agenda.</div>'+
        '<button class="btn-sm" onclick="finalizarEstudo(\''+qid+'\',\''+sid+'\')">Finalizar estudo</button>';
@@ -16930,7 +17026,7 @@ function studyChartsHtml(study){
   return '<div class="sd-section"><div class="sd-section-title">Gráficos</div>'+H+'</div>';
 }
 
-function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
+function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
   editingAvId=aid;editingAplId=null;draftAp=null;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study){draftAv=null;return;}
@@ -17042,6 +17138,10 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock){
   document.getElementById("eePnl").innerHTML=h;
   renderAvGrid();
   window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
+  /* Quem chegou aqui por uma pendência já disse QUAL parcela quer. `avCroquiSelect`
+     é o mesmo caminho do toque no croqui: posiciona o modo automático, rola até a
+     célula e põe o foco nela. Reusar evita uma segunda regra de "ir para a parcela". */
+  if(irParaParcela){ setTimeout(function(){ try{ avCroquiSelect(irParaParcela); }catch(e){} },40); }
 }
 
 /* ===== FINALIZAÇÃO DO ESTUDO (BPL) =========================================
@@ -17112,7 +17212,11 @@ function _studyFinalizationReview(qid,s){
   avancado.pendencias.forEach(function(p){notes.push(p.jobKey+': '+(p.estado==='erro'?'Erro de cálculo — ':'Pendente — ')+p.motivo);});
   if(avancado.indisponiveis.length)notes.push(avancado.indisponiveis.length+' avaliação(ões)/variável(is) sem comparação automática; resultados descritivos preservados.');
   try{ if(!_currentUserName()) notes.push('O nome do responsável será solicitado na assinatura'); }catch(e){}
-  return {issues:issues,notes:notes,ok:issues.length===0};
+  /* As contagens acima são o que o dossiê sempre guardou e continuam intactas.
+     A lista concreta entra ao lado: três anos depois, "2 parcelas sem avaliação
+     · 7 DAA" diz o que "3 avaliação(ões) sem lançamento" nunca disse. */
+  var pend=[]; try{ pend=pendenciasDoEstudo(qid,s); }catch(e){}
+  return {issues:issues,notes:notes,ok:issues.length===0,pendencias:pend};
 }
 function finalizarEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s) return;
@@ -17122,9 +17226,16 @@ function finalizarEstudo(qid,sid){
   if(!nAv && !confirm('Este estudo não tem nenhuma avaliação registrada.\n\nFinalizar assim mesmo?')) return;
   var prev=_statSnapshot(s);
   var review=_studyFinalizationReview(qid,s);
+  /* No aviso da senha vale a lista CONCRETA quando ela existe: "2 parcelas sem
+     avaliação · 7 DAA" diz onde ir; "3 avaliação(ões) sem lançamento" só diz que
+     há o que procurar. As contagens continuam no registro assinado. */
+  var _pendTxt=(review.pendencias||[]).map(function(p){
+    return p.texto+(p.detalhe?(' ('+p.detalhe+')'):'');
+  });
+  if(!_pendTxt.length) _pendTxt=review.issues;
   var resumo='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
              (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+
-             '.\n\n'+(review.issues.length?('PENDÊNCIAS ENCONTRADAS:\n• '+review.issues.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
+             '.\n\n'+(_pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+_pendTxt.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
              (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
              'Depois disso o estudo fica somente-leitura e sai da agenda.';
   requireDeletePassword(resumo, function(){
