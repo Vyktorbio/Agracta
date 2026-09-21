@@ -50,7 +50,7 @@ Object.assign(w,{BioCalculoLab:LB,BioCalculoCampo:BC,_labTab:'campo',_labStudy:(
 for(const [id,value] of Object.entries({labVol:50,labVazao:150,labPureza:'',labDens:''})){
   const el=w.document.createElement('input');el.id=id;el.value=value;w.document.body.append(el);
 }
-w.eval(['_labVal','_labAvisosHtml','calcMemoriaLab','calcMemoriaLabTexto','_labCompute'].map(functionSource).join('\n'));
+w.eval(['_labVal','_labAvisosHtml','_doseZerada','calcMemoriaLab','calcMemoriaLabTexto','_labCompute'].map(functionSource).join('\n'));
 const cfg={doseModo:'campo',volumeMl:50,vazaoLHa:150};
 let mem=w.calcMemoriaLab(study,cfg);
 assert.equal(mem.tratamentos[0].testemunha,false,'primeiro tratamento não é automaticamente testemunha');

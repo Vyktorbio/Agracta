@@ -9,9 +9,10 @@ Leva: 3 arquivos de codigo + 2 de teste novos.
 
 O PROXY NAO PRECISA SUBIR. Nada mudou nele nesta leva.
 
-ATENCAO: esta leva sobe JUNTO com a revisao das calculadoras que ja entrou
-no repositorio (a que reescreveu a bancada). Sao mudancas diferentes no
-mesmo arquivo; o app.js daqui ja contem as duas.
+ATENCAO: esta leva sobe JUNTO com as duas correcoes de calculadora que ja
+entraram no repositorio — a revisao que reescreveu a bancada e o conserto
+das bordas da leitura estrita. Sao mudancas diferentes no mesmo arquivo; o
+app.js daqui ja contem as tres.
 
 
 O QUE MUDOU NESTA LEVA
@@ -52,7 +53,8 @@ A ARITMETICA NAO MUDOU. Os motores nao foram tocados por esta leva.
 TAMBEM VAI NO AR (ja estava no repositorio)
 -------------------------------------------
 
-A revisao das calculadoras de protocolo, que reescreveu a BANCADA: a tela do
+O conserto das bordas que a leitura estrita das calculadoras deixou, e a
+revisao das calculadoras de protocolo, que reescreveu a BANCADA: a tela do
 laboratorio passou a ser derivada da propria memoria de calculo — uma receita so
 em vez de duas implementacoes —, com mistura componente a componente, g/kg
 pesando em vez de pipetando, densidade de origem separada da de alvo, e o fim de
