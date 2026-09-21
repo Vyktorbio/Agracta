@@ -1,3 +1,92 @@
+AGRACTA — 12a publicacao                    21/09/2026
+=====================================================
+
+Leva: 3 arquivos de codigo + 2 de teste novos.
+  CODIGO:  app.js  index.html  sw.js
+  TESTE:   test_calc_coluna.js        (novo)
+           test_unidade_herdada.js    (novo)
+  DOCS:    docs/ROADMAP.md
+
+O PROXY NAO PRECISA SUBIR. Nada mudou nele nesta leva.
+
+ATENCAO: esta leva sobe JUNTO com as duas correcoes de calculadora que ja
+entraram no repositorio — a revisao que reescreveu a bancada e o conserto
+das bordas da leitura estrita. Sao mudancas diferentes no mesmo arquivo; o
+app.js daqui ja contem as tres.
+
+
+O QUE MUDOU NESTA LEVA
+----------------------
+
+1) O NUMERO TINHA SAIDO DA COLUNA
+
+Na publicacao passada a dose virou campo na propria linha da receita. So que a
+tabela do modo essencial tem duas colunas — "Componente" e "Por frasco" — e a
+linha com dose editavel passou a ter tres celulas. O "por frasco", que e o unico
+numero que se le com o frasco na mao, caia para uma segunda linha, embaixo do
+nome do componente.
+
+Numa tabela, a coluna e metade do significado do numero: ali embaixo ele estava
+alinhado com "Componente", ou seja, dizendo ser outra coisa.
+
+Agora a grade abre a coluna da dose quando ela existe, e toda linha fecha com o
+mesmo numero de celulas — cabecalho, componentes, a linha do que ficou sem dose
+e a do veiculo. A dose escrita continua fora do modo essencial: o que ha naquela
+coluna e um campo, e por isso o cabecalho dela fica em branco.
+
+2) QUEM COMPLETA A DOSE SEM UNIDADE E O ESTUDO, NAO O VIZINHO DE LINHA
+
+Quando voce declara a unidade da dose, a auditoria grava a frase que define o
+ato: "e ela que passa a completar toda dose escrita sem unidade". Em mistura isso
+nao estava sendo cumprido. Num tratamento escrito "1,5 L/ha + 0,2", o app achava
+o "L" do primeiro componente e completava o segundo com litro — mesmo num estudo
+declarado em g/ha. Sao mil vezes de diferenca, e um se pesa enquanto o outro se
+pipeta.
+
+Agora quem completa e a declaracao do estudo, na tela e na memoria de calculo,
+que sao o mesmo preparo. Quem escreveu a sua unidade continua mandando na sua: a
+declaracao completa quem esta sem, nunca sobrescreve quem escreveu.
+
+A ARITMETICA NAO MUDOU. Os motores nao foram tocados por esta leva.
+
+
+TAMBEM VAI NO AR (ja estava no repositorio)
+-------------------------------------------
+
+O conserto das bordas que a leitura estrita das calculadoras deixou, e a
+revisao das calculadoras de protocolo, que reescreveu a BANCADA: a tela do
+laboratorio passou a ser derivada da propria memoria de calculo — uma receita so
+em vez de duas implementacoes —, com mistura componente a componente, g/kg
+pesando em vez de pipetando, densidade de origem separada da de alvo, e o fim de
+dois enganos que valiam mil vezes: a testemunha inventada no primeiro tratamento
+e a unidade da dose chutada como L/ha.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Calculadora de campo, modo essencial (sem "Calculo completo"): o valor "por
+   frasco" precisa estar na coluna dele, do lado direito, na mesma linha do
+   componente e do campo de dose.
+2. Editar a dose ali e ver a quantidade se refazer, com a tabela continuando
+   alinhada.
+3. Num estudo declarado em g/ha com tratamento escrito "1,5 L/ha + 0,2": o
+   segundo componente tem de sair em MASSA (mg), nao em volume.
+4. Da revisao da bancada: abrir um estudo de laboratorio e conferir a receita do
+   pote, tratamento a tratamento.
+
+
+TESTES
+------
+Duplo clique em  Conferir antes de publicar.command.
+
+  test_calc_coluna.js       28 verificacoes (novo — nenhuma linha fora da grade)
+  test_unidade_herdada.js   17 verificacoes (novo — quem completa a dose)
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 11a publicacao                    03/09/2026
 =====================================================
 

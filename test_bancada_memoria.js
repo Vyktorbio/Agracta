@@ -61,8 +61,9 @@ vm.runInContext([
   pega('_calcNum'), pega('_calcVal'), pega('_calcDoseUnit'), pega('_numBR'),
   pega('doseUnidades'), pega('doseUnidadeDeclarada'), pega('doseSemUnidade'), pega('doseUnidadePendente'), pega('doseUnidadeDe'),
   pega('_parseParcelaDim'),
-  pega('calcConfigDoEstudoLab'), pega('calcConfigLabCompleta'), pega('calcConfigLabFaltando'),
-  pega('calcMemoriaLab'), pega('calcMemoriaLabTexto'),
+  pega('calcConfigDoEstudoLab'), pega('_labPurezaOk'), pega('_labDensidadeOk'),
+  pega('calcConfigLabCompleta'), pega('calcConfigLabFaltando'),
+  pega('_doseZerada'), pega('calcMemoriaLab'), pega('calcMemoriaLabTexto'),
   pega('calcConfigDoEstudo'), pega('calcConfigCompleta'),
   pega('calcMemoria'), pega('calcMemoriaTexto'),
   pega('aplicacaoMemoriaAuto')

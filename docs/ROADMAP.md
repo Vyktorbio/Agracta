@@ -487,9 +487,11 @@ resultado troca uma armadilha por outra. Coberto por `test_capacidade_frasco.js`
 (21 verificações, incluindo a ida e volta — editar duas vezes não pode mudar a
 capacidade sozinho).
 
-**Falta desta dupla:** o aviso de plausibilidade na própria calculadora (capacidade
-absurda em relação à calda preparada) fica para depois da refinada de usabilidade em
-curso, para não colidir com ela.
+**Feito desde então:** o aviso de plausibilidade na própria calculadora. O motor só
+sabia reclamar do frasco que NÃO CABE; do absurdamente grande, não — e é por ali que o
+erro de unidade entra sem esbarrar em nada. `bottleTooLargeWarning` aponta acima de cem
+preparos inteiros, e **aponta sem bloquear**: 1 L num costal de 20 L são 20× e não têm
+nada de errado. Coberto por `test_frasco_implausivel.js` (15 verificações).
 
 ## 7-septies. O volume de calda deixou de ser texto · ✅ **feito (03/09/2026)**
 
@@ -562,6 +564,34 @@ continua bloqueada. T1 também deixou de ser chamado de testemunha por simples p
 no preparo, somente a marcação explícita vale. Coberto por
 `test_volume_calda_fluxo.js` (16 verificações, incluindo `318 mL`, `159 mL` de
 SANKARI e `104,94 µL` de SILWET no ensaio real).
+
+## 7-nonies. Duas arestas da receita de campo · ✅ **feito (21/09/2026)**
+
+A revisão das calculadoras de protocolo reescreveu a **bancada** na mesma data
+(tela derivada de `calcMemoriaLab`, mistura componente a componente, g/kg pesando,
+densidades de origem e alvo separadas, fim da testemunha inventada e do chute de
+unidade). Esta seção é o que ficou de fora dela: duas arestas na calculadora de
+**campo**.
+
+**O número tinha saído da coluna.** O Modo Preparo pôs a dose como campo na própria
+linha da receita. A tabela do modo essencial tem duas colunas — "Componente" e "Por
+frasco" — e a linha com dose editável passou a ter três células: o "por frasco",
+único número que se lê com o frasco na mão, caía para uma segunda linha da grade,
+embaixo do nome do componente. Numa tabela a coluna é metade do significado do
+número. A grade passa a declarar a coluna da dose quando ela existe, e **toda linha
+fecha com o mesmo número de células** — cabeçalho, componentes, "não entra" e
+veículo. O cabeçalho dessa coluna fica vazio de propósito: a dose escrita não volta
+ao essencial, o que há ali é um campo. Coberto por `test_calc_coluna.js`
+(28 verificações).
+
+**Quem completa a dose sem unidade é o estudo, não o vizinho de linha.** A auditoria
+da declaração diz a regra: "é ela que passa a completar toda dose escrita sem
+unidade". `doseUnidadeDe` lê a unidade do texto INTEIRO, e em `1,5 L/ha + 0,2`
+bastava o `L` do primeiro para o segundo herdar litro num estudo declarado em g/ha —
+mil vezes, e líquido no lugar de sólido. O fallback entregue ao motor passa a ser a
+unidade DECLARADA quando existe, em `_calcCompute` e em `calcMemoria`, que são o
+mesmo preparo. A dose que traz a sua unidade continua mandando na sua. Coberto por
+`test_unidade_herdada.js` (17 verificações).
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
