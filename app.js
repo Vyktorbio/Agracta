@@ -10673,6 +10673,21 @@ function aplicacaoHerancaHtml(study, qid, ap){
 
 function calcConfigDoEstudoLab(study, qid){
   if(!study) return null;
+  var LB=window.BioCalculoLab,BC=window.BioCalculoCampo;
+  var vazaoPadrao=LB.parseTaxa((study.protocolo||{}).volumeCalda);
+  /* A receita pode usar % v/v ou uma taxa diferente em cada tratamento.
+     Exigir sempre uma taxa geral deixava a tela calcular, mas impedia que a
+     aplicação guardasse exatamente aquela receita. */
+  var vazaoPendente=(study.tratamentos||[]).some(function(t){
+    var estruturada=Array.isArray(t.componentes)&&t.componentes.length>0;
+    var dose=String(t.dose==null?'':t.dose).trim();
+    if(t.testemunha&&!estruturada&&(dose===''||LB.parseNum(dose)===0))return false;
+    var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+    var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
+    var exigeTaxa=mix.problems.length>0||mix.components.some(function(c){return c.unidade!=='%';});
+    var taxa=LB.parseTaxa(t.volume!=null&&String(t.volume).trim()!==''?t.volume:vazaoPadrao);
+    return exigeTaxa&&!(taxa>0);
+  });
   return {
     volumeMl:window.BioCalculoLab.parseNum(study.labVolumeMl),
     fonteTipo:(['gL','gkg','mae','puro'].indexOf(study.labFonteTipo)>=0?study.labFonteTipo:'gL'),
@@ -10683,7 +10698,8 @@ function calcConfigDoEstudoLab(study, qid){
        vazão do protocolo é indispensável — é ela que diz quanto produto há em cada
        mililitro de calda. */
     doseModo:(study.doseModo==='ppm'?'ppm':'campo'),
-    vazaoLHa:window.BioCalculoLab.parseTaxa((study.protocolo||{}).volumeCalda),
+    vazaoLHa:vazaoPadrao,
+    vazaoPendente:vazaoPendente,
     qid:(qid||null),
     origem:'estudo'
   };
@@ -10694,7 +10710,7 @@ function calcConfigLabCompleta(cfg){
   /* Reagente puro é 100% por definição e não tem "valor de rótulo"; os outros sem o
      valor da fonte dividiriam por zero e a receita sairia em silêncio, sem número. */
   if(cfg.doseModo==='ppm' && cfg.fonteTipo!=='puro' && !(window.BioCalculoLab.parseNum(cfg.fonteValor)>0)) return false;
-  if(cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) return false;
+  if(cfg.doseModo==='campo' && (cfg.vazaoPendente==null?!(cfg.vazaoLHa>0):cfg.vazaoPendente)) return false;
   return true;
 }
 
@@ -10703,7 +10719,7 @@ function calcConfigLabFaltando(cfg){
   var f=[];
   if(!cfg || !(cfg.volumeMl>0)) f.push('o volume do pote');
   if(cfg && cfg.doseModo==='ppm' && cfg.fonteTipo!=='puro' && !(window.BioCalculoLab.parseNum(cfg.fonteValor)>0)) f.push('o valor da fonte do produto');
-  if(cfg && cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) f.push('o volume de calda do protocolo (a dose é de campo)');
+  if(cfg && cfg.doseModo==='campo' && (cfg.vazaoPendente==null?!(cfg.vazaoLHa>0):cfg.vazaoPendente)) f.push('o volume de calda dos tratamentos por área (ou o padrão do protocolo)');
   return f;
 }
 
@@ -10745,7 +10761,7 @@ function calcMemoriaLab(study, cfg){
           var r=LB.calcCampo({dose:cp.valor,unidade:cp.unidade==='%'?'% v/v':cp.unidade,
             vazao:taxa,volumeMl:reg.volumePoteMl,pureza:cfg.pureza,densidade:cfg.densidade});
           reg.componentes.push(Object.assign({id:cp.id||null,itemId:cp.itemId||null,
-            loteRef:cp.loteRef||null,nome:cp.nome},r));
+            doseRef:cp.doseRef||null,loteRef:cp.loteRef||null,nome:cp.nome},r));
         });
       }
       var liquidos=0;
