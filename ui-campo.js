@@ -149,6 +149,17 @@
   }
   window.agToggleDrawer = abrirGaveta;
 
+  /* A CAMADA DE SOLO PRECISA CHAMAR ISTO DE FORA.
+     Ligar o mapa de solos é um pedido que demora: a imagem vem da Embrapa e
+     pode voltar como erro ("sem levantamento pedológico para esta área"). Quem
+     descobre isso é o app.js, depois que a gaveta já está na tela — e a linha
+     "Mapa de solos" só sabia do estado no instante em que a gaveta abriu. Sem
+     esta saída, a linha ficava contando a história de antes da resposta, e a
+     linha "Recortar pelas quadras" ficava clara como se houvesse camada para
+     recortar. (Havia quatro chamadas a um nome que nunca existiu —
+     `sincronizarGavetaSolo` — e o guarda `typeof` as transformava em silêncio.) */
+  window.agSincronizarGaveta = sincronizarGaveta;
+
   function sincronizarGaveta(){
     var r = $('agRowNdvi');
     if(r) r.classList.toggle('on', ligado());

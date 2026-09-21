@@ -160,7 +160,29 @@ ck(/openStudyEditAvaliacao\(id,null,false,parcela\|\|''\)/.test(ir),
 ck(/openNemAmostras/.test(ir)&&/openStudyEditAplicacao/.test(ir)&&/openStudyEditV2/.test(ir),
    'e cada família de pendência tem a sua porta');
 
-console.log('\n--- 8. Consulta não escreve no estudo ---');
+console.log('\n--- 8. A etiqueta da tarja tem de ser legível no tema em que o app abre ---');
+/* O azul #8fc0e8 foi escolhido contra o fundo escuro. O app abre no tema CLARO
+   (html.light), e ali ele dá 1,93:1 sobre o branco: o título ficava legível e a
+   etiqueta que diz o que a tarja É sumia. A irmã verde nunca teve esse problema
+   porque usa --gp-green, que o tema retokeniza. Medido no Chromium: 1,93 antes,
+   6,47 depois. */
+var css=fs.readFileSync('styles.css','utf8');
+function luz(hex){
+  var c=[1,3,5].map(function(i){ return parseInt(hex.substr(i,2),16)/255; })
+    .map(function(v){ return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); });
+  return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];
+}
+function razao(a,b){ var x=luz(a),y=luz(b),hi=Math.max(x,y),lo=Math.min(x,y);
+  return Math.round((hi+0.05)/(lo+0.05)*100)/100; }
+var claro=(css.match(/html\.light \.study-focus\.retomar span\{color:(#[0-9a-f]{6})\}/)||[])[1];
+ck(!!claro,'existe uma cor própria para a etiqueta no tema claro');
+ck(razao(claro,'#ffffff')>=4.5,
+   'e ela passa de 4,5:1 sobre o branco — texto de 8px não tem folga de tamanho ('+
+   razao(claro||'#ffffff','#ffffff')+':1)');
+var escuro=(css.match(/\.study-focus\.retomar span\{color:(#[0-9a-f]{6})\}/)||[])[1];
+ck(razao(escuro,'#151619')>=4.5,'e a do tema escuro continua passando sobre o fundo escuro');
+
+console.log('\n--- 9. Consulta não escreve no estudo ---');
 var antes=JSON.stringify(est);
 ctx._studyWorkflowHtml('Q1','S1',est);
 P.retomada(est,OPTS);

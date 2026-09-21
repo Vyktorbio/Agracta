@@ -1922,4 +1922,11 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
 .pend-item.pend-amostra{border-left-color:#c77f1a}
 .study-focus.retomar{border-color:rgba(111,168,220,.35);background:linear-gradient(100deg,rgba(111,168,220,.12),rgba(111,168,220,.03))}
 .study-focus.retomar span{color:#8fc0e8}
+/* O azul claro da tarja foi escolhido contra o fundo escuro. No tema claro — que
+   e o que o app abre por padrao — ele cai para 1,9:1 sobre o branco: a tarja fica
+   com o titulo legivel e a etiqueta que diz o que ela e, sumida. A irma verde nao
+   tem esse problema porque usa --gp-green, que o tema retokeniza. Aqui a cor e
+   fixa, entao a troca e explicita, no mesmo azul que o chip de clima ja usa no
+   claro (linha 54). */
+html.light .study-focus.retomar span{color:#2f6098}
 .study-focus.retomar button{border-color:#6fa8dc;background:#6fa8dc;color:#08131d}

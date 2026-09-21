@@ -556,6 +556,34 @@ ctx.toggleSoloLayer();
 eq(ctx.soloLayerAtiva(),false,'desligar remove a camada');
 ck(removidas.length>0,'e ela sai do mapa de verdade');
 
+console.log('\n--- A gaveta do mapa fica sabendo, e o índice continua por cima ---');
+/* DUAS COISAS QUE SÓ APARECEM COM A GAVETA ABERTA.
+   1. Ligar o mapa de solos é um pedido que demora e pode voltar como recusa.
+      Quem descobre isso é esta seção do app.js, depois que a gaveta já está na
+      tela. Ela chamava `sincronizarGavetaSolo` — um nome que não existia em
+      lugar nenhum — e o guarda `typeof` transformava as quatro chamadas em
+      silêncio: a linha "Mapa de solos" contava a história de antes da
+      resposta. O nome certo é o que a ui-campo.js exporta.
+   2. Índice e solo são imagem no mesmo painel e os dois se trazem para a
+      frente ao carregar. Como cada um recarrega sozinho depois de arrastar o
+      mapa, com os dois ligados ficava em cima quem a rede respondesse por
+      último. render() já declara a ordem para a cor da quadra — o índice
+      manda, porque ali a cor É uma medida — e a pilha passa a dizer o mesmo. */
+var fonteSolo=['soloCarregarMapa','soloLimpar','_soloMapaFalhou'].map(pega).join('\n');
+ck(fonteSolo.indexOf('sincronizarGavetaSolo')<0,
+   'nenhuma chamada sobrou para o nome que não existe');
+eq((fonteSolo.match(/agSincronizarGaveta\(\)/g)||[]).length,4,
+   'os quatro avisos (pedido, imagem pronta, falha e desligar) usam o nome que a ui-campo.js exporta');
+var uiCampo=fs.readFileSync('ui-campo.js','utf8');
+ck(/window\.agSincronizarGaveta\s*=\s*sincronizarGaveta/.test(uiCampo),
+   'e a ui-campo.js exporta mesmo esse nome — senão o guarda volta a calar');
+var carrega=pega('soloCarregarMapa');
+ck(/_soloLayer\.bringToFront\(\)/.test(carrega),'o solo sobe acima das quadras');
+ck(/ndviOverlay\.bringToFront\(\)/.test(carrega),
+   'mas o índice volta para cima do solo: a pilha não depende de quem respondeu primeiro');
+ck(carrega.indexOf('_soloLayer.bringToFront()')<carrega.indexOf('ndviOverlay.bringToFront()'),
+   'e nessa ordem — solo primeiro, índice por último');
+
 console.log('\n--- Índices derivados da análise ---');
 /* Definições universais de química de solo. São CALCULADOS e nunca digitados: um
    laudo pode trazer V% junto com Ca/Mg/K que não fecham, e aí haveria dois números
