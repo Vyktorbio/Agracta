@@ -8,7 +8,8 @@
       texto é uma função separada. Assim o resultado pode ser gravado no
       estudo, exportado ou conferido — o original só produzia string.
 
-   Convenções: volumes em mL, massas em mg, concentrações em ppm (mg/L).
+   Convenções: volumes em mL, massas em mg, concentração de i.a. em mg/L.
+   O nome legado ppm neste módulo representa mg/L, não mg/kg nem µL/L.
    Fonte do produto: 'gL' | 'gkg' | 'mae' | 'puro'. */
 (function(root,factory){
   var api=factory();
@@ -17,20 +18,44 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
-  /* Mesma regra do _calcNum do app.js: remove o ponto de MILHAR (ponto seguido de
-     exatamente 3 dígitos e um não-dígito/fim) antes de trocar a vírgula decimal. */
-  function parseNum(value){
+  /* Leitura integral: preserva 0.033 e notação científica. Em percentuais e
+     densidades, ponto e vírgula são decimais; nos demais campos aceita milhar BR. */
+  function parseNum(value,decimalOnly){
     if(value===null||value===undefined||value==="")return 0;
-    if(typeof value==="number")return isFinite(value)?value:0;
-    var s=String(value).replace(/\s/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"");
-    var n=Number.parseFloat(s.replace(",","."));
-    return Number.isFinite(n)?n:0;
+    if(typeof value==="number")return Number.isFinite(value)?value:NaN;
+    var s=String(value).trim().replace(/\s/g,"");
+    if(!decimalOnly && /^[+-]?[1-9]\d{0,2}(?:\.\d{3})+(?:,\d+)?$/.test(s))s=s.replace(/\./g,"");
+    if(!/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d+)?$/i.test(s))return NaN;
+    var n=Number(s.replace(",","."));
+    return Number.isFinite(n)?n:NaN;
   }
   /* Opcional: devolve o padrão quando o campo está vazio (pureza/densidade). */
   function parseOpt(value,def){
     if(value===null||value===undefined||String(value).trim()==="")return def;
-    var n=parseNum(value);
-    return Number.isFinite(n)&&n!==0?n:def;
+    return parseNum(value,true);
+  }
+  function resultadoFinito(out){
+    Object.keys(out).forEach(function(k){
+      if(typeof out[k]==='number'&&!Number.isFinite(out[k]))throw new Error('Os valores excedem o limite numérico do cálculo.');
+    });
+    return out;
+  }
+  function purezaValida(value){
+    var p=parseOpt(value,100);
+    if(!(p>0&&p<=100))throw new Error("A pureza deve ser maior que 0% e no máximo 100%.");
+    return p;
+  }
+  function densidadeValida(value,obrigatoria){
+    if(!informado(value)){
+      if(obrigatoria)throw new Error("Informe a densidade para converter massa em volume.");
+      return null;
+    }
+    var d=parseNum(value,true);
+    if(!(d>0))throw new Error("A densidade deve ser um número maior que zero.");
+    return d;
+  }
+  function parseTaxa(value){
+    return parseNum(typeof value==='string'?value.replace(/\s*L\s*\/\s*ha\s*$/i,''):value);
   }
   function informado(value){
     return value!==null&&value!==undefined&&String(value).trim()!=="";
@@ -55,6 +80,7 @@
     if(!Number.isFinite(Number(v)))return"-";
     var a=Math.abs(v);
     if(a===0)return"0";
+    if(a<0.000001)return Number(v).toExponential(4).replace('.',',');
     if(a>=100)return formatBR(v,1);
     if(a>=1)return formatBR(v,2);
     if(a>=0.01)return formatBR(v,4);
@@ -64,39 +90,47 @@
   /* Versao do motor. Vai gravada na memoria de calculo: sem ela, um numero guardado
      hoje nao teria como ser reconferido depois que a formula mudasse. Sobe sempre que
      o calculo mudar de RESULTADO. */
-  var VERSION="1.0.0";
+  var VERSION="1.1.0";
 
   var FONTES={
     gL:  {rotulo:"Rótulo (g/L)",        campo:"Valor do rótulo (g/L)"},
-    gkg: {rotulo:"Rótulo (g/kg)",       campo:"Valor do rótulo (g/kg)"},
-    mae: {rotulo:"Solução-mãe (ppm)",   campo:"Concentração da solução-mãe (ppm)"},
+    gkg: {rotulo:"Rótulo (g/kg) — pesar",campo:"Valor do rótulo (g/kg)"},
+    mae: {rotulo:"Solução-mãe (mg/L)",  campo:"Concentração da solução-mãe (mg/L)"},
     puro:{rotulo:"Reagente puro (100%)",campo:""}
   };
 
-  /* Concentração da FONTE em ppm (mg/L). Pó puro = 1.000.000 ppm.
+  /* Concentração volumétrica da fonte em mg/L. Reagente sólido não tem
+     concentração volumétrica sem um preparo: retorna null e calcula por massa.
      Valor em branco ou zero é ERRO, não zero: sem isso a divisão pela
      concentração da fonte dá Infinity e a receita sai em silêncio, sem número. */
   function fontePpm(tipo,valor,densidade){
-    var d=parseOpt(densidade,1);
-    if(tipo==="puro")return 1000000;
+    var d=densidadeValida(densidade,tipo==='gkg');
+    if(tipo==="puro")return null;
     if(tipo!=="gL"&&tipo!=="gkg"&&tipo!=="mae")throw new Error("Fonte do produto não reconhecida.");
     var v=parseNum(valor);
     if(!(v>0))throw new Error(tipo==="mae"
       ? "Informe a concentração da solução-mãe (ppm)."
       : "Informe o valor do rótulo do produto ("+(tipo==="gkg"?"g/kg":"g/L")+").");
+    if(tipo==='gkg'&&v>1000)throw new Error("O teor em g/kg não pode superar 1000.");
     if(tipo==="gL") return v*1000;
     if(tipo==="gkg")return v*d*1000;
     return v;
   }
   function concToPpm(valor,unidade,densidade){
-    var d=parseOpt(densidade,1), v=parseNum(valor);
-    if(unidade==="ppm")return v;
-    if(unidade==="%")return v*10000;
+    var v=parseNum(valor,unidade==='%'||unidade==='% m/v');
+    if(unidade==="ppm"||unidade==="mg/L")return v;
+    if(unidade==="%"||unidade==="% m/v")return v*10000;
     if(unidade==="g/L"||unidade==="mg/mL")return v*1000;
-    if(unidade==="g/kg")return v*d*1000;
+    if(unidade==="g/kg"){
+      if(!(v>0&&v<=1000))throw new Error("O teor em g/kg deve estar entre 0 e 1000.");
+      return v*densidadeValida(densidade,true)*1000;
+    }
     return NaN;
   }
-  function volToMl(v,u){ return u==="L"?parseNum(v)*1000:parseNum(v); }
+  function volToMl(v,u){
+    if(u!=="L"&&u!=="mL")throw new Error("Use mL ou L para o volume final.");
+    return u==="L"?parseNum(v)*1000:parseNum(v);
+  }
 
   /* ---------------------------------------------------------- avisos --- */
   /* Volume de pipetagem: abaixo de ~10 µL o erro relativo domina o ensaio. */
@@ -120,6 +154,7 @@
     var uL=mL*1000;
     if(!(uL>0)||uL>=20)return null;
     var fator=Math.pow(10,Math.ceil(Math.log10(20/uL)));
+    if(!Number.isFinite(fator)||mL*fator>volumeFinalMl)return null;
     return{
       fator:fator,
       /* como preparar a mãe: 1 parte de produto em `fator` partes de solução */
@@ -136,19 +171,23 @@
     input=input||{};
     var alvoPpm=parseNum(input.alvoPpm), volumeMl=parseNum(input.volumeMl);
     var tipo=input.fonteTipo||"gL";
-    var pureza=parseOpt(input.pureza,100), dens=parseOpt(input.densidade,1);
+    var pureza=purezaValida(input.pureza), dens=densidadeValida(input.densidade,false);
     if(!(alvoPpm>0))throw new Error("A concentração alvo (ppm) deve ser maior que zero.");
     if(!(volumeMl>0))throw new Error("O volume final deve ser maior que zero.");
     if(!(pureza>0))throw new Error("A pureza deve ser maior que 0%.");
-    var conc=fontePpm(tipo,input.fonteValor,input.densidade);
+    var teor=tipo==='gkg'?parseNum(input.fonteValor):null;
+    if(tipo==='gkg'&&!(teor>0&&teor<=1000))throw new Error("Informe o teor do produto em g/kg, maior que zero e no máximo 1000.");
+    var conc=tipo==='gkg'?(dens===null?null:fontePpm(tipo,input.fonteValor,dens)):fontePpm(tipo,input.fonteValor,dens);
     var out={
       modo:"ppm", alvoPpm:alvoPpm, volumeMl:volumeMl,
       fonteTipo:tipo, fonteRotulo:FONTES[tipo]?FONTES[tipo].rotulo:tipo,
       fontePpm:conc, pureza:pureza, densidade:dens,
       avisos:[], sugestaoMae:null
     };
-    if(tipo==="puro"){
-      var mg=alvoPpm*(volumeMl/1000)/(pureza/100);
+    if(tipo!=="puro"&&pureza!==100)out.avisos.push({nivel:"medio",msg:"O teor declarado da fonte já define a quantidade de ingrediente ativo; a pureza adicional só se aplica ao reagente puro."});
+    if(tipo==="puro"||tipo==="gkg"){
+      var mg=alvoPpm*(volumeMl/1000)/(tipo==='puro'?pureza/100:teor/1000);
+      if(tipo==='gkg'){ out.fonteValor=teor; out.fonteUnidade='g/kg'; }
       out.acao="pesar"; out.massaMg=mg; out.solventeMl=volumeMl;
       var am=alertaMassa(mg); if(am)out.avisos.push(am);
     }else{
@@ -158,21 +197,21 @@
       var solv=volumeMl-vp;
       if(solv<0){
         out.impossivel=true; out.solventeMl=0;
-        out.avisos.push({nivel:"critico",msg:"O volume de produto ("+fmtVivo(vp)+" mL) excede o volume final. Reduza a concentração alvo ou aumente o volume."});
+        out.avisos.push({nivel:"critico",msg:"A concentração alvo excede a fonte e não pode ser obtida por diluição. Use uma fonte mais concentrada ou reduza a concentração alvo."});
       }else{
         out.solventeMl=solv;
       }
       var ap=alertaPipeta(vp); if(ap)out.avisos.push(ap);
       out.sugestaoMae=sugereMae(vp,volumeMl);
     }
-    return out;
+    return resultadoFinito(out);
   }
 
   /* PPM inverso: "tenho esta quantidade — que volume final consigo?" */
   function calcPPMInverso(input){
     input=input||{};
     var alvoPpm=parseNum(input.alvoPpm), disp=parseNum(input.disponivel);
-    var tipo=input.fonteTipo||"puro", pureza=parseOpt(input.pureza,100);
+    var tipo=input.fonteTipo||"puro", pureza=purezaValida(input.pureza);
     if(!(alvoPpm>0))throw new Error("A concentração alvo (ppm) deve ser maior que zero.");
     if(!(disp>0))throw new Error("Informe a quantidade disponível.");
     if(!(pureza>0))throw new Error("A pureza deve ser maior que 0%.");
@@ -191,36 +230,42 @@
       out.volumeFinalMl=(mg/alvoPpm)*1000;
       var ap=alertaPipeta(disp); if(ap)out.avisos.push(ap);
     }
-    return out;
+    return resultadoFinito(out);
   }
 
   /* ================================================ CAMPO -> BANCADA ===
      Converte a dose de campo (com a vazão) na receita do pote do lab. */
   function calcCampo(input){
     input=input||{};
-    var dose=parseNum(input.dose), unidade=input.unidade||"mL/ha";
-    var vazao=parseNum(input.vazao), volumeMl=parseNum(input.volumeMl);
+    var unidade=input.unidade||"mL/ha";
+    if(['mL/ha','L/ha','g/ha','kg/ha','% v/v'].indexOf(unidade)<0)throw new Error("Unidade da dose não reconhecida: "+unidade+".");
+    var dose=parseNum(input.dose,unidade==='% v/v');
+    var vazao=parseTaxa(input.vazao), volumeMl=parseNum(input.volumeMl);
     var base=input.base||"formulado";
-    var pureza=parseOpt(input.pureza,100);
-    var densDada=informado(input.densidade), dens=parseOpt(input.densidade,1);
+    var pureza=purezaValida(input.pureza);
+    var densDada=informado(input.densidade), dens=densidadeValida(input.densidade,false);
     if(!(dose>0))throw new Error("A dose deve ser maior que zero.");
     if(!(volumeMl>0))throw new Error("O volume do pote deve ser maior que zero.");
     if(!(pureza>0))throw new Error("A pureza deve ser maior que 0%.");
-    if(!(dens>0))throw new Error("A densidade deve ser maior que zero.");
+    if(base!=='formulado'&&base!=='ia')throw new Error("Base da dose não reconhecida.");
 
     var out={modo:"campo",dose:dose,unidade:unidade,volumeMl:volumeMl,
       base:base,pureza:pureza,densidade:dens,avisos:[],sugestaoMae:null};
+    if(pureza!==100)out.avisos.push({nivel:"medio",msg:"A dose de produto formulado usa o teor declarado, sem correção adicional de pureza. Para reagente puro, use o preparo por concentração."});
+    pureza=100;
 
     /* % v/v não depende de vazão: é proporção direta na calda */
     if(unidade==="% v/v"){
       if(base!=="formulado")throw new Error('A unidade % v/v vale para produto formulado.');
+      if(dose>100)throw new Error("A concentração em % v/v não pode superar 100%.");
       var q=volumeMl*(dose/100);
       out.acao="pipetar"; out.produtoMl=q; out.produtoUl=q*1000;
       out.solventeMl=Math.max(0,volumeMl-q);
       out.concentracaoPct=dose; out.concentracaoBase="v/v";
+      out.concentracaoPpm=dose*10000; out.concentracaoUnidade='µL/L de produto';
       var a1=alertaPipeta(q); if(a1)out.avisos.push(a1);
       out.sugestaoMae=sugereMae(q,volumeMl);
-      return out;
+      return resultadoFinito(out);
     }
     if(!(vazao>0))throw new Error("Informe a vazão (L/ha) maior que zero.");
     out.vazao=vazao;
@@ -234,7 +279,10 @@
       if(!(unidade==="g/ha"||unidade==="kg/ha"))throw new Error("Quando a dose é em i.a., use g/ha ou kg/ha.");
       var dg0=unidade==="kg/ha"?dose*1000:dose;
       if(iaU==="g/L"||iaU==="mg/mL"){ df=dg0/val; uf="L/ha"; }
-      else if(iaU==="g/kg"){ df=dg0/val; uf="kg/ha"; }
+      else if(iaU==="g/kg"){
+        if(val>1000)throw new Error("O teor em g/kg não pode superar 1000.");
+        df=dg0/val; uf="kg/ha";
+      }
       else throw new Error("Unidade de i.a. não reconhecida.");
       out.iaValor=val; out.iaUnid=iaU;
     }
@@ -254,6 +302,7 @@
     }
     out.concentracaoPct=cr*100;
     out.concentracaoPpm=cr*1000000; /* 1 mL/mL = 1e6 ppm em base v/v */
+    out.concentracaoUnidade=out.concentracaoBase==='v/v'?'µL/L de produto':'mg/L de produto';
     out.acao=acao;
 
     if(acao==="pesar"){
@@ -274,7 +323,7 @@
       var ap2=alertaPipeta(vc); if(ap2)out.avisos.push(ap2);
       out.sugestaoMae=sugereMae(vc,volumeMl);
     }
-    return out;
+    return resultadoFinito(out);
   }
 
   /* ==================================================== AJUSTE DE i.a. ===
@@ -283,75 +332,65 @@
     input=input||{};
     var oU=input.origemUnid||"g/L", aU=input.alvoUnid||"g/L";
     var volU=input.volumeUnid||"mL", volFinal=parseNum(input.volumeFinal);
-    var densDada=informado(input.densidade), dens=parseOpt(input.densidade,1);
+    var dens=densidadeValida(input.densidade,false);
+    var densAlvo=densidadeValida(input.densidadeAlvo,false);
     if(!(parseNum(input.origemValor)>0)||!(parseNum(input.alvoValor)>0))throw new Error("Informe as concentrações de origem e alvo.");
     if(!(volFinal>0))throw new Error("O volume final deve ser maior que zero.");
-    if((oU==="g/kg"||aU==="g/kg")&&!densDada)throw new Error("Para g/kg, informe a densidade do produto.");
+    if(oU==="g/kg"&&dens===null)throw new Error("Para origem em g/kg, informe a densidade do produto.");
+    if(aU==="g/kg"&&densAlvo===null)throw new Error("Para alvo em g/kg, informe a densidade da solução final; a densidade do produto não a substitui.");
     var op=concToPpm(input.origemValor,oU,input.densidade);
-    var ap=concToPpm(input.alvoValor,aU,input.densidade);
+    var ap=concToPpm(input.alvoValor,aU,input.densidadeAlvo);
     if(!Number.isFinite(op)||!Number.isFinite(ap))throw new Error("Não foi possível converter as unidades.");
     if(ap>=op)throw new Error("A concentração desejada precisa ser menor que a atual.");
     var vfml=volToMl(volFinal,volU), pm=(ap*vfml)/op;
     var out={modo:"ia",origemPpm:op,alvoPpm:ap,
       volumeFinal:volFinal,volumeUnid:volU,volumeFinalMl:vfml,
-      densidade:dens,acao:"pipetar",produtoMl:pm,produtoUl:pm*1000,
+      densidade:dens,densidadeAlvo:densAlvo,acao:"pipetar",produtoMl:pm,produtoUl:pm*1000,
       solventeMl:Math.max(0,vfml-pm),
       fatorDiluicao:op/ap,avisos:[]};
     var a=alertaPipeta(pm); if(a)out.avisos.push(a);
     out.sugestaoMae=sugereMae(pm,vfml);
-    return out;
+    return resultadoFinito(out);
   }
 
   /* ========================================================== SÉRIE ===
      Série de doses (curva), cada uma no mesmo volume. */
   function parseListaDoses(str){
-    var s=String(str||"");
+    var s=String(str||"").trim();
     var itens=s.indexOf(";")>=0?s.split(";"):s.split(/\s+/);
-    var nums=itens.map(function(x){ return parseNum(x.trim()); }).filter(function(n){ return Number.isFinite(n)&&n>0; });
-    if(!nums.length)throw new Error("Nenhuma dose válida. Separe por ponto-e-vírgula (;).");
+    var nums=itens.map(function(x){ return parseNum(x.trim()); });
+    if(!nums.length||nums.some(function(n){return !(n>0);}))throw new Error("Toda dose deve ser um número maior que zero. Separe por ponto-e-vírgula (;).");
     return nums;
   }
   function gerarSerieAuto(topo,fator,n){
-    topo=parseNum(topo); fator=parseNum(fator); n=Math.round(parseNum(n));
+    topo=parseNum(topo); fator=parseNum(fator); n=parseNum(n);
     if(!(topo>0))throw new Error("A dose de topo deve ser maior que zero.");
     if(!(fator>1))throw new Error("O fator de diluição deve ser maior que 1.");
-    if(!(n>0))throw new Error("Informe o número de doses.");
+    if(!(Number.isInteger(n)&&n>0&&n<=1000))throw new Error("Informe um número inteiro de doses entre 1 e 1000.");
     var d=[],v=topo;
-    for(var i=0;i<n;i++){ d.push(round(v,8)); v/=fator; }
+    for(var i=0;i<n;i++){
+      if(!(v>0))throw new Error("A série excede a precisão numérica. Reduza o fator ou o número de doses.");
+      d.push(v); v/=fator;
+    }
     return d;
   }
   function calcSerie(input){
     input=input||{};
-    var volumeMl=parseNum(input.volumeMl), tipo=input.fonteTipo||"gL";
-    var pureza=parseOpt(input.pureza,100), dens=parseOpt(input.densidade,1);
-    var doses=(input.doses||[]).map(parseNum).filter(function(n){return n>0;});
-    if(!(volumeMl>0))throw new Error("O volume por dose deve ser maior que zero.");
-    if(!(pureza>0))throw new Error("A pureza deve ser maior que 0%.");
-    if(!doses.length)throw new Error("Informe ao menos uma dose.");
-    var conc=fontePpm(tipo,input.fonteValor,input.densidade);
-    doses.sort(function(a,b){ return b-a; });
-    var puro=(tipo==="puro"), linhas=[], avisos=[];
+    var doses=(input.doses||[]).map(function(v){return parseNum(v);});
+    if(!doses.length||doses.some(function(v){return !(v>0);}))throw new Error("Informe doses válidas, todas maiores que zero.");
+    doses.sort(function(a,b){return b-a;});
+    var linhas=[],avisos=[];
     doses.forEach(function(ppm,i){
-      var L={ordem:i+1,ppm:ppm,avisos:[]};
-      if(puro){
-        var mg=(ppm*(volumeMl/1000))/(pureza/100);
-        L.acao="pesar"; L.massaMg=mg; L.solventeMl=volumeMl;
-        var am=alertaMassa(mg); if(am){ L.avisos.push(am); avisos.push({ppm:ppm,aviso:am}); }
-      }else{
-        var vp=(ppm*volumeMl)/conc;
-        L.acao="pipetar"; L.produtoMl=vp; L.produtoUl=vp*1000;
-        if(vp>volumeMl){ L.impossivel=true; L.solventeMl=0;
-          var im={nivel:"critico",msg:"volume de produto maior que o volume final"};
-          L.avisos.push(im); avisos.push({ppm:ppm,aviso:im});
-        } else { L.solventeMl=volumeMl-vp; }
-        var ap=alertaPipeta(vp); if(ap){ L.avisos.push(ap); avisos.push({ppm:ppm,aviso:ap}); }
-        L.sugestaoMae=sugereMae(vp,volumeMl);
-      }
-      linhas.push(L);
+      var r=calcPPM(Object.assign({},input,{alvoPpm:ppm}));
+      r.ordem=i+1; r.ppm=ppm;
+      r.avisos.forEach(function(a){avisos.push({ppm:ppm,aviso:a});});
+      linhas.push(r);
     });
-    return{modo:"serie",volumeMl:volumeMl,fonteTipo:tipo,
-      fonteRotulo:FONTES[tipo]?FONTES[tipo].rotulo:tipo,fontePpm:conc,
-      pureza:pureza,densidade:dens,testemunha:!!input.testemunha,
+    var primeiro=linhas[0];
+    return {modo:'serie',volumeMl:primeiro.volumeMl,fonteTipo:primeiro.fonteTipo,
+      fonteRotulo:primeiro.fonteRotulo,fontePpm:primeiro.fontePpm,
+      fonteValor:primeiro.fonteValor,fonteUnidade:primeiro.fonteUnidade,
+      pureza:primeiro.pureza,densidade:primeiro.densidade,testemunha:!!input.testemunha,
       linhas:linhas,avisos:avisos};
   }
 
@@ -359,6 +398,7 @@
      Relatório de texto para copiar/colar (o objeto continua disponível). */
   function formatar(r,contexto){
     if(!r)return"";
+    if(r.impossivel)return "PREPARO INVIÁVEL\n"+(r.avisos||[]).map(function(a){return a.msg;}).join("\n");
     var L=[],reg="--------------------------------------------------";
     function cab(t){ L.push(reg); L.push(t); if(contexto&&contexto.titulo)L.push(contexto.titulo); if(contexto&&contexto.data)L.push("Data: "+contexto.data); L.push(reg); }
     function passos(){ L.push(">>> COMO PREPARAR:"); }
@@ -371,9 +411,9 @@
 
     if(r.modo==="ppm"){
       cab("PREPARO POR CONCENTRAÇÃO (PPM)");
-      L.push("Fonte: "+r.fonteRotulo+(r.fonteTipo!=="puro"?" — "+fmtVivo(r.fontePpm)+" ppm":""));
-      L.push("Meta: "+fmtVivo(r.volumeMl)+" mL a "+fmtVivo(r.alvoPpm)+" ppm");
-      if(r.pureza!==100)L.push("Pureza: "+fmtVivo(r.pureza)+"%");
+      L.push("Fonte: "+r.fonteRotulo+(r.fonteTipo==="gkg"?" — "+fmtVivo(r.fonteValor)+" g/kg":r.fonteTipo!=="puro"?" — "+fmtVivo(r.fontePpm)+" mg/L":""));
+      L.push("Meta: "+fmtVivo(r.volumeMl)+" mL a "+fmtVivo(r.alvoPpm)+" mg/L (concentração de i.a.)");
+      if(r.fonteTipo==="puro"&&r.pureza!==100)L.push("Pureza: "+fmtVivo(r.pureza)+"%");
       L.push(reg); passos();
       if(r.acao==="pesar"){
         L.push("1. PESAR "+fmtVivo(r.massaMg)+" mg"+(r.pureza!==100?" (já corrigido para a pureza)":""));
@@ -393,7 +433,7 @@
         L.push("1. USAR a massa disponível: "+fmtVivo(r.usarMassaMg)+" mg");
         if(r.pureza!==100)L.push("   massa efetiva de i.a.: "+fmtVivo(r.massaEfetivaMg)+" mg");
       }else{
-        L.push("1. PIPETAR "+fmtVivo(r.usarVolumeMl)+" mL da solução-mãe ("+fmtVivo(r.maePpm)+" ppm)");
+        L.push("1. PIPETAR "+fmtVivo(r.usarVolumeMl)+" mL da solução-mãe ("+fmtVivo(r.maePpm)+" mg/L"+")");
       }
       L.push("2. COMPLETAR com solvente até "+fmtVivo(r.volumeFinalMl)+" mL");
       avisos(r.avisos);
@@ -402,8 +442,8 @@
       cab("CAMPO -> BANCADA");
       L.push("Dose de campo: "+fmtVivo(r.dose)+" "+r.unidade+(r.vazao?" | vazão "+fmtVivo(r.vazao)+" L/ha":""));
       if(r.base==="ia")L.push("Dose em i.a. ("+fmtVivo(r.iaValor)+" "+r.iaUnid+") -> "+fmtVivo(r.formuladoEquiv)+" "+r.formuladoUnid+" de formulado");
-      L.push("Concentração da calda: "+fmtVivo(r.concentracaoPct)+" % "+r.concentracaoBase+" (~"+fmtVivo(r.concentracaoPpm)+" ppm)");
-      if(r.pureza!==100)L.push("Pureza: "+fmtVivo(r.pureza)+"%");
+      L.push("Concentração da calda: "+fmtVivo(r.concentracaoPct)+" % "+r.concentracaoBase+" (~"+fmtVivo(r.concentracaoPpm)+" "+r.concentracaoUnidade+")");
+      if(r.fonteTipo==="puro"&&r.pureza!==100)L.push("Pureza: "+fmtVivo(r.pureza)+"%");
       L.push(reg);
       L.push(">>> PARA "+fmtVivo(r.volumeMl)+" mL NO POTE:");
       if(r.acao==="pesar"){
@@ -429,20 +469,21 @@
       if(contexto&&contexto.titulo)L.push(contexto.titulo);
       if(contexto&&contexto.data)L.push("Data: "+contexto.data);
       L.push("==================================================");
-      L.push("Fonte: "+r.fonteRotulo+(r.fonteTipo!=="puro"?" — "+fmtVivo(r.fontePpm)+" ppm":""));
+      L.push("Fonte: "+r.fonteRotulo+(r.fonteTipo==="gkg"?" — "+fmtVivo(r.fonteValor)+" g/kg":r.fonteTipo!=="puro"?" — "+fmtVivo(r.fontePpm)+" mg/L":""));
       L.push("Volume por dose: "+fmtVivo(r.volumeMl)+" mL");
       L.push("Nº de doses: "+r.linhas.length+(r.testemunha?" + testemunha":""));
-      if(r.pureza!==100)L.push("Pureza: "+fmtVivo(r.pureza)+"%");
+      if(r.fonteTipo==="puro"&&r.pureza!==100)L.push("Pureza: "+fmtVivo(r.pureza)+"%");
       L.push("==================================================");
       L.push("");
-      var puro=(r.fonteTipo==="puro");
-      var head=puro?"  ppm          | pesar (mg)   | solvente (mL)"
-                   :"  ppm          | produto (µL) | solvente (mL)";
+      var puro=(r.fonteTipo==="puro"||r.fonteTipo==="gkg");
+      var head=puro?"  mg/L (ppm)   | pesar (mg)   | completar até (mL)"
+                   :"  mg/L (ppm)   | produto (µL) | completar até (mL)";
       L.push(head); L.push("  "+new Array(head.trim().length+1).join("-"));
       r.linhas.forEach(function(x){
+        if(x.impossivel){L.push("  "+fmtVivo(x.ppm)+" mg/L: PREPARO INVIÁVEL");return;}
         var c1=String(fmtVivo(x.ppm)); while(c1.length<13)c1+=" ";
         var c2=String(puro?fmtVivo(x.massaMg):fmtVivo(x.produtoUl)); while(c2.length<13)c2+=" ";
-        L.push("  "+c1+"| "+c2+"| "+fmtVivo(x.solventeMl));
+        L.push("  "+c1+"| "+c2+"| "+fmtVivo(r.volumeMl));
       });
       if(r.testemunha)L.push("  0 (testem.)  |  —           | "+fmtVivo(r.volumeMl));
       if(r.avisos.length){
@@ -457,7 +498,7 @@
   return{
     VERSION:VERSION,
     FONTES:FONTES,
-    parseNum:parseNum, parseOpt:parseOpt, formatBR:formatBR, fmtVivo:fmtVivo, round:round,
+    parseNum:parseNum, parseOpt:parseOpt, parseTaxa:parseTaxa, formatBR:formatBR, fmtVivo:fmtVivo, round:round,
     fontePpm:fontePpm, concToPpm:concToPpm, volToMl:volToMl,
     alertaPipeta:alertaPipeta, alertaMassa:alertaMassa, sugereMae:sugereMae,
     calcPPM:calcPPM, calcPPMInverso:calcPPMInverso, calcCampo:calcCampo,

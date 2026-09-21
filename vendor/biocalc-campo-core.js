@@ -29,6 +29,27 @@
     return Math.round((value+Number.EPSILON)*factor)/factor;
   }
 
+  /* Só campos realmente ausentes recebem padrão. Zero, negativo, fração de
+     frasco e texto inválido precisam ser corrigidos, nunca arredondados. */
+  function recipeInput(input){
+    var out=Object.assign({},input||{});
+    var fields=[['sprayVolume','volume de calda',null,true],
+      ['plotLength','comprimento da parcela',null,true],['plotWidth','largura da parcela',null,true],
+      ['numPlots','número de parcelas',1,true],['numBottles','número de frascos',1,true],
+      ['deadVolumeMl','volume morto',0,false],['bottleCapacity','capacidade do frasco',0,true],
+      ['minimumOperatingMl','carga mínima inicial',0,false]];
+    fields.forEach(function(f){
+      var raw=out[f[0]],missing=raw==null||String(raw).trim()==='';
+      var n=missing&&f[2]!==null?f[2]:parseStrictNumber(raw,f[3]);
+      var positive=f[2]===null||f[2]===1;
+      if(!Number.isFinite(n)||(positive?n<=0:n<0))throw new Error('Confira '+f[1]+': informe um número '+(positive?'maior que zero':'igual ou maior que zero')+'.');
+      if(f[2]===1&&!Number.isInteger(n))throw new Error('O '+f[1]+' deve ser inteiro.');
+      out[f[0]]=n;
+    });
+    if(!Number.isFinite(out.plotLength*out.plotWidth*out.sprayVolume*out.numPlots+out.deadVolumeMl))throw new Error('Os valores excedem o limite numérico do cálculo.');
+    return out;
+  }
+
   /* Uma mesma unidade chega do protocolo de vários jeitos ("%", "%v/v",
      "% v/v", "ml/ha"). O núcleo trabalha com um identificador único para que
      uma grafia diferente nunca transforme adjuvante em dose por hectare. */
@@ -53,8 +74,12 @@
   }
 
   function calculateTreatment(input){
-    input=input||{};
-    var cfg=doseConfig(input.doseHa,input.doseUnit||"L/ha");
+    input=recipeInput(input);
+    var unit=normalizeDoseUnit(input.doseUnit||"L/ha");
+    if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(unit)<0)throw new Error('Unidade da dose não reconhecida.');
+    var dose=parseStrictNumber(input.doseHa,false);
+    if(!(dose>0))throw new Error('A dose deve ser um número maior que zero.');
+    var cfg=doseConfig(dose,unit);
     var sprayVolume=parseNum(input.sprayVolume);
     var plotLength=parseNum(input.plotLength);
     var plotWidth=parseNum(input.plotWidth);
@@ -108,6 +133,8 @@
       productUnit:cfg.productUnit,
       concentrationUnit:cfg.concentrationUnit,
       liquid:cfg.liquid,
+      liquidFits:!cfg.liquid||productTotal<=sprayTotalMl+1e-9,
+      canPrepare:(!cfg.liquid||productTotal<=sprayTotalMl+1e-9)&&(minBottles===0||numBottles>=minBottles),
       bottleCapacityOk:minBottles===0||numBottles>=minBottles,
       /* Este retorno nunca teve lista de avisos; o campo é próprio para não
          mudar a forma do objeto para quem já o consome. */
@@ -321,7 +348,7 @@
   }
 
   function calculateMixture(input){
-    input=input||{};
+    input=recipeInput(input);
     var comps=Array.isArray(input.components)?input.components:[];
     var sprayVolume=parseNum(input.sprayVolume);
     var plotLength=parseNum(input.plotLength);
@@ -468,7 +495,7 @@
   /* Versao do motor. Vai gravada na memoria de calculo de cada aplicacao: sem
      ela, um resultado guardado em 2026 nao teria como ser reconferido depois que
      a formula mudasse. Subir aqui sempre que o calculo mudar de resultado. */
-  var VERSION="1.2.1";
+  var VERSION="1.3.0";
 
   return{
     VERSION:VERSION,
