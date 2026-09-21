@@ -1,3 +1,94 @@
+AGRACTA — 13a publicacao                    21/09/2026
+=====================================================
+
+Leva: 4 arquivos de codigo + 1 motor novo + 2 de teste.
+  CODIGO:  app.js  styles.css  index.html  sw.js
+  MOTOR:   vendor/pendencias-core.js (novo)
+  TESTE:   test_pendencias.js  (novo)
+           test_retomar.js     (novo)
+  DOCS:    docs/ROADMAP.md
+
+O PROXY NAO PRECISA SUBIR. Nada mudou nele nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Duas telas que o app tinha pela metade — porque o dado que faltava para
+completa-las ja estava gravado, e ninguem estava usando.
+
+1) A CONFERENCIA ANTES DE FINALIZAR PASSOU A DIZER ONDE
+
+Na tela de finalizacao o checklist contava: "3 avaliacao(oes) sem lancamento",
+"5 valor(es) de parcela incompleto(s)". Contagem nao e endereco. Quem lia aquilo
+ia PROCURAR quais avaliacoes, em qual data, em qual parcela — e o app sabia as
+tres coisas o tempo todo.
+
+Agora cada pendencia e uma linha que LEVA AO REGISTRO DELA:
+
+  "2 parcelas sem avaliacao"      abre a avaliacao JA na parcela que falta
+  "Aplicacao sem horario"         abre aquela aplicacao
+  "Amostra sem identificacao"     abre a fila de amostras
+  "Testemunha nao definida"       abre o protocolo
+
+O numero da parcela e o da ESTACA — o do sorteio, o que esta escrito no campo.
+Sem randomizacao nao ha numero de campo, e a linha usa tratamento e repeticao em
+vez de inventar um.
+
+A PENDENCIA APONTA, NAO BLOQUEIA. Nenhuma delas impede finalizar: ensaio real
+fecha com buraco as vezes; o que nao pode e fechar sem ENXERGAR o buraco. E a
+mesma regra do aviso de frasco implausivel.
+
+E UMA LINHA POR REGISTRO, nunca uma por celula: 24 parcelas x 5 avaliacoes sao
+120 celulas, e listar as 120 seria a mesma coisa que nao listar nada.
+
+2) "CONTINUAR DE ONDE PAROU"
+
+Quem avalia 24 parcelas no sol para no meio: atende o telefone, almoca, volta.
+Ao reabrir o estudo, a faixa do topo dizia a "proxima melhor acao" — generica, do
+fluxo inteiro — e a pessoa ia procurar em qual avaliacao estava.
+
+Agora, quando ha leitura comecada e nao terminada, a faixa vira:
+
+  CONTINUE DE ONDE PAROU
+  Voce parou na avaliacao de 7 DAA
+  Faltam 2 parcelas — a proxima e a 23.        [ Retomar ]
+
+Um toque abre a avaliacao JA posicionada naquela parcela, pelo mesmo caminho do
+toque no croqui.
+
+TRES COISAS QUE ELA NAO FAZ, de proposito:
+  - nao aparece em estudo que ninguem tocou (prometer um lugar em que voce nunca
+    esteve e pior que nao dizer nada);
+  - nao aparece em estudo finalizado (seria apontar para uma porta trancada);
+  - quando ela aparece, a "proxima melhor acao" sai da frente — uma coisa por vez.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir um estudo com avaliacao pela metade: a faixa verde do topo deve virar
+   azul, dizendo em que avaliacao voce parou e qual a proxima parcela.
+2. Tocar em "Retomar": a avaliacao abre com o cursor JA naquela parcela.
+3. Terminar a avaliacao e reabrir o estudo: a faixa volta a ser a "proxima
+   melhor acao" de sempre.
+4. Na secao Finalizacao, com pendencias: cada linha e clicavel e leva ao
+   registro. Toque na de aplicacao sem horario e confira que abre a aplicacao
+   certa.
+5. Um estudo completo nao mostra lista nenhuma — mostra "Pronto para finalizar".
+
+
+TESTES
+------
+Duplo clique em  Conferir antes de publicar.command.
+
+  test_pendencias.js   38 verificacoes (novo — a lista e o alvo de cada linha)
+  test_retomar.js      26 verificacoes (novo — a retomada e a parcela certa)
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 12a publicacao                    21/09/2026
 =====================================================
 
