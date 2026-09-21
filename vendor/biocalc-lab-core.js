@@ -193,7 +193,6 @@
     }else{
       var vp=(alvoPpm*volumeMl)/conc;
       out.acao="pipetar"; out.produtoMl=vp; out.produtoUl=vp*1000;
-      if(tipo==="gkg"){ out.massaEquivMg=vp*dens*1000; }
       var solv=volumeMl-vp;
       if(solv<0){
         out.impossivel=true; out.solventeMl=0;
