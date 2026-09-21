@@ -22538,7 +22538,7 @@ function soloLimpar(){
   if(_soloObjURL){ try{ URL.revokeObjectURL(_soloObjURL); }catch(e){} _soloObjURL=null; }
   _soloCamadaMapa=null;
   try{ soloMapaLegendaEsconder(); }catch(e){}
-  try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
+  try{ if(typeof agSincronizarGaveta==='function') agSincronizarGaveta(); }catch(e){}
 }
 
 /* Liga/desliga o recorte. Se a camada está no mapa, redesenha na hora. */
@@ -22555,7 +22555,7 @@ function soloSetOpacidade(v){
 function _soloMapaFalhou(msg,seq){
   if(seq!==_soloMapaSeq)return;
   if(!_soloLayer){_soloMapaLigada=false;try{soloMapaLegendaEsconder();}catch(e){}}
-  try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
+  try{ if(typeof agSincronizarGaveta==='function') agSincronizarGaveta(); }catch(e){}
   try{ if(typeof _stxToast==='function') _stxToast('Solo: '+msg); }catch(e){}
 }
 function _soloMapaLegendaCss(){
@@ -22582,7 +22582,7 @@ function soloMapaLegendaMostrar(camada){
 function soloCarregarMapa(silencioso){
   if(!_map) initMap();
   _soloMapaLigada=true;
-  try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(e){}
+  try{ if(typeof agSincronizarGaveta==='function') agSincronizarGaveta(); }catch(e){}
   if(!silencioso){try{if(typeof _stxToast==='function')_stxToast('Carregando mapa de solos…');}catch(e){}}
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   var seq=++_soloMapaSeq;
@@ -22628,10 +22628,19 @@ function soloCarregarMapa(silencioso){
         _soloLayer=LF.imageOverlay(url,[[s,w],[n,e]],{opacity:_soloOpacidade,
                      attribution:'Solos © Embrapa GeoInfo'}).addTo(_map);
         _soloLayer.bringToFront();
+        /* ...MAS O ÍNDICE FICA POR CIMA DO SOLO. Os dois são imagem no mesmo
+           painel e os dois se trazem para a frente ao carregar; como cada um
+           recarrega sozinho depois de arrastar o mapa, com os dois ligados
+           quem ficava em cima era quem a rede respondesse por último — a
+           pilha trocava sem ninguém tocar em nada. A ordem passa a ser a
+           mesma que render() já declara para a cor da quadra: o índice manda,
+           porque ali a cor É uma medida do satélite; o solo é classificação e
+           vem logo abaixo. */
+        try{ if(ndviOverlay) ndviOverlay.bringToFront(); }catch(er){}
         if(url===bu) _soloObjURL=bu; else { try{ URL.revokeObjectURL(bu); }catch(er){} }
         try{ soloMapaLegendaMostrar(_soloCamadaMapa); }catch(er){}
         if(!silencioso){try{if(typeof _stxToast==='function')_stxToast('Camada de solo ligada');}catch(er){}}
-        try{ if(typeof sincronizarGavetaSolo==='function') sincronizarGavetaSolo(); }catch(er){}
+        try{ if(typeof agSincronizarGaveta==='function') agSincronizarGaveta(); }catch(er){}
       };
       img.src=bu;
     })
