@@ -109,11 +109,12 @@ lanca("dose em i.a. com unidade L/ha é recusada",
 lanca("vazão zero é recusada",
   () => Lab.calcCampo({ dose: 1, unidade: "L/ha", vazao: 0, volumeMl: 50 }));
 
-/* Pureza reduz o teor: para o mesmo alvo, é preciso MAIS produto. */
+/* A dose de formulado já se refere ao produto comercial; não se corrige duas vezes. */
 {
   const cheio = Lab.calcCampo({ dose: 1, unidade: "L/ha", vazao: 200, volumeMl: 50 });
   const meio  = Lab.calcCampo({ dose: 1, unidade: "L/ha", vazao: 200, volumeMl: 50, pureza: 50 });
-  quase("pureza 50% dobra o volume de produto", meio.produtoMl, cheio.produtoMl * 2, 1e-9);
+  quase("pureza não altera dose declarada de formulado", meio.produtoMl, cheio.produtoMl, 1e-9);
+  certo("explica que a correção se aplica ao reagente puro", meio.avisos.some(a => /pureza/.test(a.msg)));
 }
 
 /* ============================================================= PPM ===== */
@@ -298,15 +299,6 @@ S("Relatório de texto");
 {
   const fs = require("fs");
   const app = fs.readFileSync("app.js", "utf8");
-  /* A âncora é a CHAMADA, não a unidade que ela recebe: o fallback deixou de ser
-     lido do texto inteiro da dose e passou a ser o que o estudo declarou. */
-  const i = app.indexOf("_BC.parseComponents(t.produto, t.dose,");
-  certo("o laboratório lê os componentes do motor de campo", i > 0);
-  const j = app.indexOf("_comps.components.length>1", i);
-  const guarda = app.indexOf("_comps.semDose && _comps.semDose.length", i);
-  certo("e o guarda-corpo do pareamento desconhecido vem ANTES do ramo da mistura",
-        guarda > 0 && guarda < j,
-        "guarda em " + guarda + ", ramo da mistura em " + j);
 
   const mix = Campo.parseComponents("Azoxistrobina + Benzovindiflupir 300 SC", "0,5 L/ha", "");
   certo("com dois nomes e uma dose sobra um componente só", mix.components.length === 1);

@@ -9048,6 +9048,12 @@ function _labFonteSel(id,sel){
 }
 function _labRenderShell(){
   var ov=document.getElementById('calcLabOvl'); if(!ov) return;
+  ov._labDrafts=ov._labDrafts||{};
+  if(ov._labRenderKey){
+    var draft={};
+    ov.querySelectorAll('input,select').forEach(function(el){if(el.id&&el.id!=='labStudy')draft[el.id]=el.value;});
+    ov._labDrafts[ov._labRenderKey]=draft;
+  }
   var all=_labStudies(), d=_labDefs(), s=_labStudy();
   var selHtml='';
   if(all.length>1){
@@ -9061,6 +9067,7 @@ function _labRenderShell(){
      outra coisa: preparo de tanque, não tem a ver com os tratamentos deste estudo. */
   var _modo=(s&&s.doseModo==='ppm')?'ppm':'campo';
   if(_labTab!=='ia') _labTab=_modo;
+  var renderKey=(_labSel?_labSel.qid+'|'+_labSel.sid:'avulso')+'|'+_labTab;
   var T=[[_modo, _modo==='ppm'?'Receita do ensaio (ppm)':'Receita do ensaio (dose de campo)'],
          ['ia','Ajuste de i.a.']];
   var tabs='<div class="calclab-tabs">'+T.map(function(t){
@@ -9073,17 +9080,15 @@ function _labRenderShell(){
       '<div class="calc-grid">'+
       '<div class="calc-f"><span class="calc-lab">Volume do pote (mL)</span><input id="labVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Vazão padrão (L/ha)</span><input id="labVazao" class="calc-inp" inputmode="decimal" value="'+esc(String(_labVazaoDefault()))+'" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Densidade (g/mL)</span><input id="labDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
       '</div>';
   } else if(_labTab==='ppm'){
-    campos='<div class="calclab-src">Cada tratamento do estudo vira a receita do pote — a dose cadastrada É a concentração alvo em ppm. Os tratamentos já são a curva de doses.</div>'+
+    campos='<div class="calclab-src">Cada tratamento do estudo vira a receita do pote — a dose cadastrada É a concentração alvo em mg/L de ingrediente ativo (ppm neste módulo). Os tratamentos já são a curva de doses.</div>'+
       '<div class="calc-grid">'+
       '<div class="calc-f"><span class="calc-lab">Volume do pote (mL)</span><input id="labPpmVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f full"><span class="calc-lab">Fonte do produto</span>'+_labFonteSel('labPpmFonte',d.fonte)+'</div>'+
       '<div class="calc-f"><span class="calc-lab">Valor da fonte</span><input id="labPpmValor" class="calc-inp" inputmode="decimal" placeholder="340" value="'+esc(d.valor)+'" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Pureza (%)</span><input id="labPpmPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Densidade (g/mL)</span><input id="labPpmDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Pureza do reagente puro (%)</span><input id="labPpmPureza" class="calc-inp" inputmode="decimal" placeholder="100" value="'+esc(d.pureza)+'" oninput="_labCompute()"></div>'+
       '</div>';
   } else if(_labTab==='ia'){
     campos='<div class="calclab-src">Diluir um formulado concentrado até uma concentração menor (C1·V1 = C2·V2).</div>'+
@@ -9094,7 +9099,8 @@ function _labRenderShell(){
       '<div class="calc-f"><span class="calc-lab">Unidade</span>'+_labUnidSel('labIaAlvoU','g/L')+'</div>'+
       '<div class="calc-f"><span class="calc-lab">Volume final</span><input id="labIaVol" class="calc-inp" inputmode="decimal" value="'+esc(String(d.vol))+'" oninput="_labCompute()"></div>'+
       '<div class="calc-f"><span class="calc-lab">Unidade</span><select id="labIaVolU" class="calc-sel" onchange="_labCompute()"><option>mL</option><option>L</option></select></div>'+
-      '<div class="calc-f full"><span class="calc-lab">Densidade (g/mL) — obrigatória para g/kg</span><input id="labIaDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f full"><span class="calc-lab">Densidade do produto líquido (g/mL) — origem em g/kg</span><input id="labIaDens" class="calc-inp" inputmode="decimal" placeholder="1,00" value="'+esc(d.dens)+'" oninput="_labCompute()"></div>'+
+      '<div class="calc-f full"><span class="calc-lab">Densidade da solução final (g/mL) — alvo em g/kg</span><input id="labIaDensAlvo" class="calc-inp" inputmode="decimal" placeholder="Informe se o alvo for em g/kg" oninput="_labCompute()"></div>'+
       '</div>';
   }
 
@@ -9106,18 +9112,23 @@ function _labRenderShell(){
     '<div id="labOut" class="calclab-out">—</div>'+
     '<div class="calc-actions"><button class="calc-copy" onclick="_labCopiar()">Copiar</button><button class="calc-close" onclick="closeCalcLab()">Fechar</button></div>'+
     '</div>';
+  Object.keys(ov._labDrafts[renderKey]||{}).forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value=ov._labDrafts[renderKey][id];
+  });
+  ov._labRenderKey=renderKey;
   _labCompute();
 }
 function _labUnidSel(id,sel){
   return '<select id="'+id+'" class="calc-sel" onchange="_labCompute()">'+
-    ['g/L','mg/mL','g/kg','%','ppm'].map(function(u){ return '<option'+(u===sel?' selected':'')+'>'+u+'</option>'; }).join('')+'</select>';
+    ['g/L','mg/mL','g/kg','% m/v','mg/L','ppm'].map(function(u){ return '<option'+(u===sel?' selected':'')+'>'+u+'</option>'; }).join('')+'</select>';
 }
 /* Vazão padrão: a do protocolo; senão a do 1º tratamento que tenha uma. */
 function _labVazaoDefault(){
-  var s=_labStudy(); if(!s) return 100;
-  var pv=_calcNum((s.protocolo||{}).volumeCalda); if(pv>0) return pv;
-  var t=(s.tratamentos||[]).map(function(x){return _calcNum(x.volume);}).filter(function(n){return n>0;});
-  return t.length?t[0]:100;
+  var s=_labStudy(),LB=window.BioCalculoLab;if(!s)return '';
+  var raw=(s.protocolo||{}).volumeCalda;
+  if(raw!=null&&String(raw).trim()!=='')return raw;
+  var taxas=(s.tratamentos||[]).map(function(t){return LB.parseTaxa(t.volume);}).filter(function(v){return v>0;});
+  return taxas.length&&taxas.every(function(v){return v===taxas[0];})?taxas[0]:'';
 }
 /* Texto do último cálculo, para o botão Copiar */
 var _labTexto='';
@@ -9133,160 +9144,45 @@ function _labAvisosHtml(r){
   return h;
 }
 function _labCompute(){
-  var box=document.getElementById('labOut'); if(!box) return;
-  var LB=window.BioCalculoLab, s=_labStudy();
-  var F=function(v){ return LB.fmtVivo(v); };
+  var box=document.getElementById('labOut'); if(!box)return;
+  var LB=window.BioCalculoLab,s=_labStudy(),F=LB.fmtVivo;
   _labTexto='';
   try{
-    /* Receita do ensaio: um cartão por tratamento, em dose de campo ou em ppm.
-       É o mesmo laço nos dois casos — só muda a função do núcleo e o que o
-       cabeçalho do cartão anuncia. */
-    if(_labTab==='campo' || _labTab==='ppm'){
-      if(!s||!(s.tratamentos||[]).length){ box.innerHTML='<span style="color:#8aa88a">Estudo sem tratamentos cadastrados.</span>'; return; }
-      var _ppm=(_labTab==='ppm');
-      var vol=_calcNum(_labVal(_ppm?'labPpmVol':'labVol'));
-      var vazaoDef=_ppm?0:_calcNum(_labVal('labVazao'));
-      var pur=_labVal(_ppm?'labPpmPureza':'labPureza'), den=_labVal(_ppm?'labPpmDens':'labDens');
-      var fTipo=_ppm?_labVal('labPpmFonte'):'', fValor=_ppm?_labVal('labPpmValor'):'';
-      /* A BANCADA TAMBÉM PERGUNTA A UNIDADE. A dose daqui é dose de CAMPO
-         convertida para o pote, e chegava ao motor com a unidade adivinhada por
-         `_calcDoseUnit`, que devolve 'L/ha' para qualquer dose escrita só com
-         número. Entre L/ha e g/ha há mil vezes de diferença — e no pote isso é a
-         diferença entre pipetar e pesar. A calculadora de campo parou de chutar;
-         esta continuava chutando, com o mesmo estudo e a mesma dose.
-         Em ppm não há unidade por área a declarar: a dose É a concentração. */
-      if(!_ppm && doseUnidadePendente(s)){
-        box.innerHTML=calcUnidadeDosePendenteHtml(s,'labConfirmarUnidadeDose');
-        return;
-      }
-      var html='', txt=[];
-      (s.tratamentos||[]).forEach(function(t){
-        /* PREPARO NÃO INVENTA TESTEMUNHA. `studyTestemunha()` usa o primeiro
-           tratamento como recurso para a análise estatística de estudos antigos
-           sem marcação; aqui esse recurso mandava preparar "só solvente" no lugar
-           de T1 — um tratamento com dose declarada saía do pote como solvente
-           puro, sem nada na tela dizendo por quê. É a mesma correção que a
-           calculadora de campo recebeu; a bancada tinha ficado para trás. */
-        var _isWitness=!!t.testemunha;
-        var dose=_calcNum(t.dose);
-        /* A unidade que a dose escreveu ou que o estudo declarou — nunca a chutada. */
-        var _dunit=_ppm?'':doseUnidadeDe(s,t.dose);
-        var vazao=_ppm?0:(_calcNum(t.volume)||vazaoDef);
-        var sub=_ppm ? ((t.dose||'—')+' ppm') : ((t.dose||'—')+' · '+F(vazao)+' L/ha');
-        var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+'</span>'+
-                 '<span style="font-size:10px;color:#9fb1a5">'+esc(sub)+'</span></div>';
-        /* Testemunha COM dose é preparada. A tela dizia "só solvente" e a memória
-           gravada pela MESMA bancada preparava o produto: duas respostas para o
-           mesmo tratamento, e a que vai para a mão de quem prepara era a errada.
-           Quem não é testemunha e está sem dose cai no motor, que diz o que falta
-           em vez de devolver um pote de solvente calado. */
-        if(_isWitness && !(dose>0)){
-          html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>só solvente — '+F(vol)+' mL</b></div></div>';
-          txt.push(t.id+': só solvente, '+F(vol)+' mL'); return;
+    if(_labTab==='campo'||_labTab==='ppm'){
+      var ppm=_labTab==='ppm';
+      var purezaEl=document.getElementById(ppm?'labPpmPureza':'labPureza');
+      if(purezaEl)purezaEl.disabled=!ppm||_labVal('labPpmFonte')!=='puro';
+      var cfg={doseModo:_labTab,volumeMl:_labVal(ppm?'labPpmVol':'labVol'),
+        vazaoLHa:_labVal('labVazao'),pureza:ppm?_labVal('labPpmPureza'):'',
+        densidade:_labVal(ppm?'labPpmDens':'labDens'),
+        fonteTipo:ppm?_labVal('labPpmFonte'):'',fonteValor:ppm?_labVal('labPpmValor'):''};
+      var mem=calcMemoriaLab(s,cfg);
+      _labTexto=calcMemoriaLabTexto(mem);
+      if(mem.erro)throw new Error(mem.erro);
+      box.innerHTML=mem.tratamentos.map(function(t){
+        var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+
+          (t.testemunha?' (test.)':'')+'</span><span>'+esc(t.dose==null?'':t.dose)+(ppm?' mg/L':'')+'</span></div>';
+        var body='';
+        if(t.semPreparo)body='<div class="calc-kv"><span>Testemunha sem aplicação</span><b>não preparar</b></div>';
+        else if(t.erro)body='<div class="calc-terr">⚠ '+esc(t.erro)+'</div>';
+        else{
+          body=t.componentes.map(function(c){
+            return '<div class="calc-kv"><span>'+esc(c.nome)+' · '+(c.acao==='pesar'?'Pesar':'Pipetar')+'</span><b>'+
+              (c.acao==='pesar'?F(c.massaMg)+' mg':F(c.produtoUl)+' µL')+'</b></div>'+_labAvisosHtml(c);
+          }).join('');
+          body+='<div class="calc-kv"><span>'+esc(t.veiculo)+' · completar até</span><b>'+F(t.volumePoteMl)+' mL</b></div>';
         }
-        /* Sobra um caso que o portão acima não vê: a testemunha marcada que
-           carrega dose escrita só com o número. Ela não entra em
-           `doseUnidadePendente` (testemunha sem dose não tem o que calcular), e
-           daqui iria ao motor com a unidade chutada. Nada é calculado. */
-        if(!_ppm && !_dunit && doseSemUnidade(t.dose)){
-          html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ A dose "'+
-            esc(String(t.dose||'').trim())+'" está sem unidade e o estudo não declarou nenhuma. '+
-            'Nada é preparado enquanto isto não for resolvido: entre L/ha e g/ha há mil vezes de '+
-            'diferença, e no pote isso separa pipetar de pesar.</div></div>';
-          txt.push(t.id+' — sem unidade de dose: nada calculado.'); return;
-        }
-        /* MISTURA NA BANCADA. Antes daqui saía _calcNum(t.dose), que lê só o
-           primeiro número: "1,5 L + 0,2%" virava 1,5 e o adjuvante sumia calado.
-           E _calcDoseUnit não conhece "%" — toda porcentagem caía no `return
-           'L/ha'` do fim, então 0,2% era preparado como 0,2 L/ha.
-
-           O motor de laboratório JÁ sabe fazer "% v/v" (calcCampo trata a
-           unidade e nem pede vazão); só nunca era avisado. Agora cada componente
-           é lido com a sua base e preparado separado, e o solvente é o que sobra
-           depois de somar todos os líquidos — não o que sobra de um só. */
-        var _BC=window.BioCalculoCampo;
-        /* O que completa o componente escrito SEM unidade é o que o estudo
-           declarou. Ler a unidade do texto inteiro fazia o "0,2" de "1,5 L + 0,2"
-           herdar o litro do vizinho, num estudo declarado em g/ha. */
-        var _comps=(!_ppm && _BC) ? _BC.parseComponents(t.produto, t.dose, doseUnidadeDeclarada(s)||_dunit) : null;
-        /* PAREAMENTO DESCONHECIDO PARA AQUI, e este era o pior dos dois buracos.
-           Com "A + B" e uma dose só, sobra UM componente — e a condição abaixo,
-           que pede mais de um, deixava passar direto para o caminho de produto
-           único. Resultado: o pote era preparado com a dose inteira como se o
-           tratamento fosse um produto só, o segundo nome sumia da tela e NENHUM
-           aviso aparecia, porque os problemas do parse só eram pintados dentro
-           do ramo da mistura.
-
-           Não se adivinha qual dose é de qual produto. Diz-se o que falta. */
-        if(_comps && _comps.problems.length && _comps.semDose && _comps.semDose.length){
-          html+='<div class="calc-card">'+head+
-            '<div class="calc-terr">⚠ '+esc(_comps.problems.join(' '))+'</div>'+
-            '<div class="calc-warn">Escreva a dose de cada produto na mesma ordem do nome, separadas por " + ". '+
-            'Exemplo: «'+esc(t.produto||'A + B')+'» com «0,5 L/ha + 0,25 %».</div></div>';
-          txt.push(t.id+(t.produto?' · '+t.produto:'')+' — receita não calculada: '+_comps.problems.join(' '));
-          return;
-        }
-        if(_comps && _comps.components.length>1 || (_comps && _comps.components.length===1 && _comps.components[0].unidade==='%')){
-          var _linhas='', _somaMl=0, _errMix='';
-          _comps.components.forEach(function(cp){
-            if(_errMix) return;
-            try{
-              var rr=LB.calcCampo({dose:cp.valor, unidade:(cp.unidade==='%'?'% v/v':cp.unidade),
-                                   vazao:vazao, volumeMl:vol, pureza:pur, densidade:den});
-              var quanto = (rr.acao==='pesar') ? (F(rr.massaMg)+' mg')
-                                               : (F(rr.produtoUl)+' µL');
-              if(rr.acao!=='pesar') _somaMl += (rr.produtoMl||0);
-              _linhas+='<div class="calc-mixr"><span>'+esc(cp.nome)+'</span><span>'+
-                       F(cp.valor)+' '+esc(cp.unidade)+'</span><b>'+quanto+'</b><b>'+
-                       (rr.acao==='pesar'?'pesar':'pipetar')+'</b></div>';
-            }catch(e){ _errMix=e.message||String(e); }
-          });
-          if(_errMix){ html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ '+esc(_errMix)+'</div></div>'; return; }
-          var _solv=Math.max(0, vol-_somaMl);
-          var _veic=(t.veiculo||'Solvente');
-          html+='<div class="calc-card">'+head+
-            '<div class="calc-mix"><div class="calc-mixh"><span>Componente</span><span>Dose</span><span>Medir</span><span>Como</span></div>'+
-            _linhas+
-            '<div class="calc-mixr carrier"><span>'+esc(_veic)+'</span><span>completa</span><b>'+F(_solv)+' mL</b><b>—</b></div>'+
-            '</div>'+
-            (_comps.problems.length?('<div class="calc-warn">⚠ '+esc(_comps.problems.join(' ')) +'</div>'):'')+
-            (_somaMl>vol?('<div class="calc-warn">⚠ Os líquidos somam '+F(_somaMl)+' mL e o pote tem '+F(vol)+' mL.</div>'):'')+
-            '</div>';
-          txt.push(t.id+(t.produto?' · '+t.produto:'')+' — '+
-                   _comps.components.map(function(cp){return cp.nome+' '+F(cp.valor)+' '+cp.unidade;}).join(' + ')+
-                   ' + '+_veic+' até '+F(vol)+' mL');
-          return;
-        }
-        var r=null, err='';
-        try{
-          r=_ppm
-            ? LB.calcPPM({alvoPpm:dose, volumeMl:vol, fonteTipo:fTipo, fonteValor:fValor, pureza:pur, densidade:den})
-            : LB.calcCampo({dose:dose, unidade:_dunit, vazao:vazao, volumeMl:vol, pureza:pur, densidade:den});
-        }
-        catch(e){ err=e.message||String(e); }
-        if(err){ html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
-        var passo=(r.acao==='pesar')
-          ? '<div class="calc-kv"><span>Pesar</span><b>'+F(r.massaMg)+' mg</b><span>Completar até</span><b>'+F(r.volumeMl||vol)+' mL</b></div>'
-          : '<div class="calc-kv"><span>Pipetar</span><b>'+F(r.produtoUl)+' µL</b><span>Solvente</span><b>'+F(r.solventeMl)+' mL</b></div>';
-        var conc=_ppm
-          ? '<div class="calc-kv" style="margin-top:3px"><span>Alvo</span><b>'+F(r.alvoPpm)+' ppm</b><span>Fonte</span><b>'+esc(r.fonteRotulo||'')+'</b></div>'
-          : '<div class="calc-kv" style="margin-top:3px"><span>Concentração</span><b>'+F(r.concentracaoPct)+' % '+r.concentracaoBase+'</b><span>≈ ppm</span><b>'+F(r.concentracaoPpm)+'</b></div>';
-        html+='<div class="calc-card">'+head+passo+conc+_labAvisosHtml(r)+'</div>';
-        txt.push(LB.formatar(r,{titulo:t.id+(t.produto?' · '+t.produto:'')}));
-      });
-      box.innerHTML=html; _labTexto=txt.join('\n\n');
+        return '<div class="calc-card">'+head+body+'</div>';
+      }).join('');
       return;
     }
-    /* Ajuste de i.a.: ferramenta avulsa (preparo de tanque). Não olha os
-       tratamentos do estudo — por isso ficou separada da receita. */
-    var r2=LB.calcAjusteIA({origemValor:_labVal('labIaOrig'), origemUnid:_labVal('labIaOrigU'),
-      alvoValor:_labVal('labIaAlvo'), alvoUnid:_labVal('labIaAlvoU'),
-      volumeFinal:_labVal('labIaVol'), volumeUnid:_labVal('labIaVolU'), densidade:_labVal('labIaDens')});
-    _labTexto=LB.formatar(r2,{titulo:s?(s.codigo||s.nome||s.id):''});
-    box.innerHTML='<div style="white-space:pre-wrap">'+esc(_labTexto)+'</div>'+_labAvisosHtml(r2);
-  }catch(e){
-    box.innerHTML='<span style="color:#ff9a8a">⚠ '+esc(e.message||String(e))+'</span>';
-  }
+    var r=LB.calcAjusteIA({origemValor:_labVal('labIaOrig'),origemUnid:_labVal('labIaOrigU'),
+      alvoValor:_labVal('labIaAlvo'),alvoUnid:_labVal('labIaAlvoU'),
+      volumeFinal:_labVal('labIaVol'),volumeUnid:_labVal('labIaVolU'),
+      densidade:_labVal('labIaDens'),densidadeAlvo:_labVal('labIaDensAlvo')});
+    _labTexto=LB.formatar(r,{titulo:s?(s.codigo||s.nome||s.id):''});
+    box.innerHTML='<div style="white-space:pre-wrap">'+esc(_labTexto)+'</div>';
+  }catch(e){box.innerHTML='<div class="calc-terr">⚠ '+esc(e.message||String(e))+'</div>';}
 }
 /* ===================== §7.9 — O ESSENCIAL, E O RESTO ATRÁS DE UM BOTÃO ===========
    A tela despejava tudo de uma vez: dose escrita, dose relida na outra unidade, por
@@ -9322,7 +9218,7 @@ function _calcParcelaDefault(){
   return p || {comprimento:5, largura:3}; /* padrão 3×5 m (15 m²) — o mais usado; protocolo e valor salvo sobrepõem */
 }
 function _calcSalvarParcela(){
-  try{ var l=_calcNum(_calcVal('calcLen')), w=_calcNum(_calcVal('calcWid')); if(l>0&&w>0) localStorage.setItem('iracema-calc-parcela', l+'x'+w); }catch(e){}
+  try{ var BC=window.BioCalculoCampo,l=BC.parseStrictNumber(_calcVal('calcLen'),true),w=BC.parseStrictNumber(_calcVal('calcWid'),true); if(l>0&&w>0) localStorage.setItem('iracema-calc-parcela', l+'x'+w); }catch(e){}
 }
 /* ===================== MODO PREPARO ==========================================
    A calculadora tinha sete campos sempre abertos e todos os tratamentos
@@ -9661,13 +9557,10 @@ function calcConfirmarVolume(valor){
 }
 
 /* A pessoa declara a unidade da dose do estudo. Mesma forma da confirmação de
-   volume: escolha explícita, registrada na auditoria, e nada é calculado antes.
-   O ato é UM SÓ — a unidade mora no estudo, não na tela que perguntou. Campo e
-   bancada só diferem no que redesenham depois; duas telas que mexem no mesmo
-   dado não podem ter doutrinas diferentes. */
-function _doseUnidadeDeclarar(st,u){
-  if(!st) return false;
-  if(doseUnidades().indexOf(u)<0) return false;
+   volume: escolha explícita, registrada na auditoria, e nada é calculado antes. */
+function calcConfirmarUnidadeDose(u){
+  var st=_calcStudy(); if(!st) return;
+  if(doseUnidades().indexOf(u)<0) return;
   var antes=st.doseUnidade||'(não declarada)';
   st.doseUnidade=u;
   try{
@@ -9679,26 +9572,15 @@ function _doseUnidadeDeclarar(st,u){
   st._ts=Date.now();
   try{ save(); }catch(e){}
   try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
-  return true;
-}
-function calcConfirmarUnidadeDose(u){
-  if(!_doseUnidadeDeclarar(_calcStudy(),u)) return;
   try{ _calcRenderShell(); }catch(e){}
-}
-function labConfirmarUnidadeDose(u){
-  if(!_doseUnidadeDeclarar(_labStudy(),u)) return;
-  try{ _labRenderShell(); }catch(e){}
 }
 
 /* O bloco que pergunta a unidade. SUBSTITUI a receita, pelo mesmo motivo do
    volume ambíguo: uma receita calculada com unidade adivinhada é pior que
    receita nenhuma, porque parece pronta. Aqui a diferença entre L/ha e g/ha
    não é de rótulo — é de mil vezes, e de líquido para sólido. */
-function calcUnidadeDosePendenteHtml(study, confirmar){
+function calcUnidadeDosePendenteHtml(study){
   if(!doseUnidadePendente(study)) return '';
-  /* Quem responde é a tela que perguntou: a de campo grava e repinta a receita,
-     a da bancada grava e repinta o pote. A pergunta é a mesma. */
-  confirmar=confirmar||'calcConfirmarUnidadeDose';
   var exemplos=(study.tratamentos||[]).filter(function(t){
     return t && !t.testemunha && doseSemUnidade(t.dose);
   }).slice(0,3).map(function(t){ return (t.produto||t.id||'?')+' = '+String(t.dose).trim(); });
@@ -9711,7 +9593,7 @@ function calcUnidadeDosePendenteHtml(study, confirmar){
      'declara aqui é de que unidade elas são.</div>';
   h+='<div class="calc-actions" style="flex-wrap:wrap">';
   doseUnidades().forEach(function(u){
-    h+='<button class="calc-close" onclick="'+confirmar+'(\''+u+'\')">'+esc(u)+'</button>';
+    h+='<button class="calc-close" onclick="calcConfirmarUnidadeDose(\''+u+'\')">'+esc(u)+'</button>';
   });
   h+='</div>';
   h+='<div class="calc-eq" style="margin-top:6px">Vale para todo tratamento escrito só com o '+
@@ -9744,12 +9626,12 @@ function _calcCompute(){
   var study=_calcStudy();
   if(!study||!(study.tratamentos||[]).length){ box.innerHTML='<div class="calc-empty">Estudo sem tratamentos cadastrados.</div>'; return; }
   var BC=window.BioCalculoCampo;
-  var len=_calcNum(_calcVal('calcLen')), wid=_calcNum(_calcVal('calcWid'));
+  var len=BC.parseStrictNumber(_calcVal('calcLen'),true), wid=BC.parseStrictNumber(_calcVal('calcWid'),true);
   _calcSalvarParcela(); /* persiste o tamanho de parcela que o usuário deixar */
-  var plots=Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1);
-  var volDef=_calcNum(_calcVal('calcVol'));
-  var dead=_calcNum(_calcVal('calcDead'));
-  var bottles=Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1);
+  var plots=BC.parseStrictNumber(_calcVal('calcPlots'),true);
+  var volDef=BC.parseStrictNumber(_calcVal('calcVol'),true);
+  var dead=BC.parseStrictNumber(_calcVal('calcDead')||'0',true);
+  var bottles=BC.parseStrictNumber(_calcVal('calcBottles'),true);
   /* A capacidade vem com a unidade escolhida ao lado — foi assim que "1900"
      virou 1.900 L num preparo de 318 mL. */
   var cap=_calcCapAtualL();
@@ -10664,19 +10546,20 @@ function calcBarraCfg(){
    unidade e a da memória gravada não, e as duas discordavam por um fator de mil
    sem que nada na interface denunciasse. */
 function _calcCapAtualL(){
-  var n=_calcNum(_calcVal('calcCap'));
-  if(!(n>0)) return 0;
+  var raw=_calcVal('calcCap');
+  var n=raw===''?0:window.BioCalculoCampo.parseStrictNumber(raw,true);
   return ((_calcVal('calcCapUn')||'L')==='mL') ? n/1000 : n;
 }
 /* Configuração que a tela da calculadora está mostrando neste instante. */
 function _calcConfigAtual(){
+  var BC=window.BioCalculoCampo;
   return {
-    parcelaComprimento:_calcNum(_calcVal('calcLen')),
-    parcelaLargura:_calcNum(_calcVal('calcWid')),
-    parcelas:Math.max(1,Math.round(_calcNum(_calcVal('calcPlots')))||1),
-    volumeCaldaLHa:_calcNum(_calcVal('calcVol')),
-    volumeMortoMl:_calcNum(_calcVal('calcDead')),
-    frascos:Math.max(1,Math.round(_calcNum(_calcVal('calcBottles')))||1),
+    parcelaComprimento:BC.parseStrictNumber(_calcVal('calcLen'),true),
+    parcelaLargura:BC.parseStrictNumber(_calcVal('calcWid'),true),
+    parcelas:BC.parseStrictNumber(_calcVal('calcPlots'),true),
+    volumeCaldaLHa:BC.parseStrictNumber(_calcVal('calcVol'),true),
+    volumeMortoMl:BC.parseStrictNumber(_calcVal('calcDead')||'0',true),
+    frascos:BC.parseStrictNumber(_calcVal('calcBottles'),true),
     /* A MESMA leitura de `_calcCompute`: o número vale na unidade escolhida ao
        lado dele. Aqui isso não é cosmético — esta configuração é a que vai para
        a memória COPIADA e para a memória GRAVADA na aplicação. Sem o seletor, a
@@ -10811,16 +10694,16 @@ function aplicacaoHerancaHtml(study, qid, ap){
 function calcConfigDoEstudoLab(study, qid){
   if(!study) return null;
   return {
-    volumeMl:Math.max(0,_numBR(study.labVolumeMl,0)),
+    volumeMl:window.BioCalculoLab.parseNum(study.labVolumeMl),
     fonteTipo:(['gL','gkg','mae','puro'].indexOf(study.labFonteTipo)>=0?study.labFonteTipo:'gL'),
     fonteValor:(study.labFonteValor||''),
-    pureza:(study.labPureza||''),
-    densidade:(study.labDensidade||''),
+    pureza:(study.labPureza==null?'':study.labPureza),
+    densidade:(study.labDensidade==null?'':study.labDensidade),
     /* 'ppm' é dose de bancada; 'campo' é dose de campo convertida para o pote, e aí a
        vazão do protocolo é indispensável — é ela que diz quanto produto há em cada
        mililitro de calda. */
     doseModo:(study.doseModo==='ppm'?'ppm':'campo'),
-    vazaoLHa:_calcNum((study.protocolo||{}).volumeCalda),
+    vazaoLHa:window.BioCalculoLab.parseTaxa((study.protocolo||{}).volumeCalda),
     qid:(qid||null),
     origem:'estudo'
   };
@@ -10830,7 +10713,7 @@ function calcConfigLabCompleta(cfg){
   if(!cfg || !(cfg.volumeMl>0)) return false;
   /* Reagente puro é 100% por definição e não tem "valor de rótulo"; os outros sem o
      valor da fonte dividiriam por zero e a receita sairia em silêncio, sem número. */
-  if(cfg.fonteTipo!=='puro' && !(_calcNum(cfg.fonteValor)>0)) return false;
+  if(cfg.doseModo==='ppm' && cfg.fonteTipo!=='puro' && !(window.BioCalculoLab.parseNum(cfg.fonteValor)>0)) return false;
   if(cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) return false;
   return true;
 }
@@ -10839,97 +10722,70 @@ function calcConfigLabCompleta(cfg){
 function calcConfigLabFaltando(cfg){
   var f=[];
   if(!cfg || !(cfg.volumeMl>0)) f.push('o volume do pote');
-  if(cfg && cfg.fonteTipo!=='puro' && !(_calcNum(cfg.fonteValor)>0)) f.push('o valor da fonte do produto');
+  if(cfg && cfg.doseModo==='ppm' && cfg.fonteTipo!=='puro' && !(window.BioCalculoLab.parseNum(cfg.fonteValor)>0)) f.push('o valor da fonte do produto');
   if(cfg && cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) f.push('o volume de calda do protocolo (a dose é de campo)');
   return f;
 }
 
 function calcMemoriaLab(study, cfg){
-  var LB=window.BioCalculoLab;
-  if(!LB) return {erro:'O motor de cálculo do laboratório não carregou.'};
-  if(!study||!(study.tratamentos||[]).length) return {erro:'Estudo sem tratamentos cadastrados.'};
+  var LB=window.BioCalculoLab, BC=window.BioCalculoCampo;
+  if(!LB||!BC)return {erro:'O motor de cálculo do laboratório não carregou.'};
+  if(!study||!(study.tratamentos||[]).length)return {erro:'Estudo sem tratamentos cadastrados.'};
   cfg=cfg||{};
-
-  var mem={
-    motor:'BioCalculoLab',
-    motorVersao:(LB.VERSION||'?'),
-    contexto:'laboratorio',
-    app:(typeof APP_VER!=='undefined'?APP_VER:null),
-    geradoEm:Date.now(),
-    iso:new Date().toISOString(),
+  var mem={motor:'BioCalculoLab',motorVersao:LB.VERSION,contexto:'laboratorio',
+    app:(typeof APP_VER!=='undefined'?APP_VER:null),geradoEm:Date.now(),iso:new Date().toISOString(),
     user:(typeof _currentUserName==='function'?(_currentUserName()||'Não identificado'):'Não identificado'),
-    estudo:{id:study.id, codigo:(study.codigo||null), nome:(study.nome||null)},
-    entradas:cfg,
-    barra:null,          /* não há barra numa bancada */
-    tratamentos:[]
-  };
-
+    estudo:{id:study.id,codigo:study.codigo||null,nome:study.nome||null},entradas:cfg,barra:null,tratamentos:[]};
   (study.tratamentos||[]).forEach(function(t){
-    /* Testemunha é só a MARCADA, aqui como na tela. O recurso do primeiro
-       tratamento pertence à análise estatística de estudos antigos; num registro
-       de preparo ele carimbava T1 de testemunha sem que ninguém tivesse dito. */
-    var testemunha=!!t.testemunha;
-    var dval=_calcNum(t.dose);
-    /* A unidade da dose de campo: a escrita, ou a declarada pelo estudo. O motor
-       recebia a unidade lida por `_calcDoseUnit`, que devolve 'L/ha' para toda
-       dose escrita só com número — e o registro BPL saía com a autoridade de um
-       papel assinado sobre uma conta feita com unidade adivinhada. */
-    /* "0,2%" é dose, e o motor da bancada sabe prepará-la (% v/v não depende de
-       vazão). Ela não tem letra nenhuma, então nenhum parser de unidade a
-       reconhecia: virava 0,2 L/ha, 33× a real. Só vale para a dose que é UMA
-       porcentagem inteira — mistura continua fora desta memória, como sempre
-       esteve, em vez de ser adivinhada aqui. */
-    var _doseTxt=String(t.dose==null?'':t.dose).trim();
-    var dunit=(cfg.doseModo==='ppm')?''
-      :(/^[0-9.,\s]+%(?:\s*v\s*\/\s*v)?$/i.test(_doseTxt)?'% v/v':doseUnidadeDe(study,t.dose));
-    var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
-             doseModo:cfg.doseModo, doseUnidade:(dunit||null),
-             volumePoteMl:cfg.volumeMl, testemunha:testemunha, avisos:[]};
-
-    /* Testemunha sem dose não gera preparo — e isso é resultado, não falta de dado. */
-    if(testemunha && !(dval>0)){ reg.semPreparo=true; mem.tratamentos.push(reg); return; }
-
-    /* Unidade não declarada: o registro guarda a PENDÊNCIA, não um número. Mesma
-       regra da memória de campo — preparo calculado com unidade adivinhada é a
-       conta errada com a autoridade de um registro assinado. */
-    if(cfg.doseModo!=='ppm' && !dunit && dval>0 && doseSemUnidade(t.dose)){
-      reg.erro='Unidade da dose não declarada no estudo. "'+String(t.dose||'').trim()+
-               '" tanto pode ser L/ha quanto g/ha, e entre as duas há mil vezes de diferença — '+
-               'no pote, a diferença entre pipetar e pesar. Declare a unidade da dose antes de preparar.';
-      mem.tratamentos.push(reg);
-      return;
-    }
-
-    var r;
-    try{
-      r=(cfg.doseModo==='ppm')
-        ? LB.calcPPM({alvoPpm:dval, volumeMl:cfg.volumeMl, fonteTipo:cfg.fonteTipo,
-                      fonteValor:cfg.fonteValor, pureza:cfg.pureza, densidade:cfg.densidade})
-        : LB.calcCampo({dose:dval, unidade:dunit, vazao:cfg.vazaoLHa,
-                        volumeMl:cfg.volumeMl, base:'formulado',
-                        pureza:cfg.pureza, densidade:cfg.densidade});
-    }catch(e){
-      reg.erro=(e&&e.message)||String(e);
-      mem.tratamentos.push(reg);
-      return;
-    }
-
-    /* Pipetar ou pesar é a diferença que vai para a bancada: uma pede micropipeta, a
-       outra pede balança. Guardar as duas num campo "quantidade" perderia isso. */
-    reg.acao=r.acao||null;
-    if(r.produtoMl!=null){ reg.produtoMl=r.produtoMl; reg.produtoUl=r.produtoUl; }
-    if(r.massaMg!=null) reg.massaMg=r.massaMg;
-    if(r.solventeMl!=null) reg.solventeMl=r.solventeMl;
-    if(r.concentracaoPpm!=null) reg.concentracaoPpm=r.concentracaoPpm;
-    if(r.concentracaoPct!=null) reg.concentracaoPct=r.concentracaoPct;
-    if(r.alvoPpm!=null) reg.alvoPpm=r.alvoPpm;
-    if(r.impossivel) reg.impossivel=true;
-    /* A sugestão de solução-mãe é o que salva um volume impipetável: sem ela, o alerta
-       de pipeta diria "não dá" e pararia aí. */
-    if(r.sugestaoMae) reg.sugestaoMae={fator:r.sugestaoMae.fator, msg:r.sugestaoMae.msg};
-    (r.avisos||[]).forEach(function(a){ reg.avisos.push((a&&a.msg)||String(a)); });
-
+    var reg={id:t.id||null,produto:t.produto||null,dose:t.dose==null?null:t.dose,
+      doseModo:cfg.doseModo,volumePoteMl:LB.parseNum(cfg.volumeMl),testemunha:!!t.testemunha,
+      componentes:[],veiculo:t.veiculo||'Solvente',liberado:false,avisos:[]};
     mem.tratamentos.push(reg);
+    var texto=String(t.dose==null?'':t.dose).trim();
+    var estruturada=Array.isArray(t.componentes)&&t.componentes.length>0;
+    /* Referência estatística não significa testemunha sem aplicação. */
+    if(reg.testemunha&&!estruturada&&(texto===''||LB.parseNum(texto)===0)){
+      reg.semPreparo=true; return;
+    }
+    try{
+      if(!(reg.volumePoteMl>0))throw new Error('Informe um volume final válido, maior que zero.');
+      if(cfg.doseModo==='ppm'){
+        var alvo=LB.parseNum(texto.replace(/\s*(?:ppm|mg\s*\/\s*L)\s*$/i,''));
+        var r=LB.calcPPM({alvoPpm:alvo,volumeMl:reg.volumePoteMl,
+          fonteTipo:cfg.fonteTipo,fonteValor:cfg.fonteValor,pureza:cfg.pureza,densidade:cfg.densidade});
+        reg.componentes.push(Object.assign({nome:t.produto||'Produto'},r));
+      }else{
+        var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+        var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
+        if(mix.problems.length)throw new Error(mix.problems.join(' '));
+        if(!mix.components.length)throw new Error('Informe a dose e a unidade de cada componente.');
+        var taxa=LB.parseTaxa(t.volume!=null&&String(t.volume).trim()!==''?t.volume:cfg.vazaoLHa);
+        reg.volumeCaldaLHa=Number.isFinite(taxa)?taxa:null;
+        mix.components.forEach(function(cp){
+          var r=LB.calcCampo({dose:cp.valor,unidade:cp.unidade==='%'?'% v/v':cp.unidade,
+            vazao:taxa,volumeMl:reg.volumePoteMl,pureza:cfg.pureza,densidade:cfg.densidade});
+          reg.componentes.push(Object.assign({id:cp.id||null,itemId:cp.itemId||null,
+            loteRef:cp.loteRef||null,nome:cp.nome},r));
+        });
+      }
+      var liquidos=0;
+      reg.componentes.forEach(function(r){
+        liquidos+=r.produtoMl||0;
+        if(r.impossivel)reg.impossivel=true;
+        (r.avisos||[]).forEach(function(a){reg.avisos.push(r.nome+': '+a.msg);});
+      });
+      if(liquidos>reg.volumePoteMl+1e-9)reg.impossivel=true;
+      if(reg.impossivel)throw new Error('Preparo inviável: os volumes de produto ultrapassam o volume final. Revise as doses e a concentração da fonte.');
+      reg.solventeMl=reg.volumePoteMl-liquidos;
+      reg.acao=reg.componentes.length>1?'misturar':reg.componentes[0].acao;
+      if(reg.componentes.length===1){
+        var unico=reg.componentes[0];
+        ['produtoMl','produtoUl','massaMg','concentracaoPpm','concentracaoPct','concentracaoBase','concentracaoUnidade','alvoPpm','sugestaoMae'].forEach(function(k){
+          if(unico[k]!=null)reg[k]=unico[k];
+        });
+      }
+      reg.liberado=true;
+    }catch(e){reg.erro=e.message||String(e);reg.liberado=false;}
   });
   return mem;
 }
@@ -11191,35 +11047,29 @@ function calcMemoriaTexto(mem){
 }
 
 function calcMemoriaLabTexto(mem){
-  if(!mem||mem.erro) return (mem&&mem.erro)||'';
-  var LB=window.BioCalculoLab;
-  function f(v,p){ return LB?LB.formatBR(v,p==null?2:p):String(v); }
-  var e=mem.entradas||{};
+  if(!mem||mem.erro)return (mem&&mem.erro)||'';
+  var LB=window.BioCalculoLab,f=LB?LB.fmtVivo:String,e=mem.entradas||{};
   var L=['CALCULADORA DE BANCADA — '+(mem.estudo.codigo||mem.estudo.nome||mem.estudo.id),
-    'Pote '+f(e.volumeMl,0)+' mL · '+(LB&&LB.FONTES[e.fonteTipo]?LB.FONTES[e.fonteTipo].rotulo:e.fonteTipo)+
-      (e.fonteTipo!=='puro'&&e.fonteValor?(' '+e.fonteValor):'')+
-      (e.pureza?(' · pureza '+e.pureza+'%'):'')+
-      (e.densidade?(' · d '+e.densidade+' g/mL'):'')+
-      ' · '+(e.doseModo==='ppm'?'dose em ppm':('dose de campo · vazão '+f(e.vazaoLHa,0)+' L/ha')),
-    'Trat\tProduto\tDose\tAção\tQuanto\tSolvente(mL)\tConcentração'];
+    'Pote '+f(LB.parseNum(e.volumeMl))+' mL · '+(e.doseModo==='ppm'?'concentração em mg/L (ppm neste módulo)':'dose de campo')];
   mem.tratamentos.forEach(function(t){
-    if(t.semPreparo){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'0')+'\tnão preparar\t0\t0\t0'); return; }
-    if(t.erro){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t(erro) '+t.erro); return; }
-    /* Pipetar em µL e pesar em mg: a unidade que a bancada usa de verdade. */
-    var quanto=(t.acao==='pesar')
-      ? (f(t.massaMg,3)+' mg')
-      : (t.produtoUl!=null?(f(t.produtoUl,2)+' µL'):'—');
-    var conc=(t.concentracaoPpm!=null?(f(t.concentracaoPpm,2)+' ppm')
-             :(t.alvoPpm!=null?(f(t.alvoPpm,2)+' ppm'):''));
-    L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.acao||'')+'\t'+quanto+
-           '\t'+(t.solventeMl!=null?f(t.solventeMl,3):'')+'\t'+conc);
-    if(t.sugestaoMae) L.push('\t→ '+t.sugestaoMae.msg);
-    (t.avisos||[]).forEach(function(w){ L.push('\t⚠ '+w); });
+    L.push('');L.push((t.id||'')+' · '+(t.produto||'')+' · '+(t.dose==null?'':t.dose));
+    if(t.semPreparo){L.push('Testemunha sem aplicação: não preparar.');return;}
+    if(t.erro||t.impossivel){L.push('RECEITA NÃO LIBERADA: '+(t.erro||'Preparo inviável.'));return;}
+    /* Também lê memórias históricas anteriores à lista de componentes. */
+    var comps=t.componentes&&t.componentes.length?t.componentes:[t];
+    comps.forEach(function(c){
+      L.push((c.nome||t.produto||'Produto')+': '+(c.acao==='pesar'?'PESAR '+f(c.massaMg)+' mg':'PIPETAR '+f(c.produtoUl)+' µL'));
+      if(c.alvoPpm!=null)L.push('Alvo: '+f(c.alvoPpm)+' mg/L de i.a.');
+      if(c.fonteValor!=null)L.push('Teor da fonte: '+f(c.fonteValor)+' '+c.fonteUnidade);
+      else if(c.fontePpm!=null)L.push('Concentração da fonte: '+f(c.fontePpm)+' mg/L');
+      if(c.concentracaoPct!=null)L.push('Concentração: '+f(c.concentracaoPct)+' % '+c.concentracaoBase);
+      if(c.sugestaoMae)L.push(c.sugestaoMae.msg);
+      (c.avisos||[]).forEach(function(a){L.push('⚠ '+(a.msg||a));});
+    });
+    L.push('COMPLETAR com '+(t.veiculo||'solvente')+' até '+f(t.volumePoteMl||LB.parseNum(e.volumeMl))+' mL de volume final.');
+    if(!(t.componentes&&t.componentes.length))(t.avisos||[]).forEach(function(a){L.push('⚠ '+a);});
   });
-  L.push('');
-  L.push('Motor '+mem.motor+' '+mem.motorVersao+' · gerado em '+
-         (function(){ try{ return new Date(mem.geradoEm).toLocaleString('pt-BR'); }catch(_){ return mem.iso; } })()+
-         ' por '+mem.user);
+  L.push('');L.push('Motor '+mem.motor+' '+mem.motorVersao+' · '+mem.iso+' · '+mem.user);
   return L.join('\n');
 }
 
