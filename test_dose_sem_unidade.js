@@ -76,7 +76,9 @@ vm.runInContext([
   pega('doseUnidades'), pega('doseUnidadeDeclarada'), pega('doseSemUnidade'),
   pega('doseUnidadePendente'), pega('doseUnidadeDe'), pega('doseTextoDe'),
   pega('_calcConfigAtual'), pega('calcMemoria'),
-  pega('calcUnidadeDosePendenteHtml'), pega('calcConfirmarUnidadeDose'), pega('_calcCompute')
+  /* A declaração da unidade virou um ato só, usado pelas duas calculadoras:
+     `_doseUnidadeDeclarar` grava e audita, e cada tela repinta o que é seu. */
+  pega('calcUnidadeDosePendenteHtml'), pega('_doseUnidadeDeclarar'), pega('calcConfirmarUnidadeDose'), pega('_calcCompute')
 ].join('\n'), ctx);
 ctx._calcSalvarParcela=function(){};
 ctx.studyMetodosVariam=function(){ return false; };

@@ -9148,17 +9148,52 @@ function _labCompute(){
       var vazaoDef=_ppm?0:_calcNum(_labVal('labVazao'));
       var pur=_labVal(_ppm?'labPpmPureza':'labPureza'), den=_labVal(_ppm?'labPpmDens':'labDens');
       var fTipo=_ppm?_labVal('labPpmFonte'):'', fValor=_ppm?_labVal('labPpmValor'):'';
+      /* A BANCADA TAMBÉM PERGUNTA A UNIDADE. A dose daqui é dose de CAMPO
+         convertida para o pote, e chegava ao motor com a unidade adivinhada por
+         `_calcDoseUnit`, que devolve 'L/ha' para qualquer dose escrita só com
+         número. Entre L/ha e g/ha há mil vezes de diferença — e no pote isso é a
+         diferença entre pipetar e pesar. A calculadora de campo parou de chutar;
+         esta continuava chutando, com o mesmo estudo e a mesma dose.
+         Em ppm não há unidade por área a declarar: a dose É a concentração. */
+      if(!_ppm && doseUnidadePendente(s)){
+        box.innerHTML=calcUnidadeDosePendenteHtml(s,'labConfirmarUnidadeDose');
+        return;
+      }
       var html='', txt=[];
       (s.tratamentos||[]).forEach(function(t){
-        var _isWitness=!!t.testemunha || studyTestemunha(s)===t.id;
+        /* PREPARO NÃO INVENTA TESTEMUNHA. `studyTestemunha()` usa o primeiro
+           tratamento como recurso para a análise estatística de estudos antigos
+           sem marcação; aqui esse recurso mandava preparar "só solvente" no lugar
+           de T1 — um tratamento com dose declarada saía do pote como solvente
+           puro, sem nada na tela dizendo por quê. É a mesma correção que a
+           calculadora de campo recebeu; a bancada tinha ficado para trás. */
+        var _isWitness=!!t.testemunha;
         var dose=_calcNum(t.dose);
+        /* A unidade que a dose escreveu ou que o estudo declarou — nunca a chutada. */
+        var _dunit=_ppm?'':doseUnidadeDe(s,t.dose);
         var vazao=_ppm?0:(_calcNum(t.volume)||vazaoDef);
         var sub=_ppm ? ((t.dose||'—')+' ppm') : ((t.dose||'—')+' · '+F(vazao)+' L/ha');
         var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+'</span>'+
                  '<span style="font-size:10px;color:#9fb1a5">'+esc(sub)+'</span></div>';
-        if(_isWitness||!(dose>0)){
+        /* Testemunha COM dose é preparada. A tela dizia "só solvente" e a memória
+           gravada pela MESMA bancada preparava o produto: duas respostas para o
+           mesmo tratamento, e a que vai para a mão de quem prepara era a errada.
+           Quem não é testemunha e está sem dose cai no motor, que diz o que falta
+           em vez de devolver um pote de solvente calado. */
+        if(_isWitness && !(dose>0)){
           html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>só solvente — '+F(vol)+' mL</b></div></div>';
           txt.push(t.id+': só solvente, '+F(vol)+' mL'); return;
+        }
+        /* Sobra um caso que o portão acima não vê: a testemunha marcada que
+           carrega dose escrita só com o número. Ela não entra em
+           `doseUnidadePendente` (testemunha sem dose não tem o que calcular), e
+           daqui iria ao motor com a unidade chutada. Nada é calculado. */
+        if(!_ppm && !_dunit && doseSemUnidade(t.dose)){
+          html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ A dose "'+
+            esc(String(t.dose||'').trim())+'" está sem unidade e o estudo não declarou nenhuma. '+
+            'Nada é preparado enquanto isto não for resolvido: entre L/ha e g/ha há mil vezes de '+
+            'diferença, e no pote isso separa pipetar de pesar.</div></div>';
+          txt.push(t.id+' — sem unidade de dose: nada calculado.'); return;
         }
         /* MISTURA NA BANCADA. Antes daqui saía _calcNum(t.dose), que lê só o
            primeiro número: "1,5 L + 0,2%" virava 1,5 e o adjuvante sumia calado.
@@ -9170,7 +9205,10 @@ function _labCompute(){
            é lido com a sua base e preparado separado, e o solvente é o que sobra
            depois de somar todos os líquidos — não o que sobra de um só. */
         var _BC=window.BioCalculoCampo;
-        var _comps=(!_ppm && _BC) ? _BC.parseComponents(t.produto, t.dose, _calcDoseUnit(t.dose)) : null;
+        /* O que completa o componente escrito SEM unidade é o que o estudo
+           declarou. Ler a unidade do texto inteiro fazia o "0,2" de "1,5 L + 0,2"
+           herdar o litro do vizinho, num estudo declarado em g/ha. */
+        var _comps=(!_ppm && _BC) ? _BC.parseComponents(t.produto, t.dose, doseUnidadeDeclarada(s)||_dunit) : null;
         /* PAREAMENTO DESCONHECIDO PARA AQUI, e este era o pior dos dois buracos.
            Com "A + B" e uma dose só, sobra UM componente — e a condição abaixo,
            que pede mais de um, deixava passar direto para o caminho de produto
@@ -9223,7 +9261,7 @@ function _labCompute(){
         try{
           r=_ppm
             ? LB.calcPPM({alvoPpm:dose, volumeMl:vol, fonteTipo:fTipo, fonteValor:fValor, pureza:pur, densidade:den})
-            : LB.calcCampo({dose:dose, unidade:_calcDoseUnit(t.dose), vazao:vazao, volumeMl:vol, pureza:pur, densidade:den});
+            : LB.calcCampo({dose:dose, unidade:_dunit, vazao:vazao, volumeMl:vol, pureza:pur, densidade:den});
         }
         catch(e){ err=e.message||String(e); }
         if(err){ html+='<div class="calc-card">'+head+'<div class="calc-terr">⚠ '+esc(err)+'</div></div>'; return; }
@@ -9623,10 +9661,13 @@ function calcConfirmarVolume(valor){
 }
 
 /* A pessoa declara a unidade da dose do estudo. Mesma forma da confirmação de
-   volume: escolha explícita, registrada na auditoria, e nada é calculado antes. */
-function calcConfirmarUnidadeDose(u){
-  var st=_calcStudy(); if(!st) return;
-  if(doseUnidades().indexOf(u)<0) return;
+   volume: escolha explícita, registrada na auditoria, e nada é calculado antes.
+   O ato é UM SÓ — a unidade mora no estudo, não na tela que perguntou. Campo e
+   bancada só diferem no que redesenham depois; duas telas que mexem no mesmo
+   dado não podem ter doutrinas diferentes. */
+function _doseUnidadeDeclarar(st,u){
+  if(!st) return false;
+  if(doseUnidades().indexOf(u)<0) return false;
   var antes=st.doseUnidade||'(não declarada)';
   st.doseUnidade=u;
   try{
@@ -9638,15 +9679,26 @@ function calcConfirmarUnidadeDose(u){
   st._ts=Date.now();
   try{ save(); }catch(e){}
   try{ if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }catch(e){}
+  return true;
+}
+function calcConfirmarUnidadeDose(u){
+  if(!_doseUnidadeDeclarar(_calcStudy(),u)) return;
   try{ _calcRenderShell(); }catch(e){}
+}
+function labConfirmarUnidadeDose(u){
+  if(!_doseUnidadeDeclarar(_labStudy(),u)) return;
+  try{ _labRenderShell(); }catch(e){}
 }
 
 /* O bloco que pergunta a unidade. SUBSTITUI a receita, pelo mesmo motivo do
    volume ambíguo: uma receita calculada com unidade adivinhada é pior que
    receita nenhuma, porque parece pronta. Aqui a diferença entre L/ha e g/ha
    não é de rótulo — é de mil vezes, e de líquido para sólido. */
-function calcUnidadeDosePendenteHtml(study){
+function calcUnidadeDosePendenteHtml(study, confirmar){
   if(!doseUnidadePendente(study)) return '';
+  /* Quem responde é a tela que perguntou: a de campo grava e repinta a receita,
+     a da bancada grava e repinta o pote. A pergunta é a mesma. */
+  confirmar=confirmar||'calcConfirmarUnidadeDose';
   var exemplos=(study.tratamentos||[]).filter(function(t){
     return t && !t.testemunha && doseSemUnidade(t.dose);
   }).slice(0,3).map(function(t){ return (t.produto||t.id||'?')+' = '+String(t.dose).trim(); });
@@ -9659,7 +9711,7 @@ function calcUnidadeDosePendenteHtml(study){
      'declara aqui é de que unidade elas são.</div>';
   h+='<div class="calc-actions" style="flex-wrap:wrap">';
   doseUnidades().forEach(function(u){
-    h+='<button class="calc-close" onclick="calcConfirmarUnidadeDose(\''+u+'\')">'+esc(u)+'</button>';
+    h+='<button class="calc-close" onclick="'+confirmar+'(\''+u+'\')">'+esc(u)+'</button>';
   });
   h+='</div>';
   h+='<div class="calc-eq" style="margin-top:6px">Vale para todo tratamento escrito só com o '+
@@ -9768,9 +9820,16 @@ function _calcCompute(){
        calda pode ser óleo. Produto único cai no mesmo número de sempre. */
     /* A receita estruturada (item, lote, dose e unidade próprios) é a fonte
        principal. As strings continuam como compatibilidade para estudos antigos. */
+    /* QUEM COMPLETA O COMPONENTE SEM UNIDADE É O ESTUDO. `doseUnidadeDe` lê a
+       unidade do texto INTEIRO da dose, e num texto de mistura basta um vizinho
+       escrever a sua para o componente que não escreveu nenhuma herdar aquela:
+       em "1,5 L + 0,2", num estudo declarado em g/ha, o "0,2" virava 0,2 L/ha —
+       mil vezes, e líquido no lugar de sólido. A auditoria da declaração já diz
+       o contrário: "é ela que passa a completar toda dose escrita sem unidade". */
+    var _fbUnidade=doseUnidadeDeclarada(study)||dunit;
     var mix=(Array.isArray(t.componentes)&&t.componentes.length&&BC.parseStructuredComponents)
-      ? BC.parseStructuredComponents(t.componentes,dunit)
-      : BC.parseComponents(t.produto, t.dose, dunit);
+      ? BC.parseStructuredComponents(t.componentes,_fbUnidade)
+      : BC.parseComponents(t.produto, t.dose, _fbUnidade);
     var res=null, err='';
     try{ res=BC.calculateMixture({components:mix.components, carrier:(t.veiculo||'Água'), sprayVolume:vol, plotLength:len, plotWidth:wid, numPlots:plots, numBottles:bottles, deadVolumeMl:dead, bottleCapacity:cap,
       minimumOperatingMl:typeof calcDroneMinimum==='function'?calcDroneMinimum(study,t):0}); }
@@ -9795,9 +9854,20 @@ function _calcCompute(){
        É esta tabela que vai para a bancada, então ela vem antes dos agregados. */
     /* No essencial a tabela tem duas colunas: o que pôr e quanto. A dose escrita, a
        dose relida na outra unidade e o total são conferência, não execução. */
-    var _gc=_calcDetalhe?'':' style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"';
+    /* A COLUNA DA DOSE EDITÁVEL PRECISA EXISTIR NA GRADE. No essencial a grade
+       era de DUAS colunas e a linha com dose editável tinha TRÊS células: o "por
+       frasco" — o único número que se veio ler — caía para uma segunda linha,
+       embaixo do nome do componente e fora da coluna que o cabeçalho anuncia.
+       Quem confere lê a coluna; um número fora dela é um número de outra coisa.
+       O cabeçalho da coluna do meio fica VAZIO de propósito: a dose escrita não
+       volta ao essencial (ela já está no protocolo), e o que há ali é um campo,
+       que se explica sozinho — com o nome do componente ao lado e o rótulo de
+       leitura no próprio input. */
+    var _edCard=(!_calcFinalizado() && tratTemReceita(t));
+    var _colDose=(_calcDetalhe||_edCard);
+    var _gc=_calcDetalhe?'':(' style="grid-template-columns:minmax(0,1.6fr) '+(_edCard?'minmax(0,1fr) ':'')+'minmax(0,1fr)"');
     html+='<div class="calc-mix"><div class="calc-mixh"'+_gc+'><span>Componente</span>'+
-      (_calcDetalhe?'<span>Dose</span>':'')+'<span>Por frasco</span>'+(_calcDetalhe?'<span>Total</span>':'')+'</div>';
+      (_calcDetalhe?'<span>Dose</span>':(_edCard?'<span></span>':''))+'<span>Por frasco</span>'+(_calcDetalhe?'<span>Total</span>':'')+'</div>';
     res.components.forEach(function(c){
       /* A dose escrita e a mesma dose lida do outro jeito. % só vira quantidade
          depois do volume — e é aí que 3 L/ha e 150 L/ha se separam 50×. */
@@ -9829,9 +9899,11 @@ function _calcCompute(){
           (eq?'<i class="calc-eq">'+eq+'</i>':'')+'</span>';
       }
       /* No modo essencial a dose aparece quando é editável: sem ela a linha vira
-         um número sem o "de quê". */
+         um número sem o "de quê". A célula existe em TODA linha da tabela quando
+         a coluna existe — uma linha com uma célula a menos empurra o resto para
+         fora da coluna, que é o defeito que esta grade veio corrigir. */
       html+='<div class="calc-mixr'+(_ed?' ed':'')+'"'+_gc+'><span>'+esc(c.nome)+'</span>'+
-        ((_calcDetalhe||_ed)?_doseCel:'')+
+        (_colDose?((_ed||_calcDetalhe)?_doseCel:'<span></span>'):'')+
         '<b>'+a(c.perBottle,c.unit)+'</b>'+
         (_calcDetalhe?('<b>'+a(c.total,c.unit)+'</b>'):'')+'</div>';
     });
@@ -9845,11 +9917,11 @@ function _calcCompute(){
        prepara a metade achando que preparou tudo. */
     (mix.semDose||[]).forEach(function(nome){
       html+='<div class="calc-mixr falta"'+_gc+'><span>'+esc(nome)+'</span>'+
-        (_calcDetalhe?'<span>sem dose</span>':'')+'<b>não entra</b>'+
+        (_calcDetalhe?'<span>sem dose</span>':(_edCard?'<span></span>':''))+'<b>não entra</b>'+
         (_calcDetalhe?'<b>—</b>':'')+'</div>';
     });
     html+='<div class="calc-mixr carrier"'+_gc+'><span>Completar com '+esc(res.carrier.nome)+' até</span>'+
-      (_calcDetalhe?'<span>q.s.p.</span>':'')+'<b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
+      (_calcDetalhe?'<span>q.s.p.</span>':(_edCard?'<span></span>':''))+'<b>'+a(res.sprayPerBottleMl,'mL')+'</b>'+
       (_calcDetalhe?('<b>'+a(res.sprayTotalMl,'mL')+'</b>'):'')+'</div>';
     html+='</div>';
 
@@ -10793,20 +10865,47 @@ function calcMemoriaLab(study, cfg){
   };
 
   (study.tratamentos||[]).forEach(function(t){
-    var testemunha=!!t.testemunha || (typeof studyTestemunha==='function' && studyTestemunha(study)===t.id);
+    /* Testemunha é só a MARCADA, aqui como na tela. O recurso do primeiro
+       tratamento pertence à análise estatística de estudos antigos; num registro
+       de preparo ele carimbava T1 de testemunha sem que ninguém tivesse dito. */
+    var testemunha=!!t.testemunha;
     var dval=_calcNum(t.dose);
+    /* A unidade da dose de campo: a escrita, ou a declarada pelo estudo. O motor
+       recebia a unidade lida por `_calcDoseUnit`, que devolve 'L/ha' para toda
+       dose escrita só com número — e o registro BPL saía com a autoridade de um
+       papel assinado sobre uma conta feita com unidade adivinhada. */
+    /* "0,2%" é dose, e o motor da bancada sabe prepará-la (% v/v não depende de
+       vazão). Ela não tem letra nenhuma, então nenhum parser de unidade a
+       reconhecia: virava 0,2 L/ha, 33× a real. Só vale para a dose que é UMA
+       porcentagem inteira — mistura continua fora desta memória, como sempre
+       esteve, em vez de ser adivinhada aqui. */
+    var _doseTxt=String(t.dose==null?'':t.dose).trim();
+    var dunit=(cfg.doseModo==='ppm')?''
+      :(/^[0-9.,\s]+%(?:\s*v\s*\/\s*v)?$/i.test(_doseTxt)?'% v/v':doseUnidadeDe(study,t.dose));
     var reg={id:(t.id||null), produto:(t.produto||null), dose:(t.dose||null),
-             doseModo:cfg.doseModo, volumePoteMl:cfg.volumeMl, testemunha:testemunha, avisos:[]};
+             doseModo:cfg.doseModo, doseUnidade:(dunit||null),
+             volumePoteMl:cfg.volumeMl, testemunha:testemunha, avisos:[]};
 
     /* Testemunha sem dose não gera preparo — e isso é resultado, não falta de dado. */
     if(testemunha && !(dval>0)){ reg.semPreparo=true; mem.tratamentos.push(reg); return; }
+
+    /* Unidade não declarada: o registro guarda a PENDÊNCIA, não um número. Mesma
+       regra da memória de campo — preparo calculado com unidade adivinhada é a
+       conta errada com a autoridade de um registro assinado. */
+    if(cfg.doseModo!=='ppm' && !dunit && dval>0 && doseSemUnidade(t.dose)){
+      reg.erro='Unidade da dose não declarada no estudo. "'+String(t.dose||'').trim()+
+               '" tanto pode ser L/ha quanto g/ha, e entre as duas há mil vezes de diferença — '+
+               'no pote, a diferença entre pipetar e pesar. Declare a unidade da dose antes de preparar.';
+      mem.tratamentos.push(reg);
+      return;
+    }
 
     var r;
     try{
       r=(cfg.doseModo==='ppm')
         ? LB.calcPPM({alvoPpm:dval, volumeMl:cfg.volumeMl, fonteTipo:cfg.fonteTipo,
                       fonteValor:cfg.fonteValor, pureza:cfg.pureza, densidade:cfg.densidade})
-        : LB.calcCampo({dose:dval, unidade:_calcDoseUnit(t.dose), vazao:cfg.vazaoLHa,
+        : LB.calcCampo({dose:dval, unidade:dunit, vazao:cfg.vazaoLHa,
                         volumeMl:cfg.volumeMl, base:'formulado',
                         pureza:cfg.pureza, densidade:cfg.densidade});
     }catch(e){
@@ -10963,9 +11062,16 @@ function calcMemoria(study, cfg){
       return;
     }
 
+    /* QUEM COMPLETA O COMPONENTE SEM UNIDADE É O ESTUDO. `doseUnidadeDe` lê a
+       unidade do texto INTEIRO da dose, e num texto de mistura basta um vizinho
+       escrever a sua para o componente que não escreveu nenhuma herdar aquela:
+       em "1,5 L + 0,2", num estudo declarado em g/ha, o "0,2" virava 0,2 L/ha —
+       mil vezes, e líquido no lugar de sólido. A auditoria da declaração já diz
+       o contrário: "é ela que passa a completar toda dose escrita sem unidade". */
+    var _fbUnidade=doseUnidadeDeclarada(study)||dunit;
     var mix=(Array.isArray(t.componentes)&&t.componentes.length&&BC.parseStructuredComponents)
-      ? BC.parseStructuredComponents(t.componentes,dunit)
-      : BC.parseComponents(t.produto, t.dose, dunit);
+      ? BC.parseStructuredComponents(t.componentes,_fbUnidade)
+      : BC.parseComponents(t.produto, t.dose, _fbUnidade);
     (mix.problems||[]).forEach(function(p){ reg.avisos.push(p); });
 
     var r;

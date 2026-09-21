@@ -298,7 +298,9 @@ S("Relatório de texto");
 {
   const fs = require("fs");
   const app = fs.readFileSync("app.js", "utf8");
-  const i = app.indexOf("_BC.parseComponents(t.produto, t.dose, _calcDoseUnit(t.dose))");
+  /* A âncora é a CHAMADA, não a unidade que ela recebe: o fallback deixou de ser
+     lido do texto inteiro da dose e passou a ser o que o estudo declarou. */
+  const i = app.indexOf("_BC.parseComponents(t.produto, t.dose,");
   certo("o laboratório lê os componentes do motor de campo", i > 0);
   const j = app.indexOf("_comps.components.length>1", i);
   const guarda = app.indexOf("_comps.semDose && _comps.semDose.length", i);

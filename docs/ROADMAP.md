@@ -487,9 +487,11 @@ resultado troca uma armadilha por outra. Coberto por `test_capacidade_frasco.js`
 (21 verificações, incluindo a ida e volta — editar duas vezes não pode mudar a
 capacidade sozinho).
 
-**Falta desta dupla:** o aviso de plausibilidade na própria calculadora (capacidade
-absurda em relação à calda preparada) fica para depois da refinada de usabilidade em
-curso, para não colidir com ela.
+**Feito desde então:** o aviso de plausibilidade na própria calculadora. O motor só
+sabia reclamar do frasco que NÃO CABE; do absurdamente grande, não — e é por ali que o
+erro de unidade entra sem esbarrar em nada. `bottleTooLargeWarning` aponta acima de cem
+preparos inteiros, e **aponta sem bloquear**: 1 L num costal de 20 L são 20× e não têm
+nada de errado. Coberto por `test_frasco_implausivel.js` (15 verificações).
 
 ## 7-septies. O volume de calda deixou de ser texto · ✅ **feito (03/09/2026)**
 
@@ -562,6 +564,51 @@ continua bloqueada. T1 também deixou de ser chamado de testemunha por simples p
 no preparo, somente a marcação explícita vale. Coberto por
 `test_volume_calda_fluxo.js` (16 verificações, incluindo `318 mL`, `159 mL` de
 SANKARI e `104,94 µL` de SILWET no ensaio real).
+
+## 7-nonies. As duas calculadoras voltam a dizer a mesma coisa · ✅ **feito (21/09/2026)**
+
+A de campo aprendeu duas coisas nas levas anteriores e a de **bancada** ficou para trás,
+com o mesmo estudo, a mesma dose e uma resposta diferente. Não é detalhe de tela: o
+preparo é o ato irreversível — o pote errado já foi para o ensaio.
+
+**Testemunha é só a marcada.** `studyTestemunha()` usa o primeiro tratamento como recurso
+para a análise estatística de estudos antigos sem marcação. Na bancada isso não era
+rótulo, era preparo: T1 saía do pote como "só solvente" mesmo com dose declarada, e nada
+na tela dizia por quê. Corrigido na tela (`_labCompute`) e no registro
+(`calcMemoriaLab`).
+
+**A bancada também parou de chutar a unidade da dose.** `_calcDoseUnit` devolve `L/ha`
+para toda dose escrita só com número. A dose do laboratório é dose de CAMPO convertida
+para o pote: entre L/ha e g/ha há mil vezes de diferença, e ali isso é a diferença entre
+**pipetar e pesar** — instrumentos diferentes. Agora a bancada faz a MESMA pergunta que o
+campo (`DECLARE A UNIDADE DA DOSE`), e a resposta é um ato só: `_doseUnidadeDeclarar`
+grava e audita, cada tela repinta o que é seu. A memória da bancada registra a
+**pendência** em vez de um número, como a de campo já fazia. E `0,2%` passou a ser
+reconhecida como porcentagem no registro — ela não tem letra nenhuma, nenhum parser de
+unidade a enxergava, e virava `0,2 L/ha`: 33× a dose real.
+
+**Tela e registro deixaram de divergir.** A testemunha COM dose: a tela dizia "só
+solvente" e a memória gravada pela mesma bancada preparava o produto. Duas respostas para
+o mesmo tratamento, e a que vai para a mão de quem prepara era a errada. Testemunha com
+produto continua sendo achado do verificador de desenho — que é onde esse assunto mora.
+
+Coberto por `test_bancada_preparo.js` (39 verificações).
+
+**No campo, o número saiu da coluna.** A receita do Modo Preparo tem a dose editável na
+linha, e a linha editável tem três células numa grade declarada com duas colunas: o "por
+frasco" — o único número que se lê com o frasco na mão — caía para uma segunda linha,
+embaixo do nome do componente. Numa tabela a coluna é metade do significado do número. A
+grade passa a declarar a coluna da dose quando ela existe, e **toda linha tem tantas
+células quantas colunas** — cabeçalho, componentes, "não entra" e veículo. O cabeçalho
+dessa coluna fica vazio de propósito: a dose escrita não volta ao essencial, o que há ali
+é um campo. Coberto por `test_calc_coluna.js` (28 verificações).
+
+**E quem completa a dose sem unidade é o estudo, não o vizinho de linha.** A auditoria da
+declaração diz a regra: "é ela que passa a completar toda dose escrita sem unidade".
+`doseUnidadeDe` lê a unidade do texto INTEIRO, e em `1,5 L/ha + 0,2` bastava o `L` do
+primeiro para o segundo herdar litro num estudo declarado em g/ha. O fallback entregue ao
+motor passa a ser a unidade DECLARADA quando existe — na tela e na memória, que são o
+mesmo preparo. Coberto por `test_unidade_herdada.js` (17 verificações).
 
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 

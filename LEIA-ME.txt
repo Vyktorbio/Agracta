@@ -1,3 +1,119 @@
+AGRACTA — 12a publicacao                    21/09/2026
+=====================================================
+
+Leva: 3 arquivos de codigo + 3 de teste novos (2 ajustados).
+  CODIGO:  app.js  index.html  sw.js
+  TESTE:   test_bancada_preparo.js    (novo)
+           test_calc_coluna.js        (novo)
+           test_unidade_herdada.js    (novo)
+           test_biocalc_lab.js        (ajustado)
+           test_dose_sem_unidade.js   (ajustado)
+  DOCS:    docs/ROADMAP.md
+
+O PROXY NAO PRECISA SUBIR. Nada mudou nele nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Voce pediu para arrumar as calculadoras. O que eu encontrei foi isto: a de CAMPO
+aprendeu duas coisas nas levas passadas, e a de BANCADA ficou para tras — mesmo
+estudo, mesma dose, resposta diferente. Na bancada isso nao e detalhe de tela: o
+preparo e o ato que nao volta atras. O pote errado ja foi para o ensaio.
+
+1) A BANCADA PAROU DE INVENTAR TESTEMUNHA
+
+Quando ninguem marca testemunha no estudo, o app usa o primeiro tratamento como
+recurso — isso existe para a analise estatistica de estudos antigos. Na
+calculadora de laboratorio esse recurso nao rotulava: PREPARAVA. T1 saia do pote
+como "so solvente" mesmo tendo dose declarada, e nada na tela dizia por que.
+
+Agora, na bancada, testemunha e SO a marcada. E a testemunha marcada QUE CARREGA
+DOSE passou a ser preparada, porque era ai que tela e registro se contradiziam: a
+tela dizia "so solvente" e a memoria gravada pela mesma bancada preparava o
+produto. Duas respostas para o mesmo tratamento, e a errada era a que ia para a
+mao de quem prepara. (Testemunha com produto continua sendo apontada pelo
+verificador de desenho, que e onde esse assunto mora.)
+
+2) A BANCADA PARA DE CHUTAR A UNIDADE DA DOSE
+
+A dose do laboratorio e dose de CAMPO convertida para o pote. Quando ela vinha
+escrita so com o numero — "1", "50" —, a bancada assumia L/ha em silencio. Entre
+L/ha e g/ha ha mil vezes de diferenca, e no pote isso e a diferenca entre
+PIPETAR e PESAR: instrumento diferente, nao so numero diferente.
+
+Agora a bancada faz a MESMA pergunta que o campo ja fazia ("DECLARE A UNIDADE DA
+DOSE"), e a resposta vale para o estudo inteiro, com auditoria — nao importa em
+qual das duas calculadoras ela foi dada. Em ppm nada disso se aplica: ali a dose
+E a concentracao.
+
+Na mesma correcao: "0,2%" passou a ser reconhecida como porcentagem no registro
+da bancada. Ela nao tem letra nenhuma, entao nenhum leitor de unidade a enxergava
+e ela virava 0,2 L/ha — 33 vezes a dose real.
+
+3) NO CAMPO, O NUMERO TINHA SAIDO DA COLUNA
+
+Na publicacao passada a dose virou campo na propria linha da receita. So que a
+tabela do modo essencial tem duas colunas — "Componente" e "Por frasco" — e a
+linha com dose editavel passou a ter tres celulas. O "por frasco", que e o unico
+numero que se le com o frasco na mao, caia para uma segunda linha, embaixo do
+nome do componente.
+
+Numa tabela, a coluna e metade do significado do numero. Agora a grade abre a
+coluna da dose quando ela existe, e toda linha fecha com o mesmo numero de
+celulas — cabecalho, componentes, a linha do que ficou sem dose e a do veiculo.
+A dose escrita continua fora do modo essencial: o que ha naquela coluna e um
+campo, e por isso o cabecalho dela fica em branco.
+
+4) QUEM COMPLETA A DOSE SEM UNIDADE E O ESTUDO, NAO O VIZINHO DE LINHA
+
+Quando voce declara a unidade da dose, a auditoria grava a frase que define o
+ato: "e ela que passa a completar toda dose escrita sem unidade". Em mistura isso
+nao estava sendo cumprido. Num tratamento escrito "1,5 L/ha + 0,2", o app achava
+o "L" do primeiro componente e completava o segundo com litro — mesmo num estudo
+declarado em g/ha.
+
+Agora quem completa e a declaracao do estudo. Quem escreveu a sua unidade
+continua mandando na sua: a declaracao completa quem esta sem, nunca sobrescreve
+quem escreveu.
+
+A ARITMETICA NAO MUDOU. Os motores (vendor/biocalc-campo-core.js e
+vendor/biocalc-lab-core.js) nao foram tocados nesta leva. O que mudou foi o que
+se entrega a eles e o que se mostra depois.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir um estudo de bancada com dose escrita so com numero: a calculadora de
+   laboratorio deve PERGUNTAR a unidade, e nao mostrar receita nenhuma antes.
+2. Responder g/ha: a receita deve mandar PESAR. Responder L/ha: PIPETAR.
+3. Num estudo de bancada sem testemunha marcada, T1 nao pode sair como "so
+   solvente" — ele e um tratamento como os outros.
+4. Na calculadora de campo, no modo essencial (sem "Calculo completo"), conferir
+   que o valor "por frasco" esta na coluna dele, do lado direito, na mesma linha
+   do componente e do campo de dose.
+5. Editar a dose ali e ver a quantidade se refazer, com a tabela continuando
+   alinhada.
+
+
+TESTES
+------
+Duplo clique em  Conferir antes de publicar.command.
+
+  test_bancada_preparo.js   39 verificacoes (novo — a bancada de ponta a ponta)
+  test_calc_coluna.js       28 verificacoes (novo — nenhuma linha fora da grade)
+  test_unidade_herdada.js   17 verificacoes (novo — quem completa a dose)
+
+Os dois ajustados mudaram so de recorte: test_biocalc_lab.js ancorava numa linha
+de codigo que esta correcao reescreveu, e test_dose_sem_unidade.js precisava da
+funcao nova que as duas calculadoras passaram a dividir. Nenhuma verificacao foi
+afrouxada.
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 11a publicacao                    03/09/2026
 =====================================================
 
