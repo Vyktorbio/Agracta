@@ -593,6 +593,50 @@ unidade DECLARADA quando existe, em `_calcCompute` e em `calcMemoria`, que são 
 mesmo preparo. A dose que traz a sua unidade continua mandando na sua. Coberto por
 `test_unidade_herdada.js` (17 verificações).
 
+## 7-decies. A pendência com endereço, e a linha que retoma · ✅ **feito (21/09/2026)**
+
+Duas telas que o app já tinha meia — porque o dado para completá-las sempre esteve
+gravado, e não estava sendo usado.
+
+**CONFERÊNCIA ANTES DE FINALIZAR.** O checklist de fechamento contava: "3
+avaliação(ões) sem lançamento", "5 valor(es) de parcela incompleto(s)". Contagem não
+é endereço. Quem lia aquilo ia procurar quais avaliações, em qual data, em qual
+parcela — e o app sabia as três coisas o tempo todo. Agora cada pendência é uma linha
+que **leva ao registro dela**: a avaliação abre já na parcela que falta, a aplicação
+sem horário abre naquela aplicação, a amostra sem identificação abre na fila.
+
+O motor é `vendor/pendencias-core.js`, puro, com quatro regras:
+
+1. **Aponta, não bloqueia.** Nenhuma pendência impede finalizar — ensaio real fecha
+   com buraco às vezes; o que não pode é fechar sem enxergar o buraco. É a mesma
+   doutrina do aviso de frasco implausível.
+2. **Uma linha por registro, nunca uma por célula.** 24 parcelas × 5 avaliações são
+   120 células: listá-las uma a uma é a mesma coisa que não listar nada. A linha diz
+   "2 parcelas sem avaliação" e leva à primeira delas.
+3. **Toda linha carrega o seu alvo.** Lista que não se pode tocar ninguém lê.
+4. **A ordem é a do fluxo** — protocolo, aplicação, avaliação, amostra —, a mesma da
+   trilha no alto da tela.
+
+O número da parcela é o da **estaca** (`randomizacao.ordem[].parcela`), não um índice
+interno; sem randomização não há número de campo, e a linha usa tratamento e
+repetição em vez de inventar um. As contagens antigas continuam no registro assinado
+(`revisao.issues`), e a lista concreta passa a ser guardada ao lado dela: três anos
+depois, "2 parcelas sem avaliação · 7 DAA" diz o que a contagem nunca disse. Coberto
+por `test_pendencias.js` (38 verificações).
+
+**CONTINUAR DE ONDE PAROU.** Quem avalia 24 parcelas no sol para no meio. Ao reabrir
+o estudo, a faixa do topo dizia a "próxima melhor ação" — genérica, do fluxo inteiro.
+Agora, quando há leitura começada e não terminada, ela vira *"Você parou na avaliação
+de 7 DAA — faltam 2 parcelas, a próxima é a 23"*, e um toque abre a avaliação **já
+posicionada naquela parcela**, pelo mesmo caminho do toque no croqui
+(`avCroquiSelect`).
+
+Três regras: **só existe quando há onde voltar** (estudo intocado não promete um lugar
+em que a pessoa nunca esteve); **vem antes da próxima melhor ação**, porque quem
+largou a prancheta na parcela 23 não quer saber do dossiê; e **estudo finalizado não
+convida a voltar** — ali retomar seria apontar para uma porta trancada. Coberto por
+`test_retomar.js` (26 verificações).
+
 ## 8. Fase 3 — Fertilidade e nutrição · **P1**
 
 `quadra.fertilidade.analises[]` — banco temporal, cada análise com id, data,

@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v281';
+var CACHE = 'agracta-app-v283';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=2',
@@ -19,11 +19,11 @@ var ASSETS = [
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=2',
   './', './index.html',
   './integracoes.css?v=4', './integracoes.js?v=11', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
-  './vendor/avaliacao-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=1', './vendor/croqui-campo-core.js?v=3', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
+  './vendor/avaliacao-core.js?v=1', './vendor/pendencias-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=1', './vendor/croqui-campo-core.js?v=3', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=30', './theme-2026.css?v=8', './ui-campo.css?v=11', './app.js?v=165',
+  './styles.css?v=31', './theme-2026.css?v=8', './ui-campo.css?v=11', './app.js?v=167',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
