@@ -101,7 +101,7 @@ eq(cfg.parcelas,4,'parcelas por tratamento');
 eq(cfg.volumeCaldaLHa,200,'volume de calda');
 eq(cfg.volumeMortoMl,300,'volume morto');
 campos.calcPlots='0';
-eq(ctx._calcConfigAtual().parcelas,1,'zero parcelas vira 1 — dividir por zero daria NaN em silêncio');
+eq(ctx._calcConfigAtual().parcelas,0,'zero parcelas é preservado para o motor recusar, sem inventar parcela');
 campos.calcPlots='4';
 
 console.log('\n--- GOLDEN TEST: parcela 5×2 m, 4 parcelas, 200 L/ha ---');

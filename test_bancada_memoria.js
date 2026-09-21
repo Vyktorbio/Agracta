@@ -181,10 +181,10 @@ ck(/if\(typeof isQuadraLab==='function' && isQuadraLab\(qid\)\)\{[\s\S]{0,200}ap
 console.log('\n--- O texto copiado é o da bancada ---');
 var txt=ctx.calcMemoriaTexto(auto);
 ck(/CALCULADORA DE BANCADA/.test(txt),'calcMemoriaTexto reconhece a memória de bancada');
-ck(/Pote 100 mL/.test(txt),'e fala do pote');
+ck(/Pote 100(?:,0)? mL/.test(txt),'e fala do pote');
 ck(/µL/.test(txt),'com o volume em µL, que é a unidade da bancada');
 ck(!/parcela/i.test(txt),'sem uma palavra sobre parcela');
-ck(/Motor BioCalculoLab 1\.0\.0/.test(txt),'e diz qual motor e em que versão');
+ck(txt.indexOf('Motor BioCalculoLab '+LB.VERSION)>=0,'e diz qual motor e em que versão');
 
 console.log('\n'+(f?('FALHA: '+f+' de '+(f+p)+' checagens'):('todas as '+p+' checagens passaram')));
 process.exit(f?1:0);
