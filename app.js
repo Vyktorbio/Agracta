@@ -9630,7 +9630,11 @@ function _calcCompute(){
   _calcSalvarParcela(); /* persiste o tamanho de parcela que o usuário deixar */
   var plots=BC.parseStrictNumber(_calcVal('calcPlots'),true);
   var volDef=BC.parseStrictNumber(_calcVal('calcVol'),true);
-  var dead=BC.parseStrictNumber(_calcVal('calcDead')||'0',true);
+  /* Volume morto e capacidade sao os dois campos em mL que chegam aos MILHARES.
+     Neles o ponto e separador de milhar: "1.500" e 1500 mL, nao 1,5 mL. Tamanho
+     de parcela e volume de calda continuam decimais, porque ali 1.5 e o numero
+     que o campo escreve. */
+  var dead=BC.parseStrictNumber(_calcVal('calcDead')||'0',false);
   var bottles=BC.parseStrictNumber(_calcVal('calcBottles'),true);
   /* A capacidade vem com a unidade escolhida ao lado — foi assim que "1900"
      virou 1.900 L num preparo de 318 mL. */
@@ -10527,7 +10531,11 @@ function calcBarraCfg(){
    sem que nada na interface denunciasse. */
 function _calcCapAtualL(){
   var raw=_calcVal('calcCap');
-  var n=raw===''?0:window.BioCalculoCampo.parseStrictNumber(raw,true);
+  var n=raw===''?0:window.BioCalculoCampo.parseStrictNumber(raw,false);
+  /* Campo vazio ou ilegivel significa SEM limite de frasco, e isso e 0. Deixar o
+     NaN passar transformava cada cartao de tratamento em erro e ainda gravava o
+     NaN na memoria de calculo. */
+  if(!(n>0)) return 0;
   return ((_calcVal('calcCapUn')||'L')==='mL') ? n/1000 : n;
 }
 /* Configuração que a tela da calculadora está mostrando neste instante. */
@@ -10538,7 +10546,7 @@ function _calcConfigAtual(){
     parcelaLargura:BC.parseStrictNumber(_calcVal('calcWid'),true),
     parcelas:BC.parseStrictNumber(_calcVal('calcPlots'),true),
     volumeCaldaLHa:BC.parseStrictNumber(_calcVal('calcVol'),true),
-    volumeMortoMl:BC.parseStrictNumber(_calcVal('calcDead')||'0',true),
+    volumeMortoMl:BC.parseStrictNumber(_calcVal('calcDead')||'0',false),
     frascos:BC.parseStrictNumber(_calcVal('calcBottles'),true),
     /* A MESMA leitura de `_calcCompute`: o número vale na unidade escolhida ao
        lado dele. Aqui isso não é cosmético — esta configuração é a que vai para
@@ -10689,12 +10697,30 @@ function calcConfigDoEstudoLab(study, qid){
   };
 }
 
+/* Campo em branco continua valendo o padrão do motor (100% e 1 g/mL). O que não
+   vale é um número que o motor recusa: esses dois dizem isso em um lugar só,
+   porque a tela e o portão precisam recusar a MESMA entrada. */
+function _labPurezaOk(v){
+  if(v==null||String(v).trim()==='') return true;
+  var p=window.BioCalculoLab.parseNum(v,true);
+  return p>0&&p<=100;
+}
+function _labDensidadeOk(v){
+  if(v==null||String(v).trim()==='') return true;
+  return window.BioCalculoLab.parseNum(v,true)>0;
+}
+
 function calcConfigLabCompleta(cfg){
   if(!cfg || !(cfg.volumeMl>0)) return false;
   /* Reagente puro é 100% por definição e não tem "valor de rótulo"; os outros sem o
      valor da fonte dividiriam por zero e a receita sairia em silêncio, sem número. */
   if(cfg.doseModo==='ppm' && cfg.fonteTipo!=='puro' && !(window.BioCalculoLab.parseNum(cfg.fonteValor)>0)) return false;
   if(cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) return false;
+  /* Pureza e densidade passaram a ser RECUSADAS pelo motor quando zeradas ou
+     ilegíveis — antes viravam 100% e 1 g/mL em silêncio. O portão precisa enxergar
+     a mesma recusa: sem isso a configuração se declarava completa e a memória era
+     gravada com todos os tratamentos em erro, em vez de ficar como pendência. */
+  if(!_labPurezaOk(cfg.pureza) || !_labDensidadeOk(cfg.densidade)) return false;
   return true;
 }
 
@@ -10704,7 +10730,21 @@ function calcConfigLabFaltando(cfg){
   if(!cfg || !(cfg.volumeMl>0)) f.push('o volume do pote');
   if(cfg && cfg.doseModo==='ppm' && cfg.fonteTipo!=='puro' && !(window.BioCalculoLab.parseNum(cfg.fonteValor)>0)) f.push('o valor da fonte do produto');
   if(cfg && cfg.doseModo==='campo' && !(cfg.vazaoLHa>0)) f.push('o volume de calda do protocolo (a dose é de campo)');
+  if(cfg && !_labPurezaOk(cfg.pureza)) f.push('a pureza do produto (acima de 0% e no máximo 100%)');
+  if(cfg && !_labDensidadeOk(cfg.densidade)) f.push('a densidade do produto (maior que zero)');
   return f;
+}
+
+/* Testemunha sem aplicacao: o que ela escreve e "0", "0 L/ha", "0%" ou um traco.
+   A leitura estrita devolve NaN para qualquer sufixo, e a testemunha passou a
+   dar ERRO DE DOSE em vez de dispensar o preparo. Aqui so interessa uma
+   pergunta: o numero que esse texto carrega e zero? */
+function _doseZerada(texto){
+  var t=String(texto==null?'':texto).trim();
+  if(t===''||/^[-\u2012-\u2015]$/.test(t)) return true;
+  var m=t.match(/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)/);
+  if(!m) return false;
+  return window.BioCalculoLab.parseNum(m[0])===0;
 }
 
 function calcMemoriaLab(study, cfg){
@@ -10724,7 +10764,7 @@ function calcMemoriaLab(study, cfg){
     var texto=String(t.dose==null?'':t.dose).trim();
     var estruturada=Array.isArray(t.componentes)&&t.componentes.length>0;
     /* Referência estatística não significa testemunha sem aplicação. */
-    if(reg.testemunha&&!estruturada&&(texto===''||LB.parseNum(texto)===0)){
+    if(reg.testemunha&&!estruturada&&_doseZerada(texto)){
       reg.semPreparo=true; return;
     }
     try{
