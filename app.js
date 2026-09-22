@@ -637,6 +637,23 @@ function estudosAtivos(qid){
     return !((typeof estudoFinalizado==='function')&&estudoFinalizado(st));
   });
 }
+/* QUEM CONTA SO ACERTA SE FOR CHAMADO DE NOVO.
+   `estudosAtivos` ja exclui o finalizado, e a bolinha da quadra no mapa conta
+   por ele. Mas finalizar e reabrir mexiam no dado, chamavam `renderAgenda()` e
+   paravam ai: o mapa nao era redesenhado, e a bolinha continuava mostrando o
+   numero de antes ate alguma outra coisa disparar `render()` — trocar de tela,
+   recarregar, chegar uma leitura da nuvem. Quem acabou de finalizar olha a
+   quadra e ve o ensaio ainda contando, o que e indistinguivel de nao ter
+   finalizado. A regra estava certa; faltava mandar redesenhar.
+
+   Vale para os DOIS sentidos: reabrir precisa devolver o ensaio a contagem
+   pela mesma razao. */
+function _refazTelasDoEstudo(){
+  try{ renderAgenda(); }catch(e){}
+  try{ render(); }catch(e){}
+  try{ if(typeof updateAgendaBadge==='function') updateAgendaBadge(); }catch(e){}
+  try{ if(typeof updateTodayBadge==='function') updateTodayBadge(); }catch(e){}
+}
 function quadraHasAlert(qid){
   var ativos=estudosAtivos(qid);
   if(!ativos.length)return false;
@@ -17390,7 +17407,7 @@ function finalizarEstudo(qid,sid){
       try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
       alert('Estudo finalizado.\n\n'+st.finalizacao.nResultados+' resultado(s) de estatística congelados em '+
             _agFormatDateTime(st.finalizacao.em)+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
-      try{ renderAgenda(); }catch(e){}
+      _refazTelasDoEstudo();
       openStudyDetail(qid,sid);
     }, 'Rubrique para finalizar o estudo '+(s.codigo||s.id));
   }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
@@ -17419,7 +17436,7 @@ function reabrirEstudo(qid,sid){
     st._ts=Date.now();
     save();
     try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
-    try{ renderAgenda(); }catch(e){}
+    _refazTelasDoEstudo();
     openStudyDetail(qid,sid);
   }, {title:'Reabrir estudo', ok:'Reabrir'});
 }
