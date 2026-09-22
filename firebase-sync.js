@@ -727,13 +727,39 @@
       return FB.pushPromise||Promise.resolve(false);
     }
     FB.pushing=true;window._cloudSavingActive=true;
-    var next=splitState(st),ops=queueOps(next),batches=[];
-    for(var i=0;i<ops.length;i+=400){
-      var batch=FB.db.batch();
-      ops.slice(i,i+400).forEach(function(o){if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
-      batches.push(batch);
+    var next=splitState(st),newRev=Math.max(FB.lastRev||0,st.rev||0)+1;
+    var ops=[],batches=[];
+    /* Histórico de versões no servidor (vendor/versoes-core.js). Cada documento
+       alterado leva, no MESMO lote, um registro em `historico` com o conteúdo
+       anterior dele. As regras aceitam criar esse registro e recusam editar ou
+       apagar. Sem o motor carregado, grava como antes — nunca deixa de salvar
+       por causa do histórico. */
+    var V=window.VersoesCore;
+    if(V){
+      var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
+      var pares=V.mudancas(FB.remoteFlat||{},next,COLLECTIONS).map(function(m){
+        var ref=collectionRef(m.colecao).doc(m.docId);
+        var dado=m.acao==='apagar'?{type:'delete',ref:ref,bytes:64}:{type:'set',ref:ref,data:m.novo};
+        var reg=V.registro(m,newRev);
+        reg.em=window.firebase.firestore.FieldValue.serverTimestamp();
+        reg.por=FB.user.email||'';reg.porNome=String(porNome).slice(0,120);
+        return [dado,{type:'set',ref:collectionRef('historico').doc(),data:reg,
+          bytes:reg.anterior?V.bytes(reg.anterior):256}];
+      });
+      V.lotes(pares).forEach(function(l){
+        var batch=FB.db.batch();
+        l.forEach(function(o){ops.push(o);if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
+        batches.push(batch);
+      });
+      FB.historicoAtivo=true;
+    }else{
+      ops=queueOps(next);
+      for(var i=0;i<ops.length;i+=400){
+        var batch=FB.db.batch();
+        ops.slice(i,i+400).forEach(function(o){if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
+        batches.push(batch);
+      }
     }
-    var newRev=Math.max(FB.lastRev||0,st.rev||0)+1;
     if(!batches.length)batches.push(FB.db.batch());
     batches[batches.length-1].set(FB.db.doc(ROOT),{
       rev:newRev,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
@@ -914,9 +940,42 @@
     });
   };
 
-  window.openCloudHistory=function(){
-    if(typeof _stxToast==='function')_stxToast('Durante a migração, use Backups locais ou exporte um arquivo.');
-    openBackups();
+  /* ---- Histórico de versões: leitura e restauração ----
+     A tela mora no app.js (openCloudHistory); aqui ficam só as duas leituras
+     que precisam do Firestore. */
+  function lerHistorico(consulta){
+    return consulta.get().then(function(snap){
+      var out=[];snap.forEach(function(d){var r=d.data()||{};r._id=d.id;out.push(r);});return out;
+    });
+  }
+  window.AgractaVersoes={
+    disponivel:function(){return !!(firebaseInit()&&FB.user&&window.VersoesCore);},
+    /* As gravações mais recentes, agrupadas. `limite` conta REGISTROS, não
+       gravações: uma gravação grande ocupa muitos. */
+    listar:function(limite){
+      if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
+      return lerHistorico(collectionRef('historico').orderBy('rev','desc').limit(limite||600))
+        .then(function(l){return window.VersoesCore.porGravacao(l);});
+    },
+    /* Estado completo como estava ANTES da gravação `rev`, já no formato que
+       safetyApply() entende. Lê o estado vivo do servidor na hora, não o cache. */
+    estadoAntesDe:function(rev){
+      if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
+      return Promise.all([
+        readRemote(),
+        lerHistorico(collectionRef('historico').where('rev','>=',rev))
+      ]).then(function(r){
+        var res=window.VersoesCore.estadoAntesDe(r[0].flat,r[1],rev);
+        return {state:buildState(res.flat,r[0].meta),irrecuperaveis:res.irrecuperaveis,desfeitos:res.desfeitos};
+      });
+    },
+    /* Registros de UM documento — base do "o que mudou neste estudo". */
+    doDocumento:function(colecao,docId){
+      if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
+      return lerHistorico(collectionRef('historico').where('docId','==',docId))
+        .then(function(l){return l.filter(function(x){return x.colecao===colecao;})
+          .sort(function(a,b){return b.rev-a.rev;});});
+    }
   };
 
   var esc = window.esc || function(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };

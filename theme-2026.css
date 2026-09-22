@@ -929,3 +929,23 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   .loc-chip .sub{display:none!important}
   .loc-chip b{max-width:calc(100vw - 164px)!important}
 }
+
+/* Protocolo vivo (§6) — aprovação, emendas e desvios. Mesma gramática do
+   cartão de finalização: verde é o que está assinado, âmbar é o que pede leitura. */
+.pv-card{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:16px;font-size:12px;line-height:1.5;color:var(--gp-text-2);margin-bottom:9px}
+.pv-card>b{color:var(--gp-text)}
+.pv-aprovado{background:rgba(35,132,82,.09);border:1px solid rgba(35,132,82,.30)}
+.pv-aprovado>span{color:var(--gp-green);font-weight:700}
+.pv-rascunho{background:transparent;border:1px dashed var(--gp-line)}
+.pv-rubrica{max-height:48px;align-self:flex-start;background:#fff;border-radius:6px;padding:3px;margin-top:4px}
+.pv-lista{margin:10px 0 4px;display:flex;flex-direction:column;gap:7px}
+.pv-sub{font-size:11px;font-weight:700;color:var(--gp-text-3)}
+.pv-item{border:1px solid var(--gp-line);border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5;color:var(--gp-text-2)}
+.pv-item b{color:var(--gp-text)}
+.pv-item small{display:block;color:var(--gp-text-3);font-size:11px}
+.pv-item ul{margin:5px 0 0;padding-left:18px}
+.pv-item s{color:var(--gp-red);text-decoration-thickness:1px}
+.pv-desvio{border-left:3px solid var(--gp-amber)}
+.pv-motivo{color:var(--gp-text);margin-top:3px}
+.pv-btn-desvio{margin-top:6px}
+.pv-ajuda{font-size:11px;color:var(--gp-text-3);line-height:1.5;margin-top:7px}

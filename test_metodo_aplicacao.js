@@ -63,7 +63,7 @@ vm.runInContext([
   pega('aplicMetodosDe'), pega('aplicMetodoValido'), pega('aplicMetodoDoTexto'),
   pega('studyMetodo'), pega('tratMetodo'), pega('studyMetodosVariam'),
   "var PERFIL_EQUIP_KEY='agracta-perfil-equip-v1';",
-  pega('_perfisEquip'), pega('perfilEquipDe'), pega('perfilEquipGravar')
+  pega('_perfisEquip'), pega('_perfisEquipGuardar'), pega('perfilEquipDe'), pega('perfilEquipGravar')
 ].join('\n'), ctx);
 
 LAB['LAB1']=true;   /* quadra de laboratório */

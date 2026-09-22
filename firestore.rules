@@ -84,8 +84,30 @@ service cloud.firestore {
         allow write: if isAdmin();
       }
 
+      /* Histórico de versões (vendor/versoes-core.js). Cada gravação do app
+         deixa aqui o conteúdo ANTERIOR de cada documento que mudou. É
+         append-only: criar sim, editar e apagar nunca — para ninguém, nem o
+         administrador pelo app. A hora é a do servidor (em == request.time) e
+         o autor é o da sessão (por == e-mail do token): o aparelho não
+         consegue carimbar outra hora nem outra pessoa. */
+      match /historico/{registro} {
+        allow read: if canUseAgracta();
+        allow create: if canUseAgracta()
+          && request.resource.data.keys().hasOnly(['rev','colecao','docId','acao','anterior','grande','em','por','porNome'])
+          && request.resource.data.rev is int
+          && request.resource.data.colecao is string
+          && request.resource.data.docId is string
+          && request.resource.data.acao in ['criar','alterar','apagar']
+          && request.resource.data.em == request.time
+          && request.resource.data.por == request.auth.token.email;
+        allow update, delete: if false;
+      }
+
+      /* `historico` fica de fora desta regra genérica de propósito: no Firestore
+         basta UMA regra permitir para o acesso valer, e esta aqui permitiria
+         reescrever o histórico. */
       match /{collection}/{document} {
-        allow read, write: if collection != 'members' && canUseAgracta();
+        allow read, write: if collection != 'members' && collection != 'historico' && canUseAgracta();
       }
     }
 
