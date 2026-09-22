@@ -251,6 +251,37 @@
       });
     }).catch(function(){return null;});
   }
+  /* ===== ARMAZENAMENTO CHEIO NAO PODE DESFAZER TRABALHO ======================
+     Com o armazenamento rapido (localStorage) cheio, save() falha e a edicao
+     so fica na memoria e no cofre (IndexedDB). Na abertura seguinte o app lia
+     o localStorage — a copia de ANTES da edicao — e tentava devolver o cofre
+     para ele. Sem espaco, falhava calado, e o app abria com a copia velha:
+     estudos finalizados voltavam abertos, a cada recarga.
+
+     Agora, quando o cofre e mais novo e nao cabe no localStorage, ele entra
+     direto na memoria, PELO MERGE (uniao: nada do que esta na memoria nem no
+     cofre se perde), e a uniao sobe para a nuvem. O localStorage deixa de ser
+     condicao para o dado existir. */
+  function aplicarCofreNaMemoria(snap,tentativas){
+    tentativas=tentativas||0;
+    if(typeof window.cloudApply!=='function'||typeof window.cloudState!=='function'||
+       (typeof document!=='undefined'&&document.readyState==='loading')){
+      if(tentativas<50)setTimeout(function(){aplicarCofreNaMemoria(snap,tentativas+1);},200);
+      return false;
+    }
+    try{
+      var st=clone(snap.state);
+      /* A revisao do cofre pode ser menor que a da nuvem ja lida; o cofre nao e
+         leitura velha da nuvem, e trabalho deste aparelho — nao pode ser
+         descartado pela protecao de "estado mais antigo". */
+      delete st.rev;
+      if(typeof setUnsavedChanges==='function')setUnsavedChanges(true);
+      window.cloudApply(st);
+      FB.cofreNaMemoria=true;
+      cloudBadge('offline','=⚠ armazenamento do aparelho cheio · dados abertos pelo cofre offline');
+      return true;
+    }catch(e){console.error('[Agracta offline] cofre na memória:',e);return false;}
+  }
   function restoreCheckpointToLocal(st,savedAt,localAtivo){
     if(!st)return false;
     try{
@@ -300,9 +331,11 @@
             sessionStorage.setItem('agracta-idb-restored','1');
             return;
           }
-          if((!temLocal || (snap.savedAt||0)>localTs) && restoreCheckpointToLocal(snap.state,snap.savedAt,snap.localAtivo)){
-            sessionStorage.setItem('agracta-idb-restored','1');
-            location.reload();
+          if(!temLocal || (snap.savedAt||0)>localTs){
+            if(restoreCheckpointToLocal(snap.state,snap.savedAt,snap.localAtivo)){
+              sessionStorage.setItem('agracta-idb-restored','1');
+              location.reload();
+            }else aplicarCofreNaMemoria(snap);
           }
         }
       });
@@ -795,6 +828,8 @@
       // O portal recebe somente a cópia confirmada, nunca lançamentos em edição.
       try{window.dispatchEvent(new CustomEvent('agracta:sincronizado',{detail:{state:st,rev:newRev}}));}catch(_e){}
       clearTimeout(FB.timer);FB.timer=null;
+      /* Outro aparelho gravou enquanto este enviava: le e mescla antes de seguir. */
+      if(FB.lerDepois&&typeof window.cloudPull==='function'){FB.lerDepois=false;return window.cloudPull();}
       if(changed)return commitState(latest);
     },function(e){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
@@ -806,6 +841,36 @@
     /* Mantém a rejeição para quem aguarda; chamadas de autosave podem não aguardar. */
     FB.pushPromise.catch(function(){});
     return FB.pushPromise;
+  }
+
+  /* ===== NUNCA GRAVAR POR CIMA DO QUE NAO FOI LIDO ===========================
+     commitState grava cada documento que mudou em relacao a ULTIMA LEITURA
+     deste aparelho. Se outro aparelho gravou depois dela, este gravava a sua
+     copia do estudo por cima — e um estudo finalizado no computador voltava
+     aberto porque o celular, com a copia de antes, mexeu em qualquer coisa nele.
+
+     Antes de gravar: uma leitura do documento raiz (1 leitura, nao o banco
+     inteiro). Revisao nova na nuvem -> le tudo, MESCLA com o aparelho (uniao) e
+     grava a uniao. Sem conexao para conferir -> NAO grava: a edicao fica no
+     aparelho e no cofre e sobe quando a conexao voltar. */
+  function conferirAntesDeGravar(st){
+    if(!firebaseInit()||!FB.user||!FB.db)return commitState(st);
+    if(FB.pushing)return commitState(st);
+    if(FB.conferindo)return FB.conferindo;
+    var p=FB.db.doc(ROOT).get().then(function(snap){
+      FB.conferindo=null;
+      var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
+      if(rev>(FB.lastRev||0)&&typeof window.cloudPull==='function')return window.cloudPull();
+      return commitState(localState()||st);
+    },function(e){
+      FB.conferindo=null;
+      setUnsavedChanges(true);
+      cloudBadge('offline','=⌁ sem conexão · alterações guardadas neste aparelho');
+      console.error('[Agracta Firebase] conferência antes de gravar:',e);
+      return false;
+    });
+    FB.conferindo=p;
+    return p;
   }
 
   window.cloudInit=function(){return firebaseInit();};
@@ -825,8 +890,11 @@
   window.cloudSave=function(){
     clearTimeout(FB.timer);
     var st=localState();if(!st)return;
+    /* Restaurar backup ou importar SUBSTITUI de proposito: nao passa pelo merge. */
+    var substituir=!!window._cloudReplace;
     window._cloudReplace=false;
-    return commitState(st);
+    if(substituir)return commitState(st);
+    return conferirAntesDeGravar(st);
   };
   window.cloudSyncNow=function(){return cloudSave();};
   function _agractaAcessoBanner(email){
@@ -904,8 +972,12 @@
     FB.unsub=FB.db.doc(ROOT).onSnapshot({includeMetadataChanges:true},function(snap){
       if(!snap.exists||snap.metadata.hasPendingWrites)return;
       var rev=(snap.data()||{}).rev||0;
-      if(rev>FB.lastRev&&!FB.pushing){
-        FB.lastRev=rev;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
+      /* `lastRev` so muda quando a leitura ACONTECE (readRemote). Marca-lo aqui
+         fazia a conferencia antes de gravar achar que o aparelho ja tinha lido
+         uma revisao que ainda estava a caminho. */
+      if(rev>FB.lastRev&&FB.pushing){FB.lerDepois=true;return;}
+      if(rev>FB.lastRev&&rev!==FB.revAvisado){
+        FB.revAvisado=rev;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
       }
     },function(){cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');});
   };

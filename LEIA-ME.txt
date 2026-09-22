@@ -1,3 +1,67 @@
+AGRACTA — 15a publicacao                    22/09/2026
+=====================================================
+
+Leva: 1 arquivo de codigo + 1 teste novo.
+  CODIGO:  firebase-sync.js  index.html  sw.js
+  TESTE:   test_armazenamento_cheio.js  (novo)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Estudos finalizados voltavam abertos no celular. Duas causas, as duas no
+caminho entre o aparelho e a nuvem.
+
+1) ARMAZENAMENTO CHEIO NAO DESFAZ MAIS O TRABALHO
+
+O armazenamento rapido do navegador (localStorage, ~5 MB) encheu no celular.
+Finalizar um estudo gravava so na memoria e no cofre offline (IndexedDB). Na
+abertura seguinte o app lia o armazenamento rapido — a copia de ANTES das
+finalizacoes —, tentava devolver o cofre para ele, falhava calado e abria com a
+copia velha. A cada recarga, tudo voltava aberto.
+
+Agora, quando o cofre e mais novo e nao cabe no armazenamento rapido, ele
+entra direto na memoria, PELO MERGE (uniao: nada da memoria nem do cofre se
+perde), e a uniao sobe para a nuvem. O selo avisa: "armazenamento do aparelho
+cheio · dados abertos pelo cofre offline".
+
+2) NENHUM APARELHO GRAVA MAIS POR CIMA DO QUE NAO LEU
+
+O aparelho gravava cada estudo que mudou em relacao a sua ULTIMA leitura, sem
+conferir se outro aparelho tinha gravado depois. Um celular com a copia de
+antes da finalizacao, mexendo em qualquer coisa do estudo, gravava a copia
+velha por cima.
+
+Agora, antes de gravar, o aparelho le o documento raiz da nuvem (1 leitura so).
+Se ha revisao nova, le tudo, MESCLA e grava a uniao. Sem conexao para conferir,
+nao grava: a edicao fica no aparelho e no cofre e sobe quando a conexao voltar.
+O aviso de "revisao nova" do tempo real deixou de contar como leitura feita, e
+o que chega durante um envio e lido logo depois dele.
+
+Restaurar backup e importar continuam SUBSTITUINDO, como o aviso promete.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. No celular: abrir o app (duas vezes, para a versao nova entrar). Os estudos
+   finalizados aparecem finalizados; o selo pode avisar do armazenamento cheio.
+2. No PC: recarregar. Os mesmos estudos finalizados.
+3. Editar algo no PC com o celular aberto, depois editar no celular: as duas
+   edicoes aparecem nos dois.
+
+
+TESTES
+------
+  test_armazenamento_cheio.js  16 verificacoes (novo). Com o firebase-sync.js
+  anterior, falha na terceira: o estudo abre ABERTO.
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 14a publicacao                    22/09/2026
 =====================================================
 
