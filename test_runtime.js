@@ -24,12 +24,14 @@ var raiz = __dirname;
 var htmlPath = path.join(raiz, 'index.html');
 var html = fs.readFileSync(htmlPath, 'utf8');
 var vendorDir = path.join(raiz, 'vendor');
+var runtimeErrors = [];
 
 var virtualConsole = new jsdom.VirtualConsole();
 virtualConsole.on("error", function(err) {
   console.error("CONSOLE ERROR:", err);
 });
 virtualConsole.on("jsdomError", function(err) {
+  runtimeErrors.push(err.message);
   console.error("JSDOM error:", err.message);
   if (err.stack) console.error(err.stack);
 });
@@ -67,6 +69,7 @@ window.navigator.geolocation = {
   getCurrentPosition: function() {}
 };
 window.onerror = function(msg, url, line, col, err) {
+  runtimeErrors.push(String(msg));
   console.error("WINDOW RUNTIME ERROR:", msg, "at line", line, "col", col);
   if (err) console.error(err.stack);
 };
@@ -79,6 +82,7 @@ function executeFile(filePath) {
   } catch (e) {
     console.error("Error executing " + path.basename(filePath) + ":", e.message);
     if (e.stack) console.error(e.stack);
+    process.exit(1);
   }
 }
 
@@ -292,7 +296,10 @@ try {
 
 // Wait a bit and exit
 setTimeout(function() {
+  if (runtimeErrors.length) {
+    console.error('FALHA: erros durante o carregamento/eventos: ' + runtimeErrors.join('; '));
+    process.exit(1);
+  }
   console.log("Check complete.");
   process.exit(0);
 }, 500);
-
