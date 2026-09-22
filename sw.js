@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v289';
+var CACHE = 'agracta-app-v290';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=2',
@@ -42,9 +42,22 @@ var ASSETS = [
 self.addEventListener('install', function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }).then(function(){ return self.skipWaiting(); }));
 });
+/* CADA MÓDULO LIMPA SÓ A PRÓPRIA CASA.
+   O CacheStorage é da ORIGEM, não do escopo: este service worker e o da
+   estatística (/estatistica/sw.js) enxergam exatamente a mesma lista de
+   caches. Enquanto a faxina era "apague tudo que não seja meu", os dois se
+   apagavam: abrir a estatística jogava fora o cache do app, e abrir o app
+   jogava fora o da estatística — junto com os ~115MB do Pyodide, que levam
+   uma conexão boa para voltar. Nada disso dá erro na tela; aparece no
+   talhão, sem sinal, quando o app não abre.
+   Agora a faxina é por PREFIXO: cada um só apaga as versões velhas de si
+   mesmo. O PYO_CACHE já fica de fora do prefixo de propósito (é 'pyodide',
+   não 'app'), e o teste continua guardando os dois. */
 self.addEventListener('activate', function(e){
   e.waitUntil(caches.keys().then(function(ks){
-    return Promise.all(ks.map(function(k){ if(k!==CACHE && k!==PYO_CACHE) return caches.delete(k); }));
+    return Promise.all(ks.map(function(k){
+      if(/^agracta-app-v/.test(k) && k!==CACHE && k!==PYO_CACHE) return caches.delete(k);
+    }));
   }).then(function(){ return self.clients.claim(); }));
 });
 self.addEventListener('fetch', function(e){
