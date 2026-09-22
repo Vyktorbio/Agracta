@@ -147,6 +147,50 @@ else
   else avisar "index.html pede '$JS_HTML' mas o sw.js pré-carrega '$JS_SW' — corrija a lista ASSETS do sw.js"; fi
 fi
 
+# O PAREAMENTO VALE PARA AS DUAS CASAS, E EM QUALQUER FORMATO DE VERSAO.
+# As quatro linhas acima olham so o app principal, e com o padrao ?v=<numero>.
+# A estatistica versiona como ?v=bioensaio-auditoria-<n>, entao ela nunca foi
+# conferida: o SHELL ficou pedindo styles.css, exemplos.js e manifest na -11
+# enquanto o HTML pedia a -12. Resultado: o pre-cache guardava tres arquivos
+# que ninguem mais pede e deixava sem pre-carga os tres que o HTML busca --
+# a casa parecia pronta para offline e nao estava, sem erro em lugar nenhum.
+# E o mesmo furo que a checagem de existencia ja tinha tapado ali embaixo
+# ("sao DUAS casas com esse mesmo risco"); faltava tapar aqui.
+if command -v node >/dev/null 2>&1; then
+  DESPAREADOS=$(node - <<'NODE' 2>/dev/null
+var fs=require("fs"), fora=[];
+function ler(a){ return fs.existsSync(a)?fs.readFileSync(a,"utf8"):""; }
+function semQuery(u){ return String(u).replace(/^\.\//,"").replace(/[?#].*$/,""); }
+[ {nome:"app",         sw:"sw.js",             lista:/var ASSETS\s*=\s*\[([\s\S]*?)\]/,   html:"index.html"},
+  {nome:"estatistica", sw:"estatistica/sw.js", lista:/const SHELL\s*=\s*\[([\s\S]*?)\]/, html:"estatistica/index.html"}
+].forEach(function(c){
+  var m=ler(c.sw).match(c.lista); if(!m) return;
+  var lista=(m[1].match(/["'][^"']+["']/g)||[]).map(function(s){ return s.slice(1,-1).replace(/^\.\//,""); });
+  /* So interessa o que o SW DECIDIU pre-carregar: se o caminho nem esta na
+     lista, nao ha promessa de offline para cobrar. O que nao pode e a lista
+     prometer um caminho e o HTML pedir esse mesmo caminho com outra versao. */
+  var porCaminho={}; lista.forEach(function(u){ (porCaminho[semQuery(u)]=porCaminho[semQuery(u)]||[]).push(u); });
+  var html=ler(c.html), r=/(?:src|href)="([^"]+\?v=[^"]+)"/g, x;
+  while((x=r.exec(html))){
+    var pedido=x[1].replace(/^\.\//,""), caminho=semQuery(pedido), tem=porCaminho[caminho];
+    if(!tem) continue;
+    if(tem.indexOf(pedido)<0)
+      fora.push(c.nome+": o HTML pede '"+pedido+"' mas a lista do "+c.sw+" tem '"+tem.join("', '")+"'");
+  }
+});
+console.log(fora.join("\n"));
+NODE
+)
+  if [ -z "$DESPAREADOS" ]; then
+    ok "as duas casas pré-carregam as versões que o HTML pede (app e estatística)"
+  else
+    echo "$DESPAREADOS" | while IFS= read -r l; do
+      [ -n "$l" ] && avisar "$l — pré-cache é por URL: a versão velha guarda um arquivo que ninguém pede e deixa o pedido sem pré-carga"
+    done
+    PROBLEMAS=$(( PROBLEMAS + $(echo "$DESPAREADOS" | grep -c .) ))
+  fi
+fi
+
 
 # Todo arquivo pre-carregado precisa existir. O sw.js usa cache.addAll(), que e
 # tudo-ou-nada: um unico 404 na lista faz a instalacao inteira falhar, o Service
