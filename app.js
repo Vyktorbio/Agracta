@@ -212,6 +212,32 @@ function ic(n,sz){ var P={
      como microscópio — tirando ele, as versões de três traços que testei
      viraram tomada, prego e avião de papel. */
   microscope:'<path d="M3 21h18"/><path d="M14 21a7 7 0 1 0 0-14h-1"/><path d="M6 17h6"/><path d="M9 3h3v3h1v6H8V6h1z"/>',
+  /* A ESPECIALIDADE GANHA DESENHO, NÃO SÓ COR.
+     O mapa já pintava Entomologia de âmbar, Fitopatologia de roxo e
+     Nematologia de azul, e os três pinos eram o mesmo microscópio. Cor
+     sozinha é um canal fraco: no sol, no vidro sujo, para quem não distingue
+     bem as três, a única diferença sumia. Com forma, a diferença sobrevive ao
+     campo — e quem enxerga cor ganha os dois sinais somados.
+
+     O microscópio CONTINUA sendo o laboratório em geral: é ele que aparece na
+     escolha "Campo ou Laboratório", onde ainda não há especialidade nenhuma.
+     Estes três só entram onde a especialidade já é conhecida.
+
+     Os três obedecem à mesma régua do microscópio (test_lab_icone.js): no
+     máximo o número de traços do vizinho mais cheio, e nenhum traço solto com
+     menos de quatro unidades. */
+  /* Pentatomídeo visto de cima: ombro largo e anguloso, abdome arredondado,
+     antenas abertas. Tentei o escudo com o escutelo dentro e ele lia "brasão
+     de segurança"; tentei sem antena e virou bolota. O que faz o desenho ser
+     inseto é o par ombro-largo + antena. */
+  bug:'<path d="M10 4h4l1 3 6 2-1 4a8 8 0 0 1-16 0l-1-4 6-2z"/><path d="M10 4 6 1"/><path d="M14 4l4-3"/>',
+  /* Folha com a nervura. A LESÃO FICA DE FORA de propósito: uma mancha no
+     meio da folha, em qualquer tamanho que sobreviva, lê como OLHO. */
+  leaf:'<path d="M20 4C10 4 4 10 4 20c10 0 16-6 16-16z"/><path d="M4 20 15 9"/>',
+  /* Nematoide. As versões enroladas viravam a letra G, e a reta virava um
+     risco fino que sumia ao lado do bicho e da folha. Esta tem a ondulação do
+     verme e o peso dos outros dois. */
+  nematode:'<path d="M5 19c8 0 3-7 8-9s6 3 6 3"/><path d="M5 19c-1-2 1-4 3-4"/>',
   /* Campo anda junto com o laboratório: os dois aparecem lado a lado na
      escolha do tipo de quadra, e trocar só um deixaria o par desirmanado. */
   map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
@@ -1251,6 +1277,11 @@ function quadraLabTipo(id){
   return LAB_TIPOS.indexOf(d.labTipo)>=0?d.labTipo:'';
 }
 function labTipoCor(t){ return LAB_CORES[t]||'#21a86b'; }
+/* O desenho da especialidade. Quadra de laboratório sem especialidade marcada
+   volta ao microscópio, que é o que ela é: um laboratório, ainda sem dizer de
+   quê. Mesma escolha que labTipoCor faz com o verde. */
+var LAB_ICONES={Entomologia:'bug', Fitopatologia:'leaf', Nematologia:'nematode'};
+function labTipoIcone(t){ return LAB_ICONES[t]||'microscope'; }
 function setQuadraLabTipo(id,tipo){
   if(!data[id]||!isQuadraLab(id)) return false;
   if(LAB_TIPOS.indexOf(tipo)<0) return false;
@@ -1951,7 +1982,7 @@ function novaQuadraLabTipo(){
     '<div class="calc-sub">Área de Biologia</div>'+
     '<div class="qtipo-opts">'+LAB_TIPOS.map(function(t){
       return '<button class="qtipo-op" onclick="fecharNovaQuadraTipo();criarQuadraLab(\''+t+'\')">'+
-        '<div class="qtipo-ico" style="color:'+labTipoCor(t)+'">🧫</div><div><div class="qtipo-t">'+t+'</div>'+
+        '<div class="qtipo-ico" style="color:'+labTipoCor(t)+'">'+ic(labTipoIcone(t),22)+'</div><div><div class="qtipo-t">'+t+'</div>'+
         '<div class="qtipo-d">'+desc[t]+'</div></div></button>';
     }).join('')+'</div>'+
     '<div class="calc-actions"><button class="calc-close" onclick="novaQuadraTipo()">Voltar</button></div>'+
@@ -3302,7 +3333,7 @@ function renderQuadraLab(id){
   var m=LF.marker(ll,{
     draggable:!!editMode, zIndexOffset:900,
     icon:LF.divIcon({className:'lab-pin'+(isEd?' on':''),
-      html:'<div class="lab-pin-b" style="color:'+_c+'">'+ic('microscope',14)+'</div>'+
+      html:'<div class="lab-pin-b" style="color:'+_c+'">'+ic(labTipoIcone(quadraLabTipo(id)),14)+'</div>'+
            '<div class="lab-pin-t">'+esc(quadraNome(id))+(n?' <b style="color:'+_c+'">'+n+'</b>':'')+'</div>',
       iconSize:[0,0], iconAnchor:[13,13]})
   }).addTo(_qLayer);
@@ -6969,7 +7000,7 @@ function showD(id){
   if(_lab){
     h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+_labC+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">\u2715</button>'+
       '<div><div class="panel-qlbl" style="color:'+_labC+'">LABORAT\u00d3RIO</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div>'+
-      '<div class="panel-sbox" style="background:'+_labC+'15;border:1px solid '+_labC+'55;margin-right:36px"><div class="panel-scode" style="color:'+_labC+'">'+ic('microscope',20)+'</div><div class="panel-slbl" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div></div>';
+      '<div class="panel-sbox" style="background:'+_labC+'15;border:1px solid '+_labC+'55;margin-right:36px"><div class="panel-scode" style="color:'+_labC+'">'+ic(labTipoIcone(_labT),20)+'</div><div class="panel-slbl" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div></div>';
     h+='<div class="panel-body"><div class="info-grid">'+
       '<div><div class="info-l">ESPECIALIDADE</div><div class="info-v" style="color:'+_labC+'">'+esc(_labT||'\u2014')+'</div></div>'+
       '<div><div class="info-l">\u00c1REA</div><div class="info-v">Biologia</div></div>'+
