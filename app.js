@@ -404,8 +404,14 @@ function save(){
     _saveErrAlerted=false;
   }catch(e){
     err=e;
-    /* Sem espaço? Sacrifica os backups LOCAIS (a nuvem + Histórico da nuvem cobrem recuperação)
-       e tenta gravar o estado ativo de novo ANTES de alertar — preservar o dado atual é prioridade. */
+    /* Sem espaço? Sacrifica os backups LOCAIS e tenta gravar o estado ativo de novo
+       ANTES de alertar — preservar o dado atual é prioridade.
+       A justificativa escrita aqui era "a nuvem + Histórico da nuvem cobrem
+       recuperação", e ela deixou de valer: o Histórico da nuvem é do backend
+       antigo e o firebase-sync o redireciona para os próprios Backups locais —
+       que são justamente o que esta linha apaga. Sobra a nuvem, e a nuvem guarda
+       UMA versão, a mais recente: nada a que voltar. Continua sendo a escolha
+       certa contra perder a edição em curso, mas o preço é esse, e está escrito. */
     ok=false;
     try{
       var bk=JSON.parse(localStorage.getItem('iracema-safety')||'[]');
@@ -1887,6 +1893,13 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
     '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
     '<button onclick="closeMainMenu();openAvalRecovery()">'+ic('save')+' Recuperação de avaliações</button>'+
+    /* `openIntegridade` existia desde sempre e não tinha porta: a chamada automática
+       na abertura foi removida a pedido (avisava demais, cedo demais) e nenhum botão
+       ficou no lugar. Verificação que ninguém consegue abrir não verifica nada — e
+       é ela que agora sabe dizer que um estudo perdeu a finalização. Aqui ela entra
+       sob demanda, que é o que foi pedido: sem incomodar na abertura, disponível na
+       hora em que algo parece errado. */
+    '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificação de integridade</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
     (adm?'<button onclick="closeMainMenu();openComplianceISMS()">'+ic('archive')+' Conformidade &amp; ISMS</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+(_menuNome?('<b>'+esc(_menuNome)+'</b><br>'):'')+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
@@ -2250,13 +2263,31 @@ function cloudBadge(kind,txt){
     el.style.display='none';
   }
 }
+/* ESTADO ESTACIONADO E ESTADO VELHO ===========================================
+   Uma leitura da nuvem que chega no meio de uma edição de quadra/avaliação fica
+   guardada em `_cloudPending` e só é aplicada quando a edição termina. Entre
+   guardar e aplicar pode passar bastante tempo — e o que for GRAVADO nesse
+   intervalo não está dentro do estado guardado.
+
+   A rede de proteção era `if(_unsavedChanges)`: havendo edição pendente, o
+   estado guardado passa por um merge antes de entrar. Mas basta o push do
+   intervalo dar certo — que é o caso NORMAL, não o excepcional — para
+   `_unsavedChanges` voltar a false; aí o estado guardado entra CRU e o
+   `data=st.data` lá embaixo troca a memória inteira por um retrato anterior
+   àquela gravação. É assim que um estudo finalizado volta a aparecer aberto,
+   na agenda e na ficha da quadra, sem que ninguém tenha reaberto nada.
+
+   Estado estacionado é velho POR CONSTRUÇÃO. Ele volta pelo merge, sempre —
+   que é união e portanto não descarta nem o lado de cá nem o de lá. */
+var _cloudPendingParked=false;
 function cloudApply(st){
   if(!st) return;
+  var _parked=_cloudPendingParked; _cloudPendingParked=false;
   /* não atropela edição de quadra em andamento — guarda e aplica ao terminar */
-  if(window._qEditing || window._avEditing){ _cloudPending=st; return; }
+  if(window._qEditing || window._avEditing){ _cloudPending=st; _cloudPendingParked=true; return; }
   /* não aplica um estado MAIS ANTIGO sobre um mais novo (protege de push obsoleto/realtime) */
   if(st.rev!=null && _cloudRev!=null && st.rev < _cloudRev){ return; }
-  if(_unsavedChanges){
+  if(_unsavedChanges || _parked){
     st=cloudMerge(cloudState(), st);
     setTimeout(cloudSaveSoon, 50);
   }
@@ -2476,6 +2507,38 @@ function _mergeMemorias(novo, velho){
   }
   return out;
 }
+/* A TRILHA DE AUDITORIA NAO PODE ENCOLHER =====================================
+   `_mergeStudy` junta CAMPO a campo, e um array e um campo: o lado que vence leva
+   o seu `audit` inteiro por cima do outro. Dois aparelhos trabalhando o mesmo
+   estudo em paralelo — que e o normal aqui — perdem, a cada sync, tudo o que o
+   perdedor registrou. Nao e uma perda cosmetica: a entrada "Finalizacao do
+   Estudo" mora nessa lista, e com ela some o unico registro de que o estudo
+   chegou a ser finalizado.
+
+   Trilha de BPL e ADITIVA por definicao: ninguem edita uma entrada, so
+   acrescenta. Entao ela se junta pela UNIAO, como `memoriasAnteriores` ja se
+   junta, com a ordem cronologica restabelecida no fim. Uma trilha que encolhe
+   nao e trilha.
+
+   A identidade da entrada e carimbo + acao + texto: iguais nos tres, e a MESMA
+   entrada vista de dois aparelhos, nao duas. */
+function _mergeTrilha(la,ca){
+  var out=[], vistos={};
+  function junta(lista){
+    /* Trilha corrompida (texto, numero, objeto) nao derruba a sincronizacao
+       inteira: ignora-se o que nao e lista e o resto passa. */
+    if(!Array.isArray(lista)) return;
+    lista.forEach(function(e){
+      if(e==null || typeof e!=='object') return;
+      var k=(e.ts||0)+'|'+(e.iso||'')+'|'+(e.action||'')+'|'+(e.details||'');
+      if(vistos[k]) return;
+      vistos[k]=1; out.push(e);
+    });
+  }
+  junta(la); junta(ca);
+  out.sort(function(x,y){ return (x.ts||0)-(y.ts||0); });
+  return out;
+}
 function _mergeAplicacao(la,ca){
   var novo=((ca&&ca._ts)||0)>((la&&la._ts)||0) ? ca : la;
   var velho=(novo===ca)?la:ca;
@@ -2499,6 +2562,7 @@ function _mergeStudy(ls,cs){
   m._deletedAplicacoes=delAp; m._deletedAvaliacoes=delAv;
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
+  if(Array.isArray(ls.audit)||Array.isArray(cs.audit)) m.audit=_mergeTrilha(ls.audit,cs.audit);
   if(typeof ConhecimentoCore!=="undefined" && (ls.integracoes||cs.integracoes)) m.integracoes=ConhecimentoCore.merge(ls.integracoes,cs.integracoes);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
   return m;
@@ -17816,6 +17880,40 @@ function integridadeScan(){
         var tids={}; (s.tratamentos||[]).forEach(function(t){ if(t&&t.id) tids[t.id]=1; });
         var nTrat=(s.tratamentos||[]).length, nAval=(s.avaliacoes||[]).length;
         if(!nTrat && nAval) out.push({sev:'alta',msg:'Estudo “'+cod+'” ('+loc+') tem avaliação mas nenhum tratamento cadastrado.'});
+        /* FINALIZACAO QUE SUMIU — a trilha sabe o que o estudo esqueceu.
+           Finalizar grava o campo `finalizacao` E uma entrada "Finalizacao do
+           Estudo" na trilha. Reabrir apaga o campo E grava "Reabertura do
+           Estudo". Trilha com finalizacao, sem reabertura DEPOIS dela, e sem o
+           campo: o estudo foi finalizado e perdeu a finalizacao sem que
+           ninguem o reabrisse.
+
+           Isto nao conserta — APONTA. Reconstruir a finalizacao seria inventar
+           rubrica e estatistica congelada, que e exatamente o que uma trilha
+           de BPL existe para impedir. O que da para dizer com honestidade e a
+           data em que ela existiu, e essa data basta para decidir de qual
+           backup vale a pena voltar. */
+        var _finTs=0,_reabTs=0,_finIso='';
+        (s.audit||[]).forEach(function(e){
+          if(!e) return;
+          var t=e.ts||0;
+          if(!t && e.iso){ var d=new Date(e.iso); if(!isNaN(d.getTime())) t=d.getTime(); }
+          if(e.action==='Finalização do Estudo'){ if(t>=_finTs){ _finTs=t; _finIso=e.iso||''; } }
+          else if(e.action==='Reabertura do Estudo'){ if(t>_reabTs) _reabTs=t; }
+        });
+        if(_finTs && _finTs>_reabTs && !(s.finalizacao&&s.finalizacao.em)){
+          /* A data só entra na frase se for uma data de verdade. Trilha antiga pode
+             não ter carimbo utilizável, e "finalizado em 31/12/1969" faz quem lê
+             duvidar do aviso inteiro — justamente o aviso que precisa ser levado a
+             sério. Sem data crível, o aviso diz o que sabe e cala o que não sabe. */
+          var _quando='';
+          if(_finTs > 946684800000){   /* 2000-01-01: antes disso o carimbo não é dele */
+            try{ _quando=_agFormatDateTime(_finIso||new Date(_finTs).toISOString()); }
+            catch(e){ try{ _quando=new Date(_finTs).toLocaleString('pt-BR'); }catch(e2){ _quando=''; } }
+          }
+          out.push({sev:'alta',msg:'Estudo “'+cod+'” ('+loc+'): a trilha registra '+
+            (_quando?('a finalização de '+_quando):'uma finalização')+
+            ', e nenhuma reabertura depois dela — mas o estudo não está mais finalizado.'});
+        }
         if(s.testemunha && nTrat && !tids[s.testemunha]) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): a testemunha definida (“'+s.testemunha+'”) não está entre os tratamentos.'});
         var orf={};
         (s.avaliacoes||[]).forEach(function(a){
