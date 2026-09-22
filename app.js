@@ -17620,11 +17620,44 @@ function closeEventEdit(){
 
 /* ============ EXPORT / IMPORT JSON ============ */
 /* ===================== BACKUPS LOCAIS (rede de segurança: snapshot antes de ações destrutivas) ===================== */
+/* O RETRATO TEM DE SER O MESMO QUE O EXPORTAR TIRA.
+   Este backup e o exportData() guardam a mesma coisa — o estado do aparelho —
+   e por isso a lista de campos dos dois tem de ser a mesma. Ela não era: aqui
+   faltavam cinco, e o que faltava eram justamente as LÁPIDES DE EXCLUSÃO e as
+   NOTAS DE CAMPO.
+
+   A falta das lápides quebrava a própria promessa da tela. Apagar uma quadra
+   grava uma lápide (_delQuadras) num localStorage separado do QGEO e do data.
+   Como o retrato não guardava a lápide e a restauração não a desfazia, ela
+   sobrevivia ao backup — e aí o efeito depende de que quadra é, porque
+   quadrasDoLocal só consulta a lápide no SEGUNDO laço:
+
+     - QUADRA DE LABORATÓRIO (sem geometria, só um ponto) mora no `data` e
+       entra pelo segundo laço, que respeita a lápide. Restaurar devolvia a
+       quadra ao `data` e ela continuava INVISÍVEL. Conferido no navegador:
+       antes da correção, `quadrasAtivas()` voltava vazio depois de restaurar.
+     - QUADRA DE CAMPO entra pelo primeiro laço, por ter geometria no QGEO, e
+       aquele laço não olha a lápide: ela voltava visível. Aqui o estrago não
+       era na tela — era que a lápide velha continuava no aparelho e segue no
+       pacote que sobe para a nuvem (`_deletedQuadras` em cloudState), dizendo
+       "isto foi apagado" sobre algo que acabou de ser restaurado.
+
+   As notas de campo não estavam no retrato nem na restauração, então nota
+   apagada antes de restaurar não voltava — e ninguém avisava.
+
+   test_backup_local.js cobra que as duas listas continuem iguais: campo novo
+   no exportar tem de entrar aqui junto, senão a rede volta a ter buraco. */
 function safetySnap(){
   try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
   try{ if(typeof ensureCfgTS==='function') ensureCfgTS(); }catch(e){}
   try{ if(typeof ensureItens==='function') ensureItens(); }catch(e){}
+  try{ if(typeof ensureNotas==='function') ensureNotas(); }catch(e){}
   return { ts:Date.now(),
+    georefts:(typeof GEOREF_TS!=='undefined'?GEOREF_TS:0),
+    notas_campo:(typeof NOTAS_CAMPO!=='undefined'?NOTAS_CAMPO:[]),
+    _deletedQuadras:(typeof _delQuadras!=='undefined'?_delQuadras:{}),
+    _deletedLocais:(typeof _delLocais!=='undefined'?_delLocais:{}),
+    _deletedNotas:(typeof _delNotas!=='undefined'?_delNotas:{}),
     data:(typeof data!=='undefined'?data:{}),
     qgeo:(typeof QGEO!=='undefined'?QGEO:null),
     qgeots:(typeof QGEO_TS!=='undefined'?QGEO_TS:null),
@@ -17643,9 +17676,25 @@ function safetySnap(){
 function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
   Object.keys(d).forEach(function(k){ (d[k].estudos||[]).forEach(function(e){ est++; ap+=(e.aplicacoes||[]).length; av+=(e.avaliacoes||[]).length; }); });
   return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0),
-           itens:(s.itens?Object.keys(s.itens).length:0), estudos:est, aplic:ap, aval:av };
+           itens:(s.itens?Object.keys(s.itens).length:0), estudos:est, aplic:ap, aval:av,
+           /* As notas entram na conta porque agora entram no retrato: sem isso,
+              a linha do backup diria as mesmas seis coisas de antes e não haveria
+              como ver, olhando a lista, que elas passaram a estar guardadas. */
+           notas:(Array.isArray(s.notas_campo)?s.notas_campo.length:0) };
 }
-function safetyList(){ try{ return JSON.parse(localStorage.getItem('iracema-safety')||'[]'); }catch(e){ return []; } }
+/* Devolve SEMPRE um array. O JSON pode estar válido e ainda assim não ser uma
+   lista (um '{}' escrito por engano, um valor truncado pela cota); sem isto o
+   `arr.push` de safetyBackup estoura e o backup deixa de ser feito em silêncio,
+   justo quando o aparelho está apertado. */
+function safetyList(){ try{ var a=JSON.parse(localStorage.getItem('iracema-safety')||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+/* DEVOLVE SE GUARDOU MESMO. Antes engolia tudo e não dizia nada — e quem
+   chamava (safetyApply) seguia em frente apagando o estado atual, apoiado numa
+   rede que podia não existir. A tela promete "restaurar guarda o estado atual
+   antes"; a promessa só é verdadeira se alguém conferir.
+
+   A poda por cota também estava pela metade: ela encolhia até dois e desistia
+   em silêncio, sem tentar com um. Agora encolhe até caber ou até acabar, e o
+   resultado é honesto: true só quando o localStorage aceitou. */
 function safetyBackup(motivo){
   try{
     var arr=safetyList();
@@ -17653,17 +17702,39 @@ function safetyBackup(motivo){
     snap.motivo=motivo||''; snap.counts=_safetyCounts(snap);
     arr.push(snap);
     while(arr.length>10) arr.shift();
-    try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); }
-    catch(e){ while(arr.length>2){ arr.shift(); try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); break; }catch(e2){} } }
+    while(arr.length){
+      try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); return true; }
+      catch(e){ arr.shift(); }   /* não coube: sacrifica o mais antigo e tenta de novo */
+    }
   }catch(e){}
+  return false;
 }
+/* NÃO RESTAURA SEM REDE. A tela diz, com todas as letras, que o estado atual
+   é guardado antes — então restaurar sem conseguir guardar seria trocar um
+   estado por outro sem volta, exatamente o oposto do que o botão promete. Com
+   o aparelho sem espaço isso era possível e calado. Devolve true/false para
+   quem chama poder parar antes de anunciar "restaurado". */
 function safetyApply(snap){
-  if(!snap) return;
-  safetyBackup('antes de restaurar');
+  if(!snap || !snap.data || typeof snap.data!=='object' || Array.isArray(snap.data)) return false;
+  if(!safetyBackup('antes de restaurar')){
+    alert('Não consegui guardar o estado atual neste aparelho — sem isso a restauração não teria volta.\n\n'+
+          'Exporte os dados (o botão de exportar está nesta mesma tela) e libere espaço antes de restaurar.');
+    return false;
+  }
   try{
     if(snap.data){ data=snap.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
     if(snap.qgeo){ QGEO=snap.qgeo; if(typeof saveQGEO==='function') saveQGEO(); }
     if(snap.georef){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+    if(snap.georefts!=null){ GEOREF_TS=snap.georefts; if(typeof saveGeorefTS==='function') saveGeorefTS(); }
+    /* AS LÁPIDES VOLTAM COM O RESTO — é o que desfaz a exclusão de verdade, em
+       vez de só repor o registro e deixar a lápide de pé. Mesmo caminho que o
+       importData já usa para um backup de arquivo. */
+    if(Array.isArray(snap.notas_campo)){ NOTAS_CAMPO=snap.notas_campo; if(typeof saveNotas==='function') saveNotas(); }
+    if(snap._deletedQuadras && typeof snap._deletedQuadras==='object'){ _delQuadras=snap._deletedQuadras; }
+    if(snap._deletedLocais && typeof snap._deletedLocais==='object'){ _delLocais=snap._deletedLocais; }
+    if(typeof saveDelTombs==='function') saveDelTombs();
+    if(snap._deletedNotas && typeof snap._deletedNotas==='object'){ _delNotas=snap._deletedNotas;
+      try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(_e){} }
     if(snap.locais){ LOCAIS=snap.locais; if(typeof saveLocais==='function') saveLocais(); }
     if(snap.qlocal){ QLOCAL=snap.qlocal; if(typeof saveQLocal==='function') saveQLocal(); }
     if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
@@ -17682,7 +17753,8 @@ function safetyApply(snap){
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
     _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
     save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
-  }catch(e){ alert('Erro ao restaurar: '+e.message); }
+    return true;
+  }catch(e){ alert('Erro ao restaurar: '+e.message); return false; }
 }
 /* ===================== HISTÓRICO DA NUVEM (restaurar versões) ===================== */
 function _chShell(inner){
@@ -17781,11 +17853,11 @@ function openBackups(){
     return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
       '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
       '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
-      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){safetyApply(safetyList().slice().reverse()['+i+']);document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){if(!safetyApply(safetyList().slice().reverse()['+i+']))return;document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
   }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — nada é perdido.</div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
     rows+
     '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">💾 Exportar tudo agora (arquivo)</button></div>'+
   '</div>';
