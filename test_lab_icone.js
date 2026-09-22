@@ -110,20 +110,37 @@ function extensoes(d){
   for(const m of d.matchAll(/\sd="([^"]*)"/g)){
     /* Quebra em subtraços (cada M/m) e acompanha o ponto corrente. O arco
        entra pelo ponto de chegada: a barriga dele só aumenta a extensão, e
-       aqui o que se cobra é um mínimo. */
+       aqui o que se cobra é um mínimo.
+
+       CADA COMANDO PODE TRAZER VÁRIOS CONJUNTOS DE NÚMEROS, e isso não é
+       detalhe: `M10 4 6 1` é um moveto seguido de um lineto IMPLÍCITO, e
+       `M9 3h3v3h1v6H8V6h1z` encadeia vários. A primeira versão desta régua
+       lia só o primeiro conjunto de cada comando e devolvia extensão 0 para
+       um traço inteiro — ou seja, media MENOS do que o desenho tem, que é o
+       jeito perigoso de errar: reprova o que está certo e, pior, deixaria
+       passar um traço miúdo escondido depois do primeiro par. */
     for(const sub of m[1].split(/(?=[Mm])/)){
       if(!sub.trim()) continue;
       let x=0,y=0,minX=1/0,maxX=-1/0,minY=1/0,maxY=-1/0;
       const marca=()=>{ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; };
       for(const c of sub.matchAll(/([MmLlHhVvAaZz])([^MmLlHhVvAaZz]*)/g)){
-        const cmd=c[1], n=(c[2].match(/-?\d*\.?\d+/g)||[]).map(Number);
-        if(cmd==='M'||cmd==='L'){ x=n[0]; y=n[1]; }
-        else if(cmd==='m'||cmd==='l'){ x+=n[0]; y+=n[1]; }
-        else if(cmd==='H'){ x=n[0]; }      else if(cmd==='h'){ x+=n[0]; }
-        else if(cmd==='V'){ y=n[0]; }      else if(cmd==='v'){ y+=n[0]; }
-        else if(cmd==='A'){ x=n[5]; y=n[6]; }
-        else if(cmd==='a'){ x+=n[5]; y+=n[6]; }
-        marca();
+        let cmd=c[1];
+        const n=(c[2].match(/-?\d*\.?\d+/g)||[]).map(Number);
+        const passo={M:2,m:2,L:2,l:2,H:1,h:1,V:1,v:1,A:7,a:7,Z:0,z:0}[cmd];
+        if(!passo){ marca(); continue; }
+        for(let k=0;k<n.length;k+=passo){
+          const v=n.slice(k,k+passo);
+          if(cmd==='M'||cmd==='L'){ x=v[0]; y=v[1]; }
+          else if(cmd==='m'||cmd==='l'){ x+=v[0]; y+=v[1]; }
+          else if(cmd==='H'){ x=v[0]; }      else if(cmd==='h'){ x+=v[0]; }
+          else if(cmd==='V'){ y=v[0]; }      else if(cmd==='v'){ y+=v[0]; }
+          else if(cmd==='A'){ x=v[5]; y=v[6]; }
+          else if(cmd==='a'){ x+=v[5]; y+=v[6]; }
+          marca();
+          /* Depois do primeiro par, um M/m vira lineto — é o que a norma diz
+             e é exatamente o caso que passava batido. */
+          if(cmd==='M') cmd='L'; else if(cmd==='m') cmd='l';
+        }
       }
       fora.push(Math.max(maxX-minX, maxY-minY));
     }
@@ -135,14 +152,75 @@ assert.deepEqual(miudos,[],
   'nenhum traço solto do microscópio pode medir menos que 4 unidades — em '+
   '13px cada unidade vale meio pixel, e o que for menor que isso não é '+
   'desenho, é sujeira (achei: '+miudos.join(', ')+')');
-/* A régua tem de pegar o defeito que ela existe para impedir. */
+/* A régua tem de pegar o defeito que ela existe para impedir... */
 assert.ok(extensoes('<path d="M9 14h2"/>').some(v=>v<4),
   'e ela reprova mesmo o risco de duas unidades que saiu daqui');
+/* ...e tem de MEDIR CERTO o lineto implícito, que é onde ela já errou: se
+   `M10 4 6 1` voltar a medir 0, a régua reprova desenho bom e, pior, deixa
+   passar traço miúdo escondido depois do primeiro par. */
+assert.deepEqual(extensoes('<path d="M10 4 6 1"/>'),[4],
+  'moveto seguido de lineto implícito mede a distância inteira, não zero');
+assert.deepEqual(extensoes('<path d="M2 2 2 9 9 9"/>'),[7],
+  'e com vários linetos implícitos em sequência também');
+
+/* --------------------------------- 1c. cada especialidade tem seu desenho ---
+   Relato de uso, com uma prancha de pentatomídeo em anexo: "seria legal se no
+   laboratório de insetos esse fosse o ícone".
+
+   O mapa já pintava Entomologia de âmbar, Fitopatologia de roxo e Nematologia
+   de azul, e os três pinos eram o mesmo microscópio. COR SOZINHA É UM CANAL
+   FRACO: no sol, no vidro sujo do aparelho, para quem não distingue bem as
+   três, a única diferença sumia. Com forma, a diferença sobrevive ao campo, e
+   quem enxerga cor ganha os dois sinais somados.
+
+   O microscópio continua sendo o laboratório EM GERAL — é ele que aparece na
+   escolha "Campo ou Laboratório", onde ainda não há especialidade. E é para
+   ele que uma quadra sem especialidade marcada volta, pela mesma razão que
+   labTipoCor a devolve ao verde: dizer "é um laboratório" sem inventar de qual
+   é. */
+const ESPECIALIDADES={Entomologia:'bug', Fitopatologia:'leaf', Nematologia:'nematode'};
+Object.entries(ESPECIALIDADES).forEach(([esp,nome])=>{
+  assert.ok(ctxI.ic(nome,14).length>ctxI.ic('naoexiste',14).length,
+    esp+' tem desenho próprio na tabela do ic() ("'+nome+'")');
+  /* A MESMA RÉGUA DO MICROSCÓPIO, senão o conjunto volta a desirmanar: foi
+     por densidade que o microscópio foi redesenhado, e um ícone novo que a
+     ignore recria o problema no pino do lado. */
+  assert.ok(tracos(nome)<=teto,
+    esp+': '+tracos(nome)+' traços contra o teto de '+teto+' da vizinhança');
+  const finos=extensoes(fonteDoIcone(nome)).filter(v=>v<4);
+  assert.deepEqual(finos,[],
+    esp+' não pode ter traço solto abaixo de 4 unidades (achei: '+finos.join(', ')+')');
+});
+
+/* E a ligação especialidade -> desenho, com a volta ao microscópio no fim. */
+const LIGA=fatia('function labTipoIcone(t){');
+assert.match(LIGA,/LAB_ICONES\[t\]\|\|'microscope'/,
+  'especialidade desconhecida ou em branco volta ao microscópio, não a um desenho em branco');
+assert.match(src,/var LAB_ICONES=\{[^}]*Entomologia:'bug'[^}]*\}/,
+  'a tabela liga cada especialidade ao seu desenho');
+/* As três especialidades que existem têm de estar TODAS na tabela: com duas
+   cobertas e uma no microscópio, o mapa vira meio sistema. */
+const TIPOS=src.match(/var LAB_TIPOS=\[([^\]]*)\]/)[1].split(',').map(x=>x.replace(/['\s]/g,''));
+TIPOS.forEach(t=>assert.ok(ESPECIALIDADES[t],
+  'a especialidade "'+t+'" existe em LAB_TIPOS e precisa de desenho próprio'));
+assert.equal(TIPOS.length,Object.keys(ESPECIALIDADES).length,
+  'e não há desenho sobrando para especialidade que não existe');
+
+/* Onde a especialidade é conhecida, é o desenho DELA que vai. */
+[['a escolha "Qual laboratório?"', fatia('function novaQuadraLabTipo(){')],
+ ['o pino do mapa',                fatia('function renderQuadraLab(id){')]
+].forEach(([onde,trecho])=>{
+  assert.match(trecho,/ic\(labTipoIcone\(/, onde+' desenha o ícone da especialidade');
+});
+/* E onde ela NÃO é conhecida, continua o microscópio. */
+assert.match(fatia('function novaQuadraTipo(){'),/ic\('microscope'/,
+  'a escolha "Campo ou Laboratório" fica no microscópio: ali ainda não há especialidade');
 
 /* ------------------------------------------------------------- 2. o pino ---
    Roda renderQuadraLab de verdade, com o ic() e as cores de verdade. */
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const CORES=src.match(/var LAB_CORES=\{[^}]*\};/)[0];
+const ICONES=src.match(/var LAB_ICONES=\{[^}]*\};/)[0];
 
 function pino(labTipo,estudos){
   let html=null;
@@ -159,9 +237,10 @@ function pino(labTipo,estudos){
   };
   ctx.window=ctx; ctx.globalThis=ctx;
   vm.createContext(ctx);
-  vm.runInContext('var ic, LAB_CORES, labTipoCor, renderQuadraLab;\n'+
-    fatia('function ic(n,sz){')+';\n'+CORES+
+  vm.runInContext('var ic, LAB_CORES, LAB_ICONES, labTipoCor, labTipoIcone, renderQuadraLab;\n'+
+    fatia('function ic(n,sz){')+';\n'+CORES+'\n'+ICONES+
     '\nlabTipoCor=function(t){ return LAB_CORES[t]||\'#21a86b\'; };\n'+
+    '\nlabTipoIcone=function(t){ return LAB_ICONES[t]||\'microscope\'; };\n'+
     fatia('function renderQuadraLab(id){'),ctx);
   ctx.renderQuadraLab('LAB1');
   return html;
@@ -190,14 +269,28 @@ const LUGAR=[
   ['a escolha do tipo da quadra', fatia('function novaQuadraTipo(){')],
   ['o painel de edição de quadras', fatia('function buildEditPanel(){')]
 ];
+/* A REGRA É "NENHUM EMOJI", NÃO "NENHUM TUBO DE ENSAIO".
+   Este bloco nasceu caçando o 🧪 pelo nome, e por isso deixou passar um 🧫 na
+   escolha da especialidade: o emoji que a correção trocou saiu, o vizinho
+   dele ficou, e ninguém viu durante meses. A caça passa a ser pela FAIXA de
+   pictogramas — o defeito era "o aparelho desenha", não "é aquele desenho". */
+/* `Emoji_Presentation` é a propriedade exata: verdadeira para os caracteres
+   que o aparelho pinta COLORIDO por conta própria (🧪 🧫 🌱) e falsa para os
+   glifos de texto que este app usa de propósito e deve continuar usando —
+   ✕ no botão de fechar, ⚠ no alerta, × → ✓ · —. Uma faixa de code points
+   pegaria os dois grupos e reprovaria o botão de fechar. */
+const EMOJI=/\p{Emoji_Presentation}/u;
 LUGAR.forEach(([onde,trecho])=>{
-  assert.ok(!/🧪/.test(trecho), onde+' não usa mais o emoji 🧪');
+  const achou=(trecho.match(/\p{Emoji_Presentation}/gu)||[]);
+  assert.deepEqual(achou,[], onde+' não pode desenhar com emoji — quem desenha emoji é o '+
+    'sistema do aparelho, e sai diferente em cada um (achei: '+achou.join(' ')+')');
 });
 const FICHA=src.slice(src.indexOf("var _lab=isQuadraLab(id)"),
                       src.indexOf("/* ESTUDOS: EM ANDAMENTO PRIMEIRO"));
-assert.ok(!/🧪|\\ud83e\\uddea/.test(FICHA),
-  'a ficha do laboratório também não — lá o 🧪 estava escapado, e escapado continuava sendo emoji');
-assert.match(FICHA,/ic\('microscope'/,'ela desenha o microscópio do app');
+assert.ok(!EMOJI.test(FICHA)&&!/\\ud83e\\udd/.test(FICHA),
+  'a ficha do laboratório também não — lá o emoji estava ESCAPADO, e escapado continuava sendo emoji');
+assert.match(FICHA,/ic\(labTipoIcone\(_labT\),20\)/,
+  'e o crachá dela desenha o ícone DA ESPECIALIDADE, não um microscópio para as três');
 
 /* ---------------------------------------------------- 4. a folha acompanha --- */
 const BLOCO=css.slice(css.indexOf('.lab-pin{'), css.indexOf('/* Seletor campo/lab'));

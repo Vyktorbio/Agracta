@@ -40,6 +40,11 @@ const estudoFinalizado=s=>!!(s&&s.finalizacao&&s.finalizacao.em);
    e veste a cor da especialidade, e stub nenhum provaria isso. */
 const IC=fatia('function ic(n,sz){');
 const CORES=src.match(/var LAB_CORES=\{[^}]*\};/)[0];
+/* O pino passou a desenhar o ícone DA ESPECIALIDADE, não um microscópio para
+   as três; a caixa de areia precisa da tabela e da função que fazem essa
+   ligação, senão renderQuadraLab estoura antes de chegar ao que este teste
+   mede (o que o pino conta quando o ensaio está finalizado). */
+const ICONES=src.match(/var LAB_ICONES=\{[^}]*\};/)[0];
 
 function pinoHtml(estudos,labTipo){
   let html=null;
@@ -58,8 +63,10 @@ function pinoHtml(estudos,labTipo){
   };
   ctx.window=ctx; ctx.globalThis=ctx;
   vm.createContext(ctx);
-  vm.runInContext('var ic, LAB_CORES, labTipoCor, renderQuadraLab;\n'+
-    IC+';\n'+CORES+'\nlabTipoCor=function(t){ return LAB_CORES[t]||\'#21a86b\'; };\n'+
+  vm.runInContext('var ic, LAB_CORES, LAB_ICONES, labTipoCor, labTipoIcone, renderQuadraLab;\n'+
+    IC+';\n'+CORES+'\n'+ICONES+
+    '\nlabTipoCor=function(t){ return LAB_CORES[t]||\'#21a86b\'; };\n'+
+    '\nlabTipoIcone=function(t){ return LAB_ICONES[t]||\'microscope\'; };\n'+
     fatia('function renderQuadraLab(id){'),ctx);
   ctx.renderQuadraLab('LAB1');
   assert.ok(html!=null,'a função chegou a montar o ícone do pino');
