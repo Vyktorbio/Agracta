@@ -195,8 +195,23 @@ function ic(n,sz){ var P={
   /* O laboratório era um emoji 🧪, e emoji quem desenha é o sistema do
      aparelho: saía colorido e brilhante no iPhone, chapado no Android, e
      diferente do resto do app em todos. Agora é desenho daqui, no mesmo traço
-     dos outros — e, por herdar currentColor, veste a cor da especialidade. */
-  microscope:'<path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/>',
+     dos outros — e, por herdar currentColor, veste a cor da especialidade.
+
+     E É SÓ O CONTORNO, DE PROPÓSITO. O primeiro desenho tinha seis traços,
+     dois deles de duas unidades — um risco na platina e a tampa da ocular —
+     todos espremidos entre x=7 e x=13, enquanto o resto da caixa eram duas
+     linhas finas e um arco. Os vizinhos com que ele divide a tela (map,
+     sheet, calendar, gauge) são feitos de duas ou três formas grandes, e ao
+     lado deles o microscópio saía mais escuro e mais pesado. Nos dois
+     tamanhos em que ele mais aparece — 13px no botão de tipo, 14px no pino do
+     mapa — aquela tinta toda virava borrão: nenhum detalhe menor que quatro
+     unidades sobrevive a essa redução.
+
+     Agora são quatro: base, braço, platina e a cabeça inteira (ocular e tubo)
+     como UMA peça. O braço em C fica porque é ele que faz o desenho ser lido
+     como microscópio — tirando ele, as versões de três traços que testei
+     viraram tomada, prego e avião de papel. */
+  microscope:'<path d="M3 21h18"/><path d="M14 21a7 7 0 1 0 0-14h-1"/><path d="M6 17h6"/><path d="M9 3h3v3h1v6H8V6h1z"/>',
   /* Campo anda junto com o laboratório: os dois aparecem lado a lado na
      escolha do tipo de quadra, e trocar só um deixaria o par desirmanado. */
   map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
