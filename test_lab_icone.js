@@ -52,6 +52,93 @@ assert.ok(ctxI.ic('microscope',14).length>ctxI.ic('naoexiste',14).length,
 assert.ok(ctxI.ic('map',13).length>ctxI.ic('naoexiste',13).length,
   'e "map" também: Campo e Laboratório aparecem lado a lado, e trocar só um desirmanaria o par');
 
+/* ------------------------------------------- 1b. e ele é SÓ O CONTORNO ---
+   Relato de uso: "não gostei, não combinam, é desarmônico; um microscópio só o
+   contorno fica bom, esse aí tá muito cheio".
+
+   Não era gosto: era densidade medida. O primeiro desenho tinha SEIS traços,
+   dois deles de duas unidades (um risco na platina e a tampa da ocular),
+   todos espremidos entre x=7 e x=13 — enquanto os vizinhos com que ele divide
+   a tela são feitos de duas ou três formas grandes. Ao lado deles o
+   microscópio saía mais escuro e mais pesado, e nos dois tamanhos em que ele
+   mais aparece (13px no botão de tipo, 14px no pino do mapa) a tinta toda
+   virava borrão.
+
+   As duas regras que este bloco cobra saíram de olhar o ícone renderizado no
+   navegador, não de teoria:
+
+     A CONTA DE TRAÇOS. Quem vive ao lado dele é que dá a medida do que é
+     "cheio" — por isso o teto sai da vizinhança, não de um número escolhido
+     aqui. Se alguém enfeitar o `map`, o microscópio ganha a mesma licença;
+     enquanto o conjunto for enxuto, ele também é.
+
+     NENHUM DETALHE MENOR QUE QUATRO UNIDADES. Em 13px, uma unidade do
+     viewBox de 24 vale meio pixel: o que for menor que isso não é desenho,
+     é sujeira. Foi exatamente o que aconteceu com o `M9 14h2`. */
+function tracos(nome){
+  /* Conta SUBTRAÇOS, não elementos: o `sheet` mete quatro linhas dentro de um
+     <path> só, e contar elemento diria que ele é o ícone mais simples do
+     conjunto. O que pesa na tela é cada forma desenhada — cada `M` de cada
+     `d`, mais os <rect> e <circle>, que são uma forma cada. */
+  const d=fonteDoIcone(nome);
+  let n=(d.match(/<rect|<circle/g)||[]).length;
+  for(const m of d.matchAll(/\sd="([^"]*)"/g)) n+=(m[1].match(/[Mm]/g)||[]).length;
+  return n;
+}
+function fonteDoIcone(nome){
+  /* Lê o `d` da tabela do ic() direto da fonte: o SVG montado já veio com
+     stroke e tamanho, e o que se quer medir é o DESENHO. */
+  const m=new RegExp(nome+":'([^']*)'").exec(src);
+  assert.ok(m,'não achei o ícone "'+nome+'" na tabela do ic()');
+  return m[1];
+}
+
+const vizinhos=['map','sheet','calendar','gauge','archive','globe'];
+const teto=Math.max(...vizinhos.map(tracos));
+assert.ok(tracos('microscope')<=teto,
+  'o microscópio não pode ser mais cheio que o vizinho mais cheio ('+
+  tracos('microscope')+' traços contra um teto de '+teto+', dado por '+
+  vizinhos.map(n=>n+':'+tracos(n)).join(' ')+')');
+
+/* O que se mede é o TRAÇO SOLTO, não o segmento. Um risco de duas unidades
+   sozinho no meio do desenho some em 13px e deixa só sujeira — foi o caso do
+   `M9 14h2`. Já um degrau de uma unidade na quina de uma peça de nove apenas
+   arredonda, e ninguém sente falta. Então a régua é o tamanho de cada
+   SUBTRAÇO: da caneta descer ao papel até ela levantar. */
+function extensoes(d){
+  const fora=[];
+  for(const m of d.matchAll(/\sd="([^"]*)"/g)){
+    /* Quebra em subtraços (cada M/m) e acompanha o ponto corrente. O arco
+       entra pelo ponto de chegada: a barriga dele só aumenta a extensão, e
+       aqui o que se cobra é um mínimo. */
+    for(const sub of m[1].split(/(?=[Mm])/)){
+      if(!sub.trim()) continue;
+      let x=0,y=0,minX=1/0,maxX=-1/0,minY=1/0,maxY=-1/0;
+      const marca=()=>{ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; };
+      for(const c of sub.matchAll(/([MmLlHhVvAaZz])([^MmLlHhVvAaZz]*)/g)){
+        const cmd=c[1], n=(c[2].match(/-?\d*\.?\d+/g)||[]).map(Number);
+        if(cmd==='M'||cmd==='L'){ x=n[0]; y=n[1]; }
+        else if(cmd==='m'||cmd==='l'){ x+=n[0]; y+=n[1]; }
+        else if(cmd==='H'){ x=n[0]; }      else if(cmd==='h'){ x+=n[0]; }
+        else if(cmd==='V'){ y=n[0]; }      else if(cmd==='v'){ y+=n[0]; }
+        else if(cmd==='A'){ x=n[5]; y=n[6]; }
+        else if(cmd==='a'){ x+=n[5]; y+=n[6]; }
+        marca();
+      }
+      fora.push(Math.max(maxX-minX, maxY-minY));
+    }
+  }
+  return fora;
+}
+const miudos=extensoes(fonteDoIcone('microscope')).filter(v=>v<4);
+assert.deepEqual(miudos,[],
+  'nenhum traço solto do microscópio pode medir menos que 4 unidades — em '+
+  '13px cada unidade vale meio pixel, e o que for menor que isso não é '+
+  'desenho, é sujeira (achei: '+miudos.join(', ')+')');
+/* A régua tem de pegar o defeito que ela existe para impedir. */
+assert.ok(extensoes('<path d="M9 14h2"/>').some(v=>v<4),
+  'e ela reprova mesmo o risco de duas unidades que saiu daqui');
+
 /* ------------------------------------------------------------- 2. o pino ---
    Roda renderQuadraLab de verdade, com o ic() e as cores de verdade. */
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
