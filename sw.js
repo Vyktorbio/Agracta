@@ -23,7 +23,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=32', './theme-2026.css?v=8', './ui-campo.css?v=11', './app.js?v=171',
+  './styles.css?v=32', './theme-2026.css?v=8', './ui-campo.css?v=11', './app.js?v=172',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',

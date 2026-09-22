@@ -187,5 +187,45 @@ ck(/µL/.test(txt),'com o volume em µL, que é a unidade da bancada');
 ck(!/parcela/i.test(txt),'sem uma palavra sobre parcela');
 ck(txt.indexOf('Motor BioCalculoLab '+LB.VERSION)>=0,'e diz qual motor e em que versão');
 
+console.log('\n--- Receita calculável também ganha memória sem vazão geral ---');
+var percentual={id:'pct',labVolumeMl:100,doseModo:'campo',tratamentos:[
+  {id:'T1',produto:'Adjuvante',dose:'0.033%'}]};
+var cfgPct=ctx.calcConfigDoEstudoLab(percentual,'LAB1');
+eq(ctx.calcConfigLabCompleta(cfgPct),true,'% v/v só depende do volume final, não de L/ha');
+eq(ctx.calcConfigLabFaltando(cfgPct).length,0,'a ficha não pede vazão desnecessária');
+var memPct=ctx.aplicacaoMemoriaAuto(percentual,'LAB1',{id:'p'});
+ck(!!memPct,'aplicação com dose percentual conserva a receita calculada');
+if(memPct)perto(memPct.tratamentos[0].produtoUl,33,1e-9,'33 µL de adjuvante no pote de 100 mL');
+var individuais={id:'ind',labVolumeMl:100,doseModo:'campo',tratamentos:[
+  {id:'T1',produto:'A',dose:'1 L/ha',volume:'200 L/ha'},
+  {id:'T2',produto:'A',dose:'1 L/ha',volume:'100 L/ha'}]};
+var memInd=ctx.aplicacaoMemoriaAuto(individuais,'LAB1',{id:'i'});
+ck(!!memInd,'volumes individuais dispensam um valor geral artificial');
+if(memInd){
+  perto(memInd.tratamentos[0].produtoUl,500,1e-9,'T1 mantém 200 L/ha: 500 µL');
+  perto(memInd.tratamentos[1].produtoUl,1000,1e-9,'T2 mantém 100 L/ha: 1000 µL');
+}
+individuais.tratamentos[1].volume='';
+eq(ctx.calcConfigLabCompleta(ctx.calcConfigDoEstudoLab(individuais,'LAB1')),false,
+  'a taxa de T1 não preenche a vazão ausente de T2');
+individuais.protocolo={volumeCalda:'150 L/ha'};
+eq(ctx.calcConfigLabCompleta(ctx.calcConfigDoEstudoLab(individuais,'LAB1')),true,
+  'o protocolo pode suprir o volume ausente de T2');
+individuais.tratamentos[1].volume='100 ou 200 L/ha';
+eq(ctx.calcConfigLabCompleta(ctx.calcConfigDoEstudoLab(individuais,'LAB1')),false,
+  'volume ambíguo não é substituído em silêncio pelo padrão');
+var estrutura={id:'str',labVolumeMl:100,doseModo:'campo',tratamentos:[{
+  id:'T1',produto:'Adjuvante',dose:'texto antigo',componentes:[{
+    id:'C1',itemId:'I1',nome:'Adjuvante',valor:0.033,unidade:'%',doseRef:{id:'D1'},loteRef:{id:'L1'}
+  }]
+}]};
+var memEstr=ctx.aplicacaoMemoriaAuto(estrutura,'LAB1',{id:'e'});
+ck(!!memEstr,'receita estruturada percentual também dispensa vazão geral');
+if(memEstr){
+  var c=memEstr.tratamentos[0].componentes[0];
+  ck(c.itemId==='I1'&&c.loteRef.id==='L1'&&c.doseRef&&c.doseRef.id==='D1',
+    'item, lote e origem da dose acompanham o resultado');
+}
+
 console.log('\n'+(f?('FALHA: '+f+' de '+(f+p)+' checagens'):('todas as '+p+' checagens passaram')));
 process.exit(f?1:0);
