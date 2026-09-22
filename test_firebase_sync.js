@@ -103,7 +103,20 @@ assert(rebuilt.data.Q1.estudos[0].avaliacoes[0].notas.T1.sev === 12, 'lançament
 assert(rebuilt.data.Q1.estudos[0].aplicacoes[0].id === 'P1', 'aplicação não voltou');
 assert(rebuilt.data.Q1.estudos[0].randomizacao[1][0] === 3, 'matriz não voltou');
 assert(rebuilt.qgeo.Q1[1][1] === -47.51, 'geometria não voltou');
-assert(rebuilt.notas_campo[0].foto === photo, 'foto fragmentada não voltou');
+/* A foto da nota mora no aparelho (14a publicação): nunca sobe. */
+assert(Object.keys(flat.media).length === 0, 'foto da nota não pode ir para a coleção media');
+assert(JSON.stringify(flat.notas_campo).indexOf(photo) < 0, 'foto da nota não pode ir dentro da nota');
+assert(!rebuilt.notas_campo[0].foto, 'foto não deveria voltar do servidor');
+/* Foto ANTIGA ainda no servidor: é entregue ao app para migrar ao aparelho... */
+var legado = JSON.parse(JSON.stringify(flat));
+legado.media.velha0 = { noteId: 'N1', part: 0, data: photo.slice(0, 5) };
+legado.media.velha1 = { noteId: 'N1', part: 1, data: photo.slice(5) };
+assert(context.AgractaFirebase.buildState(legado, { rev: 7 }).notas_campo[0].foto === photo, 'foto antiga do servidor não chegou para a migração');
+/* ...a não ser que a nota já tenha sido migrada em algum aparelho. */
+var migrada = JSON.parse(JSON.stringify(legado));
+Object.keys(migrada.notas_campo).forEach(function(k){ migrada.notas_campo[k].data.fotoLocal = { nome: 'Agracta_x.jpg' }; });
+assert(!context.AgractaFirebase.buildState(migrada, { rev: 7 }).notas_campo[0].foto, 'nota migrada não pode receber a foto antiga de novo');
+assert(syncSrc.indexOf("COLLECTIONS_GRAVACAO.forEach") >= 0 && syncSrc.indexOf('V.mudancas(FB.remoteFlat||{},next,COLLECTIONS_GRAVACAO)') >= 0, 'gravação não pode tocar a coleção media');
 assert(rebuilt.itens.IT1.nome === 'Produto A', 'item não voltou');
 assert(rebuilt.itens.IT1.lotes[0].eventos[0].saldoApos === 500, 'cadeia de custódia do item não voltou');
 assert(rebuilt.itens.IT1.vinculosHistoricos[0].estudoId === 'E9', 'vínculo histórico do item não voltou');

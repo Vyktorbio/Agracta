@@ -182,13 +182,14 @@ check(severidade && severidade.msg.indexOf('E1') >= 0, 'a mensagem nomeia o estu
 check(severidade && /\d/.test(severidade.msg), 'a mensagem diz QUANDO a finalizacao existiu');
 
 /* ---------- 3. o caminho de recuperacao que resta ---------- */
-console.log('\n[3] Historico da nuvem: quem atende e o Backups locais');
+console.log('\n[3] Historico da nuvem: o servidor, com os Backups locais de reserva');
 
-/* O `openCloudHistory` do app.js fala com o backend Supabase (`SB.rpc`), que
-   este servidor nao usa mais. O firebase-sync SUBSTITUI a funcao e manda para os
-   Backups locais — e por isso a tela antiga nunca aparece. Este teste tranca
-   esse desvio: sem ele, um `SB` nulo devolveria "Cannot read properties of null"
-   justo na tela a que alguem recorre depois de perder dado. */
+/* Na migracao para o Firebase o historico do servidor tinha ficado para tras, e o
+   firebase-sync desviava o botao para os Backups locais. Agora o historico voltou
+   (vendor/versoes-core.js, colecao `historico`, append-only nas regras) e a tela
+   do app.js le dele. O que este teste tranca continua sendo o essencial: a tela a
+   que alguem recorre depois de perder dado nunca mostra erro de programador, e
+   sem nuvem ela aponta os Backups locais em vez de ficar muda. */
 var pintado = '';
 var modal = {style:{}, set innerHTML(v){ pintado = String(v); }, get innerHTML(){ return pintado; }};
 var docReal = context.document;
@@ -198,20 +199,24 @@ context.document = {
   body: {appendChild: function(){}},
   addEventListener: function(){}, querySelector: function(){ return null; }
 };
-context.cloudInit = function(){ return {db:{}}; };   /* Firebase configurado */
 context.SB = null;                                    /* Supabase, nao */
+var versoesReal = context.AgractaVersoes;
+context.AgractaVersoes = { disponivel: function(){ return false; } };   /* sem nuvem */
 
 var estourou = null;
 try{ context.openCloudHistory(); }catch(e){ estourou = e; }
 context.document = docReal;
+context.AgractaVersoes = versoesReal;
 
-check(!estourou, 'Historico da nuvem nao estoura num SB nulo');
+check(!estourou, 'Historico da nuvem nao estoura sem nuvem');
 check(pintado.indexOf('Cannot read') < 0, 'a tela nao mostra erro de programador');
-check(/Backups locais/.test(pintado), 'quem abre e a tela de Backups locais');
+check(/backups deste aparelho/.test(pintado), 'sem nuvem, a tela aponta os Backups locais');
 
 var syncSrc2 = fs.readFileSync('firebase-sync.js', 'utf8');
-check(/window\.openCloudHistory\s*=/.test(syncSrc2),
-      'o desvio do Historico da nuvem continua no firebase-sync');
+check(!/window\.openCloudHistory\s*=/.test(syncSrc2),
+      'o firebase-sync nao esconde mais o historico do servidor');
+check(/window\.AgractaVersoes\s*=/.test(syncSrc2),
+      'o firebase-sync expoe a leitura do historico do servidor');
 
 var appSrc = fs.readFileSync('app.js', 'utf8');
 check(appSrc.indexOf('a nuvem + Hist\u00f3rico da nuvem cobrem recupera\u00e7\u00e3o') < 0,

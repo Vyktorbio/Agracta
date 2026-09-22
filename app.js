@@ -2592,6 +2592,7 @@ function _mergeNota(la,ca){
   if(lt||ct) m._ts=Math.max(lt,ct);
   else m.resolvido = la.resolvido || ca.resolvido;
   if(!m.foto) m.foto = la.foto || ca.foto;
+  if(!m.fotoLocal) m.fotoLocal = la.fotoLocal || ca.fotoLocal;
   return m;
 }
 function cloudMerge(local,cloud){
@@ -4969,6 +4970,74 @@ function ensureNotas(){
   if(!NOTAS_CAMPO || !_delNotas) loadNotas();
 }
 
+/* ---- Foto da observação: mora no aparelho (vendor/fotos-notas-core.js) ----
+   A nota sincroniza só a etiqueta `fotoLocal:{nome, em}`; a imagem fica no
+   IndexedDB deste aparelho e nunca vai para save() nem para a nuvem. Notas
+   antigas, com a foto em base64 dentro do estado (ou chegando da coleção
+   `media` do servidor), são migradas aqui: a foto é guardada no aparelho e só
+   DEPOIS sai do estado. */
+var _FOTO_NOTA={}, _fotosNotasPronto=false, _fotosNotasRodando=false, _fotosNotasBanco=null;
+function _fotosNotasStore(){
+  if(_fotosNotasBanco) return _fotosNotasBanco;
+  try{ if(window.FotosNotasCore && window.indexedDB) _fotosNotasBanco=FotosNotasCore.criar(window.indexedDB); }catch(e){}
+  return _fotosNotasBanco;
+}
+function _fotoNota(n){
+  if(!n) return null;
+  return (typeof n.foto==='string' && n.foto) ? n.foto : (_FOTO_NOTA[n.id]||null);
+}
+function _nomeFotoNota(n, tipo){
+  var loc=null; try{ loc=(LOCAIS&&n.localId&&LOCAIS[n.localId])?LOCAIS[n.localId].nome:null; }catch(e){}
+  var q=null; try{ q=n.quadraId?quadraNome(n.quadraId):null; }catch(e){}
+  if(!window.FotosNotasCore) return 'Agracta_'+String(n.id||'foto')+'.jpg';
+  return FotosNotasCore.nomeArquivo({local:loc, quadra:q, data:n.criadoEm, titulo:n.titulo, id:n.id, tipo:tipo});
+}
+function _fotoNotaGuardar(n, dataUrl){
+  var st=_fotosNotasStore();
+  if(!st) return Promise.reject(Error('este navegador não oferece armazenamento de fotos'));
+  var meta={nome:_nomeFotoNota(n, FotosNotasCore.tipoDe(dataUrl)), em:new Date().toISOString()};
+  return st.guardar(n.id, dataUrl, meta).then(function(){ _FOTO_NOTA[n.id]=dataUrl; return meta; });
+}
+/* Carrega as fotos do aparelho (uma vez) e migra o que ainda estiver no estado. */
+function _fotosNotasVerificar(){
+  if(_fotosNotasRodando) return;
+  var st=_fotosNotasStore(); if(!st) return;
+  ensureNotas();
+  var pendentes=(NOTAS_CAMPO||[]).filter(function(n){ return n && typeof n.foto==='string' && n.foto; });
+  var lixo=Object.keys(_FOTO_NOTA).filter(function(id){ return _delNotas && _delNotas[id]; });
+  if(_fotosNotasPronto && !pendentes.length && !lixo.length) return;
+  _fotosNotasRodando=true;
+  var inicio=_fotosNotasPronto?Promise.resolve():st.todas().then(function(o){ Object.keys(o||{}).forEach(function(k){ _FOTO_NOTA[k]=o[k]; }); });
+  inicio.then(function(){
+    _fotosNotasPronto=true;
+    var mudou=false;
+    return pendentes.reduce(function(pr,n){
+      return pr.then(function(){
+        if(typeof n.foto!=='string' || !n.foto) return;
+        var ja=_FOTO_NOTA[n.id];
+        var passo=ja?Promise.resolve(n.fotoLocal||{nome:_nomeFotoNota(n, FotosNotasCore.tipoDe(ja)), em:new Date().toISOString()}):_fotoNotaGuardar(n, n.foto);
+        return passo.then(function(meta){ if(!n.fotoLocal) n.fotoLocal=meta; delete n.foto; mudou=true; }, function(){ /* sem espaço: a foto fica no estado e tenta de novo depois */ });
+      });
+    }, Promise.resolve()).then(function(){
+      Object.keys(_FOTO_NOTA).forEach(function(id){
+        if(_delNotas && _delNotas[id]){ delete _FOTO_NOTA[id]; st.apagar(id).catch(function(){}); }
+      });
+      return mudou;
+    });
+  }).then(function(mudou){
+    _fotosNotasRodando=false;
+    if(mudou) saveNotas();
+    try{ renderNotas(true); }catch(e){}
+  }, function(){ _fotosNotasRodando=false; _fotosNotasPronto=true; });
+}
+function baixarFotoNota(noteId){
+  ensureNotas();
+  var n=(NOTAS_CAMPO||[]).find(function(x){ return x && x.id===noteId; });
+  var foto=_fotoNota(n); if(!foto) return;
+  var nome=(n.fotoLocal&&n.fotoLocal.nome)||_nomeFotoNota(n, window.FotosNotasCore?FotosNotasCore.tipoDe(foto):'image/jpeg');
+  var a=document.createElement('a'); a.href=foto; a.download=nome; document.body.appendChild(a); a.click(); a.remove();
+}
+
 /* FAB das ferramentas do mapa: abre/fecha o leque (NDVI/Clima/Medir/Observação/GPS) */
 function toggleToolDock(force){
   var d=document.getElementById('toolDock'); if(!d) return;
@@ -5221,6 +5290,7 @@ function saveNoteForm(event){
   ensureNotas();
   var qid=findQuadraContaining(_currentNoteCoords.lat, _currentNoteCoords.lng);
   
+  var foto=_tempPhotoBase64;
   var newNote={
     id:"note_"+uid(),
     lat:_currentNoteCoords.lat,
@@ -5232,21 +5302,31 @@ function saveNoteForm(event){
     severidade:severity,
     recomendacao:recommendation,
     descricao:description,
-    foto:_tempPhotoBase64,
     criadoEm:new Date().toISOString().split('T')[0],
     resolvido:false,
     _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
   };
   
-  NOTAS_CAMPO.push(newNote);
-  saveNotas();
-  closeNoteModal();
-  toggleScoutingMode(false); /* salvou: sai do modo sozinho (sem caçar o Cancelar) */
-  renderNotas(true);
-  _stxToast("✓ Observação salva!");
+  function concluir(){
+    NOTAS_CAMPO.push(newNote);
+    saveNotas();
+    closeNoteModal();
+    toggleScoutingMode(false); /* salvou: sai do modo sozinho (sem caçar o Cancelar) */
+    renderNotas(true);
+    _stxToast(newNote.fotoLocal?"✓ Observação salva · foto guardada neste aparelho":"✓ Observação salva!");
+  }
+  if(!foto){ concluir(); return; }
+  /* A foto vai para o aparelho ANTES da nota existir: nota com etiqueta de uma
+     foto que não foi guardada seria promessa falsa. */
+  _fotoNotaGuardar(newNote, foto).then(function(meta){ newNote.fotoLocal=meta; concluir(); }, function(err){
+    var cheio=err && err.name==='QuotaExceededError';
+    alert('A foto não pôde ser guardada neste aparelho'+(cheio?' — não há espaço livre':' ('+((err&&err.message)||'erro desconhecido')+')')+
+      '.\n\nA observação ainda não foi salva. Libere espaço ou remova a foto e salve de novo.');
+  });
 }
 
 function renderNotas(force){
+  try{ _fotosNotasVerificar(); }catch(e){}
   if(!_map || !_notesLayer) return;
   /* não destrói um popup de nota ABERTO (senão o pin "fecha sozinho" quando o app salva/sincroniza).
      Só pula no redesenho ambiente (render/sync); ações de nota chamam renderNotas(true). */
@@ -5378,10 +5458,14 @@ function getNotePopupHtml(n){
     h+='<p style="margin:0 0 8px 0;font-size:12px;color:var(--text-2, #bbb);line-height:1.4;white-space:pre-wrap;">'+esc(n.descricao)+'</p>';
   }
   
-  if(n.foto){
-    h+='<div class="note-popup-img-container" style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border, rgba(255,255,255,0.1));max-height:140px;cursor:pointer;" onclick="openFullPhoto(\''+n.id+'\')">'+
-         '<img src="'+n.foto+'" style="width:100%;height:100%;object-fit:cover;" title="Clique para ampliar">'+
-       '</div>';
+  var _foto=_fotoNota(n);
+  if(_foto){
+    h+='<div class="note-popup-img-container" style="margin-bottom:4px;border-radius:6px;overflow:hidden;border:1px solid var(--border, rgba(255,255,255,0.1));max-height:140px;cursor:pointer;" onclick="openFullPhoto(\''+n.id+'\')">'+
+         '<img src="'+esc(_foto)+'" style="width:100%;height:100%;object-fit:cover;" title="Clique para ampliar">'+
+       '</div>'+
+       '<button type="button" onclick="baixarFotoNota(\''+n.id+'\')" style="display:block;margin:0 0 10px 0;background:none;border:0;padding:0;color:var(--accent, #8c8);font-size:11px;cursor:pointer;text-decoration:underline;" title="'+esc((n.fotoLocal&&n.fotoLocal.nome)||'')+'">Baixar foto</button>';
+  }else if(n.fotoLocal){
+    h+='<p style="margin:0 0 10px 0;font-size:11px;color:var(--text-3, #8aa88a);">📷 A foto está guardada em outro aparelho: <b>'+esc(n.fotoLocal.nome||'')+'</b></p>';
   }
   
   h+='<div style="display:flex;gap:6px;margin-top:8px;">'+
@@ -5406,7 +5490,8 @@ function openFullPhoto(noteId){
       break;
     }
   }
-  if(!n || !n.foto) return;
+  var _foto=_fotoNota(n);
+  if(!_foto) return;
   
   var modal=document.getElementById('photoFullOvl');
   if(!modal){
@@ -5423,7 +5508,7 @@ function openFullPhoto(noteId){
     document.body.appendChild(modal);
   }
   
-  document.getElementById('photoFullImg').src=n.foto;
+  document.getElementById('photoFullImg').src=_foto;
   modal.style.display='flex';
 }
 
@@ -5461,6 +5546,8 @@ function deleteNote(noteId){
     _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
     NOTAS_CAMPO.splice(idx,1);
     saveNotas();
+    delete _FOTO_NOTA[noteId];
+    try{ var _stF=_fotosNotasStore(); if(_stF) _stF.apagar(noteId).catch(function(){}); }catch(e){}
     try{ _map.closePopup(); }catch(e){}
     renderNotas(true);
     _stxToast("Observação excluída.");
@@ -8546,7 +8633,14 @@ function notasDoEstudo(qid, study){
     if(n.quadraId!==qid) return false;
     var d=String(n.criadoEm||'').slice(0,10);
     return !!d && d>=ini && d<=fim;
-  }).sort(function(a,b){ return String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')); });
+  }).sort(function(a,b){ return String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')); })
+    .map(function(n){
+      /* A página do estudo lê `foto`; a foto agora mora no aparelho. Cópia, para
+         a imagem nunca voltar ao estado que sincroniza. */
+      var f=(typeof _fotoNota==='function')?_fotoNota(n):null;
+      if(!f || n.foto) return n;
+      var c={}, k; for(k in n) c[k]=n[k]; c.foto=f; return c;
+    });
 }
 function nextEventV2(study){
   var evs=studyEventsV2(study);
@@ -10157,8 +10251,39 @@ function studyMetodosVariam(study, qid){
 
 var PERFIL_EQUIP_KEY='agracta-perfil-equip-v1';
 
+/* O perfil mora em dois lugares: no aparelho (abre offline) e na configuração
+   sincronizada (data.__config.perfisEquip), para a máquina calibrada no celular
+   ser oferecida também no computador. Vale o mais novo de cada máquina. */
 function _perfisEquip(){
-  try{ return JSON.parse(localStorage.getItem(PERFIL_EQUIP_KEY)||'{}')||{}; }catch(e){ return {}; }
+  var loc={}, nuv={}, out={};
+  try{ loc=JSON.parse(localStorage.getItem(PERFIL_EQUIP_KEY)||'{}')||{}; }catch(e){}
+  try{ nuv=(data&&data.__config&&data.__config.perfisEquip)||{}; }catch(e){}
+  [loc,nuv].forEach(function(src){
+    Object.keys(src||{}).forEach(function(k){
+      var p=src[k];
+      if(p&&typeof p==='object'&&(!out[k]||(Number(p.em)||0)>(Number(out[k].em)||0))) out[k]=p;
+    });
+  });
+  return out;
+}
+function _perfisEquipGuardar(todos){
+  try{ localStorage.setItem(PERFIL_EQUIP_KEY, JSON.stringify(todos)); }catch(e){}
+  try{
+    if(typeof ensureConfig==='function') ensureConfig();
+    if(data&&data.__config) data.__config.perfisEquip=JSON.parse(JSON.stringify(todos));
+  }catch(e){}
+}
+/* Drone: mesma regra — só configuração de voo, nunca vazão medida nem faixa
+   validada. Quem chama é calcDroneAprender, de um preparo conferido. */
+function perfilEquipGravarDrone(conf){
+  if(!conf||typeof conf!=='object'||!Object.keys(conf).length) return null;
+  var todos=_perfisEquip(), p={em:Date.now()};
+  ['minimumOperatingMl','tankCapacity','speed','width','height','minFlow','maxFlow'].forEach(function(f){
+    if(conf[f]!=null&&conf[f]!=='') p[f]=conf[f];
+  });
+  todos.drone=p;
+  _perfisEquipGuardar(todos);
+  return p;
 }
 function perfilEquipDe(metodo){
   var p=_perfisEquip()[metodo];
@@ -10177,7 +10302,7 @@ function perfilEquipGravar(barra){
     em:Date.now(),
     cvPct:((barra.resultado||{}).cvPct!=null?barra.resultado.cvPct:null)
   };
-  try{ localStorage.setItem(PERFIL_EQUIP_KEY, JSON.stringify(todos)); }catch(e){}
+  _perfisEquipGuardar(todos);
   return todos[barra.equipamento];
 }
 /* Aplica o perfil na barra corrente. As LEITURAS ficam onde estão — intocadas. */
@@ -11382,6 +11507,7 @@ function calcGravarMemoria(){
   /* §7.3 — o perfil se APRENDE aqui, de uma calibração que já foi julgada boa o
      bastante para ser gravada. Só a configuração; as leituras nunca. */
   try{ if(mem.barra) perfilEquipGravar(mem.barra); }catch(e){}
+  try{ if(typeof calcDroneAprender==='function') calcDroneAprender(mem); }catch(e){}
 
   try{ save(); }catch(e){}
   try{
@@ -13678,6 +13804,7 @@ function openStudyDetail(qid,sid){
      por alvo dentro da própria análise e a trilha logo abaixo. Um atalho que
      duplica o que está a um dedo de distância só rouba atenção do resultado. */
   h+='<div id="study-stage-dossie" class="study-stage-anchor" aria-hidden="true"></div>';
+  try{ h+=protocoloVivoHtml(qid,sid,study); }catch(e){}
   h+='<div id="study-audit">'+studyAuditHtml(study)+'</div>';
 
   /* Finalizar / reabrir — o fecho BPL do estudo */
@@ -15359,6 +15486,28 @@ function saveStudyV2(){
     if(_duAntes !== _duDepois) changes.push('Unidade da dose: "' + _duAntes + '" -> "' + _duDepois + '"');
     if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
     details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
+    /* §6 — protocolo APROVADO não se edita em silêncio. Mudou campo do protocolo:
+       vira emenda, com motivo, e o protocolo ganha nova versão. Sem motivo o
+       estudo não é salvo — o editor continua aberto com o que foi digitado. */
+    var _PV=window.ProtocoloVivoCore;
+    if(_PV && _PV.info(s).aprovado){
+      var _dif=_PV.diferencas(_PV.retrato(old), _PV.retrato(s));
+      if(_dif.length){
+        var _vAt=_PV.info(s).versao;
+        var _mot=prompt('O protocolo está APROVADO (versão '+_vAt+'). Estas mudanças viram a EMENDA '+((s.emendas||[]).length+1)+
+          ' e o protocolo passa à versão '+(_vAt+1)+':\n\n• '+_dif.slice(0,10).map(_PV.textoDiferenca).join('\n• ')+
+          (_dif.length>10?('\n• … e mais '+(_dif.length-10)):'')+
+          '\n\nSe o que mudou foi só a EXECUÇÃO (o protocolo continua valendo), cancele e use "Registrar desvio".\n\nMotivo da emenda:');
+        if(_mot===null) return;
+        _mot=String(_mot).trim();
+        if(!_mot){ alert('Emenda sem motivo não é registrada, e sem emenda o protocolo aprovado não muda. Nada foi salvo.'); return; }
+        var _em=_PV.emendar(old, s, _mot, {em:new Date().toISOString(),
+          por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', nome:_nomeParaAssinatura()});
+        if(_em) logStudyAuditInObject(s,'Emenda ao protocolo',
+          'Emenda '+_em.n+' — versão '+_em.versaoDe+' → '+_em.versaoPara+': '+_em.mudancas.map(_PV.textoDiferenca).join(' · '),
+          {motivo:_mot, emenda:_em.n});
+      }
+    }
   } else {
     action = 'Criação do Estudo';
     details = 'Código: "' + s.codigo + '", ' + s.tratamentos.length + ' tratamentos, ' + s.numRepeticoes + ' repetições.';
@@ -17355,6 +17504,12 @@ function _studyFinalizationReview(qid,s){
   avancado.pendencias.forEach(function(p){notes.push(p.jobKey+': '+(p.estado==='erro'?'Erro de cálculo — ':'Pendente — ')+p.motivo);});
   if(avancado.indisponiveis.length)notes.push(avancado.indisponiveis.length+' avaliação(ões)/variável(is) sem comparação automática; resultados descritivos preservados.');
   try{ if(!_currentUserName()) notes.push('O nome do responsável será solicitado na assinatura'); }catch(e){}
+  try{
+    var _pvi=window.ProtocoloVivoCore?ProtocoloVivoCore.info(s):null;
+    if(_pvi && !_pvi.aprovado) notes.push('Protocolo não foi aprovado no app — o estudo fecha sem versão de protocolo');
+    if(_pvi && _pvi.aprovado) notes.push('Protocolo versão '+_pvi.versao+(_pvi.emendas?(' · '+_pvi.emendas+' emenda(s)'):''));
+    if((s.desvios||[]).length) notes.push((s.desvios||[]).length+' desvio(s) de protocolo registrado(s)');
+  }catch(e){}
   /* As contagens acima são o que o dossiê sempre guardou e continuam intactas.
      A lista concreta entra ao lado: três anos depois, "2 parcelas sem avaliação
      · 7 DAA" diz o que "3 avaliação(ões) sem lançamento" nunca disse. */
@@ -17449,6 +17604,94 @@ function _bloqueadoPorFinalizacao(qid,sid){
         (finQuem&&finQuem!=='Não identificado'?(' por '+finQuem):'')+'.\n\n'+
         'Ele está somente-leitura. Use "Reabrir estudo" — pede senha e registra o motivo na trilha.');
   return true;
+}
+
+/* ===== PROTOCOLO VIVO (roadmap §6) — aprovação, emendas e desvios =====
+   O motor é vendor/protocolo-vivo-core.js; aqui só a tela e a gravação. */
+function _pvAutor(){
+  return {em:new Date().toISOString(),
+          por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
+          nome:_nomeParaAssinatura()};
+}
+function protocoloVivoHtml(qid,sid,study){
+  var PV=window.ProtocoloVivoCore; if(!PV) return '';
+  var inf=PV.info(study), fin=estudoFinalizado(study);
+  var h='<div class="sd-section" id="study-protocolo-vivo"><div class="sd-section-title">📜 Protocolo</div>';
+  if(!inf.aprovado){
+    h+='<div class="pv-card pv-rascunho"><b>Rascunho</b><span>Editável livremente. Ao aprovar, o protocolo ganha versão: dali em diante, mudar tratamentos, doses, repetições ou o plano vira emenda com motivo.</span></div>';
+    if(!fin) h+='<button class="btn-sm" onclick="aprovarProtocolo(\''+qid+'\',\''+sid+'\')">Aprovar protocolo</button>';
+  }else{
+    var quem=_identidadeBPL(inf.nome,inf.por).nome;
+    h+='<div class="pv-card pv-aprovado"><b>Aprovado · versão '+esc(String(inf.versao))+'</b>'+
+       '<span>'+esc(_agFormatDateTime(inf.em))+(quem&&quem!=='Não identificado'?(' · '+esc(quem)):'')+'</span>'+
+       (study.protocoloVivo.rubrica?('<img src="'+esc(study.protocoloVivo.rubrica)+'" alt="Rubrica da aprovação" class="pv-rubrica">'):'')+'</div>';
+  }
+  var ems=study.emendas||[];
+  if(ems.length){
+    h+='<div class="pv-lista"><div class="pv-sub">Emendas</div>'+ems.slice().reverse().map(function(e){
+      var q=_identidadeBPL(e.nome,e.por).nome;
+      return '<div class="pv-item"><div><b>Emenda '+esc(String(e.n))+'</b> · v'+esc(String(e.versaoDe))+' → v'+esc(String(e.versaoPara))+
+        '<small>'+esc(_agFormatDateTime(e.em))+(q?(' · '+esc(q)):'')+'</small></div>'+
+        '<div class="pv-motivo">Motivo: '+esc(e.motivo)+'</div>'+
+        '<ul>'+(e.mudancas||[]).map(function(d){ return '<li>'+esc(d.rotulo)+': <s>'+esc(d.de)+'</s> → '+esc(d.para)+'</li>'; }).join('')+'</ul></div>';
+    }).join('')+'</div>';
+  }
+  var dvs=study.desvios||[];
+  if(dvs.length){
+    h+='<div class="pv-lista"><div class="pv-sub">Desvios</div>'+dvs.slice().reverse().map(function(d){
+      var q=_identidadeBPL(d.nome,d.por).nome;
+      return '<div class="pv-item pv-desvio"><div><b>'+esc(d.data?isoToBR(d.data):'Data não informada')+'</b>'+
+        '<small>registrado em '+esc(_agFormatDateTime(d.registradoEm))+(q?(' · '+esc(q)):'')+'</small></div>'+
+        '<div>'+esc(d.descricao)+'</div>'+
+        '<div class="pv-motivo">Impacto no estudo: '+esc(d.impacto||'não avaliado')+'</div>'+
+        (d.acao?('<div class="pv-motivo">Ação: '+esc(d.acao)+'</div>'):'')+'</div>';
+    }).join('')+'</div>';
+  }
+  if(!fin) h+='<button class="btn-sm pv-btn-desvio" onclick="registrarDesvio(\''+qid+'\',\''+sid+'\')">Registrar desvio</button>'+
+    '<div class="pv-ajuda">Desvio é quando a EXECUÇÃO saiu do protocolo (aplicou fora do dia, choveu, faltou parcela) e o protocolo continua valendo. Se o protocolo precisa mudar, edite o estudo: a mudança vira emenda.</div>';
+  return h+'</div>';
+}
+function aprovarProtocolo(qid,sid){
+  var PV=window.ProtocoloVivoCore; var s=_estudoDe(qid,sid); if(!PV||!s) return;
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  if(PV.info(s).aprovado){ alert('Este protocolo já está aprovado.'); return; }
+  var r=PV.retrato(s);
+  var resumo='Aprovar o protocolo de '+(s.codigo||s.id)+' como versão 1.\n\n'+
+    (r.tratamentos||[]).length+' tratamento(s) · '+r.numRepeticoes+' repetição(ões) · '+r.numAplicacoes+' aplicação(ões)'+
+    '\n\nDepois disso, mudar o protocolo pede motivo e vira emenda.';
+  requireDeletePassword(resumo, function(){
+    openRubrica(function(url){
+      if(!url){ alert('Sem a rubrica o protocolo não é aprovado.'); return; }
+      var st=_estudoDe(qid,sid); if(!st) return;
+      var a=_pvAutor(); a.rubrica=url;
+      st.protocoloVivo=PV.aprovar(st,a);
+      logStudyAuditInObject(st,'Aprovação do protocolo','Protocolo aprovado como versão 1.',{rubrica:1});
+      st._ts=Date.now(); save();
+      try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
+      _stxToast('✓ Protocolo aprovado · versão 1');
+      openStudyDetail(qid,sid);
+    }, 'Rubrique para aprovar o protocolo de '+(s.codigo||s.id));
+  }, {title:'Aprovar protocolo', ok:'Aprovar'});
+}
+function registrarDesvio(qid,sid){
+  var PV=window.ProtocoloVivoCore; var s=_estudoDe(qid,sid); if(!PV||!s) return;
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  var desc=prompt('O que saiu do protocolo?\n\nEx.: 2ª aplicação feita no dia 16 e não no 14, por chuva.');
+  if(desc===null) return; desc=String(desc).trim();
+  if(!desc){ alert('Desvio sem descrição não é registrado.'); return; }
+  var quando=prompt('Quando aconteceu? (AAAA-MM-DD — deixe em branco se não souber)', todayISO());
+  if(quando===null) return; quando=String(quando).trim();
+  if(quando && !/^\d{4}-\d{2}-\d{2}$/.test(quando)){ alert('Data em formato AAAA-MM-DD, ex.: '+todayISO()+'. Nada foi registrado.'); return; }
+  var imp=prompt('Impacto no estudo (em branco = não avaliado):\n\nEx.: nenhum sobre a eficácia — intervalo ficou dentro da janela do alvo.');
+  if(imp===null) return;
+  var dv; try{ dv=PV.desvio({data:quando, descricao:desc, impacto:imp}, _pvAutor()); }catch(e){ alert(e.message); return; }
+  if(!Array.isArray(s.desvios)) s.desvios=[];
+  s.desvios.push(dv);
+  logStudyAuditInObject(s,'Desvio de protocolo',(quando?(quando+' — '):'')+desc+' · Impacto: '+(dv.impacto||'não avaliado'));
+  s._ts=Date.now(); save();
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,s); }catch(e){}
+  _stxToast('✓ Desvio registrado');
+  openStudyDetail(qid,sid);
 }
 
 /* ===== RUBRICA (assinatura por toque) — módulo isolado, aditivo ===== */
@@ -17851,34 +18094,43 @@ function openCloudHistory(){
   if(!m){ m=document.createElement('div'); m.id='chModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   m.style.display='flex';
   m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
-  if(!cloudInit()){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora — tente de novo com internet.</div>'); return; }
-  try{
-    SB.rpc('app_state_history_list', { n: 60 }).then(function(res){
-      if(res && res.error){ m.innerHTML=_chShell('<div style="border:1px solid #5a4d1f;border-radius:9px;padding:11px;margin-top:10px;color:#dccd8c;font-size:12px">O histórico precisa de um passo único no Supabase (rodar um SQL curto, uma vez). Me peça o SQL.<br><span style="color:#8aa88a">'+esc(res.error.message||'')+'</span></div>'); return; }
-      var rows=(res && res.data) || [];
-      if(!rows.length){ m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:13px;margin-top:12px">Nenhuma versão guardada ainda.</div>'); return; }
-      var html=rows.map(function(r){ var dt=new Date(r.saved_at);
-        return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-          '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+(isNaN(dt.getTime())?'?':dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}))+' <span style="color:#8aa88a;font-weight:400">· v'+(r.rev!=null?r.rev:'?')+'</span></div>'+
-          '<div style="font-size:11px;color:#8aa88a">'+(r.quadras||0)+' quadras · '+(r.locais||0)+' locais · '+(r.estudos||0)+' estudos</div></div>'+
-          '<button onclick="cloudHistoryRestore('+(+r.hid)+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
-      }).join('');
-      m.innerHTML=_chShell(html);
-    }, function(){ m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Não consegui ler o histórico (rede).</div>'); });
-  }catch(e){ m.innerHTML=_chShell('<div style="color:#dccd8c">Erro: '+esc(e.message)+'</div>'); }
+  var V=window.AgractaVersoes;
+  if(!V || !V.disponivel()){
+    m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora. O histórico fica no servidor e precisa de internet para abrir.</div>'+
+      '<button onclick="document.getElementById(\'chModal\').style.display=\'none\';openBackups()" style="margin-top:10px;width:100%;background:#16301c;color:#eaf3ed;border:1px solid #2a3a2a;border-radius:9px;padding:10px">Abrir os backups deste aparelho</button>');
+    return;
+  }
+  V.listar(600).then(function(grupos){
+    if(!grupos.length){
+      m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:13px;margin-top:12px">Nenhuma versão guardada ainda. A partir desta atualização, cada gravação deixa a versão anterior no servidor — a lista começa na próxima vez que você salvar algo.</div>');
+      return;
+    }
+    var html=grupos.slice(0,60).map(function(g){
+      var dt=g.em?new Date(g.em):null;
+      var quando=(dt&&!isNaN(dt.getTime()))?_agFormatDateTime(dt,{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'hora do servidor pendente';
+      var quem=_identidadeBPL(g.porNome,g.por).nome;
+      return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+esc(quando)+'</div>'+
+        '<div style="font-size:11px;color:#8aa88a">'+esc(quem||'—')+' · gravação '+esc(String(g.rev))+'</div>'+
+        '<div style="font-size:11px;color:#b9c9bd">'+esc(VersoesCore.resumo(g))+(g.grandes?' · '+g.grandes+' grande(s) demais para guardar':'')+'</div></div>'+
+        '<button onclick="cloudHistoryRestore('+(+g.rev)+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer" title="Volta tudo para como estava logo antes desta gravação">Voltar para antes</button></div>';
+    }).join('');
+    m.innerHTML=_chShell('<div style="font-size:11px;color:#8aa88a;margin-top:8px">Hora e autor são os do servidor. Estes registros não podem ser editados nem apagados pelo app.</div>'+html);
+  }, function(e){
+    m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Não consegui ler o histórico: '+esc((e&&e.message)||'rede')+'.</div>');
+  });
 }
-function cloudHistoryRestore(hid){
-  requireDeletePassword('Restaurar a versão selecionada por cima do estado atual. O estado atual é guardado antes (dá pra voltar).', function(){
-    if(!cloudInit()){ alert('Sem conexão com a nuvem.'); return; }
-    SB.rpc('app_state_history_get', { h: hid }).then(function(res){
-      if(res && res.error){ alert('Erro ao ler a versão: '+res.error.message); return; }
-      var st=res && res.data;
-      if(typeof st==='string'){ try{ st=JSON.parse(st); }catch(e){} }
-      if(!st || !st.data){ alert('Versão vazia ou inválida.'); return; }
-      safetyApply(st);
-      var m=document.getElementById('chModal'); if(m) m.style.display='none';
-      alert('✓ Versão restaurada e enviada para a nuvem.');
-    }, function(){ alert('Não consegui ler a versão (rede).'); });
+function cloudHistoryRestore(rev){
+  requireDeletePassword('Voltar todos os dados para como estavam logo antes da gravação '+rev+'. O estado atual é guardado antes neste aparelho, e a própria restauração vira uma nova gravação no histórico — nada se perde.', function(){
+    var V=window.AgractaVersoes;
+    if(!V || !V.disponivel()){ alert('Sem conexão com a nuvem.'); return; }
+    V.estadoAntesDe(rev).then(function(r){
+      if(r.irrecuperaveis.length && !confirm(r.irrecuperaveis.length+' documento(s) eram grandes demais para o histórico guardar e vão ficar como estão hoje:\n\n'+
+          r.irrecuperaveis.slice(0,8).map(function(x){ return '• '+x.colecao+' '+x.docId; }).join('\n')+'\n\nRestaurar o resto assim mesmo?')) return;
+      if(!safetyApply(r.state)) return;
+      var mm=document.getElementById('chModal'); if(mm) mm.style.display='none';
+      alert('✓ Dados voltaram para antes da gravação '+rev+' e foram enviados para a nuvem.');
+    }, function(e){ alert('Não consegui montar a versão: '+((e&&e.message)||'rede')); });
   }, {title:'Confirmar restauração', ok:'Restaurar'});
 }
 /* ===================== VERIFICADOR DE INTEGRIDADE ===================== */
