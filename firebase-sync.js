@@ -24,6 +24,12 @@
     'vyktorbio@gmail.com':true
   };
   var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
+  /* `media` (fotos das notas em fatias de base64) é só LEITURA desde a 14a
+     publicação: a foto mora no aparelho (vendor/fotos-notas-core.js). As fatias
+     antigas continuam sendo lidas, para cada aparelho migrar as suas, mas o app
+     nunca mais grava, reescreve ou apaga nada ali — nem cria cópia delas no
+     histórico. */
+  var COLLECTIONS_GRAVACAO=COLLECTIONS.filter(function(c){return c!=='media';});
   var CHECKPOINT_DB='agracta-local-first',CHECKPOINT_STORE='snapshots',CHECKPOINT_KEY='active';
   var LOCAL_STATE_TS_KEY='agracta-local-state-ts';
   var TRUST_KEY='agracta-trusted-device',TRUST_VERSION=2;
@@ -580,14 +586,10 @@
     });
     (st.notas_campo||[]).forEach(function(n,ni){
       if(!n||!n.id)return;
-      var note=clone(n),photo=note.foto||'';
+      /* A foto nunca sobe: fica no aparelho. Só a etiqueta `fotoLocal` viaja. */
+      var note=clone(n);
       delete note.foto;
-      var parts=photo?Math.ceil(photo.length/600000):0;
-      flat.notas_campo[docId(n.id)]=clean({id:n.id,order:ni,data:note,photoParts:parts});
-      for(var p=0;p<parts;p++){
-        var pk=n.id+'|'+p;
-        flat.media[docId(pk)]=clean({noteId:n.id,part:p,data:photo.slice(p*600000,(p+1)*600000)});
-      }
+      flat.notas_campo[docId(n.id)]=clean({id:n.id,order:ni,data:note});
     });
     (st.randomizacoes||[]).forEach(function(r,ri){
       if(r&&r.id)flat.randomizacoes[docId(r.id)]=clean({id:r.id,order:ri,data:r});
@@ -675,7 +677,8 @@
     });
     Object.keys(flat.notas_campo).forEach(function(k){
       var r=flat.notas_campo[k],n=clone(r.data||{});n.id=r.id;
-      if(r.photoParts)n.foto=(media[r.id]||[]).join('');
+      /* Foto antiga ainda no servidor: entrega para o app migrar para o aparelho. */
+      if(media[r.id]&&!(n.fotoLocal))n.foto=media[r.id].join('');
       notes[r.id]={order:r.order||0,value:n};
     });
     st.notas_campo=Object.keys(notes).map(function(id){return notes[id];}).sort(function(a,b){return a.order-b.order;}).map(function(x){return x.value;});
@@ -704,7 +707,7 @@
   }
   function queueOps(next){
     var prev=FB.remoteFlat||{},ops=[];
-    COLLECTIONS.forEach(function(c){
+    COLLECTIONS_GRAVACAO.forEach(function(c){
       var n=next[c]||{},p=prev[c]||{};
       Object.keys(n).forEach(function(id){
         if(!p[id]||stable(p[id])!==stable(n[id]))ops.push({type:'set',ref:collectionRef(c).doc(id),data:n[id]});
@@ -737,7 +740,7 @@
     var V=window.VersoesCore;
     if(V){
       var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
-      var pares=V.mudancas(FB.remoteFlat||{},next,COLLECTIONS).map(function(m){
+      var pares=V.mudancas(FB.remoteFlat||{},next,COLLECTIONS_GRAVACAO).map(function(m){
         var ref=collectionRef(m.colecao).doc(m.docId);
         var dado=m.acao==='apagar'?{type:'delete',ref:ref,bytes:64}:{type:'set',ref:ref,data:m.novo};
         var reg=V.registro(m,newRev);

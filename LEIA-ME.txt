@@ -1,3 +1,112 @@
+AGRACTA — 14a publicacao                    22/09/2026
+=====================================================
+
+Leva: 7 arquivos de codigo + 3 motores novos + regras do banco + testes.
+  CODIGO:  app.js  calculadora-drone.js  firebase-sync.js  theme-2026.css
+           index.html  sw.js  conferir.sh
+  MOTOR:   vendor/versoes-core.js        (novo)
+           vendor/protocolo-vivo-core.js (novo)
+           vendor/fotos-notas-core.js    (novo)
+  REGRAS:  firestore.rules   <-- PRECISA SER PUBLICADA (ver abaixo)
+  TESTE:   test_versoes.js  test_protocolo_vivo.js  test_drone_rascunho.js
+           test_fotos_notas.js  tests/historico-rules.cjs  (novos)
+           test_firebase_sync.js  test_trilha_finalizacao.js
+           test_metodo_aplicacao.js  (ajustados)
+  DOCS:    docs/PASSAGEM-AGRACTA.md
+
+O PROXY NAO PRECISA SUBIR. Nada mudou nele nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+1) HISTORICO DE VERSOES NA NUVEM
+
+Na migracao Supabase -> Firebase o historico imutavel ficou para tras: o botao
+"Historico da nuvem" abria so os backups do aparelho. Agora cada gravacao leva,
+no MESMO lote, um registro por documento alterado com o conteudo ANTERIOR dele,
+a hora do SERVIDOR e o e-mail de quem gravou. As regras aceitam criar esse
+registro e recusam editar ou apagar — para qualquer pessoa, inclusive o
+administrador.
+
+"Historico da nuvem" lista as gravacoes (hora, autor, "1 estudo · 3
+avaliacoes"); "Voltar para antes" pede senha, guarda o estado atual e a propria
+restauracao vira uma gravacao nova.
+
+LIMITES: o historico so existe a partir desta publicacao; e o app que escreve o
+registro (a protecao completa pede uma Cloud Function, plano Blaze); cada
+documento alterado passa a custar 2 escritas.
+
+2) PROTOCOLO VIVO
+
+O protocolo pode ser APROVADO (senha + rubrica). Depois disso, mudar
+tratamento, dose, repeticao, desenho ou plano de avaliacoes pede o MOTIVO e vira
+uma emenda numerada (v2, v3…) com o de -> para. Cancelar o motivo nao salva.
+Desvios de execucao se registram com descricao, data e impacto. Tudo aparece na
+ficha do estudo e na revisao de finalizacao. Estudos que ja existem nao mudam
+nada ate alguem aprovar.
+
+3) DRONE
+
+A configuracao de voo nao some mais ao recarregar. Vazao medida e faixa
+validada so voltam no mesmo dia. Gravar um calculo com o drone conferido ensina
+o perfil da maquina, oferecido nos estudos novos. Os perfis de equipamento
+(sider, costal, drone) passam a sincronizar entre aparelhos.
+
+4) FOTO DA OBSERVACAO DE CAMPO FICA NO APARELHO
+
+Ate aqui a foto da nota ia dentro do estado: base64 no localStorage (que estoura
+em ~5 MB) e, na nuvem, fatiada na colecao `media`. Com o historico novo, cada
+foto apagada ou trocada deixaria uma copia permanente no servidor.
+
+Agora a foto fica num banco proprio do aparelho e NUNCA sobe. A nota sincroniza
+so a etiqueta com o nome do arquivo, dado pelo Agracta:
+
+  Agracta_<local>_<quadra>_<AAAA-MM-DD>_<titulo>_<id>.jpg
+
+"Baixar foto", no balao da nota, salva o arquivo com esse nome. Nos outros
+aparelhos a nota diz "A foto esta guardada em outro aparelho: <nome>".
+
+MIGRACAO: ao abrir, cada aparelho passa as fotos antigas para o banco local e
+so DEPOIS as tira do estado. Se faltar espaco, a foto fica onde estava. As
+fatias antigas que ja estao na colecao `media` do servidor NAO sao apagadas nem
+reescritas por esta versao — o app so as le, para migrar. Apagar essas sobras e
+um passo separado, depois que todos os aparelhos tiverem aberto a versao nova.
+
+ATENCAO: backup local e exportacao de estado nao levam mais a foto da nota. Para
+guardar a foto fora do aparelho, use "Baixar foto".
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. PUBLICAR AS REGRAS DO BANCO (sem isso o historico fica aberto a edicao):
+     npx firebase-tools deploy --only firestore:rules
+2. Salvar qualquer coisa e ver o selo da nuvem voltar a verde. Se ficar
+   vermelho, a regra recusou o registro de historico: avisar antes de seguir.
+3. "Historico da nuvem": a gravacao aparece com hora e nome.
+4. Nota nova com foto: o aviso diz "foto guardada neste aparelho"; "Baixar
+   foto" salva Agracta_…jpg; no outro aparelho a nota aparece sem a imagem e
+   com o nome do arquivo.
+5. Nota antiga com foto continua mostrando a foto neste aparelho.
+6. Console do Firebase na primeira semana: escritas por dia.
+
+
+TESTES
+------
+Duplo clique em  Conferir antes de publicar.command.
+Regras do banco (emulador):  npm run test:regras
+
+  test_versoes.js           42 verificacoes (novo)
+  test_protocolo_vivo.js    31 verificacoes (novo)
+  test_drone_rascunho.js    17 verificacoes (novo)
+  test_fotos_notas.js       28 verificacoes (novo)
+  tests/historico-rules.cjs regras do historico no emulador (novo)
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 13a publicacao                    21/09/2026
 =====================================================
 

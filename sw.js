@@ -27,7 +27,7 @@ var ASSETS = [
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
-  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=8', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=1', './vendor/versoes-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=3', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
+  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=8', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=1', './vendor/versoes-core.js?v=1', './vendor/fotos-notas-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=3', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=14',
   './acesso-horario.js?v=3', './ui-campo.js?v=22', './alvos-catalogo.js?v=2',

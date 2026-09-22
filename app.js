@@ -2592,6 +2592,7 @@ function _mergeNota(la,ca){
   if(lt||ct) m._ts=Math.max(lt,ct);
   else m.resolvido = la.resolvido || ca.resolvido;
   if(!m.foto) m.foto = la.foto || ca.foto;
+  if(!m.fotoLocal) m.fotoLocal = la.fotoLocal || ca.fotoLocal;
   return m;
 }
 function cloudMerge(local,cloud){
@@ -4969,6 +4970,74 @@ function ensureNotas(){
   if(!NOTAS_CAMPO || !_delNotas) loadNotas();
 }
 
+/* ---- Foto da observação: mora no aparelho (vendor/fotos-notas-core.js) ----
+   A nota sincroniza só a etiqueta `fotoLocal:{nome, em}`; a imagem fica no
+   IndexedDB deste aparelho e nunca vai para save() nem para a nuvem. Notas
+   antigas, com a foto em base64 dentro do estado (ou chegando da coleção
+   `media` do servidor), são migradas aqui: a foto é guardada no aparelho e só
+   DEPOIS sai do estado. */
+var _FOTO_NOTA={}, _fotosNotasPronto=false, _fotosNotasRodando=false, _fotosNotasBanco=null;
+function _fotosNotasStore(){
+  if(_fotosNotasBanco) return _fotosNotasBanco;
+  try{ if(window.FotosNotasCore && window.indexedDB) _fotosNotasBanco=FotosNotasCore.criar(window.indexedDB); }catch(e){}
+  return _fotosNotasBanco;
+}
+function _fotoNota(n){
+  if(!n) return null;
+  return (typeof n.foto==='string' && n.foto) ? n.foto : (_FOTO_NOTA[n.id]||null);
+}
+function _nomeFotoNota(n, tipo){
+  var loc=null; try{ loc=(LOCAIS&&n.localId&&LOCAIS[n.localId])?LOCAIS[n.localId].nome:null; }catch(e){}
+  var q=null; try{ q=n.quadraId?quadraNome(n.quadraId):null; }catch(e){}
+  if(!window.FotosNotasCore) return 'Agracta_'+String(n.id||'foto')+'.jpg';
+  return FotosNotasCore.nomeArquivo({local:loc, quadra:q, data:n.criadoEm, titulo:n.titulo, id:n.id, tipo:tipo});
+}
+function _fotoNotaGuardar(n, dataUrl){
+  var st=_fotosNotasStore();
+  if(!st) return Promise.reject(Error('este navegador não oferece armazenamento de fotos'));
+  var meta={nome:_nomeFotoNota(n, FotosNotasCore.tipoDe(dataUrl)), em:new Date().toISOString()};
+  return st.guardar(n.id, dataUrl, meta).then(function(){ _FOTO_NOTA[n.id]=dataUrl; return meta; });
+}
+/* Carrega as fotos do aparelho (uma vez) e migra o que ainda estiver no estado. */
+function _fotosNotasVerificar(){
+  if(_fotosNotasRodando) return;
+  var st=_fotosNotasStore(); if(!st) return;
+  ensureNotas();
+  var pendentes=(NOTAS_CAMPO||[]).filter(function(n){ return n && typeof n.foto==='string' && n.foto; });
+  var lixo=Object.keys(_FOTO_NOTA).filter(function(id){ return _delNotas && _delNotas[id]; });
+  if(_fotosNotasPronto && !pendentes.length && !lixo.length) return;
+  _fotosNotasRodando=true;
+  var inicio=_fotosNotasPronto?Promise.resolve():st.todas().then(function(o){ Object.keys(o||{}).forEach(function(k){ _FOTO_NOTA[k]=o[k]; }); });
+  inicio.then(function(){
+    _fotosNotasPronto=true;
+    var mudou=false;
+    return pendentes.reduce(function(pr,n){
+      return pr.then(function(){
+        if(typeof n.foto!=='string' || !n.foto) return;
+        var ja=_FOTO_NOTA[n.id];
+        var passo=ja?Promise.resolve(n.fotoLocal||{nome:_nomeFotoNota(n, FotosNotasCore.tipoDe(ja)), em:new Date().toISOString()}):_fotoNotaGuardar(n, n.foto);
+        return passo.then(function(meta){ if(!n.fotoLocal) n.fotoLocal=meta; delete n.foto; mudou=true; }, function(){ /* sem espaço: a foto fica no estado e tenta de novo depois */ });
+      });
+    }, Promise.resolve()).then(function(){
+      Object.keys(_FOTO_NOTA).forEach(function(id){
+        if(_delNotas && _delNotas[id]){ delete _FOTO_NOTA[id]; st.apagar(id).catch(function(){}); }
+      });
+      return mudou;
+    });
+  }).then(function(mudou){
+    _fotosNotasRodando=false;
+    if(mudou) saveNotas();
+    try{ renderNotas(true); }catch(e){}
+  }, function(){ _fotosNotasRodando=false; _fotosNotasPronto=true; });
+}
+function baixarFotoNota(noteId){
+  ensureNotas();
+  var n=(NOTAS_CAMPO||[]).find(function(x){ return x && x.id===noteId; });
+  var foto=_fotoNota(n); if(!foto) return;
+  var nome=(n.fotoLocal&&n.fotoLocal.nome)||_nomeFotoNota(n, window.FotosNotasCore?FotosNotasCore.tipoDe(foto):'image/jpeg');
+  var a=document.createElement('a'); a.href=foto; a.download=nome; document.body.appendChild(a); a.click(); a.remove();
+}
+
 /* FAB das ferramentas do mapa: abre/fecha o leque (NDVI/Clima/Medir/Observação/GPS) */
 function toggleToolDock(force){
   var d=document.getElementById('toolDock'); if(!d) return;
@@ -5221,6 +5290,7 @@ function saveNoteForm(event){
   ensureNotas();
   var qid=findQuadraContaining(_currentNoteCoords.lat, _currentNoteCoords.lng);
   
+  var foto=_tempPhotoBase64;
   var newNote={
     id:"note_"+uid(),
     lat:_currentNoteCoords.lat,
@@ -5232,21 +5302,31 @@ function saveNoteForm(event){
     severidade:severity,
     recomendacao:recommendation,
     descricao:description,
-    foto:_tempPhotoBase64,
     criadoEm:new Date().toISOString().split('T')[0],
     resolvido:false,
     _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
   };
   
-  NOTAS_CAMPO.push(newNote);
-  saveNotas();
-  closeNoteModal();
-  toggleScoutingMode(false); /* salvou: sai do modo sozinho (sem caçar o Cancelar) */
-  renderNotas(true);
-  _stxToast("✓ Observação salva!");
+  function concluir(){
+    NOTAS_CAMPO.push(newNote);
+    saveNotas();
+    closeNoteModal();
+    toggleScoutingMode(false); /* salvou: sai do modo sozinho (sem caçar o Cancelar) */
+    renderNotas(true);
+    _stxToast(newNote.fotoLocal?"✓ Observação salva · foto guardada neste aparelho":"✓ Observação salva!");
+  }
+  if(!foto){ concluir(); return; }
+  /* A foto vai para o aparelho ANTES da nota existir: nota com etiqueta de uma
+     foto que não foi guardada seria promessa falsa. */
+  _fotoNotaGuardar(newNote, foto).then(function(meta){ newNote.fotoLocal=meta; concluir(); }, function(err){
+    var cheio=err && err.name==='QuotaExceededError';
+    alert('A foto não pôde ser guardada neste aparelho'+(cheio?' — não há espaço livre':' ('+((err&&err.message)||'erro desconhecido')+')')+
+      '.\n\nA observação ainda não foi salva. Libere espaço ou remova a foto e salve de novo.');
+  });
 }
 
 function renderNotas(force){
+  try{ _fotosNotasVerificar(); }catch(e){}
   if(!_map || !_notesLayer) return;
   /* não destrói um popup de nota ABERTO (senão o pin "fecha sozinho" quando o app salva/sincroniza).
      Só pula no redesenho ambiente (render/sync); ações de nota chamam renderNotas(true). */
@@ -5378,10 +5458,14 @@ function getNotePopupHtml(n){
     h+='<p style="margin:0 0 8px 0;font-size:12px;color:var(--text-2, #bbb);line-height:1.4;white-space:pre-wrap;">'+esc(n.descricao)+'</p>';
   }
   
-  if(n.foto){
-    h+='<div class="note-popup-img-container" style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border, rgba(255,255,255,0.1));max-height:140px;cursor:pointer;" onclick="openFullPhoto(\''+n.id+'\')">'+
-         '<img src="'+n.foto+'" style="width:100%;height:100%;object-fit:cover;" title="Clique para ampliar">'+
-       '</div>';
+  var _foto=_fotoNota(n);
+  if(_foto){
+    h+='<div class="note-popup-img-container" style="margin-bottom:4px;border-radius:6px;overflow:hidden;border:1px solid var(--border, rgba(255,255,255,0.1));max-height:140px;cursor:pointer;" onclick="openFullPhoto(\''+n.id+'\')">'+
+         '<img src="'+esc(_foto)+'" style="width:100%;height:100%;object-fit:cover;" title="Clique para ampliar">'+
+       '</div>'+
+       '<button type="button" onclick="baixarFotoNota(\''+n.id+'\')" style="display:block;margin:0 0 10px 0;background:none;border:0;padding:0;color:var(--accent, #8c8);font-size:11px;cursor:pointer;text-decoration:underline;" title="'+esc((n.fotoLocal&&n.fotoLocal.nome)||'')+'">Baixar foto</button>';
+  }else if(n.fotoLocal){
+    h+='<p style="margin:0 0 10px 0;font-size:11px;color:var(--text-3, #8aa88a);">📷 A foto está guardada em outro aparelho: <b>'+esc(n.fotoLocal.nome||'')+'</b></p>';
   }
   
   h+='<div style="display:flex;gap:6px;margin-top:8px;">'+
@@ -5406,7 +5490,8 @@ function openFullPhoto(noteId){
       break;
     }
   }
-  if(!n || !n.foto) return;
+  var _foto=_fotoNota(n);
+  if(!_foto) return;
   
   var modal=document.getElementById('photoFullOvl');
   if(!modal){
@@ -5423,7 +5508,7 @@ function openFullPhoto(noteId){
     document.body.appendChild(modal);
   }
   
-  document.getElementById('photoFullImg').src=n.foto;
+  document.getElementById('photoFullImg').src=_foto;
   modal.style.display='flex';
 }
 
@@ -5461,6 +5546,8 @@ function deleteNote(noteId){
     _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
     NOTAS_CAMPO.splice(idx,1);
     saveNotas();
+    delete _FOTO_NOTA[noteId];
+    try{ var _stF=_fotosNotasStore(); if(_stF) _stF.apagar(noteId).catch(function(){}); }catch(e){}
     try{ _map.closePopup(); }catch(e){}
     renderNotas(true);
     _stxToast("Observação excluída.");
@@ -8546,7 +8633,14 @@ function notasDoEstudo(qid, study){
     if(n.quadraId!==qid) return false;
     var d=String(n.criadoEm||'').slice(0,10);
     return !!d && d>=ini && d<=fim;
-  }).sort(function(a,b){ return String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')); });
+  }).sort(function(a,b){ return String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')); })
+    .map(function(n){
+      /* A página do estudo lê `foto`; a foto agora mora no aparelho. Cópia, para
+         a imagem nunca voltar ao estado que sincroniza. */
+      var f=(typeof _fotoNota==='function')?_fotoNota(n):null;
+      if(!f || n.foto) return n;
+      var c={}, k; for(k in n) c[k]=n[k]; c.foto=f; return c;
+    });
 }
 function nextEventV2(study){
   var evs=studyEventsV2(study);
