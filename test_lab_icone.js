@@ -8,9 +8,8 @@
  * que saem todos do ic(). Era o único desenho do mapa que o Agracta não
  * controlava.
  *
- * Agora é um microscópio do ic(), numa ETIQUETA QUADRADA com bico embaixo. O
- * quadrado é de propósito: no mapa, bolinha já quer dizer posição (o ponto do
- * GPS, o círculo de incerteza, as notas de campo), e o laboratório é prédio.
+ * Agora é o desenho do ic() da especialidade, só o contorno, sem caixa em
+ * volta: foi assim que o uso pediu depois de ver a etiqueta quadrada.
  *
  * E a cor virou informação: a especialidade, a mesma que a ficha do lab já
  * pintava e que o mapa ignorava.
@@ -292,24 +291,26 @@ assert.ok(!EMOJI.test(FICHA)&&!/\\ud83e\\udd/.test(FICHA),
 assert.match(FICHA,/ic\(labTipoIcone\(_labT\),20\)/,
   'e o crachá dela desenha o ícone DA ESPECIALIDADE, não um microscópio para as três');
 
-/* ---------------------------------------------------- 4. a folha acompanha --- */
+/* ---------------------------------------------------- 4. a folha acompanha ---
+   Relatos de uso: "esses ícones do laboratório com fundo preto não combinam"
+   e, depois, "quero um ícone sem a caixa em volta, apenas contorno". O pino é
+   o traço do ícone na cor da especialidade, com um halo que segue o desenho. */
 const BLOCO=css.slice(css.indexOf('.lab-pin{'), css.indexOf('/* Seletor campo/lab'));
 assert.ok(BLOCO.length>200,'achei o bloco do marcador do laboratório em styles.css');
-assert.match(BLOCO,/border-radius:7px/,'ETIQUETA QUADRADA: o canto reto separa o prédio das bolinhas do mapa (GPS, notas)');
-assert.ok(!/border-radius:50%/.test(BLOCO),'e não sobrou o círculo de antes');
-/* Relato de uso: "esses ícones do laboratório com fundo preto não combinam".
-   O pino é da família das notas de campo: cor cheia, contorno e ícone brancos. */
-assert.match(BLOCO,/background:currentColor/,'o fundo é a cor da especialidade');
-assert.ok(!/background:rgba\(10,15,13/.test(BLOCO),'e não sobrou o fundo quase preto de antes');
-assert.match(BLOCO,/border:2px solid #fff/,'contorno branco, como os pinos de nota');
-assert.match(BLOCO,/\.lab-pin-b svg\{[^}]*color:#fff/,'o ícone sai branco sobre a cor');
-assert.match(BLOCO,/\.lab-pin-b::after/,'tem o bico embaixo');
-assert.match(BLOCO,/border-top:5px solid #fff/,'e o bico continua o contorno branco');
+const CAIXA=(BLOCO.match(/\.lab-pin-b\{[^}]*\}/)||[''])[0];
+assert.ok(CAIXA,'achei a regra .lab-pin-b');
+assert.match(CAIXA,/background:none/,'sem caixa: nada pintado atrás do ícone');
+assert.match(CAIXA,/border:none/,'e sem moldura em volta');
+assert.ok(!/background:(currentColor|rgba\(10,15,13)/.test(BLOCO),
+  'não sobrou nem o fundo preto nem o fundo colorido de antes');
+assert.ok(!/\.lab-pin-b::after/.test(BLOCO),'nem o bico, que só fazia sentido pendurado na caixa');
+assert.match(CAIXA,/filter:drop-shadow\(/,
+  'o halo é drop-shadow, que acompanha o traço — sem ele o contorno some no satélite');
+assert.match(src,/ic\(labTipoIcone\(quadraLabTipo\(id\)\),22\)/,
+  'sem caixa o ícone é o pino inteiro, e sai no tamanho de um pino (22px)');
 assert.match(BLOCO,/\.lab-pin\.on \.lab-pin-b\{color:#ffce00!important/,
-  'em modo de edição o marcador inteiro fica amarelo, como os pontos que se arrastam nas quadras');
-assert.match(BLOCO,/\.lab-pin\.on \.lab-pin-b svg\{color:#2a2408/,
-  'e o ícone escurece no amarelo, onde branco não se lê');
+  'em modo de edição o ícone fica amarelo, como os pontos que se arrastam nas quadras');
 assert.ok(!/\.lab-pin-t b\{color:#7fd6a6/.test(BLOCO),
   'o número não está mais preso ao verde fixo — quem manda nele é a especialidade');
 
-console.log('Ícone do laboratório: microscópio do próprio app, etiqueta quadrada com bico, na cor da especialidade, e nenhum emoji sobrando OK.');
+console.log('Ícone do laboratório: desenho do próprio app, só o contorno na cor da especialidade, sem caixa, e nenhum emoji sobrando OK.');
