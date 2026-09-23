@@ -1671,25 +1671,32 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
    disso — é um PRÉDIO, e um canto reto o separa de relance do que é posição.
    O bico embaixo crava a etiqueta no chão; sem ele o marcador flutuava e não
    se sabia qual ponto do desenho era o lugar.
-   A cor vem inline, da especialidade (labTipoCor), e tudo aqui a herda por
-   currentColor: a borda, o bico e o traço do microscópio. */
+   A cor vem inline, da especialidade (labTipoCor), e o fundo e o bico a
+   herdam por currentColor.
+   FUNDO NA COR, BORDA E ÍCONE BRANCOS — a mesma família dos pinos de nota.
+   Relato de uso: "esses ícones do laboratório com fundo preto não combinam".
+   O quadrado quase preto era o único marcador escuro do mapa: sobre o
+   satélite virava um buraco, e ao lado das notas (cor cheia, contorno
+   branco) parecia de outro app. */
 .lab-pin{background:none;border:none}
 .lab-pin-b{
   position:relative;
   width:26px;height:26px;display:flex;align-items:center;justify-content:center;
   line-height:1;border-radius:7px;color:#21a86b;
-  background:rgba(10,15,13,.92);border:1.5px solid currentColor;
-  box-shadow:0 2px 8px rgba(0,0,0,.55), 0 0 0 3px rgba(0,0,0,.20);
+  background:currentColor;border:2px solid #fff;
+  box-shadow:0 3px 8px rgba(0,0,0,.35);
 }
-.lab-pin-b svg{display:block}
+.lab-pin-b svg{display:block;color:#fff}
 .lab-pin-b::after{
-  content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+  content:"";position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
   width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;
-  border-top:5px solid currentColor;
+  border-top:5px solid #fff;
 }
 /* Em edição o marcador fica amarelo inteiro — mesmo amarelo dos pontos que se
-   arrastam nas quadras de campo. Como tudo lê currentColor, basta a cor. */
-.lab-pin.on .lab-pin-b{color:#ffce00!important;background:rgba(40,34,8,.92)}
+   arrastam nas quadras de campo. O fundo lê currentColor, então basta a cor;
+   o ícone escurece porque branco sobre amarelo não se lê. */
+.lab-pin.on .lab-pin-b{color:#ffce00!important}
+.lab-pin.on .lab-pin-b svg{color:#2a2408}
 .lab-pin-t{
   position:absolute;left:32px;top:3px;white-space:nowrap;
   font-size:11px;font-weight:800;color:#dff3e6;
