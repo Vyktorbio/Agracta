@@ -1,3 +1,88 @@
+AGRACTA — 16a publicacao                    23/09/2026
+=====================================================
+
+Leva: 1 arquivo de codigo + 1 motor novo + 2 testes novos.
+  CODIGO:  app.js  index.html  sw.js  conferir.sh
+  MOTOR:   vendor/arena-core.js   (novo)
+  TESTE:   test_arena.js  test_arena_tela.js  (novos)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Bioensaio em ARENA no laboratorio: pote = parcela, com planta e organismo.
+O caso que motivou: moluscicida granulado sobre lesma em soja, 12 tratamentos
+x 4 repeticoes, pote 37 x 22 cm, D0 a D10.
+
+1) METODO "GRANULOS A MAO — ARENA"
+
+A bancada ganha um segundo metodo alem da Torre de Potter. A dose oficial
+continua em kg/ha; o app diz o que vai em cada pote: mg de produto e numero
+de pellets, e a dose EFETIVA depois de arredondar para pellets inteiros.
+
+  1 kg/ha num pote de 0,0814 m2 = 8,14 mg.
+  "7 kg/ha = 7 pellets" so vale se o pellet pesar ~8 mg. Quem decide e a
+  balanca: pese 100 pellets e divida por 100. Sem esse peso, o app mostra
+  a massa por pote e PEDE o peso, em vez de chutar o numero de pellets.
+
+Desvio de mais de 10% por arredondamento vira aviso. A tabela fica na ficha
+do estudo e na tela da aplicacao, e e gravada na aplicacao ao salvar.
+Granulo nao tem calda: a calculadora de laboratorio sai de cena nesse estudo.
+
+2) UNIDADE EXPERIMENTAL
+
+Forma (retangular/circular), medidas, organismos por unidade, substrato,
+distribuicao dos granulos e ponto de infestacao. O app calcula a area e a
+densidade (1 lesma por pote = 12,3/m2).
+
+3) TIPO DE ESTUDO "MOLUSCICIDA EM ARENA" (Entomologia)
+
+Na avaliacao, "+ variaveis do ensaio de arena" cria as 10 colunas de uma vez,
+com tipo e sentido certos: dano foliar (%), folhas atacadas, meristema
+atacado, planta viva, estado da lesma (0-4), lesma morta, pellets integros,
+mordidos e desintegrados, agua reposta (mL). Sim/nao entra como razao n/N
+com N = 1.
+
+4) CONDICAO INICIAL DAS PARCELAS (D0)
+
+Peso e tamanho da lesma, estadio e folhas da soja: medidos UMA vez por pote,
+antes do tratamento. Resumo por tratamento (media +- dp) e aviso quando um
+tratamento comeca mais de 20% longe da media do ensaio. Nada vem
+pre-preenchido. Dois aparelhos lancando juntos: o merge junta celula a celula.
+
+5) GRAFICOS DA ARENA
+
+Tres curvas, 0-100%, em dias: dano na planta, sobrevivencia do organismo e
+pellets atacados. No fim do ensaio, por tratamento: dano final, AACPD,
+protecao (reducao da AACPD frente a testemunha), mortalidade, Abbott, dia em
+que a sobrevivencia chegou a 50% e % de pellets atacados.
+
+A base e a PRIMEIRA testemunha marcada, e ela deve ser a INFESTADA. A
+testemunha sem organismo nao se marca como testemunha.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Estudo novo num laboratorio de Entomologia, tipo "Moluscicida em arena",
+   metodo "Granulos a mao — arena". Preencher a unidade experimental e o peso
+   do pellet: a ficha mostra area, densidade e a tabela "Dose no pote".
+2. Avaliacao nova: "+ variaveis do ensaio de arena" cria as 10 colunas.
+3. Condicao inicial: "Usar: Peso da lesma..." e lancar alguns potes.
+4. Com duas avaliacoes lancadas, aparecem os "Graficos da arena".
+
+
+TESTES
+------
+  test_arena.js        42 verificacoes (novo — as contas do motor)
+  test_arena_tela.js   29 verificacoes (novo — o app com o ensaio real)
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 15a publicacao                    22/09/2026
 =====================================================
 
