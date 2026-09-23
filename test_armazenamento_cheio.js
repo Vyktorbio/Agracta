@@ -117,7 +117,7 @@ async function celularCheio(){
     const ctx={FB:{user:{email:'t'},lastRev:5,db:{doc:()=>({get:()=>falhaRede?Promise.reject(new Error('sem rede')):Promise.resolve({exists:true,data:()=>({rev:revNuvem})})})}},
       ROOT:'r',firebaseInit:()=>true,console:{error(){}},Promise,
       cloudBadge:(k,t)=>env.badges.push(t||k),setUnsavedChanges:b=>{ctx._unsaved=b;},
-      localState:()=>({v:'memoria'}),clearTimeout(){},_cloudReplace:false,
+      localState:()=>({v:'memoria'}),setTimeout:()=>0,clearTimeout(){},_cloudReplace:false,
       cloudPull:()=>{env.pulls++;return Promise.resolve(true);}};
     ctx.window=ctx;vm.createContext(ctx);vm.runInContext(trecho,ctx);
     ctx.commitState=st=>{env.commits.push(st);return Promise.resolve(true);};
