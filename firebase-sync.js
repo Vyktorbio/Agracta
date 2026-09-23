@@ -1053,6 +1053,38 @@
     }
   };
 
+  /* ---- Fotos antigas na coleção `media` ----
+     Desde a 14a publicação a foto da nota mora no aparelho, e o app não grava
+     mais nada em `media`. As fatias antigas continuam lá. Aqui elas são
+     contadas e, sob pedido do administrador, apagadas — SÓ as que já estão
+     salvas neste aparelho ou que são de notas já excluídas. Foto que só
+     existe no servidor fica: apagá-la seria perdê-la. */
+  window.AgractaFotosAntigas={
+    /* excluidas: notas com LÁPIDE. Nota que este aparelho só não conhece
+       (criada noutro, ainda não sincronizada) NÃO conta como excluída. */
+    contar:function(seguras, excluidas){
+      if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
+      var ok={},del={};(seguras||[]).forEach(function(id){ok[id]=1;});(excluidas||[]).forEach(function(id){del[id]=1;});
+      return collectionRef('media').get().then(function(snap){
+        var out={apagaveis:[],chars:0,notas:{},pendentes:{},charsPendentes:0,total:0};
+        snap.forEach(function(d){
+          var r=d.data()||{},id=r.noteId,t=String(r.data||'').length;out.total++;
+          if(ok[id]||del[id]){out.apagaveis.push(d.id);out.chars+=t;out.notas[id]=1;}
+          else{out.pendentes[id]=1;out.charsPendentes+=t;}
+        });
+        out.nNotas=Object.keys(out.notas).length;out.nPendentes=Object.keys(out.pendentes).length;
+        return out;
+      });
+    },
+    apagar:function(ids){
+      if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
+      var lotes=[];for(var i=0;i<(ids||[]).length;i+=400)lotes.push(ids.slice(i,i+400));
+      return lotes.reduce(function(p,l){return p.then(function(){
+        var b=FB.db.batch();l.forEach(function(id){b.delete(collectionRef('media').doc(id));});return b.commit();
+      });},Promise.resolve()).then(function(){return (ids||[]).length;});
+    }
+  };
+
   var esc = window.esc || function(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   var originalIsAdmin=window.isAdmin;
   window.isAdmin=function(){
