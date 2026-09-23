@@ -808,14 +808,58 @@
     /* O último lote publica a revisão: só pode sair após os anteriores.
        Uma rede lenta mantém um único envio ativo e conserva a edição seguinte. */
     var all=batches.reduce(function(p,b){return p.then(function(){return b.commit();});},Promise.resolve());
+    /* DOIS PRAZOS, DUAS PERGUNTAS DIFERENTES ==================================
+       LENTO nao e PERDIDO, e o remedio de um estraga o outro.
+
+       O cao de guarda de 15 s responde "esta demorando": avisa na tela e NAO
+       solta a tranca. Isso e proposital e esta trancado em teste — numa rede
+       so lenta, disparar um segundo envio por cima do primeiro duplica escrita
+       e gasta cota a toa; a edicao seguinte ja sai sozinha quando o envio em
+       curso responder.
+
+       Mas `commit()` do Firestore NAO rejeita quando o aparelho perde o sinal:
+       ele fica PENDENTE ate reconectar, eventualmente para sempre. E
+       `commitState` comeca com "se ja esta enviando, guarda e sai". Entao um
+       unico envio pendurado trancava TODOS os seguintes: o celular seguia
+       gravando no aparelho e nada mais subia para o servidor pela sessao
+       inteira. A nova tentativa de 60 s nem era agendada, porque ela mora no
+       tratamento de ERRO e a promessa nunca chegava a falhar. Mudo e parado,
+       que e a pior combinacao possivel.
+
+       Por isso o segundo prazo, bem mais longo: 90 s sem resposta nao e mais
+       rede lenta, e envio perdido. Ai a tranca se solta e a tentativa e dada
+       como abandonada.
+
+       Uma tentativa abandonada ainda pode responder depois. A ordem de escrita
+       do Firestore e preservada por cliente: os lotes dela, emitidos primeiro,
+       chegam antes dos da proxima, que leva dado mais novo — a mais nova
+       vence. O que ela nao pode fazer e DAR NOTICIA: nao anuncia "salvo", nao
+       move `remoteFlat`/`lastRev` e nao mexe na tranca de quem veio depois. */
+    FB.pushSeq=(FB.pushSeq||0)+1;
+    var _meuEnvio=FB.pushSeq;
+    function _souOEnvioAtual(){ return FB.pushSeq===_meuEnvio; }
     var watchdog=setTimeout(function(){
-      if(FB.pushing){
+      if(FB.pushing&&_souOEnvioAtual()){
         window._cloudSavingActive=false;
-        cloudBadge('offline','=⌁ '+FB.pendingWrites+' alterações aguardando envio');
+        cloudBadge('offline','=⌛ '+FB.pendingWrites+' alterações aguardando envio');
       }
     },15000);
+    var perdido=setTimeout(function(){
+      if(FB.pushing&&_souOEnvioAtual()){
+        FB.pushSeq++;                       /* esta tentativa vira passado */
+        FB.pushing=false;FB.pushPromise=null;window._cloudSavingActive=false;
+        setUnsavedChanges(true);
+        cloudBadge('error','=⚠ o envio não respondeu · salvo neste aparelho · tentando de novo');
+        _agendarNovaTentativa();
+      }
+    },90000);
     FB.pushPromise=all.then(function(){
-      clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
+      clearTimeout(watchdog);clearTimeout(perdido);
+      /* Resposta de uma tentativa ja abandonada: as escritas dela chegaram e
+         foram sobrepostas pela mais nova. Quem manda na tela e na contabilidade
+         e o envio ATUAL. */
+      if(!_souOEnvioAtual()) return;
+      FB.pushing=false;window._cloudSavingActive=false;
       FB.pushPromise=null;
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
       window._cloudRev=newRev;
@@ -832,9 +876,13 @@
       if(FB.lerDepois&&typeof window.cloudPull==='function'){FB.lerDepois=false;return window.cloudPull();}
       if(changed)return commitState(latest);
     },function(e){
-      clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
-      FB.pushPromise=null;setUnsavedChanges(true);
+      clearTimeout(watchdog);clearTimeout(perdido);
       console.error('[Agracta Firebase] gravação:',e);
+      /* Falha de uma tentativa abandonada nao repinta a tela nem solta a tranca
+         de quem veio depois: a que vale ja esta correndo. */
+      if(!_souOEnvioAtual()) return;
+      FB.pushing=false;window._cloudSavingActive=false;
+      FB.pushPromise=null;setUnsavedChanges(true);
       var cod=(e&&(e.code||e.name))||'erro';
       /* O HISTORICO NUNCA IMPEDE O DADO DE SUBIR. Se o servidor recusou o lote
          e ele levava registros de historico (regra do banco mais estrita que o
