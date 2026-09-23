@@ -8743,7 +8743,11 @@ function _studyWorkflow(qid,study){
   var protocolo={id:'protocolo',label:'Protocolo',anchor:'study-stage-protocolo',state:faltas.length?'attention':'complete',detail:faltas.length?('Falta '+faltas.join(', ')):'Conferido'};
   var reps=Math.max(0,parseInt(study.numRepeticoes)||0), nparcelas=tr.length*reps;
   var randomOk=_studyRandomOk(study);
-  var planejamento={id:'planejamento',label:'Planejamento',anchor:'study-stage-planejamento',state:(reps<2||tr.length<2)?'pending':(randomOk||study.desenho==='faixas'?'complete':'ready'),detail:(reps<2?'Definir repetições':(randomOk?'Croqui randomizado':'Conferir croqui'))};
+  /* Laboratório não tem croqui: tem bancada, e a posição dos potes é rodízio,
+     não um plano a conferir antes de instalar. Com tratamentos e repetições
+     definidos, o planejamento está feito. */
+  var _lab=(typeof studyEhBancada==='function')&&studyEhBancada(qid);
+  var planejamento=_lab?{id:'planejamento',label:'Planejamento',anchor:'study-stage-planejamento',state:(reps<2||tr.length<2)?'pending':'complete',detail:(reps<2?'Definir repetições':(tr.length<2?'Definir tratamentos':('Bancada · '+nparcelas+' potes')))}:{id:'planejamento',label:'Planejamento',anchor:'study-stage-planejamento',state:(reps<2||tr.length<2)?'pending':(randomOk||study.desenho==='faixas'?'complete':'ready'),detail:(reps<2?'Definir repetições':(randomOk?'Croqui randomizado':'Conferir croqui'))};
   var nap=Math.max(1,parseInt(study.numAplicacoes)||1), feitas=(study.aplicacoes||[]).length;
   var execucao={id:'execucao',label:'Aplicação',anchor:'study-stage-execucao',state:feitas>=nap?'complete':(feitas?'active':(study.dataInicio?'ready':'pending')),detail:feitas+' de '+nap+' registrada'+(nap===1?'':'s')};
   var avs=study.avaliacoes||[], progresso=AvaliacaoCore.estudo(study), avFeitas=progresso.concluidas;
@@ -8772,6 +8776,7 @@ function _studyWorkflowHtml(qid,sid,study){
                   onclick:"pendIr('"+q+"','"+s+"','avaliacao','"+_avCroquiEscJs(_ret.avId||'')+"','"+_avCroquiEscJs(_ret.parcela||'')+"')",
                   marca:'CONTINUE DE ONDE PAROU'};
   else if(w.protocolo.state!=='complete')focus={title:'Complete o protocolo',text:w.protocolo.detail,button:'Editar protocolo',onclick:"openStudyEditV2('"+q+"','"+s+"')"};
+  else if(w.planejamento.state!=='complete'&&typeof studyEhBancada==='function'&&studyEhBancada(qid))focus={title:'Complete o planejamento',text:w.planejamento.detail+' para montar a bancada.',button:'Editar planejamento',onclick:"openStudyEditV2('"+q+"','"+s+"')"};
   else if(w.planejamento.state!=='complete')focus={title:'Confira o planejamento',text:'Valide repetições, randomização e posição das parcelas antes de instalar.',button:'Ver croqui',onclick:"openStudyParcelas('"+q+"','"+s+"')"};
   else if(next&&next.ev.type==='apl')focus={title:'Próxima ação: aplicação '+next.ev.idx+'/'+next.ev.total,text:fD(next.ev.date)+(next.diff<0?' · atrasada '+Math.abs(next.diff)+'d':(next.diff===0?' · hoje':'')),button:'Registrar aplicação',onclick:'quickAddAplicacao()'};
   else if(next&&next.ev.type==='eval')focus={title:'Próxima ação: '+(next.ev.tipo||'avaliação'),text:fD(next.ev.date)+(next.diff<0?' · atrasada '+Math.abs(next.diff)+'d':(next.diff===0?' · hoje':'')),button:'Abrir avaliação',onclick:"openStudyEditAvaliacao('"+_avCroquiEscJs(next.ev.id)+"')"};
@@ -8783,8 +8788,181 @@ function _studyWorkflowHtml(qid,sid,study){
   h+='</div><div class="study-focus'+(focus.marca?' retomar':'')+'"><div><span>'+esc(focus.marca||'PRÓXIMA MELHOR AÇÃO')+'</span><b>'+esc(focus.title)+'</b><small>'+esc(focus.text||'')+'</small></div><button type="button" onclick="'+focus.onclick+'">'+esc(focus.button)+'</button></div></div>';
   return h;
 }
+/* ============ BANCADA: OS POTES DO LABORATÓRIO ============
+   Relato de uso: "no laboratório eu uso potes, por que croqui? No campo sim, mas
+   no lab? Seria legal abrir uma grade com os tratamentos, assim a gente avalia e
+   já anota no lugar certo, já que eu faço rotações randomizadas com os potes".
+
+   Croqui é coisa de CAMPO: parcela com metragem, posicionada no mapa, percorrida
+   num sentido. No laboratório a unidade experimental é o POTE, a bancada é uma
+   grade, e a posição NÃO é fixa: os potes são girados de lugar de tempos em
+   tempos, justamente para que a posição na bancada (luz, corrente de ar, borda)
+   não vire efeito de tratamento. Pedir "Conferir croqui" ali era cobrar uma
+   etapa que não existe.
+
+   O que a bancada guarda, em st.bancada:
+     colunas   — largura da grade, como a bandeja/prateleira é de verdade;
+     rotacoes  — [{data, ordem:[chave do pote,...]}], uma por rodízio.
+   A nota continua presa ao POTE (chave tratamento+repetição), nunca à posição:
+   girar os potes muda onde cada um está, não de quem é o dado. Por isso a
+   posição de uma avaliação é a da rotação vigente NA DATA DELA — quem abre a
+   leitura do dia 20 vê a bancada como ela estava no dia 20. */
+var BANCADA_CORES=['#34d178','#d99a2b','#7a5cd6','#2f9bbf','#e5484d','#c05fb0','#8fb339','#e07b39','#4f7fd9','#a1887f','#3fb6a8','#b0a338'];
+function studyEhBancada(qid){ try{ return typeof isQuadraLab==='function'&&!!isQuadraLab(qid); }catch(e){ return false; } }
+function _bancadaRotacoes(st){
+  var b=st&&st.bancada, r=(b&&Array.isArray(b.rotacoes))?b.rotacoes:[];
+  return r.filter(function(x){ return x&&Array.isArray(x.ordem); });
+}
+/* Largura padrão: um tratamento por coluna, que é como a bancada costuma ser
+   montada — cada linha uma repetição. Com muitos tratamentos, até 8 colunas,
+   senão a grade não cabe na tela do celular. */
+function bancadaColunas(st){
+  var n=((st&&st.tratamentos)||[]).length*Math.max(1,parseInt(st&&st.numRepeticoes)||1);
+  var c=parseInt(((st&&st.bancada)||{}).colunas);
+  if(!(c>0)) c=Math.min(Math.max(((st&&st.tratamentos)||[]).length,1),8);
+  return Math.max(1,Math.min(c,Math.max(n,1),12));
+}
+/* A rotação vigente numa data: a última feita ATÉ ela. Sem data, a mais nova.
+   Devolve {rot, n} (n começa em 1) ou null, que é a ordem inicial. */
+function bancadaRotacaoEm(st,dataISO){
+  var rs=_bancadaRotacoes(st), achou=null;
+  rs.forEach(function(r,i){ if(!dataISO||!r.data||String(r.data)<=String(dataISO)) achou={rot:r,n:i+1}; });
+  return achou;
+}
+/* Os potes na ordem em que estão na bancada (linha a linha). A rotação guarda
+   chaves; pote que sumiu (tratamento apagado) sai, pote novo (repetição
+   acrescentada depois) entra no fim — nunca se perde nem se inventa um pote. */
+function bancadaPotes(st,dataISO){
+  var copia=JSON.parse(JSON.stringify(st||{}));
+  var rows=_avRowsForStudy(copia,false), porChave={};
+  rows.forEach(function(r){ porChave[r.key]=r; });
+  var vig=bancadaRotacaoEm(st,dataISO), out=[], usado={};
+  if(vig) vig.rot.ordem.forEach(function(k){ if(porChave[k]&&!usado[k]){ usado[k]=1; out.push(porChave[k]); } });
+  rows.forEach(function(r){ if(!usado[r.key]){ usado[r.key]=1; out.push(r); } });
+  return {potes:out, rotacao:vig, colunas:bancadaColunas(st)};
+}
+/* Sorteio de verdade (crypto quando há), Fisher–Yates. Com mais de dois potes
+   não se aceita devolver a MESMA disposição: seria um rodízio que não rodou. */
+function bancadaSortear(chaves,anterior){
+  var rnd=function(n){
+    try{ if(window.crypto&&crypto.getRandomValues){ var a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]%n; } }catch(e){}
+    return Math.floor(Math.random()*n);
+  };
+  var out=chaves.slice();
+  for(var t=0;t<8;t++){
+    for(var i=out.length-1;i>0;i--){ var j=rnd(i+1), x=out[i]; out[i]=out[j]; out[j]=x; }
+    if(out.length<3||!anterior||out.join('|')!==anterior.join('|')) break;
+  }
+  return out;
+}
+function _bancadaEstudo(qid,sid){ var q=data[qid]||{}; return (q.estudos||[]).find(function(x){ return x.id===sid; }); }
+function _bancadaPosicao(i,cols){ var lin=Math.floor(i/cols); return (lin<26?String.fromCharCode(65+lin):('L'+(lin+1)))+(i%cols+1); }
+/* A grade em si, usada pela tela da bancada e pela avaliação. `estado(row)`
+   devolve a classe de progresso ('' quando não há avaliação em jogo). */
+function bancadaGradeHtml(st,b,opts){
+  opts=opts||{};
+  var cols=b.colunas, h='<div class="bancada-scroll"><div class="av-croqui-grid bancada-grid" style="--croqui-cols:'+cols+'">';
+  b.potes.forEach(function(r,i){
+    var cor=BANCADA_CORES[((r.tratNum||1)-1)%BANCADA_CORES.length], est=opts.estado?opts.estado(r):'planned';
+    var pos=_bancadaPosicao(i,cols);
+    h+='<button type="button" class="av-croqui-parcela bancada-pote '+est+(opts.selecionado===r.key?' selected':'')+'" style="--pote-cor:'+cor+'"'+
+       ' onclick="'+opts.onclick.replace(/\{KEY\}/g,_avCroquiEscJs(r.key))+'"'+
+       ' title="'+esc(pos+' · pote '+(r.campo||r.label)+' · '+r.tratId+(r.produto?' · '+r.produto:''))+'">'+
+       '<span class="pos">'+esc(pos)+'</span><span class="n">'+esc(r.tratId)+'</span><span class="p">'+esc(_repDisplay(r.rep))+(r.produto?' · '+esc(r.produto):'')+'</span></button>';
+  });
+  return h+'</div></div>';
+}
+function _bancadaRotuloRotacao(b){
+  return b.rotacao?('Rotação '+b.rotacao.n+(b.rotacao.rot.data?' · '+(isoToBR(b.rotacao.rot.data)||b.rotacao.rot.data):'')):'Posição inicial';
+}
+/* A avaliação que um toque no pote abre: a mais recente até hoje, senão a
+   primeira programada — a mesma escolha que o croqui de campo faz. */
+function _bancadaAvaliacaoDaVez(st){
+  var avs=(st.avaliacoes||[]).slice().sort(function(a,b){ return String(a.data||'').localeCompare(String(b.data||''))||String(a.hora||'').localeCompare(String(b.hora||'')); });
+  var hoje=todayISO(), feitas=avs.filter(function(a){ return a.data&&a.data<=hoje; });
+  return feitas[feitas.length-1]||avs[0]||null;
+}
+var _bancadaVer=null; /* rotação que a tela está mostrando (null = a vigente) */
+function openBancada(qid,sid,ver){
+  var st=_bancadaEstudo(qid,sid); if(!st) return;
+  normalizeStudy(st);
+  _bancadaVer=(ver==null?null:ver);
+  var rs=_bancadaRotacoes(st), fin=estudoFinalizado(st);
+  var dataVer=(_bancadaVer!=null&&rs[_bancadaVer])?rs[_bancadaVer].data:null;
+  var b=(_bancadaVer!=null&&rs[_bancadaVer])?(function(){ var x=bancadaPotes({tratamentos:st.tratamentos,numRepeticoes:st.numRepeticoes,bancada:{colunas:bancadaColunas(st),rotacoes:rs.slice(0,_bancadaVer+1)}},null); return x; })():bancadaPotes(st,null);
+  var av=_bancadaAvaliacaoDaVez(st), q=_avCroquiEscJs(qid), s=_avCroquiEscJs(sid);
+  var ov=document.getElementById('studyParcelasOvl');
+  if(!ov){ ov=document.createElement('div'); ov.id='studyParcelasOvl'; ov.className='study-parcelas-ovl'; ov.onclick=function(e){ if(e.target===ov) closeStudyParcelas(); }; document.body.appendChild(ov); }
+  var h='<div class="study-parcelas-box bancada-box"><div class="study-parcelas-head"><div><span>BANCADA DO LABORATÓRIO</span><b>'+esc(st.codigo||st.nome||st.id)+'</b><small>'+esc(quadraNome(qid))+' · '+b.potes.length+' potes · '+esc(_bancadaRotuloRotacao(b))+'</small></div><button type="button" onclick="closeStudyParcelas()" aria-label="Fechar bancada" title="Fechar">×</button></div>';
+  h+='<div class="bancada-bar">';
+  if(rs.length){
+    h+='<label>Ver<select onchange="openBancada(\''+q+'\',\''+s+'\',this.value===\'\'?null:+this.value)"><option value="">Atual</option>'+
+       rs.map(function(r,i){ return '<option value="'+i+'"'+(_bancadaVer===i?' selected':'')+'>Rotação '+(i+1)+(r.data?' · '+esc(isoToBR(r.data)||r.data):'')+'</option>'; }).join('')+'</select></label>';
+  }
+  if(!fin) h+='<span class="bancada-cols"><span>Colunas</span><button type="button" aria-label="Menos colunas" onclick="bancadaMudaColunas(\''+q+'\',\''+s+'\',-1)">−</button><b>'+b.colunas+'</b><button type="button" aria-label="Mais colunas" onclick="bancadaMudaColunas(\''+q+'\',\''+s+'\',1)">+</button></span>';
+  h+='</div>';
+  h+=bancadaGradeHtml(st,b,{onclick:"bancadaAbrePote('"+q+"','"+s+"','{KEY}')"});
+  h+='<div class="study-parcelas-note">'+(av?'Toque num pote para lançar a nota dele na avaliação de <b>'+esc(isoToBR(av.data)||av.data||'')+'</b>. ':'Cadastre uma avaliação para lançar notas tocando nos potes. ')+
+     'A nota é do pote, não do lugar: girar a bancada não mexe em nenhum dado já lançado.</div>';
+  h+='<div class="study-parcelas-actions">'+
+     (!fin&&rs.length&&_bancadaVer==null?'<button type="button" class="secondary" onclick="bancadaDesfazRotacao(\''+q+'\',\''+s+'\')">Desfazer última</button>':'')+
+     (!fin?'<button type="button" onclick="bancadaNovaRotacao(\''+q+'\',\''+s+'\')">Nova rotação</button>':'')+
+     '<button type="button" class="secondary" onclick="closeStudyParcelas()">Fechar</button></div></div>';
+  ov.innerHTML=h; ov.style.display='flex';
+}
+function _bancadaGravou(qid,sid){
+  try{ save(); }catch(e){}
+  try{ if(typeof curV!=='undefined'&&curV===qid&&curSid===sid) openStudyDetail(qid,sid); }catch(e){}
+}
+function bancadaMudaColunas(qid,sid,d){
+  var st=_bancadaEstudo(qid,sid); if(!st) return;
+  if(!st.bancada||typeof st.bancada!=='object') st.bancada={};
+  st.bancada.colunas=Math.max(1,Math.min(12,bancadaColunas(st)+d));
+  _bancadaGravou(qid,sid); openBancada(qid,sid,_bancadaVer);
+}
+function bancadaNovaRotacao(qid,sid){
+  var st=_bancadaEstudo(qid,sid); if(!st||estudoFinalizado(st)) return;
+  var atual=bancadaPotes(st,null), chaves=atual.potes.map(function(r){ return r.key; });
+  if(chaves.length<2) return;
+  if(!confirm('Sortear uma nova posição para os '+chaves.length+' potes?\n\nA posição de agora fica no histórico, e as notas já lançadas não mudam.')) return;
+  if(!st.bancada||typeof st.bancada!=='object') st.bancada={};
+  if(!Array.isArray(st.bancada.rotacoes)) st.bancada.rotacoes=[];
+  st.bancada.rotacoes.push({data:todayISO(), ordem:bancadaSortear(chaves,chaves)});
+  _bancadaGravou(qid,sid); openBancada(qid,sid,null);
+  try{ _stxToast('Nova rotação sorteada: mude os potes de lugar conforme a grade.'); }catch(e){}
+}
+function bancadaDesfazRotacao(qid,sid){
+  var st=_bancadaEstudo(qid,sid); if(!st||estudoFinalizado(st)) return;
+  var rs=(st.bancada&&st.bancada.rotacoes)||[]; if(!rs.length) return;
+  if(!confirm('Desfazer a rotação '+rs.length+'? A bancada volta à posição anterior.')) return;
+  rs.pop();
+  _bancadaGravou(qid,sid); openBancada(qid,sid,null);
+}
+function bancadaAbrePote(qid,sid,key){
+  var st=_bancadaEstudo(qid,sid); if(!st) return;
+  var av=_bancadaAvaliacaoDaVez(st);
+  if(!av){ try{ _stxToast('Cadastre uma avaliação para lançar notas nos potes.'); }catch(e){} return; }
+  closeStudyParcelas();
+  pendIr(qid,sid,'avaliacao',av.id,key);
+}
+/* A grade DENTRO da avaliação: a bancada como estava na data desta leitura,
+   com o progresso de cada pote. Tocar leva ao campo de nota daquele pote. */
+function bancadaAvaliacaoHtml(st,vars){
+  var av=(typeof draftAv!=='undefined'&&draftAv)||((st.avaliacoes||[]).find(function(a){ return a.id===editingAvId; }))||null;
+  var b=bancadaPotes(st,av&&av.data||null);
+  if(!b.potes.length) return '';
+  var n={done:0,partial:0,empty:0};
+  var estado=function(r){ var x=_avCroquiStatus(r,vars); n[x]=(n[x]||0)+1; return x; };
+  var h='<div class="av-croqui bancada-av"><div class="av-croqui-head"><span class="av-croqui-title">Bancada · '+esc(_bancadaRotuloRotacao(b))+'</span><span class="av-croqui-sub">'+b.potes.length+' potes</span><button type="button" class="av-croqui-toggle" onclick="toggleAvCroqui()">'+(_avCroquiOpen?'Ocultar':'Mostrar')+'</button></div>';
+  if(!_avCroquiOpen) return h+'</div>';
+  h+='<div class="av-croqui-body">'+bancadaGradeHtml(st,b,{estado:estado,selecionado:_avCroquiKey,onclick:"avCroquiSelect('{KEY}')"});
+  h+='<div class="av-croqui-legend"><span><i class="empty"></i> '+n.empty+' pendente'+(n.empty===1?'':'s')+'</span><span><i class="partial"></i> '+n.partial+' parcial</span><span><i class="done"></i> '+n.done+' concluído'+(n.done===1?'':'s')+'</span></div>'+
+     '<div class="av-croqui-hint">Posição dos potes na data desta avaliação. Toque no pote que está na sua frente para ir direto à nota dele.</div></div></div>';
+  return h;
+}
 function closeStudyParcelas(){var o=document.getElementById('studyParcelasOvl');if(o)o.style.display='none';}
 function openStudyParcelas(qid,sid){
+  if(studyEhBancada(qid)) return openBancada(qid,sid);
   if(window.AgractaParcelas)return window.AgractaParcelas.open(qid,sid);
   var q=data[qid]||{},st=(q.estudos||[]).find(function(x){return x.id===sid;});if(!st)return;
   st=normalizeStudy(st);var rows=_avRowsForStudy(st,true),by={},ord=[];
@@ -14029,14 +14207,27 @@ function openStudyDetail(qid,sid){
 
   /* Planejamento fica explícito e acionável; antes randomização/croqui estavam
      espalhados entre o cabeçalho e a tela de avaliação. */
-  h+='<div id="study-stage-planejamento" class="study-stage-anchor" aria-hidden="true"></div>'+
-     '<div class="sd-section study-plan-card"><div class="sd-section-title">Planejamento &amp; parcelas</div><div class="study-plan-grid">'+
-     '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(_studyRandomOk(study)?'Randomizada':(study.randomizado?'A conferir':'Sequencial'))+'</b></div></div><div class="study-plan-actions">'+
-     '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
-     /* O croqui de papel diz a ORDEM; o croqui no mapa diz o LUGAR. Os dois
-        botoes ficam lado a lado porque a pergunta e a mesma, em dois passos. */
-     (!_fin?'<button type="button" class="secondary" onclick="posicionarCroquiDoEstudo(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">'+((study.croqui&&study.croqui.lat!=null)?'Ajustar no mapa':'Posicionar no mapa')+'</button>':'')+
-     (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
+  if(studyEhBancada(qid)){
+    /* Laboratório: pote na bancada, não parcela no mapa. Nada de croqui nem de
+       botão de mapa — a pergunta aqui é onde cada pote está AGORA, e ela
+       muda a cada rodízio. */
+    var _bq=_avCroquiEscJs(qid), _bs=_avCroquiEscJs(sid), _bb=bancadaPotes(study,null);
+    h+='<div id="study-stage-planejamento" class="study-stage-anchor" aria-hidden="true"></div>'+
+       '<div class="sd-section study-plan-card"><div class="sd-section-title">Planejamento &amp; potes</div><div class="study-plan-grid">'+
+       '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Potes</span><b>'+esc(String(_bb.potes.length))+'</b></div><div><span>Na bancada</span><b>'+esc(_bancadaRotuloRotacao(_bb))+'</b></div></div><div class="study-plan-actions">'+
+       '<button type="button" onclick="openBancada(\''+_bq+'\',\''+_bs+'\')">Ver bancada</button>'+
+       (!_fin?'<button type="button" class="secondary" onclick="bancadaNovaRotacao(\''+_bq+'\',\''+_bs+'\')">Nova rotação</button>':'')+
+       (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_bq+'\',\''+_bs+'\')">Editar planejamento</button>':'')+'</div></div>';
+  }else{
+    h+='<div id="study-stage-planejamento" class="study-stage-anchor" aria-hidden="true"></div>'+
+       '<div class="sd-section study-plan-card"><div class="sd-section-title">Planejamento &amp; parcelas</div><div class="study-plan-grid">'+
+       '<div><span>Delineamento</span><b>'+esc(study.delineamento||study.desenho||'DBC')+'</b></div><div><span>Parcelas</span><b>'+esc(String(study.tratamentos.length*study.numRepeticoes))+'</b></div><div><span>Ordem de campo</span><b>'+(_studyRandomOk(study)?'Randomizada':(study.randomizado?'A conferir':'Sequencial'))+'</b></div></div><div class="study-plan-actions">'+
+       '<button type="button" onclick="openStudyParcelas(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Ver croqui das parcelas</button>'+
+       /* O croqui de papel diz a ORDEM; o croqui no mapa diz o LUGAR. Os dois
+          botoes ficam lado a lado porque a pergunta e a mesma, em dois passos. */
+       (!_fin?'<button type="button" class="secondary" onclick="posicionarCroquiDoEstudo(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">'+((study.croqui&&study.croqui.lat!=null)?'Ajustar no mapa':'Posicionar no mapa')+'</button>':'')+
+       (!_fin?'<button type="button" class="secondary" onclick="openStudyEditV2(\''+_avCroquiEscJs(qid)+'\',\''+_avCroquiEscJs(sid)+'\')">Editar planejamento</button>':'')+'</div></div>';
+  }
   /* O que o DESENHO do ensaio tem a dizer sobre si mesmo. Fica junto do
      planejamento porque é ali que se conserta — depois da primeira aplicação,
      mudar o delineamento não é mais correção, é outro ensaio. */
@@ -16804,6 +16995,7 @@ function _avCroquiStatus(row, vars){
 }
 function avCroquiHtml(st, rows, vars){
   if(!st||!rows||!rows.length) return '';
+  if(typeof curV!=='undefined'&&studyEhBancada(curV)) return bancadaAvaliacaoHtml(st,vars);
   if(window.AgractaParcelas){var fisico=window.AgractaParcelas.evaluation(st,rows,vars);if(fisico)return fisico;}
   var byRep={}, order=[];
   rows.forEach(function(row){ var rep=Number(row.rep)||1; if(!byRep[rep]){byRep[rep]=[];order.push(rep);} byRep[rep].push(row); });

@@ -1925,3 +1925,22 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
    claro (linha 54). */
 html.light .study-focus.retomar span{color:#2f6098}
 .study-focus.retomar button{border-color:#6fa8dc;background:#6fa8dc;color:#08131d}
+
+/* ===== BANCADA DO LABORATÓRIO ===================================== */
+/* A grade tem a largura REAL da bancada (colunas escolhidas na tela), então
+   não obedece ao "4 colunas no celular" do croqui: se não couber, rola de lado,
+   em vez de redesenhar a bancada com outra forma. A cor do tratamento vai numa
+   faixa no topo do pote — o progresso da avaliação continua na borda/fundo. */
+.bancada-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.av-croqui-grid.bancada-grid{grid-template-columns:repeat(var(--croqui-cols),minmax(52px,1fr))!important}
+.bancada-pote{position:relative;cursor:pointer!important;aspect-ratio:1.45!important;border-top:4px solid var(--pote-cor)!important}
+.bancada-pote .pos{display:block;font-size:8px;font-weight:800;letter-spacing:.06em;color:var(--gp-text-3,#8e9991)}
+.bancada-pote .n{color:var(--pote-cor)}
+.study-parcelas-box .bancada-pote.planned{border-color:var(--gp-line-2,#3c4740);background:var(--gp-s2,#151a17)}
+.study-parcelas-box .bancada-pote:hover{transform:translateY(-1px)}
+.bancada-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:10px 0}
+.bancada-bar label{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:var(--gp-text-3,#8e9991)}
+.bancada-bar select{font:inherit;font-size:11px;padding:5px 7px;border-radius:8px;border:1px solid var(--gp-line-2,#3c4740);background:var(--gp-s2,#151a17);color:var(--gp-text,#e9ede9)}
+.bancada-cols{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:var(--gp-text-3,#8e9991)}
+.bancada-cols button{width:28px;height:28px;border-radius:8px;border:1px solid var(--gp-line-2,#3c4740);background:transparent;color:var(--gp-text,#e9ede9);font-size:15px;cursor:pointer}
+.bancada-cols b{min-width:16px;text-align:center;color:var(--gp-text,#e9ede9);font-size:12px}
