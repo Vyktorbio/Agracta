@@ -431,6 +431,26 @@ function save(){
     window._agractaLocalSavedAt=savedAt;
     try{ localStorage.setItem(AGR_LOCAL_STATE_TS_KEY,String(savedAt)); }catch(e){}
   }
+  /* O QUE MUDOU O DADO TEM DE MUDAR A TELA =================================
+     A bolinha da quadra conta `estudosAtivos` e o alerta vermelho olha a data
+     do proximo evento. As duas coisas sao lidas na hora de DESENHAR, entao so
+     acertam se alguem mandar desenhar de novo. Varrendo o app, seis funcoes
+     gravavam e repintavam apenas a ficha aberta, deixando o mapa velho:
+     apagar um estudo, salvar um estudo, salvar ou remover aplicacao, salvar ou
+     remover avaliacao. Medido no navegador: apagar um estudo deixa a bolinha
+     em 3 com dois ativos, e lancar uma avaliacao para AMANHA nao acende o
+     alerta de urgencia — que e exatamente o aviso que existe para ser visto.
+
+     Consertar as seis e deixar a setima aparecer depois. Quem grava passa por
+     aqui, entao o redesenho mora aqui. `_rrRenderSoon` ja e o caminho que a
+     sincronizacao em tempo real usa: espera 120 ms (uma rajada de gravacoes
+     vira um redesenho so), roda depois do trabalho sincrono de quem chamou, e
+     engole a propria falha — um mapa que nao repinta nao pode derrubar uma
+     gravacao que ja deu certo.
+
+     Na CARGA INICIAL nao: ali o mapa ainda nao existe, e quem monta a tela
+     chama render() no momento certo. */
+  if(ok && !window._agractaBootLoad && typeof _rrRenderSoon==='function') _rrRenderSoon();
   if(typeof cloudSaveSoon==='function') cloudSaveSoon();
   return ok;
 }
