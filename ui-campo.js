@@ -843,6 +843,10 @@
         linha(I.caixa, 'Backups (restaurar)', 'Pontos de restauração guardados', 'agMenuAcao(\'openBackups\')')+
         linha(I.nuvem, 'Histórico da nuvem', 'Versões sincronizadas', 'agMenuAcao(\'openCloudHistory\')')+
         linha(I.recarregar, 'Recuperação de avaliações', 'Resgata lançamentos perdidos', 'agMenuAcao(\'openAvalRecovery\')')+
+        /* As duas existiam só no menu antigo (app.js), que esta gaveta substituiu:
+           quem procurava pela barra de baixo não achava. */
+        linha(I.caixa, 'Armazenamento do aparelho', 'O que ocupa espaço e o que pode sair', 'agMenuAcao(\'openArmazenamento\')')+
+        linha(I.escudo, 'Verificação de integridade', 'Aponta estudos e dados a revisar', 'agMenuAcao(\'openIntegridade\')')+
       '</details>'+
       '<details class="ag-sec ag-menu-details"><summary>Preferências</summary>'+
         linha(I.lua, escuro?'Tema escuro':'Tema claro', 'Alterna o visual', 'agMenuAcao(\'toggleTheme\')')+
