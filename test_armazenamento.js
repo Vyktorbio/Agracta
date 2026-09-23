@@ -97,6 +97,10 @@ vm.createContext(sctx);vm.runInContext(bloco,sctx);
   ok(apagados.sort().join()==='m1,m2,m4','apaga exatamente as que podem sair');
   const menu=fs.readFileSync('app.js','utf8');
   ok(/openArmazenamento\(\)">'\+ic\('archive'\)\+' Armazenamento do aparelho/.test(menu),'Menu → Armazenamento do aparelho');
+  /* A barra de baixo abre a gaveta de ui-campo.js, não o menu antigo: a porta
+     tem de existir nos dois, senão ninguém acha (aconteceu em 23/09). */
+  const gaveta=fs.readFileSync('ui-campo.js','utf8');
+  ok(/agMenuAcao\(\\'openArmazenamento\\'\)/.test(gaveta)&&/agMenuAcao\(\\'openIntegridade\\'\)/.test(gaveta),'gaveta da barra de baixo → Armazenamento e Verificação de integridade');
   ok(/isAdmin\(\)\)\?'<button onclick="armFotosAntigas\(\)"/.test(menu),'fotos antigas no servidor: só o administrador');
   const html=fs.readFileSync('index.html','utf8'),sw=fs.readFileSync('sw.js','utf8');
   const v=(html.match(/vendor\/armazenamento-core\.js\?v=\d+/)||[])[0];

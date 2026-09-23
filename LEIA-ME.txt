@@ -1,3 +1,27 @@
+AGRACTA — 18a publicacao                    23/09/2026
+=====================================================
+
+Leva: 1 arquivo de codigo.
+  CODIGO:  ui-campo.js  index.html  sw.js
+  TESTE:   test_armazenamento.js  (ajustado)
+
+O QUE MUDOU
+-----------
+"Armazenamento do aparelho" (17a publicacao) so tinha entrado no menu antigo.
+O botao Menu da barra de baixo abre OUTRA gaveta (ui-campo.js), e la ele nao
+aparecia. Agora esta em Menu → Copias e recuperacao, junto com "Verificacao de
+integridade", que tambem so existia no menu antigo.
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Menu (barra de baixo) → abrir "Copias e recuperacao": aparecem
+   "Armazenamento do aparelho" e "Verificacao de integridade".
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 17a publicacao                    23/09/2026
 =====================================================
 
