@@ -3458,7 +3458,7 @@ function renderQuadraLab(id){
   var m=LF.marker(ll,{
     draggable:!!editMode, zIndexOffset:900,
     icon:LF.divIcon({className:'lab-pin'+(isEd?' on':''),
-      html:'<div class="lab-pin-b" style="color:'+_c+'">'+ic(labTipoIcone(quadraLabTipo(id)),14)+'</div>'+
+      html:'<div class="lab-pin-b" style="color:'+_c+'">'+ic(labTipoIcone(quadraLabTipo(id)),22)+'</div>'+
            '<div class="lab-pin-t">'+esc(quadraNome(id))+(n?' <b style="color:'+_c+'">'+n+'</b>':'')+'</div>',
       iconSize:[0,0], iconAnchor:[13,13]})
   }).addTo(_qLayer);
