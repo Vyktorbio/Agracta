@@ -771,7 +771,7 @@
        apagar. Sem o motor carregado, grava como antes — nunca deixa de salvar
        por causa do histórico. */
     var V=window.VersoesCore;
-    if(V){
+    if(V&&!FB.semHistorico){
       var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
       var pares=V.mudancas(FB.remoteFlat||{},next,COLLECTIONS_GRAVACAO).map(function(m){
         var ref=collectionRef(m.colecao).doc(m.docId);
@@ -834,13 +834,42 @@
     },function(e){
       clearTimeout(watchdog);FB.pushing=false;window._cloudSavingActive=false;
       FB.pushPromise=null;setUnsavedChanges(true);
-      cloudBadge('error','— salvo localmente');
       console.error('[Agracta Firebase] gravação:',e);
+      var cod=(e&&(e.code||e.name))||'erro';
+      /* O HISTORICO NUNCA IMPEDE O DADO DE SUBIR. Se o servidor recusou o lote
+         e ele levava registros de historico (regra do banco mais estrita que o
+         app, campo inesperado), o mesmo envio sai de novo SEM o historico. O
+         dado e o que importa; a falta do historico fica registrada na tela. */
+      if(FB.historicoAtivo&&!FB.semHistorico&&(cod==='permission-denied'||cod==='invalid-argument')){
+        FB.semHistorico={em:Date.now(),codigo:cod};FB.historicoAtivo=false;
+        console.warn('[Agracta Firebase] histórico recusado pelo servidor ('+cod+'); gravando sem ele nesta sessão.');
+        return commitState(localState()||st);
+      }
+      cloudBadge('error','=⚠ não subiu ('+cod+') · salvo neste aparelho · toque para tentar de novo');
+      _agendarNovaTentativa();
       throw e;
     });
     /* Mantém a rejeição para quem aguarda; chamadas de autosave podem não aguardar. */
     FB.pushPromise.catch(function(){});
     return FB.pushPromise;
+  }
+
+  /* Envio que falhou tenta de novo sozinho, em 60 s, enquanto houver edição
+     pendente. Antes, ficava parado até alguém tocar no selo ou reabrir o app. */
+  function _agendarNovaTentativa(){
+    if(FB.retryTimer)return;
+    FB.retryTimer=setTimeout(function(){
+      FB.retryTimer=null;
+      if(window._unsavedChanges&&typeof window.cloudSave==='function')window.cloudSave();
+    },60000);
+  }
+  /* A leitura de conferência não pode travar a gravação: sem resposta em 12 s
+     conta como sem conexão (a edição fica no aparelho e tenta de novo). */
+  function _comPrazo(p,ms){
+    return new Promise(function(ok,falha){
+      var t=setTimeout(function(){var e=new Error('sem resposta do servidor');e.code='deadline-exceeded';falha(e);},ms);
+      p.then(function(v){clearTimeout(t);ok(v);},function(e){clearTimeout(t);falha(e);});
+    });
   }
 
   /* ===== NUNCA GRAVAR POR CIMA DO QUE NAO FOI LIDO ===========================
@@ -857,7 +886,7 @@
     if(!firebaseInit()||!FB.user||!FB.db)return commitState(st);
     if(FB.pushing)return commitState(st);
     if(FB.conferindo)return FB.conferindo;
-    var p=FB.db.doc(ROOT).get().then(function(snap){
+    var p=_comPrazo(FB.db.doc(ROOT).get(),12000).then(function(snap){
       FB.conferindo=null;
       var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
       if(rev>(FB.lastRev||0)&&typeof window.cloudPull==='function')return window.cloudPull();
@@ -865,8 +894,9 @@
     },function(e){
       FB.conferindo=null;
       setUnsavedChanges(true);
-      cloudBadge('offline','=⌁ sem conexão · alterações guardadas neste aparelho');
+      cloudBadge('offline','=⌁ sem conexão com o servidor ('+((e&&(e.code||e.name))||'erro')+') · alterações guardadas neste aparelho');
       console.error('[Agracta Firebase] conferência antes de gravar:',e);
+      _agendarNovaTentativa();
       return false;
     });
     FB.conferindo=p;

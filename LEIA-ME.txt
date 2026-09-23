@@ -1,3 +1,36 @@
+AGRACTA — 19a publicacao                    23/09/2026
+=====================================================
+
+Leva: 1 arquivo de codigo + 1 teste novo.
+  CODIGO:  firebase-sync.js  index.html  sw.js
+  TESTE:   test_sync_falha_visivel.js (novo)  test_armazenamento_cheio.js (ajustado)
+
+O QUE MUDOU
+-----------
+Um celular deixou de salvar no servidor e a tela dizia so "nao subiu".
+
+1) O HISTORICO NUNCA IMPEDE O DADO DE SUBIR. Com as regras novas do banco, um
+   registro de historico recusado fazia o lote INTEIRO falhar. Agora, se o
+   servidor recusa (permission-denied / invalid-argument) um envio que levava
+   historico, o mesmo envio sai de novo sem o historico, e isso fica anotado.
+
+2) O MOTIVO APARECE NA TELA. "nao subiu (permission-denied)", "sem conexao
+   com o servidor (deadline-exceeded)" — com o codigo, para saber o que fazer.
+
+3) TENTA DE NOVO SOZINHO. Envio que falhou tenta outra vez em 60 s enquanto
+   houver edicao pendente. A conferencia antes de gravar tem prazo de 12 s: sem
+   resposta, solta a gravacao em vez de prende-la ate reabrir o app.
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Criar algo no celular e ver no PC (recarregar o PC).
+2. Se aparecer "nao subiu (...)", anotar o texto entre parenteses.
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 18a publicacao                    23/09/2026
 =====================================================
 
