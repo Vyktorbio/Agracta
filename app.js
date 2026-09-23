@@ -2580,9 +2580,31 @@ function _mergeStudy(ls,cs){
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
   if(Array.isArray(ls.audit)||Array.isArray(cs.audit)) m.audit=_mergeTrilha(ls.audit,cs.audit);
+  if(ls.condicaoInicial||cs.condicaoInicial) m.condicaoInicial=_mergeCondInicial(ls.condicaoInicial,cs.condicaoInicial,ct>lt);
   if(typeof ConhecimentoCore!=="undefined" && (ls.integracoes||cs.integracoes)) m.integracoes=ConhecimentoCore.merge(ls.integracoes,cs.integracoes);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
   return m;
+}
+/* Condição inicial: medida de campo digitada pote a pote, às vezes em dois
+   aparelhos ao mesmo tempo. Junta CÉLULA a célula — vence a medida mais nova
+   de cada uma —, nunca o objeto inteiro de um lado por cima do outro. */
+function _mergeCondInicial(a,b,bVence){
+  a=a||{}; b=b||{};
+  var top=bVence?b:a, base=bVence?a:b;
+  var out={variaveis:(top.variaveis&&top.variaveis.length)?top.variaveis:(base.variaveis||[]), valores:{}, meta:{}};
+  [base,top].forEach(function(src){
+    Object.keys(src.valores||{}).forEach(function(k){
+      Object.keys(src.valores[k]||{}).forEach(function(v){
+        var em=((src.meta||{})[k]||{})[v]; em=em&&em.em?Date.parse(em.em)||0:0;
+        var atual=((out.meta[k]||{})[v]||{}).em; atual=atual?Date.parse(atual)||0:-1;
+        if(em>=atual){
+          (out.valores[k]=out.valores[k]||{})[v]=src.valores[k][v];
+          var mm=((src.meta||{})[k]||{})[v]; if(mm){ (out.meta[k]=out.meta[k]||{})[v]=mm; }
+        }
+      });
+    });
+  });
+  return out;
 }
 function _mergeNota(la,ca){
   /* a edição mais NOVA vence (permite REABRIR nota resolvida); empate/sem carimbo: local + resolvida vence (compat) */
@@ -10171,10 +10193,13 @@ var APLIC_METODOS={
   co2:'Costal pressurizado a CO₂',
   drone:'Drone',
   atomizer:'Atomizador costal motorizado',
-  lab:'Torre de Potter — bancada'
+  lab:'Torre de Potter — bancada',
+  /* Arena: grânulo (isca, pellet) colocado à mão no pote. A dose oficial segue
+     em kg/ha; ArenaCore traduz para mg e nº de pellets por pote. */
+  granulado:'Grânulos à mão — arena'
 };
 /* Rótulo curto, para caber no cartão do tratamento sem empurrar o resto. */
-var APLIC_METODOS_CURTO={tractor:'sider', co2:'costal CO₂', drone:'drone', atomizer:'atomizador', lab:'Potter'};
+var APLIC_METODOS_CURTO={tractor:'sider', co2:'costal CO₂', drone:'drone', atomizer:'atomizador', lab:'Potter', granulado:'grânulos'};
 
 /* A regra de categoria, num lugar só. */
 /* A ORDEM importa: o primeiro da lista é o que vale quando ninguém declarou nada, e
@@ -10183,7 +10208,7 @@ var APLIC_METODOS_CURTO={tractor:'sider', co2:'costal CO₂', drone:'drone', ato
    sem a matriz por bico. É correto — quem usa costal declara o costal, e aí a matriz
    aparece. O que não pode é o app escolher a máquina errada e calcular calado. */
 function aplicMetodosDe(qid){
-  return (typeof isQuadraLab==='function' && isQuadraLab(qid)) ? ['lab'] : ['tractor','co2','drone','atomizer'];
+  return (typeof isQuadraLab==='function' && isQuadraLab(qid)) ? ['lab','granulado'] : ['tractor','co2','drone','atomizer'];
 }
 function aplicMetodoValido(qid, m){ return aplicMetodosDe(qid).indexOf(m)>=0; }
 
@@ -10204,11 +10229,302 @@ function aplicMetodoDoTexto(txt){
 /* Método do ESTUDO. Ordem: o que foi declarado > o que o protocolo escreveu > o
    primeiro válido da categoria. A quadra de laboratório não negocia: é Potter. */
 function studyMetodo(study, qid){
-  if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return 'lab';
+  if(typeof isQuadraLab==='function' && isQuadraLab(qid)) return (study&&study.metodoAplicacao==='granulado')?'granulado':'lab';
   if(study && aplicMetodoValido(qid, study.metodoAplicacao)) return study.metodoAplicacao;
   var doProto=aplicMetodoDoTexto((study&&study.protocolo&&study.protocolo.equipamento)||'');
   if(doProto && aplicMetodoValido(qid, doProto)) return doProto;
   return aplicMetodosDe(qid)[0];
+}
+
+/* ===================== ARENA — pote = parcela (vendor/arena-core.js) ==============
+   Bioensaio de bancada com planta e organismo no pote. A unidade experimental
+   é declarada uma vez no estudo; a dose oficial fica em kg/ha e ArenaCore diz o
+   que a mão põe em cada pote. Aqui só a tela e a gravação. */
+function _arenaNum(v){ var n=parseFloat(String(v==null?'':v).replace(',','.')); return isFinite(n)?n:null; }
+function _arenaBR(x,c){ if(x==null||!isFinite(x)) return '—'; return Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(c==null?2:c)}); }
+function arenaDoEstudo(study){ return (study&&study.arena&&typeof study.arena==='object')?study.arena:{}; }
+function arenaEditorHtml(s){
+  var a=arenaDoEstudo(s), circ=(a.forma==='circular'), v=function(x){ return esc(x==null?'':String(x)); };
+  var h='<div class="se-section-title">Unidade experimental (arena)</div>';
+  h+='<div class="e-hint" style="margin:2px 0 8px">Pote, bandeja ou placa com planta e organismo — cada um é uma parcela. Preencha o que se aplica; em branco não entra em conta nenhuma.</div>';
+  h+='<div class="se-row">';
+  h+='<div class="se-field"><label>Forma</label><select id="seArForma" onchange="_seArenaDica()"><option value="retangular"'+(circ?'':' selected')+'>Retangular</option><option value="circular"'+(circ?' selected':'')+'>Circular</option></select></div>';
+  h+='<div class="se-field"><label>Comprimento (cm)</label><input type="text" inputmode="decimal" id="seArComp" value="'+v(a.comprimentoCm)+'" placeholder="37" oninput="_seArenaDica()"></div>';
+  h+='<div class="se-field"><label>Largura (cm)</label><input type="text" inputmode="decimal" id="seArLarg" value="'+v(a.larguraCm)+'" placeholder="22" oninput="_seArenaDica()"></div>';
+  h+='<div class="se-field"><label>Diâmetro (cm)</label><input type="text" inputmode="decimal" id="seArDiam" value="'+v(a.diametroCm)+'" placeholder="só circular" oninput="_seArenaDica()"></div>';
+  h+='</div><div class="se-row">';
+  h+='<div class="se-field"><label>Organismos por unidade</label><input type="text" inputmode="decimal" id="seArOrg" value="'+v(a.organismosPorUnidade)+'" placeholder="1" oninput="_seArenaDica()"></div>';
+  h+='<div class="se-field"><label>Organismo</label><input type="text" id="seArOrgNome" value="'+v(a.organismo)+'" placeholder="lesma"></div>';
+  h+='<div class="se-field"><label>Peso médio do pellet (mg) <span style="opacity:.6">grânulos</span></label><input type="text" inputmode="decimal" id="seArPellet" value="'+v(a.pesoPelletMg)+'" placeholder="pese 100 e divida" oninput="_seArenaDica()"></div>';
+  h+='</div>';
+  h+='<div class="se-field"><label>Substrato</label><input type="text" id="seArSubstrato" value="'+v(a.substrato)+'" placeholder="solo de campo peneirado e homogeneizado; volume de água inicial padronizado"></div>';
+  h+='<div class="se-field"><label>Distribuição dos grânulos</label><input type="text" id="seArPosicoes" value="'+v(a.posicoes)+'" placeholder="posições predeterminadas P1–P7"></div>';
+  h+='<div class="se-field"><label>Ponto de infestação</label><input type="text" id="seArInfest" value="'+v(a.pontoInfestacao)+'" placeholder="X central padronizado"></div>';
+  h+='<div class="e-hint" id="seArDica" style="margin:-2px 0 8px">'+_arenaDicaTexto(a)+'</div>';
+  return h;
+}
+function _arenaDicaTexto(a){
+  if(!window.ArenaCore) return '';
+  var ar=ArenaCore.area(a), d=ArenaCore.densidade(a), t=[];
+  if(ar.m2!=null) t.push('Área: <b>'+_arenaBR(ar.m2,4)+' m²</b>'); else t.push('Área: '+esc(ar.motivo));
+  if(d.porM2!=null) t.push('densidade: <b>'+_arenaBR(d.porM2,1)+' '+esc(a.organismo||'organismos')+'/m²</b>');
+  if(ar.m2!=null) t.push('1 kg/ha = <b>'+_arenaBR(ar.m2*100,2)+' mg</b> por unidade');
+  return t.join(' · ');
+}
+function _arenaLerCampos(get){
+  function tx(id){ var e=get(id); return e?String(e.value||'').trim():''; }
+  function nm(id){ var x=_arenaNum(tx(id)); return (x!=null&&x>=0)?x:null; }
+  var o={forma:tx('seArForma')==='circular'?'circular':'retangular',
+    comprimentoCm:nm('seArComp'), larguraCm:nm('seArLarg'), diametroCm:nm('seArDiam'),
+    organismosPorUnidade:nm('seArOrg'), organismo:tx('seArOrgNome'), pesoPelletMg:nm('seArPellet'),
+    substrato:tx('seArSubstrato'), posicoes:tx('seArPosicoes'), pontoInfestacao:tx('seArInfest')};
+  Object.keys(o).forEach(function(k){ if(o[k]===''||o[k]==null) delete o[k]; });
+  return o;
+}
+function _seArenaDica(){
+  var d=document.getElementById('seArDica'); if(!d) return;
+  d.innerHTML=_arenaDicaTexto(_arenaLerCampos(function(id){ return document.getElementById(id); }));
+}
+function arenaLerEditor(el){ return _arenaLerCampos(el); }
+function arenaResumoTexto(study){
+  var a=arenaDoEstudo(study), t=[];
+  if(!Object.keys(a).length || !window.ArenaCore) return '';
+  if(a.forma==='circular'&&a.diametroCm) t.push('Ø '+_arenaBR(a.diametroCm,1)+' cm');
+  else if(a.comprimentoCm&&a.larguraCm) t.push(_arenaBR(a.comprimentoCm,1)+' × '+_arenaBR(a.larguraCm,1)+' cm');
+  var ar=ArenaCore.area(a); if(ar.m2!=null) t.push(_arenaBR(ar.m2,4)+' m²');
+  if(a.organismosPorUnidade!=null){
+    var d=ArenaCore.densidade(a);
+    t.push(_arenaBR(a.organismosPorUnidade,0)+' '+(a.organismo||'organismo')+'/unidade'+(d.porM2!=null?(' ≈ '+_arenaBR(d.porM2,1)+'/m²'):''));
+  }
+  if(a.pesoPelletMg) t.push('pellet '+_arenaBR(a.pesoPelletMg,2)+' mg');
+  if(a.substrato) t.push(a.substrato);
+  if(a.posicoes) t.push(a.posicoes);
+  if(a.pontoInfestacao) t.push('infestação: '+a.pontoInfestacao);
+  return t.join(' · ');
+}
+/* Primeiro número da dose ("7", "7 kg/ha", "7 + 0,2%" → 7). */
+function _arenaDoseValor(raw){
+  var p=String(raw==null?'':raw).split(/\s\+\s/)[0], m=p.match(/-?\d+(?:[.,]\d+)?/);
+  return m?_arenaNum(m[0]):null;
+}
+function arenaDoseTabela(study, qid){
+  if(!window.ArenaCore||!study) return null;
+  var a=arenaDoEstudo(study);
+  var linhas=(study.tratamentos||[]).map(function(t){
+    var un=(typeof doseUnidadeDe==='function')?doseUnidadeDe(study,t.dose):'';
+    var r=ArenaCore.doseNaArena(_arenaDoseValor(t.dose), un, a);
+    return {id:t.id, produto:t.produto||'', dose:t.dose||'', unidade:un, testemunha:!!t.testemunha,
+      mg:r.mg, pellets:r.pellets, pelletsArred:r.pelletsArred, doseEfetiva:r.doseEfetiva,
+      desvioPct:r.desvioPct, motivo:r.motivo, avisos:r.avisos};
+  });
+  return {em:new Date().toISOString(), motor:'ArenaCore', motorVersao:ArenaCore.VERSAO,
+    area:ArenaCore.area(a).m2, pesoPelletMg:a.pesoPelletMg==null?null:a.pesoPelletMg, linhas:linhas};
+}
+/* Tabela do que vai em cada pote. Na aplicação, é o que a mão precisa ver. */
+function arenaDoseHtml(study, qid, onde){
+  var tb=arenaDoseTabela(study, qid); if(!tb) return '';
+  var h='<div class="se-section-title">'+(onde==='aplicacao'?'O que vai em cada pote':'Dose no pote')+'</div>';
+  if(tb.area==null) return h+'<div class="calc-warn">⚠ Declare as medidas da arena no cadastro do estudo (etapa de preparo). Sem área, a dose por hectare não vira quantidade no pote.</div>';
+  var semPeso=tb.pesoPelletMg==null;
+  h+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th><th>mg / pote</th><th>Pellets</th><th>Dose efetiva</th></tr></thead><tbody>';
+  tb.linhas.forEach(function(l){
+    var nome=esc(l.id)+(l.produto?' · '+esc(l.produto):'');
+    if(l.mg==null){
+      h+='<tr><td>'+nome+'</td><td>'+esc(l.dose||'—')+'</td><td colspan="3" style="opacity:.75">'+esc(l.motivo||'—')+'</td></tr>';
+      return;
+    }
+    h+='<tr><td>'+nome+'</td><td>'+esc(l.dose)+(l.unidade&&!/[a-zA-Z]/.test(l.dose)?' '+esc(l.unidade):'')+'</td>'+
+       '<td>'+_arenaBR(l.mg,2)+'</td>'+
+       '<td>'+(l.pelletsArred==null?'—':('<b>'+l.pelletsArred+'</b> <small style="opacity:.7">('+_arenaBR(l.pellets,2)+')</small>'))+'</td>'+
+       '<td>'+(l.doseEfetiva==null?'—':(_arenaBR(l.doseEfetiva,2)+' '+esc(l.unidade)+(l.desvioPct!=null&&Math.abs(l.desvioPct)>=0.5?' <small style="opacity:.7">('+(l.desvioPct>0?'+':'')+_arenaBR(l.desvioPct,0)+'%)</small>':'')))+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  var av=[], desv=[];
+  tb.linhas.forEach(function(l){ (l.avisos||[]).forEach(function(x){ if(/desviam a dose/.test(x)) desv.push(l.id); else av.push(l.id+': '+x); }); });
+  if(desv.length) av.unshift(desv.join(', ')+': pellets inteiros desviam a dose em mais de 10% (ver a coluna "Dose efetiva")');
+  if(semPeso) h+='<div class="calc-warn">⚠ Falta o peso médio do pellet (cadastro do estudo). A massa por pote já está certa; o nº de pellets depende dele — pese 100 pellets e divida por 100.</div>';
+  if(av.length) h+='<div class="calc-warn">⚠ '+esc(av.join(' · '))+'</div>';
+  h+='<div class="e-hint" style="margin:4px 0 0">Área '+_arenaBR(tb.area,4)+' m²'+(semPeso?'':' · pellet '+_arenaBR(tb.pesoPelletMg,2)+' mg')+
+     '. O número entre parênteses é o exato; o pote recebe o inteiro, e a dose efetiva mostra o efeito do arredondamento.'+
+     (onde==='aplicacao'?' Ao salvar, esta tabela fica gravada na aplicação.':'')+'</div>';
+  return h;
+}
+/* As variáveis do ensaio de arena de uma vez, com tipo, N e sentido certos. */
+function avConjuntoArena(){
+  var itens=(CATALOGO_AVAL['Moluscicida em arena']||[]);
+  if(!_avGrid.varcfg) _avGrid.varcfg={};
+  itens.forEach(function(it){
+    if(_avGrid.variaveis.indexOf(it.nome)<0) _avGrid.variaveis.push(it.nome);
+    _avGrid.tipos[it.nome]=it.tipo;
+    var cfg={};
+    if(it.tipo==='razao'&&it.N>0) cfg.N=it.N;
+    if(it.tipo==='escala'){ cfg.escalaMax=it.escalaMax||4; if(it.escalaNome) cfg.escalaNome=it.escalaNome; }
+    if(it.sentido==='maior') cfg.sentido='maior';
+    _avGrid.varcfg[it.nome]=cfg;
+  });
+  renderAvGrid();
+}
+
+/* ===================== CONDIÇÃO INICIAL DAS PARCELAS (D0) =====================
+   Peso e tamanho do organismo, estádio e nº de folhas da planta: são da PARCELA,
+   medidos uma vez antes do tratamento — não uma leitura diária. Ficam em
+   study.condicaoInicial = {variaveis:[nome], valores:{parcela:{var:valor}},
+   meta:{parcela:{var:{em,por}}}}. Medida se faz: nada vem pré-preenchido. */
+var CONDICAO_INICIAL_ARENA=['Peso da lesma (g)','Comprimento da lesma (mm)','Estádio da soja','Nº de folhas da soja'];
+function condicaoInicialHtml(qid,sid,study){
+  var ci=study.condicaoInicial||{}, vars=ci.variaveis||[], fin=estudoFinalizado(study);
+  var arena=(study.tipoEstudo==='Moluscicida em arena');
+  if(!vars.length && !arena && !(study.arena&&Object.keys(study.arena).length)) return '';
+  var h='<div class="sd-section" id="study-condicao-inicial"><div class="sd-section-title">Condição inicial das parcelas (D0)</div>';
+  if(!vars.length){
+    h+='<div class="e-hint" style="margin:2px 0 8px">O que se mede em cada pote antes do tratamento — peso e tamanho do organismo, estádio da planta. Serve para conferir se os tratamentos começaram iguais.</div>';
+    if(!fin){
+      if(arena) h+='<button class="btn-sm" onclick="condicaoInicialDefinir(\''+qid+'\',\''+sid+'\',1)">Usar: '+esc(CONDICAO_INICIAL_ARENA.join(', '))+'</button> ';
+      h+='<button class="btn-sm" onclick="condicaoInicialDefinir(\''+qid+'\',\''+sid+'\',0)">Escolher variáveis</button>';
+    }
+    return h+'</div>';
+  }
+  var rows=_avRowsForStudy(study,true), val=ci.valores||{};
+  var cheias=0; rows.forEach(function(r){ vars.forEach(function(v){ var x=(val[r.key]||{})[v]; if(x!==''&&x!=null) cheias++; }); });
+  /* resumo por tratamento e desbalanço */
+  var res=window.ArenaCore?ArenaCore.condicaoInicial(val,rows,vars):null;
+  if(res){
+    var numericas=vars.filter(function(v){ return res.geral[v]&&res.geral[v].n>0; });
+    if(numericas.length){
+      h+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th>'+numericas.map(function(v){ return '<th>'+esc(v)+'</th>'; }).join('')+'</tr></thead><tbody>';
+      (study.tratamentos||[]).forEach(function(t){
+        var pt=res.porTratamento[t.id]||{};
+        h+='<tr><td>'+esc(t.id)+'</td>'+numericas.map(function(v){ var c=pt[v];
+          return '<td>'+(c?(_arenaBR(c.media,2)+(c.dp!=null?' <small style="opacity:.7">± '+_arenaBR(c.dp,2)+'</small>':'')+(c.n<rows.length/((study.tratamentos||[]).length||1)?' <small style="opacity:.7">(n='+c.n+')</small>':'')):'—')+'</td>'; }).join('')+'</tr>';
+      });
+      h+='</tbody></table></div>';
+    }
+    if(res.avisos.length) h+='<div class="calc-warn">⚠ Os tratamentos não começaram iguais: '+esc(res.avisos.join(' · '))+'. Não impede o ensaio — fica registrado para a análise.</div>';
+  }
+  h+='<details'+(cheias<rows.length*vars.length?' open':'')+' style="margin-top:6px"><summary style="cursor:pointer;font-size:12px">Lançar por parcela · '+cheias+' de '+(rows.length*vars.length)+' medidas</summary>';
+  h+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parcela</th>'+vars.map(function(v){ return '<th>'+esc(v)+'</th>'; }).join('')+'</tr></thead><tbody>';
+  rows.forEach(function(r){
+    h+='<tr><td>'+(r.parcela?('<b>'+esc(String(r.parcela))+'</b> · '):'')+esc(r.label||r.key)+'</td>'+vars.map(function(v){
+      var x=(val[r.key]||{})[v];
+      return '<td><input class="calc-inp" style="min-width:64px" '+(fin?'disabled ':'')+'value="'+esc(x==null?'':String(x))+'" '+
+        'onchange="condicaoInicialSet(\''+qid+'\',\''+sid+'\',\''+esc(r.key)+'\','+esc(JSON.stringify(v)).replace(/"/g,'&quot;')+',this.value)"></td>';
+    }).join('')+'</tr>';
+  });
+  h+='</tbody></table></div>';
+  if(!fin) h+='<button class="btn-sm" style="margin-top:6px" onclick="condicaoInicialDefinir(\''+qid+'\',\''+sid+'\',0)">Mudar variáveis</button>';
+  h+='</details></div>';
+  return h;
+}
+function condicaoInicialDefinir(qid,sid,padraoArena){
+  var st=_estudoDe(qid,sid); if(!st) return;
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  var ci=st.condicaoInicial||{variaveis:[],valores:{},meta:{}};
+  var lista;
+  if(padraoArena) lista=CONDICAO_INICIAL_ARENA.slice();
+  else{
+    var txt=prompt('Variáveis da condição inicial, separadas por vírgula.\n\nEx.: Peso da lesma (g), Comprimento da lesma (mm), Estádio da soja, Nº de folhas da soja\n\nTirar uma variável da lista NÃO apaga o que já foi medido nela.',(ci.variaveis||[]).join(', '));
+    if(txt===null) return;
+    lista=String(txt).split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  }
+  var antes=(ci.variaveis||[]).join(', ');
+  ci.variaveis=lista.filter(function(v,i){ return lista.indexOf(v)===i; });
+  if(!ci.valores) ci.valores={}; if(!ci.meta) ci.meta={};
+  st.condicaoInicial=ci;
+  logStudyAuditInObject(st,'Condição inicial — variáveis',(antes||'—')+' → '+(ci.variaveis.join(', ')||'—'));
+  st._ts=Date.now(); save();
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
+  openStudyDetail(qid,sid);
+  setTimeout(function(){ var el=document.getElementById('study-condicao-inicial'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'start'}); },60);
+}
+function condicaoInicialSet(qid,sid,key,v,valor){
+  var st=_estudoDe(qid,sid); if(!st) return;
+  if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  var ci=st.condicaoInicial||(st.condicaoInicial={variaveis:[v],valores:{},meta:{}});
+  if(!ci.valores) ci.valores={}; if(!ci.meta) ci.meta={};
+  valor=String(valor==null?'':valor).trim();
+  var antes=(ci.valores[key]||{})[v];
+  if((antes==null?'':String(antes))===valor) return;
+  (ci.valores[key]=ci.valores[key]||{})[v]=valor;
+  (ci.meta[key]=ci.meta[key]||{})[v]={em:new Date().toISOString(),por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''};
+  /* Corrigir uma medida já lançada fica na trilha; o primeiro lançamento não
+     polui a trilha com 48 linhas. */
+  if(antes!=null && antes!=='') logStudyAuditInObject(st,'Condição inicial corrigida',key+' · '+v+': '+antes+' → '+(valor||'(vazio)'));
+  st._ts=Date.now(); save();
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
+}
+
+/* ===================== GRÁFICOS DA ARENA ==========================================
+   Três perguntas do ensaio, uma curva cada, todas em 0–100% e em dias:
+   a planta foi protegida (dano)? o organismo morreu (sobrevivência)? a isca foi
+   comida (pellets atacados)? E no fim, a tabela por tratamento contra a
+   testemunha INFESTADA. As contas são de vendor/arena-core.js. */
+function arenaPontos(study){
+  var avs=(study.avaliacoes||[]).filter(function(a){ return a&&a.data&&(a.variaveis||[]).length; })
+    .sort(function(a,b){ return String(a.data).localeCompare(String(b.data))||String(a.hora||'').localeCompare(String(b.hora||'')); });
+  if(!avs.length) return [];
+  var t0=study.avalInicio||avs[0].data, d0=new Date(t0+'T00:00:00');
+  return avs.map(function(a){
+    var daa=Math.max(0,Math.round((new Date(a.data+'T00:00:00')-d0)/864e5));
+    var m=avMomento(a,daa);
+    return {dia:m.dias, rotulo:m.explicito?m.rotulo:('D'+daa), medias:_avMeans(study,a)};
+  });
+}
+function _arenaCor(i){ var p=['#1f8a52','#2f85c9','#d69431','#9b59b6','#e0566b','#16a085','#c0392b','#f39c12','#27ae60','#8e44ad','#d35400','#7f8c8d']; return p[i%p.length]; }
+function _arenaLinhaSvg(serie, trats, test, rotuloY){
+  var W=520,Hh=210,pl=34,pr=12,pt=10,pb=26, dias=[];
+  trats.forEach(function(t){ (serie[t.id]||[]).forEach(function(p){ dias.push(p.dia); }); });
+  if(!dias.length) return '';
+  var d0=Math.min.apply(null,dias), d1=Math.max.apply(null,dias); if(d1<=d0) d1=d0+1;
+  function X(d){ return pl+(W-pl-pr)*(d-d0)/(d1-d0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(100,y))/100); }
+  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(rotuloY)+' por tratamento ao longo dos dias" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px">';
+  [0,25,50,75,100].forEach(function(g){ var y=Y(g);
+    h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'" stroke-width="1"/>';
+    h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+g+'%</text>'; });
+  var passo=Math.max(1,Math.ceil((d1-d0)/10));
+  for(var d=Math.ceil(d0);d<=d1;d+=passo) h+='<text x="'+X(d).toFixed(1)+'" y="'+(Hh-9)+'" font-size="9" text-anchor="middle" fill="#8a948e">D'+_fmtMom(d)+'</text>';
+  var leg='';
+  trats.forEach(function(t,ti){
+    var xs=serie[t.id]||[]; if(!xs.length) return;
+    /* a testemunha é a linha escura tracejada; nenhum tratamento pode ter a cor dela */
+    var col=(t.id===test)?'#222':_arenaCor(ti);
+    var dd=xs.map(function(p,k){ return (k?'L':'M')+X(p.dia).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ');
+    h+='<path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"'+(t.id===test?' stroke-dasharray="5 3"':'')+'/>';
+    xs.forEach(function(p){
+      h+='<circle cx="'+X(p.dia).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.2" fill="'+col+'" stroke="#fff" stroke-width="1.5">'+
+         '<title>'+esc(t.id+(t.produto?' · '+t.produto:'')+' — '+(p.rotulo||('D'+_fmtMom(p.dia)))+': '+_arenaBR(p.y,1)+'%')+'</title></circle>';
+    });
+    leg+='<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 2px 0;font-size:10px;color:#26312b"><span style="width:12px;height:3px;background:'+col+';display:inline-block;border-radius:2px"></span>'+esc(t.id)+(t.id===test?' (testemunha)':'')+'</span>';
+  });
+  return h+'</svg><div style="margin:4px 0 2px;line-height:1.8">'+leg+'</div>';
+}
+function arenaGraficosHtml(study, qid){
+  if(!window.ArenaCore) return '';
+  if(study.tipoEstudo!=='Moluscicida em arena' && studyMetodo(study,qid)!=='granulado') return '';
+  var pts=arenaPontos(study); if(!pts.length) return '';
+  var trats=study.tratamentos||[], test=(typeof studyTestemunha==='function')?studyTestemunha(study):'';
+  var cv=ArenaCore.curvas(pts,trats), H='';
+  if(cv.dano) H+='<div class="res-title">Dano na planta × dias <small style="opacity:.7">('+esc(cv.dano.variavel)+')</small></div>'+_arenaLinhaSvg(cv.dano.series,trats,test,'Dano');
+  if(cv.sobrevivencia) H+='<div class="res-title">Sobrevivência do organismo × dias <small style="opacity:.7">(100 − '+esc(cv.sobrevivencia.variavel)+')</small></div>'+_arenaLinhaSvg(cv.sobrevivencia.series,trats,test,'Sobrevivência');
+  if(cv.consumo) H+='<div class="res-title">Pellets atacados × dias <small style="opacity:.7">(mordidos + desintegrados, sobre o total contado)</small></div>'+_arenaLinhaSvg(cv.consumo.series,trats,test,'Pellets atacados');
+  if(!H) return '<div class="sd-section"><div class="sd-section-title">Gráficos da arena</div><div class="e-hint">As curvas aparecem quando houver avaliação com <b>Dano foliar (%)</b>, <b>Lesma morta</b> ou as contagens de <b>pellets</b> — use "+ variáveis do ensaio de arena" na avaliação.</div></div>';
+  var R=ArenaCore.resumo(cv,trats,test||null), tn={};
+  trats.forEach(function(t){ tn[t.id]=t; });
+  var ult=pts[pts.length-1];
+  var tb='<div class="res-title">Resultado no fim do ensaio <small style="opacity:.7">('+esc(ult.rotulo)+')</small></div>';
+  tb+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dano final</th><th>AACPD</th><th>Proteção</th><th>Mortalidade</th><th>Abbott</th><th>≤50% vivos</th><th>Pellets atacados</th></tr></thead><tbody>';
+  function pc(x){ return x==null?'—':_arenaBR(x,1)+'%'; }
+  R.linhas.forEach(function(l){
+    var t=tn[l.id]||{};
+    tb+='<tr'+(l.testemunha?' style="font-weight:700"':'')+'><td>'+esc(l.id)+(t.produto?' <small style="opacity:.7">'+esc(t.produto)+'</small>':'')+(l.testemunha?' <small>(testemunha)</small>':'')+'</td>'+
+        '<td>'+pc(l.danoFinal)+'</td><td>'+(l.aacpd==null?'—':_arenaBR(l.aacpd,1))+'</td><td>'+pc(l.protecao)+'</td>'+
+        '<td>'+pc(l.mortalidadeFinal)+'</td><td>'+pc(l.abbott)+'</td><td>'+(l.dia50==null?'—':'D'+_fmtMom(l.dia50))+'</td><td>'+pc(l.pelletsAtacados)+'</td></tr>';
+  });
+  tb+='</tbody></table></div>';
+  tb+='<div class="e-hint" style="margin:4px 0 0">'+(R.semTestemunha
+      ?'⚠ Nenhum tratamento marcado como testemunha: proteção e Abbott ficam em branco. Marque a <b>testemunha infestada</b> (com organismo, sem produto) no cadastro.'
+      :'Base da proteção e do Abbott: <b>'+esc(test)+'</b>, a primeira testemunha marcada — deve ser a <b>infestada</b>. A testemunha sem organismo não se marca como testemunha.')+
+     ' Proteção = redução da AACPD de dano frente à testemunha. "≤50% vivos" é o primeiro dia em que a média de sobreviventes chegou à metade — leitura, não interpolação.</div>';
+  return '<div class="sd-section" id="study-arena-graficos"><div class="sd-section-title">Gráficos da arena</div>'+H+tb+'</div>';
 }
 
 /* Método de UM tratamento. O override só vale se tiver sido declarado — ligar a chave
@@ -10974,6 +11290,7 @@ function aplicacaoHerancaHtml(study, qid, ap){
      primeiro, como em todo o resto do app. */
   if(typeof isQuadraLab==='function' && isQuadraLab(qid)){
     try{ _calcCss(); }catch(e){}
+    if(studyMetodo(study, qid)==='granulado') return arenaDoseHtml(study, qid, 'aplicacao');
     return aplicacaoHerancaLabHtml(study, qid, ap);
   }
   /* As classes deste bloco moram na folha da calculadora, que só é injetada quando a
@@ -11238,6 +11555,8 @@ function aplicacaoMemoriaAuto(study, qid, ap){
   if(ap.memoriaCalculo) return null;              /* já há registro: não se sobrescreve */
   /* §7.8 — dois motores, um pipeline. A categoria da quadra escolhe qual. */
   var ehLab=(typeof isQuadraLab==='function' && isQuadraLab(qid));
+  /* Grânulos não têm calda nem pipeta: a receita do pote fica em ap.doseArena. */
+  if(ehLab && typeof studyMetodo==='function' && studyMetodo(study, qid)==='granulado') return null;
   var cfg=ehLab?calcConfigDoEstudoLab(study, qid):calcConfigDoEstudo(study, qid);
   var completa=ehLab?calcConfigLabCompleta(cfg):calcConfigCompleta(cfg);
   if(!completa) return null;                      /* faltou dado declarado: não se inventa */
@@ -13597,7 +13916,9 @@ function openStudyDetail(qid,sid){
   h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Conhecimento e contexto</button>';
   h+='<button class="btn-sm" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+sid+'\')" title="Escolher entre o modelo Agracta e o protocolo Sinergista">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
-  h+=isQuadraLab(qid)
+  /* Grânulos não têm calda: a quantidade por pote já está na ficha. */
+  if(isQuadraLab(qid) && studyMetodo(study,qid)==='granulado'){}
+  else h+=isQuadraLab(qid)
     ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório: a receita de cada tratamento deste estudo, mais o ajuste de i.a.">🧪 Calc lab</button>'
     : '<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">🧪 Calc</button>';
   h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
@@ -13630,7 +13951,8 @@ function openStudyDetail(qid,sid){
     _pc.push(_fr+((study.labFonteTipo!=='puro'&&study.labFonteValor)?' '+study.labFonteValor:''));
     if(study.labPureza) _pc.push('pureza '+study.labPureza+'%');
     if(study.labDensidade) _pc.push('d '+study.labDensidade+' g/mL');
-    h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo no laboratório</span><span>'+esc(_pc.join(' · '))+'</span></div>';
+    if(studyMetodo(study,qid)!=='granulado') h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Preparo no laboratório</span><span>'+esc(_pc.join(' · '))+'</span></div>';
+    var _arT=arenaResumoTexto(study); if(_arT) h+='<div class="sd-meta-item"><span class="sd-meta-lbl">Unidade experimental</span><span>'+esc(_arT)+'</span></div>';
   }else{
     if(study.volumeMorto>0) _pc.push('vol. morto '+_br(study.volumeMorto)+' mL');
     if(study.numFrascos>1) _pc.push(study.numFrascos+' frascos/preparo');
@@ -13804,6 +14126,11 @@ function openStudyDetail(qid,sid){
      por alvo dentro da própria análise e a trilha logo abaixo. Um atalho que
      duplica o que está a um dedo de distância só rouba atenção do resultado. */
   h+='<div id="study-stage-dossie" class="study-stage-anchor" aria-hidden="true"></div>';
+  if(isQuadraLab(qid)){
+    try{ if(studyMetodo(study,qid)==='granulado') h+='<div class="sd-section" id="study-arena-dose">'+arenaDoseHtml(study,qid,'estudo')+'</div>'; }catch(e){}
+    try{ h+=condicaoInicialHtml(qid,sid,study); }catch(e){}
+    try{ h+=arenaGraficosHtml(study,qid); }catch(e){}
+  }
   try{ h+=protocoloVivoHtml(qid,sid,study); }catch(e){}
   h+='<div id="study-audit">'+studyAuditHtml(study)+'</div>';
 
@@ -14728,6 +15055,7 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Densidade (g/mL) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabDens" value="'+esc(s.labDensidade==null?'':String(s.labDensidade))+'" placeholder="1,00" inputmode="decimal"></div>';
     h+='</div>';
     h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de laboratório deste estudo. O volume do pote costuma ser o do falcon (50 mL). Densidade é obrigatória quando a fonte é g/kg.</div>';
+    h+=arenaEditorHtml(s);
   }else{
     h+='<div class="se-section-title">Preparo de calda</div>';
     h+='<div class="se-row">';
@@ -14850,7 +15178,7 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Como o estudo é aplicado</label><select id="seMetodo" onchange="_seMetodoSync()">'+
        _mets.map(function(k){ return '<option value="'+esc(k)+'"'+(k===_metStudy?' selected':'')+'>'+esc(APLIC_METODOS[k])+'</option>'; }).join('')+
        '</select></div>';
-    h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seMetodoPorTrat" '+(s.metodoPorTratamento?'checked':'')+' onchange="_seMetodoSync()" style="width:auto"> Métodos diferentes por tratamento</label>'+
+    if(!isQuadraLab(curV)) h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seMetodoPorTrat" '+(s.metodoPorTratamento?'checked':'')+' onchange="_seMetodoSync()" style="width:auto"> Métodos diferentes por tratamento</label>'+
        '<div class="e-hint">Ligue só quando for verdade — ex.: T1 e T2 de drone, T3 de trator no mesmo estudo. Desligado, todos usam o método acima e a tela não repete o rótulo em cada tratamento.</div></div>';
   }
 
@@ -15128,6 +15456,7 @@ function syncStudyInputs(){
     try{ workingStudy.janela=janelaDaTela(); }catch(e){}
   }
   x=el("seLabVol"); if(x) workingStudy.labVolumeMl=Math.max(0,_numBR(x.value,50))||50;
+  if(el("seArForma")) workingStudy.arena=arenaLerEditor(el);
   x=el("seLabFonte"); if(x) workingStudy.labFonteTipo=x.value;
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
   x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
@@ -15474,6 +15803,7 @@ function saveStudyV2(){
     if(_numBR(old.capacidadeFrasco,0) !== s.capacidadeFrasco) changes.push('Capacidade do frasco (L): ' + _numBR(old.capacidadeFrasco,0) + ' -> ' + s.capacidadeFrasco);
     /* preparo no laboratório entra na mesma trilha de auditoria BPL */
     if(_numBR(old.labVolumeMl,50) !== s.labVolumeMl) changes.push('Volume do pote (mL): ' + _numBR(old.labVolumeMl,50) + ' -> ' + s.labVolumeMl);
+    if(JSON.stringify(old.arena||{}) !== JSON.stringify(s.arena||{})) changes.push('Unidade experimental (arena): ' + (arenaResumoTexto(old)||'—') + ' -> ' + (arenaResumoTexto(s)||'—'));
     if((old.labFonteTipo||'gL') !== s.labFonteTipo) changes.push('Fonte do produto (lab): "' + (old.labFonteTipo||'gL') + '" -> "' + s.labFonteTipo + '"');
     if(String(old.labFonteValor||'') !== String(s.labFonteValor||'')) changes.push('Valor da fonte (lab): "' + (old.labFonteValor||'—') + '" -> "' + (s.labFonteValor||'—') + '"');
     if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
@@ -15955,6 +16285,8 @@ function saveAplicacao(){
   /* §7.4 — a memória se deriva do estudo ao salvar, para que registrar a aplicação no
      campo não deixe a aplicação sem nenhum registro do que foi preparado. Só quando
      ainda não há nenhuma: nunca por cima de uma conferida na calculadora. */
+  /* Arena: o que foi para cada pote, com o peso de pellet que valia no dia. */
+  try{ if(isQuadraLab(curV) && studyMetodo(study,curV)==='granulado' && !ap.doseArena){ ap.doseArena=arenaDoseTabela(study,curV); } }catch(e){}
   try{
     var _memAuto=aplicacaoMemoriaAuto(study, curV, ap);
     if(_memAuto){
@@ -16105,7 +16437,7 @@ function _avBrutoTxt(src,key,v){
 /* ===== Catálogo de variáveis por tipo de estudo =====
    Sem isso a variável é texto livre e vira "Mortalidade" / "mortalidade" / "Mort."
    em avaliações diferentes — e aí a série da AACPD e da prancha não fecha. */
-var TIPOS_ESTUDO=['Eficácia','Mortalidade','Fungo in vitro','Fungo in vivo','Folha destacada','Seletividade/Fitotoxicidade','Produtividade','Outro'];
+var TIPOS_ESTUDO=['Eficácia','Mortalidade','Fungo in vitro','Fungo in vivo','Folha destacada','Moluscicida em arena','Seletividade/Fitotoxicidade','Produtividade','Outro'];
 /* CAMPO e LABORATÓRIO não são o mesmo mundo, e tratá-los como se fossem foi o
    que deixou um bioensaio de mortalidade sair rotulado como "curva de progresso
    da doença". No campo: severidade, incidência, fito, produtividade — e a AACPD
@@ -16115,7 +16447,7 @@ var TIPOS_ESTUDO=['Eficácia','Mortalidade','Fungo in vitro','Fungo in vivo','Fo
    "severidade" ali era possível, e era a porta de entrada do erro.
    Nematologia não usa: lá o registro é fila de amostras, não avaliação. */
 var TIPOS_POR_LAB={
-  Entomologia:['Mortalidade','Folha destacada','Outro'],
+  Entomologia:['Mortalidade','Folha destacada','Moluscicida em arena','Outro'],
   /* "Fungo in vivo" fica: na Fitopatologia dele é ensaio de bancada com planta
      inoculada, e mede severidade — não é tipo de campo que vazou. Saíram só os
      que não têm o que fazer numa bancada: "Eficácia" e "Seletividade". */
@@ -16200,6 +16532,22 @@ var CATALOGO_AVAL={
     {nome:'Incidência',tipo:'razao',N:20},
     {nome:'Nº de lesões',tipo:'contagem',sub:10},
     {nome:'Nota de escala',tipo:'escala',escalaMax:4,sub:10}
+  ],
+  /* ARENA: pote = parcela, com planta e organismo. Dano na planta tem sentido
+     'menor' (a testemunha infestada é a maior); morte da lesma e estado da lesma
+     têm sentido 'maior'. Sim/não entra como razão n/N com N = 1: a média dos
+     potes é a proporção, e a estatística a trata como tal. */
+  'Moluscicida em arena':[
+    {nome:'Dano foliar (%)',tipo:'pct'},
+    {nome:'Folhas atacadas',tipo:'contagem'},
+    {nome:'Meristema atacado',tipo:'razao',N:1},
+    {nome:'Planta viva',tipo:'razao',N:1,sentido:'maior'},
+    {nome:'Estado da lesma (0–4)',tipo:'escala',escalaMax:4,sentido:'maior',escalaNome:'0 normal · 1 atividade reduzida · 2 hipersecreção · 3 paralisada · 4 morta'},
+    {nome:'Lesma morta',tipo:'razao',N:1,sentido:'maior'},
+    {nome:'Pellets íntegros',tipo:'contagem'},
+    {nome:'Pellets mordidos',tipo:'contagem'},
+    {nome:'Pellets desintegrados',tipo:'contagem'},
+    {nome:'Água reposta (mL)',tipo:'contagem'}
   ],
   'Produtividade':[
     {nome:'Peso da parcela (g)',tipo:'contagem'},
@@ -16540,7 +16888,8 @@ function renderAvGrid(){
     html+='<td><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button></td></tr>';
   });
   html+='</tbody></table></div>';
-  if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button></div>';
+  if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button>'+
+    (((_avStudy()||{}).tipoEstudo==='Moluscicida em arena')?'<button type="button" class="av-addcol" onclick="avConjuntoArena()">+ variáveis do ensaio de arena</button>':'')+'</div>';
   w.innerHTML=html;
 }
 

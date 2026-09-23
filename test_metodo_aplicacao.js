@@ -4,7 +4,8 @@
  * O QUE ESTE TESTE PROTEGE
  *
  *  1. CATEGORIA. Bancada e campo não compartilham método. Numa quadra de laboratório
- *     o único método é a Torre de Potter; numa quadra de campo a Potter não existe.
+ *     os métodos são a Torre de Potter e o grânulo à mão em arena; numa quadra de
+ *     campo nenhum dos dois existe.
  *     Oferecer sider numa bancada é o mesmo erro que mostrar BBCH num ensaio de placa.
  *
  *  2. DIVERGÊNCIA É QUE É INFORMAÇÃO. Enquanto todos os tratamentos usam o mesmo
@@ -77,7 +78,9 @@ eq(JSON.stringify(ctx.aplicMetodosDe('Q1')),'["tractor","co2","drone","atomizer"
    a matriz bico a bico — o que é correto, porque no sider não se coleta bico a bico.
    Quem usa costal declara o costal (test_calc_barra.js cobre esse lado). */
 eq(ctx.aplicMetodosDe('Q1')[0],'tractor','e o sider é o primeiro, que é quem vale por omissão');
-eq(JSON.stringify(ctx.aplicMetodosDe('LAB1')),'["lab"]','bancada oferece só a Torre de Potter');
+/* 16a publicação: a bancada ganhou o grânulo à mão em arena. Continua sem
+   nenhum método de campo. */
+eq(JSON.stringify(ctx.aplicMetodosDe('LAB1')),'["lab","granulado"]','bancada oferece Torre de Potter e grânulos em arena — nenhum método de campo');
 eq(ctx.aplicMetodoValido('Q1','lab'),false,'Potter NÃO existe em quadra de campo');
 eq(ctx.aplicMetodoValido('LAB1','tractor'),false,'sider NÃO existe em bancada');
 eq(ctx.aplicMetodoValido('LAB1','drone'),false,'drone tampouco');
