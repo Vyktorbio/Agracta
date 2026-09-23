@@ -1917,6 +1917,7 @@ function toggleMainMenu(){
        sob demanda, que é o que foi pedido: sem incomodar na abertura, disponível na
        hora em que algo parece errado. */
     '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificação de integridade</button>'+
+    '<button onclick="closeMainMenu();openArmazenamento()">'+ic('archive')+' Armazenamento do aparelho</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
     (adm?'<button onclick="closeMainMenu();openComplianceISMS()">'+ic('archive')+' Conformidade &amp; ISMS</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+(_menuNome?('<b>'+esc(_menuNome)+'</b><br>'):'')+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
@@ -18074,7 +18075,22 @@ function openRubrica(onDone,info){
 function rubricaClear(){ var cv=document.getElementById('rubricaCanvas'); if(_rubricaCtx&&cv){ var r=cv.getBoundingClientRect(); _rubricaCtx.clearRect(0,0,r.width,r.height); } _rubricaDirty=false; }
 function _rubricaClose(){ var ovl=document.getElementById('rubricaOvl'); if(ovl) ovl.style.display='none'; }
 function rubricaSkip(){ _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(null); }
-function rubricaConfirm(){ var cv=document.getElementById('rubricaCanvas'),url=null; try{ if(_rubricaDirty&&cv) url=cv.toDataURL('image/png'); }catch(e){} _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(url); }
+/* A rubrica era o PNG da tela inteira (1080 × 2000 px no celular), em cada
+   avaliação assinada e em cada finalização. Agora sai só a área com tinta,
+   reduzida a no máximo 600 × 240 px: a mesma assinatura, uma fração do espaço.
+   Rubricas já gravadas NÃO são reescritas — assinatura feita não se mexe. */
+function _rubricaCompacta(cv){
+  var AC=window.ArmazenamentoCore, ctx=cv.getContext('2d');
+  var im=ctx.getImageData(0,0,cv.width,cv.height), bx=AC?AC.caixaDaTinta(im.data,cv.width,cv.height):null;
+  if(!bx) return cv.toDataURL('image/png');
+  var pad=Math.round(8*(window.devicePixelRatio||1));
+  var x=Math.max(0,bx.x-pad), y=Math.max(0,bx.y-pad), w=Math.min(cv.width-x,bx.w+2*pad), h=Math.min(cv.height-y,bx.h+2*pad);
+  var k=Math.min(1,600/w,240/h), out=document.createElement('canvas');
+  out.width=Math.max(1,Math.round(w*k)); out.height=Math.max(1,Math.round(h*k));
+  var o=out.getContext('2d'); o.imageSmoothingQuality='high'; o.drawImage(cv,x,y,w,h,0,0,out.width,out.height);
+  return out.toDataURL('image/png');
+}
+function rubricaConfirm(){ var cv=document.getElementById('rubricaCanvas'),url=null; try{ if(_rubricaDirty&&cv){ try{ url=_rubricaCompacta(cv); }catch(e2){ url=cv.toDataURL('image/png'); } } }catch(e){} _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(url); }
 /* ===== DIÁRIO DE AVALIAÇÕES (rede de segurança no aparelho) =====================
    Caixa-preta append-only em IndexedDB (independente do blob/localStorage): toda
    avaliação salva fica registrada localmente, p/ recuperar mesmo se a sincronização
@@ -18368,13 +18384,29 @@ function safetyList(){ try{ var a=JSON.parse(localStorage.getItem('iracema-safet
    A poda por cota também estava pela metade: ela encolhia até dois e desistia
    em silêncio, sem tentar com um. Agora encolhe até caber ou até acabar, e o
    resultado é honesto: true só quando o localStorage aceitou. */
+/* ORÇAMENTO (16a+1 publicação). As cópias ocupavam todo o espaço que sobrava
+   e o dado ficava sem folga para crescer — foi assim que finalizar estudo
+   deixou de gravar no celular. Agora elas só usam o que sobra depois de
+   reservar a folga do dado (vendor/armazenamento-core.js). Na abertura isso
+   pode dar zero cópias: o cofre e o histórico da nuvem seguem guardando.
+   Antes de excluir, importar ou restaurar, UMA cópia ainda é tentada. */
+function _safetyMaxCopias(copiaChars, obrigatoria){
+  var AC=window.ArmazenamentoCore; if(!AC) return 10;
+  var m=AC.medir(localStorage), seg=m.porGrupo.seguranca||0, dados=0;
+  m.itens.forEach(function(it){ if(it.chave==='iracema-v7') dados=it.chars; });
+  var n=AC.copiasPermitidas(m.total-seg, copiaChars, dados);
+  return obrigatoria?Math.max(1,n):n;
+}
 function safetyBackup(motivo){
   try{
     var arr=safetyList();
     var snap=JSON.parse(JSON.stringify(safetySnap()));
     snap.motivo=motivo||''; snap.counts=_safetyCounts(snap);
     arr.push(snap);
-    while(arr.length>10) arr.shift();
+    var _max=10;
+    try{ _max=_safetyMaxCopias(JSON.stringify(snap).length, !/^ao abrir/.test(motivo||'')); }catch(e){}
+    if(_max<=0){ try{ localStorage.removeItem('iracema-safety'); }catch(e){} return false; }
+    while(arr.length>Math.min(10,_max)) arr.shift();
     while(arr.length){
       try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); return true; }
       catch(e){ arr.shift(); }   /* não coube: sacrifica o mais antigo e tenta de novo */
@@ -18560,6 +18592,94 @@ function openIntegridade(){
   '</div>';
   m.style.display='flex';
 }
+/* ===================== ARMAZENAMENTO DO APARELHO ===============================
+   O que ocupa o armazenamento rápido, o que pode sair sem perder nada, e o
+   banco do aparelho (IndexedDB), que é onde cabe de verdade. As contas são de
+   vendor/armazenamento-core.js. Nada aqui apaga dado de pesquisa. */
+function _armMB(chars){ var AC=window.ArmazenamentoCore; var v=AC?AC.mb(chars):chars*2/1048576; return (v<0.1?v.toFixed(2):v.toFixed(1)).replace('.',',')+' MB'; }
+function openArmazenamento(){
+  var AC=window.ArmazenamentoCore;
+  var m=document.getElementById('armModal');
+  if(!m){ m=document.createElement('div'); m.id='armModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  if(!AC){ m.innerHTML='<div style="background:#0e150e;color:#eaf3ed;padding:16px;border-radius:14px">O módulo de armazenamento não carregou. Recarregue o app.</div>'; m.style.display='flex'; return; }
+  var md=AC.medir(localStorage), cor={dados:'#37d684',seguranca:'#d69431',cache:'#2f85c9',outros:'#8a948e'};
+  var img={rubricas:{n:0,chars:0},outras:{n:0,chars:0}}; try{ img=AC.imagens(data); }catch(e){}
+  var fotosNoEstado=0; try{ ensureNotas(); (NOTAS_CAMPO||[]).forEach(function(n){ if(n&&typeof n.foto==='string') fotosNoEstado+=n.foto.length; }); }catch(e){}
+  var descart=md.itens.filter(function(i){ return i.descartavel; }), descartChars=descart.reduce(function(a,i){ return a+i.chars; },0);
+  var barra='<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#1a241c;margin:8px 0 4px">'+
+    ['dados','seguranca','cache','outros'].map(function(g){ var w=md.porGrupo[g]/md.limite*100; return w>0?'<div title="'+esc(AC.GRUPOS[g])+'" style="width:'+Math.min(100,w).toFixed(2)+'%;background:'+cor[g]+'"></div>':''; }).join('')+'</div>';
+  var leg=['dados','seguranca','cache','outros'].map(function(g){ return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:9px;height:9px;border-radius:2px;background:'+cor[g]+';display:inline-block"></span>'+esc(AC.GRUPOS[g])+' '+_armMB(md.porGrupo[g])+'</span>'; }).join('');
+  var top=md.itens.slice(0,8).map(function(i){ return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px solid #1a241c"><span>'+esc(i.rotulo)+'</span><b>'+_armMB(i.chars)+'</b></div>'; }).join('');
+  var nSeg=safetyList().length;
+  var h='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Armazenamento do aparelho</b><button onclick="document.getElementById(\'armModal\').style.display=\'none\'" style="background:none;border:0;color:#8aa88a;font-size:22px;cursor:pointer">×</button></div>'+
+    '<div style="margin-top:10px;font-weight:700">Armazenamento rápido: '+Math.round(md.usoPct)+'% <span style="font-weight:400;color:#8aa88a">de ~'+_armMB(md.limite)+' (estimativa)</span></div>'+barra+
+    '<div style="font-size:11px;color:#a7b0aa;line-height:1.9">'+leg+'</div>'+
+    (md.usoPct>80?'<div style="margin-top:6px;padding:8px;border-radius:8px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a;font-size:12px">Quase cheio. Com ele cheio, uma edição pode não gravar aqui — o app segue pelo cofre, mas é melhor liberar espaço.</div>':'')+
+    '<div style="margin-top:10px">'+top+'</div>'+
+    '<div style="margin-top:12px;font-weight:700">Dentro dos seus dados</div>'+
+    '<div style="font-size:12px;color:#a7b0aa;margin-top:3px">'+img.rubricas.n+' rubrica(s): '+_armMB(img.rubricas.chars)+
+      (img.outras.n?(' · '+img.outras.n+' outra(s) imagem(ns): '+_armMB(img.outras.chars)):'')+
+      (fotosNoEstado?(' · fotos de notas ainda por migrar: '+_armMB(fotosNoEstado)):'')+
+      '<br>Rubricas novas já saem recortadas e reduzidas. As já feitas não são mexidas — assinatura feita não se altera.</div>'+
+    '<div style="margin-top:12px;font-weight:700">Banco do aparelho</div><div id="armIdb" style="font-size:12px;color:#a7b0aa;margin-top:3px">medindo…</div>'+
+    '<div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">'+
+      '<button onclick="armLimparCache()" '+(descartChars?'':'disabled ')+'style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Limpar cache descartável ('+_armMB(descartChars)+')</button>'+
+      '<button onclick="armAjustarCopias()" '+(nSeg?'':'disabled ')+'style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Ajustar cópias de segurança ('+nSeg+' hoje · '+_armMB(md.porGrupo.seguranca)+')</button>'+
+      '<button onclick="armProteger()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Proteger o banco do aparelho contra limpeza automática</button>'+
+      ((typeof isAdmin==='function'&&isAdmin())?'<button onclick="armFotosAntigas()" style="background:#1a2230;color:#a9c7e6;border:1px solid #2a3a4a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fotos antigas no servidor…</button>':'')+
+    '</div><div id="armMsg" style="font-size:12px;color:#9ac49a;margin-top:8px"></div></div>';
+  m.innerHTML=h; m.style.display='flex';
+  try{
+    if(navigator.storage&&navigator.storage.estimate) Promise.all([navigator.storage.estimate(), navigator.storage.persisted?navigator.storage.persisted():Promise.resolve(null)]).then(function(r){
+      var e=r[0]||{}, el=document.getElementById('armIdb'); if(!el) return;
+      el.innerHTML='Em uso: <b>'+_armMB((e.usage||0)/2)+'</b> de '+_armMB((e.quota||0)/2)+' disponíveis. Cofre offline, fotos e diário de avaliações moram aqui.'+
+        (r[1]===true?' <b style="color:#37d684">Protegido.</b>':(r[1]===false?' Ainda não protegido contra limpeza automática.':''));
+    });
+    else { var el=document.getElementById('armIdb'); if(el) el.textContent='Este navegador não informa o tamanho do banco do aparelho.'; }
+  }catch(e){}
+}
+function _armMsg(t){ var el=document.getElementById('armMsg'); if(el) el.innerHTML=t; }
+function armLimparCache(){
+  var AC=window.ArmazenamentoCore; if(!AC) return;
+  var n=0,c=0; AC.medir(localStorage).itens.forEach(function(i){ if(i.descartavel){ try{ localStorage.removeItem(i.chave); n++; c+=i.chars; }catch(e){} } });
+  openArmazenamento(); _armMsg('✓ '+n+' item(ns) de cache removidos · '+_armMB(c)+' liberados. Eles se refazem quando precisar.');
+}
+function armAjustarCopias(){
+  var arr=safetyList(); if(!arr.length) return;
+  var ultima=JSON.stringify(arr[arr.length-1]).length, max=_safetyMaxCopias(ultima,false), antes=arr.length;
+  while(arr.length>max) arr.shift();
+  try{ if(arr.length) localStorage.setItem('iracema-safety',JSON.stringify(arr)); else localStorage.removeItem('iracema-safety'); }catch(e){}
+  openArmazenamento();
+  _armMsg(antes===arr.length?'Nada a ajustar: as '+antes+' cópia(s) cabem sem tirar a folga dos dados.':
+    ('✓ '+(antes-arr.length)+' cópia(s) antiga(s) removida(s); ficaram '+arr.length+'. O cofre offline e o histórico da nuvem continuam guardando.'));
+}
+function armProteger(){
+  if(!(navigator.storage&&navigator.storage.persist)){ _armMsg('Este navegador não oferece essa proteção.'); return; }
+  navigator.storage.persist().then(function(ok){
+    openArmazenamento();
+    _armMsg(ok?'✓ Protegido: o navegador não apaga o banco do aparelho para liberar espaço.':'O navegador não concedeu agora. Com o app instalado na tela inicial ele costuma conceder.');
+  });
+}
+function armFotosAntigas(){
+  var F=window.AgractaFotosAntigas; if(!F){ _armMsg('Precisa de conexão com a nuvem.'); return; }
+  ensureNotas();
+  var seguras=Object.keys(_FOTO_NOTA||{}), excluidas=Object.keys(_delNotas||{});
+  _armMsg('Contando as fotos antigas no servidor…');
+  F.contar(seguras, excluidas).then(function(r){
+    if(!r.total){ _armMsg('Não há fotos antigas no servidor.'); return; }
+    var txt=r.total+' fatia(s) de foto no servidor. '+
+      (r.apagaveis.length?(r.apagaveis.length+' podem sair ('+_armMB(r.chars)+', '+r.nNotas+' nota(s)): a foto já está salva neste aparelho ou a nota foi excluída. '):'Nenhuma pode sair a partir deste aparelho. ')+
+      (r.nPendentes?(r.nPendentes+' nota(s) têm a foto SÓ no servidor e ficam — abra o app no aparelho que as tem, ou deixe como está.'):'');
+    _armMsg(esc(txt)+(r.apagaveis.length?'<br><button id="armFotosOk" style="margin-top:6px;background:#3a1a1a;color:#ffb3a8;border:1px solid #6b2b2b;border-radius:9px;padding:8px 10px;font-weight:700;cursor:pointer">Apagar '+r.apagaveis.length+' fatia(s) do servidor</button>':''));
+    var b=document.getElementById('armFotosOk');
+    if(b) b.onclick=function(){
+      if(!confirm('Apagar '+r.apagaveis.length+' fatia(s) de foto do servidor?\n\nSó saem fotos que já estão salvas NESTE aparelho ou de notas excluídas. Não tem volta no servidor.')) return;
+      _armMsg('Apagando…');
+      F.apagar(r.apagaveis).then(function(n){ _armMsg('✓ '+n+' fatia(s) apagada(s) do servidor.'); },function(e){ _armMsg('Não consegui apagar: '+esc((e&&e.message)||e)); });
+    };
+  },function(e){ _armMsg('Não consegui ler o servidor: '+esc((e&&e.message)||e)); });
+}
 function openBackups(){
   var m=document.getElementById('bkpModal');
   if(!m){ m=document.createElement('div'); m.id='bkpModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
@@ -18570,7 +18690,7 @@ function openBackups(){
       '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
       '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
       '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){if(!safetyApply(safetyList().slice().reverse()['+i+']))return;document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
-  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
+  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local agora. São criados antes de excluir/importar e ao abrir o app — mas só enquanto sobra espaço: com o armazenamento do aparelho apertado, a folga dos seus dados vem primeiro. O cofre offline e o <b>Histórico da nuvem</b> continuam guardando. Veja em Menu → Armazenamento do aparelho.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
     '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+

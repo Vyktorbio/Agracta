@@ -1,3 +1,73 @@
+AGRACTA — 17a publicacao                    23/09/2026
+=====================================================
+
+Leva: 2 arquivos de codigo + 1 motor novo + 1 teste novo.
+  CODIGO:  app.js  firebase-sync.js  index.html  sw.js  conferir.sh
+  MOTOR:   vendor/armazenamento-core.js  (novo)
+  TESTE:   test_armazenamento.js  (novo)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+O armazenamento rapido do celular (localStorage, ~5 milhoes de caracteres)
+encheu em 22/09 e finalizar estudo deixou de gravar. O maior ocupante era o
+proprio app.
+
+1) AS COPIAS DE SEGURANCA NAO COMEM MAIS A FOLGA DOS DADOS
+
+A cada abertura e antes de cada exclusao o app guardava ATE 10 COPIAS
+COMPLETAS dos dados ali, sempre que coubessem — ocupava todo o espaco livre,
+e a gravacao seguinte (maior por uma finalizacao com rubrica e estatistica)
+nao tinha para onde crescer.
+
+Agora as copias so usam o que sobra depois de reservar uma folga para os
+dados (1 milhao de caracteres ou metade dos dados, o que for maior). Com
+dados grandes, na abertura pode nao haver copia nenhuma — o cofre offline e o
+Historico da nuvem continuam guardando. Antes de excluir, importar ou
+restaurar, UMA copia ainda e feita, como a tela promete.
+
+2) RUBRICA MENOR
+
+A rubrica era a imagem da tela inteira. Agora sai so a area com tinta,
+reduzida: a mesma assinatura, ~4x menos espaco. Rubricas ja gravadas NAO sao
+mexidas — assinatura feita nao se altera.
+
+3) MENU → ARMAZENAMENTO DO APARELHO
+
+Mostra o que ocupa o armazenamento rapido (seus dados, copias de seguranca,
+cache, outros), quantas rubricas e fotos estao dentro dos dados, e o banco do
+aparelho (IndexedDB), onde cabe de verdade. Botoes:
+  - Limpar cache descartavel (consulta de solo, datas de NDVI, passagem de
+    dados entre telas — tudo se refaz sozinho);
+  - Ajustar copias de seguranca a folga dos dados;
+  - Proteger o banco do aparelho contra limpeza automatica do navegador;
+  - (so administrador) Fotos antigas no servidor: conta e apaga as fatias
+    antigas da colecao `media` — SO as que ja estao salvas neste aparelho ou
+    de notas excluidas. Foto que so existe no servidor fica.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. No celular: Menu → Armazenamento do aparelho. Anotar o % de uso.
+2. "Ajustar copias de seguranca" e "Limpar cache descartavel": o % cai.
+3. "Proteger o banco do aparelho".
+4. Finalizar um estudo e recarregar: continua finalizado, sem aviso de espaco.
+5. (admin, no celular que tirou as fotos) "Fotos antigas no servidor".
+
+
+TESTES
+------
+  test_armazenamento.js  20 verificacoes (novo). Com o app anterior, a
+  abertura com dados grandes gravava a copia mesmo sem folga.
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 16a publicacao                    23/09/2026
 =====================================================
 
