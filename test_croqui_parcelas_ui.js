@@ -55,6 +55,10 @@ const semDim=JSON.parse(before);semDim.protocolo={};assert.equal(P.layout(semDim
 const repetida=JSON.parse(before);repetida.randomizacao.ordem[1]=Object.assign({},repetida.randomizacao.ordem[0]);assert.equal(P.layout(repetida).parcelas.length,0,'duplicata não cria vínculo errado');
 w._avCroquiOpen=true;w._avGrid={variaveis:['Severidade'],notas:{T1R1:{Severidade:0}}};w._avCroquiKey='T8R4';
 const host=d.createElement('div');host.innerHTML=P.evaluation(st,[],[]);assert.equal(host.querySelectorAll('[data-pc-eval]').length,32);assert.equal(host.querySelector('.selected').dataset.pcEval,'T8R4');
+/* A avaliação mora no #eePnl, que para a propagação do clique: tocar na parcela tem de funcionar mesmo assim. */
+{const panel=d.createElement('div');panel.addEventListener('click',ev=>ev.stopPropagation());panel.appendChild(host);d.body.appendChild(panel);
+ const antes=calls.length;host.querySelector('[data-pc-eval="T3R2"] polygon').dispatchEvent(new w.MouseEvent('click',{bubbles:true}));
+ assert.deepEqual(calls.slice(antes),[['row','T3R2']]);panel.remove();}
 // O painel compacto não se perde nos redesenhos e o enquadramento usa a área real.
 let fitted=null;w._croquiEdit={qid:'Q',sid:'S',pos:st.croqui};w._estudoDe=()=>st;
 let size={x:390,y:800};w._map={getSize:()=>size,getContainer:()=>({getBoundingClientRect:()=>({left:0,top:0,right:size.x,bottom:size.y})}),fitBounds:(bounds,options)=>{fitted=options;},panTo(){}};

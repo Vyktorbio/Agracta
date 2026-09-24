@@ -2,6 +2,11 @@
    A página isolada nunca devolve fotos ao aplicativo ou à sincronização. */
 (function(w){
 'use strict';
+/* Mesma ordem do modo automático da avaliação: croqui sorteado, senão 1A, 1B… */
+function plotOrder(study){
+ try{return typeof w._avRowsForStudy==='function'?w._avRowsForStudy(study,true).map(r=>({treatment:r.tratId,rep:r.rep,plot:String(r.parcela||r.campo||r.key)})):[];}
+ catch(e){return [];}
+}
 w.abrirGaleriaFotos=function(s,initial){
  const user=w._authUser,owner=user&&(user.uid||user.id);
  if(!owner||document.documentElement.classList.contains('pre-auth')){alert('Entre no Agracta para abrir sua galeria local.');return;}
@@ -15,9 +20,9 @@ w.abrirGaleriaFotos=function(s,initial){
  const frame=document.createElement('iframe');frame.title='Galeria de fotos local do estudo';
  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads allow-modals');
  frame.referrerPolicy='no-referrer';
- frame.src='galeria-local.html?v=3';
+ frame.src='galeria-local.html?v=4';
  const context={owner:String(owner),qid:s.qid,sid:s.sid,codigo:s.codigo,cultura:s.cultura,alvo:s.alvo,local:s.local,reps:study.numRepeticoes,
-   tratamentos:s.tratamentos.map(t=>({id:t.id,produto:t.produto,dose:t.dose})),avaliacoes:(study.avaliacoes||[]).map(a=>({id:a.id,data:a.data}))};
+   tratamentos:s.tratamentos.map(t=>({id:t.id,produto:t.produto,dose:t.dose})),avaliacoes:(study.avaliacoes||[]).map(a=>({id:a.id,data:a.data})),plots:plotOrder(study)};
  if(initial)context.initial={treatment:initial.treatment,rep:initial.rep,assessment:initial.assessment,date:initial.date,plot:initial.plot,filter:initial.filter===true};
  const focus=document.activeElement;
  frame.addEventListener('load',()=>{if(dialog.open)frame.contentWindow.postMessage({type:'agracta:fotos-local-context',context},location.origin);},{once:true});

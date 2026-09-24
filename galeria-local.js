@@ -1,7 +1,8 @@
 /* Esta página não envia mensagens, fotos, métricas ou requisições de rede. */
 (function(){
 'use strict';
-let context=null,storage=null,photos=[],busy=false,urls=[],selected=new Set(),filterPlot=null;
+let context=null,storage=null,photos=[],busy=false,urls=[],selected=new Set(),filterPlot=null,plots=[],seqIndex=-1;
+const SEQ_KEY='agracta-fotos-sequencia';
 const $=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const br=date=>/^\d{4}-\d{2}-\d{2}$/.test(date||'')?date.slice(8)+'/'+date.slice(5,7)+'/'+date.slice(0,4):'Sem data';
 function message(text,error){$('status').textContent=text;$('status').className=error?'error':'';}
@@ -31,16 +32,33 @@ async function normalized(blob,max){
  const result=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Não foi possível preparar a imagem.')),'image/jpeg',.92));
  return {blob:result,width:canvas.width,height:canvas.height};
 }
+/* Sequência automática: cada foto da câmera fica na parcela da vez e a
+   identificação avança sozinha para a seguinte, na ordem do campo. */
+function seqOn(){return plots.length>1&&$('seq-on').checked;}
+function seqShow(){
+ const on=seqOn(),p=on&&plots[seqIndex];$('seq-box').hidden=!on;
+ $('camera-label').textContent=p?'Tirar foto · '+p.plot:'Tirar foto';
+ if(!p)return;
+ const t=treatment(p.treatment),next=plots[seqIndex+1];
+ $('seq-plot').textContent=p.plot;$('seq-pos').textContent=(seqIndex+1)+' de '+plots.length;
+ $('seq-info').textContent=p.treatment+(t?' · '+t.produto:'')+' · R'+p.rep+(next?' · depois: '+next.plot:' · última parcela');
+ $('seq-prev').disabled=busy||seqIndex<=0;$('seq-skip').disabled=busy||seqIndex>=plots.length-1;
+}
+function seqGo(i){
+ seqIndex=Math.max(0,Math.min(plots.length-1,i));const p=plots[seqIndex];
+ $('treatment').value=p.treatment;$('rep').value=String(p.rep);$('plot').value=p.plot.slice(0,40);seqShow();
+}
+function seqMatch(){const t=$('treatment').value,r=Number($('rep').value);return plots.findIndex(p=>p.treatment===t&&Number(p.rep)===r);}
 function binding(){
  if(!$('capture-form').reportValidity())throw Error('Preencha tratamento, repetição e data.');
  const t=$('treatment').value,rep=Number($('rep').value),date=$('date').value;
  if(!treatment(t)||!(rep>=1&&rep<=context.reps)||!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('Confira a identificação da parcela.');
  return {treatment:t,rep,date,assessment:$('assessment').value,plot:$('plot').value.trim()};
 }
-async function addFiles(files){
+async function addFiles(files,fromCamera){
  if(!context||busy||!files.length)return;
  let bind;try{bind=binding();}catch(err){message(err.message,true);return;}
- setBusy(true);let saved=0,failure='';
+ setBusy(true);let saved=0,failure='';const seqPlot=fromCamera&&seqOn()?plots[seqIndex]:null;
  try{
   for(const file of files){
    if(photos.length>=100)throw Error('Esta galeria chegou a 100 fotos. Baixe os originais e remova as fotos que não precisa manter aqui.');
@@ -50,7 +68,13 @@ async function addFiles(files){
    await storage.put([row]);photos.push(row);selected.add(row.id);saved++;
   }
  }catch(err){failure=err.name==='QuotaExceededError'?'Sem espaço no aparelho. Baixe as fotos já salvas e libere espaço.':err.message;}
- finally{setBusy(false);draw();$('camera').value='';$('files').value='';message(saved+' foto(s) salvas localmente.'+(failure?' '+failure:''),!!failure);}
+ finally{
+  setBusy(false);draw();$('camera').value='';$('files').value='';
+  if(seqPlot&&saved&&!failure){
+   const last=seqIndex>=plots.length-1;if(!last)seqGo(seqIndex+1);else seqShow();
+   message('Foto da parcela '+seqPlot.plot+' salva.'+(last?' Sequência concluída: esta era a última parcela.':' Agora: parcela '+plots[seqIndex].plot+'.'));
+  }else{seqShow();message(saved+' foto(s) salvas localmente.'+(failure?' '+failure:''),!!failure);}
+ }
 }
 function download(blob,name){
  const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
@@ -101,11 +125,29 @@ window.addEventListener('message',async function(ev){
    $('plot').value=String(initial.plot||'').slice(0,40);
    if(initial.filter===true){filterPlot={treatment:initial.treatment,rep:Number(initial.rep)};$('plot-filter-label').hidden=false;$('plot-filter').options[0].textContent=(initial.plot||initial.treatment+' R'+initial.rep)+' · todas as datas';}
   }
+  plots=(Array.isArray(c.plots)?c.plots:[]).filter(p=>p&&treatment(p.treatment)&&Number(p.rep)>=1&&Number(p.rep)<=context.reps)
+   .map(p=>({treatment:p.treatment,rep:Number(p.rep),plot:String(p.plot||p.treatment+'R'+p.rep)}));
+  if(plots.length>1){
+   $('seq').hidden=false;
+   let lembrar=false;try{lembrar=localStorage.getItem(SEQ_KEY)==='1';}catch(e){}
+   if(lembrar){$('seq-on').checked=true;seqStart();}
+  }
   photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();message('Galeria pronta. Armazenamento exclusivo deste aparelho.');
  }catch(err){message('Galeria indisponível: '+err.message,true);}
 });
 $('capture-form').addEventListener('submit',ev=>ev.preventDefault());
-['camera','files'].forEach(id=>$(id).addEventListener('change',ev=>addFiles(Array.from(ev.target.files||[]))));
+['camera','files'].forEach(id=>$(id).addEventListener('change',ev=>addFiles(Array.from(ev.target.files||[]),id==='camera')));
+/* Começa na parcela escolhida (ex.: a do botão Foto); fora da lista, na primeira. */
+function seqStart(){
+ const i=seqMatch();seqGo(i>=0?i:0);
+ if(filterPlot&&$('plot-filter').value==='plot'){$('plot-filter').value='all';selected=new Set(visiblePhotos().map(p=>p.id));draw();}
+}
+$('seq-on').addEventListener('change',()=>{
+ try{localStorage.setItem(SEQ_KEY,$('seq-on').checked?'1':'0');}catch(e){}
+ if(seqOn()){seqStart();message('Sequência ligada. Toque em Tirar foto: depois de salvar, a próxima parcela já fica pronta.');}else seqShow();
+});
+['seq-prev','seq-skip'].forEach(id=>$(id).addEventListener('click',()=>{seqGo(seqIndex+(id==='seq-prev'?-1:1));message('Parcela da vez: '+plots[seqIndex].plot+'.');}));
+['treatment','rep'].forEach(id=>$(id).addEventListener('change',()=>{if(!seqOn())return;const i=seqMatch();if(i>=0)seqGo(i);}));
 $('assessment').addEventListener('change',()=>{const a=context.avaliacoes.find(a=>a.id===$('assessment').value);if(a&&a.data)$('date').value=a.data;});
 $('date').addEventListener('change',()=>{const a=context.avaliacoes.find(a=>a.id===$('assessment').value);if(a&&a.data!==$('date').value)$('assessment').value='';});
 $('gallery').addEventListener('change',ev=>{const id=ev.target.dataset.select;if(!id)return;if(ev.target.checked)selected.add(id);else selected.delete(id);count();});
