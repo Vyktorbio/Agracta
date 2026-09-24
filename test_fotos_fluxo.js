@@ -43,6 +43,10 @@ const tick=()=>new Promise(r=>setTimeout(r,30));
  p.document.body.insertAdjacentHTML('beforeend','<input id="avAutoInput" value="12.5">');let written=null;
  const auto={row,pos:3};p._avAutoState=()=>auto;p.avAutoWrite=v=>{written=v;};
  p.avFotografarParcela(null);assert.equal(written,'12.5');assert.equal(auto.pos,3);assert.equal(calls.length,2);
- p.estudoFinalizado=()=>true;p.avFotografarParcela('T1_R2');assert.equal(calls.length,2);
+ /* O painel da avaliação (#eePnl) para a propagação do clique: o botão precisa funcionar mesmo assim. */
+ p.document.body.insertAdjacentHTML('beforeend','<div id="eePnl"><button type="button" data-av-photo="T1_R2">Foto</button></div>');
+ p.document.getElementById('eePnl').addEventListener('click',ev=>ev.stopPropagation());
+ p.document.querySelector('#eePnl [data-av-photo]').click();assert.equal(calls.length,3);assert.equal(calls[2].initial.rep,2);
+ p.estudoFinalizado=()=>true;p.avFotografarParcela('T1_R2');assert.equal(calls.length,3);
  parent.window.close();console.log('Fluxo local: contexto externo recusado, captura, originais, prévia, PPTX/ZIP, exclusão e fechamento ao sair OK; zero transmissões.');
 })().catch(err=>{console.error(err);process.exit(1);});
