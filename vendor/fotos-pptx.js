@@ -220,20 +220,61 @@ function partesPptx(pngBytes, larguraPng, alturaPng, meta){
 }
 
 /* Grade por quantidade de fotos. A foto fica com toda a altura que sobra da
-   legenda: entre o subtítulo (1,15") e o rodapé (7,02"). */
+   legenda, entre o cabeçalho (0,92") e o rodapé (7,02"). */
 const GRADE={1:[1,1],2:[2,1],4:[2,2],6:[3,2],8:[4,2]};
+const TOPO=.92,BASE=7.02,ESQ=.8,GX=.14,GY=.1,LEG_MIN=2.3;
+function capDe(rows){return rows===1?.62:.5;}
+function celula(cols,rows,capH){
+  const w=(SL_L-2*ESQ-(cols-1)*GX)/cols,h=(BASE-TOPO-(rows-1)*GY)/rows;capH=capH||capDe(rows);
+  return {w,h,capH,photoH:h-capH};
+}
+/* Altura da legenda pelo texto real: 1 linha quando cabe em 11 pt, senão 2 (no
+   máximo 3), mais a linha de parcela e data. */
+function capPara(images,largura){
+  const linhas=Math.min(3,Math.max(1,...images.map(p=>wrap(p.label,Math.max(12,Math.floor(largura*72/(11*.57)))).length)));
+  return .27+linhas*11*1.2/72;
+}
 function layoutFotos(n){
   if(!GRADE[n])throw Error('Escolha 1, 2, 4, 6 ou 8 fotos por slide.');
-  const [cols,rows]=GRADE[n],gapX=.18,gapY=.12,left=.8,top=1.15,bottom=7.02;
-  const w=(SL_L-2*left-(cols-1)*gapX)/cols,h=(bottom-top-(rows-1)*gapY)/rows,capH=rows===1?.8:.6;
-  return Array.from({length:n},(_,i)=>({x:left+(i%cols)*(w+gapX),y:top+Math.floor(i/cols)*(h+gapY),w,h,photoH:h-capH,capH,cols}));
+  const [cols,rows]=GRADE[n],c=celula(cols,rows);
+  return Array.from({length:n},(_,i)=>Object.assign({x:ESQ+(i%cols)*(c.w+GX),y:TOPO+Math.floor(i/cols)*(c.h+GY),cols,rows},c));
+}
+/* Arranjo real de um slide, sem cortar nenhuma foto. Testa as grades que cabem
+   n fotos (sem linha vazia) com as proporções das fotos deste slide e fica com a
+   de maior área de foto: 4 fotos em pé vão lado a lado, 4 deitadas em 2 × 2.
+   Depois cada coluna e linha encolhe para o tamanho da foto e o conjunto é
+   centralizado, para a sobra ficar nas bordas e não entre as fotos. */
+function arranjo(images,n){
+  layoutFotos(n);
+  const [c0,r0]=GRADE[n];let best=null;
+  for(let cols=1;cols<=n;cols++){
+    const rows=Math.ceil(n/cols);if(cols*rows-n>=cols)continue;
+    const c=celula(cols,rows);let area=0;
+    images.forEach(p=>{const f=Math.min(c.w/p.width,c.photoH/p.height);area+=p.width*p.height*f*f;});
+    const padrao=cols===c0&&rows===r0;
+    if(!best||area>best.area*1.03||(padrao&&area>=best.area/1.03))best=Object.assign({cols,rows,area},c);
+  }
+  const {cols}=best;
+  /* Com a grade escolhida, mede a legenda na largura em que ela vai ficar. */
+  const larg=Math.min(best.w,Math.max(LEG_MIN,...images.map(p=>p.width*Math.min(best.w/p.width,best.photoH/p.height))));
+  Object.assign(best,celula(cols,best.rows,Math.max(capDe(best.rows),capPara(images,larg))));
+  const fotos=images.map((p,i)=>{const f=Math.min(best.w/p.width,best.photoH/p.height);return {iw:p.width*f,ih:p.height*f,c:i%cols,r:Math.floor(i/cols)};});
+  const nc=Math.min(images.length,cols),nr=Math.ceil(images.length/cols),colW=[],rowH=[];
+  for(let c=0;c<nc;c++)colW[c]=Math.max(Math.min(best.w,LEG_MIN),...fotos.filter(f=>f.c===c).map(f=>f.iw));
+  for(let r=0;r<nr;r++)rowH[r]=Math.max(...fotos.filter(f=>f.r===r).map(f=>f.ih))+best.capH;
+  const W=colW.reduce((a,b)=>a+b,0)+GX*(nc-1),H=rowH.reduce((a,b)=>a+b,0)+GY*(nr-1);
+  const x0=ESQ+(SL_L-2*ESQ-W)/2,y0=TOPO+(BASE-TOPO-H)/2;
+  return fotos.map(f=>{
+    const x=x0+colW.slice(0,f.c).reduce((a,b)=>a+b,0)+GX*f.c,y=y0+rowH.slice(0,f.r).reduce((a,b)=>a+b,0)+GY*f.r;
+    return {x,y,w:colW[f.c],h:rowH[f.r],photoH:rowH[f.r]-best.capH,capH:best.capH,iw:f.iw,ih:f.ih,cols,rows:best.rows};
+  });
 }
 function wrap(s,max){
   const words=String(s||'').split(/\s+/),out=[];let line='';
   words.forEach(word=>{while(word.length>max){if(line){out.push(line);line='';}out.push(word.slice(0,max));word=word.slice(max);}if((line+' '+word).trim().length>max){out.push(line);line=word;}else line=(line+' '+word).trim();});if(line)out.push(line);return out;
 }
 function caption(photo,box){
-  const maxPts=((box.capH||.94)-.3)*72;let font=14,lines=[];
+  const maxPts=((box.capH||.94)-.27)*72;let font=13,lines=[];
   do{lines=wrap(photo.label,Math.max(12,Math.floor(box.w*72/(font*.57))));if(lines.length*font*1.2<=maxPts||font<=9)break;font--; }while(true);
   return {font,lines};
 }
@@ -243,16 +284,16 @@ function fotoSlide(images,n,meta,page,total){
   sp+=_faixa(3,'FaixaEsqBaixo',[[0,3.90],[f,3.33],[f,A],[0,A]],LARANJA_PPT);
   sp+=_faixa(4,'FaixaDirCima',[[L-f,0],[L,0],[L,3.72],[L-f,3.15]],LARANJA_PPT);
   sp+=_faixa(5,'FaixaDirBaixo',[[L-f,3.33],[L,3.90],[L,A],[L-f,A]],CINZA_PPT);
-  sp+=_texto(6,'Estudo',.8,.25,11.7,.45,[{t:meta.titulo,tam:26,negrito:true,cor:'3F3F3F'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
-  sp+=_texto(7,'Identificação',.8,.77,11.7,.3,[{t:meta.subtitulo||'Registro fotográfico de parcelas',tam:13,cor:'C86A08'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
+  sp+=_texto(6,'Estudo',.8,.16,11.7,.42,[{t:meta.titulo,tam:22,negrito:true,cor:'3F3F3F'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
+  sp+=_texto(7,'Identificação',.8,.58,11.7,.28,[{t:meta.subtitulo||'Registro fotográfico de parcelas',tam:12,cor:'C86A08'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
   /* Foto encostada na legenda: sobra de altura vai para cima, não entre a foto e o texto. */
-  const boxes=layoutFotos(n);
+  const boxes=arranjo(images,n);
   images.forEach((p,i)=>{
-    const b=boxes[i],factor=Math.min(b.w/p.width,b.photoH/p.height),iw=p.width*factor,ih=p.height*factor;
+    const b=boxes[i],iw=b.iw,ih=b.ih;
     sp+=_imagem(10+i*3,b.x+(b.w-iw)/2,b.y+b.photoH-ih,iw,ih).replace('rId2','rId'+(i+2)).replace('name="Grafico"','name="Foto '+(i+1)+'"');
     const cap=caption(p,b);
-    sp+=_texto(11+i*3,'Tratamento '+(i+1),b.x,b.y+b.photoH+.03,b.w,b.capH-.3,cap.lines.map(t=>({t,tam:cap.font,negrito:true,algn:'ctr'}))).replace('<a:spAutoFit/>','<a:normAutofit/>');
-    sp+=_texto(12+i*3,'Parcela e data '+(i+1),b.x,b.y+b.h-.27,b.w,.26,[{t:p.detail,tam:10,algn:'ctr'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
+    sp+=_texto(11+i*3,'Tratamento '+(i+1),b.x,b.y+b.photoH+.02,b.w,b.capH-.26,cap.lines.map(t=>({t,tam:cap.font,negrito:true,algn:'ctr'}))).replace('<a:spAutoFit/>','<a:normAutofit/>');
+    sp+=_texto(12+i*3,'Parcela e data '+(i+1),b.x,b.y+b.h-.25,b.w,.24,[{t:p.detail,tam:9,algn:'ctr'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
   });
   sp+=_texto(100,'Rodapé',.8,7.12,11.7,.23,[{t:'CONFIDENTIAL INFORMATION     '+page+' / '+total,tam:10,cor:'808080',algn:'ctr'}]);
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld '+_NS+'>'+_ARVORE_VAZIA.replace('</p:spTree>',sp+'</p:spTree>')+'<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
@@ -276,6 +317,6 @@ function partesFotos(images,n,meta){
   });
   return files;
 }
-const api={layout:layoutFotos,caption,parts:partesFotos,zip:zipar,build:(images,n,meta)=>zipar(partesFotos(images,n,meta))};
+const api={layout:layoutFotos,arranjo,caption,parts:partesFotos,zip:zipar,build:(images,n,meta)=>zipar(partesFotos(images,n,meta))};
 if(typeof module==='object'&&module.exports)module.exports=api;else root.FotosPptx=api;
 })(typeof window==='object'?window:this);
