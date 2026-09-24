@@ -818,6 +818,12 @@ reabertura exige usuário autorizado + motivo, eventos importantes pedem rubrica
 **A versão definitiva não pode depender só do navegador** — eventos precisam ser
 persistidos onde o cliente comum não reescreva.
 
+> **Fundação pronta (motor, ainda não ligado ao app):** `vendor/eventos-core.js`, com
+> tipos fechados, exigências por tipo, id = SHA-256 do conteúdo e grafo de eventos que
+> junta aparelhos offline sem "último vence". A correção aponta para a identidade
+> estável da observação canônica. Desenho e caminho de adoção em
+> [OBSERVACAO-E-EVENTOS.md](OBSERVACAO-E-EVENTOS.md).
+
 ## 14. Fase 9 — Amostras e laboratório · **P2**
 
 Entidade `amostra` com identificador legível (`AGR-2026-113 T3 R2 DAT14 SOLO`) e id
@@ -839,6 +845,11 @@ Faixas exigem tratar explicitamente a **pseudorreplicação**.
 
 Camada canônica `fact_observation` (estudo, local, quadra, tratamento, dose, cultura,
 alvo, BBCH, variável, momento, valor) — não consultar estruturas antigas heterogêneas.
+
+> **Fundação pronta (motor, ainda não ligado ao app):** `vendor/observacao-core.js`
+> projeta qualquer estudo nessa forma, com organização, EPPO por injeção, momento
+> `null` quando desconhecido, e n + variância por tratamento. Ver
+> [OBSERVACAO-E-EVENTOS.md](OBSERVACAO-E-EVENTOS.md).
 
 Por padrão só estudos finalizados. Além da média: variabilidade, estabilidade,
 heterogeneidade. Meta-análise quando apropriado. Explicação de diferenças apresenta
