@@ -101,7 +101,7 @@ async function exportFiles(kind){
 }
 function preview(){
  const chosen=selection(),n=Number($('per-slide').value);if(!chosen.length){message('Selecione pelo menos uma foto.',true);return;}
- let html='';for(let i=0;i<chosen.length;i+=n){html+='<section class="preview-slide"><h3>Slide '+(Math.floor(i/n)+1)+' · '+esc(context.codigo)+'</h3><div class="preview-grid cols-'+n/2+'">'+chosen.slice(i,i+n).map(p=>'<figure><img src="'+url(p.thumb)+'" alt="'+esc(label(p))+'"><figcaption><b>'+esc(label(p))+'</b><br>'+esc(detail(p))+'</figcaption></figure>').join('')+'</div></section>';}
+ let html='';for(let i=0;i<chosen.length;i+=n){html+='<section class="preview-slide"><h3>Slide '+(Math.floor(i/n)+1)+' · '+esc(context.codigo)+'</h3><div class="preview-grid cols-'+FotosPptx.layout(n)[0].cols+'">'+chosen.slice(i,i+n).map(p=>'<figure><img src="'+url(p.thumb)+'" alt="'+esc(label(p))+'"><figcaption><b>'+esc(label(p))+'</b><br>'+esc(detail(p))+'</figcaption></figure>').join('')+'</div></section>';}
  $('preview').innerHTML=html;$('preview').scrollIntoView({block:'start'});
 }
 window.addEventListener('message',async function(ev){
@@ -165,7 +165,9 @@ $('gallery').addEventListener('click',async ev=>{
 });
 $('all').addEventListener('click',()=>{selected=selection().length===visiblePhotos().length?new Set():new Set(visiblePhotos().map(p=>p.id));draw();});
 $('plot-filter').addEventListener('change',()=>{selected=new Set(visiblePhotos().map(p=>p.id));draw();});
-$('per-slide').addEventListener('change',count);
+const PER_KEY='agracta-fotos-por-slide';
+try{const v=localStorage.getItem(PER_KEY);if(v&&$('per-slide').querySelector('option[value="'+v+'"]'))$('per-slide').value=v;}catch(e){}
+$('per-slide').addEventListener('change',()=>{try{localStorage.setItem(PER_KEY,$('per-slide').value);}catch(e){}count();});
 $('preview-button').addEventListener('click',preview);
 $('pptx').addEventListener('click',()=>exportFiles('pptx'));
 $('originals').addEventListener('click',()=>exportFiles('zip'));
