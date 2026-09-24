@@ -30,7 +30,7 @@ const Store=require('./vendor/fotos-store.js'),Pptx=require('./vendor/fotos-pptx
  // Estrutura, relações, número de páginas, legendas escapadas e proporções.
  const images=Array.from({length:17},(_,i)=>({bytes:new Uint8Array([255,216,255,217]),width:i%2?600:1200,height:i%2?1200:600,label:'T'+i+' · Produto <experimental> & dose',detail:'R1 · 12/09/2026'}));
  const {JSDOM}=require('jsdom'),parser=new (new JSDOM('').window.DOMParser)();
- for(const n of [4,6,8]){
+ for(const n of [1,2,4,6,8]){
   const parts=Pptx.parts(images,n,{titulo:'Estudo <teste>',subtitulo:'Soja & alvo'}),slides=parts.filter(f=>/^ppt\/slides\/slide\d+\.xml$/.test(f.nome));
   assert.equal(slides.length,Math.ceil(images.length/n));
   let pics=0;
@@ -48,6 +48,11 @@ const Store=require('./vendor/fotos-store.js'),Pptx=require('./vendor/fotos-pptx
   assert.equal(pics,17);assert.equal(parts.filter(f=>f.nome.startsWith('ppt/media/')).length,17);
   const zip=await Pptx.build(images,n,{titulo:'Teste'}).arrayBuffer();assert.equal(new DataView(zip).getUint32(0,true),0x04034b50);
  }
- assert.throws(()=>Pptx.parts([],4,{}),/pelo menos/);assert.throws(()=>Pptx.layout(5),/4, 6 ou 8/);
- console.log('Fotos locais: contas/estudos isolados, persistência, originais, ordenação, quota, ausência de transmissão e PPTX 4/6/8 OK.');
+ assert.throws(()=>Pptx.parts([],4,{}),/pelo menos/);assert.throws(()=>Pptx.layout(5),/1, 2, 4, 6 ou 8/);
+ /* As fotos não podem voltar a ficar miúdas: altura útil mínima por quantidade (polegadas, slide de 7,5"). */
+ for(const [n,min] of [[1,4.9],[2,4.9],[4,2.2],[6,2.2],[8,2.2]]){
+  const boxes=Pptx.layout(n);assert.equal(boxes.length,n);
+  boxes.forEach(b=>{assert(b.photoH>=min,n+' por slide: foto com '+b.photoH.toFixed(2)+'"');assert(b.y+b.h<=7.05,'acima do rodapé');assert(b.x+b.w<=13.333-.79,'dentro das faixas');});
+ }
+ console.log('Fotos locais: contas/estudos isolados, persistência, originais, ordenação, quota, ausência de transmissão e PPTX 1/2/4/6/8 OK.');
 })().catch(err=>{console.error(err);process.exit(1);});

@@ -219,18 +219,22 @@ function partesPptx(pngBytes, larguraPng, alturaPng, meta){
   ];
 }
 
+/* Grade por quantidade de fotos. A foto fica com toda a altura que sobra da
+   legenda: entre o subtítulo (1,15") e o rodapé (7,02"). */
+const GRADE={1:[1,1],2:[2,1],4:[2,2],6:[3,2],8:[4,2]};
 function layoutFotos(n){
-  if(![4,6,8].includes(n))throw Error('Escolha 4, 6 ou 8 fotos por slide.');
-  const cols=n/2,gap=.18,left=.8,top=1.15,w=(SL_L-2*left-(cols-1)*gap)/cols,h=2.72;
-  return Array.from({length:n},(_,i)=>({x:left+(i%cols)*(w+gap),y:top+Math.floor(i/cols)*(h+.15),w,h,photoH:1.78}));
+  if(!GRADE[n])throw Error('Escolha 1, 2, 4, 6 ou 8 fotos por slide.');
+  const [cols,rows]=GRADE[n],gapX=.18,gapY=.12,left=.8,top=1.15,bottom=7.02;
+  const w=(SL_L-2*left-(cols-1)*gapX)/cols,h=(bottom-top-(rows-1)*gapY)/rows,capH=rows===1?.8:.6;
+  return Array.from({length:n},(_,i)=>({x:left+(i%cols)*(w+gapX),y:top+Math.floor(i/cols)*(h+gapY),w,h,photoH:h-capH,capH,cols}));
 }
 function wrap(s,max){
   const words=String(s||'').split(/\s+/),out=[];let line='';
   words.forEach(word=>{while(word.length>max){if(line){out.push(line);line='';}out.push(word.slice(0,max));word=word.slice(max);}if((line+' '+word).trim().length>max){out.push(line);line=word;}else line=(line+' '+word).trim();});if(line)out.push(line);return out;
 }
 function caption(photo,box){
-  let font=14,lines=[];
-  do{lines=wrap(photo.label,Math.max(12,Math.floor(box.w*72/(font*.57))));if(lines.length*font*1.2<=48||font<=9)break;font--; }while(true);
+  const maxPts=((box.capH||.94)-.3)*72;let font=14,lines=[];
+  do{lines=wrap(photo.label,Math.max(12,Math.floor(box.w*72/(font*.57))));if(lines.length*font*1.2<=maxPts||font<=9)break;font--; }while(true);
   return {font,lines};
 }
 function fotoSlide(images,n,meta,page,total){
@@ -241,13 +245,14 @@ function fotoSlide(images,n,meta,page,total){
   sp+=_faixa(5,'FaixaDirBaixo',[[L-f,3.33],[L,3.90],[L,A],[L-f,A]],CINZA_PPT);
   sp+=_texto(6,'Estudo',.8,.25,11.7,.45,[{t:meta.titulo,tam:26,negrito:true,cor:'3F3F3F'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
   sp+=_texto(7,'Identificação',.8,.77,11.7,.3,[{t:meta.subtitulo||'Registro fotográfico de parcelas',tam:13,cor:'C86A08'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
+  /* Foto encostada na legenda: sobra de altura vai para cima, não entre a foto e o texto. */
   const boxes=layoutFotos(n);
   images.forEach((p,i)=>{
     const b=boxes[i],factor=Math.min(b.w/p.width,b.photoH/p.height),iw=p.width*factor,ih=p.height*factor;
-    sp+=_imagem(10+i*3,b.x+(b.w-iw)/2,b.y+(b.photoH-ih)/2,iw,ih).replace('rId2','rId'+(i+2)).replace('name="Grafico"','name="Foto '+(i+1)+'"');
+    sp+=_imagem(10+i*3,b.x+(b.w-iw)/2,b.y+b.photoH-ih,iw,ih).replace('rId2','rId'+(i+2)).replace('name="Grafico"','name="Foto '+(i+1)+'"');
     const cap=caption(p,b);
-    sp+=_texto(11+i*3,'Tratamento '+(i+1),b.x,b.y+b.photoH+.06,b.w,.68,cap.lines.map(t=>({t,tam:cap.font,negrito:true,algn:'ctr'}))).replace('<a:spAutoFit/>','<a:normAutofit/>');
-    sp+=_texto(12+i*3,'Parcela e data '+(i+1),b.x,b.y+b.photoH+.76,b.w,.3,[{t:p.detail,tam:10,algn:'ctr'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
+    sp+=_texto(11+i*3,'Tratamento '+(i+1),b.x,b.y+b.photoH+.03,b.w,b.capH-.3,cap.lines.map(t=>({t,tam:cap.font,negrito:true,algn:'ctr'}))).replace('<a:spAutoFit/>','<a:normAutofit/>');
+    sp+=_texto(12+i*3,'Parcela e data '+(i+1),b.x,b.y+b.h-.27,b.w,.26,[{t:p.detail,tam:10,algn:'ctr'}]).replace('<a:spAutoFit/>','<a:normAutofit/>');
   });
   sp+=_texto(100,'Rodapé',.8,7.12,11.7,.23,[{t:'CONFIDENTIAL INFORMATION     '+page+' / '+total,tam:10,cor:'808080',algn:'ctr'}]);
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld '+_NS+'>'+_ARVORE_VAZIA.replace('</p:spTree>',sp+'</p:spTree>')+'<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
