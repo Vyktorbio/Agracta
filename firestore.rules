@@ -103,11 +103,32 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      /* `historico` fica de fora desta regra genérica de propósito: no Firestore
-         basta UMA regra permitir para o acesso valer, e esta aqui permitiria
-         reescrever o histórico. */
+      /* Eventos formais (vendor/eventos-core.js). Mesma tranca do histórico —
+         criar sim, editar e apagar nunca, para ninguém — e mais uma: o id do
+         documento é o SHA-256 do conteúdo, e é o SERVIDOR que recalcula e
+         confere. O aparelho não consegue gravar um evento cujo id não bata com
+         o que está escrito nele. `json` é a serialização estável do evento;
+         `enviadoPor` e `recebidoEm` são do servidor (quem enviou, quando
+         chegou) — o autor declarado continua dentro do `json`. */
+      match /eventos/{evento} {
+        allow read: if canUseAgracta();
+        allow create: if canUseAgracta()
+          && request.resource.data.keys().hasOnly(['schema','estudo','tipo','json','enviadoPor','recebidoEm'])
+          && request.resource.data.schema == 1
+          && request.resource.data.estudo is string && request.resource.data.estudo.size() <= 600
+          && request.resource.data.tipo is string && request.resource.data.tipo.size() <= 40
+          && request.resource.data.json is string && request.resource.data.json.size() <= 60000
+          && evento == 'ev:' + hashing.sha256(request.resource.data.json).toHexString().lower()
+          && request.resource.data.enviadoPor == request.auth.token.email
+          && request.resource.data.recebidoEm == request.time;
+        allow update, delete: if false;
+      }
+
+      /* `historico` e `eventos` ficam de fora desta regra genérica de
+         propósito: no Firestore basta UMA regra permitir para o acesso valer,
+         e esta aqui permitiria reescrevê-los. */
       match /{collection}/{document} {
-        allow read, write: if collection != 'members' && collection != 'historico' && canUseAgracta();
+        allow read, write: if collection != 'members' && collection != 'historico' && collection != 'eventos' && canUseAgracta();
       }
     }
 

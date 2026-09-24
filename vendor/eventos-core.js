@@ -147,7 +147,9 @@
     Object.keys(ev).forEach(function (k) { if (k !== 'id') c[k] = ev[k]; });
     return c;
   }
-  function idDe(ev) { return 'ev:' + sha256(estavel(conteudo(ev))); }
+  /* O que vai para a nuvem e o que o hash cobre: o evento sem o próprio id. */
+  function serializar(ev) { return estavel(conteudo(ev)); }
+  function idDe(ev) { return 'ev:' + sha256(serializar(ev)); }
 
   function congelar(o) {
     if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -369,7 +371,7 @@
 
   var api = {
     VERSAO: VERSAO, SCHEMA: SCHEMA, TIPOS: TIPOS, PAPEIS: PAPEIS,
-    sha256: sha256, estavel: estavel, idDe: idDe,
+    sha256: sha256, estavel: estavel, serializar: serializar, idDe: idDe,
     validar: validar, criar: criar, anexar: anexar, merge: merge, pontas: pontas, ordenar: ordenar,
     verificar: verificar, estado: estado, aplicar: aplicar, deTrilhaLegada: deTrilhaLegada
   };

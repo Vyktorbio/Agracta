@@ -479,8 +479,12 @@
     var ov=document.getElementById('conhecimentoOvl');if(!ov||ov.hidden)return;
     var abas=[['produtos','Produtos e ativos'],['alvos','Alvos'],['projetos','Projetos'],['estudos','Estudos'],['fontes','Fontes']];
     if(typeof w.isAdmin==='function'&&w.isAdmin())abas.push(['clientes','Clientes']);
+    /* Abas de outros módulos (ex.: conhecimento-canonico.js) entram aqui sem que
+       este arquivo precise conhecê-las: {id, rotulo, html(acervo), acao(a,b)}. */
+    var extras=lista(w.agConhecimentoAbas);extras.forEach(function(x){if(x&&x.id)abas.push([x.id,x.rotulo]);});
+    var extra=extras.find(function(x){return x&&x.id===view.aba;});
     ov.innerHTML='<section class="con-shell"><header class="con-head"><div><p>AGRACTA</p><h1>Conhecimento experimental</h1></div>'+bot('fechar','Fechar ×')+'</header><nav aria-label="Conhecimento">'+abas.map(function(a){return bot('aba',a[1],'data-aba="'+a[0]+'" aria-current="'+(view.aba===a[0]?'page':'false')+'"',view.aba===a[0]?'ativo':'');}).join('')+'</nav><p id="conhecimentoAviso" role="status" aria-live="polite"></p><main>'+
-      (view.estudo?ficha():view.aba==='estudos'?abaEstudos():view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):view.aba==='clientes'?(w.agClientesHtml?w.agClientesHtml(acervo):vazio('Gestão de clientes indisponível.')):selecao())+'</main></section>';
+      (view.estudo?ficha():extra?extra.html(acervo):view.aba==='estudos'?abaEstudos():view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):view.aba==='clientes'?(w.agClientesHtml?w.agClientesHtml(acervo):vazio('Gestão de clientes indisponível.')):selecao())+'</main></section>';
   }
   function adicionar(key,eventos){
     var s=achar(key);if(!s)throw Error('Estudo não encontrado.');
@@ -535,6 +539,7 @@
     if(a==='estornar'){if(w.confirm('Estornar este custo? O registro original permanecerá no histórico.'))adicionar(key,[{tipo:'estorno',alvo:b.dataset.evento}]);return;}
     if(a.indexOf('cliente')===0&&w.agClientesAcao)return w.agClientesAcao(a,b,acervo);
     if(a.indexOf('fonte')===0&&w.agFontesAcao)return w.agFontesAcao(a,b);
+    var dono=lista(w.agConhecimentoAbas).find(function(x){return x&&x.acao&&a.indexOf(x.id)===0;});if(dono)return dono.acao(a,b);
   }
   document.addEventListener('click',function(ev){
     var target=ev.target.closest&&ev.target.closest('[data-ag-conhecimento-item],[data-ag-conhecimento-qid],[data-ag-conhecimento-busca]');

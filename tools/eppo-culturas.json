@@ -1,0 +1,26 @@
+{
+  "_leia": "Nome da cultura como o Agracta usa -> nome científico que se consulta na EPPO. É a ÚNICA parte digitada; os códigos vêm só da EPPO (tools/eppo-atualiza.py). Onde o nome comum cobre mais de uma espécie cultivada (café, cana, citros), fica o GÊNERO: escolher uma espécie inventaria uma precisão que o registro do estudo não tem. Pastagem, estufa e pousio não são táxon e ficam de fora.",
+  "culturas": {
+    "Soja": "Glycine max",
+    "Milho": "Zea mays",
+    "Algodão": "Gossypium hirsutum",
+    "Feijão": "Phaseolus vulgaris",
+    "Café": "Coffea",
+    "Cana de açúcar": "Saccharum",
+    "Citros": "Citrus",
+    "Tomate": "Solanum lycopersicum",
+    "Morango": "Fragaria x ananassa",
+    "Melão": "Cucumis melo",
+    "Arroz": "Oryza sativa",
+    "Trigo": "Triticum aestivum",
+    "Sorgo": "Sorghum bicolor",
+    "Batata": "Solanum tuberosum",
+    "Amendoim": "Arachis hypogaea",
+    "Girassol": "Helianthus annuus",
+    "Cevada": "Hordeum vulgare",
+    "Alface": "Lactuca sativa",
+    "Cebola": "Allium cepa",
+    "Pimentão": "Capsicum annuum",
+    "Uva": "Vitis vinifera"
+  }
+}
