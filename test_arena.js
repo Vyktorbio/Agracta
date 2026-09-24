@@ -50,6 +50,8 @@ ok(/dose não informada/.test(A.doseNaArena('',"kg/ha",pote).motivo),'testemunha
 
 /* ---------- papel das variáveis ---------- */
 ok(A.papel('Dano foliar (%)')==='dano','dano foliar');
+ok(A.papel('Consumo foliar (%)')==='dano','consumo foliar entra na curva de dano');
+ok(['Lesma ativa','Lesma se alimentando','Lesma paralisada','Muco (0–2)'].every(n=>A.papel(n)===null),'comportamentos da lesma não viram morte nem dano');
 ok(A.papel('Lesma morta')==='morte','lesma morta');
 ok(A.papel('Pellets íntegros')==='integros','pellets íntegros');
 ok(A.papel('Pellets desintegrados')==='desintegrados','"desintegrados" não é "íntegros"');

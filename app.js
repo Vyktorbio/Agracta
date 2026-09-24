@@ -10705,7 +10705,7 @@ function arenaGraficosHtml(study, qid){
   if(cv.dano) H+='<div class="res-title">Dano na planta × dias <small style="opacity:.7">('+esc(cv.dano.variavel)+')</small></div>'+_arenaLinhaSvg(cv.dano.series,trats,test,'Dano');
   if(cv.sobrevivencia) H+='<div class="res-title">Sobrevivência do organismo × dias <small style="opacity:.7">(100 − '+esc(cv.sobrevivencia.variavel)+')</small></div>'+_arenaLinhaSvg(cv.sobrevivencia.series,trats,test,'Sobrevivência');
   if(cv.consumo) H+='<div class="res-title">Pellets atacados × dias <small style="opacity:.7">(mordidos + desintegrados, sobre o total contado)</small></div>'+_arenaLinhaSvg(cv.consumo.series,trats,test,'Pellets atacados');
-  if(!H) return '<div class="sd-section"><div class="sd-section-title">Gráficos da arena</div><div class="e-hint">As curvas aparecem quando houver avaliação com <b>Dano foliar (%)</b>, <b>Lesma morta</b> ou as contagens de <b>pellets</b> — use "+ variáveis do ensaio de arena" na avaliação.</div></div>';
+  if(!H) return '<div class="sd-section"><div class="sd-section-title">Gráficos da arena</div><div class="e-hint">As curvas aparecem quando houver avaliação com <b>Consumo foliar (%)</b>, <b>Lesma morta</b> ou as contagens de <b>pellets</b> — use "+ variáveis do ensaio de arena" na avaliação.</div></div>';
   var R=ArenaCore.resumo(cv,trats,test||null), tn={};
   trats.forEach(function(t){ tn[t.id]=t; });
   var ult=pts[pts.length-1];
@@ -16749,17 +16749,19 @@ var CATALOGO_AVAL={
      'menor' (a testemunha infestada é a maior); morte da lesma e estado da lesma
      têm sentido 'maior'. Sim/não entra como razão n/N com N = 1: a média dos
      potes é a proporção, e a estatística a trata como tal. */
+  /* Uma lesma por pote (10 lesmas/m² na arena): cada comportamento é sim/não
+     por pote, gravado como razão n/1 — 0 não, 1 sim. "sentido maior" = o
+     produto aumenta o valor (mortalidade, paralisação, muco). */
   'Moluscicida em arena':[
-    {nome:'Dano foliar (%)',tipo:'pct'},
-    {nome:'Folhas atacadas',tipo:'contagem'},
-    {nome:'Meristema atacado',tipo:'razao',N:1},
-    {nome:'Planta viva',tipo:'razao',N:1,sentido:'maior'},
-    {nome:'Estado da lesma (0–4)',tipo:'escala',escalaMax:4,sentido:'maior',escalaNome:'0 normal · 1 atividade reduzida · 2 hipersecreção · 3 paralisada · 4 morta'},
-    {nome:'Lesma morta',tipo:'razao',N:1,sentido:'maior'},
+    {nome:'Consumo foliar (%)',tipo:'pct'},
     {nome:'Pellets íntegros',tipo:'contagem'},
     {nome:'Pellets mordidos',tipo:'contagem'},
     {nome:'Pellets desintegrados',tipo:'contagem'},
-    {nome:'Água reposta (mL)',tipo:'contagem'}
+    {nome:'Lesma morta',tipo:'razao',N:1,sentido:'maior'},
+    {nome:'Lesma ativa',tipo:'razao',N:1},
+    {nome:'Lesma se alimentando',tipo:'razao',N:1},
+    {nome:'Lesma paralisada',tipo:'razao',N:1,sentido:'maior'},
+    {nome:'Muco (0–2)',tipo:'escala',escalaMax:2,sentido:'maior',escalaNome:'0 normal · 1 aumentado · 2 muito'}
   ],
   'Produtividade':[
     {nome:'Peso da parcela (g)',tipo:'contagem'},

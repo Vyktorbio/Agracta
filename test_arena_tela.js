@@ -58,8 +58,13 @@ ok(R("studyMetodo(data.LAB.estudos[0],'LAB')")==='granulado','o estudo de arena 
 ok(R("studyMetodo({metodoAplicacao:'drone'},'LAB')")==='lab','método de campo não vale na bancada');
 ok(R("TIPOS_POR_LAB.Entomologia.indexOf('Moluscicida em arena')>=0"),'tipo "Moluscicida em arena" na Entomologia');
 const cat=R("CATALOGO_AVAL['Moluscicida em arena']");
-ok(cat.length===10&&cat.find(c=>c.nome==='Lesma morta').sentido==='maior'&&cat.find(c=>c.nome==='Lesma morta').N===1,'catálogo com 10 variáveis, lesma morta = razão N=1, sentido maior');
-ok(!cat.find(c=>c.nome==='Dano foliar (%)').sentido,'dano foliar: sentido menor (a testemunha é a maior)');
+ok(cat.length===9&&cat.find(c=>c.nome==='Lesma morta').sentido==='maior'&&cat.find(c=>c.nome==='Lesma morta').N===1,'catálogo com 9 variáveis, lesma morta = razão N=1, sentido maior');
+ok(!cat.find(c=>c.nome==='Consumo foliar (%)').sentido,'consumo foliar: sentido menor (a testemunha é a maior)');
+/* Uma lesma por pote: cada comportamento é sim/não (razão n/1); muco em escala 0–2. */
+ok(['Lesma ativa','Lesma se alimentando','Lesma paralisada'].every(n=>{const c=cat.find(x=>x.nome===n);return c&&c.tipo==='razao'&&c.N===1;}),'atividade, alimentação e paralisação = sim/não por pote');
+ok(cat.find(c=>c.nome==='Lesma paralisada').sentido==='maior'&&!cat.find(c=>c.nome==='Lesma ativa').sentido&&!cat.find(c=>c.nome==='Lesma se alimentando').sentido,'paralisação sobe com o produto; atividade e alimentação caem');
+ok((c=>c&&c.tipo==='escala'&&c.escalaMax===2&&/2 muito/.test(c.escalaNome))(cat.find(c=>c.nome==='Muco (0–2)')),'muco em escala 0 normal · 1 aumentado · 2 muito');
+ok(!cat.find(c=>/Estado da lesma|Folhas atacadas|Meristema|Planta viva|Água reposta/.test(c.nome)),'o conjunto antigo saiu do botão');
 const res=R("arenaResumoTexto(data.LAB.estudos[0])");
 ok(/37 × 22 cm/.test(res)&&/0,0814 m²/.test(res)&&/12,3\/m²/.test(res),'ficha: medidas, área e densidade ('+res+')');
 const lidos=R("_arenaLerCampos(function(id){ return ({seArForma:{value:'retangular'},seArComp:{value:'37'},seArLarg:{value:'22,0'},seArPellet:{value:''},seArOrg:{value:'1'}})[id]||null; })");
@@ -102,7 +107,7 @@ for(let d=0;d<=10;d+=2){
   trats.forEach((t,ti)=>{for(let r=1;r<=4;r++){
     const k=t.id+'R'+r, trat=ti>=2, forte=t.id==='T07'||t.id==='T12';
     const morta=t.id==='T01'?'':(trat&&(forte?d>=3:d>=6)?100:0);
-    notas[k]={'Dano foliar (%)':t.id==='T01'?0:(trat?(forte?Math.min(d,3):Math.min(d*2,10)):d*6),
+    notas[k]={'Consumo foliar (%)':t.id==='T01'?0:(trat?(forte?Math.min(d,3):Math.min(d*2,10)):d*6),
       'Lesma morta':morta,
       'Pellets íntegros':trat?Math.max(0,2-Math.floor(d/4)):'',
       'Pellets mordidos':trat?Math.min(2,Math.floor(d/4)):'',

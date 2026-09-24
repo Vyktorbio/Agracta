@@ -91,7 +91,7 @@
       if(/integr/.test(s)) return 'integros';
       if(/mordid|consumid|atacad/.test(s)) return 'mordidos';
     }
-    if(/dano|desfolha|area foliar consumida/.test(s)) return 'dano';
+    if(/dano|desfolha|area foliar consumida|consumo foliar/.test(s)) return 'dano';
     if(/(lesma|caracol|molusco).*mort|mortalidade|mortos?\b|morta\b/.test(s)) return 'morte';
     return null;
   }
