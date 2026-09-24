@@ -12,10 +12,12 @@
  * 2. FALHA AQUI NÃO SOBE. Todo o trabalho deste módulo está em try/catch; um
  *    evento recusado ou um armazenamento cheio vira aviso no console, nunca
  *    erro na tela de quem está finalizando um estudo.
- * 3. ARMAZENAMENTO SEPARADO. Os eventos ficam em `agracta-eventos-v1`, fora
- *    do objeto `data`: não entram no save, no merge entre aparelhos nem na
- *    nuvem. Nesta etapa são uma segunda via local — a sincronização com
- *    regras só-de-acréscimo no servidor é a etapa seguinte.
+ * 3. ARMAZENAMENTO SEPARADO. Os eventos ficam num IndexedDB próprio
+ *    (`agracta-eventos`), fora do objeto `data` e do localStorage — o
+ *    localStorage tem teto de ~5 milhões de caracteres e é dele que o save do
+ *    app depende; os eventos não disputam esse espaço. Não entram no save, no
+ *    merge entre aparelhos nem na nuvem: nesta etapa são uma segunda via
+ *    local. A gravação é assíncrona e enfileirada, e a tela nunca espera.
  * 4. DESLIGÁVEL. `localStorage['agracta-eventos-off']='1'` e o módulo não
  *    instala nada. Sem os motores carregados, também não.
  *
@@ -29,7 +31,6 @@
  */
 (function (root) {
   'use strict';
-  var CHAVE = 'agracta-eventos-v1';
   var CHAVE_OFF = 'agracta-eventos-off';
   var CHAVE_DISP = 'agracta-dispositivo';
 
@@ -41,18 +42,59 @@
     try { return !!(s && s.getItem(CHAVE_OFF) === '1'); } catch (e) { return false; }
   }
 
-  /* ---- armazenamento próprio ---------------------------------------------- */
+  /* ---- armazenamento próprio (IndexedDB) --------------------------------
+     Um registro por estudo: { estudo, eventos:[...] }. Tudo enfileirado numa
+     promessa só, para duas ações seguidas não lerem o mesmo registro velho. */
+  var DB = 'agracta-eventos', STORE = 'registros', _db = null, _fila = Promise.resolve();
+  function abrir() {
+    if (_db) return _db;
+    _db = new Promise(function (res, rej) {
+      var idb = root.indexedDB;
+      if (!idb) { rej(new Error('sem IndexedDB')); return; }
+      var rq = idb.open(DB, 1);
+      rq.onupgradeneeded = function () {
+        var db = rq.result;
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'estudo' });
+      };
+      rq.onsuccess = function () { res(rq.result); };
+      rq.onerror = function () { rej(rq.error); };
+    });
+    _db.catch(function () { _db = null; });
+    return _db;
+  }
+  function tx(modo, fn) {
+    return abrir().then(function (db) {
+      return new Promise(function (res, rej) {
+        var t = db.transaction(STORE, modo), st = t.objectStore(STORE), out;
+        fn(st, function (v) { out = v; });
+        t.oncomplete = function () { res(out); };
+        t.onerror = function () { rej(t.error); };
+        t.onabort = function () { rej(t.error || new Error('transação abortada')); };
+      });
+    });
+  }
+  function lerRegistro(chaveEstudo) {
+    return tx('readonly', function (st, fim) {
+      var rq = st.get(chaveEstudo);
+      rq.onsuccess = function () { fim(rq.result ? rq.result.eventos.slice() : []); };
+    });
+  }
+  function gravarRegistro(chaveEstudo, eventos) {
+    return tx('readwrite', function (st) { st.put({ estudo: chaveEstudo, eventos: eventos }); });
+  }
   function lerTudo() {
-    var s = ls(); if (!s) return {};
-    try { var o = JSON.parse(s.getItem(CHAVE) || '{}'); return o && typeof o === 'object' ? o : {}; }
-    catch (e) { aviso('armazenamento ilegível; começando vazio sem apagar o antigo', e); return {}; }
+    return tx('readonly', function (st, fim) {
+      var rq = st.getAll();
+      rq.onsuccess = function () {
+        var o = {}; (rq.result || []).forEach(function (r) { o[r.estudo] = r.eventos; }); fim(o);
+      };
+    });
   }
-  function gravarTudo(o) {
-    var s = ls(); if (!s) return false;
-    s.setItem(CHAVE, JSON.stringify(o));
-    return true;
+  function enfileirar(fn) {
+    var p = _fila.then(fn);
+    _fila = p.catch(function () {});
+    return p;
   }
-  function registroDe(chaveEstudo) { return (lerTudo()[chaveEstudo] || []).slice(); }
 
   function dispositivo() {
     var s = ls(); if (!s) return null;
@@ -79,7 +121,9 @@
   function autor() {
     var u = root._authUser, nome = '';
     try { nome = typeof root._currentUserName === 'function' ? String(root._currentUserName() || '') : ''; } catch (e) {}
-    return { email: (u && u.email) || null, nome: nome || null };
+    /* Mesma regra da trilha: sem nome conhecido fica "Não identificado", que é
+       a verdade — e o evento não se perde por isso. */
+    return { email: (u && u.email) || null, nome: nome.trim() || 'Não identificado' };
   }
   function contexto() {
     return { autor: autor(), organizacao: null, dispositivo: dispositivo(),
@@ -136,21 +180,25 @@
     return [];
   }
 
+  /* Os pedidos são montados NA HORA da chamada (o _avReopen e a finalização
+     são lidos agora, antes de o app limpá-los); só a gravação é adiada. */
   function registrar(study, action, details, extra) {
-    if (!study || !study.id) return 0;
+    if (!study || !study.id) return Promise.resolve(0);
     var qid = qidDoEstudo(study);
     var ps = pedidos(study, action, details, extra, qid);
-    if (!ps.length) return 0;
-    var O = root.ObservacaoCore, E = root.EventosCore, kEst = O.chaveEstudo(qid, study.id);
-    var tudo = lerTudo(), reg = (tudo[kEst] || []).slice(), n = 0, ctx = contexto();
-    ps.forEach(function (p) {
-      try {
-        var r = E.anexar(reg, p.tipo, p.dados, ctx);
-        reg = r.registro; n++;
-      } catch (e) { aviso('evento ' + p.tipo + ' não registrado: ' + (e && e.message), e); }
-    });
-    if (n) { tudo[kEst] = reg; gravarTudo(tudo); }
-    return n;
+    if (!ps.length) return Promise.resolve(0);
+    var O = root.ObservacaoCore, E = root.EventosCore, kEst = O.chaveEstudo(qid, study.id), ctx = contexto();
+    ctx.em = new Date().toISOString();
+    return enfileirar(function () {
+      return lerRegistro(kEst).then(function (reg) {
+        var n = 0;
+        ps.forEach(function (p) {
+          try { reg = E.anexar(reg, p.tipo, p.dados, ctx).registro; n++; }
+          catch (e) { aviso('evento ' + p.tipo + ' não registrado: ' + (e && e.message), e); }
+        });
+        return n ? gravarRegistro(kEst, reg).then(function () { return n; }) : 0;
+      });
+    }).catch(function (e) { aviso('evento não gravado (a trilha foi gravada normalmente)', e); return 0; });
   }
 
   /* ---- instalação ---------------------------------------------------------- */
@@ -161,7 +209,7 @@
     if (typeof orig !== 'function' || orig.__eventos) return false;
     var envolto = function (study, action, details, extra) {
       var ret = orig.apply(this, arguments);           /* 1. o de sempre, primeiro */
-      try { registrar(study, action, details, extra); } /* 2. o evento, ao lado */
+      try { registrar(study, action, details, extra); } /* 2. o evento, ao lado, sem esperar */
       catch (e) { aviso('falha ao registrar evento (a trilha foi gravada normalmente)', e); }
       return ret;
     };
@@ -171,11 +219,13 @@
     return true;
   }
 
+  /* Consultas devolvem promessa. `ocioso()` resolve quando a fila esvazia. */
   var api = {
     instalar: instalar,
-    registro: function (qid, sid) { return registroDe(root.ObservacaoCore.chaveEstudo(qid, sid)); },
-    verificar: function (qid, sid) { return root.EventosCore.verificar(api.registro(qid, sid)); },
-    exportar: function () { return lerTudo(); }
+    registro: function (qid, sid) { return enfileirar(function () { return lerRegistro(root.ObservacaoCore.chaveEstudo(qid, sid)); }); },
+    verificar: function (qid, sid) { return api.registro(qid, sid).then(function (r) { return root.EventosCore.verificar(r); }); },
+    exportar: function () { return enfileirar(lerTudo); },
+    ocioso: function () { return _fila; }
   };
   root.AgractaEventos = api;
   instalar();

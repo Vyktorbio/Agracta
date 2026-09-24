@@ -11,9 +11,11 @@ Testes: `test_observacao_eventos.js`.
 **Estado:** motores prontos e ligados ao app por um módulo separado,
 `eventos-app.js` (teste: `test_eventos_app.js`). O `app.js` não foi alterado. O
 módulo escuta `logStudyAuditInObject` e, **depois** que a trilha de sempre foi
-gravada, grava o evento formal num armazenamento próprio do aparelho
-(`agracta-eventos-v1`), fora do objeto `data`, do merge e da nuvem. Falha no evento
-vira aviso no console e nunca chega à tela. Para desligar:
+gravada, grava o evento formal num IndexedDB próprio do aparelho
+(`agracta-eventos`), fora do objeto `data`, do merge e da nuvem. O `localStorage`
+fica de fora de propósito: ele tem teto de ~5 milhões de caracteres, e o save do app
+depende dele. A gravação é assíncrona e enfileirada, então a tela nunca espera. Falha
+no evento vira aviso no console e nunca chega à tela. Para desligar:
 `localStorage['agracta-eventos-off']='1'`. O `main` de antes desta ligação está
 salvo na branch `salve/antes-eventos-2026-09-24`.
 
