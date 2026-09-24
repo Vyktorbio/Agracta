@@ -50,9 +50,19 @@ const Store=require('./vendor/fotos-store.js'),Pptx=require('./vendor/fotos-pptx
  }
  assert.throws(()=>Pptx.parts([],4,{}),/pelo menos/);assert.throws(()=>Pptx.layout(5),/1, 2, 4, 6 ou 8/);
  /* As fotos não podem voltar a ficar miúdas: altura útil mínima por quantidade (polegadas, slide de 7,5"). */
- for(const [n,min] of [[1,4.9],[2,4.9],[4,2.2],[6,2.2],[8,2.2]]){
+ for(const [n,min] of [[1,5.3],[2,5.3],[4,2.5],[6,2.5],[8,2.5]]){
   const boxes=Pptx.layout(n);assert.equal(boxes.length,n);
   boxes.forEach(b=>{assert(b.photoH>=min,n+' por slide: foto com '+b.photoH.toFixed(2)+'"');assert(b.y+b.h<=7.05,'acima do rodapé');assert(b.x+b.w<=13.333-.79,'dentro das faixas');});
+ }
+ /* Arranjo pelo formato das fotos: 4 em pé lado a lado, 4 deitadas em 2 × 2, sempre sem cortar e sem sair da área. */
+ const deitada={width:1600,height:1200},emPe={width:1200,height:1600};
+ const pe=Pptx.arranjo([emPe,emPe,emPe,emPe],4),dei=Pptx.arranjo([deitada,deitada,deitada,deitada],4);
+ assert.equal(pe[0].cols,4);assert.equal(dei[0].cols,2);assert(pe[0].ih>3.5,'foto em pé grande');assert(dei[0].ih>=2.5);
+ for(const [imgs,n] of [[[deitada,emPe,deitada,emPe],4],[Array(8).fill(deitada),8],[Array(8).fill(emPe),8],[[deitada],4],[[emPe,deitada],2],[[emPe],1]]){
+  const b=Pptx.arranjo(imgs,n);assert.equal(b.length,imgs.length);
+  b.forEach((x,i)=>{assert(Math.abs(x.iw/x.ih-imgs[i].width/imgs[i].height)<1e-9,'proporção mantida');assert(x.iw<=x.w+1e-9&&x.ih<=x.photoH+1e-9,'foto dentro da caixa');
+   assert(x.x>=.79&&x.x+x.w<=13.333-.79,'dentro das faixas');assert(x.y>=.9&&x.y+x.h<=7.03,'entre cabeçalho e rodapé');
+   b.forEach((o,j)=>{if(j>i)assert(o.x>=x.x+x.w-1e-9||o.x+o.w<=x.x+1e-9||o.y>=x.y+x.h-1e-9||o.y+o.h<=x.y+1e-9,'caixas não se sobrepõem');});});
  }
  console.log('Fotos locais: contas/estudos isolados, persistência, originais, ordenação, quota, ausência de transmissão e PPTX 1/2/4/6/8 OK.');
 })().catch(err=>{console.error(err);process.exit(1);});
