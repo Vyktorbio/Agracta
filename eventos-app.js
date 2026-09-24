@@ -5,7 +5,7 @@
  * ESCUTA essa chamada e, depois que ela terminou, grava AO LADO um evento
  * formal (vendor/eventos-core.js) num armazenamento próprio do aparelho.
  *
- * QUATRO GARANTIAS, porque o objetivo é não estragar o que funciona:
+ * CINCO GARANTIAS, porque o objetivo é não estragar o que funciona:
  *
  * 1. O ORIGINAL RODA PRIMEIRO E SEMPRE. A trilha de sempre é gravada antes
  *    de qualquer coisa daqui, e o valor de retorno é o dela.
@@ -15,9 +15,15 @@
  * 3. ARMAZENAMENTO SEPARADO. Os eventos ficam num IndexedDB próprio
  *    (`agracta-eventos`), fora do objeto `data` e do localStorage — o
  *    localStorage tem teto de ~5 milhões de caracteres e é dele que o save do
- *    app depende; os eventos não disputam esse espaço. Não entram no save, no
- *    merge entre aparelhos nem na nuvem: nesta etapa são uma segunda via
- *    local. A gravação é assíncrona e enfileirada, e a tela nunca espera.
+ *    app depende; os eventos não disputam esse espaço. Não entram no save nem
+ *    no merge do app. A gravação é assíncrona e enfileirada, e a tela nunca
+ *    espera.
+ * 5. NUVEM POR FORA DA FILA. Com sessão e rede, os eventos vão para
+ *    workspaces/agracta/eventos — coleção só-de-acréscimo, em que o servidor
+ *    recalcula o SHA-256 e recusa id que não bata (firestore.rules). O envio
+ *    roda fora da fila local e com tempo limite: rede ruim atrasa a nuvem,
+ *    nunca a gravação no aparelho. Os eventos de outros aparelhos descem e
+ *    só entram depois de conferido o hash de cada um.
  * 4. DESLIGÁVEL. `localStorage['agracta-eventos-off']='1'` e o módulo não
  *    instala nada. Sem os motores carregados, também não.
  *
@@ -73,20 +79,33 @@
       });
     });
   }
-  function lerRegistro(chaveEstudo) {
+  function lerFicha(chaveEstudo) {
     return tx('readonly', function (st, fim) {
       var rq = st.get(chaveEstudo);
-      rq.onsuccess = function () { fim(rq.result ? rq.result.eventos.slice() : []); };
+      rq.onsuccess = function () {
+        var r = rq.result || {};
+        fim({ estudo: chaveEstudo, eventos: (r.eventos || []).slice(), enviados: (r.enviados || []).slice() });
+      };
     });
   }
-  function gravarRegistro(chaveEstudo, eventos) {
-    return tx('readwrite', function (st) { st.put({ estudo: chaveEstudo, eventos: eventos }); });
+  function lerRegistro(chaveEstudo) { return lerFicha(chaveEstudo).then(function (f) { return f.eventos; }); }
+  /* `enviados`: ids que já estão na nuvem. Fica na mesma ficha do estudo. */
+  function gravarFicha(f) {
+    return tx('readwrite', function (st) { st.put({ estudo: f.estudo, eventos: f.eventos, enviados: f.enviados || [] }); });
   }
   function lerTudo() {
     return tx('readonly', function (st, fim) {
       var rq = st.getAll();
       rq.onsuccess = function () {
         var o = {}; (rq.result || []).forEach(function (r) { o[r.estudo] = r.eventos; }); fim(o);
+      };
+    });
+  }
+  function lerFichas() {
+    return tx('readonly', function (st, fim) {
+      var rq = st.getAll();
+      rq.onsuccess = function () {
+        fim((rq.result || []).map(function (r) { return { estudo: r.estudo, eventos: r.eventos || [], enviados: r.enviados || [] }; }));
       };
     });
   }
@@ -190,15 +209,155 @@
     var O = root.ObservacaoCore, E = root.EventosCore, kEst = O.chaveEstudo(qid, study.id), ctx = contexto();
     ctx.em = new Date().toISOString();
     return enfileirar(function () {
-      return lerRegistro(kEst).then(function (reg) {
+      return lerFicha(kEst).then(function (f) {
         var n = 0;
         ps.forEach(function (p) {
-          try { reg = E.anexar(reg, p.tipo, p.dados, ctx).registro; n++; }
+          try { f.eventos = E.anexar(f.eventos, p.tipo, p.dados, ctx).registro; n++; }
           catch (e) { aviso('evento ' + p.tipo + ' não registrado: ' + (e && e.message), e); }
         });
-        return n ? gravarRegistro(kEst, reg).then(function () { return n; }) : 0;
+        return n ? gravarFicha(f).then(function () { return n; }) : 0;
+      }).catch(function (e) { aviso('evento não gravado (a trilha foi gravada normalmente)', e); return 0; });
+    }).then(function (n) {
+      if (n) agendarEnvio();
+      return n;
+    });
+  }
+
+  /* ---- nuvem ---------------------------------------------------------------
+     Usa a mesma conexão que o firebase-sync.js abriu. Sem Firebase iniciado,
+     sem sessão ou sem rede, simplesmente não sincroniza agora. */
+  var COLECAO = 'workspaces/agracta/eventos', LIMITE_MS = 20000;
+  var _sinc = null, _estado = { ultimoEnvio: null, ultimaLeitura: null, ultimoErro: null, pendentes: null, rejeitados: 0 };
+  function nuvem() {
+    try {
+      var fb = root.firebase;
+      if (!fb || !fb.apps || !fb.apps.length) return null;
+      var u = fb.auth().currentUser;
+      if (!u || !u.email) return null;
+      if (root.navigator && root.navigator.onLine === false) return null;
+      return { db: fb.firestore(), email: String(u.email).toLowerCase(), fb: fb };
+    } catch (e) { return null; }
+  }
+  function comLimite(p) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error('tempo esgotado')); }, LIMITE_MS);
+      p.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+  function documento(ev, estudo, n) {
+    return { schema: 1, estudo: estudo, tipo: ev.tipo, json: root.EventosCore.serializar(ev),
+             enviadoPor: n.email, recebidoEm: n.fb.firestore.FieldValue.serverTimestamp() };
+  }
+  /* Um evento só entra se o conteúdo confere com o id — o mesmo teste que o
+     servidor fez ao aceitar; aqui ele protege contra cópia adulterada. */
+  function eventoDaNuvem(id, d) {
+    var E = root.EventosCore;
+    if (!d || typeof d.json !== 'string' || typeof d.estudo !== 'string') return null;
+    if (id !== 'ev:' + E.sha256(d.json)) return null;
+    var ev; try { ev = JSON.parse(d.json); } catch (e) { return null; }
+    ev.id = id;
+    if (E.idDe(ev) !== id || E.validar(ev).erros.length) return null;
+    return ev;
+  }
+  function enviarUm(n, ev, estudo) {
+    var ref = n.db.doc(COLECAO + '/' + ev.id);
+    return comLimite(ref.set(documento(ev, estudo, n))).then(function () { return true; }, function (e) {
+      /* Já existe (ex.: a confirmação do envio anterior se perdeu): a regra
+         recusa regravar. Confere se o que está lá é este mesmo evento. */
+      return comLimite(ref.get()).then(function (snap) {
+        if (snap.exists && snap.data().json === root.EventosCore.serializar(ev)) return true;
+        throw e;
       });
-    }).catch(function (e) { aviso('evento não gravado (a trilha foi gravada normalmente)', e); return 0; });
+    });
+  }
+  function enviar(n) {
+    return enfileirar(lerFichas).then(function (fichas) {
+      var ok = {}, pend = 0, seq = Promise.resolve();
+      fichas.forEach(function (f) {
+        var ja = {}; f.enviados.forEach(function (id) { ja[id] = 1; });
+        f.eventos.forEach(function (ev) {
+          if (ja[ev.id] || ev.legado) return;
+          pend++;
+          seq = seq.then(function () {
+            return enviarUm(n, ev, f.estudo).then(function () {
+              (ok[f.estudo] = ok[f.estudo] || []).push(ev.id); pend--;
+            }, function (e) { _estado.ultimoErro = { em: new Date().toISOString(), codigo: (e && (e.code || e.message)) || 'erro' }; });
+          });
+        });
+      });
+      return seq.then(function () {
+        _estado.pendentes = pend;
+        if (!Object.keys(ok).length) return 0;
+        _estado.ultimoEnvio = new Date().toISOString();
+        return enfileirar(function () {
+          return Promise.all(Object.keys(ok).map(function (k) {
+            return lerFicha(k).then(function (f) {
+              f.enviados = Array.from(new Set(f.enviados.concat(ok[k])));
+              return gravarFicha(f);
+            });
+          }));
+        }).then(function () { return Object.keys(ok).reduce(function (a, k) { return a + ok[k].length; }, 0); });
+      });
+    });
+  }
+  function receber(n) {
+    return comLimite(n.db.collection(COLECAO).get()).then(function (snap) {
+      var porEstudo = {}, rej = 0;
+      snap.forEach(function (d) {
+        var dd = d.data(), ev = eventoDaNuvem(d.id, dd);
+        if (!ev) { rej++; return; }
+        (porEstudo[dd.estudo] = porEstudo[dd.estudo] || []).push(ev);
+      });
+      _estado.rejeitados = rej;
+      if (rej) aviso(rej + ' evento(s) da nuvem recusado(s): conteúdo não confere com o id');
+      return enfileirar(function () {
+        return Promise.all(Object.keys(porEstudo).map(function (k) {
+          return lerFicha(k).then(function (f) {
+            var antes = f.eventos.length;
+            f.eventos = root.EventosCore.merge(f.eventos, porEstudo[k]);
+            f.enviados = Array.from(new Set(f.enviados.concat(porEstudo[k].map(function (e) { return e.id; }))));
+            return gravarFicha(f).then(function () { return f.eventos.length - antes; });
+          });
+        }));
+      }).then(function (ns) {
+        _estado.ultimaLeitura = new Date().toISOString();
+        return ns.reduce(function (a, b) { return a + b; }, 0);
+      });
+    });
+  }
+  /* Envia o que falta e baixa o que outros aparelhos gravaram. Uma rodada por
+     vez; pedir de novo durante uma rodada devolve a mesma promessa. */
+  function sincronizar(op) {
+    op = op || {};
+    if (_sinc) return _sinc;
+    var n = nuvem();
+    if (!n) return Promise.resolve({ enviados: 0, recebidos: 0, semNuvem: true });
+    _sinc = enviar(n).then(function (env) {
+      if (op.soEnviar) return { enviados: env, recebidos: 0 };
+      return receber(n).then(function (rec) { return { enviados: env, recebidos: rec }; });
+    }).catch(function (e) {
+      _estado.ultimoErro = { em: new Date().toISOString(), codigo: (e && (e.code || e.message)) || 'erro' };
+      aviso('sincronização dos eventos adiada', e);
+      return { enviados: 0, recebidos: 0, erro: _estado.ultimoErro };
+    }).then(function (r) { _sinc = null; return r; });
+    return _sinc;
+  }
+  var _timerEnvio = null;
+  function agendarEnvio() {
+    if (_timerEnvio) return;
+    _timerEnvio = setTimeout(function () { _timerEnvio = null; sincronizar({ soEnviar: true }); }, 1500);
+  }
+  /* O Firebase carrega depois deste arquivo: espera ele subir e a sessão
+     abrir, e sincroniza a cada login e a cada volta da rede. */
+  function ligarNuvem(tentativa) {
+    tentativa = tentativa || 0;
+    var fb = root.firebase;
+    if (!fb || !fb.apps || !fb.apps.length) {
+      if (tentativa < 24) setTimeout(function () { ligarNuvem(tentativa + 1); }, 5000);
+      return;
+    }
+    try { fb.auth().onAuthStateChanged(function (u) { if (u) sincronizar(); }); } catch (e) { aviso('sem sessão do Firebase', e); }
+    try { root.addEventListener('online', function () { sincronizar(); }); } catch (e) {}
   }
 
   /* ---- instalação ---------------------------------------------------------- */
@@ -216,6 +375,7 @@
     envolto.__eventos = true;
     envolto.original = orig;
     root.logStudyAuditInObject = envolto;
+    try { setTimeout(function () { ligarNuvem(0); }, 0); } catch (e) {}
     return true;
   }
 
@@ -225,6 +385,8 @@
     registro: function (qid, sid) { return enfileirar(function () { return lerRegistro(root.ObservacaoCore.chaveEstudo(qid, sid)); }); },
     verificar: function (qid, sid) { return api.registro(qid, sid).then(function (r) { return root.EventosCore.verificar(r); }); },
     exportar: function () { return enfileirar(lerTudo); },
+    sincronizar: sincronizar,
+    estado: function () { return JSON.parse(JSON.stringify(_estado)); },
     ocioso: function () { return _fila; }
   };
   root.AgractaEventos = api;

@@ -28,7 +28,11 @@ function logStudyAuditInObject(study, action, details, extra){
 function carregar(opts) {
   opts = opts || {};
   const ctx = { console: { warn: () => { ctx._avisos++; } }, _avisos: 0, localStorage: opts.ls || memoria(),
-                indexedDB: opts.semIdb ? undefined : (opts.idb || new IDBFactory()), Promise };
+                indexedDB: opts.semIdb ? undefined : (opts.idb || new IDBFactory()), Promise,
+                /* timers de verdade, mas sem prender o processo do teste */
+                setTimeout: (f, t) => { const h = setTimeout(f, t); if (h.unref) h.unref(); return h; }, clearTimeout,
+                addEventListener: (tipo, fn) => { (ctx._ouvintes[tipo] = ctx._ouvintes[tipo] || []).push(fn); }, _ouvintes: {},
+                navigator: { onLine: true }, firebase: opts.firebase };
   ctx.window = ctx; ctx.self = ctx;
   vm.createContext(ctx);
   vm.runInContext(APP, ctx);

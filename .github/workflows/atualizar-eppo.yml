@@ -1,0 +1,43 @@
+name: Atualizar tabela EPPO
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 1 * *'
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: atualizar-eppo
+  cancel-in-progress: false
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      # Sem o segredo EPPO_TOKEN o script sai com 2 e nao mexe em nada: vira
+      # aviso, nao falha -- senao o agendamento mensal ficaria vermelho todo mes.
+      - run: |
+          python3 tools/eppo-atualiza.py || { c=$?; if [ "$c" -eq 2 ]; then echo "::warning::Sem o segredo EPPO_TOKEN: tabela EPPO nao atualizada."; exit 0; fi; exit "$c"; }
+        env:
+          EPPO_TOKEN: ${{ secrets.EPPO_TOKEN }}
+      - run: npm test -- --pull-request
+      - name: Abrir revisão da tabela
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if git diff --quiet -- data/eppo.json; then exit 0; fi
+          if [ "$(gh pr list --state open --search 'in:title "Atualizar tabela EPPO"' --json number --jq length)" != 0 ]; then exit 0; fi
+          branch="automation/eppo-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/eppo.json sw.js
+          git commit -m 'Atualizar tabela EPPO a partir do EPPO Global Database'
+          git push origin "$branch"
+          gh pr create --title 'Atualizar tabela EPPO' --body-file docs/EPPO-PR.md --head "$branch"

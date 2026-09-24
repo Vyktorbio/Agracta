@@ -1,0 +1,32 @@
+{
+ "schema": 1,
+ "fonte": "EPPO Global Database — https://data.eppo.int",
+ "licenca": "EPPO Open Licence",
+ "gerado": null,
+ "nota": "Ainda sem códigos: a tabela é preenchida pelo workflow \"Atualizar tabela EPPO\" (tools/eppo-atualiza.py), que precisa do segredo EPPO_TOKEN. Nenhum código é digitado à mão.",
+ "culturas": {
+  "Soja": "Glycine max",
+  "Milho": "Zea mays",
+  "Algodão": "Gossypium hirsutum",
+  "Feijão": "Phaseolus vulgaris",
+  "Café": "Coffea",
+  "Cana de açúcar": "Saccharum",
+  "Citros": "Citrus",
+  "Tomate": "Solanum lycopersicum",
+  "Morango": "Fragaria x ananassa",
+  "Melão": "Cucumis melo",
+  "Arroz": "Oryza sativa",
+  "Trigo": "Triticum aestivum",
+  "Sorgo": "Sorghum bicolor",
+  "Batata": "Solanum tuberosum",
+  "Amendoim": "Arachis hypogaea",
+  "Girassol": "Helianthus annuus",
+  "Cevada": "Hordeum vulgare",
+  "Alface": "Lactuca sativa",
+  "Cebola": "Allium cepa",
+  "Pimentão": "Capsicum annuum",
+  "Uva": "Vitis vinifera"
+ },
+ "codigos": {},
+ "naoResolvidos": []
+}

@@ -5,19 +5,24 @@ do [ROADMAP](ROADMAP.md). As duas se desenham juntas porque se tocam num ponto:
 **um evento de "corrigir dado finalizado" precisa apontar para uma observação com
 identidade estável.**
 
-Motores: `vendor/observacao-core.js` e `vendor/eventos-core.js`.
-Testes: `test_observacao_eventos.js`.
+Motores: `vendor/observacao-core.js`, `vendor/eventos-core.js` e `vendor/eppo-core.js`.
+Módulos do app: `eventos-app.js` (eventos no aparelho e na nuvem) e
+`conhecimento-canonico.js` (aba "Entre estudos").
+Testes: `test_observacao_eventos.js`, `test_eventos_app.js`, `test_eventos_nuvem.js`,
+`test_eppo_core.js`, `test_eppo_ferramenta.py`, `test_conhecimento_canonico.js` e
+`tests/eventos-rules.cjs` (emulador).
 
 **Estado:** motores prontos e ligados ao app por um módulo separado,
 `eventos-app.js` (teste: `test_eventos_app.js`). O `app.js` não foi alterado. O
 módulo escuta `logStudyAuditInObject` e, **depois** que a trilha de sempre foi
 gravada, grava o evento formal num IndexedDB próprio do aparelho
-(`agracta-eventos`), fora do objeto `data`, do merge e da nuvem. O `localStorage`
+(`agracta-eventos`), fora do objeto `data` e do merge do app. De lá, os eventos
+vão para a nuvem numa coleção própria e só-de-acréscimo (seção 4). O `localStorage`
 fica de fora de propósito: ele tem teto de ~5 milhões de caracteres, e o save do app
 depende dele. A gravação é assíncrona e enfileirada, então a tela nunca espera. Falha
 no evento vira aviso no console e nunca chega à tela. Para desligar:
-`localStorage['agracta-eventos-off']='1'`. O `main` de antes desta ligação está
-salvo na branch `salve/antes-eventos-2026-09-24`.
+`localStorage['agracta-eventos-off']='1'`. O `main` de antes da primeira ligação
+está salvo na branch `salve/antes-eventos-2026-09-24`.
 
 | Ação no app | Evento |
 |---|---|
@@ -170,21 +175,97 @@ registro de eventos ───────────────┘            
 `resumir` só considera as observações válidas. Uma avaliação invalidada sai da
 comparação sem que nenhum dado seja apagado.
 
-## 4. Caminho de adoção
+## 4. Eventos na nuvem
+
+Com sessão e rede, o `eventos-app.js` envia os eventos para
+`workspaces/agracta/eventos/{id}` e baixa os que outros aparelhos gravaram.
+
+**Documento na nuvem:** `{schema, estudo, tipo, json, enviadoPor, recebidoEm}`.
+`json` é o evento sem o próprio id (`EventosCore.serializar`), e o id do documento
+é `'ev:' + sha256(json)`.
+
+**O que a regra do Firestore garante** (`firestore.rules`, teste
+`tests/eventos-rules.cjs` no emulador):
+- só criar: `update` e `delete` são recusados para todos, inclusive o administrador;
+- **o servidor recalcula o SHA-256** do `json` e recusa um id que não bata;
+- `enviadoPor` tem que ser o e-mail da sessão, e `recebidoEm` a hora do servidor;
+- nenhum campo além dos seis;
+- a regra genérica do workspace exclui `eventos`, então ela não reabre a porta.
+
+O autor declarado continua dentro do `json`. A nuvem atesta quem enviou e quando
+chegou. Um aparelho compartilhado pode enviar um evento que outra pessoa criou
+offline, e isso fica visível como autor ≠ remetente.
+
+**O que o aparelho garante** (`test_eventos_nuvem.js`):
+- o envio roda fora da fila local, com tempo limite de 20 s. Rede ruim atrasa a
+  nuvem, mas nunca a gravação no aparelho;
+- evento já enviado não sobe de novo. Se a confirmação se perdeu, o aparelho confere
+  na nuvem que o conteúdo é o mesmo e marca como enviado;
+- evento baixado só entra depois de conferido o hash. Cópia adulterada é recusada e
+  contada;
+- sincroniza ao abrir a sessão, quando a rede volta, logo depois de gravar um evento
+  e quando o Conhecimento abre a aba "Entre estudos".
+
+> **Importante:** o merge **não** publica as regras do Firestore. Até alguém rodar
+> `npx firebase-tools deploy --only firestore:rules`, a coleção `eventos` fica sob a
+> regra genérica: os membros conseguem gravar, mas também alterar. A sincronização
+> funciona nos dois casos. A imutabilidade só passa a valer depois do deploy.
+
+## 5. Tabela EPPO
+
+- `tools/eppo-culturas.json`: nome da cultura no app → nome científico. É a **única**
+  parte digitada. Onde o nome comum cobre várias espécies (café, cana, citros), o
+  arquivo usa o gênero.
+- `tools/eppo-atualiza.py`: consulta a EPPO para cada binômio do `alvos-catalogo.js`
+  e cada cultura. Só aceita um código se a própria EPPO confirmar que o táxon dele tem
+  **exatamente** aquele nome (preferido ou registrado). O resto vai para
+  `naoResolvidos`, com o motivo. Teste: `test_eppo_ferramenta.py`, sem rede.
+- Workflow **Atualizar tabela EPPO** (`.github/workflows/atualizar-eppo.yml`): roda
+  a ferramenta todo mês ou sob demanda e abre uma PR para revisão, como o do Agrofit.
+  **Precisa do segredo `EPPO_TOKEN`** no repositório (cadastro gratuito em
+  data.eppo.int). Sem ele, o workflow só avisa e não mexe em nada.
+- `data/eppo.json`: a tabela. Enquanto ninguém rodar o workflow com o token, ela sai
+  com `codigos` vazio. Nada é inventado para preenchê-la.
+- `vendor/eppo-core.js`: o `deps.eppo` do app. Resolve a cultura pelo nome do app
+  ("Cana-de-açúcar", "CITROS") e o alvo pelo binômio, sem aproximação.
+
+## 6. Conhecimento: aba "Entre estudos"
+
+`conhecimento-canonico.js` acrescenta uma aba ao Conhecimento. As abas antigas
+continuam iguais: o `integracoes.js` só ganhou um ponto de encaixe para abas de outros
+módulos.
+
+- Lê todos os estudos pela observação canônica (`extrair`), aplica os eventos formais
+  (`aplicar`) e resume (`resumir`).
+- Agrupa o que é a mesma coisa: variável, unidade, alvo e cultura (pelo código EPPO
+  quando há, senão pelo nome). Mostra só os grupos presentes em dois ou mais estudos.
+- Mostra cada estudo × tratamento × momento lado a lado, com n, média e DP.
+  **Não combina médias.** Por grupo, diz o que ainda falta para uma meta-análise
+  (`faltasParaComparar`).
+- Por padrão mostra só estudos finalizados. Um botão inclui os que estão em execução.
+- Uma avaliação invalidada ou excluída por evento formal sai da conta, e a tela diz
+  quantas observações ficaram de fora. Uma correção formal entra com o valor corrigido.
+- O cegamento vale aqui também: o nome do produto vem da projeção do Conhecimento, e
+  o ingrediente ativo nunca aparece.
+- DAA conta da primeira aplicação registrada. DAT/HAT declarado na avaliação vence.
+
+Teste: `test_conhecimento_canonico.js`.
+
+## 7. Caminho de adoção
 
 Em ordem. Cada passo vale por si:
 
 1. ✅ **Carregar os motores no app** (`index.html` + `sw.js`, com o CACHE incrementado).
-2. ✅ **Gravar o evento junto com a trilha atual**, pelo módulo `eventos-app.js`. Por
-   enquanto a gravação é só no aparelho. Falta enviar os eventos para uma coleção
-   própria (`eventos/{id}`) na nuvem.
-3. **Regras do Firestore para `eventos/`**: `create` só quando `request.auth` confere
-   com `autor.email` e o id tem a forma certa; **sem `update` e sem `delete`**. É isso
-   que torna o append-only real. O teste de regras entra em `tests/`, no mesmo molde de
-   `historico-rules.cjs`.
+2. ✅ **Gravar o evento junto com a trilha atual**, pelo módulo `eventos-app.js`.
+3. ✅ **Eventos na nuvem** com regras só-de-acréscimo e hash conferido pelo servidor
+   (seção 4). Falta **publicar as regras** (`npx firebase-tools deploy --only
+   firestore:rules`).
 4. **Correção de dado finalizado** passa a ser `observacao.corrigida` em vez de
    reabrir o estudo inteiro.
-5. **Conhecimento** passa a consultar `extrair` + `aplicar` + `resumir`, e não mais as
-   estruturas de cada tela.
-6. **Tabela EPPO** injetada (arquivo em `data/`, gerado a partir da base oficial da
-   EPPO e nunca digitado à mão) e campos `culturaEppo`/`alvoEppo` no estudo.
+5. ✅ **Conhecimento** com a aba "Entre estudos" sobre `extrair` + `aplicar` +
+   `resumir` (seção 6). As abas antigas ainda leem a projeção própria; migrá-las é
+   opcional.
+6. ✅ **Tabela EPPO**: a ferramenta, o workflow e o carregador estão prontos (seção 5).
+   Falta cadastrar o segredo `EPPO_TOKEN` e rodar o workflow. Os campos
+   `culturaEppo`/`alvoEppo` no estudo já são lidos quando existem, mas ainda não há
+   tela para preenchê-los.
