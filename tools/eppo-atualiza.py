@@ -13,9 +13,17 @@ Qualquer resposta fora do esperado vira "não resolvido" — nunca um código
 aproximado. Um código errado faz o Agracta juntar ensaios que não têm nada a ver;
 um código ausente só deixa a busca dizer que não é completa.
 
-Uso:  EPPO_TOKEN=... python3 tools/eppo-atualiza.py
-O token é gratuito (cadastro em https://data.eppo.int). Dados sob a EPPO Open
-Licence. O workflow "Atualizar tabela EPPO" roda isto e abre uma PR.
+Duas fontes, a mesma regra:
+  EPPO_TOKEN=... python3 tools/eppo-atualiza.py            (API da EPPO)
+  python3 tools/eppo-atualiza.py --xml caminho/fullcodes.xml  (arquivo oficial)
+
+O arquivo oficial é o "fullcodes.xml" do pacote xmlfull.zip, baixado com login
+gratuito em https://data.eppo.int. Nele a conferência é direta: o nome tem que
+aparecer, exatamente, como nome latino ativo de um código ativo. Nome que aparece
+em mais de um código (homônimo entre grupos) fica "ambíguo" e sem código.
+
+Dados sob a EPPO Open Licence. O workflow "Atualizar tabela EPPO" usa a API e
+abre uma PR.
 """
 import json
 import os
@@ -26,6 +34,7 @@ import time
 import unicodedata
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASE = 'https://data.eppo.int/api/rest/1.0'
@@ -103,19 +112,64 @@ def resolver(nome, token, get=http_json, pausa=0.2):
     return None, 'nenhum código conferiu com o nome (' + ', '.join(cands) + ')'
 
 
-def gerar(token, get=http_json, pausa=0.2, hoje=None):
+def indice_xml(caminho):
+    """nome latino normalizado -> [(código, nome preferido do código, o nome é o preferido?)]
+
+    Lê o fullcodes.xml em fluxo (o arquivo tem ~130 MB). Só códigos ativos e só
+    nomes latinos ativos entram."""
+    idx, data_export = {}, None
+    for ev, el in ET.iterparse(caminho, events=('start', 'end')):
+        if ev == 'start' and el.tag == 'codes':
+            data_export = el.get('dateexport')
+        if ev != 'end' or el.tag != 'code':
+            continue
+        if el.get('isactive') == 'true':
+            cod = (el.findtext('eppocode') or '').strip()
+            nomes = el.find('names')
+            latinos = []
+            for nm in (nomes if nomes is not None else []):
+                if nm.get('isactive') == 'false' or (nm.findtext('lang') or '') != 'la':
+                    continue
+                latinos.append(((nm.findtext('fullname') or '').strip(), nm.get('ispreferred') == 'true'))
+            pref = next((n for n, p in latinos if p), None)
+            if CODIGO.fullmatch(cod):
+                for n, p in latinos:
+                    if n:
+                        idx.setdefault(normal(n), []).append((cod, pref or n, p))
+        el.clear()
+    return idx, data_export
+
+
+def resolver_xml(nome, idx):
+    achados = idx.get(normal(nome), [])
+    cods = sorted({c for c, _, _ in achados})
+    if not cods:
+        return None, 'nome não consta como nome latino ativo na EPPO'
+    if len(cods) > 1:
+        preferidos = sorted({c for c, _, p in achados if p})
+        if len(preferidos) != 1:
+            return None, 'ambíguo na EPPO (' + ', '.join(cods) + ')'
+        cods = preferidos
+    c = cods[0]
+    pref = next(pn for cc, pn, _ in achados if cc == c)
+    return {'eppo': c, 'nomePreferido': pref}, None
+
+
+def gerar(token, get=http_json, pausa=0.2, hoje=None, xml=None):
     culturas = json.loads((ROOT / 'tools/eppo-culturas.json').read_text())['culturas']
     nomes = sorted(set(nomes_do_catalogo((ROOT / 'alvos-catalogo.js').read_text())) | set(culturas.values()))
-    codigos, falta = {}, []
+    codigos, falta, idx, exportado = {}, [], None, None
+    if xml:
+        idx, exportado = indice_xml(xml)
     for nome in nomes:
-        r, motivo = resolver(nome, token, get, pausa)
+        r, motivo = resolver_xml(nome, idx) if xml else resolver(nome, token, get, pausa)
         if r:
             codigos[nome] = r
         else:
             falta.append({'nome': nome, 'motivo': motivo})
     return {
         'schema': 1,
-        'fonte': 'EPPO Global Database — https://data.eppo.int',
+        'fonte': 'EPPO Global Database — https://data.eppo.int' + (' (fullcodes.xml exportado em ' + exportado + ')' if exportado else ' (API)'),
         'licenca': 'EPPO Open Licence',
         'gerado': hoje or time.strftime('%Y-%m-%d'),
         'culturas': culturas,
@@ -124,14 +178,16 @@ def gerar(token, get=http_json, pausa=0.2, hoje=None):
     }
 
 
-def main():
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    xml = argv[argv.index('--xml') + 1] if '--xml' in argv and argv.index('--xml') + 1 < len(argv) else None
     token = os.environ.get('EPPO_TOKEN', '').strip()
-    if not token:
-        print('Falta EPPO_TOKEN (cadastro gratuito em https://data.eppo.int). Nada foi alterado.', file=sys.stderr)
+    if not token and not xml:
+        print('Falta EPPO_TOKEN (cadastro gratuito em https://data.eppo.int) ou --xml fullcodes.xml. Nada foi alterado.', file=sys.stderr)
         return 2
     destino = ROOT / 'data/eppo.json'
     antigo = json.loads(destino.read_text()) if destino.exists() else {'codigos': {}}
-    novo = gerar(token)
+    novo = gerar(token, xml=xml)
     if len(novo['codigos']) < 0.8 * len(antigo.get('codigos', {})):
         print('A tabela perdeu mais de 20% dos códigos. Revisar a fonte antes de substituir.', file=sys.stderr)
         return 1

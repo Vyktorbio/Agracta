@@ -224,8 +224,18 @@ offline, e isso fica visível como autor ≠ remetente.
   a ferramenta todo mês ou sob demanda e abre uma PR para revisão, como o do Agrofit.
   **Precisa do segredo `EPPO_TOKEN`** no repositório (cadastro gratuito em
   data.eppo.int). Sem ele, o workflow só avisa e não mexe em nada.
-- `data/eppo.json`: a tabela. Enquanto ninguém rodar o workflow com o token, ela sai
-  com `codigos` vazio. Nada é inventado para preenchê-la.
+- **Modo arquivo oficial:** `python3 tools/eppo-atualiza.py --xml fullcodes.xml`
+  lê o `fullcodes.xml` do pacote `xmlfull.zip` da EPPO, sem token e sem rede. Entram
+  só nomes latinos ativos de códigos ativos, com o nome exato. Um nome presente em
+  mais de um código fica "ambíguo", salvo quando é o nome preferido de exatamente um.
+  Um sinônimo ativo leva ao código e registra o nome atual (ex.: *Conyza
+  bonariensis* → ERIBO, hoje *Erigeron bonariensis*).
+- `data/eppo.json`: a tabela. **Gerada em 24/09/2026 a partir do `fullcodes.xml`
+  oficial exportado nesse dia: 230 códigos conferidos e 15 nomes não resolvidos.**
+  Todas as culturas de `eppo-culturas.json` resolvem. Os não resolvidos ficam na
+  própria tabela com o motivo, para revisão. São casos em que a EPPO desativou o nome
+  (*Colletotrichum gloeosporioides*), usa outra forma ("*C. acutatum* sensu lato", sem
+  o "Candidatus") ou não tem o táxon. Nenhum foi aproximado.
 - `vendor/eppo-core.js`: o `deps.eppo` do app. Resolve a cultura pelo nome do app
   ("Cana-de-açúcar", "CITROS") e o alvo pelo binômio, sem aproximação.
 
@@ -265,7 +275,8 @@ Em ordem. Cada passo vale por si:
 5. ✅ **Conhecimento** com a aba "Entre estudos" sobre `extrair` + `aplicar` +
    `resumir` (seção 6). As abas antigas ainda leem a projeção própria; migrá-las é
    opcional.
-6. ✅ **Tabela EPPO**: a ferramenta, o workflow e o carregador estão prontos (seção 5).
-   Falta cadastrar o segredo `EPPO_TOKEN` e rodar o workflow. Os campos
+6. ✅ **Tabela EPPO**: preenchida a partir do arquivo oficial (seção 5). Para
+   atualizar: `--xml` com um `fullcodes.xml` novo, ou o workflow com o segredo
+   `EPPO_TOKEN`. Os campos
    `culturaEppo`/`alvoEppo` no estudo já são lidos quando existem, mas ainda não há
    tela para preenchê-los.
