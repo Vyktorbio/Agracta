@@ -40,9 +40,11 @@ w.avFotografarParcela=function(key){
  const qid=w.curV,s=w.agConhecimento.projetar(qid,study,w.data[qid]);
  w.abrirGaleriaFotos(s,{treatment:row.tratId,rep:row.rep,assessment:av.id,date:av.data,plot:String(row.parcela||row.campo||row.key)});
 };
+/* Captura, não bolha: a avaliação mora no #eePnl, que para a propagação do
+   clique para não fechar o painel. Na bolha o botão Foto nunca chegava aqui. */
 document.addEventListener('click',function(ev){
  const b=ev.target.closest&&ev.target.closest('[data-av-photo],[data-av-photo-auto]');
  if(!b)return;
  w.avFotografarParcela(b.hasAttribute('data-av-photo-auto')?null:b.dataset.avPhoto);
-});
+},true);
 })(window);
