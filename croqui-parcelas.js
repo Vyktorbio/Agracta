@@ -101,7 +101,7 @@ function detail(st){
   if(av.duplaLeitura)h+='<p class="pc-hint">'+e(w.avQuemAtivo()?'Leitura do avaliador '+w.avQuemAtivo():'Leitura consolidada')+'</p>';
  }
  h+='<div class="pc-actions">';
- if(!w.estudoFinalizado(st))h+='<button type="button" data-pc-action="evaluate">'+(av?(av.carimbo&&av.carimbo.rubrica?'Consultar avaliação assinada':'Abrir avaliação nesta parcela'):'Nova avaliação nesta parcela')+'</button>';
+ if(!w.estudoFinalizado(st))h+='<button type="button" data-pc-action="evaluate">'+(av?(av.carimbo&&av.carimbo.rubrica?'Consultar avaliação assinada':'Lançar valores e foto nesta parcela'):'Nova avaliação nesta parcela')+'</button>';
  else h+='<p class="pc-hint">Estudo finalizado · avaliações somente para consulta.</p>';
  h+='<button type="button" data-pc-action="photos">Fotos desta parcela</button></div><p class="pc-hint">As fotos ficam neste aparelho e nesta conta.</p><details class="pc-history" open><summary>Histórico de avaliações da parcela</summary>';
  h+=assessments(st).slice().reverse().map(a=>{
@@ -173,7 +173,8 @@ function evaluation(st,rows,vars){
  if(w._avCroquiOpen)h+=diagram(st,g,null,w._avCroquiKey,'eval',w._avGrid);
  return h+'</div>';
 }
-document.addEventListener('click',ev=>{const el=ev.target.closest('[data-pc-eval]');if(el)w.avCroquiSelect(el.dataset.pcEval);});
+/* Captura: o croqui da avaliação mora no #eePnl, que para a propagação do clique. */
+document.addEventListener('click',ev=>{const el=ev.target.closest&&ev.target.closest('[data-pc-eval]');if(el)w.avCroquiSelect(el.dataset.pcEval);},true);
 document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('[data-pc-eval]')){ev.preventDefault();w.avCroquiSelect(ev.target.dataset.pcEval);}});
 // Fecha imediatamente quando a porta de acesso esconde o aplicativo.
 new MutationObserver(()=>{if(!allowed())close();}).observe(document.documentElement,{attributes:true,attributeFilter:['class']});

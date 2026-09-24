@@ -16791,7 +16791,15 @@ function _avTouchCell(row,v){
   };
 }
 function _avCss(){ if(document.getElementById('avCss'))return; var s=document.createElement('style'); s.id='avCss';
-  s.textContent='.av-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:4px;padding-bottom:4px;position:relative}'+
+  s.textContent='.av-ficha{margin:0 0 12px;border:1px solid var(--gp-green,#34d178);border-radius:13px;background:var(--gp-s2,#151a17);padding:11px 12px;scroll-margin-top:12px}'+
+  '.av-ficha-head{display:flex;align-items:flex-start;gap:8px}.av-ficha-head>div{flex:1;min-width:0}.av-ficha-k{font-size:10px;font-weight:820;letter-spacing:.1em;text-transform:uppercase;color:var(--gp-text-3,#8e9991)}'+
+  '.av-ficha-head b{font-size:22px;margin:0 4px}.av-ficha-pos{font-size:11px;color:var(--gp-text-3,#8e9991)}.av-ficha-sub{font-size:12px;color:var(--gp-text-2,#c8d1cb);margin-top:2px;overflow-wrap:anywhere}'+
+  '.av-ficha-x{border:0;background:transparent;color:var(--gp-text-2,#c8d1cb);font-size:22px;line-height:1;padding:2px 6px;cursor:pointer}'+
+  '.av-ficha-vars{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0}.av-ficha-var{display:flex;flex-direction:column;gap:4px;min-width:0}'+
+  '.av-ficha-nome{font-size:11px;font-weight:750;color:var(--gp-text-2,#c8d1cb);overflow-wrap:anywhere}.av-ficha-var .av-cell{width:100%;min-height:44px;font-size:16px;box-sizing:border-box}.av-ficha-var .av-cellwrap{display:flex;gap:4px;align-items:center}'+
+  '.av-ficha-var .av-subbtn{min-height:44px;width:100%}.av-ficha-nav{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-top:4px}'+
+  '.av-ficha-nav button{min-height:44px;border-radius:10px;border:1px solid var(--gp-line-2,#3c4740);background:var(--gp-s3,#1b211d);color:var(--gp-text,#e9ede9);font:750 13px system-ui,sans-serif;cursor:pointer}.av-ficha-nav button:disabled{opacity:.35;cursor:default}'+
+  '.av-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:4px;padding-bottom:4px;position:relative}'+
   '.av-varlab{font-size:11px;font-weight:700;color:var(--text-2,#9ab39a);margin:8px 0 -2px}'+
   '.av-table{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-content}'+
   '.av-table th,.av-table td{border:1px solid var(--border,#2a3a2a);padding:4px 6px;text-align:center;white-space:nowrap}'+
@@ -16953,16 +16961,18 @@ function avValidateCell(inp){
   if(!v) return;
   if(b && t){ /* célula com dado bruto (razão n/N, escala, sub-amostra) */
     inp.value=_avWriteBruto(t,v,b,inp.value);
+    _avEspelhar(inp);
     _avRefreshDer();
     _avPersistNow();
     return;
   }
   var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
   var val=inp.value.trim();
-  if(val==='') return;
+  if(val===''){ _avEspelhar(inp); return; }
   var num=parseFloat(val.replace(',','.'));
   if(isNaN(num)){
     inp.value='';
+    _avEspelhar(inp);
     _stxToast('Valor inválido. Digite um número.');
     return;
   }
@@ -16982,6 +16992,7 @@ function avValidateCell(inp){
     }
     inp.value=String(Math.floor(num));
   }
+  _avEspelhar(inp);
   _avPersistNow(); /* autosave da grade manual no blur */
 }
 
@@ -17034,11 +17045,100 @@ function avCroquiSelect(key){
   setTimeout(function(){
     var w=document.getElementById('avGridWrap'); if(!w)return;
     if(_avAuto.on){var auto=document.getElementById('avAutoInput');if(auto){auto.scrollIntoView({block:'center',behavior:'smooth'});if(!locked){auto.focus();auto.select&&auto.select();}return;}}
+    var ficha=document.getElementById('avFicha');
+    if(ficha){ ficha.scrollIntoView({block:'start',behavior:'smooth'}); var f0=ficha.querySelector('.av-cell'); if(f0&&!locked){ f0.focus({preventScroll:true}); f0.select&&f0.select(); } return; }
     var input=Array.prototype.find.call(w.querySelectorAll('.av-cell'),function(el){return el.getAttribute('data-t')===key;});
     if(input){ input.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); if(!locked){input.focus(); input.select&&input.select();} }
   },30);
 }
 
+/* Conteúdo de uma célula de lançamento. A tabela e a ficha da parcela usam o
+   mesmo HTML, então os dois caminhos gravam pelo mesmo avValidateCell. */
+function _avCellHtml(rw,v){
+  var row=_avGrid.notas[rw.key]||{}, old=(rw.rep===1&&_avGrid.notas[rw.tratId])?_avGrid.notas[rw.tratId]:{};
+  var val=(row[v]!=null&&row[v]!=='')?row[v]:((old&&old[v]!=null)?old[v]:'');
+  var cfg=_avCfg(_avGrid,v), k=esc(rw.key), ev=esc(v);
+  if(cfg.tipo==='razao'){
+    var cel=(_avGrid.bruto[rw.key]||{})[v]||{};
+    var nv=(cel.n==null?'':cel.n), Nv=(cel.N==null||cel.N===''?(cfg.N||''):cel.N);
+    return '<div class="av-cellwrap">'+
+      '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="n" value="'+esc(nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
+      '<span class="av-sep">/</span>'+
+      '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="N" value="'+esc(Nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
+      '</div><div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div>';
+  } else if(cfg.sub>1){
+    var celS=(_avGrid.bruto[rw.key]||{})[v]||{}, ch=_avSubCheias(celS);
+    return '<button type="button" class="av-subbtn'+(ch>=cfg.sub?' cheia':'')+'" data-dt="'+k+'" data-dv="'+ev+'" onclick="avOpenSub(\''+k+'\',\''+ev.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">'+
+      (val===''?'—':esc(val))+'<small>'+ch+'/'+cfg.sub+'</small></button>';
+  } else if(cfg.tipo==='escala'){
+    var celE=(_avGrid.bruto[rw.key]||{})[v]||{}, e0=((celE.sub||[])[0]);
+    return '<input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="0–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
+      '<div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div>';
+  } else if(cfg.tipo==='contagem'){
+    return '<div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div>';
+  } else {
+    return '<input class="av-cell av-cell-num" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)">';
+  }
+}
+/* Ficha da parcela: tocar numa parcela do croqui abre, logo abaixo dele, os
+   campos de lançamento daquela parcela e o botão de foto. Os campos são os
+   mesmos da tabela (mesmo data-t/data-v), espelhados por _avEspelhar, então
+   gravam pelo caminho de sempre: carimbo por célula, leitura dupla e autosave.
+   No modo automático a caixa dele já faz esse papel. */
+function _avFichaHtml(rows,vs){
+  if(_avAuto.on||!_avCroquiOpen||!_avCroquiKey||!rows||!rows.length) return '';
+  var i=-1; rows.some(function(r,j){ if(r.key===_avCroquiKey){i=j;return true;} return false; });
+  if(i<0) return '';
+  var rw=rows[i], prev=rows[i-1], next=rows[i+1], nome=function(r){ return esc(r.campo||r.label||r.key); };
+  var h='<div class="av-ficha" id="avFicha" data-ficha="'+esc(rw.key)+'"><div class="av-ficha-head"><div><span class="av-ficha-k">Parcela</span><b>'+nome(rw)+'</b><span class="av-ficha-pos">'+(i+1)+' de '+rows.length+'</span>'+
+    '<div class="av-ficha-sub">'+esc(rw.tratId+(rw.produto?' · '+rw.produto:'')+' · repetição '+(rw.repDisplay||rw.rep))+'</div></div>'+
+    '<button type="button" class="av-ficha-x" onclick="avFichaFechar()" aria-label="Fechar a ficha da parcela">×</button></div>';
+  if(vs.length){
+    h+='<div class="av-ficha-vars">'+vs.map(function(v){
+      var cfg=_avCfg(_avGrid,v), suf=cfg.tipo==='pct'?' %':cfg.tipo==='razao'?' n/N':cfg.tipo==='escala'?' 0–'+cfg.escalaMax:'';
+      if(cfg.sub>1) suf+=' ×'+cfg.sub;
+      return '<div class="av-ficha-var"><span class="av-ficha-nome">'+esc(v)+(suf?'<small style="opacity:.65">'+esc(suf)+'</small>':'')+'</span>'+_avCellHtml(rw,v)+'</div>';
+    }).join('')+'</div>';
+  } else h+='<div class="av-hint" style="margin:10px 0">Adicione uma coluna na tabela abaixo para lançar valores nesta parcela.</div>';
+  h+='<div class="av-ficha-nav"><button type="button" onclick="avFichaIr(-1)"'+(prev?' aria-label="Parcela anterior: '+nome(prev)+'"':' disabled')+'>‹ '+(prev?nome(prev):'')+'</button>'+
+    '<button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button>'+
+    '<button type="button" onclick="avFichaIr(1)"'+(next?' aria-label="Próxima parcela: '+nome(next)+'"':' disabled')+'>'+(next?nome(next):'')+' ›</button></div></div>';
+  return h;
+}
+function avFichaIr(delta){
+  var st=_avStudy(); if(!st) return;
+  var rows=_avRowsForStudy(st,true), i=-1;
+  rows.some(function(r,j){ if(r.key===_avCroquiKey){i=j;return true;} return false; });
+  var alvo=rows[i+delta]; if(alvo) avCroquiSelect(alvo.key);
+}
+function avFichaFechar(){
+  var fs=document.getElementById('avFs'); if(!(fs&&fs.disabled)&&typeof _avSyncInputs==='function') _avSyncInputs();
+  _avCroquiKey=null; renderAvGrid();
+}
+/* A mesma célula pode estar na ficha e na tabela. _avSyncInputs lê todos os
+   campos em ordem; sem espelho, o da tabela (antigo) apagaria o da ficha. */
+function _avEspelhar(inp){
+  var w=document.getElementById('avGridWrap'); if(!w||!inp) return;
+  var t=inp.getAttribute('data-t'), v=inp.getAttribute('data-v'), b=inp.getAttribute('data-b')||'';
+  if(!t||!v) return;
+  Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(el){
+    if(el!==inp&&el.getAttribute('data-t')===t&&el.getAttribute('data-v')===v&&(el.getAttribute('data-b')||'')===b) el.value=inp.value;
+  });
+}
+if(!window.__avFichaEv){
+  window.__avFichaEv=true;
+  document.addEventListener('input',function(ev){ var el=ev.target; if(el&&el.classList&&el.classList.contains('av-cell')&&el.closest('#avGridWrap')) _avEspelhar(el); });
+  /* Enter na ficha: próximo campo; no último, próxima parcela. */
+  document.addEventListener('keydown',function(ev){
+    if(ev.key!=='Enter') return;
+    var el=ev.target, ficha=el&&el.closest&&el.closest('#avFicha');
+    if(!ficha||!el.classList.contains('av-cell')) return;
+    ev.preventDefault();
+    var campos=Array.prototype.slice.call(ficha.querySelectorAll('.av-cell')), i=campos.indexOf(el);
+    if(i>=0&&i<campos.length-1){ campos[i+1].focus(); campos[i+1].select&&campos[i+1].select(); }
+    else { avValidateCell(el); avFichaIr(1); }
+  });
+}
 function renderAvGrid(){
   _avCss(); var w=document.getElementById('avGridWrap'); if(!w) return;
   var st=_avStudy(), rows=_avRowsForStudy(st,false), croquiRows=_avRowsForStudy(st,true), ts=(st&&st.tratamentos)||[];
@@ -17057,6 +17157,7 @@ function renderAvGrid(){
     }
   }
   html+=avCroquiHtml(st,croquiRows,vs);
+  html+=_avFichaHtml(croquiRows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
   vs.forEach(function(v){
     var cfg=_avCfg(_avGrid,v), suf='';
@@ -17071,33 +17172,8 @@ function renderAvGrid(){
   });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
   rows.forEach(function(rw){
-    var row=_avGrid.notas[rw.key]||{}, old=(rw.rep===1&&_avGrid.notas[rw.tratId])?_avGrid.notas[rw.tratId]:{};
     html+='<tr data-av-row="'+esc(rw.key)+'"><td class="av-tname" title="'+esc((rw.produto||'')+(rw.parcela?' · parcela '+rw.parcela:''))+'">'+esc(rw.label)+'</td>';
-    vs.forEach(function(v){
-      var val=(row[v]!=null&&row[v]!=='')?row[v]:((old&&old[v]!=null)?old[v]:'');
-      var cfg=_avCfg(_avGrid,v), k=esc(rw.key), ev=esc(v);
-      if(cfg.tipo==='razao'){
-        var cel=(_avGrid.bruto[rw.key]||{})[v]||{};
-        var nv=(cel.n==null?'':cel.n), Nv=(cel.N==null||cel.N===''?(cfg.N||''):cel.N);
-        html+='<td><div class="av-cellwrap">'+
-          '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="n" value="'+esc(nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
-          '<span class="av-sep">/</span>'+
-          '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="N" value="'+esc(Nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
-          '</div><div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div></td>';
-      } else if(cfg.sub>1){
-        var celS=(_avGrid.bruto[rw.key]||{})[v]||{}, ch=_avSubCheias(celS);
-        html+='<td><button type="button" class="av-subbtn'+(ch>=cfg.sub?' cheia':'')+'" data-dt="'+k+'" data-dv="'+ev+'" onclick="avOpenSub(\''+k+'\',\''+ev.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">'+
-          (val===''?'—':esc(val))+'<small>'+ch+'/'+cfg.sub+'</small></button></td>';
-      } else if(cfg.tipo==='escala'){
-        var celE=(_avGrid.bruto[rw.key]||{})[v]||{}, e0=((celE.sub||[])[0]);
-        html+='<td><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="0–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
-          '<div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div></td>';
-      } else if(cfg.tipo==='contagem'){
-        html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>';
-      } else {
-        html+='<td><input class="av-cell av-cell-num" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)"></td>';
-      }
-    });
+    vs.forEach(function(v){ html+='<td>'+_avCellHtml(rw,v)+'</td>'; });
     html+='<td><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button></td></tr>';
   });
   html+='</tbody></table></div>';
