@@ -1,9 +1,8 @@
 {
  "schema": 1,
- "fonte": "EPPO Global Database — https://data.eppo.int",
+ "fonte": "EPPO Global Database — https://data.eppo.int (fullcodes.xml exportado em 2026-09-24T03:31:47+02:00)",
  "licenca": "EPPO Open Licence",
- "gerado": null,
- "nota": "Ainda sem códigos: a tabela é preenchida pelo workflow \"Atualizar tabela EPPO\" (tools/eppo-atualiza.py), que precisa do segredo EPPO_TOKEN. Nenhum código é digitado à mão.",
+ "gerado": "2026-09-24",
  "culturas": {
   "Soja": "Glycine max",
   "Milho": "Zea mays",
@@ -27,6 +26,988 @@
   "Pimentão": "Capsicum annuum",
   "Uva": "Vitis vinifera"
  },
- "codigos": {},
- "naoResolvidos": []
+ "codigos": {
+  "Acidovorax avenae subsp. avenae": {
+   "eppo": "PSDMAV",
+   "nomePreferido": "Acidovorax avenae"
+  },
+  "Acidovorax citrulli": {
+   "eppo": "PSDMAC",
+   "nomePreferido": "Acidovorax citrulli"
+  },
+  "Aculops lycopersici": {
+   "eppo": "VASALY",
+   "nomePreferido": "Aculops lycopersici"
+  },
+  "Agrotis ipsilon": {
+   "eppo": "AGROYP",
+   "nomePreferido": "Agrotis ipsilon"
+  },
+  "Alabama argillacea": {
+   "eppo": "ALABAR",
+   "nomePreferido": "Alabama argillacea"
+  },
+  "Allium cepa": {
+   "eppo": "ALLCE",
+   "nomePreferido": "Allium cepa"
+  },
+  "Alternaria tomatophila": {
+   "eppo": "ALTETP",
+   "nomePreferido": "Alternaria linariae"
+  },
+  "Amaranthus palmeri": {
+   "eppo": "AMAPA",
+   "nomePreferido": "Amaranthus palmeri"
+  },
+  "Amaranthus retroflexus": {
+   "eppo": "AMARE",
+   "nomePreferido": "Amaranthus retroflexus"
+  },
+  "Anastrepha fraterculus": {
+   "eppo": "ANSTFR",
+   "nomePreferido": "Anastrepha fraterculus"
+  },
+  "Anastrepha grandis": {
+   "eppo": "ANSTGR",
+   "nomePreferido": "Anastrepha grandis"
+  },
+  "Anthonomus grandis": {
+   "eppo": "ANTHGR",
+   "nomePreferido": "Anthonomus grandis"
+  },
+  "Anticarsia gemmatalis": {
+   "eppo": "THEMGE",
+   "nomePreferido": "Anticarsia gemmatalis"
+  },
+  "Aphis gossypii": {
+   "eppo": "APHIGO",
+   "nomePreferido": "Aphis gossypii"
+  },
+  "Arachis hypogaea": {
+   "eppo": "ARHHY",
+   "nomePreferido": "Arachis hypogaea"
+  },
+  "Ascochyta tarda": {
+   "eppo": "ASCOCF",
+   "nomePreferido": "Boeremia coffeae"
+  },
+  "Atta capiguara": {
+   "eppo": "ATTACA",
+   "nomePreferido": "Atta capiguara"
+  },
+  "Atta sexdens": {
+   "eppo": "ATTASD",
+   "nomePreferido": "Atta sexdens"
+  },
+  "Bean common mosaic virus": {
+   "eppo": "BCMV00",
+   "nomePreferido": "Potyvirus phaseovulgaris"
+  },
+  "Bean golden mosaic virus": {
+   "eppo": "BGMV00",
+   "nomePreferido": "Begomovirus costai"
+  },
+  "Bemisia tabaci": {
+   "eppo": "BEMITA",
+   "nomePreferido": "Bemisia tabaci"
+  },
+  "Bidens pilosa": {
+   "eppo": "BIDPI",
+   "nomePreferido": "Bidens pilosa"
+  },
+  "Bipolaris maydis": {
+   "eppo": "COCHHE",
+   "nomePreferido": "Bipolaris maydis"
+  },
+  "Botrytis cinerea": {
+   "eppo": "BOTRCI",
+   "nomePreferido": "Botrytis cinerea"
+  },
+  "Bremia lactucae": {
+   "eppo": "BREMLA",
+   "nomePreferido": "Bremia lactucae"
+  },
+  "Brevipalpus yothersi": {
+   "eppo": "BRVPYO",
+   "nomePreferido": "Brevipalpus yothersi"
+  },
+  "Bucephalogonia xanthophis": {
+   "eppo": "BUCLXA",
+   "nomePreferido": "Bucephalogonia xanthophis"
+  },
+  "Capsicum annuum": {
+   "eppo": "CPSAN",
+   "nomePreferido": "Capsicum annuum"
+  },
+  "Cenchrus echinatus": {
+   "eppo": "CCHEC",
+   "nomePreferido": "Cenchrus echinatus"
+  },
+  "Ceratitis capitata": {
+   "eppo": "CERTCA",
+   "nomePreferido": "Ceratitis capitata"
+  },
+  "Cercospora coffeicola": {
+   "eppo": "CERCCO",
+   "nomePreferido": "Cercospora coffeicola"
+  },
+  "Cercospora kikuchii": {
+   "eppo": "CERCKI",
+   "nomePreferido": "Cercospora kikuchii"
+  },
+  "Cercospora longipes": {
+   "eppo": "CERCLO",
+   "nomePreferido": "Cercospora longipes"
+  },
+  "Cercospora sojina": {
+   "eppo": "CERCSO",
+   "nomePreferido": "Cercospora sojina"
+  },
+  "Cercospora zeina": {
+   "eppo": "CERCZN",
+   "nomePreferido": "Cercospora zeina"
+  },
+  "Chaetosiphon fragaefolii": {
+   "eppo": "CHTSFR",
+   "nomePreferido": "Chaetosiphon fragaefolii"
+  },
+  "Chloridea virescens": {
+   "eppo": "HELIVI",
+   "nomePreferido": "Chloridea virescens"
+  },
+  "Chrysodeixis includens": {
+   "eppo": "PSEPIN",
+   "nomePreferido": "Chrysodeixis includens"
+  },
+  "Citrus": {
+   "eppo": "1CIDG",
+   "nomePreferido": "Citrus"
+  },
+  "Citrus leprosis virus C": {
+   "eppo": "CILVC0",
+   "nomePreferido": "Cilevirus leprosis"
+  },
+  "Citrus tristeza virus": {
+   "eppo": "CTV000",
+   "nomePreferido": "Closterovirus tristezae"
+  },
+  "Clavibacter michiganensis": {
+   "eppo": "CORBMI",
+   "nomePreferido": "Clavibacter michiganensis"
+  },
+  "Coccus viridis": {
+   "eppo": "COCCVI",
+   "nomePreferido": "Coccus viridis"
+  },
+  "Coffea": {
+   "eppo": "1COFG",
+   "nomePreferido": "Coffea"
+  },
+  "Coffee ringspot virus": {
+   "eppo": "CORSV0",
+   "nomePreferido": "Dichorhavirus coffeae"
+  },
+  "Colletotrichum falcatum": {
+   "eppo": "GLOMTU",
+   "nomePreferido": "Colletotrichum falcatum"
+  },
+  "Colletotrichum fragariae": {
+   "eppo": "COLLFR",
+   "nomePreferido": "Colletotrichum fragariae"
+  },
+  "Colletotrichum gossypii": {
+   "eppo": "GLOMGO",
+   "nomePreferido": "Colletotrichum gossypii"
+  },
+  "Colletotrichum gossypii var. cephalosporioides": {
+   "eppo": "COLLGC",
+   "nomePreferido": "Colletotrichum gossypii var. cephalosporioides"
+  },
+  "Colletotrichum graminicola": {
+   "eppo": "COLLGR",
+   "nomePreferido": "Colletotrichum graminicola"
+  },
+  "Colletotrichum lindemuthianum": {
+   "eppo": "COLLLD",
+   "nomePreferido": "Colletotrichum lindemuthianum"
+  },
+  "Colletotrichum orbiculare": {
+   "eppo": "COLLLA",
+   "nomePreferido": "Colletotrichum orbiculare"
+  },
+  "Colletotrichum truncatum": {
+   "eppo": "COLLDU",
+   "nomePreferido": "Colletotrichum truncatum"
+  },
+  "Commelina benghalensis": {
+   "eppo": "COMBE",
+   "nomePreferido": "Commelina benghalensis"
+  },
+  "Conyza bonariensis": {
+   "eppo": "ERIBO",
+   "nomePreferido": "Erigeron bonariensis"
+  },
+  "Conyza sumatrensis": {
+   "eppo": "ERISU",
+   "nomePreferido": "Erigeron sumatrensis"
+  },
+  "Cornitermes cumulans": {
+   "eppo": "CRNTCU",
+   "nomePreferido": "Cornitermes cumulans"
+  },
+  "Corynespora cassiicola": {
+   "eppo": "CORYCA",
+   "nomePreferido": "Corynespora cassiicola"
+  },
+  "Cotton leafroll dwarf virus": {
+   "eppo": "CLRDV0",
+   "nomePreferido": "Polerovirus CLDV"
+  },
+  "Cowpea mild mottle virus": {
+   "eppo": "CPMMV0",
+   "nomePreferido": "Carlavirus vignae"
+  },
+  "Cucumis melo": {
+   "eppo": "CUMME",
+   "nomePreferido": "Cucumis melo"
+  },
+  "Cyperus rotundus": {
+   "eppo": "CYPRO",
+   "nomePreferido": "Cyperus rotundus"
+  },
+  "Dalbulus maidis": {
+   "eppo": "DALBMA",
+   "nomePreferido": "Dalbulus maidis"
+  },
+  "Deois flavopicta": {
+   "eppo": "TOMAFL",
+   "nomePreferido": "Deois flavopicta"
+  },
+  "Diabrotica speciosa": {
+   "eppo": "DIABSC",
+   "nomePreferido": "Diabrotica speciosa"
+  },
+  "Diaphania hyalinata": {
+   "eppo": "DPHNHY",
+   "nomePreferido": "Diaphania hyalinata"
+  },
+  "Diaphorina citri": {
+   "eppo": "DIAACI",
+   "nomePreferido": "Diaphorina citri"
+  },
+  "Diaporthe aspalathi": {
+   "eppo": "DIAPAS",
+   "nomePreferido": "Diaporthe aspalathi"
+  },
+  "Diaporthe citri": {
+   "eppo": "DIAPCI",
+   "nomePreferido": "Diaporthe citri"
+  },
+  "Diaporthe longicolla": {
+   "eppo": "PHOPLO",
+   "nomePreferido": "Diaporthe longicolla"
+  },
+  "Diatraea saccharalis": {
+   "eppo": "DIATSA",
+   "nomePreferido": "Diatraea saccharalis"
+  },
+  "Dichelops melacanthus": {
+   "eppo": "DICLME",
+   "nomePreferido": "Dichelops melacanthus"
+  },
+  "Digitaria horizontalis": {
+   "eppo": "DIGHO",
+   "nomePreferido": "Digitaria horizontalis"
+  },
+  "Digitaria insularis": {
+   "eppo": "TRCIN",
+   "nomePreferido": "Digitaria insularis"
+  },
+  "Diloboderus abderus": {
+   "eppo": "DILDAB",
+   "nomePreferido": "Diloboderus abderus"
+  },
+  "Drosophila suzukii": {
+   "eppo": "DROSSU",
+   "nomePreferido": "Drosophila suzukii"
+  },
+  "Dysmicoccus texensis": {
+   "eppo": "DYSMBI",
+   "nomePreferido": "Dysmicoccus texensis"
+  },
+  "Elasmopalpus lignosellus": {
+   "eppo": "ELASLI",
+   "nomePreferido": "Elasmopalpus lignosellus"
+  },
+  "Eleusine indica": {
+   "eppo": "ELEIN",
+   "nomePreferido": "Eleusine indica"
+  },
+  "Elsinoe australis": {
+   "eppo": "ELSIAU",
+   "nomePreferido": "Elsinoë australis"
+  },
+  "Elsinoe fawcettii": {
+   "eppo": "ELSIFA",
+   "nomePreferido": "Elsinoë fawcettii"
+  },
+  "Empoasca kraemeri": {
+   "eppo": "EMPOKR",
+   "nomePreferido": "Empoasca kraemeri"
+  },
+  "Erysiphe diffusa": {
+   "eppo": "MCRSDI",
+   "nomePreferido": "Erysiphe diffusa"
+  },
+  "Euphorbia heterophylla": {
+   "eppo": "EPHHL",
+   "nomePreferido": "Euphorbia heterophylla"
+  },
+  "Euschistus heros": {
+   "eppo": "EUSCHE",
+   "nomePreferido": "Euschistus heros"
+  },
+  "Exserohilum turcicum": {
+   "eppo": "SETOTU",
+   "nomePreferido": "Exserohilum turcicum"
+  },
+  "Fragaria x ananassa": {
+   "eppo": "FRAAN",
+   "nomePreferido": "Fragaria x ananassa"
+  },
+  "Frankliniella occidentalis": {
+   "eppo": "FRANOC",
+   "nomePreferido": "Frankliniella occidentalis"
+  },
+  "Frankliniella schultzei": {
+   "eppo": "FRANSC",
+   "nomePreferido": "Frankliniella schultzei"
+  },
+  "Fusarium oxysporum f. sp. lycopersici": {
+   "eppo": "FUSALY",
+   "nomePreferido": "Fusarium oxysporum f. sp. lycopersici"
+  },
+  "Fusarium oxysporum f. sp. melonis": {
+   "eppo": "FUSAME",
+   "nomePreferido": "Fusarium oxysporum f. sp. melonis"
+  },
+  "Fusarium oxysporum f. sp. phaseoli": {
+   "eppo": "FUSAPH",
+   "nomePreferido": "Fusarium oxysporum f. sp. phaseoli"
+  },
+  "Fusarium oxysporum f. sp. vasinfectum": {
+   "eppo": "FUSAVA",
+   "nomePreferido": "Fusarium oxysporum f. sp. vasinfectum"
+  },
+  "Fusarium solani f. sp. phaseoli": {
+   "eppo": "FUSASH",
+   "nomePreferido": "Fusarium phaseoli"
+  },
+  "Fusarium tucumaniae": {
+   "eppo": "FUSASH",
+   "nomePreferido": "Fusarium phaseoli"
+  },
+  "Fusarium verticillioides": {
+   "eppo": "FUSAVR",
+   "nomePreferido": "Fusarium verticillioides"
+  },
+  "Fusarium virguliforme": {
+   "eppo": "FUSASH",
+   "nomePreferido": "Fusarium phaseoli"
+  },
+  "Glycine max": {
+   "eppo": "GLXMA",
+   "nomePreferido": "Glycine max"
+  },
+  "Gossypium hirsutum": {
+   "eppo": "GOSHI",
+   "nomePreferido": "Gossypium hirsutum"
+  },
+  "Gymnandrosoma aurantianum": {
+   "eppo": "ECDYAU",
+   "nomePreferido": "Gymnandrosoma aurantianum"
+  },
+  "Helianthus annuus": {
+   "eppo": "HELAN",
+   "nomePreferido": "Helianthus annuus"
+  },
+  "Helicoverpa armigera": {
+   "eppo": "HELIAR",
+   "nomePreferido": "Helicoverpa armigera"
+  },
+  "Helicoverpa zea": {
+   "eppo": "HELIZE",
+   "nomePreferido": "Helicoverpa zea"
+  },
+  "Hemileia vastatrix": {
+   "eppo": "HEMIVA",
+   "nomePreferido": "Hemileia vastatrix"
+  },
+  "Heterodera glycines": {
+   "eppo": "HETDGL",
+   "nomePreferido": "Heterodera glycines"
+  },
+  "Heterotermes tenuis": {
+   "eppo": "HETTTE",
+   "nomePreferido": "Heterotermes tenuis"
+  },
+  "Hordeum vulgare": {
+   "eppo": "HORVX",
+   "nomePreferido": "Hordeum vulgare"
+  },
+  "Hyponeuma taltula": {
+   "eppo": "HPNMTA",
+   "nomePreferido": "Hyponeuma taltula"
+  },
+  "Hypothenemus hampei": {
+   "eppo": "STEHHA",
+   "nomePreferido": "Hypothenemus hampei"
+  },
+  "Ipomoea grandifolia": {
+   "eppo": "IAQGR",
+   "nomePreferido": "Ipomoea grandifolia"
+  },
+  "Lactuca sativa": {
+   "eppo": "LACSA",
+   "nomePreferido": "Lactuca sativa"
+  },
+  "Leifsonia xyli subsp. xyli": {
+   "eppo": "CLABXY",
+   "nomePreferido": "Leifsonia xyli subsp. xyli"
+  },
+  "Leptosphaeria sacchari": {
+   "eppo": "LEPTSA",
+   "nomePreferido": "Epicoccum sorghinum"
+  },
+  "Leucoptera coffeella": {
+   "eppo": "LEUCCO",
+   "nomePreferido": "Perileucoptera coffeella"
+  },
+  "Leveillula taurica": {
+   "eppo": "LEVETA",
+   "nomePreferido": "Leveillula taurica"
+  },
+  "Liriomyza sativae": {
+   "eppo": "LIRISA",
+   "nomePreferido": "Liriomyza sativae"
+  },
+  "Liriomyza trifolii": {
+   "eppo": "LIRITR",
+   "nomePreferido": "Liriomyza trifolii"
+  },
+  "Lobiopa insularis": {
+   "eppo": "LOBPIN",
+   "nomePreferido": "Lobiopa insularis"
+  },
+  "Macrophomina phaseolina": {
+   "eppo": "MCPHPH",
+   "nomePreferido": "Macrophomina phaseolina"
+  },
+  "Mahanarva fimbriolata": {
+   "eppo": "MAHAFI",
+   "nomePreferido": "Mahanarva fimbriolata"
+  },
+  "Mahanarva posticata": {
+   "eppo": "MAHAPO",
+   "nomePreferido": "Mahanarva posticata"
+  },
+  "Maize rayado fino virus": {
+   "eppo": "MRFV00",
+   "nomePreferido": "Marafivirus maydis"
+  },
+  "Meloidogyne exigua": {
+   "eppo": "MELGEX",
+   "nomePreferido": "Meloidogyne exigua"
+  },
+  "Meloidogyne hapla": {
+   "eppo": "MELGHA",
+   "nomePreferido": "Meloidogyne hapla"
+  },
+  "Meloidogyne incognita": {
+   "eppo": "MELGIN",
+   "nomePreferido": "Meloidogyne incognita"
+  },
+  "Meloidogyne javanica": {
+   "eppo": "MELGJA",
+   "nomePreferido": "Meloidogyne javanica"
+  },
+  "Meloidogyne paranaensis": {
+   "eppo": "MELGPA",
+   "nomePreferido": "Meloidogyne paranaensis"
+  },
+  "Melon yellowing-associated virus": {
+   "eppo": "MYAV00",
+   "nomePreferido": "Carlavirus melonis"
+  },
+  "Migdolus fryanus": {
+   "eppo": "MIGDFR",
+   "nomePreferido": "Migdolus fryanus"
+  },
+  "Mocis latipes": {
+   "eppo": "MOCIRE",
+   "nomePreferido": "Mocis repanda"
+  },
+  "Mycosphaerella fragariae": {
+   "eppo": "MYCOFR",
+   "nomePreferido": "Ramularia grevilleana"
+  },
+  "Myzus persicae": {
+   "eppo": "MYZUPE",
+   "nomePreferido": "Myzus persicae"
+  },
+  "Neoleucinodes elegantalis": {
+   "eppo": "NEOLEL",
+   "nomePreferido": "Neoleucinodes elegantalis"
+  },
+  "Nezara viridula": {
+   "eppo": "NEZAVI",
+   "nomePreferido": "Nezara viridula"
+  },
+  "Notozulia entreriana": {
+   "eppo": "NOTZEN",
+   "nomePreferido": "Notozulia entreriana"
+  },
+  "Oligonychus ilicis": {
+   "eppo": "OLIGIL",
+   "nomePreferido": "Oligonychus ilicis"
+  },
+  "Oryza sativa": {
+   "eppo": "ORYSA",
+   "nomePreferido": "Oryza sativa"
+  },
+  "Panonychus citri": {
+   "eppo": "METTCI",
+   "nomePreferido": "Panonychus citri"
+  },
+  "Pantoea ananatis": {
+   "eppo": "ERWIAN",
+   "nomePreferido": "Pantoea ananatis"
+  },
+  "Parthenium hysterophorus": {
+   "eppo": "PTNHY",
+   "nomePreferido": "Parthenium hysterophorus"
+  },
+  "Pectinophora gossypiella": {
+   "eppo": "PECTGO",
+   "nomePreferido": "Pectinophora gossypiella"
+  },
+  "Peronospora manshurica": {
+   "eppo": "PEROMA",
+   "nomePreferido": "Peronospora manshurica"
+  },
+  "Phakopsora gossypii": {
+   "eppo": "PHAKGO",
+   "nomePreferido": "Phakopsora gossypii"
+  },
+  "Phakopsora pachyrhizi": {
+   "eppo": "PHAKPA",
+   "nomePreferido": "Phakopsora pachyrhizi"
+  },
+  "Phaseolus vulgaris": {
+   "eppo": "PHSVX",
+   "nomePreferido": "Phaseolus vulgaris"
+  },
+  "Phthorimaea absoluta": {
+   "eppo": "GNORAB",
+   "nomePreferido": "Phthorimaea absoluta"
+  },
+  "Phyllocnistis citrella": {
+   "eppo": "PHYNCI",
+   "nomePreferido": "Phyllocnistis citrella"
+  },
+  "Phyllocoptruta oleivora": {
+   "eppo": "PHYUOL",
+   "nomePreferido": "Phyllocoptruta oleivora"
+  },
+  "Phyllophaga cuyabana": {
+   "eppo": "PHYGCU",
+   "nomePreferido": "Phyllophaga cuyabana"
+  },
+  "Phyllosticta citricarpa": {
+   "eppo": "GUIGCI",
+   "nomePreferido": "Phyllosticta citricarpa"
+  },
+  "Physopella zeae": {
+   "eppo": "PHLLZE",
+   "nomePreferido": "Physopella zeae"
+  },
+  "Phytonemus pallidus": {
+   "eppo": "TARSPA",
+   "nomePreferido": "Phytonemus pallidus"
+  },
+  "Phytophthora cactorum": {
+   "eppo": "PHYTCC",
+   "nomePreferido": "Phytophthora cactorum"
+  },
+  "Phytophthora capsici": {
+   "eppo": "PHYTCP",
+   "nomePreferido": "Phytophthora capsici"
+  },
+  "Phytophthora infestans": {
+   "eppo": "PHYTIN",
+   "nomePreferido": "Phytophthora infestans"
+  },
+  "Phytophthora parasitica": {
+   "eppo": "PHYTNP",
+   "nomePreferido": "Phytophthora nicotianae"
+  },
+  "Phytophthora sojae": {
+   "eppo": "PHYTMS",
+   "nomePreferido": "Phytophthora sojae"
+  },
+  "Piezodorus guildinii": {
+   "eppo": "PIEZGU",
+   "nomePreferido": "Piezodorus guildinii"
+  },
+  "Planococcus citri": {
+   "eppo": "PSECCI",
+   "nomePreferido": "Planococcus citri"
+  },
+  "Podosphaera aphanis": {
+   "eppo": "PODOAP",
+   "nomePreferido": "Podosphaera aphanis"
+  },
+  "Podosphaera xanthii": {
+   "eppo": "PODOXA",
+   "nomePreferido": "Podosphaera xanthii"
+  },
+  "Polyphagotarsonemus latus": {
+   "eppo": "HEMTLA",
+   "nomePreferido": "Polyphagotarsonemus latus"
+  },
+  "Praelongorthezia praelonga": {
+   "eppo": "ORTHPR",
+   "nomePreferido": "Praelongorthezia praelonga"
+  },
+  "Pratylenchus brachyurus": {
+   "eppo": "PRATBR",
+   "nomePreferido": "Pratylenchus brachyurus"
+  },
+  "Pratylenchus coffeae": {
+   "eppo": "PRATCO",
+   "nomePreferido": "Pratylenchus coffeae"
+  },
+  "Pratylenchus zeae": {
+   "eppo": "PRATZE",
+   "nomePreferido": "Pratylenchus zeae"
+  },
+  "Pseudocercospora griseola": {
+   "eppo": "PHAIGR",
+   "nomePreferido": "Pseudocercospora griseola"
+  },
+  "Pseudomonas syringae pv. garcae": {
+   "eppo": "PSDMGC",
+   "nomePreferido": "Pseudomonas syringae pv. garcae"
+  },
+  "Pseudoperonospora cubensis": {
+   "eppo": "PSPECU",
+   "nomePreferido": "Pseudoperonospora cubensis"
+  },
+  "Puccinia kuehnii": {
+   "eppo": "PUCCKU",
+   "nomePreferido": "Puccinia kuehnii"
+  },
+  "Puccinia melanocephala": {
+   "eppo": "PUCCML",
+   "nomePreferido": "Puccinia melanocephala"
+  },
+  "Puccinia polysora": {
+   "eppo": "PUCCPY",
+   "nomePreferido": "Puccinia polysora"
+  },
+  "Puccinia sorghi": {
+   "eppo": "PUCCSO",
+   "nomePreferido": "Puccinia sorghi"
+  },
+  "Pythium aphanidermatum": {
+   "eppo": "PYTHAP",
+   "nomePreferido": "Pythium aphanidermatum"
+  },
+  "Quesada gigas": {
+   "eppo": "QUESGI",
+   "nomePreferido": "Quesada gigas"
+  },
+  "Ralstonia solanacearum": {
+   "eppo": "RALSSL",
+   "nomePreferido": "Ralstonia solanacearum"
+  },
+  "Ramularia areola": {
+   "eppo": "RAMUGO",
+   "nomePreferido": "Ramulariopsis gossypii"
+  },
+  "Ramulariopsis gossypii": {
+   "eppo": "RAMUGO",
+   "nomePreferido": "Ramulariopsis gossypii"
+  },
+  "Raphanus raphanistrum": {
+   "eppo": "RAPRA",
+   "nomePreferido": "Raphanus raphanistrum"
+  },
+  "Rhizoctonia fragariae": {
+   "eppo": "RHIZFR",
+   "nomePreferido": "Rhizoctonia fragariae"
+  },
+  "Rhizoctonia solani": {
+   "eppo": "RHIZSO",
+   "nomePreferido": "Rhizoctonia solani"
+  },
+  "Rhopalosiphum maidis": {
+   "eppo": "RHOPMA",
+   "nomePreferido": "Rhopalosiphum maidis"
+  },
+  "Rosellinia bunodes": {
+   "eppo": "ROSLBU",
+   "nomePreferido": "Dematophora bunodes"
+  },
+  "Rotylenchulus reniformis": {
+   "eppo": "ROTYRE",
+   "nomePreferido": "Rotylenchulus reniformis"
+  },
+  "Saccharum": {
+   "eppo": "1SACG",
+   "nomePreferido": "Saccharum"
+  },
+  "Sclerotinia sclerotiorum": {
+   "eppo": "SCLESC",
+   "nomePreferido": "Sclerotinia sclerotiorum"
+  },
+  "Selenaspidus articulatus": {
+   "eppo": "SELSAR",
+   "nomePreferido": "Selenaspidus articulatus"
+  },
+  "Septoria glycines": {
+   "eppo": "SEPTGL",
+   "nomePreferido": "Septoria glycines"
+  },
+  "Septoria lycopersici": {
+   "eppo": "SEPTLY",
+   "nomePreferido": "Septoria lycopersici"
+  },
+  "Sida rhombifolia": {
+   "eppo": "SIDRH",
+   "nomePreferido": "Sida rhombifolia"
+  },
+  "Solanum lycopersicum": {
+   "eppo": "LYPES",
+   "nomePreferido": "Solanum lycopersicum"
+  },
+  "Solanum tuberosum": {
+   "eppo": "SOLTU",
+   "nomePreferido": "Solanum tuberosum"
+  },
+  "Sorghum bicolor": {
+   "eppo": "SORVU",
+   "nomePreferido": "Sorghum bicolor"
+  },
+  "Soybean mosaic virus": {
+   "eppo": "SMV000",
+   "nomePreferido": "Potyvirus glycitessellati"
+  },
+  "Spermacoce latifolia": {
+   "eppo": "BOILF",
+   "nomePreferido": "Spermacoce latifolia"
+  },
+  "Sphenophorus levis": {
+   "eppo": "SPPHLE",
+   "nomePreferido": "Sphenophorus levis"
+  },
+  "Spiroplasma kunkelii": {
+   "eppo": "SPIRKU",
+   "nomePreferido": "Spiroplasma kunkelii"
+  },
+  "Spodoptera cosmioides": {
+   "eppo": "SPODCO",
+   "nomePreferido": "Spodoptera cosmioides"
+  },
+  "Spodoptera eridania": {
+   "eppo": "PRODER",
+   "nomePreferido": "Spodoptera eridania"
+  },
+  "Spodoptera frugiperda": {
+   "eppo": "LAPHFR",
+   "nomePreferido": "Spodoptera frugiperda"
+  },
+  "Sporisorium scitamineum": {
+   "eppo": "USTISC",
+   "nomePreferido": "Sporisorium scitamineum"
+  },
+  "Stagonosporopsis cucurbitacearum": {
+   "eppo": "DIDYBR",
+   "nomePreferido": "Stagonosporopsis cucurbitacearum"
+  },
+  "Stemphylium solani": {
+   "eppo": "STEMSO",
+   "nomePreferido": "Stemphylium solani"
+  },
+  "Stenocarpella maydis": {
+   "eppo": "DIPDMA",
+   "nomePreferido": "Stenocarpella maydis"
+  },
+  "Sugarcane mosaic virus": {
+   "eppo": "SCMV00",
+   "nomePreferido": "Potyvirus sacchari"
+  },
+  "Sugarcane yellow leaf virus": {
+   "eppo": "SCYLV0",
+   "nomePreferido": "Polerovirus SCYLV"
+  },
+  "Telchin licus": {
+   "eppo": "CASTLI",
+   "nomePreferido": "Telchin licus"
+  },
+  "Tetranychus ludeni": {
+   "eppo": "TETRLU",
+   "nomePreferido": "Tetranychus ludeni"
+  },
+  "Tetranychus urticae": {
+   "eppo": "TETRUR",
+   "nomePreferido": "Tetranychus urticae"
+  },
+  "Thielaviopsis paradoxa": {
+   "eppo": "CERAPA",
+   "nomePreferido": "Thielaviopsis paradoxa"
+  },
+  "Thrips palmi": {
+   "eppo": "THRIPL",
+   "nomePreferido": "Thrips palmi"
+  },
+  "Thrips tabaci": {
+   "eppo": "THRITB",
+   "nomePreferido": "Thrips tabaci"
+  },
+  "Tomato severe rugose virus": {
+   "eppo": "TOSRV0",
+   "nomePreferido": "Begomovirus solanumseverugosi"
+  },
+  "Tomato spotted wilt virus": {
+   "eppo": "TSWV00",
+   "nomePreferido": "Orthotospovirus tomatomaculae"
+  },
+  "Triticum aestivum": {
+   "eppo": "TRZAX",
+   "nomePreferido": "Triticum aestivum subsp. aestivum"
+  },
+  "Urochloa plantaginea": {
+   "eppo": "BRAPL",
+   "nomePreferido": "Brachiaria plantaginea"
+  },
+  "Uromyces appendiculatus": {
+   "eppo": "UROMAP",
+   "nomePreferido": "Uromyces appendiculatus"
+  },
+  "Verticillium dahliae": {
+   "eppo": "VERTDA",
+   "nomePreferido": "Verticillium dahliae"
+  },
+  "Vitis vinifera": {
+   "eppo": "VITVI",
+   "nomePreferido": "Vitis vinifera"
+  },
+  "Xanthomonas albilineans": {
+   "eppo": "XANTAB",
+   "nomePreferido": "Xanthomonas albilineans"
+  },
+  "Xanthomonas axonopodis pv. phaseoli": {
+   "eppo": "XANTPH",
+   "nomePreferido": "Xanthomonas phaseoli pv. phaseoli"
+  },
+  "Xanthomonas citri pv. malvacearum": {
+   "eppo": "XANTMA",
+   "nomePreferido": "Xanthomonas citri pv. malvacearum"
+  },
+  "Xanthomonas citri subsp. citri": {
+   "eppo": "XANTCI",
+   "nomePreferido": "Xanthomonas citri pv. citri"
+  },
+  "Xanthomonas fragariae": {
+   "eppo": "XANTFR",
+   "nomePreferido": "Xanthomonas fragariae"
+  },
+  "Xanthomonas perforans": {
+   "eppo": "XANTPF",
+   "nomePreferido": "Xanthomonas euvesicatoria pv. perforans"
+  },
+  "Xylella fastidiosa": {
+   "eppo": "XYLEFA",
+   "nomePreferido": "Xylella fastidiosa"
+  },
+  "Xylosandrus compactus": {
+   "eppo": "XYLSCO",
+   "nomePreferido": "Xylosandrus compactus"
+  },
+  "Zabrotes subfasciatus": {
+   "eppo": "ZABRSU",
+   "nomePreferido": "Zabrotes subfasciatus"
+  },
+  "Zea mays": {
+   "eppo": "ZEAMX",
+   "nomePreferido": "Zea mays"
+  },
+  "Zucchini yellow mosaic virus": {
+   "eppo": "ZYMV00",
+   "nomePreferido": "Potyvirus cucurbitaflavitesselati"
+  }
+ },
+ "naoResolvidos": [
+  {
+   "nome": "Bradysia matogrossensis",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Candidatus Liberibacter asiaticus",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Candidatus Phytoplasma pruni",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Citrus sudden death virus",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Claviceps paspali",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Colletotrichum acutatum",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Colletotrichum gloeosporioides",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Cotton vein mosaic virus",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Curtobacterium flaccumfaciens",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Eacles imperialis magnifica",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Mahanarva spectabilis",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Phoma costarricensis",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Ramulariopsis pseudoglycines",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Scaptocoris castanea",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  },
+  {
+   "nome": "Ustilago operta",
+   "motivo": "nome não consta como nome latino ativo na EPPO"
+  }
+ ]
 }

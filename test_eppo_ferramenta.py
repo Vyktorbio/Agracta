@@ -80,4 +80,47 @@ atual = __import__("json").loads((RAIZ / 'data/eppo.json').read_text())
 ok(atual['schema'] == 1 and isinstance(atual['codigos'], dict) and atual['culturas']['Soja'] == 'Glycine max', 'data/eppo.json no formato')
 ok(all(eppo.CODIGO.fullmatch(v['eppo']) for v in atual['codigos'].values()), 'todo código na tabela tem forma de código')
 
+# --- modo --xml: o arquivo oficial fullcodes.xml -------------------------------
+import tempfile
+XML = """<?xml version="1.0" encoding="utf-8"?>
+<codes version="1.0" dateexport="2026-09-24T03:31:47+02:00">
+ <code id="1" creation="1996-10-28" type="PFL" isactive="true"><eppocode>GLXMA</eppocode><names>
+  <name id="1" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Glycine max</fullname><lang>la</lang></name>
+  <name id="2" creation="2016-07-24" ispreferred="false" isactive="true"><fullname>soja</fullname><lang>pt</lang></name></names></code>
+ <code id="2" creation="1996-10-28" type="PFL" isactive="true"><eppocode>ERIBO</eppocode><names>
+  <name id="3" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Erigeron bonariensis</fullname><lang>la</lang></name>
+  <name id="4" creation="1996-10-28" ispreferred="false" isactive="true"><fullname>Conyza bonariensis</fullname><lang>la</lang></name></names></code>
+ <code id="3" creation="1996-10-28" type="GAF" isactive="true"><eppocode>COLLGL</eppocode><names>
+  <name id="5" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Colletotrichum sensu lato</fullname><lang>la</lang></name>
+  <name id="6" creation="1996-10-28" ispreferred="false" isactive="false"><fullname>Nome desativado</fullname><lang>la</lang></name></names></code>
+ <code id="4" creation="1996-10-28" type="GAI" isactive="false"><eppocode>VELHOX</eppocode><names>
+  <name id="7" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Codigo desativado</fullname><lang>la</lang></name></names></code>
+ <code id="5" creation="1996-10-28" type="GAI" isactive="true"><eppocode>1HOMOG</eppocode><names>
+  <name id="8" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Homonimus</fullname><lang>la</lang></name></names></code>
+ <code id="6" creation="1996-10-28" type="PFL" isactive="true"><eppocode>1HOMPG</eppocode><names>
+  <name id="9" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Homonimus</fullname><lang>la</lang></name></names></code>
+ <code id="7" creation="1996-10-28" type="PFL" isactive="true"><eppocode>SINPRF</eppocode><names>
+  <name id="10" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Duplo nomen</fullname><lang>la</lang></name></names></code>
+ <code id="8" creation="1996-10-28" type="PFL" isactive="true"><eppocode>SINSIN</eppocode><names>
+  <name id="11" creation="1996-10-28" ispreferred="true" isactive="true"><fullname>Outro nomen</fullname><lang>la</lang></name>
+  <name id="12" creation="1996-10-28" ispreferred="false" isactive="true"><fullname>Duplo nomen</fullname><lang>la</lang></name></names></code>
+</codes>"""
+with tempfile.NamedTemporaryFile('w', suffix='.xml', delete=False, encoding='utf-8') as f:
+    f.write(XML)
+idx, exp = eppo.indice_xml(f.name)
+x = lambda nome: eppo.resolver_xml(nome, idx)
+ok(exp == '2026-09-24T03:31:47+02:00', 'data de exportação lida')
+ok(x('Glycine max')[0] == {'eppo': 'GLXMA', 'nomePreferido': 'Glycine max'}, 'nome preferido')
+ok(x('glycine  MAX')[0]['eppo'] == 'GLXMA', 'caixa e espaço ignorados')
+ok(x('soja')[0] is None, 'nome comum em português não conta: só latim')
+ok(x('Conyza bonariensis')[0] == {'eppo': 'ERIBO', 'nomePreferido': 'Erigeron bonariensis'}, 'sinônimo ativo leva ao nome atual')
+ok(x('Nome desativado')[0] is None, 'nome desativado pela EPPO não vale')
+ok(x('Codigo desativado')[0] is None, 'código desativado não vale')
+r, m = x('Homonimus')
+ok(r is None and m.startswith('ambíguo') and '1HOMOG' in m and '1HOMPG' in m, 'homônimo fica ambíguo')
+ok(x('Duplo nomen')[0]['eppo'] == 'SINPRF', 'preferido num código e sinônimo noutro: vale o preferido')
+import os
+os.environ.pop('EPPO_TOKEN', None)
+ok(eppo.main(['--xml']) == 2, '--xml sem caminho e sem token: para sem mexer em nada')
+
 print(f'Ferramenta EPPO: {N} verificações OK.')
