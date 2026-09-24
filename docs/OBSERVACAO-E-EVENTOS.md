@@ -8,9 +8,23 @@ identidade estável.**
 Motores: `vendor/observacao-core.js` e `vendor/eventos-core.js`.
 Testes: `test_observacao_eventos.js`.
 
-**Estado:** os motores estão prontos e testados, e ainda não estão ligados ao app.
-Nenhuma tela mudou e nenhum dado foi migrado. A ligação é o próximo passo (ver
-"Caminho de adoção" no fim).
+**Estado:** motores prontos e ligados ao app por um módulo separado,
+`eventos-app.js` (teste: `test_eventos_app.js`). O `app.js` não foi alterado. O
+módulo escuta `logStudyAuditInObject` e, **depois** que a trilha de sempre foi
+gravada, grava o evento formal num armazenamento próprio do aparelho
+(`agracta-eventos-v1`), fora do objeto `data`, do merge e da nuvem. Falha no evento
+vira aviso no console e nunca chega à tela. Para desligar:
+`localStorage['agracta-eventos-off']='1'`. O `main` de antes desta ligação está
+salvo na branch `salve/antes-eventos-2026-09-24`.
+
+| Ação no app | Evento |
+|---|---|
+| Finalização do estudo | `estudo.finalizado` (rubrica guardada como hash do desenho) |
+| Reabertura do estudo | `estudo.reaberto` (rubrica = reautenticação por senha, que é o que o app pede) |
+| Aprovação do protocolo | `protocolo.aprovado` |
+| Emenda ao protocolo | `protocolo.emendado` (de→para = versões) |
+| Edição de avaliação **assinada** | uma `observacao.corrigida` por célula que mudou de valor |
+| Qualquer outra ação | nenhum evento: continua só na trilha |
 
 ---
 
@@ -93,7 +107,7 @@ estudo, que o próximo salvamento do aparelho reescreve inteiro. Com o
 | `estudo.finalizado` | estudo | | ✔ | | diretor |
 | `estudo.reaberto` | estudo | ✔ | ✔ | | supervisor |
 | `protocolo.aprovado` | estudo | | ✔ | | diretor |
-| `protocolo.emendado` | estudo | ✔ | ✔ | ✔ | diretor |
+| `protocolo.emendado` | estudo | ✔ | | ✔ | diretor |
 | `observacao.corrigida` | observação | ✔ | | ✔ | supervisor |
 | `avaliacao.invalidada` / `revalidada` | avaliação | ✔ | ✔ | | supervisor |
 | `registro.excluido` / `restaurado` | estudo, avaliação, aplicação, observação, amostra | ✔ | | | supervisor |
@@ -158,11 +172,10 @@ comparação sem que nenhum dado seja apagado.
 
 Em ordem. Cada passo vale por si:
 
-1. **Carregar os motores no app** (`index.html` + `sw.js`, com o CACHE incrementado).
-   Não muda nenhum comportamento.
-2. **Gravar evento junto com a trilha atual** em `finalizarEstudo`, `reabrirEstudo`,
-   `reabrirAvaliacao` e na aprovação/emenda do protocolo vivo. A trilha em texto
-   continua, e o evento vai para uma coleção própria (`eventos/{id}`).
+1. ✅ **Carregar os motores no app** (`index.html` + `sw.js`, com o CACHE incrementado).
+2. ✅ **Gravar o evento junto com a trilha atual**, pelo módulo `eventos-app.js`. Por
+   enquanto a gravação é só no aparelho. Falta enviar os eventos para uma coleção
+   própria (`eventos/{id}`) na nuvem.
 3. **Regras do Firestore para `eventos/`**: `create` só quando `request.auth` confere
    com `autor.email` e o id tem a forma certa; **sem `update` e sem `delete`**. É isso
    que torna o append-only real. O teste de regras entra em `tests/`, no mesmo molde de

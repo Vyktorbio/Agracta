@@ -51,7 +51,7 @@
     'estudo.finalizado':    { entidade: ['estudo'], motivo: false, rubrica: true,  dePara: false, papel: 'diretor',    rotulo: 'Estudo finalizado' },
     'estudo.reaberto':      { entidade: ['estudo'], motivo: true,  rubrica: true,  dePara: false, papel: 'supervisor', rotulo: 'Estudo reaberto' },
     'protocolo.aprovado':   { entidade: ['estudo'], motivo: false, rubrica: true,  dePara: false, papel: 'diretor',    rotulo: 'Protocolo aprovado' },
-    'protocolo.emendado':   { entidade: ['estudo'], motivo: true,  rubrica: true,  dePara: true,  papel: 'diretor',    rotulo: 'Emenda ao protocolo' },
+    'protocolo.emendado':   { entidade: ['estudo'], motivo: true,  rubrica: false, dePara: true,   papel: 'diretor',    rotulo: 'Emenda ao protocolo' },
     'observacao.corrigida': { entidade: ['observacao'], motivo: true, rubrica: false, dePara: true, papel: 'supervisor', rotulo: 'Dado corrigido' },
     'avaliacao.invalidada': { entidade: ['avaliacao'], motivo: true, rubrica: true, dePara: false, papel: 'supervisor', rotulo: 'Avaliação invalidada' },
     'avaliacao.revalidada': { entidade: ['avaliacao'], motivo: true, rubrica: true, dePara: false, papel: 'supervisor', rotulo: 'Avaliação revalidada' },
