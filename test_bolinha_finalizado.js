@@ -69,6 +69,8 @@ vm.createContext(context);
 ['vendor/avaliacao-core.js','vendor/protocolo-core.js','vendor/pendencias-core.js'].forEach(function(f){
   try{ vm.runInContext(fs.readFileSync(f, 'utf8'), context, {filename: f}); }catch(e){}
 });
+/* assinatura eletrônica (SHA-256), carregada depois do app como no index.html */
+['vendor/eventos-core.js','vendor/assinatura-core.js'].forEach(function(f){ vm.runInContext(fs.readFileSync(f,'utf8'), context, {filename:f}); });
 vm.runInContext(fs.readFileSync('app.js', 'utf8'), context, {filename: 'app.js'});
 
 
@@ -87,7 +89,7 @@ context.updateTodayBadge  = function(){ pintou.push('updateTodayBadge'); };
 
 /* portoes do fluxo real, sem a parte humana */
 context.requireDeletePassword = function(msg, cb){ cb(); };
-context.openRubrica = function(cb){ cb('data:image/png;base64,AAA'); };
+context.openRubrica = function(cb){ cb(true); };  /* toque em Assinar */
 context.confirm = function(){ return true; };
 context.alert = function(){};
 context.prompt = function(){ return 'engano na data de aplicacao'; };

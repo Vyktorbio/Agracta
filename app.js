@@ -12631,9 +12631,7 @@ function protocoloVerificaHtml(study, _pvQid){
      quando ele chegar — o cartão não tem campo de digitação, então repintar
      aqui não arranca nada de ninguém (ver a lição da busca do Agrofit). */
   _agrofitCultCarregar(function(){
-    if(typeof curV!=='undefined' && typeof curSid!=='undefined' &&
-       curV===_pvQid && curSid===((study||{}).id) &&
-       typeof openStudyDetail==='function') openStudyDetail(curV, curSid);
+    if(_estudoNaTela(_pvQid,(study||{}).id)) openStudyDetail(curV, curSid);
   });
   var P=(typeof window!=='undefined')?window.ProtocoloCore:null;
   if(!P||!study) return '';
@@ -13861,17 +13859,22 @@ function _bioestatIntegratedHtml(qid,sid,study){
    mensagem quanto pelo watchdog (antes só o handler atualizava, então um job que estourava o
    tempo deixava o spinner preso na tela mesmo com o cache 'ready'). Tolerante: dispara também se
    o spinner ainda estiver na tela, mesmo que a checagem do overlay falhe. */
+/* A ficha deste estudo está na tela agora? Repintar em segundo plano (resultado
+   da estatística, culturas do Agrofit) só pode acontecer com ela aberta: voltar
+   para a quadra não limpa curSid, e o repintar reabria o estudo sozinho. */
+function _estudoNaTela(qid,sid){
+  var ov=document.getElementById('sdOvl');
+  return !!(ov&&ov.classList.contains('open')&&curV===qid&&curSid===sid);
+}
 var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
   /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
      aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
   if(c&&window.AgEstudoPagina&&window.AgEstudoPagina.atualizarAnalises)window.AgEstudoPagina.atualizarAnalises(c);
-  if(!c||curV!==c.qid||curSid!==c.sid)return;
-  var ov=document.getElementById('sdOvl');
-  var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
-  if(!open)return;
+  /* #bioAutoStatus fica no DOM da ficha fechada: não prova que ela está aberta. */
+  if(!c||!_estudoNaTela(c.qid,c.sid))return;
   clearTimeout(_bioRefreshT);
-  _bioRefreshT=setTimeout(function(){ if(curV===c.qid&&curSid===c.sid) openStudyDetail(c.qid,c.sid); },120);
+  _bioRefreshT=setTimeout(function(){ if(_estudoNaTela(c.qid,c.sid)) openStudyDetail(c.qid,c.sid); },120);
 }
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
@@ -14350,7 +14353,7 @@ function openStudyDetail(qid,sid){
          mesmo dia. Sai o momento quando declarado, senão a hora da leitura. */
       var _mrot=''; try{ if(a.momento){ var _mm2=avMomento(a,null); if(_mm2&&_mm2.explicito) _mrot=' · '+_mm2.rotulo; } }catch(e){}
       if(!_mrot && a.hora) _mrot=' · '+esc(String(a.hora).slice(0,5));
-      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação rubricada" style="margin-left:6px;font-size:12px">✍️</span>':'');
+      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação assinada" style="margin-left:6px;font-size:12px">✍️</span>':'');
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
@@ -14394,7 +14397,7 @@ function openStudyDetail(qid,sid){
        '<b>🔒 Estudo finalizado</b><span>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+'</span>'+
        '<p>'+esc(String(_finN))+' resultado(s) de estatística congelados — o relatório usa este retrato, não um recálculo.</p>'+
        (_finFuso?('<small>Fuso do carimbo: '+esc(_finFuso)+'</small>'):'')+
-       (study.finalizacao.rubrica?('<div style="margin-top:8px"><img src="'+esc(study.finalizacao.rubrica)+'" alt="Rubrica de quem finalizou" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>'):'')+
+       _seloAssinatura(study.finalizacao.assinatura,(window.AssinaturaCore&&study.finalizacao.assinatura)?AssinaturaCore.conteudoFinalizacao(study):null,study.finalizacao.rubrica,'Rubrica de quem finalizou')+
        '</div>'+
        '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">🔓 Reabrir estudo</button>';
   }else{
@@ -14412,7 +14415,7 @@ function openStudyDetail(qid,sid){
                        :(_closePend.length?('<span class="pend-cab">'+_closePend.length+' pendência'+(_closePend.length===1?'':'s')+' — toque para ir ao registro</span>'+pendListaHtml(qid,sid,_closePend))
                                           :('<ul>'+_closeReview.issues.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>')))+
        (_closeReview.notes.length?'<small>'+esc(_closeReview.notes.join(' · '))+'</small>':'')+'</div>'+
-       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin:9px 0 8px">Finalizar pede senha e rubrica, carimba data e hora e <b>congela a estatística</b>. O estudo passa a somente-leitura e sai da agenda.</div>'+
+       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin:9px 0 8px">Finalizar pede senha e assinatura eletrônica (SHA-256), carimba data e hora e <b>congela a estatística</b>. O estudo passa a somente-leitura e sai da agenda.</div>'+
        '<button class="btn-sm" onclick="finalizarEstudo(\''+qid+'\',\''+sid+'\')">Finalizar estudo</button>';
   }
   h+='</div>';
@@ -18047,7 +18050,8 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
   if(av.carimbo){ assinPor=_identidadeBPL(av.carimbo.rubricaNome,av.carimbo.rubricaPor).nome; }
 
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()" aria-label="Fechar avaliação" title="Fechar">×</button></div>';
-  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+'</div>'; }
+  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+
+    ((locked&&av.carimbo.assinatura&&window.AssinaturaCore)?_seloAssinatura(av.carimbo.assinatura,AssinaturaCore.conteudoAvaliacao(av)):'')+'</div>'; }
   if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
   if(inheritedFrom){h+='<div class="av-schema-inherited">✓ Campos herdados da avaliação de '+esc(isoToBR(inheritedFrom.data)||inheritedFrom.data||'data anterior')+'. A grade veio vazia para esta leitura.</div>';}
   h+='<fieldset id="avFs"'+(locked?' disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">';
@@ -18217,8 +18221,8 @@ function finalizarEstudo(qid,sid){
              (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
              'Depois disso o estudo fica somente-leitura e sai da agenda.';
   requireDeletePassword(resumo, function(){
-    openRubrica(function(url){
-      if(!url){ alert('Sem a rubrica o estudo não é finalizado.'); return; }
+    openRubrica(function(ok){
+      if(!ok){ alert('Sem a assinatura o estudo não é finalizado.'); return; }
       var st=_estudoDe(qid,sid); if(!st) return;
       st.estatisticaFinal=_statSnapshot(st);   /* recalcula na hora do aceite, não a prévia */
       st.estatisticaFinal.avancado=_bioestatSnapshotAvancado(qid,st);
@@ -18227,15 +18231,17 @@ function finalizarEstudo(qid,sid){
         em:new Date().toISOString(),
         por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
         nome:_nomeParaAssinatura(),
-        rubrica:url,
         significado:'Estudo finalizado — relatórios disponíveis e pendências preservados',
         analiseCompleta:st.estatisticaFinal.avancado.completo,
         fuso:AGRACTA_TIME_ZONE,
         nAvaliacoes:(st.avaliacoes||[]).length,
         nResultados:(st.estatisticaFinal.itens||[]).length
       };
+      /* A assinatura cobre a estatística congelada e o conteúdo de cada avaliação. */
+      st.finalizacao.assinatura=_assinaturaNova('estudo.finalizacao',AssinaturaCore.conteudoFinalizacao(st),st.finalizacao.significado);
+      st.finalizacao.rubrica=AssinaturaCore.rubricaDe(st.finalizacao.assinatura);
       logStudyAuditInObject(st,'Finalização do Estudo',
-        'Estudo finalizado e travado. '+st.finalizacao.nResultados+' resultado(s) de estatística congelados.',
+        'Estudo finalizado e travado. '+st.finalizacao.nResultados+' resultado(s) de estatística congelados. Assinatura SHA-256 '+st.finalizacao.assinatura.hash+'.',
         {rubrica:1});
       st._ts=Date.now();
       save();
@@ -18244,7 +18250,7 @@ function finalizarEstudo(qid,sid){
             _agFormatDateTime(st.finalizacao.em)+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
       _refazTelasDoEstudo();
       openStudyDetail(qid,sid);
-    }, 'Rubrique para finalizar o estudo '+(s.codigo||s.id));
+    }, 'Finalizar o estudo '+(s.codigo||s.id));
   }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
 }
 function reabrirEstudo(qid,sid){
@@ -18304,7 +18310,8 @@ function protocoloVivoHtml(qid,sid,study){
     var quem=_identidadeBPL(inf.nome,inf.por).nome;
     h+='<div class="pv-card pv-aprovado"><b>Aprovado · versão '+esc(String(inf.versao))+'</b>'+
        '<span>'+esc(_agFormatDateTime(inf.em))+(quem&&quem!=='Não identificado'?(' · '+esc(quem)):'')+'</span>'+
-       (study.protocoloVivo.rubrica?('<img src="'+esc(study.protocoloVivo.rubrica)+'" alt="Rubrica da aprovação" class="pv-rubrica">'):'')+'</div>';
+       (study.protocoloVivo.assinatura?_seloAssinatura(study.protocoloVivo.assinatura,AssinaturaCore.conteudoProtocolo(study.protocoloVivo)):
+        (study.protocoloVivo.rubrica&&!(window.AssinaturaCore&&AssinaturaCore.ehEletronica(study.protocoloVivo.rubrica))?('<img src="'+esc(study.protocoloVivo.rubrica)+'" alt="Rubrica da aprovação" class="pv-rubrica">'):''))+'</div>';
   }
   var ems=study.emendas||[];
   if(ems.length){
@@ -18340,17 +18347,20 @@ function aprovarProtocolo(qid,sid){
     (r.tratamentos||[]).length+' tratamento(s) · '+r.numRepeticoes+' repetição(ões) · '+r.numAplicacoes+' aplicação(ões)'+
     '\n\nDepois disso, mudar o protocolo pede motivo e vira emenda.';
   requireDeletePassword(resumo, function(){
-    openRubrica(function(url){
-      if(!url){ alert('Sem a rubrica o protocolo não é aprovado.'); return; }
+    openRubrica(function(ok){
+      if(!ok){ alert('Sem a assinatura o protocolo não é aprovado.'); return; }
       var st=_estudoDe(qid,sid); if(!st) return;
-      var a=_pvAutor(); a.rubrica=url;
+      var a=_pvAutor();
       st.protocoloVivo=PV.aprovar(st,a);
-      logStudyAuditInObject(st,'Aprovação do protocolo','Protocolo aprovado como versão 1.',{rubrica:1});
+      /* A assinatura cobre o retrato do protocolo congelado na aprovação. */
+      st.protocoloVivo.assinatura=_assinaturaNova('protocolo.aprovado',AssinaturaCore.conteudoProtocolo(st.protocoloVivo),'Protocolo aprovado como versão 1');
+      st.protocoloVivo.rubrica=AssinaturaCore.rubricaDe(st.protocoloVivo.assinatura);
+      logStudyAuditInObject(st,'Aprovação do protocolo','Protocolo aprovado como versão 1. Assinatura SHA-256 '+st.protocoloVivo.assinatura.hash+'.',{rubrica:1});
       st._ts=Date.now(); save();
       try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
       _stxToast('✓ Protocolo aprovado · versão 1');
       openStudyDetail(qid,sid);
-    }, 'Rubrique para aprovar o protocolo de '+(s.codigo||s.id));
+    }, 'Aprovar o protocolo de '+(s.codigo||s.id));
   }, {title:'Aprovar protocolo', ok:'Aprovar'});
 }
 function registrarDesvio(qid,sid){
@@ -18375,52 +18385,45 @@ function registrarDesvio(qid,sid){
 }
 
 /* ===== RUBRICA (assinatura por toque) — módulo isolado, aditivo ===== */
-var _rubricaCb=null,_rubricaCtx=null,_rubricaDrawing=false,_rubricaDirty=false;
-function _rubricaPos(cv,e){ var r=cv.getBoundingClientRect(); var t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; return {x:t.clientX-r.left,y:t.clientY-r.top}; }
-function _rubricaBind(cv){
-  if(cv._rbBound) return; cv._rbBound=true;
-  function start(e){ if(e.cancelable)e.preventDefault(); _rubricaDrawing=true; if(!_rubricaCtx)return; var p=_rubricaPos(cv,e); _rubricaCtx.beginPath(); _rubricaCtx.moveTo(p.x,p.y); _rubricaCtx.lineTo(p.x+0.1,p.y+0.1); _rubricaCtx.stroke(); _rubricaDirty=true; }
-  function move(e){ if(!_rubricaDrawing||!_rubricaCtx)return; if(e.cancelable)e.preventDefault(); var p=_rubricaPos(cv,e); _rubricaCtx.lineTo(p.x,p.y); _rubricaCtx.stroke(); _rubricaDirty=true; }
-  function end(){ _rubricaDrawing=false; }
-  cv.addEventListener('touchstart',start,{passive:false}); cv.addEventListener('touchmove',move,{passive:false}); cv.addEventListener('touchend',end); cv.addEventListener('touchcancel',end);
-  cv.addEventListener('mousedown',start); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
-}
+/* ===== ASSINATURA ELETRÔNICA (no lugar da rubrica desenhada) =====================
+   openRubrica só CONFIRMA: mostra quem vai assinar e o quê, e devolve true no
+   "Assinar". Quem chamou monta o conteúdo e gera a assinatura por
+   _assinaturaNova — SHA-256 do conteúdo + quem, quando e o significado
+   (vendor/assinatura-core.js). Quem assina é o usuário logado no aparelho.
+   Rubricas desenhadas já gravadas continuam aparecendo; nada é reescrito. */
+var _rubricaCb=null;
 function openRubrica(onDone,info){
-  var ovl=document.getElementById('rubricaOvl'), cv=document.getElementById('rubricaCanvas');
-  if(!ovl||!cv){ if(onDone)onDone(null); return; }
-  _rubricaCb=onDone||null; _rubricaDirty=false;
-  ovl.style.display='flex';
+  var ovl=document.getElementById('rubricaOvl');
+  if(!ovl){ if(onDone)onDone(null); return; }
+  _rubricaCb=onDone||null;
   var inf=document.getElementById('rubricaInfo'); if(inf) inf.textContent=info||'';
-  setTimeout(function(){
-    var r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
-    var w=Math.round(r.width)||(cv.parentElement?cv.parentElement.clientWidth:0)||window.innerWidth;
-    var h=Math.round(r.height)||(cv.parentElement?cv.parentElement.clientHeight:0)||(window.innerHeight-130);
-    cv.width=Math.max(1,Math.round(w*dpr)); cv.height=Math.max(1,Math.round(h*dpr));
-    _rubricaCtx=cv.getContext('2d'); _rubricaCtx.setTransform(dpr,0,0,dpr,0,0);
-    _rubricaCtx.lineWidth=2.6; _rubricaCtx.lineCap='round'; _rubricaCtx.lineJoin='round'; _rubricaCtx.strokeStyle='#13202b';
-    _rubricaCtx.clearRect(0,0,w,h);
-    _rubricaBind(cv);
-  },60);
+  var quem=document.getElementById('rubricaQuem');
+  if(quem){ var email=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; quem.textContent=_currentUserName()+(email?(' · '+email):''); }
+  ovl.style.display='flex';
+  var b=document.getElementById('rubricaAssinar'); if(b) try{ b.focus(); }catch(e){}
 }
-function rubricaClear(){ var cv=document.getElementById('rubricaCanvas'); if(_rubricaCtx&&cv){ var r=cv.getBoundingClientRect(); _rubricaCtx.clearRect(0,0,r.width,r.height); } _rubricaDirty=false; }
 function _rubricaClose(){ var ovl=document.getElementById('rubricaOvl'); if(ovl) ovl.style.display='none'; }
 function rubricaSkip(){ _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(null); }
-/* A rubrica era o PNG da tela inteira (1080 × 2000 px no celular), em cada
-   avaliação assinada e em cada finalização. Agora sai só a área com tinta,
-   reduzida a no máximo 600 × 240 px: a mesma assinatura, uma fração do espaço.
-   Rubricas já gravadas NÃO são reescritas — assinatura feita não se mexe. */
-function _rubricaCompacta(cv){
-  var AC=window.ArmazenamentoCore, ctx=cv.getContext('2d');
-  var im=ctx.getImageData(0,0,cv.width,cv.height), bx=AC?AC.caixaDaTinta(im.data,cv.width,cv.height):null;
-  if(!bx) return cv.toDataURL('image/png');
-  var pad=Math.round(8*(window.devicePixelRatio||1));
-  var x=Math.max(0,bx.x-pad), y=Math.max(0,bx.y-pad), w=Math.min(cv.width-x,bx.w+2*pad), h=Math.min(cv.height-y,bx.h+2*pad);
-  var k=Math.min(1,600/w,240/h), out=document.createElement('canvas');
-  out.width=Math.max(1,Math.round(w*k)); out.height=Math.max(1,Math.round(h*k));
-  var o=out.getContext('2d'); o.imageSmoothingQuality='high'; o.drawImage(cv,x,y,w,h,0,0,out.width,out.height);
-  return out.toDataURL('image/png');
+function rubricaConfirm(){ _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(true); }
+/* Gera a assinatura do usuário logado sobre `conteudo`. */
+function _assinaturaNova(escopo,conteudo,significado){
+  return AssinaturaCore.assinar(escopo,conteudo,{
+    por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
+    nome:_nomeParaAssinatura(), significado:significado||''});
 }
-function rubricaConfirm(){ var cv=document.getElementById('rubricaCanvas'),url=null; try{ if(_rubricaDirty&&cv){ try{ url=_rubricaCompacta(cv); }catch(e2){ url=cv.toDataURL('image/png'); } } }catch(e){} _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(url); }
+/* Selo da assinatura para as telas: hash curto e se o conteúdo ainda bate. */
+function _seloAssinatura(ass,conteudo,rubricaAntiga,alt){
+  if(ass&&window.AssinaturaCore){
+    var c=AssinaturaCore.conferir(ass,conteudo);
+    return '<div title="SHA-256 '+esc(ass.hash)+'" style="margin-top:8px;padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.4;'+
+      (c.ok?'background:#e8f4ec;color:#1d5a34;border:1px solid #b9dcc5':'background:#fdecea;color:#8a2a1f;border:1px solid #efb9b1')+'">'+
+      (c.ok?'✓ Assinatura eletrônica':'⚠ '+(c.motivo==='conteudo'?'Conteúdo alterado depois da assinatura':'Assinatura não confere'))+
+      ' · SHA-256 <code>'+esc(AssinaturaCore.curto(ass.hash))+'…</code></div>';
+  }
+  if(rubricaAntiga&&!(window.AssinaturaCore&&AssinaturaCore.ehEletronica(rubricaAntiga)))
+    return '<div style="margin-top:8px"><img src="'+esc(rubricaAntiga)+'" alt="'+esc(alt||'Rubrica')+'" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>';
+  return '';
+}
 /* ===== DIÁRIO DE AVALIAÇÕES (rede de segurança no aparelho) =====================
    Caixa-preta append-only em IndexedDB (independente do blob/localStorage): toda
    avaliação salva fica registrada localmente, p/ recuperar mesmo se a sincronização
@@ -18596,7 +18599,7 @@ function saveAvaliacao(){
   var _reab = (_avReopen && _avReopen.avid===av.id) ? _avReopen : null;
   var _motivo = _reab ? _reab.motivo : null;
   /* editar avaliação ASSINADA invalida a assinatura → exige NOVA (exigência BPL) */
-  if(_reab && av.carimbo && av.carimbo.rubrica){ av.carimbo.rubrica=null; av.carimbo.rubricaEm=null; av.carimbo.rubricaPor=null; av.carimbo.rubricaNome=null; av.carimbo.rubricaSignificado=null; }
+  if(_reab && av.carimbo && av.carimbo.rubrica){ av.carimbo.rubrica=null; av.carimbo.rubricaEm=null; av.carimbo.rubricaPor=null; av.carimbo.rubricaNome=null; av.carimbo.rubricaSignificado=null; av.carimbo.assinatura=null; }
   logStudyAuditInObject(study, action, details, { mudancas:(_mud&&_mud.length?_mud.slice(0,80):null), total_mudancas:(_mud?_mud.length:null), motivo:_motivo });
   save();
   /* rede de segurança no aparelho: registra a avaliação no diário (IndexedDB). Best-effort, nunca quebra o salvar. */
@@ -18613,11 +18616,14 @@ function saveAvaliacao(){
   try{
     if(typeof openRubrica==='function' && !(av.carimbo&&av.carimbo.rubrica)){
       var _rqid=curV,_rsid=curSid,_raid=av.id,_rdata=av.data;
-      openRubrica(function(url){ if(!url) return; try{
+      openRubrica(function(ok){ if(!ok) return; try{
         var _q=data[_rqid], _st=_q&&(_q.estudos||[]).find(function(s){return s.id===_rsid;});
         var _a=_st&&(_st.avaliacoes||[]).find(function(x){return x.id===_raid;});
-        if(_a){ if(!_a.carimbo)_a.carimbo={}; _a.carimbo.rubrica=url; _a.carimbo.rubricaEm=new Date().toISOString();
-          _a.carimbo.rubricaPor=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; _a.carimbo.rubricaNome=_nomeParaAssinatura(); _a.carimbo.rubricaSignificado='Conferido e assinado';
+        if(_a){ if(!_a.carimbo)_a.carimbo={};
+          /* A assinatura cobre o que foi medido: variáveis, notas e dado bruto. */
+          var _ass=_assinaturaNova('avaliacao',AssinaturaCore.conteudoAvaliacao(_a),'Conferido e assinado');
+          _a.carimbo.assinatura=_ass; _a.carimbo.rubrica=AssinaturaCore.rubricaDe(_ass); _a.carimbo.rubricaEm=_ass.em;
+          _a.carimbo.rubricaPor=_ass.por; _a.carimbo.rubricaNome=_ass.nome; _a.carimbo.rubricaSignificado=_ass.significado;
           save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSave==='function')cloudSave();
           if(typeof openStudyDetail==='function')openStudyDetail(_rqid,_rsid); }
       }catch(e){} }, 'Avaliação '+(isoToBR(_rdata)||_rdata||''));
