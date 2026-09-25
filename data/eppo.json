@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "fonte": "EPPO Global Database — https://data.eppo.int (fullcodes.xml exportado em 2026-09-24T03:31:47+02:00)",
+ "fonte": "EPPO Global Database — https://data.eppo.int (API)",
  "licenca": "EPPO Open Licence",
- "gerado": "2026-09-24",
+ "gerado": "2026-09-25",
  "culturas": {
   "Soja": "Glycine max",
   "Milho": "Zea mays",
@@ -951,63 +951,63 @@
  "naoResolvidos": [
   {
    "nome": "Bradysia matogrossensis",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Candidatus Liberibacter asiaticus",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Candidatus Phytoplasma pruni",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Citrus sudden death virus",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Claviceps paspali",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Colletotrichum acutatum",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Colletotrichum gloeosporioides",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Cotton vein mosaic virus",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Curtobacterium flaccumfaciens",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Eacles imperialis magnifica",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Mahanarva spectabilis",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Phoma costarricensis",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Ramulariopsis pseudoglycines",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Scaptocoris castanea",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   },
   {
    "nome": "Ustilago operta",
-   "motivo": "nome não consta como nome latino ativo na EPPO"
+   "motivo": "EPPO não devolveu código"
   }
  ]
 }
