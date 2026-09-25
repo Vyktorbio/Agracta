@@ -2490,6 +2490,26 @@ function _mergeAval(la,ca){
   m.notas=notas;
   m.notasMeta=metas;
   m.bruto=brutos;
+  /* LEITURA DUPLA: A e B costumam ler em celulares diferentes. `avaliadores`
+     vinha inteiro do lado mais novo, e a leitura de um avaliador sumia quando o
+     outro gravava depois. Junta avaliador a avaliador, célula a célula (o lado
+     mais novo vence só onde os dois têm valor), e refaz a média. */
+  if(la.avaliadores||ca.avaliadores){
+    var novo=(_ct>_lt)?ca:la, velho=(novo===ca)?la:ca, av2={};
+    [velho.avaliadores||{},novo.avaliadores||{}].forEach(function(src){
+      Object.keys(src).forEach(function(q){
+        var r=src[q]; if(!r||typeof r!=='object') return;
+        var d=av2[q]||(av2[q]={nome:'',notas:{}});
+        Object.keys(r).forEach(function(f){ if(f!=='notas'&&r[f]!=null&&r[f]!=='') d[f]=r[f]; });
+        Object.keys(r.notas||{}).forEach(function(pc){
+          var lin=r.notas[pc]||{}, dst=d.notas[pc]||(d.notas[pc]={});
+          Object.keys(lin).forEach(function(v){ if(lin[v]!==''&&lin[v]!=null) dst[v]=lin[v]; else if(!(v in dst)) dst[v]=lin[v]; });
+        });
+      });
+    });
+    m.avaliadores=av2;
+    if(m.duplaLeitura&&typeof avConsolidar==='function'){ try{ avConsolidar(m); }catch(e){} }
+  }
   return m;
 }
 /* APLICAÇÃO: a edição mais nova vence — mas REGISTRO DE FATO não se perde.
@@ -2590,6 +2610,23 @@ function _mergeAplicacao(la,ca){
   if(mem.length) m.memoriasAnteriores=mem; else delete m.memoriasAnteriores;
   return m;
 }
+/* ABERTO OU FECHADO: A TRILHA DECIDE ==========================================
+   Reabrir apaga `finalizacao`. Na mescla por campo a cópia mais nova vence nos
+   campos que TEM, e um campo que ela não tem vinha da cópia velha: o
+   `finalizacao` apagado voltava da nuvem e o estudo reaparecia fechado nos
+   outros aparelhos (e no próprio, depois do sync), barrando as avaliações
+   lançadas após a reabertura. A trilha já é unida entre os aparelhos; o último
+   registro entre finalização e reabertura diz o estado. Sem nenhum dos dois na
+   trilha (dado antigo), devolve '' e nada muda. */
+function _estadoFechamentoPelaTrilha(audit){
+  var ult=null;
+  (Array.isArray(audit)?audit:[]).forEach(function(e){
+    if(!e||(e.action!=='Finalização do Estudo'&&e.action!=='Reabertura do Estudo')) return;
+    var t=e.ts||Date.parse(e.iso||'')||0;
+    if(!ult||t>=ult.t) ult={t:t,a:e.action};
+  });
+  return !ult?'':(ult.a==='Reabertura do Estudo'?'aberto':'fechado');
+}
 function _mergeStudy(ls,cs){
   /* escalares do estudo: a edição mais NOVA vence; empate/sem carimbo: local (compat) */
   var lt=ls._ts||0, ct=cs._ts||0, m={},k;
@@ -2601,6 +2638,7 @@ function _mergeStudy(ls,cs){
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
   if(Array.isArray(ls.audit)||Array.isArray(cs.audit)) m.audit=_mergeTrilha(ls.audit,cs.audit);
+  if(_estadoFechamentoPelaTrilha(m.audit)==='aberto'){ delete m.finalizacao; delete m.estatisticaFinal; }
   if(ls.condicaoInicial||cs.condicaoInicial) m.condicaoInicial=_mergeCondInicial(ls.condicaoInicial,cs.condicaoInicial,ct>lt);
   if(typeof ConhecimentoCore!=="undefined" && (ls.integracoes||cs.integracoes)) m.integracoes=ConhecimentoCore.merge(ls.integracoes,cs.integracoes);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
@@ -4451,7 +4489,9 @@ function removerCroqui(){
   if(!_croquiEdit) return;
   var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
   if(!confirm('Tirar o croqui deste ensaio do mapa?\nO ensaio e os dados continuam; só a posição é apagada.')) return;
-  delete st.croqui; st._ts=Date.now();
+  /* null, não delete: na mescla entre aparelhos um campo ausente voltava da
+     cópia mais velha e o croqui removido reaparecia; o null do lado mais novo vence. */
+  st.croqui=null; st._ts=Date.now();
   save();
   fecharCroquiEditor();
   if(typeof _stxToast==='function') _stxToast('Croqui removido do mapa.');
