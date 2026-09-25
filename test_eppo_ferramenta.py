@@ -123,4 +123,24 @@ import os
 os.environ.pop('EPPO_TOKEN', None)
 ok(eppo.main(['--xml']) == 2, '--xml sem caminho e sem token: para sem mexer em nada')
 
+# --- diagnóstico: diz por que falhou, sem vazar o token -----------------------
+import io
+eppo.DIAG = {'names2codes': [], 'taxon': [], 'erros': []}
+class ErroHTTP(Exception):
+    code = 401
+    def read(self):
+        return b'{"message":"token SEGREDO-XYZ invalido"}'
+def cai(url, token):
+    raise ErroHTTP()
+res, motivo = eppo.resolver('Glycine max', 'SEGREDO-XYZ', get=cai, pausa=0)
+ok(motivo == 'consulta falhou: ErroHTTP 401', 'código HTTP no motivo')
+eppo.resolver('Glycine max', 'T', get=fake, pausa=0)
+buf = io.StringIO()
+eppo.diagnostico({'codigos': {}, 'naoResolvidos': [{'nome': 'a', 'motivo': 'consulta falhou: ErroHTTP 401'}]},
+                 {'codigos': {'x': {'eppo': 'GLXMA'}}}, buf)
+out = buf.getvalue()
+ok('Resolvidos: 0 (tabela atual: 1)' in out and 'consulta falhou' in out, 'resumo por motivo')
+ok('ErroHTTP 401' in out and '[names2codes]' in out and 'GLXMA' in out, 'amostras de erro e de resposta')
+ok('SEGREDO-XYZ' not in out and 'token *** invalido' in out, 'o token nunca aparece no log')
+
 print(f'Ferramenta EPPO: {N} verificações OK.')

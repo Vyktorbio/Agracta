@@ -31,6 +31,7 @@ import pathlib
 import re
 import sys
 import time
+from collections import Counter
 import unicodedata
 import urllib.parse
 import urllib.request
@@ -86,24 +87,56 @@ def nomes_do_taxon(taxon, lista_nomes):
     return nomes
 
 
+# Amostras do que a API respondeu, para o log dizer POR QUE falhou. O token é
+# apagado de tudo que entra aqui; nada disto vai para a tabela.
+DIAG = {'names2codes': [], 'taxon': [], 'erros': []}
+
+
+def _amostra(tipo, valor, token, limite=3):
+    if len(DIAG[tipo]) >= limite:
+        return
+    txt = valor if isinstance(valor, str) else json.dumps(valor, ensure_ascii=False)
+    if token:
+        txt = txt.replace(token, '***')
+    DIAG[tipo].append(txt[:400])
+
+
+def _erro(e, token):
+    msg = type(e).__name__
+    codigo = getattr(e, 'code', None)
+    if codigo is not None:
+        msg += f' {codigo}'
+    corpo = ''
+    try:
+        corpo = e.read().decode('utf-8', 'replace')[:300] if hasattr(e, 'read') else str(e)[:300]
+    except Exception:
+        pass
+    _amostra('erros', msg + (': ' + corpo if corpo else ''), token)
+    return msg
+
+
 def resolver(nome, token, get=http_json, pausa=0.2):
     q = urllib.parse.urlencode({'authtoken': token, 'intext': nome})
     try:
-        cands = candidatos(get(f'{BASE}/tools/names2codes?{q}', token), nome)
+        resp = get(f'{BASE}/tools/names2codes?{q}', token)
+        _amostra('names2codes', {'nome': nome, 'resposta': resp}, token)
+        cands = candidatos(resp, nome)
     except Exception as e:  # rede, token, formato
-        return None, f'consulta falhou: {type(e).__name__}'
+        return None, f'consulta falhou: {_erro(e, token)}'
     if not cands:
         return None, 'EPPO não devolveu código'
     for c in cands:
         t = urllib.parse.urlencode({'authtoken': token})
         try:
             taxon = get(f'{BASE}/taxon/{c}?{t}', token)
+            _amostra('taxon', {'codigo': c, 'resposta': taxon}, token)
             if isinstance(taxon, dict) and taxon.get('is_active') is False:
                 continue
             nomes = nomes_do_taxon(taxon, [])
             if normal(nome) not in nomes:
                 nomes |= nomes_do_taxon(taxon, get(f'{BASE}/taxon/{c}/names?{t}', token))
-        except Exception:
+        except Exception as e:
+            _erro(e, token)
             continue
         finally:
             time.sleep(pausa)
@@ -178,6 +211,25 @@ def gerar(token, get=http_json, pausa=0.2, hoje=None, xml=None):
     }
 
 
+def diagnostico(novo, antigo, saida=None):
+    """Resumo para o log: quantos resolveram, por que os outros não, e o formato
+    das primeiras respostas da API. É o que permite ajustar a ferramenta sem
+    ter o token em mãos."""
+    saida = saida or sys.stdout
+    motivos = Counter(re.split(r'[:(]', x['motivo'])[0].strip() for x in novo['naoResolvidos'])
+    print(f"Resolvidos: {len(novo['codigos'])} (tabela atual: {len(antigo.get('codigos', {}))}). "
+          f"Não resolvidos: {len(novo['naoResolvidos'])}.", file=saida)
+    for m, n in motivos.most_common():
+        print(f'  {n:4d}  {m}', file=saida)
+    for tipo in ('erros', 'names2codes', 'taxon'):
+        for a in DIAG[tipo]:
+            print(f'  [{tipo}] {a}', file=saida)
+    atuais = antigo.get('codigos', {})
+    divergentes = [k for k, v in novo['codigos'].items() if k in atuais and atuais[k].get('eppo') != v.get('eppo')]
+    if divergentes:
+        print('  Códigos diferentes da tabela atual: ' + ', '.join(divergentes[:10]), file=saida)
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     xml = argv[argv.index('--xml') + 1] if '--xml' in argv and argv.index('--xml') + 1 < len(argv) else None
@@ -188,6 +240,7 @@ def main(argv=None):
     destino = ROOT / 'data/eppo.json'
     antigo = json.loads(destino.read_text()) if destino.exists() else {'codigos': {}}
     novo = gerar(token, xml=xml)
+    diagnostico(novo, antigo)
     if len(novo['codigos']) < 0.8 * len(antigo.get('codigos', {})):
         print('A tabela perdeu mais de 20% dos códigos. Revisar a fonte antes de substituir.', file=sys.stderr)
         return 1
