@@ -12631,9 +12631,7 @@ function protocoloVerificaHtml(study, _pvQid){
      quando ele chegar — o cartão não tem campo de digitação, então repintar
      aqui não arranca nada de ninguém (ver a lição da busca do Agrofit). */
   _agrofitCultCarregar(function(){
-    if(typeof curV!=='undefined' && typeof curSid!=='undefined' &&
-       curV===_pvQid && curSid===((study||{}).id) &&
-       typeof openStudyDetail==='function') openStudyDetail(curV, curSid);
+    if(_estudoNaTela(_pvQid,(study||{}).id)) openStudyDetail(curV, curSid);
   });
   var P=(typeof window!=='undefined')?window.ProtocoloCore:null;
   if(!P||!study) return '';
@@ -13861,17 +13859,22 @@ function _bioestatIntegratedHtml(qid,sid,study){
    mensagem quanto pelo watchdog (antes só o handler atualizava, então um job que estourava o
    tempo deixava o spinner preso na tela mesmo com o cache 'ready'). Tolerante: dispara também se
    o spinner ainda estiver na tela, mesmo que a checagem do overlay falhe. */
+/* A ficha deste estudo está na tela agora? Repintar em segundo plano (resultado
+   da estatística, culturas do Agrofit) só pode acontecer com ela aberta: voltar
+   para a quadra não limpa curSid, e o repintar reabria o estudo sozinho. */
+function _estudoNaTela(qid,sid){
+  var ov=document.getElementById('sdOvl');
+  return !!(ov&&ov.classList.contains('open')&&curV===qid&&curSid===sid);
+}
 var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
   /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
      aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
   if(c&&window.AgEstudoPagina&&window.AgEstudoPagina.atualizarAnalises)window.AgEstudoPagina.atualizarAnalises(c);
-  if(!c||curV!==c.qid||curSid!==c.sid)return;
-  var ov=document.getElementById('sdOvl');
-  var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
-  if(!open)return;
+  /* #bioAutoStatus fica no DOM da ficha fechada: não prova que ela está aberta. */
+  if(!c||!_estudoNaTela(c.qid,c.sid))return;
   clearTimeout(_bioRefreshT);
-  _bioRefreshT=setTimeout(function(){ if(curV===c.qid&&curSid===c.sid) openStudyDetail(c.qid,c.sid); },120);
+  _bioRefreshT=setTimeout(function(){ if(_estudoNaTela(c.qid,c.sid)) openStudyDetail(c.qid,c.sid); },120);
 }
 window.addEventListener('message',function(ev){
   if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
