@@ -5,10 +5,11 @@ Os nomes vêm do que o Agracta já usa: os binômios do alvos-catalogo.js e as
 culturas de tools/eppo-culturas.json. Nenhum código é digitado à mão.
 
 Para cada nome:
-  1. pergunta à EPPO qual código corresponde (tools/names2codes);
-  2. abre o táxon de cada código candidato e só aceita se o nome preferido, ou
-     um nome registrado para aquele táxon, for EXATAMENTE o nome consultado
-     (ignorando só caixa, espaços e o sinal de híbrido).
+  1. pergunta à EPPO quais códigos têm aquele nome (API v2, tools/name2codes);
+  2. abre cada código candidato e só aceita se ele estiver ativo e tiver o nome
+     consultado, EXATAMENTE, como nome latino (ignorando só caixa, espaços e o
+     sinal de híbrido). Mais de um código conferido: vale o que tem o nome como
+     preferido; se não houver exatamente um, fica "ambíguo".
 Qualquer resposta fora do esperado vira "não resolvido" — nunca um código
 aproximado. Um código errado faz o Agracta juntar ensaios que não têm nada a ver;
 um código ausente só deixa a busca dizer que não é completa.
@@ -38,7 +39,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BASE = 'https://data.eppo.int/api/rest/1.0'
+# API v2 (especificação: https://api.eppo.int/gd/v2/eppo_api_gd_v2.yml). A chave
+# vai só no cabeçalho X-Api-Key — nunca na URL.
+BASE = 'https://api.eppo.int/gd/v2'
 CODIGO = re.compile(r'\b[0-9A-Z]{5,6}\b')
 
 
@@ -59,32 +62,29 @@ def http_json(url, token):
         return json.loads(r.read().decode('utf-8'))
 
 
-def candidatos(resposta, nome):
-    """Códigos que a resposta de names2codes sugere para o nome. Aceita o valor
-    como texto ou lista; o que não parecer código é ignorado."""
-    vals = []
-    if isinstance(resposta, dict):
-        for k, v in resposta.items():
-            if normal(k) == normal(nome) or len(resposta) == 1:
-                vals.append(v)
-    elif isinstance(resposta, list):
-        vals = resposta
-    out = []
-    for v in vals:
-        for c in CODIGO.findall(json.dumps(v) if not isinstance(v, str) else v):
-            if c not in out:
-                out.append(c)
-    return out[:3]
+def candidatos(resposta):
+    """name2codes devolve [{eppocode, preferred}]. Devolve [(código, preferido)],
+    sem repetição; o que não tiver forma de código é ignorado."""
+    out, vistos = [], set()
+    for item in resposta if isinstance(resposta, list) else []:
+        if not isinstance(item, dict):
+            continue
+        c = str(item.get('eppocode') or '').strip().upper()
+        if CODIGO.fullmatch(c) and c not in vistos:
+            vistos.add(c)
+            out.append((c, item.get('preferred') is True))
+    return out[:6]
 
 
-def nomes_do_taxon(taxon, lista_nomes):
-    nomes = set()
-    if isinstance(taxon, dict) and taxon.get('prefname'):
-        nomes.add(normal(taxon['prefname']))
-    for n in lista_nomes if isinstance(lista_nomes, list) else []:
-        if isinstance(n, dict) and n.get('fullname'):
-            nomes.add(normal(n['fullname']))
-    return nomes
+def nomes_latinos(overview, nomes):
+    """Nomes latinos do táxon: o preferido do overview e os de lang_iso 'la'."""
+    out = set()
+    if isinstance(overview, dict) and overview.get('prefname'):
+        out.add(normal(overview['prefname']))
+    for n in nomes if isinstance(nomes, list) else []:
+        if isinstance(n, dict) and n.get('fullname') and n.get('lang_iso') == 'la':
+            out.add(normal(n['fullname']))
+    return out
 
 
 # Amostras do que a API respondeu, para o log dizer POR QUE falhou. O token é
@@ -116,33 +116,41 @@ def _erro(e, token):
 
 
 def resolver(nome, token, get=http_json, pausa=0.2):
-    q = urllib.parse.urlencode({'authtoken': token, 'intext': nome})
+    q = urllib.parse.urlencode({'name': nome, 'onlyPreferred': 'false'})
     try:
-        resp = get(f'{BASE}/tools/names2codes?{q}', token)
+        resp = get(f'{BASE}/tools/name2codes?{q}', token)
         _amostra('names2codes', {'nome': nome, 'resposta': resp}, token)
-        cands = candidatos(resp, nome)
-    except Exception as e:  # rede, token, formato
+        cands = candidatos(resp)
+    except Exception as e:  # rede, chave, formato
         return None, f'consulta falhou: {_erro(e, token)}'
     if not cands:
         return None, 'EPPO não devolveu código'
-    for c in cands:
-        t = urllib.parse.urlencode({'authtoken': token})
+    conferidos = []
+    for c, preferido in cands:
         try:
-            taxon = get(f'{BASE}/taxon/{c}?{t}', token)
-            _amostra('taxon', {'codigo': c, 'resposta': taxon}, token)
-            if isinstance(taxon, dict) and taxon.get('is_active') is False:
+            ov = get(f'{BASE}/taxons/taxon/{c}/overview', token)
+            _amostra('taxon', {'codigo': c, 'resposta': ov}, token)
+            if not isinstance(ov, dict) or ov.get('is_active') is False:
                 continue
-            nomes = nomes_do_taxon(taxon, [])
+            nomes = nomes_latinos(ov, [])
             if normal(nome) not in nomes:
-                nomes |= nomes_do_taxon(taxon, get(f'{BASE}/taxon/{c}/names?{t}', token))
+                nomes |= nomes_latinos(ov, get(f'{BASE}/taxons/taxon/{c}/names', token))
         except Exception as e:
             _erro(e, token)
             continue
         finally:
             time.sleep(pausa)
         if normal(nome) in nomes:
-            return {'eppo': c, 'nomePreferido': (taxon or {}).get('prefname') or nome}, None
-    return None, 'nenhum código conferiu com o nome (' + ', '.join(cands) + ')'
+            conferidos.append((c, preferido, ov.get('prefname') or nome))
+    if not conferidos:
+        return None, 'nenhum código conferiu com o nome (' + ', '.join(c for c, _ in cands) + ')'
+    if len(conferidos) > 1:
+        pref = [x for x in conferidos if x[1]]
+        if len(pref) != 1:
+            return None, 'ambíguo na EPPO (' + ', '.join(sorted(x[0] for x in conferidos)) + ')'
+        conferidos = pref
+    c, _, prefname = conferidos[0]
+    return {'eppo': c, 'nomePreferido': prefname}, None
 
 
 def indice_xml(caminho):

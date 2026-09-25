@@ -19,52 +19,69 @@ def ok(c, m):
     N += 1
 
 
+# Respostas no formato da API v2 (https://api.eppo.int/gd/v2/eppo_api_gd_v2.yml):
+# name2codes -> [{eppocode, preferred}]; overview -> {prefname, is_active};
+# names -> [{fullname, lang_iso, preferred}].
 TAXONS = {
     'GLXMA': {'eppocode': 'GLXMA', 'prefname': 'Glycine max', 'is_active': True},
     'ZEAMX': {'eppocode': 'ZEAMX', 'prefname': 'Zea mays', 'is_active': True},
-    'FRAAN': {'eppocode': 'FRAAN', 'prefname': 'Fragaria × ananassa', 'is_active': True},
+    'FRAAN': {'eppocode': 'FRAAN', 'prefname': 'Fragaria \u00d7 ananassa', 'is_active': True},
     'PHAKPA': {'eppocode': 'PHAKPA', 'prefname': 'Phakopsora pachyrhizi', 'is_active': True},
     'OLDCOD': {'eppocode': 'OLDCOD', 'prefname': 'Nome antigo', 'is_active': False},
     'NOVOCD': {'eppocode': 'NOVOCD', 'prefname': 'Nome aceito', 'is_active': True},
+    'HOMOAG': {'eppocode': 'HOMOAG', 'prefname': 'Homonimus', 'is_active': True},
+    'HOMOBG': {'eppocode': 'HOMOBG', 'prefname': 'Homonimus', 'is_active': True},
 }
-NOMES = {'NOVOCD': [{'fullname': 'Nome aceito'}, {'fullname': 'Sinonimo antigus'}]}
+NOMES = {'NOVOCD': [{'fullname': 'Nome aceito', 'lang_iso': 'la', 'preferred': True},
+                    {'fullname': 'Sinonimo antigus', 'lang_iso': 'la', 'preferred': False}],
+         'GLXMA': [{'fullname': 'soja', 'lang_iso': 'pt', 'preferred': False}]}
 SUGESTOES = {
-    'Glycine max': {'Glycine max': 'GLXMA'},
-    'Zea mays': {'Zea mays': 'GLXMA;ZEAMX'},          # 1º candidato errado, 2º certo
-    'Fragaria x ananassa': {'Fragaria x ananassa': ['FRAAN']},
-    'Phakopsora pachyrhizi': {'Phakopsora pachyrhizi': 'GLXMA'},  # sugere código de outra coisa
-    'Sinonimo antigus': {'Sinonimo antigus': 'OLDCOD NOVOCD'},
-    'Nada aqui': {'Nada aqui': '****NOT FOUND*****'},
+    'Glycine max': [{'eppocode': 'GLXMA', 'preferred': True}],
+    'Zea mays': [{'eppocode': 'GLXMA', 'preferred': False}, {'eppocode': 'ZEAMX', 'preferred': True}],
+    'Fragaria x ananassa': [{'eppocode': 'FRAAN', 'preferred': True}],
+    'Phakopsora pachyrhizi': [{'eppocode': 'GLXMA', 'preferred': True}],   # código de outra coisa
+    'Sinonimo antigus': [{'eppocode': 'OLDCOD', 'preferred': False}, {'eppocode': 'NOVOCD', 'preferred': False}],
+    'Homonimus': [{'eppocode': 'HOMOAG', 'preferred': True}, {'eppocode': 'HOMOBG', 'preferred': True}],
+    'soja': [{'eppocode': 'GLXMA', 'preferred': False}],                   # nome em português
+    'Nada aqui': [],
+    'Formato estranho': {'erro': 'inesperado'},
 }
 
 
 def fake(url, token):
-    ok(token == 'T', 'token repassado')
-    if '/tools/names2codes' in url:
-        nome = eppo.urllib.parse.parse_qs(eppo.urllib.parse.urlparse(url).query)['intext'][0]
+    ok(token in ('T', 'CHAVE-SECRETA'), 'chave repassada')
+    ok('CHAVE-SECRETA' not in url, 'chave nunca na URL')
+    ok(url.startswith('https://api.eppo.int/gd/v2/'), 'API v2')
+    if '/tools/name2codes' in url:
+        qs = eppo.urllib.parse.parse_qs(eppo.urllib.parse.urlparse(url).query)
+        ok(qs['onlyPreferred'] == ['false'], 'procura também sinônimos')
+        nome = qs['name'][0]
         if nome == 'Rede cai':
             raise OSError('sem rede')
-        return SUGESTOES.get(nome, {})
-    cod = url.split('/taxon/')[1].split('?')[0].split('/')[0]
-    if url.split('?')[0].endswith('/names'):
+        return SUGESTOES.get(nome, [])
+    cod = url.split('/taxons/taxon/')[1].split('/')[0]
+    if url.endswith('/names'):
         return NOMES.get(cod, [])
     return TAXONS.get(cod, {})
 
 
 def r(nome):
-    return eppo.resolver(nome, 'T', get=fake, pausa=0)
+    return eppo.resolver(nome, 'CHAVE-SECRETA', get=fake, pausa=0)
 
 
-ok(r('Glycine max')[0]['eppo'] == 'GLXMA', 'código conferido')
+ok(r('Glycine max')[0] == {'eppo': 'GLXMA', 'nomePreferido': 'Glycine max'}, 'código conferido')
 ok(r('Zea mays')[0]['eppo'] == 'ZEAMX', 'pula candidato que não confere')
 ok(r('Fragaria x ananassa')[0]['eppo'] == 'FRAAN', 'sinal de híbrido × equivale a x')
 res, motivo = r('Phakopsora pachyrhizi')
 ok(res is None and 'nenhum código conferiu' in motivo, 'código de outro táxon é recusado')
 res, _ = r('Sinonimo antigus')
-ok(res['eppo'] == 'NOVOCD' and res['nomePreferido'] == 'Nome aceito', 'sinônimo aceito pelo nome registrado; inativo pulado')
-ok(r('Nada aqui')[0] is None, 'não encontrado fica sem código')
+ok(res == {'eppo': 'NOVOCD', 'nomePreferido': 'Nome aceito'}, 'sinônimo latino aceito; código inativo pulado')
+res, motivo = r('Homonimus')
+ok(res is None and motivo.startswith('ambíguo') and 'HOMOAG' in motivo, 'homônimo fica ambíguo')
+ok(r('soja')[0] is None, 'nome em português não conta: só latim')
+ok(r('Nada aqui')[1] == 'EPPO não devolveu código', 'lista vazia')
+ok(r('Formato estranho')[1] == 'EPPO não devolveu código', 'formato inesperado não inventa nada')
 ok(r('Rede cai')[1].startswith('consulta falhou'), 'falha de rede não inventa nada')
-ok(r('Desconhecido')[1] == 'EPPO não devolveu código', 'resposta vazia')
 
 ok(eppo.nomes_do_catalogo("['Ferrugem','Phakopsora pachyrhizi'],\n['Buva','Conyza bonariensis']") ==
    ['Conyza bonariensis', 'Phakopsora pachyrhizi'], 'lê os binômios do catálogo')
