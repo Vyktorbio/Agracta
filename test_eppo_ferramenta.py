@@ -160,4 +160,14 @@ ok('Resolvidos: 0 (tabela atual: 1)' in out and 'consulta falhou' in out, 'resum
 ok('ErroHTTP 401' in out and '[names2codes]' in out and 'GLXMA' in out, 'amostras de erro e de resposta')
 ok('SEGREDO-XYZ' not in out and 'token *** invalido' in out, 'o token nunca aparece no log')
 
+# --- só mudança de conteúdo vira PR ---------------------------------------------
+base = {'fonte': 'arquivo', 'gerado': '2026-09-24', 'culturas': {'Soja': 'Glycine max'},
+        'codigos': {'Glycine max': {'eppo': 'GLXMA', 'nomePreferido': 'Glycine max'}},
+        'naoResolvidos': [{'nome': 'X y', 'motivo': 'nome não consta'}]}
+cosmetico = dict(base, fonte='API', gerado='2026-09-25', naoResolvidos=[{'nome': 'X y', 'motivo': 'EPPO não devolveu código'}])
+ok(eppo.substancia(base) == eppo.substancia(cosmetico), 'fonte, data e redação do motivo não contam')
+ok(eppo.substancia(base) != eppo.substancia(dict(base, codigos={'Glycine max': {'eppo': 'OUTRO'}})), 'código diferente conta')
+ok(eppo.substancia(base) != eppo.substancia(dict(base, naoResolvidos=[])), 'nome que passou a resolver conta')
+ok(eppo.substancia(base) != eppo.substancia(dict(base, culturas={})), 'cultura conta')
+
 print(f'Ferramenta EPPO: {N} verificações OK.')
