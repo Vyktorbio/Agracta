@@ -70,6 +70,43 @@ const L2=V.lotes([[{bytes:5e6},{bytes:5e6}],[{bytes:10},{bytes:10}]],450,8e6);
 ok(L2.length===2 && L2[0].length===2,'par grande sozinho, sem ser partido');
 
 /* ---- ligação no firebase-sync e nas regras ---- */
+/* ---- gravação por campos: só o que mudou sobe, e o histórico ainda volta ---- */
+{
+  const grande='R'.repeat(5000);
+  const A={id:'E1',data:{audit:[1],rub:grande,est:{a:1,b:{x:1}},sai:1}};
+  const B={id:'E1',data:{audit:[1,2],rub:grande,est:{a:1,b:{x:2}},novo:'n'}};
+  const cs=V.campos(A,B);
+  eq(cs.map(x=>x.caminho.join('.')).sort(),['data.audit','data.est.b','data.novo','data.sai'],'só os caminhos que mudaram (até 3 níveis)');
+  ok(!cs.some(x=>x.caminho.join('.').includes('rub')),'o campo pesado que não mudou não sobe');
+  eq(V.aplicarCampos(A,cs),B,'aplicar os campos no anterior dá exatamente o novo');
+  ok(V.bytes(cs.map(x=>x.valor))<500,'o envio é pequeno perto do documento');
+  eq(V.campos(A,A),[],'nada mudou, nada sobe');
+  eq(V.campos({d:{'':1}},{d:{'':2}}).map(x=>x.caminho),[['d']],'nome de campo inválido: o pai vira folha');
+  eq(V.campos({d:{_agractaArray:true,_agractaLength:1,_agractaItems:{0:1}}},{d:{_agractaArray:true,_agractaLength:2,_agractaItems:{0:1,1:2}}}).map(x=>x.caminho),[['d']],'lista codificada vai inteira');
+  /* golden: sequência com gravações parciais restaura cada momento exato */
+  let srv={estudos:{}}, hist=[], ant={};
+  function gp(rev,novo){
+    ant[rev]=clone(srv);
+    V.mudancas(srv,novo,['estudos']).forEach(m=>{
+      if(m.acao==='alterar') m.campos=V.campos(m.anterior,m.novo);
+      const r=V.registro(m,rev);
+      if(m.acao==='alterar') ok(r.anterior._parcial===true && V.bytes(r.anterior)<V.bytes(m.anterior),'histórico guarda só o anterior dos campos');
+      hist.push(JSON.parse(JSON.stringify(r)));   /* ida e volta como o Firestore */
+    });
+    srv=clone(novo);
+  }
+  gp(1,{estudos:{E1:A}});
+  gp(2,{estudos:{E1:B}});
+  gp(3,{estudos:{E1:Object.assign(clone(B),{data:Object.assign(clone(B.data),{audit:[1,2,3]})})}});
+  gp(4,{estudos:{}});
+  for(const rev of [1,2,3,4]){
+    const res=V.estadoAntesDe(srv,hist,rev);
+    eq(res.flat,ant[rev],'parcial: antes da gravação '+rev);
+    eq(res.irrecuperaveis,[]);
+  }
+  const orf=V.estadoAntesDe({estudos:{}},[{rev:9,colecao:'estudos',docId:'X',acao:'alterar',anterior:{_parcial:true,campos:[{c:'["a"]',v:1}]}}],9);
+  eq(orf.irrecuperaveis.length,1,'parcial sem o documento para desfazer é dito, não inventado');
+}
 const sync=fs.readFileSync('firebase-sync.js','utf8');
 ok(/collectionRef\('historico'\)\.doc\(\)/.test(sync),'o sync grava em historico');
 ok(/V\.lotes\(pares\)/.test(sync),'o sync usa os lotes pareados');
@@ -84,4 +121,6 @@ const app=fs.readFileSync('app.js','utf8');
 const tela=app.slice(app.indexOf('function openCloudHistory'),app.indexOf('/* ===================== VERIFICADOR DE INTEGRIDADE'));
 ok(!/SB\.rpc/.test(tela),'a tela não chama mais o Supabase');
 ok(/AgractaVersoes/.test(tela),'a tela lê o histórico do Firebase');
+ok(/function opEscrita/.test(sync)&&/type==='update'/.test(sync),'o sync grava por campos');
+ok(/FB\.semParcial=/.test(sync),'recusa do update volta ao documento inteiro');
 console.log('Versões: '+n+' verificações — mudanças, registro, golden de restauração, lotes e ligação.');
