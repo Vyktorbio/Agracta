@@ -15992,11 +15992,16 @@ function gerarAvaliacoesAuto(s){
   if(_parseMomentos(s.avalMomentos, s.avalUnidade).length) return _gerarAvalMomentos(s);
   var start=s.avalInicio||s.dataInicio, iv=parseInt(s.avalIntervalo)||0, n=parseInt(s.avalNum)||0;
   if(!start||n<=0) return 0;
+  /* Agenda reancorada na 1ª aplicação real (campo-inteligente.js): as previstas
+     andam junto. Sem isto, salvar o estudo recriaria as datas antigas. */
+  var _desl=parseInt(s.avalDeslocamento)||0;
+  if(_desl) start=_isoShift(start,_desl);
   var temData={}; s.avaliacoes.forEach(function(a){ if(a.data) temData[a.data]=true; });
   var add=0;
   for(var i=0;i<n;i++){
     var d=(iv>0)?_isoShift(start,i*iv):start;
-    if(temData[d]) continue;
+    /* avaliação já feita na data ORIGINAL do horário cobre o horário deslocado */
+    if(temData[d]||(_desl&&temData[_isoShift(d,-_desl)])) continue;
     var _avid='auto_'+d;
     /* o id é determinístico por data, então ele SEMPRE colide com uma exclusão anterior da
        mesma data. Limpa a lápide local e carimba _ts para o merge saber que esta é nova. */
