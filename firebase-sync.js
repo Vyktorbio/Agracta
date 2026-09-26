@@ -23,7 +23,7 @@
     'machadovictorchaves@gmail.com':true,
     'vyktorbio@gmail.com':true
   };
-  var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
+  var COLLECTIONS=['locais','quadras','estudos_arquivo','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
   /* `media` (fotos das notas em fatias de base64) é só LEITURA desde a 14a
      publicação: a foto mora no aparelho (vendor/fotos-notas-core.js). As fatias
      antigas continuam sendo lidas, para cada aparelho migrar as suas, mas o app
@@ -534,6 +534,24 @@
     showAuthGate();
   };
 
+  /* Arquivo de finalizações anteriores: só recebe itens (BPL — nada sai).
+     Junta sem perder: o que veio no documento do estudo (aparelho em versão
+     antiga ainda grava ali) e o que está em `estudos_arquivo`, sem repetir,
+     em ordem de reabertura. */
+  function _chaveArquivo(item){
+    item=item||{};
+    return String(item.reabertoEm||'')+'|'+String(item.reabertoPor||'')+'|'+String(item.motivo||'').slice(0,60);
+  }
+  function _arquivoFinalizacoes(){
+    var vistos={},out=[];
+    Array.prototype.forEach.call(arguments,function(lista){
+      (Array.isArray(lista)?lista:[]).forEach(function(item){
+        if(!item||typeof item!=='object')return;
+        var k=_chaveArquivo(item);if(vistos[k])return;vistos[k]=1;out.push(item);
+      });
+    });
+    return out.sort(function(a,b){return String(a.reabertoEm||'').localeCompare(String(b.reabertoEm||''));});
+  }
   function splitState(st){
     var flat={};
     COLLECTIONS.forEach(function(c){flat[c]={};});
@@ -570,6 +588,19 @@
         if(!s||!s.id)return;
         var study=clone(s),apps=study.aplicacoes||[],avs=study.avaliacoes||[];
         delete study.aplicacoes;delete study.avaliacoes;
+        /* O arquivo de finalizações anteriores sai do documento do estudo: cada
+           reabertura guarda a finalização inteira (com rubrica desenhada antiga,
+           ~110 KB) e ele só cresce — algumas reaberturas levariam o estudo além
+           de 1 MB, que o Firestore recusa, e aí nada mais sobe. Uma finalização
+           arquivada por documento. `estudos_arquivo` vem antes de `estudos` na
+           gravação: o arquivo existe no servidor antes de sair do estudo. */
+        var arq=_arquivoFinalizacoes(study.finalizacoesAnteriores);
+        delete study.finalizacoesAnteriores;
+        arq.forEach(function(item){
+          var chave=s.id+'|fin|'+_chaveArquivo(item);
+          flat.estudos_arquivo[docId(chave)]=clean({chave:chave,estudoId:s.id,tipo:'finalizacaoAnterior',
+            reabertoEm:item.reabertoEm||'',data:item});
+        });
         flat.estudos[docId(s.id)]=clean({id:s.id,quadraId:qid,order:si,data:study});
         apps.forEach(function(a,ai){
           if(a&&a.id)flat.aplicacoes[docId(a.id)]=clean({id:a.id,estudoId:s.id,order:ai,data:a});
@@ -672,6 +703,15 @@
     });
     Object.keys(st.data).forEach(function(qid){
       if(qid!=='__config')st.data[qid].estudos=(st.data[qid].estudos||[]).sort(function(a,b){return a.order-b.order;}).map(function(x){return x.value;});
+    });
+    var arquivo={};
+    Object.keys(flat.estudos_arquivo||{}).forEach(function(k){
+      var r=flat.estudos_arquivo[k];
+      if(r&&r.tipo==='finalizacaoAnterior'&&r.data)(arquivo[r.estudoId]=arquivo[r.estudoId]||[]).push(clone(r.data));
+    });
+    Object.keys(studies).forEach(function(id){
+      var s=studies[id].value,junto=_arquivoFinalizacoes(s.finalizacoesAnteriores,arquivo[id]);
+      if(junto.length)s.finalizacoesAnteriores=junto;
     });
     Object.keys(flat.aplicacoes).forEach(function(k){
       var r=flat.aplicacoes[k],s=studies[r.estudoId];
@@ -899,6 +939,13 @@
         console.warn('[Agracta Firebase] histórico recusado pelo servidor ('+cod+'); gravando sem ele nesta sessão.');
         return commitState(localState()||st);
       }
+      /* Documento acima do limite do Firestore (1 MiB): diz QUAL, em vez de um
+         "invalid-argument" que ninguém no campo consegue resolver. */
+      var grandeDemais=cod==='invalid-argument'?_documentoGrandeDemais(next):null;
+      if(grandeDemais){
+        console.error('[Agracta Firebase] documento acima de 1 MB:',grandeDemais);
+        cloudBadge('error','=⚠ não subiu: '+grandeDemais.nome+' passou de 1 MB ('+grandeDemais.kb+' KB) · salvo neste aparelho');
+      }else
       cloudBadge('error','=⚠ não subiu ('+cod+') · salvo neste aparelho · toque para tentar de novo');
       _agendarNovaTentativa();
       throw e;
@@ -939,6 +986,21 @@
       return batch.update.apply(batch,args);
     }
     return batch.set(o.ref,o.data);
+  }
+  function _documentoGrandeDemais(flat){
+    var V=window.VersoesCore,pior=null;
+    if(!V||!flat)return null;
+    Object.keys(flat).forEach(function(c){
+      Object.keys(flat[c]||{}).forEach(function(id){
+        var b=V.bytes(flat[c][id]);
+        if(b>1000000&&(!pior||b>pior.b)){
+          var d=flat[c][id]||{},cod=(d.data&&d.data.codigo)||d.id||d.key||id;
+          pior={b:b,colecao:c,id:id,kb:Math.round(b/1024),
+            nome:(c==='estudos'?'o estudo ':c==='avaliacoes'?'a avaliação ':c+' ')+String(cod).slice(0,40)};
+        }
+      });
+    });
+    return pior;
   }
   /* Envio que falhou tenta de novo sozinho, em 60 s, enquanto houver edição
      pendente. Antes, ficava parado até alguém tocar no selo ou reabrir o app. */
