@@ -208,7 +208,7 @@
   }
 
   /* Resumo legível de uma gravação: "2 estudos · 5 avaliações". */
-  var NOMES={locais:['local','locais'], quadras:['quadra','quadras'], estudos:['estudo','estudos'],
+  var NOMES={locais:['local','locais'], quadras:['quadra','quadras'], estudos:['estudo','estudos'], estudos_arquivo:['finalização arquivada','finalizações arquivadas'],
     aplicacoes:['aplicação','aplicações'], avaliacoes:['avaliação','avaliações'],
     lancamentos:['lançamento','lançamentos'], notas_campo:['nota de campo','notas de campo'],
     randomizacoes:['sorteio','sorteios'], itens:['item','itens'], config:['configuração','configurações'],
