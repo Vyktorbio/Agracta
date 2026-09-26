@@ -743,7 +743,7 @@
     COLLECTIONS_GRAVACAO.forEach(function(c){
       var n=next[c]||{},p=prev[c]||{};
       Object.keys(n).forEach(function(id){
-        if(!p[id]||stable(p[id])!==stable(n[id]))ops.push({type:'set',ref:collectionRef(c).doc(id),data:n[id]});
+        if(!p[id]||stable(p[id])!==stable(n[id]))ops.push(opEscrita(c,id,p[id],n[id]).op);
       });
       Object.keys(p).forEach(function(id){
         if(!n[id])ops.push({type:'delete',ref:collectionRef(c).doc(id)});
@@ -774,8 +774,8 @@
     if(V&&!FB.semHistorico){
       var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
       var pares=V.mudancas(FB.remoteFlat||{},next,COLLECTIONS_GRAVACAO).map(function(m){
-        var ref=collectionRef(m.colecao).doc(m.docId);
-        var dado=m.acao==='apagar'?{type:'delete',ref:ref,bytes:64}:{type:'set',ref:ref,data:m.novo};
+        var w=opEscrita(m.colecao,m.docId,m.anterior,m.novo),dado=w.op;
+        if(w.campos)m.campos=w.campos;
         var reg=V.registro(m,newRev);
         reg.em=window.firebase.firestore.FieldValue.serverTimestamp();
         reg.por=FB.user.email||'';reg.porNome=String(porNome).slice(0,120);
@@ -784,7 +784,7 @@
       });
       V.lotes(pares).forEach(function(l){
         var batch=FB.db.batch();
-        l.forEach(function(o){ops.push(o);if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
+        l.forEach(function(o){ops.push(o);naBatch(batch,o);});
         batches.push(batch);
       });
       FB.historicoAtivo=true;
@@ -792,7 +792,7 @@
       ops=queueOps(next);
       for(var i=0;i<ops.length;i+=400){
         var batch=FB.db.batch();
-        ops.slice(i,i+400).forEach(function(o){if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
+        ops.slice(i,i+400).forEach(function(o){naBatch(batch,o);});
         batches.push(batch);
       }
     }
@@ -888,6 +888,12 @@
          e ele levava registros de historico (regra do banco mais estrita que o
          app, campo inesperado), o mesmo envio sai de novo SEM o historico. O
          dado e o que importa; a falta do historico fica registrada na tela. */
+      if(!FB.semParcial&&ops.some(function(o){return o.type==='update';})&&
+         (cod==='not-found'||cod==='invalid-argument'||cod==='failed-precondition')){
+        FB.semParcial={em:Date.now(),codigo:cod};
+        console.warn('[Agracta Firebase] gravação por campos recusada ('+cod+'); gravando documentos inteiros nesta sessão.');
+        return commitState(localState()||st);
+      }
       if(FB.historicoAtivo&&!FB.semHistorico&&(cod==='permission-denied'||cod==='invalid-argument')){
         FB.semHistorico={em:Date.now(),codigo:cod};FB.historicoAtivo=false;
         console.warn('[Agracta Firebase] histórico recusado pelo servidor ('+cod+'); gravando sem ele nesta sessão.');
@@ -902,6 +908,38 @@
     return FB.pushPromise;
   }
 
+  /* SÓ O QUE MUDOU SOBE (vendor/versoes-core.js, `campos`). Documento grande
+     que já existe no servidor vai por update() dos campos alterados, não por
+     set() do documento inteiro: lançar uma nota num estudo de 400 KB mandava
+     ~1 MB por salvamento e estourava o prazo de envio no 4G. Documento pequeno
+     segue inteiro (nada a ganhar). Se o servidor recusar o update (documento
+     apagado por outro aparelho, caminho inesperado), `FB.semParcial` volta
+     ao set() inteiro pelo resto da sessão — nunca deixa de salvar por isso. */
+  var PARCIAL_MIN_BYTES=16384;
+  function opEscrita(c,id,prevDoc,nextDoc){
+    var ref=collectionRef(c).doc(id),V=window.VersoesCore;
+    if(!nextDoc)return {op:{type:'delete',ref:ref,bytes:64},campos:null};
+    if(prevDoc&&V&&typeof V.campos==='function'&&!FB.semParcial&&V.bytes(nextDoc)>=PARCIAL_MIN_BYTES){
+      var cs=V.campos(prevDoc,nextDoc);
+      if(cs.length){
+        var b=0;cs.forEach(function(x){b+=x.ausente?32:V.bytes(x.valor);});
+        return {op:{type:'update',ref:ref,campos:cs,bytes:b+64},campos:cs};
+      }
+    }
+    return {op:{type:'set',ref:ref,data:nextDoc},campos:null};
+  }
+  function naBatch(batch,o){
+    if(o.type==='delete')return batch.delete(o.ref);
+    if(o.type==='update'){
+      var fs=window.firebase.firestore,args=[o.ref];
+      o.campos.forEach(function(x){
+        args.push(new (Function.prototype.bind.apply(fs.FieldPath,[null].concat(x.caminho)))());
+        args.push(x.ausente?fs.FieldValue.delete():x.valor);
+      });
+      return batch.update.apply(batch,args);
+    }
+    return batch.set(o.ref,o.data);
+  }
   /* Envio que falhou tenta de novo sozinho, em 60 s, enquanto houver edição
      pendente. Antes, ficava parado até alguém tocar no selo ou reabrir o app. */
   function _agendarNovaTentativa(){

@@ -33,7 +33,7 @@
 (function(root){
   'use strict';
 
-  var VERSAO='1.0.0';
+  var VERSAO='1.1.0';
   /* Folga sob o limite de 1 MiB do Firestore para o envelope do registro. */
   var MAX_ANTERIOR_BYTES=900000;
 
@@ -68,16 +68,80 @@
     return out;
   }
 
+  /* GRAVAR SÓ O QUE MUDOU ====================================================
+     Um estudo carrega a estatística congelada e as finalizações anteriores
+     (com rubricas desenhadas antigas): passa de 400 KB. Lançar UMA nota põe
+     uma linha na trilha do estudo, e regravar o documento inteiro — mais a
+     cópia inteira dele no histórico — mandava ~1 MB por salvamento. No 4G do
+     campo isso passava do prazo de envio e o aparelho ficava em "alterações
+     aguardando envio" para sempre.
+
+     `campos` devolve os caminhos que mudaram entre o que o servidor tem e o
+     que vai. Desce em mapas que existem dos dois lados (até `prof` níveis);
+     o resto é folha. Cada item: {caminho, ausente (sai do documento), valor,
+     anterior, anteriorAusente}. Nome de campo vazio ou reservado ('__') não é
+     caminho válido no Firestore: aí o pai inteiro vira a folha. */
+  function mapa(v){ return v!==null && typeof v==='object' && !Array.isArray(v) && v._agractaArray!==true; }
+  function nomeOk(k){ return k!=='' && k.indexOf('__')!==0; }
+  function campos(prev, next, prof){
+    prof=prof==null?3:prof;
+    var out=[];
+    (function anda(p, n, caminho, nivel){
+      var ks={};
+      Object.keys(p).forEach(function(k){ ks[k]=1; });
+      Object.keys(n).forEach(function(k){ ks[k]=1; });
+      Object.keys(ks).sort().forEach(function(k){
+        var temP=Object.prototype.hasOwnProperty.call(p,k), temN=Object.prototype.hasOwnProperty.call(n,k);
+        var c=caminho.concat([k]);
+        if(temP && temN && stable(p[k])===stable(n[k])) return;
+        if(temP && temN && nivel<prof && mapa(p[k]) && mapa(n[k]) &&
+           Object.keys(p[k]).concat(Object.keys(n[k])).every(nomeOk)){
+          anda(p[k], n[k], c, nivel+1); return;
+        }
+        out.push({caminho:c, ausente:!temN, valor:temN?n[k]:null,
+                  anterior:temP?p[k]:null, anteriorAusente:!temP});
+      });
+    })(prev||{}, next||{}, [], 1);
+    return out;
+  }
+  /* O documento depois de aplicar os campos — o que o Firestore faz num update. */
+  function aplicarCampos(doc, lista, usarAnterior){
+    var out=clone(doc)||{};
+    (lista||[]).forEach(function(x){
+      var cam=x.caminho, o=out;
+      for(var i=0;i<cam.length-1;i++){ if(!mapa(o[cam[i]])) o[cam[i]]={}; o=o[cam[i]]; }
+      var k=cam[cam.length-1];
+      var some=usarAnterior?x.anteriorAusente:x.ausente;
+      if(some) delete o[k]; else o[k]=clone(usarAnterior?x.anterior:x.valor);
+    });
+    return out;
+  }
+
   /* O registro que vai para `historico`. `em` e `por` quem preenche é o
-     chamador: o carimbo é o serverTimestamp, que só existe no SDK. */
+     chamador: o carimbo é o serverTimestamp, que só existe no SDK.
+     Mudança gravada por campos (`m.campos`) guarda só o ANTERIOR desses campos:
+     anterior = {_parcial:true, campos:[{c:'["data","audit"]', v:...} | {c, ausente:true}]}.
+     Cabe nas chaves que a regra do banco aceita (vai dentro de `anterior`), e o
+     caminho vai como texto JSON porque o Firestore não aceita lista dentro de lista. */
   function registro(m, rev, maxBytes){
     var lim=(maxBytes==null?MAX_ANTERIOR_BYTES:maxBytes);
     var r={rev:rev, colecao:m.colecao, docId:m.docId, acao:m.acao, anterior:null};
-    if(m.anterior!=null){
-      if(bytes(m.anterior)>lim) r.grande=true;
-      else r.anterior=clone(m.anterior);
+    var ant=m.anterior;
+    if(m.campos && m.acao==='alterar'){
+      ant={_parcial:true, campos:m.campos.map(function(x){
+        return x.anteriorAusente?{c:JSON.stringify(x.caminho), ausente:true}:{c:JSON.stringify(x.caminho), v:x.anterior};
+      })};
+    }
+    if(ant!=null){
+      if(bytes(ant)>lim) r.grande=true;
+      else r.anterior=clone(ant);
     }
     return r;
+  }
+  function desfazParcial(doc, ant){
+    return aplicarCampos(doc, (ant.campos||[]).map(function(x){
+      return {caminho:JSON.parse(x.c), anteriorAusente:!!x.ausente, anterior:x.v};
+    }), true);
   }
 
   /* Divide em lotes que o Firestore aceita: até 500 escritas e um pedido de
@@ -134,11 +198,11 @@
     alvo.forEach(function(r){
       var c=out[r.colecao]||(out[r.colecao]={});
       if(r.acao==='criar'){ delete c[r.docId]; return; }
-      if(r.grande || r.anterior==null){
+      if(r.grande || r.anterior==null || (r.anterior._parcial===true && !c[r.docId])){
         irrecuperaveis.push({colecao:r.colecao, docId:r.docId, rev:r.rev});
         return;
       }
-      c[r.docId]=clone(r.anterior);
+      c[r.docId]=r.anterior._parcial===true?desfazParcial(c[r.docId], r.anterior):clone(r.anterior);
     });
     return {flat:out, irrecuperaveis:irrecuperaveis, desfeitos:alvo.length};
   }
@@ -157,7 +221,7 @@
   }
 
   var API={VERSAO:VERSAO, MAX_ANTERIOR_BYTES:MAX_ANTERIOR_BYTES, stable:stable,
-    mudancas:mudancas, registro:registro, lotes:lotes, porGravacao:porGravacao,
+    mudancas:mudancas, campos:campos, aplicarCampos:aplicarCampos, registro:registro, lotes:lotes, porGravacao:porGravacao,
     estadoAntesDe:estadoAntesDe, resumo:resumo, emMs:emMs, bytes:bytes};
   root.VersoesCore=API;
   if(typeof module!=='undefined' && module.exports) module.exports=API;
