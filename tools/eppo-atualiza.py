@@ -219,6 +219,18 @@ def gerar(token, get=http_json, pausa=0.2, hoje=None, xml=None):
     }
 
 
+def substancia(tabela):
+    """O que muda o app: os códigos, as culturas e QUAIS nomes ficaram sem código.
+    Data, texto da fonte e a redação do motivo não contam — senão a mesma
+    tabela, conferida pela API em vez do arquivo, subiria o CACHE e faria todo
+    aparelho baixar de novo o que já tem."""
+    return (
+        {k: v.get('eppo') for k, v in (tabela.get('codigos') or {}).items()},
+        tabela.get('culturas') or {},
+        sorted(x.get('nome') for x in (tabela.get('naoResolvidos') or [])),
+    )
+
+
 def diagnostico(novo, antigo, saida=None):
     """Resumo para o log: quantos resolveram, por que os outros não, e o formato
     das primeiras respostas da API. É o que permite ajustar a ferramenta sem
@@ -252,8 +264,8 @@ def main(argv=None):
     if len(novo['codigos']) < 0.8 * len(antigo.get('codigos', {})):
         print('A tabela perdeu mais de 20% dos códigos. Revisar a fonte antes de substituir.', file=sys.stderr)
         return 1
-    if {k: v for k, v in novo.items() if k != 'gerado'} == {k: v for k, v in antigo.items() if k != 'gerado'}:
-        print('Tabela EPPO sem mudança.')
+    if substancia(novo) == substancia(antigo):
+        print('Tabela EPPO sem mudança nos códigos: nada a gravar.')
         return 0
     destino.write_text(json.dumps(novo, ensure_ascii=False, indent=1) + '\n')
     sw = ROOT / 'sw.js'
