@@ -94,7 +94,8 @@ ok(C.previsaoBBCH({aplicacoes:[{data:'2026-09-01',bbch:'50'}],avaliacoes:[{data:
 console.log('\n[4] ligação');
 const html=fs.readFileSync('index.html','utf8'),sw=fs.readFileSync('sw.js','utf8');
 ok(html.indexOf('vendor/campo-inteligente-core.js')<html.indexOf('campo-inteligente.js?v')&&html.indexOf('app.js?v=')<html.indexOf('vendor/campo-inteligente-core.js'),'carrega depois do app, motor antes da ligação');
-ok(/campo-inteligente-core\.js\?v=1/.test(sw)&&/'\.\/campo-inteligente\.js\?v=1'/.test(sw),'os dois vão no pré-cache (abre offline no campo)');
+/* a versão sobe a cada publicação; o pareamento com o index.html é conferido pelo portão */
+ok(/campo-inteligente-core\.js\?v=\d+/.test(sw)&&/'\.\/campo-inteligente\.js\?v=\d+'/.test(sw),'os dois vão no pré-cache (abre offline no campo)');
 ok(/logStudyAuditInObject\(s,'Agenda reancorada/.test(glue)&&/_markDeleted\(s,'_deletedAvaliacoes'/.test(glue),'ajuste da agenda fica na trilha e não ressuscita no merge');
 ok(/confirm\(/.test(glue),'ajuste da agenda só com confirmação');
 

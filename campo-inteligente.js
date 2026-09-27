@@ -88,6 +88,8 @@ function tipoCore(v){
   var t=null;
   try{ if(typeof w._avCfg==='function') t=(w._avCfg(w._avGrid,v)||{}).tipo; }catch(e){}
   t=t||((w._avGrid&&w._avGrid.tipos)||{})[v];
+  /* número (medida) usa limiar relativo, como contagem; o piso absoluto de 15 é de % */
+  if(t==='numero') return 'numero';
   return (t==='contagem'||t==='escala')?'contagem':'pct';
 }
 function valorGrid(row,v){

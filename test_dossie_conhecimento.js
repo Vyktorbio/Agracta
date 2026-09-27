@@ -6,14 +6,16 @@ const fn=n=>src.match(new RegExp('function '+n+'\\([^]*?\\n}'))[0];
 const c={JSON,Date,_bioAutoCache:{},MOTOR_CALCULO:'teste',_bioestatSignature:s=>s.sig,
  _bioestatJobs:()=>[{jobKey:'A|Sev',avId:'A',date:'2026-09-11',variavel:'Sev'}],
  _bioestatJobsTempo:()=>[{jobKey:'__tempo__|Mort',variavel:'Mort',unidade:'dias'}],
+ /* triagem forense é uma por variável (todas as avaliações juntas) */
+ _bioestatJobsForense:()=>[{jobKey:'__forense__|Sev',variavel:'Sev',datas:1}],
  _bioestatPendentes:()=>[],_biocGravar:()=>{throw Error('Não guardar erros');}};
 vm.createContext(c);['_bioestatEstadoResultado','_bioestatManifesto','_bioestatSnapshotAvancado','_bioestatPersistir'].forEach(n=>vm.runInContext(fn(n),c));
 const study={id:'S',sig:'nova'};
 c._bioAutoCache['Q|S']={sig:'velha',results:{'A|Sev':{ok:true}}};
 assert.equal(c._bioestatSnapshotAvancado('Q',study).pendencias.length,3,'cache antigo não fecha estudo');
-const cache=c._bioAutoCache['Q|S']={sig:'nova',status:'ready',qid:'Q',sid:'S',results:{'A|Sev':{ok:true,analise:{p:.02}},'A|Sev|F':{ok:false,erro:'tempo esgotado'}}};
+const cache=c._bioAutoCache['Q|S']={sig:'nova',status:'ready',qid:'Q',sid:'S',results:{'A|Sev':{ok:true,analise:{p:.02}},'__forense__|Sev':{ok:false,erro:'tempo esgotado'}}};
 let snap=c._bioestatSnapshotAvancado('Q',study);assert.equal(snap.completo,false);assert.equal(snap.pendencias[0].estado,'erro');assert.equal(snap.pendencias[1].estado,'pendente');c._bioestatPersistir(cache);
-cache.results['A|Sev|F']={ok:true};cache.results['__tempo__|Mort']={ok:true};snap=c._bioestatSnapshotAvancado('Q',study);assert.equal(snap.completo,true);
+cache.results['__forense__|Sev']={ok:true};cache.results['__tempo__|Mort']={ok:true};snap=c._bioestatSnapshotAvancado('Q',study);assert.equal(snap.completo,true);
 cache.results['A|Sev'].analise.p=.9;assert.equal(snap.results['A|Sev'].analise.p,.02,'snapshot independente do cache');
 c._bioestatPendentes=()=>[{avId:'B',date:'2026-09-12',variavel:'Sev'}];assert.equal(c._bioestatSnapshotAvancado('Q',study).completo,false);
 assert(src.includes('st.estatisticaFinal.avancado=_bioestatSnapshotAvancado(qid,st)'));

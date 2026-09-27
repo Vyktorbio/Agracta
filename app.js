@@ -7078,9 +7078,10 @@ function _bioestatStatSheet(qid,s){
 }
 function _bioestatForensicSheet(qid,s){
   var H=['Local','Quadra','Estudo','Avaliacao_ID','Data','Variavel','Status','Linha','Veredito','Classe','Modo','Flags','Alertas','Testes_previstos','Testes_executados','Inconclusivos','Cobertura_pct','Cobertura_suficiente','Tipo_dado','Controle','N_grupos','Segundo_conjunto','Achado','Severidade','Executado','Estatistica','Leitura','Explicacao_inocente','Resumo','Aviso','Detalhes_JSON','Exportado_em','Exportado_por','Exportado_por_email'];
-  var out=[H],jobs=(typeof _bioestatJobs==='function'?_bioestatJobs(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
+  var out=[H],jobs=(typeof _bioestatJobsForense==='function'?_bioestatJobsForense(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
   function add(job,status,linha,v,p,a,det){
     v=v||{};p=p||{};a=a||{};var b=_bioestatExportBase(qid,s,job);
+    if(job&&job.datasTexto) b.data=job.datasTexto;   /* triagem por variável: o período, não uma data */
     out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,linha,v.nivel||'',v.classe||'',v.modo||p.modo||'',v.flags==null?'':v.flags,v.watches==null?'':v.watches,v.testes_previstos==null?'':v.testes_previstos,v.testes_executados==null?'':v.testes_executados,v.testes_inconclusivos==null?'':v.testes_inconclusivos,v.cobertura==null?'':Math.round(v.cobertura*10000)/100,v.cobertura_suficiente==null?'':(v.cobertura_suficiente?'sim':'não'),p.tipo_dado||'',p.controle==null?'':p.controle,p.n_grupos==null?'':p.n_grupos,p.tem_segundo_conjunto==null?'':(p.tem_segundo_conjunto?'sim':'não'),a.nome||'',a.severidade||'',a.executado==null?'':(a.executado?'sim':'não'),a.estatistica||'',a.leitura||'',a.explicacao_inocente||'',v.resumo||'',det&&det.aviso||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
   }
   /* Triagem local de contingência: entrega indicadores descritivos auditáveis
@@ -7103,7 +7104,7 @@ function _bioestatForensicSheet(qid,s){
   }
   if(!jobs.length){add(null,'SEM_DADOS','Resumo',{}, {}, {}, {aviso:'Sem avaliação com dados suficientes para triagem.'});return out;}
   jobs.forEach(function(job){
-    var rel=res[job.jobKey+'|F'];
+    var rel=res[job.jobKey];
     if(!rel){addRapida(job,'');return;}
     if(!rel.ok){addRapida(job,rel.erro||'triagem não concluída');return;}
     var v=rel.veredito||{},p=rel.parametros||{};
@@ -7197,7 +7198,7 @@ async function downloadStudyWorkbook(qid,sid){
     _bioestatAppendSheet(wb,'Forense',_bioestatForensicSheet(qid,s));
     var nome=(s.codigo||'estudo').replace(/[^\w.-]+/g,'_')+'-Agracta.xlsx';
     XLSX.writeFile(wb,nome,{bookType:'xlsx',cellStyles:true});
-    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]&&cache.results[j.jobKey+'|F']);}).length;
+    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]);}).length;
     var _errs=0; if(cache&&cache.results)Object.keys(cache.results).forEach(function(k){if(cache.results[k]&&cache.results[k].ok===false)_errs++;});
     _stxToast(_pend?'✓ Planilha baixada; estatística rápida incluída e '+_pend+' triagem(ns) avançada(s) identificada(s)':(_errs?'✓ Planilha baixada; revise '+_errs+' resultado(s) com alerta':'✓ Planilha completa: dados + estatística + forense'));
   }catch(e){console.error(e);alert('Não consegui gerar a planilha: '+e.message);}
@@ -8795,8 +8796,9 @@ function _studyWorkflow(qid,study){
   var avs=study.avaliacoes||[], progresso=AvaliacaoCore.estudo(study), avFeitas=progresso.concluidas;
   var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(progresso.complete?'complete':(progresso.started?'active':'ready')),detail:avFeitas+' de '+avs.length+' concluídas'+(progresso.parciais?' · '+progresso.parciais+' parciais':'')};
   var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,study):[], c=_bioAutoCache[qid+'|'+study.id], rr=c&&c.results||{};
-  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey+'|F'];});
-  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobs.some(function(j){return rr[j.jobKey+'|F']&&rr[j.jobKey+'|F'].ok===false;});
+  var jobsF=(typeof _bioestatJobsForense==='function')?_bioestatJobsForense(qid,study,jobs):[];
+  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobsF.length>0&&jobsF.every(function(j){return !!rr[j.jobKey];});
+  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobsF.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;});
   var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!progresso.started?'pending':(anaErr?'attention':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready'))),detail:!progresso.started?'Aguardando dados':(anaErr?'Revisar falha de cálculo':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular')))};
   var dossierOk=anaDone&&forDone&&!anaErr&&!forErr;
   var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':((anaErr||forErr)?'attention':(dossierOk?'ready':'pending')),detail:estudoFinalizado(study)?'Finalizado':((anaErr||forErr)?'Revisar pendências':(dossierOk?'Pronto para revisar':'Aguardando resultados'))};
@@ -13305,8 +13307,9 @@ var MOTOR_VERSAO='agracta-15';
    Mexer só na tela do motor não mexe aqui.
 
    A versão 14 corrige a natureza da variável e os papéis forenses.
+   A versão 16 tria cada VARIÁVEL uma vez, com todas as avaliações juntas.
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-15';
+var MOTOR_CALCULO='agracta-16';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -13317,6 +13320,31 @@ function _bioestatJobs(qid,study){
     jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa});
   }); });
   return jobs;
+}
+/* ===== A TRIAGEM FORENSE É POR VARIÁVEL, NÃO POR DATA =====================
+   Triar avaliação por avaliação custava duas vezes. Poder: uma avaliação com
+   5 tratamentos × 4 repetições tem 20 valores, pouco para dígito final,
+   arredondamento e duplicata, que ficavam inconclusivos. Alarme: N triagens
+   independentes somam N chances de falso positivo no mesmo estudo.
+   Aqui cada variável é triada UMA vez, com todas as avaliações juntas; o motor
+   trata cada data como um estrato (cada uma com a sua escala e os seus grupos)
+   e soma o volume entre elas. Só entram as células que a análise já aceitou.
+   `celulas` evita recalcular _bioestatJobs quando quem chama já tem. */
+function _bioestatJobsForense(qid,study,celulas){
+  var porVar={}, ordem=[];
+  (celulas||_bioestatJobs(qid,study)).forEach(function(j){
+    if(!j||!j.aoa||!j.aoa.length) return;
+    if(!porVar[j.variavel]){ porVar[j.variavel]=[]; ordem.push(j.variavel); }
+    porVar[j.variavel].push(j);
+  });
+  return ordem.map(function(v){
+    var cs=porVar[v], linhas=[], datas={};
+    cs.forEach(function(cj){ cj.aoa.slice(1).forEach(function(r){ linhas.push(r); }); if(cj.date) datas[cj.date]=1; });
+    var ds=Object.keys(datas).sort(), br=function(x){ return isoToBR(x)||x; };
+    return {jobKey:'__forense__|'+v, variavel:v, tipo:cs[0].tipo, datas:ds.length,
+            datasTexto:ds.length>1?(br(ds[0])+' a '+br(ds[ds.length-1])):(ds.length?br(ds[0]):''),
+            n:linhas.length, aoa:[cs[0].aoa[0]].concat(linhas)};
+  });
 }
 /* ===== O CARTÃO DE TEMPO NASCE SOZINHO ====================================
    O painel calcula UMA avaliação por vez: cada cartão é um par (avaliação,
@@ -13365,9 +13393,9 @@ function _bioestatEstadoResultado(r){
 }
 function _bioestatManifesto(qid,s){
   var out=[];
-  _bioestatJobs(qid,s).forEach(function(j){
-    ['analise','forense'].forEach(function(m){out.push({jobKey:j.jobKey+(m==='forense'?'|F':''),avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:m});});
-  });
+  var cel=_bioestatJobs(qid,s);
+  cel.forEach(function(j){out.push({jobKey:j.jobKey,avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:'analise'});});
+  _bioestatJobsForense(qid,s,cel).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,datas:j.datas,modo:'forense'});});
   _bioestatJobsTempo(qid,s).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,unidade:j.unidade,modo:'tempo'});});
   return out;
 }
@@ -13463,11 +13491,11 @@ function _bioestatEnsureStudy(qid,sid){
   var q=data[qid]||{}, study=(q.estudos||[]).find(function(s){return s.id===sid;}); if(!study)return;
   study=normalizeStudy(study);
   var key=qid+'|'+sid, sig=_bioestatSignature(study), jobs=_bioestatJobs(qid,study), c=_bioAutoCache[key];
-  var jobsT=_bioestatJobsTempo(qid,study);
+  var jobsT=_bioestatJobsTempo(qid,study), jobsF=_bioestatJobsForense(qid,study,jobs);
   if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'))return;
-  /* por avaliação/variável: análise + triagem forense; mais um por variável
-     com curva de sobrevivência, que é do estudo inteiro e não de uma data */
-  var total=jobs.length*2+jobsT.length;
+  /* análise por avaliação/variável; triagem forense e curva de sobrevivência
+     uma por variável, porque ambas são do estudo inteiro e não de uma data */
+  var total=jobs.length+jobsF.length+jobsT.length;
   c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
   if(!total)return;
   /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
@@ -13477,11 +13505,12 @@ function _bioestatEnsureStudy(qid,sid){
     if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
-      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; if(_bioestatEstadoResultado(res[j.jobKey+'|F'])==='calculado')n++; });
+      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
+      jobsF.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       jobsT.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
-    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
+    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF);
   });
 }
 /* Tipo de dado da triagem forense a partir do TIPO DECLARADO da coluna.
@@ -13506,13 +13535,13 @@ function _bioestatForenseTipo(j){
 }
 /* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
    consulta ao cache em disco é assíncrona e precisa vir antes. */
-function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
+function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
   function _ftipo(j){ return _bioestatForenseTipo(j); }
   var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
-    [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
+    [['analise',j.jobKey,'']].forEach(function(m,mi){
       var fjob={jobKey:m[1],avId:j.avId,date:j.date,variavel:j.variavel,tipo:j.tipo};
       var req=key+'|'+sig+'|'+i+'-'+mi+'|'+Date.now();
       /* Sentido da variável, para o motor pôr a letra 'a' no MELHOR tratamento.
@@ -13527,6 +13556,14 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
         maiorMelhor:_mm}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
+  });
+  /* Triagem forense: uma por variável, com todas as avaliações (estratos por data). */
+  (jobsF||[]).forEach(function(j,i){
+    var req=key+'|'+sig+'|F'+i+'|'+Date.now();
+    var item={requestId:req,key:key,sig:sig,job:{jobKey:j.jobKey,variavel:j.variavel,tipo:j.tipo,datas:j.datas,datasTexto:j.datasTexto},
+      payload:{requestId:req,aoa:j.aoa,modo:'forense',titulo:tit,responsavel:resp,tipo:j.tipo,
+               doseUnit:doseUnit,forenseTipo:_ftipo(j),local:loc,quadra:qn}};
+    _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
   /* A curva de sobrevivência vai por último: ela é a mais cara e as prévias de
      cada data já estarão na tela enquanto ela roda. */
@@ -13802,7 +13839,7 @@ function _bioestatForenseCard(job,rel){
   var rot=(!v.cobertura_suficiente||achados.some(function(a){return a.executado===false;}))?'Triagem parcial / inconclusiva':flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
   var lis=achados.map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
   return '<div style="padding:9px 11px;border:1px solid '+bd+';background:'+bg+';border-radius:9px;margin-top:7px">'+
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(job.datasTexto?(job.datasTexto+(job.datas>1?' ('+job.datas+' avaliações)':'')):(isoToBR(job.date)||job.date||''))+'</b>'+
     '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+chipbg+';color:'+cor+';white-space:nowrap">'+esc(rot)+'</span></div>'+
     (v.resumo?'<div style="font-size:11px;color:#6a766f;margin-top:3px">'+esc(v.resumo)+'</div>':'')+
     (lis?'<ul style="margin:6px 0 0;padding-left:18px;font-size:11px;color:#5a655e">'+lis+'</ul>':'')+
@@ -13823,11 +13860,11 @@ function _bioestatIntegratedHtml(qid,sid,study){
   }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
-  var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
+  var tot=(c&&c.total)||(jobs.length+_bioestatJobsForense(qid,study,jobs).length), body='', fbody='';
   if(!c||c.sig!==sig){
     jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
     body+='<div id="bioAutoStatus" class="bio-engine-status">Carregando verificações avançadas no aparelho… '+((c&&c.done)||0)+' de '+tot+'<small>No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.</small></div>';
-    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado… 0 de '+jobs.length+'<small>Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
+    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado…<small>Uma por variável, com todas as avaliações juntas. Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
   }
   /* "Repetições insuficientes" era o diagnóstico genérico para qualquer motivo.
      Quando a pendência tem endereço, ela vale mais que a frase. */
@@ -13838,7 +13875,10 @@ function _bioestatIntegratedHtml(qid,sid,study){
     var res=(c&&c.results)||{}, faltamAnalise=0, faltamForense=0;
     jobs.forEach(function(j){
       if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey],qid,sid); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
-      if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
+    });
+    var _jobsF=_bioestatJobsForense(qid,study,jobs);
+    _jobsF.forEach(function(j){
+      if(res[j.jobKey]) fbody+=_bioestatForenseCard(j,res[j.jobKey]); else faltamForense++;
     });
     /* A curva de sobrevivência entra ANTES das análises por data: num
        bioensaio ela é a resposta, e as leituras avulsas são o caminho. */
@@ -13849,7 +13889,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
     });
     body=_tHtml+body;
     if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
-    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
+    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(_jobsF.length-faltamForense)+' de '+_jobsF.length+' variáve'+(_jobsF.length>1?'is':'l')+'<small>Uma triagem por variável, com todas as avaliações juntas.</small></div>';
   }
   /* UMA folha por ALVO. Antes era um botão só, cravado na variável mais frequente —
      estudo com alvos diferentes (Mancha angular + Cercospora) só gerava a primeira. */
@@ -13874,7 +13914,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
        datas em que só uma fecha mostrava uma análise e duas ausências mudas. */
     abrir+body+_pendHtml+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
-    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
+    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Uma triagem por variável, com todas as avaliações juntas. Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão, gradiente de campo) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;
 }
 /* Re-renderiza o detalhe do estudo quando a análise fica pronta — usado tanto pelo handler de
@@ -16607,8 +16647,12 @@ function saveAplicacao(){
    prancha e o % de controle já consomem. Sub-amostra NÃO é repetição: entrar com
    10 frutos como 10 blocos é pseudorreplicação e infla o grau de liberdade, então
    a ANOVA recebe a média da parcela. */
-var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};
-var AV_TIPO_LABEL={pct:'% / número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
+var AV_TIPOS={pct:1,numero:1,contagem:1,razao:1,escala:1};
+/* 'numero' = MEDIDA livre (altura, produtividade, diâmetro, peso): sem teto de 100 e com
+   decimais. Antes dele, '% / número' era o único tipo digitável — medida com unidade batia
+   no teto de 100 — e os modelos de medida usavam 'contagem', que TRUNCA decimais (12,5 mm
+   virava 12) e manda a variável para análise de contagem. */
+var AV_TIPO_LABEL={pct:'%',numero:'número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
 /* src = uma avaliação (av) ou o rascunho _avGrid — ambos têm .tipos e .varcfg */
 function _avTipo(src,v){ var t=(src&&src.tipos&&src.tipos[v])||'pct'; return AV_TIPOS[t]?t:'pct'; }
 /* "% / número" é o único tipo DIGITÁVEL para variável que não seja contagem, razão ou
@@ -16806,8 +16850,8 @@ var CATALOGO_AVAL={
      a testemunha (fórmula de Abbott, que o estatistica.js já traz auditado) —
      por isso 'sentido:maior' NÃO se aplica: colônia menor = melhor controle. */
   'Fungo in vitro':[
-    {nome:'Diâmetro da colônia (mm)',tipo:'contagem',sub:2},
-    {nome:'Crescimento micelial (mm/dia)',tipo:'contagem'},
+    {nome:'Diâmetro da colônia (mm)',tipo:'numero',sub:2},
+    {nome:'Crescimento micelial (mm/dia)',tipo:'numero'},
     {nome:'Esporulação (conídios/mL)',tipo:'contagem'}
   ],
   /* FOLHA DESTACADA: bancada, folha ou disco foliar em placa. Serve tanto para
@@ -16817,7 +16861,7 @@ var CATALOGO_AVAL={
   'Folha destacada':[
     {nome:'Mortalidade',tipo:'razao',N:10,sentido:'maior'},
     {nome:'Severidade na folha',tipo:'pct'},
-    {nome:'Diâmetro da lesão (mm)',tipo:'contagem',sub:2},
+    {nome:'Diâmetro da lesão (mm)',tipo:'numero',sub:2},
     {nome:'Nº de indivíduos vivos',tipo:'contagem'}
   ],
   'Fungo in vivo':[
@@ -16845,9 +16889,9 @@ var CATALOGO_AVAL={
     {nome:'Muco (0–2)',tipo:'escala',escalaMax:2,sentido:'maior',escalaNome:'0 normal · 1 aumentado · 2 muito'}
   ],
   'Produtividade':[
-    {nome:'Peso da parcela (g)',tipo:'contagem'},
+    {nome:'Peso da parcela (g)',tipo:'numero'},
     {nome:'Nº de frutos',tipo:'contagem',sub:10},
-    {nome:'Peso de 100 grãos (g)',tipo:'contagem'}
+    {nome:'Peso de 100 grãos (g)',tipo:'numero'}
   ]
 };
 function _avCatalogo(){
@@ -17005,7 +17049,7 @@ function _avWriteBruto(key,v,campo,val){
     if(num<0) num=0;
     if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
     if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
-    if(cfg.tipo==='contagem'||cfg.tipo==='razao') num=Math.floor(num);
+    if(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)))) num=Math.floor(num);
   }
   var out=(num==='')?'':String(num);
   if(campo==='n'||campo==='N') cel[campo]=out;
@@ -17050,6 +17094,7 @@ function avValidateCell(inp){
     return;
   }
   var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+  var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp; /* 'numero' não tem teto de 100 */
   var val=inp.value.trim();
   if(val===''){ _avEspelhar(inp); return; }
   var num=parseFloat(val.replace(',','.'));
@@ -17063,7 +17108,7 @@ function avValidateCell(inp){
     if(num<0){
       num=0;
       _stxToast('Valor menor que 0% ajustado para 0%.');
-    } else if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
+    } else if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
       num=100;
       _stxToast('Valor maior que 100% ajustado para 100%.');
     }
@@ -17073,7 +17118,7 @@ function avValidateCell(inp){
       num=0;
       _stxToast('Valor negativo ajustado para 0.');
     }
-    inp.value=String(Math.floor(num));
+    inp.value=String((typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))?num:Math.floor(num)); /* medida com unidade não perde decimais */
   }
   _avEspelhar(inp);
   _avPersistNow(); /* autosave da grade manual no blur */
@@ -17251,6 +17296,7 @@ function renderAvGrid(){
     var _vjs=esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     html+='<th>'+esc(v)+suf+
       '<button type="button" class="av-delcol" title="Corrigir o nome desta coluna" onclick="avRenameCol(\''+_vjs+'\')">✎</button>'+
+      ((cfg.tipo==='pct'||cfg.tipo==='contagem'||cfg.tipo==='numero')?'<button type="button" class="av-delcol" title="'+(cfg.tipo==='numero'?'Tipo: número — tocar para voltar a %':'Transformar em número (medida sem teto de 100, com decimais)')+'" onclick="avTipoCol(\''+_vjs+'\')">'+(cfg.tipo==='numero'?'№':'#')+'</button>':'')+
       '<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+_vjs+'\')">×</button></th>';
   });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
@@ -17274,7 +17320,7 @@ function _avSyncInputs(){
 
     var val = inp.value.trim();
     if(val !== '') {
-      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
       var num = parseFloat(val.replace(',', '.'));
       if(isNaN(num)) {
         val = '';
@@ -17282,10 +17328,10 @@ function _avSyncInputs(){
       } else {
         if(tp==='pct'){
           if(num<0) num=0;
-          if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
+          if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
         } else {
           if(num<0) num=0;
-          num = Math.floor(num);
+          if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
         }
         val = String(num);
         inp.value = val;
@@ -17347,7 +17393,7 @@ function _avSubRender(){
     '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+cfg.sub+' amostras'+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
     '<div class="av-sub-grid">';
   vals.slice(0,cfg.sub).forEach(function(x,i){
-    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+(cfg.tipo==='pct'?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
+    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
   });
   h+='</div>';
   h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':'Média da parcela')+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
@@ -17459,17 +17505,17 @@ function _avPersistNow(){
 }
 function _avSetCell(key,v,val){
   if(val !== '' && val != null) {
-    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
     var num = parseFloat(String(val).replace(',', '.'));
     if(isNaN(num)) {
       val = '';
     } else {
       if(tp==='pct'){
         if(num<0) num=0;
-        if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
+        if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
       } else {
         if(num<0) num=0;
-        num = Math.floor(num);
+        if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
       }
       val = String(num);
     }
@@ -17598,14 +17644,15 @@ function avAddCol(){
   m.innerHTML='<div class="avcol-box">'+
     '<div class="avcol-title">Nova coluna de avaliação</div>'+
     '<label class="avcol-lab">Nome da variável <span class="avcol-lab-dim">— doença, praga, daninha ou medida</span></label>'+
-    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
+    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender();_avColSugereTipo()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
     '<div id="avColAlvos" class="alvo-lista"></div>'+
     '<label class="avcol-lab">Como você vai lançar?</label>'+
     '<div class="avcol-types">'+
-      '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\')">% / número<small>digita (severidade)</small></button>'+
-      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\')">Contagem<small>botões − / +</small></button>'+
-      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\')">Razão n/N<small>mortalidade, incidência</small></button>'+
-      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\')">Escala<small>nota de classe → índice</small></button>'+
+      '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\',true)">%<small>0–100: severidade</small></button>'+
+      '<button type="button" class="avcol-type" data-t="numero" onclick="_avColType(\'numero\',true)">Número<small>altura, peso, produtividade</small></button>'+
+      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\',true)">Contagem<small>botões − / +</small></button>'+
+      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\',true)">Razão n/N<small>mortalidade, incidência</small></button>'+
+      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\',true)">Escala<small>nota de classe → índice</small></button>'+
     '</div>'+
     '<div id="avColOpts"></div>'+
     '<div class="avcol-btns"><button type="button" class="avcol-ok" onclick="avColConfirm()">Adicionar</button>'+
@@ -17616,6 +17663,7 @@ function avAddCol(){
      % num de eficácia). Só que agora ela vem pronta em vez de exigir um toque. */
   var padrao=(cat.itens&&cat.itens[0])||null;
   window._avColTipo=(padrao&&AV_TIPOS[padrao.tipo])?padrao.tipo:'pct';
+  window._avColTipoEscolhido=false;
   window._avColOpts={
     sub:Math.max(1,parseInt(padrao&&padrao.sub)||1),
     N:(padrao&&padrao.N!=null)?padrao.N:20,
@@ -17707,15 +17755,28 @@ function _alvoEscolher(i){
   if(inp){ inp.value=a.comum; inp.focus(); }
   var box=document.getElementById('avColAlvos'); if(box) box.innerHTML='';
 }
-function _avColType(t){ if(document.getElementById('avColOpts')) _avColLerOpts();
+function _avColType(t, porClique){ if(document.getElementById('avColOpts')) _avColLerOpts();
   window._avColTipo=AV_TIPOS[t]?t:'pct';
+  if(porClique) window._avColTipoEscolhido=true;
   Array.prototype.forEach.call(document.querySelectorAll('#avColModal .avcol-type'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===window._avColTipo); });
   _avColOptsRender();
+}
+/* Enquanto se digita: nome de MEDIDA com unidade e ninguém tocou num tipo -> o destaque
+   vai para Número (e volta, se o nome deixar de ser de medida). Escolha explícita manda. */
+function _avColSugereTipo(){
+  if(window._avColTipoEscolhido) return;
+  var i=document.getElementById('avColNome'), nome=i?i.value:'';
+  var medida=(typeof _avEhMedidaLivre==='function') && _avEhMedidaLivre(nome);
+  if(medida && window._avColTipo!=='numero'){ window._avColTipoAntesDaSugestao=window._avColTipo||'pct'; _avColType('numero'); }
+  else if(!medida && window._avColTipo==='numero' && window._avColTipoAntesDaSugestao){ _avColType(window._avColTipoAntesDaSugestao); window._avColTipoAntesDaSugestao=null; }
 }
 function avColConfirm(){
   var i=document.getElementById('avColNome'); var name=(i?i.value:'').trim();
   if(!name){ if(i){ i.focus(); i.style.borderColor='#d84b43'; } return; }
   var t=window._avColTipo||'pct', o=_avColLerOpts();
+  /* Ninguém escolheu o tipo e o nome é de MEDIDA com unidade ("Altura (cm)", "Peso de
+     100 grãos (g)"): nasce como número, não como % com teto de 100. */
+  if(t==='pct' && !window._avColTipoEscolhido && typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(name)) t='numero';
   if(_avGrid.variaveis.indexOf(name)<0) _avGrid.variaveis.push(name);
   _avGrid.tipos[name]=t;
   if(!_avGrid.varcfg) _avGrid.varcfg={};
@@ -17777,6 +17838,33 @@ function avRenameCol(name){
   try{ save(); }catch(e){}
   renderAvGrid();
   if(typeof _stxToast==='function') _stxToast('Coluna renomeada para "'+novo+'"');
+}
+/* Trocar o TIPO de uma coluna já lançada, entre %, contagem e número. Só entre estes três:
+   neles o valor da célula é o próprio número digitado — razão guarda n/N e escala guarda
+   classes, e trocar exigiria relançar. Os valores gravados NÃO mudam; muda como são validados
+   daqui em diante e como a estatística os trata (número entra como variável contínua).
+   Vale para todas as avaliações do estudo, como o renomear, e vai para a trilha. */
+function avTipoCol(name){
+  _avSyncInputs();
+  var st=_avStudy(), atual=_avTipo(_avGrid,name);
+  if(st && typeof estudoFinalizado==='function' && estudoFinalizado(st)){ if(typeof _stxToast==='function') _stxToast('Estudo finalizado: reabra para mudar o tipo da variável.'); return; }
+  if(atual==='razao'||atual==='escala'){ alert('Razão n/N e escala guardam o dado de outro jeito (n e N, classes). Trocar o tipo exigiria relançar as notas.'); return; }
+  var novo=(atual==='numero')?'pct':'numero';
+  var msg=(novo==='numero')
+    ? 'Transformar "'+name+'" em NÚMERO (medida livre: sem teto de 100 e com decimais)?\n\nVale para todas as avaliações deste estudo. Os valores já lançados não mudam; a estatística passa a tratar a variável como contínua.'
+    : 'Voltar "'+name+'" para % (0 a 100)?\n\nVale para todas as avaliações deste estudo. Os valores já lançados não mudam; valores acima de 100 passam a ser limitados na digitação.';
+  if(!confirm(msg)) return;
+  function troca(o){ if(!o||!o.tipos) return 0; var tem=(o.variaveis||[]).indexOf(name)>=0 || Object.prototype.hasOwnProperty.call(o.tipos,name); if(!tem) return 0; o.tipos[name]=novo; return 1; }
+  if(!_avGrid.tipos) _avGrid.tipos={};
+  _avGrid.tipos[name]=novo;
+  var n=1; ((st&&st.avaliacoes)||[]).forEach(function(a){ if(a && (a.variaveis||[]).indexOf(name)>=0){ if(!a.tipos) a.tipos={}; n+=troca(a); } });
+  if(st){
+    try{ logStudyAuditInObject(st,'Tipo de variável','"'+name+'": '+(AV_TIPO_LABEL[atual]||atual)+' -> '+(AV_TIPO_LABEL[novo]||novo)+' (em todas as avaliações do estudo)'); }catch(e){}
+    st._ts=Date.now();
+  }
+  try{ save(); }catch(e){}
+  renderAvGrid();
+  if(typeof _stxToast==='function') _stxToast('"'+name+'" agora é '+(AV_TIPO_LABEL[novo]||novo));
 }
 function avDelCol(name){
   _avSyncInputs();
