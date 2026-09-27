@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <title>Estatística — Agracta</title>
 <link rel="apple-touch-icon" href="icons/icon-180.png" />
-<link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-12" />
-<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-12" />
+<link rel="manifest" href="manifest.webmanifest?v=bioensaio-auditoria-15" />
+<link rel="stylesheet" href="styles.css?v=bioensaio-auditoria-15" />
 <link rel="stylesheet" href="../profundidade.css?v=1" />
 <script>
   /* A casca fica oculta somente na análise automática. Correção também identificada no PR 53. */
@@ -383,7 +383,8 @@
       <label>Tipo de dado
         <select id="opt-forense-tipo">
           <option value="count" selected>Contagem (nº de colônias/insetos/lesões)</option>
-          <option value="cont">Contínuo (diâmetro, peso, %)</option>
+          <option value="cont">Contínuo (diâmetro, peso, altura)</option>
+          <option value="pct">Estimativa visual 0–100% (severidade, incidência, notas)</option>
         </select>
       </label>
       <label>Régua de severidade
@@ -431,7 +432,7 @@
 
 <script src="lib/xlsx.full.min.js"></script>
 <script src="pyodide/pyodide.js"></script>
-<script src="exemplos.js?v=bioensaio-auditoria-12"></script>
-<script src="app.js?v=bioensaio-auditoria-14"></script>
+<script src="exemplos.js?v=bioensaio-auditoria-15"></script>
+<script src="app.js?v=bioensaio-auditoria-15"></script>
 </body>
 </html>

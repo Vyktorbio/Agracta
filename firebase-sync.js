@@ -774,7 +774,7 @@
     return Promise.all(reads).then(function(all){
       var flat={};COLLECTIONS.forEach(function(c,i){flat[c]=all[i]||{};});
       var root=all[COLLECTIONS.length],meta=(root&&root.exists)?root.data():{};
-      FB.remoteFlat=flat;FB.lastRev=meta.rev||0;FB.pulling=false;
+      FB.remoteFlat=flat;FB.lastRev=meta.rev||0;FB.lastSeenWrite=meta.writeId||FB.lastSeenWrite||'';FB.pulling=false;
       return {flat:flat,meta:meta,state:buildState(flat,meta)};
     }).catch(function(e){FB.pulling=false;throw e;});
   }
@@ -837,8 +837,10 @@
       }
     }
     if(!batches.length)batches.push(FB.db.batch());
+    var writeId=Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+    FB.myWrites=FB.myWrites||{};FB.myWrites[writeId]=1;
     batches[batches.length-1].set(FB.db.doc(ROOT),{
-      rev:newRev,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
+      rev:newRev,writeId:writeId,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy:FB.user.email||'',
       updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
       schema:2
@@ -903,7 +905,7 @@
       FB.pushPromise=null;
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
       window._cloudRev=newRev;
-      var latest=localState()||FB.queuedState||st;
+      var latest=stateForCommit()||FB.queuedState||st;
       FB.queuedState=null;
       var changed=stable(splitState(latest))!==stable(next);
       setUnsavedChanges(changed);cloudBadge(changed?'saving':'saved');
@@ -932,12 +934,12 @@
          (cod==='not-found'||cod==='invalid-argument'||cod==='failed-precondition')){
         FB.semParcial={em:Date.now(),codigo:cod};
         console.warn('[Agracta Firebase] gravação por campos recusada ('+cod+'); gravando documentos inteiros nesta sessão.');
-        return commitState(localState()||st);
+        return commitState(stateForCommit()||st);
       }
       if(FB.historicoAtivo&&!FB.semHistorico&&(cod==='permission-denied'||cod==='invalid-argument')){
         FB.semHistorico={em:Date.now(),codigo:cod};FB.historicoAtivo=false;
         console.warn('[Agracta Firebase] histórico recusado pelo servidor ('+cod+'); gravando sem ele nesta sessão.');
-        return commitState(localState()||st);
+        return commitState(stateForCommit()||st);
       }
       /* Documento acima do limite do Firestore (1 MiB): diz QUAL, em vez de um
          "invalid-argument" que ninguém no campo consegue resolver. */
@@ -1030,15 +1032,43 @@
      inteiro). Revisao nova na nuvem -> le tudo, MESCLA com o aparelho (uniao) e
      grava a uniao. Sem conexao para conferir -> NAO grava: a edicao fica no
      aparelho e no cofre e sobe quando a conexao voltar. */
+  /* O QUE GRAVAR: o estado local MAIS o remoto que chegou durante uma edição e ficou
+     PENDENTE (cloudApply adia a aplicação enquanto uma quadra/avaliação está aberta).
+     Sem isto, qualquer decisão tomada com localState() puro via o trabalho do colega
+     só no pendente, e não no local — e tratava essa AUSÊNCIA como edição deste aparelho.
+     O caso concreto: o pull durante a edição gravava o estado mesclado, e logo depois
+     a "edição pendente segue sozinha" comparava o local (sem o colega) com o que acabara
+     de subir e enviava a diferença — apagando do servidor, em segundos, o que o outro
+     técnico tinha acabado de salvar. O merge é o mesmo do pull (união com lápides). */
+  function stateForCommit(){
+    var st=localState(),p=window._cloudPending;
+    if(st&&p&&typeof cloudMerge==='function'){
+      try{st=cloudMerge(st,clone(p));}catch(e){console.error('[Agracta Firebase] merge do pendente:',e);}
+    }
+    return st;
+  }
+  /* O `rev` NAO e atomico: newRev=max(lastRev,st.rev)+1. Dois aparelhos que conferem
+     no mesmo instante leem o mesmo rev e gravam o MESMO numero — e o criterio "rev
+     maior" nao via a gravacao alheia em lugar nenhum (ouvinte, conferencia, resync):
+     cada aparelho seguia com a visao velha, e o proximo set() do documento inteiro
+     sobrescrevia a mudanca do colega. Cada envio leva um `writeId` unico; e alheia a
+     gravacao cujo writeId nao e nosso nem o ultimo ja lido. Raiz sem writeId (versao
+     antiga do app gravando) cai no criterio do rev. */
+  function gravacaoAlheia(d){
+    d=d||{};var rev=d.rev||0,wid=d.writeId||'';
+    if(!wid)return rev>(FB.lastRev||0);
+    if(FB.myWrites&&FB.myWrites[wid])return rev>(FB.lastRev||0);
+    return wid!==FB.lastSeenWrite;
+  }
   function conferirAntesDeGravar(st){
     if(!firebaseInit()||!FB.user||!FB.db)return commitState(st);
     if(FB.pushing)return commitState(st);
     if(FB.conferindo)return FB.conferindo;
     var p=_comPrazo(FB.db.doc(ROOT).get(),12000).then(function(snap){
       FB.conferindo=null;
-      var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
-      if(rev>(FB.lastRev||0)&&typeof window.cloudPull==='function')return window.cloudPull();
-      return commitState(localState()||st);
+      var dRaiz=(snap&&snap.exists&&snap.data())||{};
+      if(gravacaoAlheia(dRaiz)&&typeof window.cloudPull==='function')return window.cloudPull();
+      return commitState(stateForCommit()||st);
     },function(e){
       FB.conferindo=null;
       setUnsavedChanges(true);
@@ -1067,10 +1097,10 @@
   };
   window.cloudSave=function(){
     clearTimeout(FB.timer);
-    var st=localState();if(!st)return;
     /* Restaurar backup ou importar SUBSTITUI de proposito: nao passa pelo merge. */
     var substituir=!!window._cloudReplace;
     window._cloudReplace=false;
+    var st=substituir?localState():stateForCommit();if(!st)return;
     if(substituir)return commitState(st);
     return conferirAntesDeGravar(st);
   };
@@ -1135,8 +1165,8 @@
     FB.resyncing=true;
     FB.db.doc(ROOT).get().then(function(snap){
       FB.resyncing=false;
-      var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
-      if(rev>FB.lastRev)cloudPull();
+      var dR=(snap&&snap.exists&&snap.data())||null;
+      if(dR&&((typeof gravacaoAlheia==='function')?gravacaoAlheia(dR):((dR.rev||0)>FB.lastRev)))cloudPull();
       else cloudBadge('saved');
     }).catch(function(e){
       FB.resyncing=false;
@@ -1149,13 +1179,14 @@
     if(FB.unsub){FB.unsub();FB.unsub=null;}
     FB.unsub=FB.db.doc(ROOT).onSnapshot({includeMetadataChanges:true},function(snap){
       if(!snap.exists||snap.metadata.hasPendingWrites)return;
-      var rev=(snap.data()||{}).rev||0;
+      var d=snap.data()||{},rev=d.rev||0,aviso=(d.writeId||'')+'|'+rev;
       /* `lastRev` so muda quando a leitura ACONTECE (readRemote). Marca-lo aqui
          fazia a conferencia antes de gravar achar que o aparelho ja tinha lido
          uma revisao que ainda estava a caminho. */
-      if(rev>FB.lastRev&&FB.pushing){FB.lerDepois=true;return;}
-      if(rev>FB.lastRev&&rev!==FB.revAvisado){
-        FB.revAvisado=rev;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
+      if(!((typeof gravacaoAlheia==='function')?gravacaoAlheia(d):(rev>(FB.lastRev||0))))return;
+      if(FB.pushing){FB.lerDepois=true;return;}
+      if(aviso!==FB.revAvisado){
+        FB.revAvisado=aviso;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
       }
     },function(){cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');});
   };

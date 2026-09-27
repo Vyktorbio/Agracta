@@ -93,7 +93,7 @@ var fontes=['soloDaQuadra','soloObservado','_soloGeom','_soloChaveCoord','_soloL
   'soloCarregarMapa','soloOnMove','soloBindMove','toggleSoloLayer',
   '_soloSet','soloAnalises','soloAnaliseAtual',
   '_nucleoNutricao','soloIndices','soloCalagem','soloCalagemTrilha',
-  'soloAnaliseHtml','soloSalvarAnalise','soloApagarAnalise','soloCancelarAnalise',
+  'soloAnaliseHtml','soloUnidadeSuspeita','soloSalvarAnalise','soloApagarAnalise','soloCancelarAnalise',
   'soloCalagemHtml','soloCalagemSaidaHtml','soloCalcular','soloToggleCalculo',
   'soloPacote','soloPacoteNome','soloPacoteValidar','soloPacoteCarregar','soloPacoteRemover',
   'soloPacoteCulturas','_soloPacoteCultura','_soloFaixa','_soloDose','soloRecomendar',
@@ -640,6 +640,21 @@ eq(an.resultados.Ca,25,'resultado numérico, não texto');
 eq(an.fonte,'laudo','marcada como laudo');
 eq(an.user,'Daria','autoria BPL registrada');
 ck(!!ctx.data.Q1.solo.cartografico,'lançar análise não apaga o cartográfico');
+
+console.log('\n--- Unidade suspeita no laudo ---');
+eq(ctx.soloUnidadeSuspeita(LAUDO).length,0,'laudo em mmolc/dm³ não levanta suspeita');
+ck(ctx.soloUnidadeSuspeita({Ca:2.5,Mg:0.8,K:0.3,HAl:2.8}).length===1,'laudo em cmolc/dm³ (CTC 6,4) levanta a suspeita do fator 10');
+ck(/39,1/.test(ctx.soloUnidadeSuspeita({Ca:25,Mg:8,K:120,HAl:28}).join(' ')),'K em mg/dm³ levanta a suspeita do fator 39,1');
+var _perguntou=null; ctx.confirm=function(m){ _perguntou=m; return false; };
+['pH','MO','P','Al'].forEach(function(k){ campos['soloAn_'+k]=String(LAUDO[k]); });
+campos.soloAn_K='0.3'; campos.soloAn_Ca='2.5'; campos.soloAn_Mg='0.8'; campos.soloAn_HAl='2.8';
+campos.soloAnData='2026-08-20'; ctx._soloAnEdit='nova'; var _antes=ctx.soloAnalises('Q1').length;
+ctx.soloSalvarAnalise('Q1');
+ck(/cmolc/.test(_perguntou||''),'ao salvar laudo com cara de cmolc, pergunta antes');
+eq(ctx.soloAnalises('Q1').length,_antes,'e quem desiste não grava');
+ctx.confirm=function(){ return true; };
+['pH','MO','P','K','Ca','Mg','HAl','Al'].forEach(function(k){ campos['soloAn_'+k]=String(LAUDO[k]); });
+campos.soloAnData='2026-08-12';
 
 console.log('\n--- Recusas do formulário ---');
 ctx._ultimoAlerta=null;
