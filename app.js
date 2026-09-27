@@ -7078,9 +7078,10 @@ function _bioestatStatSheet(qid,s){
 }
 function _bioestatForensicSheet(qid,s){
   var H=['Local','Quadra','Estudo','Avaliacao_ID','Data','Variavel','Status','Linha','Veredito','Classe','Modo','Flags','Alertas','Testes_previstos','Testes_executados','Inconclusivos','Cobertura_pct','Cobertura_suficiente','Tipo_dado','Controle','N_grupos','Segundo_conjunto','Achado','Severidade','Executado','Estatistica','Leitura','Explicacao_inocente','Resumo','Aviso','Detalhes_JSON','Exportado_em','Exportado_por','Exportado_por_email'];
-  var out=[H],jobs=(typeof _bioestatJobs==='function'?_bioestatJobs(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
+  var out=[H],jobs=(typeof _bioestatJobsForense==='function'?_bioestatJobsForense(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
   function add(job,status,linha,v,p,a,det){
     v=v||{};p=p||{};a=a||{};var b=_bioestatExportBase(qid,s,job);
+    if(job&&job.datasTexto) b.data=job.datasTexto;   /* triagem por variável: o período, não uma data */
     out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,linha,v.nivel||'',v.classe||'',v.modo||p.modo||'',v.flags==null?'':v.flags,v.watches==null?'':v.watches,v.testes_previstos==null?'':v.testes_previstos,v.testes_executados==null?'':v.testes_executados,v.testes_inconclusivos==null?'':v.testes_inconclusivos,v.cobertura==null?'':Math.round(v.cobertura*10000)/100,v.cobertura_suficiente==null?'':(v.cobertura_suficiente?'sim':'não'),p.tipo_dado||'',p.controle==null?'':p.controle,p.n_grupos==null?'':p.n_grupos,p.tem_segundo_conjunto==null?'':(p.tem_segundo_conjunto?'sim':'não'),a.nome||'',a.severidade||'',a.executado==null?'':(a.executado?'sim':'não'),a.estatistica||'',a.leitura||'',a.explicacao_inocente||'',v.resumo||'',det&&det.aviso||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
   }
   /* Triagem local de contingência: entrega indicadores descritivos auditáveis
@@ -7103,7 +7104,7 @@ function _bioestatForensicSheet(qid,s){
   }
   if(!jobs.length){add(null,'SEM_DADOS','Resumo',{}, {}, {}, {aviso:'Sem avaliação com dados suficientes para triagem.'});return out;}
   jobs.forEach(function(job){
-    var rel=res[job.jobKey+'|F'];
+    var rel=res[job.jobKey];
     if(!rel){addRapida(job,'');return;}
     if(!rel.ok){addRapida(job,rel.erro||'triagem não concluída');return;}
     var v=rel.veredito||{},p=rel.parametros||{};
@@ -7197,7 +7198,7 @@ async function downloadStudyWorkbook(qid,sid){
     _bioestatAppendSheet(wb,'Forense',_bioestatForensicSheet(qid,s));
     var nome=(s.codigo||'estudo').replace(/[^\w.-]+/g,'_')+'-Agracta.xlsx';
     XLSX.writeFile(wb,nome,{bookType:'xlsx',cellStyles:true});
-    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]&&cache.results[j.jobKey+'|F']);}).length;
+    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]);}).length;
     var _errs=0; if(cache&&cache.results)Object.keys(cache.results).forEach(function(k){if(cache.results[k]&&cache.results[k].ok===false)_errs++;});
     _stxToast(_pend?'✓ Planilha baixada; estatística rápida incluída e '+_pend+' triagem(ns) avançada(s) identificada(s)':(_errs?'✓ Planilha baixada; revise '+_errs+' resultado(s) com alerta':'✓ Planilha completa: dados + estatística + forense'));
   }catch(e){console.error(e);alert('Não consegui gerar a planilha: '+e.message);}
@@ -8795,8 +8796,9 @@ function _studyWorkflow(qid,study){
   var avs=study.avaliacoes||[], progresso=AvaliacaoCore.estudo(study), avFeitas=progresso.concluidas;
   var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(progresso.complete?'complete':(progresso.started?'active':'ready')),detail:avFeitas+' de '+avs.length+' concluídas'+(progresso.parciais?' · '+progresso.parciais+' parciais':'')};
   var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,study):[], c=_bioAutoCache[qid+'|'+study.id], rr=c&&c.results||{};
-  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey+'|F'];});
-  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobs.some(function(j){return rr[j.jobKey+'|F']&&rr[j.jobKey+'|F'].ok===false;});
+  var jobsF=(typeof _bioestatJobsForense==='function')?_bioestatJobsForense(qid,study,jobs):[];
+  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobsF.length>0&&jobsF.every(function(j){return !!rr[j.jobKey];});
+  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobsF.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;});
   var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!progresso.started?'pending':(anaErr?'attention':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready'))),detail:!progresso.started?'Aguardando dados':(anaErr?'Revisar falha de cálculo':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular')))};
   var dossierOk=anaDone&&forDone&&!anaErr&&!forErr;
   var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':((anaErr||forErr)?'attention':(dossierOk?'ready':'pending')),detail:estudoFinalizado(study)?'Finalizado':((anaErr||forErr)?'Revisar pendências':(dossierOk?'Pronto para revisar':'Aguardando resultados'))};
@@ -13305,8 +13307,9 @@ var MOTOR_VERSAO='agracta-15';
    Mexer só na tela do motor não mexe aqui.
 
    A versão 14 corrige a natureza da variável e os papéis forenses.
+   A versão 16 tria cada VARIÁVEL uma vez, com todas as avaliações juntas.
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-15';
+var MOTOR_CALCULO='agracta-16';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -13317,6 +13320,31 @@ function _bioestatJobs(qid,study){
     jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa});
   }); });
   return jobs;
+}
+/* ===== A TRIAGEM FORENSE É POR VARIÁVEL, NÃO POR DATA =====================
+   Triar avaliação por avaliação custava duas vezes. Poder: uma avaliação com
+   5 tratamentos × 4 repetições tem 20 valores, pouco para dígito final,
+   arredondamento e duplicata, que ficavam inconclusivos. Alarme: N triagens
+   independentes somam N chances de falso positivo no mesmo estudo.
+   Aqui cada variável é triada UMA vez, com todas as avaliações juntas; o motor
+   trata cada data como um estrato (cada uma com a sua escala e os seus grupos)
+   e soma o volume entre elas. Só entram as células que a análise já aceitou.
+   `celulas` evita recalcular _bioestatJobs quando quem chama já tem. */
+function _bioestatJobsForense(qid,study,celulas){
+  var porVar={}, ordem=[];
+  (celulas||_bioestatJobs(qid,study)).forEach(function(j){
+    if(!j||!j.aoa||!j.aoa.length) return;
+    if(!porVar[j.variavel]){ porVar[j.variavel]=[]; ordem.push(j.variavel); }
+    porVar[j.variavel].push(j);
+  });
+  return ordem.map(function(v){
+    var cs=porVar[v], linhas=[], datas={};
+    cs.forEach(function(cj){ cj.aoa.slice(1).forEach(function(r){ linhas.push(r); }); if(cj.date) datas[cj.date]=1; });
+    var ds=Object.keys(datas).sort(), br=function(x){ return isoToBR(x)||x; };
+    return {jobKey:'__forense__|'+v, variavel:v, tipo:cs[0].tipo, datas:ds.length,
+            datasTexto:ds.length>1?(br(ds[0])+' a '+br(ds[ds.length-1])):(ds.length?br(ds[0]):''),
+            n:linhas.length, aoa:[cs[0].aoa[0]].concat(linhas)};
+  });
 }
 /* ===== O CARTÃO DE TEMPO NASCE SOZINHO ====================================
    O painel calcula UMA avaliação por vez: cada cartão é um par (avaliação,
@@ -13365,9 +13393,9 @@ function _bioestatEstadoResultado(r){
 }
 function _bioestatManifesto(qid,s){
   var out=[];
-  _bioestatJobs(qid,s).forEach(function(j){
-    ['analise','forense'].forEach(function(m){out.push({jobKey:j.jobKey+(m==='forense'?'|F':''),avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:m});});
-  });
+  var cel=_bioestatJobs(qid,s);
+  cel.forEach(function(j){out.push({jobKey:j.jobKey,avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:'analise'});});
+  _bioestatJobsForense(qid,s,cel).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,datas:j.datas,modo:'forense'});});
   _bioestatJobsTempo(qid,s).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,unidade:j.unidade,modo:'tempo'});});
   return out;
 }
@@ -13463,11 +13491,11 @@ function _bioestatEnsureStudy(qid,sid){
   var q=data[qid]||{}, study=(q.estudos||[]).find(function(s){return s.id===sid;}); if(!study)return;
   study=normalizeStudy(study);
   var key=qid+'|'+sid, sig=_bioestatSignature(study), jobs=_bioestatJobs(qid,study), c=_bioAutoCache[key];
-  var jobsT=_bioestatJobsTempo(qid,study);
+  var jobsT=_bioestatJobsTempo(qid,study), jobsF=_bioestatJobsForense(qid,study,jobs);
   if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'))return;
-  /* por avaliação/variável: análise + triagem forense; mais um por variável
-     com curva de sobrevivência, que é do estudo inteiro e não de uma data */
-  var total=jobs.length*2+jobsT.length;
+  /* análise por avaliação/variável; triagem forense e curva de sobrevivência
+     uma por variável, porque ambas são do estudo inteiro e não de uma data */
+  var total=jobs.length+jobsF.length+jobsT.length;
   c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
   if(!total)return;
   /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
@@ -13477,11 +13505,12 @@ function _bioestatEnsureStudy(qid,sid){
     if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
-      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; if(_bioestatEstadoResultado(res[j.jobKey+'|F'])==='calculado')n++; });
+      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
+      jobsF.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       jobsT.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
-    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
+    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF);
   });
 }
 /* Tipo de dado da triagem forense a partir do TIPO DECLARADO da coluna.
@@ -13506,13 +13535,13 @@ function _bioestatForenseTipo(j){
 }
 /* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
    consulta ao cache em disco é assíncrona e precisa vir antes. */
-function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
+function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
   function _ftipo(j){ return _bioestatForenseTipo(j); }
   var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
-    [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
+    [['analise',j.jobKey,'']].forEach(function(m,mi){
       var fjob={jobKey:m[1],avId:j.avId,date:j.date,variavel:j.variavel,tipo:j.tipo};
       var req=key+'|'+sig+'|'+i+'-'+mi+'|'+Date.now();
       /* Sentido da variável, para o motor pôr a letra 'a' no MELHOR tratamento.
@@ -13527,6 +13556,14 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
         maiorMelhor:_mm}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
+  });
+  /* Triagem forense: uma por variável, com todas as avaliações (estratos por data). */
+  (jobsF||[]).forEach(function(j,i){
+    var req=key+'|'+sig+'|F'+i+'|'+Date.now();
+    var item={requestId:req,key:key,sig:sig,job:{jobKey:j.jobKey,variavel:j.variavel,tipo:j.tipo,datas:j.datas,datasTexto:j.datasTexto},
+      payload:{requestId:req,aoa:j.aoa,modo:'forense',titulo:tit,responsavel:resp,tipo:j.tipo,
+               doseUnit:doseUnit,forenseTipo:_ftipo(j),local:loc,quadra:qn}};
+    _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
   /* A curva de sobrevivência vai por último: ela é a mais cara e as prévias de
      cada data já estarão na tela enquanto ela roda. */
@@ -13802,7 +13839,7 @@ function _bioestatForenseCard(job,rel){
   var rot=(!v.cobertura_suficiente||achados.some(function(a){return a.executado===false;}))?'Triagem parcial / inconclusiva':flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
   var lis=achados.map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
   return '<div style="padding:9px 11px;border:1px solid '+bd+';background:'+bg+';border-radius:9px;margin-top:7px">'+
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(job.datasTexto?(job.datasTexto+(job.datas>1?' ('+job.datas+' avaliações)':'')):(isoToBR(job.date)||job.date||''))+'</b>'+
     '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+chipbg+';color:'+cor+';white-space:nowrap">'+esc(rot)+'</span></div>'+
     (v.resumo?'<div style="font-size:11px;color:#6a766f;margin-top:3px">'+esc(v.resumo)+'</div>':'')+
     (lis?'<ul style="margin:6px 0 0;padding-left:18px;font-size:11px;color:#5a655e">'+lis+'</ul>':'')+
@@ -13823,11 +13860,11 @@ function _bioestatIntegratedHtml(qid,sid,study){
   }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
-  var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
+  var tot=(c&&c.total)||(jobs.length+_bioestatJobsForense(qid,study,jobs).length), body='', fbody='';
   if(!c||c.sig!==sig){
     jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
     body+='<div id="bioAutoStatus" class="bio-engine-status">Carregando verificações avançadas no aparelho… '+((c&&c.done)||0)+' de '+tot+'<small>No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.</small></div>';
-    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado… 0 de '+jobs.length+'<small>Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
+    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado…<small>Uma por variável, com todas as avaliações juntas. Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
   }
   /* "Repetições insuficientes" era o diagnóstico genérico para qualquer motivo.
      Quando a pendência tem endereço, ela vale mais que a frase. */
@@ -13838,7 +13875,10 @@ function _bioestatIntegratedHtml(qid,sid,study){
     var res=(c&&c.results)||{}, faltamAnalise=0, faltamForense=0;
     jobs.forEach(function(j){
       if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey],qid,sid); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
-      if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
+    });
+    var _jobsF=_bioestatJobsForense(qid,study,jobs);
+    _jobsF.forEach(function(j){
+      if(res[j.jobKey]) fbody+=_bioestatForenseCard(j,res[j.jobKey]); else faltamForense++;
     });
     /* A curva de sobrevivência entra ANTES das análises por data: num
        bioensaio ela é a resposta, e as leituras avulsas são o caminho. */
@@ -13849,7 +13889,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
     });
     body=_tHtml+body;
     if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
-    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
+    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(_jobsF.length-faltamForense)+' de '+_jobsF.length+' variáve'+(_jobsF.length>1?'is':'l')+'<small>Uma triagem por variável, com todas as avaliações juntas.</small></div>';
   }
   /* UMA folha por ALVO. Antes era um botão só, cravado na variável mais frequente —
      estudo com alvos diferentes (Mancha angular + Cercospora) só gerava a primeira. */
@@ -13874,7 +13914,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
        datas em que só uma fecha mostrava uma análise e duas ausências mudas. */
     abrir+body+_pendHtml+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
-    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
+    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Uma triagem por variável, com todas as avaliações juntas. Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão, gradiente de campo) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;
 }
 /* Re-renderiza o detalhe do estudo quando a análise fica pronta — usado tanto pelo handler de

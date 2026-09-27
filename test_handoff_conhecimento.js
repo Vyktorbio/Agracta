@@ -11,9 +11,21 @@ Object.assign(c,{$:id=>elements(id.slice(1)),document:{getElementById:elements},
 vm.runInContext(fn(engine,'preencherIdentificacaoSeVazia')+'\n'+fn(engine,'_agTipoResp')+'\n'+fn(engine,'__agractaHandoff'),c);
 c.__agractaHandoff({aoa:[[1]],modo:'forense',tipo:jobs[0].tipo,forenseTipo:'cont'});c.timers.shift()();
 assert.equal(c.roles.resposta,'Ferrugem');assert.equal(c.roles.tratamento,'tratamento');assert.equal(elements('opt-tipo').value,'proporcao');assert.equal(c.clicks,1);
+/* Forense é por VARIÁVEL: leva a repetição (desconto de bloco, gradiente e ordem) e usa
+   a data como estrato. Com a matriz aberta na 1ª data, triaria uma avaliação só. */
+assert.equal(c.roles.repeticao,'bloco');assert.deepEqual(Array.from(c.roles.estrato),['data_avaliacao']);
 c.pipeline={bloqueia:true,checks:[{severidade:'critico',titulo:'Resposta ausente',detalhe:'Selecione a resposta'}]};
 c.__agractaHandoff({aoa:[[1]],modo:'forense',tipo:'pct'});c.timers.shift()();
 assert.equal(c.clicks,1);assert.equal(c.results[0].ok,false);assert.match(c.results[0].erro,/Resposta ausente/);
+{ /* seletor de datas: forense abre em TODAS, como o modo Tempo */
+  const sel={value:'2026-01-10',options:[{value:'2026-01-10'},{value:'2026-01-24'},{value:'__todas'}]};let filtrou=0;
+  fields['matriz-data']=sel;c.atualizarMatrizFiltros=()=>{filtrou++;};c.pipeline={bloqueia:false};
+  c.__agractaHandoff({aoa:[[1]],modo:'forense',tipo:'pct',forenseTipo:'pct'});c.timers.shift()();
+  assert.equal(sel.value,'__todas','triagem forense usa todas as datas');assert.equal(filtrou,1,'e reaplica o filtro antes de montar as colunas');
+  sel.value='2026-01-10';c.__agractaHandoff({aoa:[[1]],modo:'analise',tipo:'pct'});c.timers.shift()();
+  assert.equal(sel.value,'2026-01-10','a análise por data continua abrindo numa data só');
+  delete fields['matriz-data'];c.clicks=1;c.results.length=0;
+}
 console.log('Handoff: tipo por variável, papéis forenses explícitos e bloqueio devolvido sem timeout OK.');
 
 // O mesmo motor atende estudos consecutivos: identificação e custódia não podem vazar.

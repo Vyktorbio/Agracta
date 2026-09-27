@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-15";
+const APP_VERSION = "bioensaio-auditoria-16";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -3834,7 +3834,10 @@ function __agractaHandoff(payload){
        todas — e as colunas são montadas AQUI, antes de setModo, então ajustar
        o filtro só lá dentro chegaria tarde: `carregarColunas` logo abaixo
        sobrescreveria com as colunas de uma data só. */
-    if(modo==='tempo'){
+    /* Forense também: a triagem é por VARIÁVEL, com todas as avaliações juntas
+       (cada data vira um estrato). Com o filtro na primeira data, ela analisaria
+       só uma avaliação e perderia o volume que é a razão de ser por variável. */
+    if(modo==='tempo' || modo==='forense'){
       var _ds=document.getElementById('matriz-data');
       if(_ds && [].some.call(_ds.options,function(o){return o.value==='__todas';})){
         _ds.value='__todas'; atualizarMatrizFiltros();
@@ -3864,7 +3867,7 @@ function __agractaHandoff(payload){
         /* forense leva a repetição: com ela o motor desconta o efeito de bloco (senão um gradiente
            de campo imita 'variâncias uniformes' e 'dados lisos') e roda os testes de gradiente e de
            ordem das repetições */
-        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento', repeticao: 'bloco'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
+        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento', repeticao: 'bloco', estrato: ['data_avaliacao']} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
         /* A dose só viaja quando o Agracta já provou que o ensaio É uma série
            de doses (mesmo item, 3+ níveis, mesma unidade). Chegando, ela tem
            de vir com papel: sem isso a coluna existe e a rota continua sendo
