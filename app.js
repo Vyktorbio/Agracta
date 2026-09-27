@@ -10793,6 +10793,449 @@ function arenaGraficosHtml(study, qid){
   return '<div class="sd-section" id="study-arena-graficos"><div class="sd-section-title">Gráficos da arena</div>'+H+tb+'</div>';
 }
 
+/* ===================== BIOENSAIOS DE BANCADA (vendor/bioensaio-core.js) ==============
+   Torre de Potter (Entomologia) e crescimento micelial em placa (Fitopatologia).
+   O método NÃO é mais uma pergunta: sai do tipo do estudo numa quadra de
+   laboratório. O protocolo é escrito UMA vez, aqui; a primeira avaliação nasce
+   com as variáveis certas e o N de cada arena; o resumo — mortalidade, Abbott,
+   validade da testemunha, IOBC, inibição do crescimento, IVCM, fim pela borda,
+   CL50/CE50 — sai sozinho, com a referência de cada conta ao lado.
+   ===================================================================================== */
+function bioensaioMetodo(study, qid){
+  if(!window.BioensaioCore||!study) return '';
+  var lab=false, met=null;
+  try{ lab=(typeof isQuadraLab==='function')&&!!isQuadraLab(qid); }catch(e){}
+  try{ met=lab?studyMetodo(study,qid):null; }catch(e){}
+  return BioensaioCore.metodoDoEstudo(study, lab, met);
+}
+function bioensaioProt(study, qid){
+  var m=bioensaioMetodo(study,qid); return m?BioensaioCore.protocolo(study,m):null;
+}
+function _bioBR(x,c){ return (x==null||!isFinite(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(c==null?1:c)}); }
+
+/* ---------- protocolo (editor do estudo) ---------- */
+function _bioCampoHtml(k, rot, val, ph, dica, texto){
+  return '<div class="se-field"><label>'+rot+'</label><input type="text" id="seBio_'+k+'" value="'+
+    esc(val==null?'':(typeof val==='number'?String(val).replace('.',','):String(val)))+'" placeholder="'+esc(ph||'')+'"'+
+    (dica?' oninput="_seBioDica()"':'')+(texto?'':' inputmode="decimal"')+'></div>';
+}
+function bioensaioEditorHtml(s){
+  var m=bioensaioMetodo(s, curV); if(!m) return '';
+  var def=BioensaioCore.METODOS[m], b=((s.bioensaio&&s.bioensaio[m])||{}), P=BioensaioCore.protocolo(s,m);
+  function v(k){ return (b[k]==null||b[k]==='')?'':b[k]; }
+  function pd(k){ var x=def.parametros[k].padrao; return (x==null||x==='')?'':String(x).replace('.',','); }
+  var h='<div class="se-section-title">'+esc(def.rotulo)+' <span style="font-weight:400;opacity:.7">· protocolo do bioensaio</span></div>';
+  h+='<input type="hidden" id="seBioMetodo" value="'+esc(m)+'">';
+  if(m==='potter'){
+    h+='<div class="e-hint" style="margin:2px 0 8px">Escrito uma vez, vale para todas as leituras. O N de cada arena é o <b>nº de organismos por unidade</b> da arena, logo abaixo — a avaliação já nasce com ele (Potter, 1952).</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('volumeMl','Volume pulverizado (mL)',v('volumeMl'),pd('volumeMl'))+
+       _bioCampoHtml('pressaoKpa','Pressão (kPa)',v('pressaoKpa'),'ex.: 68,9')+'</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('depositoAlvo','Depósito alvo (mg/cm²)',v('depositoAlvo'),'do POP do laboratório',true)+
+       _bioCampoHtml('depositoTolPct','Tolerância (%)',v('depositoTolPct'),pd('depositoTolPct'),true)+'</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('pesoAntesG','Calibração: massa antes (g)',v('pesoAntesG'),'0,0000',true)+
+       _bioCampoHtml('pesoDepoisG','massa depois (g)',v('pesoDepoisG'),'0,0000',true)+
+       _bioCampoHtml('superficieCm','Ø da superfície pesada (cm)',v('superficieCm'),'= Ø da arena',true)+'</div>';
+    h+='<div class="e-hint" id="seBioDica" style="margin:-2px 0 8px">'+_bioDicaTexto(m,P)+'</div>';
+    var cat=P.categoria;
+    h+='<div class="se-row"><div class="se-field"><label>O organismo é</label><select id="seBio_categoria">'+
+       '<option value="praga"'+(cat!=='inimigo'?' selected':'')+'>Praga (alvo do produto)</option>'+
+       '<option value="inimigo"'+(cat==='inimigo'?' selected':'')+'>Inimigo natural (seletividade · IOBC)</option></select></div>'+
+       _bioCampoHtml('estagio','Estágio',v('estagio'),'adultos, ninfas, larvas L2…',false,true)+'</div>';
+    h+=_bioCampoHtml('criterio','Critério de morte',v('criterio'),pd('criterio'),false,true);
+    h+='<div class="se-row">'+_bioCampoHtml('limiteTestemunha','Mortalidade máxima da testemunha (%)',v('limiteTestemunha'),pd('limiteTestemunha'))+
+       '<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" id="seBio_moribundoMorto"'+(P.moribundoMorto?' checked':'')+' style="width:auto"> Moribundo conta como morto</label></div></div>';
+    h+='<div class="e-hint" style="margin:-2px 0 8px">Testemunha acima do limite invalida a leitura; entre 5% e o limite, a eficácia é corrigida por Abbott (WHO, 2016). Inimigo natural recebe a classe IOBC do laboratório (Hassan, 1994; Sterk et al., 1999).</div>';
+  }else{
+    h+='<div class="e-hint" style="margin:2px 0 8px">Meio envenenado (Grover &amp; Moore, 1962). A leitura anota o diâmetro da colônia em cruz; a média, o crescimento sem o disco e a inibição saem sozinhos. O Ø da placa também é a escala da medição por foto.</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('placaMm','Ø interno da placa (mm)',v('placaMm'),pd('placaMm'))+
+       _bioCampoHtml('discoMm','Disco de micélio (mm)',v('discoMm'),pd('discoMm'))+
+       _bioCampoHtml('bordaPct','Fim: testemunha a (% da placa)',v('bordaPct'),pd('bordaPct'))+'</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('meio','Meio de cultura',v('meio'),pd('meio'),false,true)+
+       _bioCampoHtml('temperaturaC','Temperatura (°C)',v('temperaturaC'),pd('temperaturaC'))+
+       _bioCampoHtml('fotoperiodo','Fotoperíodo',v('fotoperiodo'),'12 h luz / 12 h escuro',false,true)+'</div>';
+    h+=_bioCampoHtml('isolado','Isolado / espécie',v('isolado'),'ex.: Sclerotinia sclerotiorum, isolado SS-12',false,true);
+  }
+  return h;
+}
+function _bioDicaTexto(m,P){
+  if(m!=='potter'||!window.BioensaioCore) return '';
+  var dep=BioensaioCore.depositoPotter(P.pesoAntesG,P.pesoDepoisG,P.superficieCm||P.arenaDiametroCm);
+  if(dep.mgCm2==null) return 'Depósito: '+esc(dep.motivo)+' — pese a superfície antes e depois da pulverização.';
+  var al=BioensaioCore.depositoNoAlvo(dep.mgCm2,P.depositoAlvo,P.depositoTolPct);
+  return 'Depósito: <b>'+_bioBR(dep.mgCm2,2)+' mg/cm²</b>'+(al?(al.dentro?' ✓ dentro do alvo':' ⚠ '+_bioBR(al.desvioPct,1)+'% do alvo — recalibre a torre'):'');
+}
+function _bioLerCampos(get, metodo){
+  var def=window.BioensaioCore&&BioensaioCore.METODOS[metodo]; if(!def) return null;
+  var o={};
+  Object.keys(def.parametros).forEach(function(k){
+    var e=get('seBio_'+k); if(!e) return;
+    var pd=def.parametros[k].padrao;
+    if(typeof pd==='boolean'){ o[k]=!!e.checked; return; }
+    var t=String(e.value==null?'':e.value).trim(); if(t==='') return;
+    if(typeof pd==='number'||pd===null){ var n=_arenaNum(t); if(n!=null&&n>=0) o[k]=n; }
+    else o[k]=t;
+  });
+  return o;
+}
+function _seBioDica(){
+  var d=document.getElementById('seBioDica'), mEl=document.getElementById('seBioMetodo'); if(!d||!mEl) return;
+  var s=JSON.parse(JSON.stringify(workingStudy||{})); s.bioensaio=s.bioensaio||{};
+  s.bioensaio[mEl.value]=_bioLerCampos(function(id){ return document.getElementById(id); }, mEl.value)||{};
+  try{ if(document.getElementById('seArForma')) s.arena=_arenaLerCampos(function(id){ return document.getElementById(id); }); }catch(e){}
+  d.innerHTML=_bioDicaTexto(mEl.value, BioensaioCore.protocolo(s, mEl.value));
+}
+/* Grava só o método que está na tela; o do outro método (se o tipo do estudo mudou)
+   fica guardado, para não sumir com o que alguém escreveu. */
+function bioensaioLerEditor(get, atual){
+  var mEl=get('seBioMetodo'), m=mEl&&mEl.value, out=JSON.parse(JSON.stringify((atual&&typeof atual==='object')?atual:{}));
+  if(!m) return out;
+  var o=_bioLerCampos(get,m); if(o) out[m]=o;
+  return out;
+}
+function bioensaioResumoTexto(study, qid){
+  var m=bioensaioMetodo(study, qid==null?curV:qid); if(!m) return '';
+  var P=BioensaioCore.protocolo(study,m), t=[];
+  if(m==='potter'){
+    if(P.volumeMl!=null) t.push(_bioBR(P.volumeMl,2)+' mL');
+    if(P.pressaoKpa!=null) t.push(_bioBR(P.pressaoKpa,1)+' kPa');
+    var dep=BioensaioCore.depositoPotter(P.pesoAntesG,P.pesoDepoisG,P.superficieCm||P.arenaDiametroCm);
+    if(dep.mgCm2!=null) t.push('depósito '+_bioBR(dep.mgCm2,2)+' mg/cm²'+(P.depositoAlvo?' (alvo '+_bioBR(P.depositoAlvo,2)+')':''));
+    if(P.individuosPorArena) t.push(_bioBR(P.individuosPorArena,0)+' '+(P.organismo||'indivíduos')+'/arena');
+    if(P.estagio) t.push(P.estagio);
+    t.push(P.categoria==='inimigo'?'inimigo natural':'praga');
+    t.push('testemunha até '+_bioBR(P.limiteTestemunha,0)+'%');
+  }else{
+    t.push('placa Ø '+_bioBR(P.placaMm,0)+' mm'); t.push('disco '+_bioBR(P.discoMm,1)+' mm');
+    if(P.meio) t.push(P.meio); if(P.temperaturaC!=null) t.push(_bioBR(P.temperaturaC,1)+' °C');
+    if(P.fotoperiodo) t.push(P.fotoperiodo); if(P.isolado) t.push(P.isolado);
+  }
+  return t.join(' · ');
+}
+
+/* ---------- avaliação: nasce com o protocolo ---------- */
+/* A PRIMEIRA avaliação de um bioensaio nascia vazia e cada leitura pedia para
+   criar a coluna à mão — nome, tipo, sub-amostras, N. Agora o esquema vem do
+   método (e as seguintes herdam dele, como sempre). */
+function bioensaioSemente(study, qid){
+  var m=bioensaioMetodo(study,qid); if(!m) return null;
+  var P=BioensaioCore.protocolo(study,m), out={metodo:m, variaveis:[], tipos:{}, varcfg:{}};
+  BioensaioCore.variaveisIniciais(m,P).forEach(function(v){
+    out.variaveis.push(v.nome); out.tipos[v.nome]=v.tipo;
+    var c={}; if(v.sub) c.sub=v.sub; if(v.N) c.N=v.N; if(v.sentido) c.sentido=v.sentido;
+    out.varcfg[v.nome]=c;
+  });
+  return out.variaveis.length?out:null;
+}
+/* O N declarado uma vez (organismos por arena) vale de padrão em toda leitura em
+   que a mortalidade n/N ainda não tenha N padrão próprio. */
+function bioensaioPadraoN(study, qid, grid){
+  if(!grid) return;
+  var m=bioensaioMetodo(study,qid); if(m!=='potter') return;
+  var P=BioensaioCore.protocolo(study,m); if(!(P.individuosPorArena>0)) return;
+  (grid.variaveis||[]).forEach(function(v){
+    if(_avTipo(grid,v)!=='razao' || BioensaioCore.papelDaVariavel('potter',v)!=='mortalidade') return;
+    if(!grid.varcfg||typeof grid.varcfg!=='object') grid.varcfg={};
+    var c=grid.varcfg[v]||{};
+    if(!(_numBR(c.N,0)>0)) grid.varcfg[v]=Object.assign({},c,{N:Math.round(P.individuosPorArena)});
+  });
+}
+/* Diâmetro da colônia: o que o editor de sub-amostras precisa saber da placa. */
+function _avBioPlaca(v){
+  try{
+    var st=_avStudy(); if(!st||bioensaioMetodo(st,curV)!=='placa') return null;
+    if(BioensaioCore.papelDaVariavel('placa',v)!=='diametro') return null;
+    return BioensaioCore.protocolo(st,'placa');
+  }catch(e){ return null; }
+}
+function avSubTomouPlaca(){
+  if(!_avSubCtx) return;
+  var P=_avBioPlaca(_avSubCtx.v); if(!P||!(P.placaMm>0)) return;
+  var cfg=_avCfg(_avGrid,_avSubCtx.v);
+  for(var i=0;i<cfg.sub;i++) _avWriteBruto(_avSubCtx.key,_avSubCtx.v,'s'+i,String(P.placaMm));
+  _avPersistNow(); _avSubRender();
+}
+
+/* ---------- os dados do ensaio, lidos da grade ---------- */
+function _bioDias(study, av){
+  var base=study.avalInicio||study.dataInicio||'', daa=null;
+  try{ if(base&&av.data) daa=Math.round((new Date(av.data+'T00:00:00')-new Date(base+'T00:00:00'))/864e5); }catch(e){}
+  var m=avMomento(av, daa==null?0:daa);
+  return {dias:m.dias, rotulo:(m.explicito?m.rotulo:(daa!=null?(daa+' DAT'):(isoToBR(av.data)||av.data||'')))};
+}
+function _bioTestemunha(study){
+  var ts=study.tratamentos||[], t=ts.filter(function(x){ return x&&x.testemunha; })[0];
+  if(t) return t.id;
+  var z=ts.filter(function(x){ var d=_arenaDoseValor(x&&x.dose); return x && d===0; })[0];
+  return z?z.id:'';
+}
+function bioensaioDados(study, qid){
+  var m=bioensaioMetodo(study,qid); if(!m) return null;
+  var P=BioensaioCore.protocolo(study,m), papel=(m==='placa')?'diametro':'mortalidade', nomeVar=null;
+  (study.avaliacoes||[]).forEach(function(av){ (av.variaveis||[]).forEach(function(v){
+    if(!nomeVar && BioensaioCore.papelDaVariavel(m,v)===papel) nomeVar=v; }); });
+  var serie=null; try{ serie=_doseSerieDoEstudo(study); }catch(e){}
+  var test=_bioTestemunha(study);
+  var trats=(study.tratamentos||[]).filter(function(t){ return t&&t.id; }).map(function(t){
+    var d=(serie&&serie.doses[t.id]!=null)?serie.doses[t.id]:_arenaDoseValor(t.dose);
+    return {id:t.id, nome:t.produto||'', dose:d, doseTexto:t.dose||'', testemunha:t.id===test};
+  });
+  var ds={metodo:m, prot:P, testemunha:test, variavel:nomeVar, tratamentos:trats, serie:serie, leituras:[]};
+  if(!nomeVar){ ds.vazio=true; return ds; }
+  var rows=_avRowsForStudy(study,false);
+  (study.avaliacoes||[]).forEach(function(av){
+    if(!av||(av.variaveis||[]).indexOf(nomeVar)<0) return;
+    var tipo=_avTipo(av,nomeVar), parcelas=[];
+    rows.forEach(function(rw){
+      var cel=_avCel(av,rw.key,nomeVar,false), nota=_avNota(av,rw,nomeVar);
+      if(m==='potter'){
+        if(tipo!=='razao'||!cel) return;
+        if(cel.n==null||String(cel.n).trim()==='') return;
+        var N=(cel.N==null||String(cel.N).trim()==='')?((av.varcfg&&av.varcfg[nomeVar]&&av.varcfg[nomeVar].N)||''):cel.N;
+        parcelas.push({tratId:rw.tratId, rep:rw.rep, n:cel.n, N:N});
+      }else{
+        var sub=(cel&&Array.isArray(cel.sub))?cel.sub.filter(function(x){ return x!=null&&String(x).trim()!==''; }):[];
+        if(!sub.length && (nota==null||String(nota).trim()==='')) return;
+        parcelas.push({tratId:rw.tratId, rep:rw.rep, sub:sub, valor:nota});
+      }
+    });
+    if(!parcelas.length) return;
+    var d=_bioDias(study,av);
+    ds.leituras.push({avId:av.id, jobKey:(av.id||av.data)+'|'+nomeVar, rotulo:d.rotulo, dias:d.dias, data:av.data, parcelas:parcelas});
+  });
+  ds.leituras.sort(function(a,b){ return (a.dias||0)-(b.dias||0); });
+  if(!ds.leituras.length) ds.vazio=true;
+  return ds;
+}
+/* O que o motor estatístico já calculou para esta leitura (CL50/CE50 com IC). */
+function _bioMotor(qid, sid, jobKey){
+  try{ var c=_bioAutoCache[qid+'|'+sid]; var r=c&&c.results&&c.results[jobKey]; return r||null; }catch(e){ return null; }
+}
+
+/* ---------- gráficos ---------- */
+/* Marcas do eixo em números redondos: 0, 30, 60, 90 mm — e não 23, 45, 68. */
+function _bioMarcas(yMax){
+  var passos=[1,2,2.5,5,10,15,20,25,30,50,100,200,250,500], m=null;
+  for(var i=0;i<passos.length;i++){ var n=yMax/passos[i]; if(n<=6 && Math.abs(n-Math.round(n))<1e-9){ m=passos[i]; break; } }
+  if(!m){ for(var j=0;j<passos.length;j++){ if(yMax/passos[j]<=6){ m=passos[j]; break; } } }
+  if(!m) m=yMax/4;
+  var out=[]; for(var v=0; v<=yMax+1e-9; v+=m) out.push(v);
+  if(out[out.length-1]<yMax-1e-9) out.push(yMax);
+  return out;
+}
+/* rótulo do eixo x colado na borda sai inteiro: âncora no início ou no fim */
+function _bioAncora(x, x0, x1){ return (x<=x0+1e-9)?'start':((x>=x1-1e-9)?'end':'middle'); }
+function _bioLinhaSvg(series, trats, test, o){
+  var W=520,Hh=220,pl=40,pr=12,pt=12,pb=30, xs=[];
+  trats.forEach(function(t){ (series[t.id]||[]).forEach(function(p){ xs.push(p.x); }); });
+  if(!xs.length) return '';
+  var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs); if(x1<=x0){ x0=x0-1; x1=x1+1; }
+  var yMax=o.yMax||100;
+  function X(v){ return pl+(W-pl-pr)*(v-x0)/(x1-x0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(yMax,y))/yMax); }
+  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(o.titulo||'')+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px;max-width:640px;display:block">';
+  _bioMarcas(yMax).forEach(function(g){ var y=Y(g);
+    h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'"/>';
+    h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+_bioBR(g,1)+(o.yUnid||'')+'</text>'; });
+  if(o.ref && o.ref.y!=null){ var yr=Y(o.ref.y);
+    h+='<line x1="'+pl+'" y1="'+yr.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+yr.toFixed(1)+'" stroke="#b91c1c" stroke-dasharray="4 3"/>'+
+       '<text x="'+(W-pr)+'" y="'+(yr-3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#b91c1c">'+esc(o.ref.rot||'')+'</text>'; }
+  (o.xRotulos||[]).forEach(function(r){ h+='<text x="'+X(r.x).toFixed(1)+'" y="'+(Hh-12)+'" font-size="9" text-anchor="'+_bioAncora(r.x,x0,x1)+'" fill="#8a948e">'+esc(r.rot)+'</text>'; });
+  if(o.xTitulo) h+='<text x="'+((pl+W-pr)/2)+'" y="'+(Hh-1)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+esc(o.xTitulo)+'</text>';
+  var leg='';
+  trats.forEach(function(t,ti){
+    var ps=series[t.id]||[]; if(!ps.length) return;
+    var col=(t.id===test)?'#222':_arenaCor(ti);
+    h+='<path d="'+ps.map(function(p,k){ return (k?'L':'M')+X(p.x).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ')+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"'+(t.id===test?' stroke-dasharray="5 3"':'')+'/>';
+    ps.forEach(function(p){ h+='<circle cx="'+X(p.x).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.2" fill="'+col+'" stroke="#fff" stroke-width="1.5"><title>'+esc(t.id+(t.nome?' · '+t.nome:'')+' — '+(p.rotulo||'')+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title></circle>'; });
+    leg+='<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 2px 0;font-size:10px;color:#26312b"><span style="width:12px;height:3px;background:'+col+';display:inline-block;border-radius:2px"></span>'+esc(t.id)+(t.id===test?' (testemunha)':'')+'</span>';
+  });
+  return h+'</svg><div style="margin:4px 0 2px;line-height:1.8">'+leg+'</div>';
+}
+/* Curva de dose: pontos observados e a curva ajustada pelo motor, dose em log. */
+function _bioDoseSvg(pontos, curva, o){
+  var ps=(pontos||[]).filter(function(p){ return p.dose>0&&p.y!=null&&isFinite(p.y); });
+  var cs=(curva||[]).filter(function(p){ return p.dose>0&&p.y!=null&&isFinite(p.y); });
+  if(ps.length<2 && cs.length<2) return '';
+  var W=520,Hh=220,pl=40,pr=12,pt=12,pb=30, lx=ps.concat(cs).map(function(p){ return Math.log10(p.dose); });
+  var x0=Math.min.apply(null,lx), x1=Math.max.apply(null,lx); if(x1<=x0){ x0-=1; x1+=1; }
+  var yMax=o.yMax||100;
+  function X(d){ return pl+(W-pl-pr)*(Math.log10(d)-x0)/(x1-x0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(yMax,y))/yMax); }
+  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(o.titulo||'Curva de dose')+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px;max-width:640px;display:block">';
+  _bioMarcas(yMax).forEach(function(g){ var y=Y(g);
+    h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'"/>';
+    h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+_bioBR(g,1)+(o.yUnid||'')+'</text>'; });
+  for(var e=Math.ceil(x0);e<=Math.floor(x1);e++){ var xe=pl+(W-pl-pr)*(e-x0)/(x1-x0);
+    h+='<text x="'+xe.toFixed(1)+'" y="'+(Hh-12)+'" font-size="9" text-anchor="'+_bioAncora(e,x0,x1)+'" fill="#8a948e">'+_bioBR(Math.pow(10,e),4)+'</text>'; }
+  h+='<text x="'+((pl+W-pr)/2)+'" y="'+(Hh-1)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+esc(o.xTitulo||'dose (escala log)')+'</text>';
+  if(cs.length>1) h+='<path d="'+cs.map(function(p,k){ return (k?'L':'M')+X(p.dose).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ')+'" fill="none" stroke="#1f8a52" stroke-width="2"/>';
+  ps.forEach(function(p){ h+='<circle cx="'+X(p.dose).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.4" fill="#2f85c9" stroke="#fff" stroke-width="1.5"><title>'+esc(_bioBR(p.dose,4)+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title></circle>'; });
+  if(o.marca && o.marca.dose>0 && Math.log10(o.marca.dose)>=x0 && Math.log10(o.marca.dose)<=x1){
+    var xm=X(o.marca.dose);
+    h+='<line x1="'+xm.toFixed(1)+'" y1="'+pt+'" x2="'+xm.toFixed(1)+'" y2="'+(Hh-pb)+'" stroke="#b91c1c" stroke-dasharray="4 3"/>'+
+       '<text x="'+(xm+3).toFixed(1)+'" y="'+(pt+9)+'" font-size="9" fill="#b91c1c">'+esc(o.marca.rot||'')+'</text>';
+  }
+  return h+'</svg>';
+}
+function _bioCurvaBinomial(rel){
+  /* a curva ajustada do motor: P = C + (1 − C)·F(b0 + b1·log10 dose) */
+  var a=rel&&rel.analise; if(!a||a.slope==null||a.intercepto==null) return [];
+  var C=(a.resposta_natural&&a.resposta_natural.metodo!=='ausente'&&a.resposta_natural.C)||0;
+  var ds=(a.tabela_doses||[]).filter(function(t){ return t.dose>0; }).map(function(t){ return t.dose; });
+  if(ds.length<2) return [];
+  var lo=Math.log10(Math.min.apply(null,ds))-0.3, hi=Math.log10(Math.max.apply(null,ds))+0.3, out=[];
+  function F(z){ if(a.link==='probit'){ var t=1/(1+0.2316419*Math.abs(z)), d=0.3989423*Math.exp(-z*z/2), p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274)))); return z>0?1-p:p; } return 1/(1+Math.exp(-z)); }
+  for(var i=0;i<=60;i++){ var x=lo+(hi-lo)*i/60; out.push({dose:Math.pow(10,x), y:100*(C+(1-C)*F(a.intercepto+a.slope*x))}); }
+  return out;
+}
+
+/* ---------- o painel ---------- */
+function _bioRefsHtml(chaves){
+  var refs=BioensaioCore.refsDe(chaves); if(!refs.length) return '';
+  return '<details class="bio-refs" style="margin-top:8px"><summary style="font-size:10.5px;color:#486053;cursor:pointer">Referências ('+refs.length+')</summary>'+
+    '<ol style="margin:5px 0 0;padding-left:18px;font-size:10px;color:#5f6f66;line-height:1.5">'+refs.map(function(r){ return '<li>'+esc(r.abnt)+'</li>'; }).join('')+'</ol></details>';
+}
+function _bioChip(txt, cor){
+  var c={ok:['#e8f5ec','#1f6f43'],alerta:['#fff6e0','#8a6d18'],erro:['#fdeaea','#a33']}[cor||'ok'];
+  return '<span style="display:inline-block;margin:0 5px 4px 0;padding:2px 7px;border-radius:999px;font-size:10.5px;background:'+c[0]+';color:'+c[1]+'">'+txt+'</span>';
+}
+function _bioPainelPotter(qid, sid, study, ds, R, refs){
+  var H='', test=ds.testemunha, trats=ds.tratamentos;
+  if(R.deposito && R.deposito.mgCm2!=null){
+    var al=R.depositoNoAlvo;
+    H+=_bioChip('Depósito '+_bioBR(R.deposito.mgCm2,2)+' mg/cm²'+(al?(al.dentro?' ✓':' ⚠ '+_bioBR(al.desvioPct,1)+'%'):''), al&&!al.dentro?'alerta':'ok');
+  }
+  R.leituras.forEach(function(L){
+    var v=L.validade, cor=(v.estado==='invalido')?'erro':(v.estado==='sem'?'alerta':'ok');
+    H+=_bioChip(esc(L.rotulo)+': testemunha '+(L.testemunhaMort==null?'—':_bioBR(L.testemunhaMort,1)+'%')+(v.estado==='invalido'?' ✗ repetir':(v.estado==='sem'?'':' ✓')), cor);
+  });
+  /* uma coluna por leitura: mortalidade e eficácia de Abbott */
+  H+='<div class="av-scroll" style="margin-top:4px"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th>';
+  R.leituras.forEach(function(L){ H+='<th>'+esc(L.rotulo)+'<br><small style="font-weight:400">mort. · Abbott</small></th>'; });
+  if(R.prot.categoria==='inimigo') H+='<th>IOBC<br><small style="font-weight:400">'+esc(R.final?R.final.rotulo:'')+'</small></th>';
+  H+='</tr></thead><tbody>';
+  trats.forEach(function(t){
+    H+='<tr'+(t.id===test?' style="font-weight:700"':'')+'><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+esc(t.doseTexto||'')+'</td>';
+    R.leituras.forEach(function(L){
+      var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{};
+      var inval=(L.validade.estado==='invalido');
+      H+='<td title="'+esc((l.mortos!=null?(l.mortos+' de '+l.avaliados+' em '+l.arenas+' arena(s)'):'sem leitura'))+'">'+
+        (l.mortalidade==null?'—':_bioBR(l.mortalidade,1)+'%')+
+        (t.id===test?'':' · '+(l.abbott==null?'—':(inval?'<s>':'')+_bioBR(l.abbott,1)+'%'+(inval?'</s>':'')))+'</td>';
+    });
+    if(R.prot.categoria==='inimigo'){
+      var lf=R.final?R.final.linhas.filter(function(x){ return x.tratId===t.id; })[0]:null;
+      H+='<td>'+((lf&&lf.iobc)?(lf.iobc.classe+' · '+esc(lf.iobc.rotulo)):'—')+'</td>';
+    }
+    H+='</tr>';
+  });
+  H+='</tbody></table></div>';
+  H+='<div class="e-hint" style="margin:3px 0 0">Mortalidade = mortos ÷ avaliados, somados nas arenas. Eficácia = Abbott (1925) / Schneider-Orelli (1947): (tratado − testemunha) ÷ (100 − testemunha). Leitura com a testemunha acima do limite sai riscada.</div>';
+  /* curva de mortalidade no tempo */
+  var series={};
+  trats.forEach(function(t){ series[t.id]=R.leituras.map(function(L){
+    var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]; return (l&&l.mortalidade!=null)?{x:L.dias, y:l.mortalidade, rotulo:L.rotulo}:null; }).filter(Boolean); });
+  if(R.leituras.length>1) H+='<div class="res-title">Mortalidade × tempo</div>'+_bioLinhaSvg(series, trats, test, {yMax:100, yUnid:'%', titulo:'Mortalidade por tratamento ao longo das leituras',
+    xRotulos:R.leituras.map(function(L){ return {x:L.dias, rot:L.rotulo}; })});
+  /* CL50/CL90 — do motor estatístico, leitura a leitura */
+  if(ds.serie){
+    var linhas='', ultimoRel=null, ultimoRot='';
+    ds.leituras.forEach(function(L){
+      var rel=_bioMotor(qid,sid,L.jobKey), a=rel&&rel.ok&&rel.analise;
+      if(!a||!a.doses_letais){ linhas+='<tr><td class="av-tname">'+esc(L.rotulo)+'</td><td colspan="4" style="color:#8a948e">'+(rel&&rel.ok===false?esc(rel.erro||'sem curva'):'calculando no motor estatístico…')+'</td></tr>'; return; }
+      function cl(p){ var d=(a.doses_letais||[]).filter(function(x){ return Math.abs(x.p-p)<1e-9; })[0]; if(!d) return '—';
+        return _bioBR(d.dose,3)+' <small style="color:#7a877f">('+(d.ic_inf!=null?_bioBR(d.ic_inf,3)+'–'+_bioBR(d.ic_sup,3):'IC não estimável')+')</small>'; }
+      var rn=a.resposta_natural||{};
+      linhas+='<tr><td class="av-tname">'+esc(L.rotulo)+'</td><td>'+cl(0.5)+'</td><td>'+cl(0.9)+'</td><td>'+_bioBR(a.slope,2)+' ± '+_bioBR(a.slope_se,2)+'</td><td>'+
+        (a.p_qui_quadrado==null?'—':('χ² p='+_bioBR(a.p_qui_quadrado,3)))+(rn.metodo==='estimada'?(' · C='+_bioBR(100*rn.C,1)+'%'):'')+'</td></tr>';
+      ultimoRel=rel; ultimoRot=L.rotulo;
+    });
+    H+='<div class="res-title">CL50 e CL90 <small style="opacity:.7">('+esc(ds.serie.unidade||'dose')+' · Robertson et al., 2007)</small></div>'+
+       '<div class="av-scroll"><table class="av-table"><thead><tr><th>Leitura</th><th>CL50 (IC 95%)</th><th>CL90 (IC 95%)</th><th>Inclinação</th><th>Aderência · resp. natural</th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
+    if(ultimoRel){
+      var a2=ultimoRel.analise, pts=(a2.tabela_doses||[]).filter(function(t){ return t.dose>0; }).map(function(t){ return {dose:t.dose, y:100*(t.prop_obs||0)}; });
+      var c50=(a2.doses_letais||[]).filter(function(x){ return Math.abs(x.p-0.5)<1e-9; })[0];
+      H+='<div class="res-title">Curva de dose-resposta <small style="opacity:.7">('+esc(ultimoRot)+')</small></div>'+
+        _bioDoseSvg(pts, _bioCurvaBinomial(ultimoRel), {yMax:100, yUnid:'%', xTitulo:'concentração ('+(ds.serie.unidade||'dose')+', escala log)', marca:c50?{dose:c50.dose, rot:'CL50 '+_bioBR(c50.dose,3)}:null})+
+        '<div class="e-hint" style="margin:3px 0 0">Pontos: mortalidade observada em cada concentração. Curva: o modelo com a resposta natural da testemunha (C) — a CL50 é a concentração que mata 50% além da mortalidade natural, por isso ela cruza a curva um pouco acima de 50%.</div>';
+      refs.push('robertson2007','finney1971');
+    }
+  }else if(trats.length>2){
+    H+='<div class="e-hint" style="margin:6px 0 0">CL50 aparece quando os tratamentos formam uma série de concentrações do mesmo produto (3 ou mais níveis, mesma unidade).</div>';
+  }
+  return H;
+}
+function _bioPainelPlaca(qid, sid, study, ds, R, refs){
+  var H='', test=ds.testemunha, trats=ds.tratamentos, P=R.prot, F=R.final;
+  if(R.fim) H+=_bioChip('Fim do ensaio: '+esc(R.fim.rotulo)+' — testemunha na borda', 'ok');
+  else if(R.leituras.length){
+    var ul=R.leituras[R.leituras.length-1];
+    H+=_bioChip('Testemunha em '+_bioBR(ul.testemunhaDiametro,1)+' de '+_bioBR(P.placaMm,0)+' mm — siga as leituras até '+_bioBR(P.bordaPct,0)+'% da placa', 'alerta');
+  }
+  if(F){
+    H+='<div class="res-title">'+esc(F.rotulo)+(R.fim?' · leitura final':' · última leitura')+'</div>';
+    H+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th><th>Ø médio (mm)</th><th>Crescimento (mm)</th><th>Inibição</th><th>IVCM</th><th>Taxa radial</th></tr></thead><tbody>';
+    trats.forEach(function(t){
+      var l=F.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{}, pt=R.porTratamento[t.id]||{};
+      H+='<tr'+(t.id===test?' style="font-weight:700"':'')+'><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+esc(t.doseTexto||'')+'</td>'+
+        '<td>'+_bioBR(l.diametro,1)+(l.dpDiametro!=null?' <small style="color:#7a877f">± '+_bioBR(l.dpDiametro,1)+'</small>':'')+'</td>'+
+        '<td>'+_bioBR(l.crescimento,1)+'</td><td>'+(t.id===test?'—':(l.inibicao==null?'—':_bioBR(l.inibicao,1)+'%'))+'</td>'+
+        '<td>'+_bioBR(pt.ivcm,2)+'</td><td>'+(pt.taxa?_bioBR(pt.taxa.mmDia,2)+' mm/dia':'—')+'</td></tr>';
+    });
+    H+='</tbody></table></div>';
+    H+='<div class="e-hint" style="margin:3px 0 0">Ø médio = média da cruz em cada placa. Crescimento = Ø − disco de '+_bioBR(P.discoMm,1)+' mm. Inibição = (testemunha − tratado) ÷ testemunha, sobre o crescimento (Vincent, 1947). IVCM = Σ(D − D anterior) ÷ dias (Oliveira, 1991). Taxa radial = inclinação do raio no tempo.</div>';
+  }
+  var series={};
+  trats.forEach(function(t){ series[t.id]=R.leituras.map(function(L){
+    var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]; return (l&&l.diametro!=null)?{x:L.dias, y:l.diametro, rotulo:L.rotulo}:null; }).filter(Boolean); });
+  if(R.leituras.length>1) H+='<div class="res-title">Crescimento da colônia × dias</div>'+_bioLinhaSvg(series, trats, test, {yMax:P.placaMm||90, yUnid:' mm', titulo:'Diâmetro médio da colônia por tratamento',
+    ref:{y:P.placaMm, rot:'borda da placa'}, xTitulo:'dias após a repicagem', xRotulos:R.leituras.map(function(L){ return {x:L.dias, rot:L.rotulo}; })});
+  /* CE50 — curva de dose do motor sobre o crescimento (sem o disco) */
+  if(ds.serie){
+    var Lf=null; ds.leituras.forEach(function(L){ if(F && L.avId===F.avId) Lf=L; });
+    var rel=Lf?_bioMotor(qid,sid,Lf.jobKey):null, a=rel&&rel.ok&&rel.analise;
+    if(a && a.doses_efetivas_absolutas){
+      var ce=a.doses_efetivas_absolutas.filter(function(q){ return q.nivel===50; })[0];
+      var un=ds.serie.unidade||'', cls=(ce&&ce.dose!=null)?BioensaioCore.classeEdgington(ce.dose, un):null;
+      H+='<div class="res-title">CE50 <small style="opacity:.7">('+esc(F.rotulo)+' · curva log-logística sobre o crescimento)</small></div>';
+      if(ce && ce.dose!=null){
+        H+='<div style="font-size:12px;margin:2px 0 4px"><b>CE50 = '+_bioBR(ce.dose,4)+' '+esc(un)+'</b> <small style="color:#7a877f">(IC 95% '+(ce.ic_inf!=null?_bioBR(ce.ic_inf,4)+'–'+_bioBR(ce.ic_sup,4):'não estimável')+')</small>'+
+          (ce.extrapolado?' '+_bioChip('fora das concentrações testadas','alerta'):'')+'</div>';
+        if(cls && cls.classe) H+=_bioChip(esc(cls.rotulo)+' (Edgington et al., 1971)', cls.classe<=2?'ok':'alerta');
+        else if(cls && cls.motivo) H+='<div class="e-hint">'+esc(cls.motivo)+'</div>';
+      }else if(ce){
+        H+='<div class="e-hint">CE50 não sai: '+esc(ce.motivo||'a curva não chega a 50% de redução')+'.</div>';
+      }
+      var pts=[]; (Lf.parcelas||[]).forEach(function(p){
+        var t=trats.filter(function(x){ return x.id===p.tratId; })[0]; if(!t||!(t.dose>0)) return;
+        var dm=(p.sub&&p.sub.length)?BioensaioCore.diametroMedio(p.sub):BioensaioCore.num(p.valor);
+        if(dm!=null) pts.push({dose:t.dose, y:BioensaioCore.crescimento(dm,P.discoMm)}); });
+      var curva=(a.curva||[]).map(function(q){ return {dose:q.dose, y:q.ajustado}; });
+      H+=_bioDoseSvg(pts, curva, {yMax:Math.max(P.placaMm||90, 1), yUnid:' mm', xTitulo:'concentração ('+un+', escala log)', marca:(ce&&ce.dose)?{dose:ce.dose, rot:'CE50 '+_bioBR(ce.dose,3)}:null});
+      refs.push('edgington1971');
+    }else if(Lf){
+      H+='<div class="e-hint" style="margin:6px 0 0">'+(rel&&rel.ok===false?('CE50: '+esc(rel.erro||'a curva não fechou')):'CE50: calculando no motor estatístico…')+'</div>';
+    }
+  }else if(trats.length>2){
+    H+='<div class="e-hint" style="margin:6px 0 0">CE50 aparece quando os tratamentos formam uma série de concentrações do mesmo produto (4 ou mais níveis positivos, mesma unidade).</div>';
+  }
+  return H;
+}
+function bioensaioPainelHtml(qid, sid, study){
+  var ds=null; try{ ds=bioensaioDados(study,qid); }catch(e){ ds=null; }
+  if(!ds) return '';
+  var def=BioensaioCore.METODOS[ds.metodo];
+  var H='<div class="sd-section" id="study-bioensaio"><div class="sd-section-title">'+esc(def.rotulo)+' <span style="font-weight:400;color:#8a948e">· resultado automático</span></div>';
+  var prot=bioensaioResumoTexto(study,qid);
+  if(prot) H+='<div class="e-hint" style="margin:0 0 6px">Protocolo: '+esc(prot)+'</div>';
+  if(ds.vazio){
+    return H+'<div class="e-hint">As contas aparecem quando houver leitura com <b>'+(ds.metodo==='placa'?'Diâmetro da colônia (mm)':'Mortalidade (mortos/N)')+'</b>.</div></div>';
+  }
+  var R=BioensaioCore.resumo(ds), refs=(def.refs||[]).slice();
+  (R.refs||[]).forEach(function(x){ refs.push(x.chave); });
+  H+=(ds.metodo==='potter')?_bioPainelPotter(qid,sid,study,ds,R,refs):_bioPainelPlaca(qid,sid,study,ds,R,refs);
+  if(R.avisos.length) H+='<ul style="margin:6px 0 0;padding-left:16px;font-size:10.5px;color:#8a6d18;line-height:1.5">'+R.avisos.map(function(a){ return '<li>'+esc(a)+'</li>'; }).join('')+'</ul>';
+  return H+_bioRefsHtml(refs)+'</div>';
+}
+
 /* Método de UM tratamento. O override só vale se tiver sido declarado — ligar a chave
    "métodos diferentes por tratamento" é a declaração. Sem ela, um método guardado numa
    edição anterior não pode voltar a valer sozinho. */
@@ -13313,7 +13756,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-15';
+var MOTOR_VERSAO='agracta-16';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -13331,8 +13774,11 @@ var MOTOR_VERSAO='agracta-15';
 
    A versão 14 corrige a natureza da variável e os papéis forenses.
    A versão 16 tria cada VARIÁVEL uma vez, com todas as avaliações juntas.
+   A versão 17 segue Robertson et al. (2007) na dose-resposta — resposta natural
+   estimada com a testemunha no modelo, heterogeneidade só quando significativa —
+   e leva a placa numa série de concentrações para a curva de dose (CE50).
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-16';
+var MOTOR_CALCULO='agracta-17';
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -13340,7 +13786,19 @@ function _bioestatJobs(qid,study){
     var aoa=_bioestatJobAoa(qid,study,av,v), groups={};
     aoa.slice(1).forEach(function(r){groups[r[7]]=(groups[r[7]]||0)+1;});
     if(Object.keys(groups).filter(function(k){return groups[k]>=2;}).length<2)return;
-    jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa});
+    var job={jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa};
+    /* Placa numa série de concentrações: a pergunta é a CE50, não quais doses
+       diferem. Vai para a curva de dose sobre o CRESCIMENTO (diâmetro − disco),
+       que é onde "metade da testemunha" tem sentido (Edgington et al., 1971).
+       A curva de 4 parâmetros pede 4 concentrações positivas; com menos, fica a
+       comparação de médias. */
+    try{
+      if(bioensaioMetodo(study,qid)==='placa' && BioensaioCore.papelDaVariavel('placa',v)==='diametro'){
+        var _ser=_doseSerieDoEstudo(study);
+        if(_ser && _ser.niveis>=4){ job.modelo='curva'; job.desconto=BioensaioCore.protocolo(study,'placa').discoMm||0; }
+      }
+    }catch(e){}
+    jobs.push(job);
   }); });
   return jobs;
 }
@@ -13574,9 +14032,9 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
         var _avJ=(study.avaliacoes||[]).find(function(x){ return x && x.id===j.avId; });
         _mm=(_avSentido(_avJ||_avCfgDoEstudo(study,j.variavel), j.variavel)==='maior');
       }catch(e){}
-      var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:j.aoa,modo:m[0],titulo:tit,
+      var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:(j.modelo==='curva'?_bioestatAoaCrescimento(j.aoa,j.desconto):j.aoa),modo:m[0],titulo:tit,
         responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn,
-        maiorMelhor:_mm}};
+        maiorMelhor:_mm, modelo:(j.modelo||'')}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
   });
@@ -13599,6 +14057,19 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
     _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
   _bioestatEnsureFrame(); _bioestatPump();
+}
+/* Diâmetro da colônia → crescimento (diâmetro − disco), só na cópia que vai para a
+   curva: a triagem forense e a grade continuam com o dado como foi lido. */
+function _bioestatAoaCrescimento(aoa, disco){
+  if(!Array.isArray(aoa)||!aoa.length) return aoa;
+  var h=aoa[0], iv=h.indexOf('Valor'), ivar=h.indexOf('Variavel'), k=Number(disco)||0;
+  if(iv<0) return aoa;
+  return [h.slice()].concat(aoa.slice(1).map(function(r){
+    var x=r.slice(), n=parseFloat(String(x[iv]).replace(',','.'));
+    if(isFinite(n)) x[iv]=Math.round(Math.max(0,n-k)*1000)/1000;
+    if(ivar>=0) x[ivar]='Crescimento micelial (mm)';
+    return x;
+  }));
 }
 function _bioestatPump(){
   if(!_bioEngineReady||_bioAutoBusy||!_bioAutoQueue.length)return;
@@ -13651,6 +14122,8 @@ function _bioestatDoseHtml(a,nf,pf){
        resultado — e tem de aparecer escrito, não como célula em branco. */
     var linhas=(c.doses_letais||[]).map(function(d){
       var ic=(d.ic_inf!=null&&d.ic_sup!=null)?(nf(d.ic_inf,3)+' – '+nf(d.ic_sup,3)):'não estimável';
+      /* g de Fieller: a partir de 0,5 o intervalo existe mas não serve (Finney, 1971) */
+      if(d.ic_confiavel===false && d.ic_inf!=null) ic+=' · g='+nf(d.g,2)+', pouco útil';
       return '<tr><td class="av-tname">'+esc(_bioestatRotuloDose(d.p))+'</td><td>'+nf(d.dose,3)+(un?(' '+esc(un)):'')+'</td><td style="color:#7a877f">'+esc(ic)+'</td></tr>';
     }).join('');
     var meta=[];
@@ -13658,7 +14131,10 @@ function _bioestatDoseHtml(a,nf,pf){
     if(c.link) meta.push('ligação '+c.link);
     if(c.p_qui_quadrado!=null) meta.push('aderência χ²'+(c.gl!=null?('('+c.gl+')'):'')+'='+nf(c.qui_quadrado,2)+' p'+pf(c.p_qui_quadrado));
     if(c.heterogeneo) meta.push('heterogênea (h='+nf(c.heterogeneidade_h,2)+') — IC alargado por '+(c.criterio_ic||'t de Student'));
-    if(c.abbott_aplicado) meta.push('Abbott sobre a testemunha');
+    var rn=c.resposta_natural||null;
+    if(rn && rn.metodo==='estimada') meta.push('resposta natural estimada C='+nf((rn.C||0)*100,1)+'%'+(rn.C_ep!=null?(' ±'+nf(rn.C_ep*100,1)):'')+' (testemunha no modelo)');
+    else if(rn && rn.metodo==='declarada') meta.push('resposta natural declarada C='+nf((rn.C||0)*100,1)+'%');
+    else if(c.abbott_aplicado) meta.push('Abbott sobre a testemunha');
     return '<div style="margin-top:6px">'+
       (curvas.length>1?'<div style="font-size:10.5px;color:#486053"><b>'+esc(c.grupo||'curva')+'</b></div>':'')+
       (linhas?'<div class="av-scroll" style="margin-top:3px"><table class="av-table"><thead><tr><th>Dose letal</th><th>Estimativa</th><th>IC 95% (Fieller)</th></tr></thead><tbody>'+linhas+'</tbody></table></div>':'')+
@@ -13671,7 +14147,10 @@ function _bioestatDoseHtml(a,nf,pf){
     if(par.erro) l.push('paralelismo não testado: '+String(par.erro));
     if(pot.p!=null) l.push('potência χ²('+pot.gl+')='+nf(pot.qui2,2)+' p'+pf(pot.p)+(pot.difere?' — potências diferentes':' — sem diferença de potência'));
     var rz=(cmp.razoes||[]).map(function(r){
-      return '<tr><td class="av-tname">'+esc(r.grupo)+'</td><td>'+nf(r.lc50,3)+'</td><td>'+nf(r.rr,2)+'×</td><td style="color:#7a877f">'+nf(r.ic_inf,2)+' – '+nf(r.ic_sup,2)+'</td><td>'+(r.referencia?'referência':(r.significativo?'difere':'ns'))+'</td></tr>';
+      /* RR90 junto: com inclinações diferentes a razão muda com a dose, e a
+         resistência pode aparecer só na CL90 (Robertson & Preisler, 1992) */
+      var r90=(r.rr90!=null&&!r.referencia)?(' · RR90 '+nf(r.rr90,2)+'× ('+(r.significativo90?'difere':'ns')+')'):'';
+      return '<tr><td class="av-tname">'+esc(r.grupo)+'</td><td>'+nf(r.lc50,3)+'</td><td>'+nf(r.rr,2)+'×</td><td style="color:#7a877f">'+nf(r.ic_inf,2)+' – '+nf(r.ic_sup,2)+'</td><td>'+(r.referencia?'referência':(r.significativo?'difere':'ns'))+esc(r90)+'</td></tr>';
     }).join('');
     cmpHtml='<div style="margin-top:7px;border-top:1px dashed #d9e5dc;padding-top:6px">'+
       '<div style="font-size:10.5px;color:#486053"><b>Comparação de curvas</b>'+(cmp.referencia?(' <span style="font-weight:400;color:#8a948e">· referência '+esc(cmp.referencia)+'</span>'):'')+'</div>'+
@@ -13682,6 +14161,27 @@ function _bioestatDoseHtml(a,nf,pf){
   return '<div style="margin-top:7px;padding:7px 9px;border:1px solid #d9e5dc;border-radius:8px;background:#fff">'+
     '<div style="font-size:10.5px;color:#26352c"><b>Curva de dose-resposta</b>'+(a.escala_dose?(' <span style="font-weight:400;color:#8a948e">· dose em '+esc(a.escala_dose)+'</span>'):'')+'</div>'+
     blocos+cmpHtml+'</div>';
+}
+/* Curva de dose de resposta CONTÍNUA (log-logística de 4 parâmetros): as doses
+   efetivas relativas e — para resposta que cai, como o crescimento micelial — a
+   CE absoluta, que é a CE50 da fitopatologia (Edgington et al., 1971). */
+function _bioestatCurvaContinuaHtml(a,nf){
+  if(!a||!a.doses_efetivas) return '';
+  var un=a.unidade?(' '+a.unidade):'';
+  var lin=function(q,rot){
+    var ic=(q.ic_inf!=null&&q.ic_sup!=null)?(nf(q.ic_inf,3)+' – '+nf(q.ic_sup,3)):(q.motivo||'não estimável');
+    return '<tr><td class="av-tname">'+esc(rot)+'</td><td>'+(q.dose!=null?nf(q.dose,4)+esc(un):'—')+'</td><td style="color:#7a877f">'+esc(ic)+(q.extrapolado?' · fora do testado':'')+'</td></tr>';
+  };
+  var rel=(a.doses_efetivas||[]).map(function(q){ return lin(q,'DE'+nf(q.nivel,0)+' (relativa)'); }).join('');
+  var abs=(a.doses_efetivas_absolutas||[]).map(function(q){ return lin(q,'CE'+nf(q.nivel,0)+' (vs testemunha)'); }).join('');
+  var ce50=(a.doses_efetivas_absolutas||[]).filter(function(q){ return q.nivel===50&&q.dose!=null; })[0];
+  var cls=(ce50&&window.BioensaioCore)?BioensaioCore.classeEdgington(ce50.dose,a.unidade):null;
+  var p=a.parametros||{};
+  return '<div style="margin-top:7px;padding:7px 9px;border:1px solid #d9e5dc;border-radius:8px;background:#fff">'+
+    '<div style="font-size:10.5px;color:#26352c"><b>Curva de dose</b> <span style="font-weight:400;color:#8a948e">· log-logística de 4 parâmetros'+(a.r2!=null?(' · R² '+nf(a.r2,3)):'')+'</span></div>'+
+    '<div class="av-scroll" style="margin-top:3px"><table class="av-table"><thead><tr><th>Dose efetiva</th><th>Estimativa</th><th>IC 95%</th></tr></thead><tbody>'+abs+rel+'</tbody></table></div>'+
+    '<div style="font-size:10px;color:#728078;margin-top:2px">testemunha (d) '+nf(p.patamar_dose_zero_d,1)+' · dose alta (c) '+nf(p.patamar_dose_alta_c,1)+' · inclinação '+nf(p.inclinacao_b,2)+
+      (cls&&cls.classe?(' · '+esc(cls.rotulo)+' (Edgington et al., 1971)'):'')+'</div></div>';
 }
 /* O LOG DE DECISÃO, na tela e ao lado do número que ele justifica. Recolhido,
    porque no talhão o que importa é a letra; aberto, porque numa auditoria o
@@ -13750,6 +14250,7 @@ function _bioestatResumoCard(job,rel,qid,sid){
     pressHtml+
     (rows?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')+
     _bioestatDoseHtml(a,nf,pf)+
+    (typeof _bioestatCurvaContinuaHtml==='function'?_bioestatCurvaContinuaHtml(a,nf):'')+
     (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
     _bioestatDecisaoHtml(rel)+
     jsonBtn+
@@ -14457,6 +14958,9 @@ function openStudyDetail(qid,sid){
   }
   h+='</div>';
   h+='<div id="study-stage-analise" class="study-stage-anchor" aria-hidden="true"></div>';
+  /* Bancada: o resultado do bioensaio (Potter ou placa) vem primeiro — é ele que
+     responde o ensaio; a AACPD e a comparação de médias vêm depois. */
+  if(isQuadraLab(qid)){ try{ h+=bioensaioPainelHtml(qid,sid,study); }catch(e){ console.error('[bioensaio painel]',e); } }
   h+=studyAudpcHtml(study);
   h+=studyChartsHtml(study);
   h+=_bioestatIntegratedHtml(qid,sid,study);
@@ -15395,7 +15899,11 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Densidade (g/mL) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabDens" value="'+esc(s.labDensidade==null?'':String(s.labDensidade))+'" placeholder="1,00" inputmode="decimal"></div>';
     h+='</div>';
     h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de laboratório deste estudo. O volume do pote costuma ser o do falcon (50 mL). Densidade é obrigatória quando a fonte é g/kg.</div>';
-    h+=arenaEditorHtml(s);
+    /* Bioensaio de bancada: o protocolo (Torre de Potter ou placa) é escrito aqui,
+       uma vez. A placa não tem arena de pote — a unidade é a própria placa. */
+    var _bioM='';
+    try{ _bioM=bioensaioMetodo(s,curV); h+=bioensaioEditorHtml(s); }catch(e){}
+    if(_bioM!=='placa') h+=arenaEditorHtml(s);
   }else{
     h+='<div class="se-section-title">Preparo de calda</div>';
     h+='<div class="se-row">';
@@ -15418,7 +15926,11 @@ function renderStudyEditModal(){
      momentos não são regulares — 2, 12, 24, 48, 72 h. Forçar "a cada X" ali
      obrigava a digitar avaliação por avaliação, e sem o momento declarado duas
      leituras do mesmo dia se engoliam. */
-  var _emH=(s.avalUnidade==='horas'), _lab=isQuadraLab(curV);
+  /* Bioensaio: a contagem e os momentos têm padrão de método — a Torre de Potter
+     lê em horas (24, 48, 72 h); a placa, em dias, até a testemunha chegar à borda. */
+  var _bioMA=''; try{ _bioMA=bioensaioMetodo(s,curV); }catch(e){}
+  var _emH=(s.avalUnidade==='horas')||(!s.avalUnidade && _bioMA==='potter'), _lab=isQuadraLab(curV);
+  var _momSug=(_bioMA==='potter')?'24, 48, 72':(_bioMA==='placa'?'1, 2, 3, 4, 5, 6, 7':'');
   if(_lab){
     h+='<div class="se-field"><label>Contagem do tempo</label><select id="seAvalUnid" onchange="_seTrocaContagem()">'+
        '<option value="horas"'+(_emH?' selected':'')+'>Horas após o tratamento (HAT)</option>'+
@@ -15432,7 +15944,8 @@ function renderStudyEditModal(){
        2, 12, 24, 36, 72; em dias são DAT 1, DAT 3, DAT 7 — também irregulares.
        A grade "a cada X" é do campo e não descreve nem um nem outro. */
     h+='<div class="se-field"><label>Hora zero</label><input type="time" id="seAvalHora0" value="'+esc(s.avalHora0||'')+'" placeholder="08:00"></div>';
-    h+='<div class="se-field"><label>Momentos ('+(_emH?'h':'dias')+')</label><input type="text" id="seAvalMom" value="'+esc(s.avalMomentos||'')+'" placeholder="'+(_emH?'2, 12, 24, 36, 72':'1, 3, 7')+'" inputmode="decimal"></div>';
+    h+='<div class="se-field"><label>Momentos ('+(_emH?'h':'dias')+')</label><input type="text" id="seAvalMom" value="'+esc(s.avalMomentos||'')+'" placeholder="'+(_momSug||(_emH?'2, 12, 24, 36, 72':'1, 3, 7'))+'" inputmode="decimal">'+
+       ((_momSug&&!s.avalMomentos)?'<button type="button" class="btn-sm" style="margin-top:4px" onclick="var e=document.getElementById(\'seAvalMom\');if(e)e.value=\''+_momSug+'\'">usar '+_momSug+(_bioMA==='potter'?' h':' dias')+'</button>':'')+'</div>';
   }else{
     h+='<div class="se-field"><label>A cada (dias)</label><input type="number" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
     h+='<div class="se-field"><label>Nº avaliações</label><input type="number" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
@@ -15797,6 +16310,7 @@ function syncStudyInputs(){
   }
   x=el("seLabVol"); if(x) workingStudy.labVolumeMl=Math.max(0,_numBR(x.value,50))||50;
   if(el("seArForma")) workingStudy.arena=arenaLerEditor(el);
+  if(el("seBioMetodo")) workingStudy.bioensaio=bioensaioLerEditor(el, workingStudy.bioensaio);
   x=el("seLabFonte"); if(x) workingStudy.labFonteTipo=x.value;
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
   x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
@@ -16149,6 +16663,11 @@ function saveStudyV2(){
     /* preparo no laboratório entra na mesma trilha de auditoria BPL */
     if(_numBR(old.labVolumeMl,50) !== s.labVolumeMl) changes.push('Volume do pote (mL): ' + _numBR(old.labVolumeMl,50) + ' -> ' + s.labVolumeMl);
     if(JSON.stringify(old.arena||{}) !== JSON.stringify(s.arena||{})) changes.push('Unidade experimental (arena): ' + (arenaResumoTexto(old)||'—') + ' -> ' + (arenaResumoTexto(s)||'—'));
+    if(JSON.stringify(old.bioensaio||{}) !== JSON.stringify(s.bioensaio||{})){
+      var _bioAntes='—', _bioDepois='—';
+      try{ _bioAntes=bioensaioResumoTexto(old,curV)||'—'; _bioDepois=bioensaioResumoTexto(s,curV)||'—'; }catch(e){}
+      changes.push('Protocolo do bioensaio: ' + _bioAntes + ' -> ' + _bioDepois);
+    }
     if((old.labFonteTipo||'gL') !== s.labFonteTipo) changes.push('Fonte do produto (lab): "' + (old.labFonteTipo||'gL') + '" -> "' + s.labFonteTipo + '"');
     if(String(old.labFonteValor||'') !== String(s.labFonteValor||'')) changes.push('Valor da fonte (lab): "' + (old.labFonteValor||'—') + '" -> "' + (s.labFonteValor||'—') + '"');
     if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
@@ -17075,7 +17594,14 @@ function _avWriteBruto(key,v,campo,val){
     if(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)))) num=Math.floor(num);
   }
   var out=(num==='')?'':String(num);
-  if(campo==='n'||campo==='N') cel[campo]=out;
+  if(campo==='n'||campo==='N'){
+    cel[campo]=out;
+    /* A célula MOSTRA o N padrão da variável (varcfg.N — do catálogo ou do nº de
+       organismos por arena do protocolo) enquanto ninguém digita outro. Gravar só
+       o n deixava o N em branco: a tela dizia 5/20 e a porcentagem não saía. O
+       que se vê é o que vale — o padrão passa a ser dado da parcela. */
+    if(campo==='n' && out!=='' && (cel.N==null||String(cel.N).trim()==='') && cfg.N>0) cel.N=String(cfg.N);
+  }
   else {
     var i=parseInt(String(campo).slice(1))||0;
     if(!Array.isArray(cel.sub)) cel.sub=[];
@@ -17412,25 +17938,51 @@ function _avSubRender(){
   if(!rw) rw={label:key,produto:''};
   var cel=_avCel(_avGrid,key,v,true), vals=_avSubList(cel,cfg.sub);
   var der=(_avGrid.notas[key]&&_avGrid.notas[key][v])||'';
+  /* diâmetro da colônia numa placa: os campos são os dois EIXOS da cruz */
+  var _pl=(typeof _avBioPlaca==='function')?_avBioPlaca(v):null, _cruz=!!(_pl&&cfg.sub===2);
   var h='<div class="av-sub-box"><div class="av-sub-title">'+esc(v)+'</div>'+
-    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+cfg.sub+' amostras'+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
+    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+(_cruz?'diâmetro em cruz, placa de '+_pl.placaMm+' mm':(cfg.sub+' amostras'))+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
     '<div class="av-sub-grid">';
   vals.slice(0,cfg.sub).forEach(function(x,i){
-    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
+    h+='<div class="av-sub-f"><label>'+(_cruz?(i===0?'Eixo 1':'Eixo 2 ⟂'):(i+1))+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
   });
   h+='</div>';
-  h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':'Média da parcela')+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
-  var al=_avSubOutlier(vals); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
-  h+='<div class="av-sub-btns"><button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
+  h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':(_cruz?'Diâmetro médio':'Média da parcela'))+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
+  if(_pl) h+='<div class="av-sub-cresc" style="font-size:11px;color:#8a948e;margin:-2px 0 6px">'+_avSubCrescTexto(der,_pl)+'</div>';
+  var al=_avSubOutlier(vals)||_avSubPlacaAviso(vals,_pl); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
+  h+='<div class="av-sub-btns">'+(_pl&&_pl.placaMm>0?'<button type="button" class="av-sub-clr" onclick="avSubTomouPlaca()" title="A colônia cobriu a placa inteira">Tomou a placa ('+_pl.placaMm+' mm)</button>':'')+
+     '<button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
   m.innerHTML=h;
+}
+/* Placa: o que a média da cruz significa — crescimento sem o disco. */
+function _avSubCrescTexto(der, pl){
+  var d=parseFloat(String(der==null?'':der).replace(',','.'));
+  if(!isFinite(d)) return 'Crescimento = diâmetro médio − disco de '+pl.discoMm+' mm.';
+  var c=Math.max(0,d-(pl.discoMm||0));
+  return 'Crescimento: '+String(Math.round(c*10)/10).replace('.',',')+' mm (sem o disco de '+String(pl.discoMm).replace('.',',')+' mm)';
+}
+/* Aponta, não corta: diâmetro acima da placa costuma ser erro de leitura — ou o
+   protocolo tem a placa errada. Quem decide é quem está com a placa na mão. */
+function _avSubPlacaAviso(vals, pl){
+  if(!pl||!(pl.placaMm>0)) return '';
+  var fora=(vals||[]).map(function(x){ return parseFloat(String(x==null?'':x).replace(',','.')); })
+    .filter(function(x){ return isFinite(x) && x>pl.placaMm+0.5; });
+  var peq=(vals||[]).map(function(x){ return parseFloat(String(x==null?'':x).replace(',','.')); })
+    .filter(function(x){ return isFinite(x) && x>0 && pl.discoMm>0 && x<pl.discoMm; });
+  if(fora.length) return 'Diâmetro maior que a placa de '+pl.placaMm+' mm — confira a leitura (ou o Ø da placa no protocolo).';
+  if(peq.length) return 'Menor que o disco de '+pl.discoMm+' mm — o diâmetro inclui o disco; confira.';
+  return '';
 }
 function _avSubResumo(){
   var m=document.getElementById('avSubModal'); if(!m||!_avSubCtx) return;
   var cfg=_avCfg(_avGrid,_avSubCtx.v);
   var der=(_avGrid.notas[_avSubCtx.key]&&_avGrid.notas[_avSubCtx.key][_avSubCtx.v])||'';
   var b=m.querySelector('.av-sub-res b'); if(b) b.textContent=(der===''?'—':der+(cfg.tipo==='escala'?'%':''));
+  var pl=(typeof _avBioPlaca==='function')?_avBioPlaca(_avSubCtx.v):null;
+  var cr=m.querySelector('.av-sub-cresc'); if(cr&&pl) cr.textContent=_avSubCrescTexto(der,pl);
   var w=m.querySelector('.av-sub-warn');
-  if(w){ var txt=_avSubOutlier(_avSubList(_avCel(_avGrid,_avSubCtx.key,_avSubCtx.v,true),cfg.sub)); w.textContent=txt; w.style.display=txt?'':'none'; }
+  if(w){ var vals=_avSubList(_avCel(_avGrid,_avSubCtx.key,_avSubCtx.v,true),cfg.sub);
+    var txt=_avSubOutlier(vals)||_avSubPlacaAviso(vals,pl); w.textContent=txt; w.style.display=txt?'':'none'; }
 }
 function avSubWrite(inp){
   if(!_avSubCtx) return;
@@ -18045,6 +18597,9 @@ function studyAudpcHtml(study){
        Numa variável de sentido 'maior' a seção inteira sai de cena, e quem
        responde é o ranking de eficácia de Abbott, logo acima. */
     if(_avSentido(_avCfgDoEstudo(study,v),v)==='maior') return;
+    /* Diâmetro de colônia em placa também não tem AACPD: o crescimento micelial
+       se resume por inibição e IVCM, no painel do bioensaio. */
+    if(study.tipoEstudo==='Fungo in vitro' && window.BioensaioCore && BioensaioCore.papelDaVariavel('placa',v)==='diametro') return;
     var t0=new Date(pts[0].date), days=pts.map(function(p){ return Math.max(0,Math.round((new Date(p.date)-t0)/864e5)); });
     function audpc(tr){ var s=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null) return null; if(prev!=null) s+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return s; }
     var ta=audpc(test);
@@ -18174,6 +18729,16 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
       avVars=herdado.variaveis.slice();avTipos=JSON.parse(JSON.stringify(herdado.tipos||{}));avCfg=JSON.parse(JSON.stringify(herdado.varcfg||{}));
     }
   }
+  /* Bioensaio de bancada: sem leitura anterior de onde herdar, o esquema vem do
+     PROTOCOLO — Mortalidade n/N com o N da arena (Potter) ou o diâmetro da colônia
+     em cruz (placa). Ninguém cria coluna à mão numa leitura de bancada. */
+  var _bioSem=null;
+  if(!avVars.length){
+    try{
+      _bioSem=bioensaioSemente(study,curV);
+      if(_bioSem){ avVars=_bioSem.variaveis.slice(); avTipos=JSON.parse(JSON.stringify(_bioSem.tipos)); avCfg=JSON.parse(JSON.stringify(_bioSem.varcfg)); }
+    }catch(e){ _bioSem=null; }
+  }
   /* §10 — em leitura dupla a grade carrega a leitura de QUEM está com a prancheta.
      É aqui que o cegamento acontece: os valores do outro avaliador nem entram no
      rascunho, então não há o que escurecer nem o que esconder na pintura. */
@@ -18187,6 +18752,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
     bruto:JSON.parse(JSON.stringify(av.bruto||{}))
   };
   _avHerdarN(study, av, _avGrid);
+  try{ bioensaioPadraoN(study, curV, _avGrid); }catch(e){}
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
   var bbchList=bbchListDaQuadra(curV, studyCultura(study,q));
@@ -18203,6 +18769,11 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
     ((locked&&av.carimbo.assinatura&&window.AssinaturaCore)?_seloAssinatura(av.carimbo.assinatura,AssinaturaCore.conteudoAvaliacao(av)):'')+'</div>'; }
   if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
   if(inheritedFrom){h+='<div class="av-schema-inherited">✓ Campos herdados da avaliação de '+esc(isoToBR(inheritedFrom.data)||inheritedFrom.data||'data anterior')+'. A grade veio vazia para esta leitura.</div>';}
+  else if(_bioSem){
+    var _bioN=(_bioSem.varcfg[_bioSem.variaveis[0]]||{}).N;
+    h+='<div class="av-schema-inherited">✓ Campos do protocolo ('+esc(BioensaioCore.METODOS[_bioSem.metodo].rotulo)+'): '+
+      esc(_bioSem.variaveis.join(', '))+(_bioSem.metodo==='placa'?' — dois eixos em cruz por placa; a média sai sozinha.':(_bioN?(' — N = '+_bioN+' por arena, do protocolo.'):' — declare o nº de organismos por arena no estudo e o N vem pronto.'))+'</div>';
+  }
   h+='<fieldset id="avFs"'+(locked?' disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">';
   h+='<div class="se-field"><label>Data</label><input type="date" id="vData" value="'+esc(av.data)+'"></div>';
   /* Momento explícito — OPCIONAL. Em branco, o app segue derivando o DAA da data,

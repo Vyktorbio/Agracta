@@ -43,7 +43,7 @@ var ctx={ String:String, Number:Number, Math:Math, isFinite:isFinite, JSON:JSON,
           Date:Date, isoToBR:function(x){return x;} };
 ctx.window=ctx; ctx.self=ctx;
 vm.createContext(ctx);
-['esc','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatDecisaoHtml','_bioestatResumoCard']
+['esc','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatCurvaContinuaHtml','_bioestatDecisaoHtml','_bioestatResumoCard']
   .forEach(function(n){ vm.runInContext(pega(n),ctx); });
 
 var job={variavel:'Mortalidade',date:'2026-09-09',jobKey:'av1|Mortalidade'};
@@ -107,6 +107,28 @@ ck(/>b</.test(c3),'as letras do teste contra o controle chegam à tabela');
 ck(/Shapiro-Wilk/.test(c3)&&/Levene/.test(c3),'os pressupostos testados continuam na tela');
 ck(/Tabela ANOVA/.test(c3),'a tabela ANOVA continua disponível');
 ck(/CV residual/.test(c3),'o CV residual continua na tela');
+
+/* ---------------------- 3b. Robertson et al. (2007) e a curva contínua ---- */
+console.log('\nResposta natural estimada, g de Fieller, RR90 e curva contínua');
+var relNat={ok:true,analise:{tipo_analise:'Dose-resposta (regressão probit)',link:'probit',slope:2.1,slope_se:0.3,
+  qui_quadrado:1.2,gl:3,p_qui_quadrado:0.75,heterogeneo:false,abbott_aplicado:false,
+  resposta_natural:{metodo:'estimada',C:0.083,C_ep:0.021},
+  doses_letais:[{p:0.5,dose:10,ic_inf:8,ic_sup:12.5,g:0.04,ic_confiavel:true},{p:0.9,dose:40,ic_inf:20,ic_sup:300,g:0.62,ic_confiavel:false}]}};
+var cN=ctx._bioestatResumoCard(job,relNat,'Q1','s1');
+ck(/resposta natural estimada C=8,3%/.test(cN)&&/testemunha no modelo/.test(cN),'resposta natural estimada aparece com o erro-padrão');
+ck(!/Abbott sobre a testemunha/.test(cN),'e não é mais chamada de Abbott');
+ck(/g=0,62, pouco útil/.test(cN),'CL com g ≥ 0,5: o IC sai marcado como pouco útil (Finney, 1971)');
+var relRR={ok:true,analise:{tipo_analise:'Dose-resposta (múltiplas curvas)',curvas:[{grupo:'S',doses_letais:[{p:0.5,dose:8}]},{grupo:'R',doses_letais:[{p:0.5,dose:24}]}],
+  comparacao:{referencia:'S',paralelismo:{p:0.6,gl:1,qui2:0.3,paralelo:true},
+    razoes:[{grupo:'S',lc50:8,rr:1,ic_inf:1,ic_sup:1,referencia:true,significativo:false},
+            {grupo:'R',lc50:24,rr:3,ic_inf:2.2,ic_sup:4.1,referencia:false,significativo:true,lc90:60,rr90:2.6,ic90_inf:1.7,ic90_sup:4,significativo90:true}]}}};
+ck(/RR90 2,6× \(difere\)/.test(ctx._bioestatResumoCard(job,relRR,'Q1','s1')),'razão de resistência também na CL90');
+var relCurva={ok:true,analise:{tipo_analise:'Curva de dose — log-logística de 4 parâmetros (resposta contínua)',unidade:'ppm',r2:0.98,
+  parametros:{patamar_dose_zero_d:83,patamar_dose_alta_c:0.5,inclinacao_b:1.2},
+  doses_efetivas:[{nivel:50,dose:1.3,ic_inf:1,ic_sup:1.7}],doses_efetivas_absolutas:[{nivel:50,dose:1.35,ic_inf:1,ic_sup:1.8},{nivel:90,dose:null,motivo:'a curva não chega a 90% de redução da testemunha'}]}};
+var cC=ctx._bioestatResumoCard(job,relCurva,'Q1','s1');
+ck(/Curva de dose/.test(cC)&&/CE50 \(vs testemunha\)/.test(cC)&&/1,35 ppm/.test(cC),'curva contínua: CE50 contra a testemunha');
+ck(/não chega a 90%/.test(cC),'CE que não existe diz o motivo');
 
 /* ----------------------------------------------------- 4. não regride ---- */
 console.log('\nO que já funcionava continua funcionando');

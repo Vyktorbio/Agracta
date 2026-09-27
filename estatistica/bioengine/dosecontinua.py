@@ -97,6 +97,47 @@ def _de_ic(p, b, e, cov, gl, alfa):
     return float(np.exp(ld - t * ep)), float(np.exp(ld + t * ep)), ep
 
 
+def _de_absoluta(p, b, c, d, e):
+    """Dose em que a resposta cai p em relação à testemunha (o patamar d):
+       y* = d·(1 − p). É a CE50 da fitopatologia — a concentração que reduz o
+       crescimento à metade do da testemunha (Edgington et al., 1971) —, que só
+       coincide com a DE50 da curva (e) quando o patamar de dose alta c é zero.
+       Só existe para resposta que CAI com a dose e quando y* está entre os
+       patamares; fora disso devolve None, não um número inventado."""
+    if not (d > c):
+        return None
+    alvo = d * (1.0 - p)
+    if not (c < alvo < d):
+        return None
+    k = (d - c) / (alvo - c) - 1.0
+    if k <= 0:
+        return None
+    return float(e * k ** (1.0 / b))
+
+
+def _de_absoluta_ic(p, par, cov, gl, alfa):
+    """IC no log da dose pelo método delta, com o gradiente numérico nos quatro
+       parâmetros (b, c, d, e) — a incerteza dos patamares entra, e não só a de e."""
+    x0 = _de_absoluta(p, *par)
+    if x0 is None or x0 <= 0:
+        return None, None, None
+    grad = np.zeros(4)
+    for i in range(4):
+        h = 1e-6 * max(1.0, abs(par[i]))
+        up = list(par); dn = list(par)
+        up[i] += h; dn[i] -= h
+        xu, xd = _de_absoluta(p, *up), _de_absoluta(p, *dn)
+        if xu is None or xd is None or xu <= 0 or xd <= 0:
+            return None, None, None
+        grad[i] = (np.log(xu) - np.log(xd)) / (2 * h)
+    var = float(grad @ cov @ grad)
+    if not np.isfinite(var) or var < 0:
+        return None, None, None
+    ep = float(np.sqrt(var))
+    t = float(stats.t.ppf(1 - alfa / 2, gl))
+    return float(np.exp(np.log(x0) - t * ep)), float(np.exp(np.log(x0) + t * ep)), ep
+
+
 def analisar_dose_continua(dose, resposta, niveis=(10, 50, 90), alfa=.05,
                            unidade='', maior_melhor=False):
     x = np.asarray(dose, dtype=float)
@@ -173,6 +214,24 @@ def analisar_dose_continua(dose, resposta, niveis=(10, 50, 90), alfa=.05,
         avisos.append('Fora do intervalo de doses testado: ' + fora + '. O número existe, mas o ensaio não '
                       'tem dado para sustentá-lo.')
 
+    # CE absoluta: redução em relação à testemunha (só para resposta que cai)
+    absolutas = []
+    for nivel in niveis:
+        p = float(nivel) / 100.0
+        if not 0 < p < 1:
+            continue
+        v = _de_absoluta(p, b, c, d, e)
+        if v is None:
+            absolutas.append({'nivel': float(nivel), 'dose': None, 'ic_inf': None, 'ic_sup': None,
+                              'unidade': unidade, 'extrapolado': None,
+                              'motivo': ('a resposta não cai com a dose' if not d > c else
+                                         'a curva não chega a %g%% de redução da testemunha' % nivel)})
+            continue
+        lo_a, hi_a, ep_a = _de_absoluta_ic(p, (b, c, d, e), cov, gl, alfa)
+        absolutas.append({'nivel': float(nivel), 'dose': v, 'ic_inf': lo_a, 'ic_sup': hi_a,
+                          'ep_log': ep_a, 'unidade': unidade,
+                          'extrapolado': bool(not faixa[0] <= v <= faixa[1])})
+
     lof = _falta_de_ajuste(x, y, pred, 4)
     if lof and not lof['ajuste_suficiente']:
         avisos.append('Teste de falta de ajuste significativo (p=' + ('%.4f' % lof['p']) + '): a log-logística não '
@@ -191,6 +250,7 @@ def analisar_dose_continua(dose, resposta, niveis=(10, 50, 90), alfa=.05,
                 'patamar_dose_zero_d': d, 'patamar_dose_zero_d_ep': float(ep[2]),
                 'de50_e': e, 'de50_e_ep': float(ep[3])},
             'doses_efetivas': des,
+            'doses_efetivas_absolutas': absolutas,
             'gl_residual': gl, 'sigma': float(np.sqrt(sigma2)),
             'r2': float(1 - sse / sst) if sst > 0 else None,
             'faixa_testada': {'min': faixa[0], 'max': faixa[1], 'n_doses': int(len(positivas)),

@@ -287,10 +287,11 @@ def _equivalencia(base, opcoes, alfa, maior_melhor):
 def _texto_decisao_dose(tipo, dinfo):
     return (f"Resposta {'binária' if tipo == 'binario' else 'binomial (x de n)'} "
             f"com preditor quantitativo de DOSE ({dinfo.get('n_doses','?')} níveis). "
-            "Escolhida análise de DOSE-RESPOSTA: ajuste probit e logit por máxima "
-            "verossimilhança, com a ligação de menor AIC; CL/DL50 e CL/DL90 com "
-            "intervalo de confiança por Fieller, correção de Abbott para mortalidade "
-            "natural, qui-quadrado de aderência e fator de heterogeneidade.")
+            "Escolhida análise de DOSE-RESPOSTA (Robertson et al., 2007): ajuste probit e "
+            "logit por máxima verossimilhança, com a ligação de menor AIC; resposta natural "
+            "estimada como parâmetro, com a testemunha no modelo; CL/DL50 e CL/DL90 com "
+            "intervalo de Fieller e o g de cada uma; qui-quadrado de aderência e fator de "
+            "heterogeneidade aplicado quando significativo (Finney, 1971).")
 
 
 def _rodar_dose_resposta(dados, papeis, rinfo, chaves, fatores_cols, opcoes, alfa, avisos):
@@ -338,9 +339,14 @@ def _rodar_dose_resposta(dados, papeis, rinfo, chaves, fatores_cols, opcoes, alf
         try:
             r = doseresponse.analisar_dose_resposta(
                 d, y, n, controle_mort=controle, log_dose=log_dose,
-                link=link_op, probs=probs, alfa=alfa)
+                link=link_op, probs=probs, alfa=alfa,
+                natural=opcoes.get("natural", "auto"))
             r["grupo"] = grp
             curvas.append(r)
+            # os avisos da curva (desenho, g, heterogeneidade) vão para o log de
+            # decisão — é lá que a tela e o laudo os leem
+            for a in (r.get("avisos") or []):
+                avisos.append(a if len(grupos) == 1 else f"{grp}: {a}")
             # dados tratados (dose>0) para o teste de paralelismo
             mt = d > 0
             x_log = np.log10(d[mt]) if log_dose else d[mt]

@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-17";
+const APP_VERSION = "bioensaio-auditoria-18";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -768,7 +768,9 @@ function linhasMatrizDeAoa(aoa){
       dose:textoLimpo(valorLinha(obj,["Dose"])),
       tempo:textoLimpo(valorLinha(obj,["Tempo"])),
       n_total:textoLimpo(valorLinha(obj,["N_total","N total"])),
-      n_vivos:textoLimpo(valorLinha(obj,["N_vivos","N vivos"]))
+      n_vivos:textoLimpo(valorLinha(obj,["N_vivos","N vivos"])),
+      /* mortos/afetados de uma razão n/N: com N_total é o "x de n" binomial */
+      afetados:textoLimpo(valorLinha(obj,["Afetados"]))
     });
   });
   return linhas;
@@ -2751,15 +2753,29 @@ function renderDose(out, a){
       `<dt>Modelo</dt><dd>${c.tipo_analise} ${chip("ligação: "+c.link,"chip-info")}</dd>`+
       `<dt>Inclinação (slope)</dt><dd>${fmt(c.slope,3)} ± ${fmt(c.slope_se,3)}</dd>`+
       `<dt>χ² aderência</dt><dd>${fmt(c.qui_quadrado,2)} (gl=${c.gl}) ${p_chip(c.p_qui_quadrado)}</dd>`+
-      `<dt>Heterogeneidade (h)</dt><dd>${fmt(c.heterogeneidade_h,2)} ${c.heterogeneo?chip("heterogêneo → IC por t","chip-alerta"):chip("homogêneo","chip-ok")}</dd>`+
-      (c.abbott_aplicado?`<dt>Abbott</dt><dd>${chip("corrigido (controle "+fmt(c.controle_mortalidade*100,1)+"%)","chip-info")}</dd>`:"")+
+      `<dt>Heterogeneidade (h)</dt><dd>${fmt(c.heterogeneidade_h,2)} ${c.heterogeneo?chip("heterogênea (p&lt;0,05) → IC por t e h","chip-alerta"):chip("sem heterogeneidade significativa","chip-ok")}</dd>`+
+      respostaNaturalDose(c)+
       `</div>`;
     const colDose = "Dose" + (uni ? ` (${uni})` : "");
-    h += `<div class="tab-rolavel"><table><thead><tr><th>Letal</th><th>${esc(colDose)}</th><th>IC95% inf.</th><th>IC95% sup.</th></tr></thead><tbody>`;
+    const temG = c.doses_letais.some(dl=>dl.g!=null);
+    h += `<div class="tab-rolavel"><table><thead><tr><th>Letal</th><th>${esc(colDose)}</th><th>IC95% inf.</th><th>IC95% sup.</th>${temG?'<th>g</th>':''}</tr></thead><tbody>`;
     c.doses_letais.forEach(dl=>{
-      h += `<tr><td>CL/DL${Math.round(dl.p*100)}</td><td><b>${fmt(dl.dose,3)}${sufUni}</b></td><td>${fmt(dl.ic_inf,3)}</td><td>${fmt(dl.ic_sup,3)}</td></tr>`;
+      const gTxt = dl.g==null ? '' : `<td>${fmt(dl.g,3)}${dl.ic_confiavel===false?' '+chip('IC pouco útil','chip-alerta'):''}</td>`;
+      h += `<tr><td>CL/DL${Math.round(dl.p*100)}</td><td><b>${fmt(dl.dose,3)}${sufUni}</b></td><td>${fmt(dl.ic_inf,3)}</td><td>${fmt(dl.ic_sup,3)}</td>${gTxt}</tr>`;
     });
     h += `</tbody></table></div>`;
+    if(temG) h += `<p class="dica">g de Fieller: quanto menor, mais preciso o intervalo; a partir de 0,5 ele fica largo demais para ser útil (Finney, 1971).</p>`;
+    if(Array.isArray(c.tabela_doses) && c.tabela_doses.length){
+      h += `<div class="tab-rolavel"><table><thead><tr><th>Dose</th><th>n</th><th>Respostas</th><th>Observado</th><th>Esperado</th><th>Resíduo</th></tr></thead><tbody>`;
+      c.tabela_doses.forEach(t=>{
+        const r = t.residuo==null ? '—' : fmt(t.residuo,2);
+        const alto = t.residuo!=null && Math.abs(t.residuo)>2;
+        h += `<tr><td>${t.testemunha?'testemunha':fmt(t.dose,4)+sufUni}</td><td>${fmt(t.n,0)}</td><td>${fmt(t.respostas,0)}</td>`+
+             `<td>${fmt(100*(t.prop_obs||0),1)}%</td><td>${fmt(100*t.prop_esperada,1)}%</td><td>${alto?'<b>'+r+'</b>':r}</td></tr>`;
+      });
+      h += `</tbody></table></div><p class="dica">Observado × esperado pelo modelo, dose a dose. Resíduo acima de 2 em módulo aponta a dose que o modelo descreve mal.</p>`;
+    }
+    if(Array.isArray(c.referencias) && c.referencias.length) h += `<p class="dica">Método: ${esc(c.referencias.join('; '))}.</p>`;
     if(c.modelo_natural_mle) h += `<p class="dica">Modelo com mortalidade natural estimada (Finney): C=${fmt(c.modelo_natural_mle.C*100,1)}%.</p>`;
     const b = secao(titulo, h);
     const cv = el("canvas"); cv.width=600; cv.height=320; b.appendChild(cv);
@@ -2767,6 +2783,17 @@ function renderDose(out, a){
     desenharDose(cv, c, uni);
   });
   if(a.comparacao) renderComparacaoCurvas(out, a.comparacao, uni);
+}
+
+function respostaNaturalDose(c){
+  const rn = c.resposta_natural;
+  if(rn && rn.metodo && rn.metodo!=='ausente'){
+    const ep = rn.C_ep!=null ? ' ± '+fmt(rn.C_ep*100,1) : '';
+    const obs = (rn.testemunha_observada!=null && rn.metodo==='estimada') ? ' · testemunha observada '+fmt(rn.testemunha_observada*100,1)+'%' : '';
+    return `<dt>Resposta natural</dt><dd>${chip('C = '+fmt((rn.C||0)*100,1)+'%'+ep,'chip-info')} <span class="dica">${esc(rn.rotulo||rn.metodo)}${obs}</span></dd>`;
+  }
+  if(c.abbott_aplicado) return `<dt>Abbott</dt><dd>${chip("corrigido (controle "+fmt(c.controle_mortalidade*100,1)+"%)","chip-info")}</dd>`;
+  return '';
 }
 
 function renderComparacaoCurvas(out, comp, uni){
@@ -2788,16 +2815,20 @@ function renderComparacaoCurvas(out, comp, uni){
   }
   h += `<p class="dica">Referência (RR=1): <b>${comp.referencia||"—"}</b> — menor CL50 (mais sensível/potente). `+
        `RR &gt; 1 = menos sensível (mais resistente / menos potente).</p>`;
+  const tem90 = (comp.razoes||[]).some(r=>r.rr90!=null);
   h += `<div class="tab-rolavel"><table><thead><tr><th>Produto/Pop.</th><th>CL50${uni?" ("+uni+")":""}</th>`+
-       `<th>Razão (RR)</th><th>IC95%</th></tr></thead><tbody>`;
+       `<th>Razão (RR50)</th><th>IC95%</th>`+(tem90?`<th>CL90${uni?" ("+uni+")":""}</th><th>RR90</th><th>IC95%</th>`:'')+`</tr></thead><tbody>`;
   (comp.razoes||[]).forEach(r=>{
     const sig = r.significativo && !r.referencia ? " significativo" : "";
+    const sig90 = r.significativo90 && !r.referencia ? " significativo" : "";
     const tag = r.referencia ? ` <span class="op-tag">ref</span>` : "";
     h += `<tr><td>${esc(r.grupo)}${tag}</td><td>${fmt(r.lc50,3)}${sufUni}</td>`+
          `<td><b>${fmt(r.rr,2)}×</b>${sig}</td>`+
-         `<td>${r.referencia?"—":fmt(r.ic_inf,2)+" – "+fmt(r.ic_sup,2)}</td></tr>`;
+         `<td>${r.referencia?"—":fmt(r.ic_inf,2)+" – "+fmt(r.ic_sup,2)}</td>`+
+         (tem90?`<td>${fmt(r.lc90,3)}${sufUni}</td><td>${r.rr90!=null?'<b>'+fmt(r.rr90,2)+'×</b>'+sig90:'—'}</td>`+
+                `<td>${r.referencia||r.rr90==null?"—":fmt(r.ic90_inf,2)+" – "+fmt(r.ic90_sup,2)}</td>`:'')+`</tr>`;
   });
-  h += `</tbody></table></div><p class="dica">Significativo = RR significativamente diferente de 1 (IC não inclui 1).</p>`;
+  h += `</tbody></table></div><p class="dica">Teste de razão de doses letais (Robertson &amp; Preisler, 1992): a razão é significativa quando o IC não inclui 1 (Wheeler et al., 2006). Vale mesmo com inclinações diferentes — por isso RR90 também aparece.</p>`;
   out.appendChild(secao("Comparação de potência / resistência", h));
 }
 
@@ -2941,6 +2972,16 @@ function renderCurvaDose(out,a){
        `<td>${q.extrapolado?chip('fora do testado','chip-alerta'):''}</td></tr>`;
   });
   h+='</tbody></table></div><p class="dica">Intervalos assimétricos porque vêm do logaritmo da dose.</p>';
+  const abs=(a.doses_efetivas_absolutas||[]).filter(q=>q.dose!=null);
+  if(abs.length){
+    h+='<div class="tab-rolavel"><table><thead><tr><th>Redução em relação à testemunha</th><th>Dose</th><th>IC 95%</th><th></th></tr></thead><tbody>';
+    (a.doses_efetivas_absolutas||[]).forEach(q=>{
+      h+=`<tr><td>CE${fmt(q.nivel,0)} absoluta</td><td>${q.dose!=null?fmt(q.dose,4)+esc(u):'—'}</td>`+
+         `<td>${q.ic_inf!=null?fmt(q.ic_inf,4)+' a '+fmt(q.ic_sup,4):(q.motivo?esc(q.motivo):'—')}</td>`+
+         `<td>${q.extrapolado?chip('fora do testado','chip-alerta'):''}</td></tr>`;
+    });
+    h+='</tbody></table></div><p class="dica">CE absoluta: a dose que reduz a resposta a (100 − nível)% da testemunha — a CE50 da fitopatologia (Edgington et al., 1971). Só coincide com a DE50 (e) quando o patamar de dose alta é zero.</p>';
+  }
   const bloco=secao('Doses efetivas',h);
   if(a.curva?.length){
     const cv=el('canvas');cv.width=760;cv.height=340;bloco.appendChild(cv);
@@ -3849,6 +3890,22 @@ function __agractaHandoff(payload){
     var lv = matrizLinhasFiltradas();
     var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
+    /* Razão n/N numa série de doses: o Agracta manda os mortos (Afetados) e os
+       avaliados (N_total) de cada parcela — é o "x de n" binomial que a
+       dose-resposta de Robertson et al. (2007) pede. Sem este passo o motor
+       recebia só a porcentagem, adivinhava "contagem" e recusava a curva: a CL50
+       automática nunca saía. Só vale quando TODA linha tem o par completo. */
+    var _n = function(v){ var t=String(v==null?'':v).trim(); return t===''?NaN:Number(t.replace(',','.')); };
+    var _binom = modo==='analise' && lv.length>0 && lv.every(function(r){
+      var a=_n(r.afetados), n=_n(r.n_total);
+      return Number.isFinite(a) && Number.isFinite(n) && n>0 && a>=0 && a<=n;
+    });
+    if(_binom){
+      cols = cols.filter(function(c){ return c.nome!=='tempo_n_total'; }).map(function(c){
+        return c.nome===resposta ? {nome:resposta, valores:lv.map(function(r){ return String(_n(r.afetados)); })} : c;
+      });
+      cols.push({nome:'n_total', valores:lv.map(function(r){ return String(_n(r.n_total)); })});
+    }
     var ref = lv[0] || {};
     /* Cada handoff é uma nova execução, inclusive quando reutiliza o iframe.
        Campo ausente também substitui o anterior: a custódia pertence ao estudo atual. */
@@ -3876,15 +3933,22 @@ function __agractaHandoff(payload){
            de vir com papel: sem isso a coluna existe e a rota continua sendo
            comparação de médias. */
         if(papeis && cols.some(function(c){ return c.nome==='dose'; })) papeis.dose='dose';
+        if(papeis && _binom) papeis.n_total='n_total';
+        /* Série de doses do MESMO produto é UMA curva: a dose já identifica o
+           tratamento. Com "tratamento" como fator, o motor fazia uma curva por
+           tratamento — cada uma com uma dose só — e nenhuma CL50 saía. */
+        if(papeis && _binom && papeis.dose) papeis.fatores=[];
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
-        $('#opt-modelo').value='auto';
+        /* O Agracta pode pedir o modelo: crescimento micelial numa série de
+           concentrações vai para a curva de dose (CE50), não para a ANOVA. */
+        $('#opt-modelo').value=(payload.modelo==='curva' && papeis && papeis.dose) ? 'curva' : 'auto';
         $('#opt-comparacao').value='todos';
         $('#opt-testemunha').value=payload.controle||'';
         /* A natureza registrada tem precedência sobre adivinhar pela aparência
            dos números: uma contagem pequena não vira medida contínua. */
         var tipoEl=document.getElementById('opt-tipo');
         if(tipoEl) tipoEl.value='';
-        _setSel('opt-tipo', _agTipoResp((payload.tipos||{})[resposta]||payload.tipo)||_agTipoResp(resposta));
+        _setSel('opt-tipo', _binom ? 'binomial' : (_agTipoResp((payload.tipos||{})[resposta]||payload.tipo)||_agTipoResp(resposta)));
         if((payload.sentidos||{})[resposta]!=null)window.__agractaMaiorMelhor=!!payload.sentidos[resposta];
         _set('opt-unidade', payload.doseUnit);
         if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
