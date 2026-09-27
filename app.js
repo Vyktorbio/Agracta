@@ -16647,8 +16647,12 @@ function saveAplicacao(){
    prancha e o % de controle já consomem. Sub-amostra NÃO é repetição: entrar com
    10 frutos como 10 blocos é pseudorreplicação e infla o grau de liberdade, então
    a ANOVA recebe a média da parcela. */
-var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};
-var AV_TIPO_LABEL={pct:'% / número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
+var AV_TIPOS={pct:1,numero:1,contagem:1,razao:1,escala:1};
+/* 'numero' = MEDIDA livre (altura, produtividade, diâmetro, peso): sem teto de 100 e com
+   decimais. Antes dele, '% / número' era o único tipo digitável — medida com unidade batia
+   no teto de 100 — e os modelos de medida usavam 'contagem', que TRUNCA decimais (12,5 mm
+   virava 12) e manda a variável para análise de contagem. */
+var AV_TIPO_LABEL={pct:'%',numero:'número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
 /* src = uma avaliação (av) ou o rascunho _avGrid — ambos têm .tipos e .varcfg */
 function _avTipo(src,v){ var t=(src&&src.tipos&&src.tipos[v])||'pct'; return AV_TIPOS[t]?t:'pct'; }
 /* "% / número" é o único tipo DIGITÁVEL para variável que não seja contagem, razão ou
@@ -16846,8 +16850,8 @@ var CATALOGO_AVAL={
      a testemunha (fórmula de Abbott, que o estatistica.js já traz auditado) —
      por isso 'sentido:maior' NÃO se aplica: colônia menor = melhor controle. */
   'Fungo in vitro':[
-    {nome:'Diâmetro da colônia (mm)',tipo:'contagem',sub:2},
-    {nome:'Crescimento micelial (mm/dia)',tipo:'contagem'},
+    {nome:'Diâmetro da colônia (mm)',tipo:'numero',sub:2},
+    {nome:'Crescimento micelial (mm/dia)',tipo:'numero'},
     {nome:'Esporulação (conídios/mL)',tipo:'contagem'}
   ],
   /* FOLHA DESTACADA: bancada, folha ou disco foliar em placa. Serve tanto para
@@ -16857,7 +16861,7 @@ var CATALOGO_AVAL={
   'Folha destacada':[
     {nome:'Mortalidade',tipo:'razao',N:10,sentido:'maior'},
     {nome:'Severidade na folha',tipo:'pct'},
-    {nome:'Diâmetro da lesão (mm)',tipo:'contagem',sub:2},
+    {nome:'Diâmetro da lesão (mm)',tipo:'numero',sub:2},
     {nome:'Nº de indivíduos vivos',tipo:'contagem'}
   ],
   'Fungo in vivo':[
@@ -16885,9 +16889,9 @@ var CATALOGO_AVAL={
     {nome:'Muco (0–2)',tipo:'escala',escalaMax:2,sentido:'maior',escalaNome:'0 normal · 1 aumentado · 2 muito'}
   ],
   'Produtividade':[
-    {nome:'Peso da parcela (g)',tipo:'contagem'},
+    {nome:'Peso da parcela (g)',tipo:'numero'},
     {nome:'Nº de frutos',tipo:'contagem',sub:10},
-    {nome:'Peso de 100 grãos (g)',tipo:'contagem'}
+    {nome:'Peso de 100 grãos (g)',tipo:'numero'}
   ]
 };
 function _avCatalogo(){
@@ -17045,7 +17049,7 @@ function _avWriteBruto(key,v,campo,val){
     if(num<0) num=0;
     if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
     if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
-    if(cfg.tipo==='contagem'||cfg.tipo==='razao') num=Math.floor(num);
+    if(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)))) num=Math.floor(num);
   }
   var out=(num==='')?'':String(num);
   if(campo==='n'||campo==='N') cel[campo]=out;
@@ -17090,6 +17094,7 @@ function avValidateCell(inp){
     return;
   }
   var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+  var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp; /* 'numero' não tem teto de 100 */
   var val=inp.value.trim();
   if(val===''){ _avEspelhar(inp); return; }
   var num=parseFloat(val.replace(',','.'));
@@ -17103,7 +17108,7 @@ function avValidateCell(inp){
     if(num<0){
       num=0;
       _stxToast('Valor menor que 0% ajustado para 0%.');
-    } else if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
+    } else if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
       num=100;
       _stxToast('Valor maior que 100% ajustado para 100%.');
     }
@@ -17113,7 +17118,7 @@ function avValidateCell(inp){
       num=0;
       _stxToast('Valor negativo ajustado para 0.');
     }
-    inp.value=String(Math.floor(num));
+    inp.value=String((typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))?num:Math.floor(num)); /* medida com unidade não perde decimais */
   }
   _avEspelhar(inp);
   _avPersistNow(); /* autosave da grade manual no blur */
@@ -17291,6 +17296,7 @@ function renderAvGrid(){
     var _vjs=esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     html+='<th>'+esc(v)+suf+
       '<button type="button" class="av-delcol" title="Corrigir o nome desta coluna" onclick="avRenameCol(\''+_vjs+'\')">✎</button>'+
+      ((cfg.tipo==='pct'||cfg.tipo==='contagem'||cfg.tipo==='numero')?'<button type="button" class="av-delcol" title="'+(cfg.tipo==='numero'?'Tipo: número — tocar para voltar a %':'Transformar em número (medida sem teto de 100, com decimais)')+'" onclick="avTipoCol(\''+_vjs+'\')">'+(cfg.tipo==='numero'?'№':'#')+'</button>':'')+
       '<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+_vjs+'\')">×</button></th>';
   });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
@@ -17314,7 +17320,7 @@ function _avSyncInputs(){
 
     var val = inp.value.trim();
     if(val !== '') {
-      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
       var num = parseFloat(val.replace(',', '.'));
       if(isNaN(num)) {
         val = '';
@@ -17322,10 +17328,10 @@ function _avSyncInputs(){
       } else {
         if(tp==='pct'){
           if(num<0) num=0;
-          if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
+          if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
         } else {
           if(num<0) num=0;
-          num = Math.floor(num);
+          if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
         }
         val = String(num);
         inp.value = val;
@@ -17387,7 +17393,7 @@ function _avSubRender(){
     '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+cfg.sub+' amostras'+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
     '<div class="av-sub-grid">';
   vals.slice(0,cfg.sub).forEach(function(x,i){
-    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+(cfg.tipo==='pct'?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
+    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
   });
   h+='</div>';
   h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':'Média da parcela')+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
@@ -17499,17 +17505,17 @@ function _avPersistNow(){
 }
 function _avSetCell(key,v,val){
   if(val !== '' && val != null) {
-    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
     var num = parseFloat(String(val).replace(',', '.'));
     if(isNaN(num)) {
       val = '';
     } else {
       if(tp==='pct'){
         if(num<0) num=0;
-        if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
+        if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
       } else {
         if(num<0) num=0;
-        num = Math.floor(num);
+        if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
       }
       val = String(num);
     }
@@ -17638,14 +17644,15 @@ function avAddCol(){
   m.innerHTML='<div class="avcol-box">'+
     '<div class="avcol-title">Nova coluna de avaliação</div>'+
     '<label class="avcol-lab">Nome da variável <span class="avcol-lab-dim">— doença, praga, daninha ou medida</span></label>'+
-    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
+    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender();_avColSugereTipo()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
     '<div id="avColAlvos" class="alvo-lista"></div>'+
     '<label class="avcol-lab">Como você vai lançar?</label>'+
     '<div class="avcol-types">'+
-      '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\')">% / número<small>digita (severidade)</small></button>'+
-      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\')">Contagem<small>botões − / +</small></button>'+
-      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\')">Razão n/N<small>mortalidade, incidência</small></button>'+
-      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\')">Escala<small>nota de classe → índice</small></button>'+
+      '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\',true)">%<small>0–100: severidade</small></button>'+
+      '<button type="button" class="avcol-type" data-t="numero" onclick="_avColType(\'numero\',true)">Número<small>altura, peso, produtividade</small></button>'+
+      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\',true)">Contagem<small>botões − / +</small></button>'+
+      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\',true)">Razão n/N<small>mortalidade, incidência</small></button>'+
+      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\',true)">Escala<small>nota de classe → índice</small></button>'+
     '</div>'+
     '<div id="avColOpts"></div>'+
     '<div class="avcol-btns"><button type="button" class="avcol-ok" onclick="avColConfirm()">Adicionar</button>'+
@@ -17656,6 +17663,7 @@ function avAddCol(){
      % num de eficácia). Só que agora ela vem pronta em vez de exigir um toque. */
   var padrao=(cat.itens&&cat.itens[0])||null;
   window._avColTipo=(padrao&&AV_TIPOS[padrao.tipo])?padrao.tipo:'pct';
+  window._avColTipoEscolhido=false;
   window._avColOpts={
     sub:Math.max(1,parseInt(padrao&&padrao.sub)||1),
     N:(padrao&&padrao.N!=null)?padrao.N:20,
@@ -17747,15 +17755,28 @@ function _alvoEscolher(i){
   if(inp){ inp.value=a.comum; inp.focus(); }
   var box=document.getElementById('avColAlvos'); if(box) box.innerHTML='';
 }
-function _avColType(t){ if(document.getElementById('avColOpts')) _avColLerOpts();
+function _avColType(t, porClique){ if(document.getElementById('avColOpts')) _avColLerOpts();
   window._avColTipo=AV_TIPOS[t]?t:'pct';
+  if(porClique) window._avColTipoEscolhido=true;
   Array.prototype.forEach.call(document.querySelectorAll('#avColModal .avcol-type'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===window._avColTipo); });
   _avColOptsRender();
+}
+/* Enquanto se digita: nome de MEDIDA com unidade e ninguém tocou num tipo -> o destaque
+   vai para Número (e volta, se o nome deixar de ser de medida). Escolha explícita manda. */
+function _avColSugereTipo(){
+  if(window._avColTipoEscolhido) return;
+  var i=document.getElementById('avColNome'), nome=i?i.value:'';
+  var medida=(typeof _avEhMedidaLivre==='function') && _avEhMedidaLivre(nome);
+  if(medida && window._avColTipo!=='numero'){ window._avColTipoAntesDaSugestao=window._avColTipo||'pct'; _avColType('numero'); }
+  else if(!medida && window._avColTipo==='numero' && window._avColTipoAntesDaSugestao){ _avColType(window._avColTipoAntesDaSugestao); window._avColTipoAntesDaSugestao=null; }
 }
 function avColConfirm(){
   var i=document.getElementById('avColNome'); var name=(i?i.value:'').trim();
   if(!name){ if(i){ i.focus(); i.style.borderColor='#d84b43'; } return; }
   var t=window._avColTipo||'pct', o=_avColLerOpts();
+  /* Ninguém escolheu o tipo e o nome é de MEDIDA com unidade ("Altura (cm)", "Peso de
+     100 grãos (g)"): nasce como número, não como % com teto de 100. */
+  if(t==='pct' && !window._avColTipoEscolhido && typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(name)) t='numero';
   if(_avGrid.variaveis.indexOf(name)<0) _avGrid.variaveis.push(name);
   _avGrid.tipos[name]=t;
   if(!_avGrid.varcfg) _avGrid.varcfg={};
@@ -17817,6 +17838,33 @@ function avRenameCol(name){
   try{ save(); }catch(e){}
   renderAvGrid();
   if(typeof _stxToast==='function') _stxToast('Coluna renomeada para "'+novo+'"');
+}
+/* Trocar o TIPO de uma coluna já lançada, entre %, contagem e número. Só entre estes três:
+   neles o valor da célula é o próprio número digitado — razão guarda n/N e escala guarda
+   classes, e trocar exigiria relançar. Os valores gravados NÃO mudam; muda como são validados
+   daqui em diante e como a estatística os trata (número entra como variável contínua).
+   Vale para todas as avaliações do estudo, como o renomear, e vai para a trilha. */
+function avTipoCol(name){
+  _avSyncInputs();
+  var st=_avStudy(), atual=_avTipo(_avGrid,name);
+  if(st && typeof estudoFinalizado==='function' && estudoFinalizado(st)){ if(typeof _stxToast==='function') _stxToast('Estudo finalizado: reabra para mudar o tipo da variável.'); return; }
+  if(atual==='razao'||atual==='escala'){ alert('Razão n/N e escala guardam o dado de outro jeito (n e N, classes). Trocar o tipo exigiria relançar as notas.'); return; }
+  var novo=(atual==='numero')?'pct':'numero';
+  var msg=(novo==='numero')
+    ? 'Transformar "'+name+'" em NÚMERO (medida livre: sem teto de 100 e com decimais)?\n\nVale para todas as avaliações deste estudo. Os valores já lançados não mudam; a estatística passa a tratar a variável como contínua.'
+    : 'Voltar "'+name+'" para % (0 a 100)?\n\nVale para todas as avaliações deste estudo. Os valores já lançados não mudam; valores acima de 100 passam a ser limitados na digitação.';
+  if(!confirm(msg)) return;
+  function troca(o){ if(!o||!o.tipos) return 0; var tem=(o.variaveis||[]).indexOf(name)>=0 || Object.prototype.hasOwnProperty.call(o.tipos,name); if(!tem) return 0; o.tipos[name]=novo; return 1; }
+  if(!_avGrid.tipos) _avGrid.tipos={};
+  _avGrid.tipos[name]=novo;
+  var n=1; ((st&&st.avaliacoes)||[]).forEach(function(a){ if(a && (a.variaveis||[]).indexOf(name)>=0){ if(!a.tipos) a.tipos={}; n+=troca(a); } });
+  if(st){
+    try{ logStudyAuditInObject(st,'Tipo de variável','"'+name+'": '+(AV_TIPO_LABEL[atual]||atual)+' -> '+(AV_TIPO_LABEL[novo]||novo)+' (em todas as avaliações do estudo)'); }catch(e){}
+    st._ts=Date.now();
+  }
+  try{ save(); }catch(e){}
+  renderAvGrid();
+  if(typeof _stxToast==='function') _stxToast('"'+name+'" agora é '+(AV_TIPO_LABEL[novo]||novo));
 }
 function avDelCol(name){
   _avSyncInputs();

@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-16";
+const APP_VERSION = "bioensaio-auditoria-17";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -3811,6 +3811,9 @@ function _agractaEmitirResultado(rel){
 function _agTipoResp(t){
   t=String(t||'').toLowerCase();
   if(t==='pct'||t==='proporcao')return 'proporcao';
+  /* 'numero' é o tipo de MEDIDA do Agracta (altura, peso, diâmetro). Tem de vir antes das
+     expressões abaixo: a de contagem casa "n[úu]mero" e mandaria altura para Poisson. */
+  if(t==='numero')return 'continua';
   if(t==='continua')return 'continua';
   if(t==='contagem')return 'contagem';
   if(/sever|incid|fitotox|efic|propor|%/.test(t)) return 'proporcao';
