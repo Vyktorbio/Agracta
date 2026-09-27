@@ -217,7 +217,10 @@ function ler(arq){ return fs.existsSync(arq)?fs.readFileSync(arq,"utf8"):""; }
 ].forEach(function(c){
   var m=ler(c.sw).match(c.lista);
   if(m) confere(c.base,(m[1].match(/["'][^"']+["']/g)||[]).map(function(s){return s.slice(1,-1);}));
-  var html=ler(c.html), r=/(?:src|href)="([^"]+)"/g, x;
+  /* \x22 = aspa dupla. Com tres aspas literais nesta linha, o bash 3.2 do macOS
+     (o do duplo clique) nao fechava a substituicao de comando e o portao morria
+     sem veredito; o CI em bash 5 nunca viu o problema */
+  var html=ler(c.html), r=/(?:src|href)=\x22([^\x22]+)\x22/g, x;
   while((x=r.exec(html))) confere(c.base,[x[1]]);
 });
 console.log(falta.join("\n"));

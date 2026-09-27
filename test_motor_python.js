@@ -15,5 +15,6 @@ const {loadPyodide}=require('./estatistica/pyodide/pyodide.js');
   await py.runPythonAsync(fs.readFileSync('tests/motor_equivalencia.py','utf8'));
   await py.runPythonAsync(fs.readFileSync('tests/motor_dosecontinua.py','utf8'));
   await py.runPythonAsync(fs.readFileSync('tests/motor_rotas_novas.py','utf8'));
-  console.log('Motor Python: cálculos, blocos, faltantes, modelos, poder, equivalência e curva de dose verificados.');
+  await py.runPythonAsync(fs.readFileSync('tests/motor_forense.py','utf8'));
+  console.log('Motor Python: cálculos, blocos, faltantes, modelos, poder, equivalência, curva de dose e triagem forense verificados.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

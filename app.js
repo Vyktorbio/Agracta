@@ -6466,17 +6466,18 @@ function buildStudyRecord(qid,s){
   /* RESUMO consolidado: média de cada avaliação (+ % controle) e AUDPC numa tabela só, agrupado por variável */
   var _test=studyTestemunha(s), _avsR=_avsM;
   if(_avsR.length){
-    var _means={}; _avsR.forEach(function(a){ _means[a.data]=_avMeans(s,a); });
-    var _bv={}; _avsR.forEach(function(a){ if(!a.data)return; (a.variaveis||[]).forEach(function(v){ (_bv[v]=_bv[v]||[]).push({date:a.data}); }); });
-    function _audpc(v,tr){ var pts=_bv[v]; if(!pts||pts.length<2)return null; var t0=new Date(pts[0].date), days=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); var ss=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var mm=_means[pts[i].date], y=mm&&mm[tr]&&mm[tr][v]; if(y==null)return null; if(prev!=null)ss+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return ss; }
+    /* médias POR AVALIAÇÃO (não por data): duas avaliações no mesmo dia se sobrescreviam e a 1ª sumia do resumo e do AUDPC */
+    var _meansAv=_avsR.map(function(a){ return _avMeans(s,a); });
+    var _bv={}; _avsR.forEach(function(a,ai){ if(!a.data)return; (a.variaveis||[]).forEach(function(v){ (_bv[v]=_bv[v]||[]).push({date:a.data,m:_meansAv[ai]}); }); });
+    function _audpc(v,tr){ var pts=_bv[v]; if(!pts||pts.length<2)return null; var t0=new Date(pts[0].date), days=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); var ss=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var mm=pts[i].m, y=mm&&mm[tr]&&mm[tr][v]; if(y==null)return null; if(prev!=null)ss+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return ss; }
     L.push(''); L.push('RESUMO — media por avaliacao · (% controle vs testemunha '+_test+') · AUDPC');
     var _rh='Variavel\tTrat'; _avsR.forEach(function(a){ _rh+='\t'+(isoToBR(a.data)||''); }); _rh+='\tAUDPC';
     L.push(_rh);
     _vars.forEach(function(v){
       s.tratamentos.forEach(function(t){
         var isT=(t.id===_test), line=v+'\t'+t.id+(isTestemunha(s,t.id)?' (test.)':'');
-        _avsR.forEach(function(a){
-          var mm=_means[a.data], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
+        _avsR.forEach(function(a,ai){
+          var mm=_meansAv[ai], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
           var cell=(mv!=null?String(_r1(mv)):'');
           if(!isT){ var _c=_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
           line+='\t'+cell;
@@ -6844,12 +6845,13 @@ function _sinergistaDynamicCells(qid,s){
     if(witness)nm='UNTREATED';
     else try{nm=(typeof tratProdutoNome==='function'?tratProdutoNome(t,true):t.produto)||'';}catch(e){nm=t.produto||'';}
     if(!nm)nm=tits.map(function(x){return x.nome||x.codigo||'';}).filter(Boolean).join(' + ');
-    var eq=null;try{eq=(typeof tratEquivalenteIA==='function')?tratEquivalenteIA(t):null;}catch(e){}
+    var eq=null;try{eq=(typeof tratEquivalenteIA==='function')?tratEquivalenteIA(t,s):null;}catch(e){}
     c['B'+row]=ix+1;c['C'+row]=nm;
     c['D'+row]=t.ingredienteAtivo||t.ia||tits.map(function(x){return x.ativos||'';}).filter(Boolean).join(' + ');
     c['E'+row]=t.concentracao||tits.map(function(x){return x.concentracao||'';}).filter(Boolean).join(' + ');
     c['F'+row]=(typeof doseTextoDe==='function')?doseTextoDe(s,t.dose):(t.dose||'');
-    c['G'+row]=t.concentracaoAtivo||((eq&&eq.valor!=null)?Math.round(eq.valor*1000)/1000:'');
+    /* equivalentesIA devolve UM item por ativo ({itens:[...]}); ler eq.valor deixava a coluna sempre vazia */
+    c['G'+row]=t.concentracaoAtivo||((eq&&eq.itens&&eq.itens.length)?(eq.itens.length===1?Math.round(eq.itens[0].valor*1000)/1000:eq.itens.map(function(x){return String(Math.round(x.valor*1000)/1000).replace('.',',');}).join(' + ')):'');
     c['H'+row]=s.numAplicacoes||'';
     c['I'+row]=(parseInt(s.numAplicacoes)>1)?(s.intervaloDias||''):'';
     c['J'+row]=t.volume||p.volumeCalda||'';
@@ -13482,12 +13484,32 @@ function _bioestatEnsureStudy(qid,sid){
     _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
   });
 }
+/* Tipo de dado da triagem forense a partir do TIPO DECLARADO da coluna.
+   · contagem de organismo/lesão -> 'count' (índice de Poisson);
+   · contagem de estrutura da planta (estande, vagens, grãos) -> 'cont': ela é regulada pelo
+     manejo ou pelo desenvolvimento, subdispersa por natureza, e o teste de Poisson acusaria
+     dado honesto;
+   · estimativa visual (% de severidade/incidência) e escala de notas -> 'pct': o motor não
+     pontua dígito/arredondamento, porque preferir nós de 5 e 10 é o viés normal de quem estima
+     a olho (marcava ~100% dos estudos de severidade honestos);
+   · resto -> 'cont'. Errar para 'cont' só perde um teste; errar para 'count' cria alarme. */
+function _bioestatForenseTipo(j){
+  var nome=String((j&&j.variavel)||'').toLowerCase(), tipo=(j&&j.tipo)||'';
+  if(tipo==='contagem'){
+    var organismo=/inset|lagart|percevej|pulg|ovos|ninf|adult|[áa]caro|mosca|trips|cigarr|besour|les[õo]|col[ôo]n|p[úu]stul|esporo|nemat|daninha|invasor/.test(nome);
+    var regulada=/stand|estande|plantas|vagens|gr[ãa]os|espiga|perfilh|\bnós\b|n[úu]mero de n[óo]s|folhas|ramos|flores|frutos|sementes/.test(nome);
+    return (regulada && !organismo) ? 'cont' : 'count';
+  }
+  if(tipo==='escala') return 'pct';
+  if(tipo==='pct' && (typeof _avEhPercentual==='function'?_avEhPercentual(nome):/sever|incid|%/.test(nome))) return 'pct';
+  return 'cont';
+}
 /* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
    consulta ao cache em disco é assíncrona e precisa vir antes. */
 function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
-  function _ftipo(j){ return j.tipo==='contagem'?'count':'cont'; }
+  function _ftipo(j){ return _bioestatForenseTipo(j); }
   var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
     [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
@@ -15480,7 +15502,7 @@ function renderStudyEditModal(){
         if(t.doseRef) h+='<div class="e-hint" style="margin:2px 0 0">Dose de: <b>'+esc(doseOrigemRotulo(t.doseRef.origem))+'</b>'+(t.doseRef.documento?(' · '+esc(t.doseRef.documento)):'')+'</div>';
         /* Equivalente em i.a.: duas formulações a 1 L/ha não são a mesma dose se uma
            tem 250 g/L e a outra 500. */
-        var _ia=null; try{ _ia=tratEquivalenteIA(t); }catch(e){}
+        var _ia=null; try{ _ia=tratEquivalenteIA(t,s); }catch(e){}
         if(_ia) h+='<div class="e-hint" style="margin:2px 0 0">Equivalente: <b>'+esc(tratEquivalenteIATexto(_ia))+'</b>'+
           (_ia.parcial?' <span style="color:#dccd8c">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
         /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
@@ -16589,6 +16611,17 @@ var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};
 var AV_TIPO_LABEL={pct:'% / número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
 /* src = uma avaliação (av) ou o rascunho _avGrid — ambos têm .tipos e .varcfg */
 function _avTipo(src,v){ var t=(src&&src.tipos&&src.tipos[v])||'pct'; return AV_TIPOS[t]?t:'pct'; }
+/* "% / número" é o único tipo DIGITÁVEL para variável que não seja contagem, razão ou
+   escala — então altura, produtividade e massa também caem nele. O teto de 100 é o
+   contrato do tipo, mas numa MEDIDA com unidade ele destrói o dado: 110 cm ou 3500 kg/ha
+   viravam 100 (no lançamento rápido, sem aviso). O teto só é dispensado quando o nome diz,
+   sem dúvida, que é medida com unidade; na dúvida ("v1", "Sev"), vale o teto. */
+function _avEhMedidaLivre(v){
+  return /altura|produtiv|rendimento|peso|massa|di[âa]metro|comprimento|largura|biomassa|estande|\bstand\b|\((?:cm|mm|m|g|kg|t|sc|l|ml|m2|m²|cm2|cm²|kg\/ha|t\/ha|sc\/ha|g\/planta|g\/parcela)\)|\b(?:cm|mm|kg\/ha|t\/ha|sc\/ha|g\/planta)\b/i.test(String(v||''));
+}
+function _avTetoPct(v){ return !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)); }
+/* Roteamento da triagem forense: estimativa visual percentual (severidade, incidência…) */
+function _avEhPercentual(v){ return /sev|incid|%|percent|desfolh|efic|cobert|fitotox|dano|infest|propor|queima|mancha/i.test(String(v||'')); }
 function _avCfg(src,v){
   var c=(src&&src.varcfg&&src.varcfg[v])||{};
   return {
@@ -16971,7 +17004,7 @@ function _avWriteBruto(key,v,campo,val){
   if(num!==''){
     if(num<0) num=0;
     if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
-    if(cfg.tipo==='pct' && num>100) num=100;
+    if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
     if(cfg.tipo==='contagem'||cfg.tipo==='razao') num=Math.floor(num);
   }
   var out=(num==='')?'':String(num);
@@ -17030,7 +17063,7 @@ function avValidateCell(inp){
     if(num<0){
       num=0;
       _stxToast('Valor menor que 0% ajustado para 0%.');
-    } else if(num>100){
+    } else if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
       num=100;
       _stxToast('Valor maior que 100% ajustado para 100%.');
     }
@@ -17211,7 +17244,7 @@ function renderAvGrid(){
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
   vs.forEach(function(v){
     var cfg=_avCfg(_avGrid,v), suf='';
-    if(cfg.tipo==='pct') suf=' <small style="opacity:.6">%</small>';
+    if(cfg.tipo==='pct' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) suf=' <small style="opacity:.6">%</small>'; /* 'Altura (cm) %' confundia */
     else if(cfg.tipo==='razao') suf=' <small style="opacity:.6">n/N</small>';
     else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">0–'+cfg.escalaMax+'</small>';
     if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
@@ -17249,7 +17282,7 @@ function _avSyncInputs(){
       } else {
         if(tp==='pct'){
           if(num<0) num=0;
-          if(num>100) num=100;
+          if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
         } else {
           if(num<0) num=0;
           num = Math.floor(num);
@@ -17433,7 +17466,7 @@ function _avSetCell(key,v,val){
     } else {
       if(tp==='pct'){
         if(num<0) num=0;
-        if(num>100) num=100;
+        if(num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
       } else {
         if(num<0) num=0;
         num = Math.floor(num);
@@ -18856,6 +18889,15 @@ function cloudHistoryRestore(rev){
   }, {title:'Confirmar restauração', ok:'Restaurar'});
 }
 /* ===================== VERIFICADOR DE INTEGRIDADE ===================== */
+/* Data de registro válida: aceita dd/mm/aaaa (como o plantio é gravado) e aaaa-mm-dd, e
+   recusa o que o calendário não tem. new Date() lia dd/mm como mês/dia; pD() sozinho aceita
+   "30/02" e rola para 2 de março — então a data precisa sobreviver à ida e volta. */
+function _dataRegistroValida(s){
+  var t=String(s==null?'':s).trim();
+  var iso=/^\d{4}-\d{2}-\d{2}/.test(t)?t.slice(0,10):brToIso(t);
+  var d=pD(t);
+  return !!(iso && d && !isNaN(d) && fDIso(d)===iso);
+}
 function integridadeScan(){
   var out=[];
   try{
@@ -18909,7 +18951,7 @@ function integridadeScan(){
         var orf={};
         (s.avaliacoes||[]).forEach(function(a){
           if(!a) return;
-          if(a.data && isNaN(new Date(a.data).getTime())) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): avaliação com data inválida.'});
+          if(a.data && !_dataRegistroValida(a.data)) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): avaliação com data inválida.'});
           if(nTrat) Object.keys(a.notas||{}).forEach(function(k){ var tid=String(k).replace(/R\d+$/,''); if(tid && !tids[tid] && !orf[tid]){ orf[tid]=1; out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): há notas de um tratamento (“'+tid+'”) que não está mais na lista — o dado pode ficar invisível.'}); } });
         });
       });
@@ -19096,7 +19138,8 @@ function _buildXlsx(soDoLocal){
   var XLSX=window.XLSX;
   function num(x){ return (x==null||x==='')?'':x; }
   function toNum(x){ if(x==null||x==='') return ''; if(typeof x==='number') return isFinite(x)?x:''; var s=String(x).trim().replace(',','.'); if(s==='') return ''; var n=Number(s); return isFinite(n)?n:String(x); }
-  function dap(pl,when){ try{ if(!pl||!when) return ''; var p=new Date(pl), w=new Date(when); if(isNaN(p)||isNaN(w)) return ''; return Math.round((w-p)/864e5); }catch(e){ return ''; } }
+  /* pD, não new Date: o plantio fica gravado em dd/mm/aaaa, que new Date lê como mês/dia (dia>12 = Invalid Date; dia<=12 = data trocada) */
+  function dap(pl,when){ try{ if(!pl||!when) return ''; var p=pD(pl), w=pD(when); if(!p||!w||isNaN(p)||isNaN(w)) return ''; return daysBetween(p,w); }catch(e){ return ''; } }
   var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Tipo_variavel','Valor','Sub_amostras','n_afetados','N_avaliados','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
   var aplH=['Local','Quadra','Cultura','Estudo','Data_aplicacao','BBCH','Obs','Registrado_em','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI'];
   var estH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Testemunha','N_avaliacoes','Area_ha','Comprimento_m','Largura_m','Lat','Lng'];
@@ -21555,11 +21598,20 @@ function _tratProximoId(study){
 
    NÃO SE SOMA os ativos: gramas de 2,4-D e gramas de picloram não são a mesma
    grandeza, e um total único faria parecer que são. Sai uma linha por ativo. */
-function tratEquivalenteIA(t){
+function tratEquivalenteIA(t, study){
   var D=(typeof window!=='undefined')?window.DoseCore:null;
   if(!D || !D.equivalentesIA) return null;
   var it=tratItem(t); if(!it || !it.concentracao) return null;
-  var v=_calcNum(t.dose), u=_calcDoseUnit(t.dose);
+  /* A dose lida como foi ESCRITA, pelo mesmo núcleo da calculadora. _calcDoseUnit()
+     mandava "0,5% v/v" e dose sem unidade para L/ha, e o "Equivalente" exibido saía
+     na grandeza errada. % da calda não é dose por área (depende do volume) e dose
+     sem unidade, num estudo que não declarou nenhuma, não tem conta: não se mostra. */
+  var BC=(typeof window!=='undefined')?window.BioCalculoCampo:null, v, u;
+  if(BC && BC.parseDose){
+    var dd=BC.parseDose(t.dose, study?doseUnidadeDeclarada(study):'');
+    if(!dd || dd.erro || doseUnidades().indexOf(dd.unidade)<0) return null;
+    v=dd.valor; u=dd.unidade;
+  } else { v=_calcNum(t.dose); u=_calcDoseUnit(t.dose); }
   if(!(v>0)) return null;
   var r=D.equivalentesIA(v, u, it.concentracao);
   return (r&&!r.erro&&r.itens&&r.itens.length)?r:null;
@@ -23394,6 +23446,23 @@ function _soloAnFormPinta(id, a){
   alvo.innerHTML=h; alvo.style.display='block';
 }
 
+/* Conferência de UNIDADE antes de gravar o laudo. Os campos pedem mmolc/dm³, mas muitos
+   laboratórios laudam em cmolc/dm³ (fator 10) e o K costuma vir em mg/dm³ (fator 39,1).
+   Digitado sem converter, cmolc dá calagem 10× MENOR; K em mg/dm³ infla a soma de bases e
+   o app diz que não precisa de calcário. Não bloqueia (solo arenoso existe): mostra a
+   suspeita e pergunta. Limiares folgados para não incomodar laudo correto:
+   CTC (Ca+Mg+K+H+Al) abaixo de 15 mmolc/dm³ ou K acima de 15 mmolc/dm³. */
+function soloUnidadeSuspeita(res){
+  res=res||{}; var avisos=[];
+  function n(k){ var v=res[k]; return (v===''||v==null||!isFinite(Number(v)))?null:Number(v); }
+  var Ca=n('Ca'), Mg=n('Mg'), K=n('K'), HAl=n('HAl');
+  if(Ca!=null&&Mg!=null&&K!=null&&HAl!=null){
+    var T=Ca+Mg+K+HAl;
+    if(T>0 && T<15) avisos.push('A CTC deu '+(Math.round(T*10)/10)+' mmolc/dm³ — valor típico de laudo em cmolc/dm³. Se for o caso, multiplique Ca, Mg, K, H+Al e Al por 10; sem isso a calagem sai 10 vezes menor.');
+  }
+  if(K!=null && K>15) avisos.push('K = '+K+' mmolc/dm³ é muito alto — parece mg/dm³. Nesse caso divida por 39,1 (ex.: 120 mg/dm³ = 3,1 mmolc/dm³); sem isso a saturação por bases fica inflada e a calagem pode sumir.');
+  return avisos;
+}
 function soloSalvarAnalise(id){
   if(!data[id]) return;
   var dataColeta=_soloVal('soloAnData');
@@ -23404,6 +23473,8 @@ function soloSalvarAnalise(id){
     if(v!==''){ res[c.k]=Number(v); algum=true; }
   });
   if(!algum){ alert('Preencha ao menos um resultado do laudo.'); return; }
+  var _susp=soloUnidadeSuspeita(res);
+  if(_susp.length && !confirm('Confira as unidades do laudo:\n\n• '+_susp.join('\n\n• ')+'\n\nSalvar assim mesmo?')) return;
 
   var lista=((data[id].solo||{}).analises||[]).slice();
   var antiga=lista.filter(function(x){ return x.id===_soloAnEdit; })[0]||null;

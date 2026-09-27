@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-12";
+const APP_VERSION = "bioensaio-auditoria-15";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -1126,9 +1126,10 @@ function papeisDeExemploValidacao(p){
 function papeisDeExemploForense(p){
   const map={};
   COLUNAS.forEach(c=>map[c.nome]="ignorar");
-  ["resposta","tratamento","resposta2"].forEach(k=>{
+  ["resposta","tratamento","resposta2","repeticao"].forEach(k=>{
     if(p[k]) map[p[k]]=k;
   });
+  (Array.isArray(p.estrato) ? p.estrato : (p.estrato?[p.estrato]:[])).forEach(c=>{ if(c in map) map[c]="estrato"; });
   return map;
 }
 function renderPreview(){
@@ -1161,6 +1162,8 @@ const PAPEL_OPCOES_VALIDACAO = [
 const PAPEL_OPCOES_FORENSE = [
   ["resposta","Resposta (numérica)"],
   ["tratamento","Tratamento/grupo"],
+  ["repeticao","Repetição/bloco (opcional)"],
+  ["estrato","Estrato: avaliação/variável (opcional)"],
   ["resposta2","2ª avaliação (opcional)"],
   ["ignorar","Ignorar"]
 ];
@@ -1253,7 +1256,9 @@ function adivinharPapeisForense(){
   const papeis={};
   COLUNAS.forEach(col=>{
     const n=col.nome.toLowerCase(); let p="ignorar";
-    if(/trat|produto|grupo|isolad|cultivar|variedad|fator|parcela/.test(n)) p="tratamento";
+    if(/^(bloco|repeticao|repetição|rep)$|repeti/.test(n)) p="repeticao";
+    else if(/^(data|variavel|variável)$|data_aval|aval_data/.test(n)) p="estrato";
+    else if(/trat|grupo|isolad|cultivar|variedad|fator|parcela/.test(n)) p="tratamento";
     else if(/resposta2|aval2|leitura2|segunda|conta2|valor2|y2|2$/.test(n)) p="resposta2";
     else if(/resp|result|conta|colon|sever|nota|valor|leitura|incid|mort|num|y$/.test(n)) p="resposta";
     papeis[col.nome]=p;
@@ -1365,11 +1370,13 @@ function lerPapeisValidacao(){
   return r;
 }
 function lerPapeisForense(){
-  const r={};
+  const r={}, estrato=[];
   document.querySelectorAll("#papeis-lista select").forEach(sel=>{
     const col=sel.dataset.coluna, p=sel.value;
-    if(p==="resposta"||p==="tratamento"||p==="resposta2") r[p]=col;
+    if(p==="resposta"||p==="tratamento"||p==="resposta2"||p==="repeticao") r[p]=col;
+    else if(p==="estrato") estrato.push(col); /* data + variável combinam num rótulo só */
   });
+  if(estrato.length) r.estrato=estrato;
   return r;
 }
 
@@ -1748,11 +1755,11 @@ function avaliarPipelineForense(){
   const nLin=COLUNAS[0]?.valores.length || 0;
   const rota={
     titulo:"Triagem forense de dados",
-    descricao:"Rastrear padrões atípicos (subdispersão, homogeneidade de variância, último dígito, arredondamento, duplicatas, extremos, acoplamento) que merecem verificação humana.",
-    chips:["triagem","não é prova","verificar fonte"]
+    descricao:"Rastrear padrões atípicos (subdispersão de Poisson, homogeneidade de variância, dígito final, arredondamento, duplicatas, extremos, gradiente de campo, ordem das repetições, acoplamento) que merecem verificação humana. Cada teste tem p-valor calibrado por reamostragem e severidade corrigida por Benjamini-Hochberg.",
+    chips:["triagem","não é prova","verificar fonte","p calibrado"]
   };
   pushCheck(checks,"ok","Dados carregados",`${nLin} linha(s) e ${COLUNAS.length} coluna(s).`);
-  ["resposta","tratamento","resposta2"].forEach(p=>{
+  ["resposta","tratamento","resposta2","repeticao"].forEach(p=>{
     if((sel.porPapel[p]||[]).length>1) pushCheck(checks,"critico","Papéis conflitantes",`Mais de uma coluna marcada como ${p}: ${sel.porPapel[p].join(", ")}.`, true);
   });
   if(!papeis.resposta) pushCheck(checks,"critico","Resposta ausente","Marque a coluna de resposta (numérica).", true);
@@ -1772,6 +1779,16 @@ function avaliarPipelineForense(){
       pushCheck(checks,"ok","Grupos detectados",`${niveis} grupo(s); ${com3} com ≥3 repetições (índice de dispersão exige ≥3).`);
       if(com3<2) pushCheck(checks,"aviso","Poucas repetições por grupo","Vários testes (dispersão, último dígito, heaping) ficam fracos ou inativos com poucas repetições.");
     }
+  }
+  if(papeis.repeticao){
+    pushCheck(checks,"ok","Gradiente de campo habilitado","Repetição/bloco marcada: o motor desconta o efeito de bloco e roda os testes de gradiente de campo e de ordem das repetições.");
+  } else {
+    pushCheck(checks,"aviso","Sem repetição/bloco","Sem ela, um gradiente de campo pode imitar anomalia — homogeneidade e extremos ficam limitados a ATENÇÃO — e dois testes não rodam.");
+  }
+  if(papeis.estrato && papeis.estrato.length){
+    pushCheck(checks,"ok","Triagem em estratos",`${papeis.estrato.join(" + ")} define(m) os estratos: cada um mantém sua escala e os testes somam volume entre eles.`);
+  } else if(nLin < 40){
+    pushCheck(checks,"aviso","Pouco volume para os testes de dígito","Dígito final (≥20 inteiros), arredondamento (≥15) e duplicatas precisam de volume. Marque data/variável como Estrato para triar várias avaliações de uma vez.");
   }
   if(papeis.resposta2){
     const taxa=taxaNumerica(valoresColuna(papeis.resposta2));
@@ -2634,10 +2651,14 @@ async function analisarForense(){
   const papeis = lerPapeisForense();
   if(!papeis.resposta){ avisar("Defina a coluna de Resposta."); return; }
   if(!papeis.tratamento){ avisar("Defina a coluna de Tratamento (grupo)."); return; }
+  const tipoSel = $("#opt-forense-tipo").value; // "count" | "cont" | "pct"
   const opcoes = {
-    tipo: $("#opt-forense-tipo").value,        // "count" | "cont"
+    tipo: tipoSel==="pct" ? "cont" : tipoSel,
     modo: $("#opt-forense-modo").value,        // "conservador" | "sensivel"
   };
+  /* estimativa visual (%): o motor não pontua dígito/arredondamento — preferir nós de 5 e
+     10 é o viés normal de quem estima a olho — e confere os limites 0–100 */
+  if(tipoSel==="pct") opcoes.escala="pct";
   const ctrl = ($("#opt-forense-controle").value||"").trim();
   if(ctrl) opcoes.controle = ctrl.replace(",", ".");
   try{
@@ -3339,9 +3360,14 @@ function renderRelatorioForense(rel){
     `${chip(`${v.testes_executados||0}/${v.testes_previstos||0} testes executados`, v.cobertura_suficiente?"chip-ok":"chip-alerta")}</div>`+
     `<p class="dica">${esc(v.resumo||"")}</p>`));
 
-  // Achados
+  // Ajustes que o motor fez sozinho (ex.: "contagem" com decimais tratada como contínua)
+  (rel.avisos||[]).forEach(a=> out.appendChild(htmlBloco(`<div class="aviso"><b>Ajuste automático:</b> ${esc(a)}</div>`)));
+
+  // Achados separados por papel: sinais, testes que passaram, contexto e não avaliados.
+  // Misturados numa lista só, um "não avaliado" parecia aprovação.
   const achados = rel.achados || [];
-  const itens = achados.map(a=>{
+  const bloco = (sevs) => achados.filter(a=>sevs.includes(a.severidade));
+  const item = (a) => {
     const sev = FORENSE_SEV[a.severidade] || FORENSE_SEV.clear;
     return `<li class="qa-item ${sev.item}">`+
       `<b>${esc(a.nome)} ${chip(sev.rotulo, sev.chip)}</b>`+
@@ -3349,20 +3375,51 @@ function renderRelatorioForense(rel){
       `<span>${esc(a.leitura||"")}</span>`+
       (a.explicacao_inocente ? `<span class="dica"><i>Explicação inocente possível:</i> ${esc(a.explicacao_inocente)}</span>` : "")+
       `</li>`;
-  }).join("");
-  out.appendChild(secao("Achados (ordenados por severidade)", `<ul class="qa-list">${itens}</ul>`));
+  };
+  const sinais = bloco(["flag","watch"]);
+  if(sinais.length){
+    const m = v.testes_executados||0;
+    out.appendChild(secao("Sinais a verificar",
+      `<p class="dica">A severidade vem do <b>q-valor</b> (p corrigido por Benjamini-Hochberg para o nº de testes), não do p bruto — sem essa correção, ${m} testes a 5% dariam ~${Math.round((1-Math.pow(0.95,m))*100)}% de chance de ao menos um alarme falso em dados honestos.</p>`+
+      `<ul class="qa-list">${sinais.map(item).join("")}</ul>`));
+  }
+  const limpos = bloco(["clear"]).filter(a=>a.p!=null);
+  if(limpos.length) out.appendChild(secao(`Testes sem sinal (${limpos.length})`, `<ul class="qa-list">${limpos.map(item).join("")}</ul>`));
+  const contexto = bloco(["clear"]).filter(a=>a.p==null);
+  if(contexto.length){
+    out.appendChild(secao(`Contexto (${contexto.length})`,
+      `<p class="dica">Informação para a leitura do laudo — não é pontuada. Inclui padrões com causa legítima comum que nenhuma estatística separa de fabricação (ex.: gradiente comum entre repetições).</p>`+
+      `<ul class="qa-list">${contexto.map(item).join("")}</ul>`));
+  }
+  const naoAval = bloco(["na"]);
+  if(naoAval.length){
+    out.appendChild(secao(`Não avaliados (${naoAval.length})`,
+      `<p class="dica"><b>Não são resultados limpos.</b> Estes testes não puderam rodar por falta de dados — ausência de sinal aqui não é ausência de problema.</p>`+
+      `<ul class="qa-list">${naoAval.map(item).join("")}</ul>`));
+  }
 
-  // Parâmetros
+  // Parâmetros e reprodutibilidade
   const par = rel.parametros || {};
   out.appendChild(secao("Parâmetros da triagem",
     `<div>`+
+    chip("motor: "+(rel.versao||"forense"), "chip-info")+
     chip("tipo: "+(par.tipo_dado||"—"), "chip-info")+
+    (par.escala ? chip("escala: "+par.escala, "chip-info") : "")+
     chip("régua: "+(par.modo||"—"), "chip-info")+
+    chip("estratos: "+(par.n_estratos!=null?par.n_estratos:"—"), "chip-info")+
     chip("grupos: "+(par.n_grupos!=null?par.n_grupos:"—"), "chip-info")+
     chip("seed: "+(par.seed!=null?par.seed:"—"), "chip-info")+
+    chip("reamostras: "+(par.reamostras!=null?par.reamostras:"—"), "chip-info")+
+    (par.correcao_multiplicidade ? chip("multiplicidade: "+par.correcao_multiplicidade, "chip-info") : "")+
+    chip("repetição/bloco: "+(par.tem_repeticao?"sim":"não"), par.tem_repeticao?"chip-ok":"chip-info")+
+    (par.tem_repeticao ? chip("bloco descontado: "+(par.bloco_descontado?"sim":"não"), par.bloco_descontado?"chip-ok":"chip-alerta") : "")+
+    (par.escala_registro ? chip("grade de registro: "+par.escala_registro, "chip-info") : "")+
     (par.controle!=null ? chip("controle: "+fmt(par.controle,2), "chip-info") : "")+
     (par.tem_segundo_conjunto ? chip("2ª avaliação: sim", "chip-info") : chip("2ª avaliação: não", "chip-info"))+
-    `</div>`));
+    `</div>`+
+    `<p class="dica">A semente fixa as reamostragens: repetir a triagem sobre os mesmos dados e parâmetros reproduz os mesmos p-valores.`+
+    (par.tem_repeticao ? "" : " <b>Sem a coluna de repetição/bloco</b>, os testes de gradiente de campo e de ordem das repetições não rodam, e homogeneidade/extremos ficam limitados a ATENÇÃO.")+
+    `</p>`));
 
   // Disclaimer (sempre visível)
   if(rel.aviso) out.appendChild(htmlBloco(`<div class="aviso"><b>Importante:</b> ${esc(rel.aviso)}</div>`));
@@ -3804,7 +3861,10 @@ function __agractaHandoff(payload){
         _set('audit-observacao-custodia', '');
         preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
-        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
+        /* forense leva a repetição: com ela o motor desconta o efeito de bloco (senão um gradiente
+           de campo imita 'variâncias uniformes' e 'dados lisos') e roda os testes de gradiente e de
+           ordem das repetições */
+        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento', repeticao: 'bloco'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
         /* A dose só viaja quando o Agracta já provou que o ensaio É uma série
            de doses (mesmo item, 3+ níveis, mesma unidade). Chegando, ela tem
            de vir com papel: sem isso a coluna existe e a rota continua sendo

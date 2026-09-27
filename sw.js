@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v319';
+var CACHE = 'agracta-app-v320';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=2',
@@ -23,7 +23,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=35', './theme-2026.css?v=9', './ui-campo.css?v=11', './app.js?v=187',
+  './styles.css?v=35', './theme-2026.css?v=9', './ui-campo.css?v=11', './app.js?v=188',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=2',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
   './vendor/leaflet.js', './vendor/leaflet.css',
@@ -31,7 +31,7 @@ var ASSETS = [
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=8', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=1', './vendor/versoes-core.js?v=3', './vendor/campo-inteligente-core.js?v=1', './campo-inteligente.js?v=1', './vendor/fotos-notas-core.js?v=1', './vendor/arena-core.js?v=2', './vendor/armazenamento-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=3', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
-  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=20',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=21',
   './acesso-horario.js?v=3', './ui-campo.js?v=23', './alvos-catalogo.js?v=2',
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
@@ -105,8 +105,16 @@ self.addEventListener('fetch', function(e){
   if(isHTML){
     e.respondWith(
       fetch(e.request).then(function(resp){
-        var copy = resp.clone();
-        caches.open(CACHE).then(function(c){ c.put('./index.html', copy); });
+        /* Só a PRÓPRIA página do app, íntegra, vira o shell offline. Um 404 (endereço
+           digitado errado) ou a página de login de um Wi-Fi com portal cativo (resposta
+           redirecionada, status 200) era gravado como index.html, e offline no campo o
+           app abria essa página no lugar do Agracta. */
+        var raiz = new URL('./', self.registration.scope).pathname;
+        var ehApp = (u.pathname === raiz || u.pathname === raiz + 'index.html');
+        if(ehApp && resp && resp.ok && !resp.redirected && resp.type === 'basic'){
+          var copy = resp.clone();
+          caches.open(CACHE).then(function(c){ c.put('./index.html', copy); });
+        }
         return resp;
       }).catch(function(){ return caches.match('./index.html').then(function(r){ return r || caches.match('./'); }); })
     );

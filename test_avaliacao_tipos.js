@@ -121,6 +121,14 @@ context._avGrid = {variaveis:['Sev'], notas:{}, tipos:{Sev:'pct'}, meta:{}, varc
 context._avWriteBruto('T1R1','Sev','s0','150');
 eq(context._avGrid.bruto.T1R1.Sev.sub[0], '100', 'porcentagem acima de 100 é limitada');
 
+/* "% / número" é o único tipo digitável para MEDIDA também: com unidade no nome, o teto
+   de 100 destruía o dado (110 cm virava 100). */
+context._avGrid = {variaveis:['Altura (cm)','Produtividade (kg/ha)'], notas:{}, tipos:{'Altura (cm)':'pct','Produtividade (kg/ha)':'pct'}, meta:{}, varcfg:{'Altura (cm)':{sub:2},'Produtividade (kg/ha)':{sub:2}}, bruto:{}};
+context._avWriteBruto('T1R1','Altura (cm)','s0','110');
+eq(context._avGrid.bruto.T1R1['Altura (cm)'].sub[0], '110', 'medida com unidade (altura em cm) não é limitada a 100');
+context._avWriteBruto('T1R1','Produtividade (kg/ha)','s0','3500');
+eq(context._avGrid.bruto.T1R1['Produtividade (kg/ha)'].sub[0], '3500', 'produtividade em kg/ha não vira 100');
+
 /* ---------- 3. tipos legados intocados ---------- */
 console.log('\n[3] pct e contagem simples continuam fora do bruto');
 check(context._avUsaBruto({tipo:'pct',sub:1}) === false, 'pct sem sub-amostra não usa bruto');
