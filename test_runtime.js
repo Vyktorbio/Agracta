@@ -68,6 +68,9 @@ window.navigator.geolocation = {
   watchPosition: function() {},
   getCurrentPosition: function() {}
 };
+/* jsdom não tem fetch. Aqui o teste roda sem rede: toda busca falha como falharia
+   num aparelho offline — e o app precisa aguentar isso sem erro solto. */
+window.fetch = function(){ return Promise.reject(new TypeError('Failed to fetch (teste sem rede)')); };
 window.onerror = function(msg, url, line, col, err) {
   runtimeErrors.push(String(msg));
   console.error("WINDOW RUNTIME ERROR:", msg, "at line", line, "col", col);

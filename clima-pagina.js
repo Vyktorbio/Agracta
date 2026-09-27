@@ -167,7 +167,8 @@ function buscar(ll){
   var passado=base+'&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,relative_humidity_2m_mean,precipitation_sum'+
     '&hourly=relative_humidity_2m&past_days=30&forecast_days=1';
   var json=function(u){ return fetch(u).then(function(r){return r.json();}); };
-  var estacoes=fetch((w.CLIMA_PROXY||'')+'/clima/estacoes').then(function(r){return r.json();}).catch(function(){return null;});
+  /* o proxy só atende quem está logado: proxyFetch (app.js) leva o token */
+  var estacoes=(typeof w.proxyFetch==='function'?w.proxyFetch:fetch)((w.CLIMA_PROXY||'')+'/clima/estacoes').then(function(r){return r.json();}).catch(function(){return null;});
   return Promise.all([json(agora),json(passado),estacoes]);
 }
 function horasDe(j){

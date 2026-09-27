@@ -4679,6 +4679,29 @@ function updateAgendaBadge(){
 /* ============ DETAIL PANEL ============ */
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
 var NDVI_PROXY=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://localhost:8799':'https://ndvi-iracemapolis.onrender.com';
+/* O proxy (NDVI, clima, solo) só atende membro ativo do Agracta: cada pedido leva o
+   token de login do Firebase e o servidor confere — antes, qualquer pessoa com o
+   endereço gastava a cota do Sentinel e as chaves da Ecowitt. Sem login (sessão
+   local), o pedido sai sem token e o proxy decide. Se o token venceu no caminho
+   (401), renova uma vez e repete. /health e a legenda do solo são abertos. */
+function proxyFetch(url,opts){
+  function token(forcar){
+    try{ if(typeof window.agractaTokenLogin==='function') return Promise.resolve(window.agractaTokenLogin(!!forcar)).catch(function(){ return null; }); }catch(e){}
+    return Promise.resolve(null);
+  }
+  function pedir(tk){
+    var o={},k,h={},hs=(opts&&opts.headers)||{};
+    for(k in (opts||{})) o[k]=opts[k];
+    if(tk){ for(k in hs) h[k]=hs[k]; h.Authorization='Bearer '+tk; o.headers=h; }
+    return fetch(url,o);
+  }
+  return token(false).then(function(tk){
+    return pedir(tk).then(function(r){
+      if(!r||r.status!==401||!tk) return r;
+      return token(true).then(function(novo){ return (novo&&novo!==tk)?pedir(novo):r; });
+    });
+  });
+}
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null, ndviZonas=false;
 var _ndviAutoLatest=false,_ndviDatesSeq=0;
 function _lerpColor(a,b,t){ function h(s,i){return parseInt(s.substr(i,2),16);} function c(x){x=Math.max(0,Math.min(255,Math.round(x)));return (x<16?'0':'')+x.toString(16);} return '#'+c(h(a,1)+(h(b,1)-h(a,1))*t)+c(h(a,3)+(h(b,3)-h(a,3))*t)+c(h(a,5)+(h(b,5)-h(a,5))*t); }
@@ -4724,8 +4747,8 @@ function computeQuadraMeans(cb){
   if(_bboxDegenerada(bb)){ falhou('Não consegui definir a área das quadras para medir (mapa sem dimensão ou quadras sem contorno).'); return; }
   try{ ndviStatus('Medindo as quadras…','wait'); }catch(e){}
   var w=bb[0], s=bb[1], e=bb[2], n=bb[3];
-  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
-   .then(function(r){ if(!r.ok) throw new Error('o servidor NDVI respondeu '+r.status); return r.blob(); })
+  proxyFetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
+   .then(function(r){ if(!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error((j&&j.error)||('o servidor NDVI respondeu '+r.status)); }); return r.blob(); })
    .then(function(blob){ if(!blob) throw new Error('resposta vazia do servidor NDVI');
      var bu=URL.createObjectURL(blob), img=new Image();
      img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} falhou('Não consegui ler a imagem bruta do índice.'); };
@@ -4835,7 +4858,7 @@ function onProbeClick(e){
   if(!ndviDate){ ndviStatus('Escolha uma data primeiro.','err'); return; }
   var lat=e.latlng.lat, lng=e.latlng.lng, q=quadraAt(lat,lng);
   var pop=LF.popup({className:'ndvi-pop',maxWidth:230}).setLatLng(e.latlng).setContent('<div class="ndvi-pop-b">Consultando…</div>').openOn(_map);
-  fetch(NDVI_PROXY+'/point?lat='+lat+'&lng='+lng+'&date='+ndviDate)
+  proxyFetch(NDVI_PROXY+'/point?lat='+lat+'&lng='+lng+'&date='+ndviDate)
    .then(function(r){return r.json();}).then(function(d){
      if(d.error){ pop.setContent('<div class="ndvi-pop-b">Erro: '+esc(d.error)+'</div>'); return; }
      function row(l,v){ return '<div class="ndvi-pop-row"><span>'+l+'</span><b>'+(v==null?'—':(v>0?'+':'')+v.toFixed(2))+'</b></div>'; }
@@ -5906,7 +5929,7 @@ function climaChipAtualiza(){
     var mac=climaMatch(ll),st=_climaStationByMac(mac);
     _climaChipMac=mac;
     if(!mac){ satelite(); return; }
-    fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(d){
+    proxyFetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(d){
       if(!atual()) return;
       if(!d||d.error){ satelite(); return; }
       var v=function(x){ return (x&&x.value!=null)?x.value:null; };
@@ -5914,7 +5937,7 @@ function climaChipAtualiza(){
     }).catch(satelite);
   }
   if(_climaStations){ comEstacoes(); return; }
-  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(arr){
+  proxyFetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(arr){
     if(Array.isArray(arr)) _climaStations=arr;
     comEstacoes();
   }).catch(satelite);   /* proxy dormindo não pode deixar o chip vazio */
@@ -5943,7 +5966,7 @@ function climaChipIniciar(){
 function climaInit(){
   if(_climaStations){ climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad(); return; }
   climaSay('Identificando a melhor fonte para este ponto do mapa…');
-  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
+  proxyFetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
     if(!arr||arr.error){ climaSay((arr&&arr.error)||'Não consegui listar as estações.','err'); return; }
     _climaStations=arr; climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad();
   }).catch(function(){ _climaStations=[];climaMac=null;buildClimaPanel();climaLocalLoad(_climaMapCoord(),false); });
@@ -5961,7 +5984,7 @@ function climaLoad(){
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
   var seq=++_climaPanelSeq;
   climaSay('Carregando dados ao vivo…');
-  fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
+  proxyFetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
     if(seq!==_climaPanelSeq) return;
     if(!d||d.error){ climaMac=null;buildClimaPanel();climaLocalLoad(ll,false); return; }
     climaRender(d);
@@ -6084,7 +6107,7 @@ function ndviLoadDates(){
   var dt=new Date(); dt.setMonth(dt.getMonth()-6);
   var from=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   ndviStatus('Buscando datas disponíveis…');
-  fetch(NDVI_PROXY+'/dates?bbox='+bb.join(',')+'&from='+from+'&to='+to).then(function(r){return r.json();}).then(function(arr){
+  proxyFetch(NDVI_PROXY+'/dates?bbox='+bb.join(',')+'&from='+from+'&to='+to).then(function(r){return r.json();}).then(function(arr){
     if(seq!==_ndviDatesSeq)return;
     if(arr.error || !arr.length){ ndviStatus('Lista de datas indisponível — digite uma data no campo acima.'); return; }
     arr=arr.slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
@@ -6112,7 +6135,7 @@ function ndviLoadImage(){
   if(!ndviIndex || !ndviDate) return;
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   ndviStatus('Carregando '+ndviIndex+' de '+ndviDate+'…');
-  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb))
+  proxyFetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb))
    .then(function(r){ if(r.ok) return r.blob(); return r.json().then(function(j){ throw (j.error||'erro'); }); })
    .then(function(blob){
      var bu=URL.createObjectURL(blob), img=new Image();
@@ -6153,7 +6176,7 @@ function ndviSerie(id){
   var from=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   var ix=ndviIndex||'NDVI';
   showSerieModal(id, ix, 'carregando');
-  fetch(NDVI_PROXY+'/stats?index='+ix+'&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
+  proxyFetch(NDVI_PROXY+'/stats?index='+ix+'&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
    .then(function(r){return r.json();}).then(function(arr){
      if(arr.error){ showSerieModal(id, ix, null, arr.error); return; }
      showSerieModal(id, ix, arr);
@@ -6528,7 +6551,7 @@ function studyFetchNdvi(qid,from,to,cb){
   ensureQGEO(); var pts=QGEO&&QGEO[qid]; if(!pts){ cb(null,'sem geometria'); return; }
   var ring=pts.map(function(p){return [p[1],p[0]];}); ring.push(ring[0]);
   var geom={type:'Polygon',coordinates:[ring]};
-  fetch(NDVI_PROXY+'/stats?index=NDVI&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
+  proxyFetch(NDVI_PROXY+'/stats?index=NDVI&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
    .then(function(r){return r.json();}).then(function(arr){ if(arr&&arr.error){cb(null,arr.error);return;} cb(arr||[]); })
    .catch(function(){ cb(null,'Servidor NDVI fora do ar (pode estar acordando ~50s).'); });
 }
@@ -16433,7 +16456,7 @@ function _carimboClima(qid, dateStr, horaStr, cb){
     var ep = isPast ? (NDVI_PROXY+'/clima/historico?mac='+encodeURIComponent(mac)+'&date='+encodeURIComponent(dateStr)
                        + (horaStr?('&hora='+encodeURIComponent(String(horaStr).slice(0,5))):''))
                     : (NDVI_PROXY+'/clima?mac='+encodeURIComponent(mac));
-    fetch(ep).then(function(r){return r.json();}).then(function(d){
+    proxyFetch(ep).then(function(r){return r.json();}).then(function(d){
       if(!d||d.error){ openMeteo(); return; }
       function v(n){ return (n&&n.value!=null)?n.value:null; }
       /* sem_amostra = a estação não tinha leitura perto do horário pedido; melhor
@@ -16445,11 +16468,11 @@ function _carimboClima(qid, dateStr, horaStr, cb){
     }).catch(function(){ openMeteo(); });
   }
   if(_climaStations){ station(); }
-  else { fetch(NDVI_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){ if(Array.isArray(arr))_climaStations=arr; station(); }).catch(openMeteo); }
+  else { proxyFetch(NDVI_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){ if(Array.isArray(arr))_climaStations=arr; station(); }).catch(openMeteo); }
 }
 function _carimboNdvi(qid, cb){
   var ctr=quadraCenter(qid); if(!ctr){ cb(null); return; }
-  fetch(NDVI_PROXY+'/point?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6)+'&date='+todayISO()).then(function(r){return r.json();}).then(function(d){
+  proxyFetch(NDVI_PROXY+'/point?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6)+'&date='+todayISO()).then(function(r){return r.json();}).then(function(d){
     if(!d||d.error){ cb(null); return; }
     cb({fonte:'sentinel2',ndvi:d.ndvi,ndre:d.ndre,gndvi:d.gndvi,data:d.date});
   }).catch(function(){ cb(null); });
@@ -20558,7 +20581,7 @@ function consultarSolo(id, cb, forcar){
   _soloEstado[id]='buscando';
   try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
 
-  fetch(SOLO_PROXY+'/solo?geom='+encodeURIComponent(JSON.stringify(geom)))
+  proxyFetch(SOLO_PROXY+'/solo?geom='+encodeURIComponent(JSON.stringify(geom)))
     .then(function(r){ if(r&&r.ok===false) throw new Error('o servidor respondeu '+r.status); return r.json(); })
     .then(function(d){
       if(seq!==_soloSeq) return;                    /* resposta atrasada de outra quadra */
@@ -20766,7 +20789,7 @@ function consultarSoloPropriedades(id, cb, forcar){
   _soloPropEstado[id]='buscando';
   try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
 
-  fetch(SOLO_PROXY+'/solo/propriedades?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6))
+  proxyFetch(SOLO_PROXY+'/solo/propriedades?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6))
     .then(function(r){ if(r&&r.ok===false) throw new Error('o servidor respondeu '+r.status); return r.json(); })
     .then(function(d){
       if(seq!==_soloPropSeq) return;
@@ -21058,7 +21081,7 @@ function consultarPos(qid, sid, ap, horas, forcar, cb){
           '&data='+encodeURIComponent(ap.data)+
           (ap.hora?('&hora='+encodeURIComponent(String(ap.hora).slice(0,5))):'')+
           '&horas='+encodeURIComponent(h);
-  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+  proxyFetch(url).then(function(r){ return r.json(); }).then(function(d){
     if(seq!==_posSeq && _posEstado[chave]!=='buscando') return;
     if(!d || d.error){ _posEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui ler a chuva depois da aplicação.'}); return; }
     _posEstado[chave]=null;
@@ -23350,7 +23373,7 @@ function consultarJanela(qid, sid, av, forcar, cb){
   _janelaEstado[chave]='buscando';
   var url=NDVI_PROXY+'/clima/janela?mac='+encodeURIComponent(mac)+
           '&de='+encodeURIComponent(ap.data)+'&ate='+encodeURIComponent(av.data);
-  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+  proxyFetch(url).then(function(r){ return r.json(); }).then(function(d){
     if(seq!==_janelaSeq && _janelaEstado[chave]!=='buscando') return;
     if(!d || d.error){ _janelaEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui montar a janela.'}); return; }
     _janelaEstado[chave]=null;
@@ -24056,7 +24079,7 @@ function soloCarregarMapa(silencioso){
   if(!silencioso){try{if(typeof _stxToast==='function')_stxToast('Carregando mapa de solos…');}catch(e){}}
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   var seq=++_soloMapaSeq;
-  fetch(SOLO_PROXY+'/solo/mapa?bbox='+bb.join(',')+'&width='+ndviPx(bb))
+  proxyFetch(SOLO_PROXY+'/solo/mapa?bbox='+bb.join(',')+'&width='+ndviPx(bb))
     .then(function(r){
       if(r.ok){
         try{_soloCamadaMapa=r.headers&&r.headers.get?r.headers.get('X-Solo-Camada'):null;}catch(e){_soloCamadaMapa=null;}
