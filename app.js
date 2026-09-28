@@ -11013,6 +11013,41 @@ function _bioMotor(qid, sid, jobKey){
   try{ var c=_bioAutoCache[qid+'|'+sid]; var r=c&&c.results&&c.results[jobKey]; return r||null; }catch(e){ return null; }
 }
 
+/* TL50/TL90 do motor "Mortalidade no tempo" (Kaplan-Meier + log-rank). */
+function _bioTL50(rel, study){
+  if(!rel) return {pendente:true};
+  if(!rel.ok) return {erro:rel.erro||'não foi possível analisar'};
+  var km=rel.kaplan_meier||{}, curvas=km.curvas||[];
+  if(!curvas.length) return null;
+  var eixo=null; try{ eixo=_bioestatEixoTempo(study); }catch(e){}
+  var un=(eixo&&eixo.unidade==='HAT')?'h':'d';
+  var lr=km.logrank&&km.logrank.p!=null?km.logrank:null;
+  return {un:un, linhas:curvas.map(function(c){ return {tratId:String(c.tratamento), lt50:(c.LT50==null?null:Number(c.LT50)), lt90:(c.LT90==null?null:Number(c.LT90)), mortes:c.mortes, n:c.n}; }), logrank:lr};
+}
+/* ---------- o que o painel e o laudo leem do mesmo jeito ---------- */
+/* Série de um gráfico de linha: por tratamento, o campo de cada leitura. */
+function _bioSeries(R, trats, campo){
+  var s={};
+  trats.forEach(function(t){ s[t.id]=R.leituras.map(function(L){
+    var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0];
+    return (l&&l[campo]!=null)?{x:L.dias, y:l[campo], rotulo:L.rotulo}:null; }).filter(Boolean); });
+  return s;
+}
+function _bioXRotulos(R){ return R.leituras.map(function(L){ return {x:L.dias, rot:L.rotulo}; }); }
+/* Dose letal de probabilidade p (0,5 → CL50) na análise binomial do motor. */
+function _bioDL(a, p){ return ((a&&a.doses_letais)||[]).filter(function(x){ return Math.abs(x.p-p)<1e-9; })[0]||null; }
+function _bioPontosPotter(a){ return ((a&&a.tabela_doses)||[]).filter(function(t){ return t.dose>0; }).map(function(t){ return {dose:t.dose, y:100*(t.prop_obs||0)}; }); }
+/* CE50 absoluta (metade do crescimento da testemunha) da curva contínua. */
+function _bioCE50(a){ return ((a&&a.doses_efetivas_absolutas)||[]).filter(function(q){ return q.nivel===50; })[0]||null; }
+/* Pontos da curva de dose da placa: crescimento (Ø − disco) de cada placa tratada. */
+function _bioPontosPlaca(Lf, trats, P){
+  var pts=[];
+  ((Lf&&Lf.parcelas)||[]).forEach(function(p){
+    var t=trats.filter(function(x){ return x.id===p.tratId; })[0]; if(!t||!(t.dose>0)) return;
+    var dm=(p.sub&&p.sub.length)?BioensaioCore.diametroMedio(p.sub):BioensaioCore.num(p.valor);
+    if(dm!=null) pts.push({dose:t.dose, y:BioensaioCore.crescimento(dm,P.discoMm)}); });
+  return pts;
+}
 /* ---------- gráficos ---------- */
 /* Marcas do eixo em números redondos: 0, 30, 60, 90 mm — e não 23, 45, 68. */
 function _bioMarcas(yMax){
@@ -11026,6 +11061,13 @@ function _bioMarcas(yMax){
 }
 /* rótulo do eixo x colado na borda sai inteiro: âncora no início ou no fim */
 function _bioAncora(x, x0, x1){ return (x<=x0+1e-9)?'start':((x>=x1-1e-9)?'end':'middle'); }
+/* Abertura do SVG: na tela ele se ajusta à largura; no LAUDO (o.arquivo) ele é
+   um arquivo autônomo — namespace, tamanho fixo e fundo branco —, porque vira
+   imagem no DOCX e no PDF. */
+function _bioSvgAbre(W, H, o, rotulo){
+  if(o&&o.arquivo) return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" font-family="Arial, Helvetica, sans-serif"><rect width="'+W+'" height="'+H+'" fill="#ffffff"/>';
+  return '<svg width="100%" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(rotulo||'')+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px;max-width:640px;display:block">';
+}
 function _bioLinhaSvg(series, trats, test, o){
   var W=520,Hh=220,pl=40,pr=12,pt=12,pb=30, xs=[];
   trats.forEach(function(t){ (series[t.id]||[]).forEach(function(p){ xs.push(p.x); }); });
@@ -11033,7 +11075,10 @@ function _bioLinhaSvg(series, trats, test, o){
   var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs); if(x1<=x0){ x0=x0-1; x1=x1+1; }
   var yMax=o.yMax||100;
   function X(v){ return pl+(W-pl-pr)*(v-x0)/(x1-x0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(yMax,y))/yMax); }
-  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(o.titulo||'')+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px;max-width:640px;display:block">';
+  /* no arquivo a legenda vai DENTRO do desenho: 4 tratamentos por linha */
+  var comDado=trats.filter(function(t){ return (series[t.id]||[]).length; });
+  var linhasLeg=o.arquivo?Math.ceil(comDado.length/4):0, HT=Hh+(linhasLeg?(8+linhasLeg*16):0);
+  var h=_bioSvgAbre(W, HT, o, o.titulo);
   _bioMarcas(yMax).forEach(function(g){ var y=Y(g);
     h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'"/>';
     h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+_bioBR(g,1)+(o.yUnid||'')+'</text>'; });
@@ -11047,9 +11092,18 @@ function _bioLinhaSvg(series, trats, test, o){
     var ps=series[t.id]||[]; if(!ps.length) return;
     var col=(t.id===test)?'#222':_arenaCor(ti);
     h+='<path d="'+ps.map(function(p,k){ return (k?'L':'M')+X(p.x).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ')+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"'+(t.id===test?' stroke-dasharray="5 3"':'')+'/>';
-    ps.forEach(function(p){ h+='<circle cx="'+X(p.x).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.2" fill="'+col+'" stroke="#fff" stroke-width="1.5"><title>'+esc(t.id+(t.nome?' · '+t.nome:'')+' — '+(p.rotulo||'')+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title></circle>'; });
+    /* no arquivo do laudo, sem <title>: dica de mouse não existe numa imagem */
+    ps.forEach(function(p){ h+='<circle cx="'+X(p.x).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.2" fill="'+col+'" stroke="#fff" stroke-width="1.5">'+(o.arquivo?'':'<title>'+esc(t.id+(t.nome?' · '+t.nome:'')+' — '+(p.rotulo||'')+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title>')+'</circle>'; });
     leg+='<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 2px 0;font-size:10px;color:#26312b"><span style="width:12px;height:3px;background:'+col+';display:inline-block;border-radius:2px"></span>'+esc(t.id)+(t.id===test?' (testemunha)':'')+'</span>';
   });
+  if(o.arquivo){
+    comDado.forEach(function(t,k){
+      var ti=trats.indexOf(t), col=(t.id===test)?'#222':_arenaCor(ti), lx=pl+(k%4)*120, ly=Hh+14+Math.floor(k/4)*16;
+      h+='<line x1="'+lx+'" y1="'+(ly-3)+'" x2="'+(lx+14)+'" y2="'+(ly-3)+'" stroke="'+col+'" stroke-width="3"'+(t.id===test?' stroke-dasharray="4 2"':'')+'/>'+
+         '<text x="'+(lx+18)+'" y="'+ly+'" font-size="10" fill="#26312b">'+esc(t.id+(t.id===test?' (testemunha)':''))+'</text>';
+    });
+    return h+'</svg>';
+  }
   return h+'</svg><div style="margin:4px 0 2px;line-height:1.8">'+leg+'</div>';
 }
 /* Curva de dose: pontos observados e a curva ajustada pelo motor, dose em log. */
@@ -11061,7 +11115,7 @@ function _bioDoseSvg(pontos, curva, o){
   var x0=Math.min.apply(null,lx), x1=Math.max.apply(null,lx); if(x1<=x0){ x0-=1; x1+=1; }
   var yMax=o.yMax||100;
   function X(d){ return pl+(W-pl-pr)*(Math.log10(d)-x0)/(x1-x0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(yMax,y))/yMax); }
-  var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(o.titulo||'Curva de dose')+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px;max-width:640px;display:block">';
+  var h=_bioSvgAbre(W, Hh, o, o.titulo||'Curva de dose');
   _bioMarcas(yMax).forEach(function(g){ var y=Y(g);
     h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'"/>';
     h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+_bioBR(g,1)+(o.yUnid||'')+'</text>'; });
@@ -11069,7 +11123,7 @@ function _bioDoseSvg(pontos, curva, o){
     h+='<text x="'+xe.toFixed(1)+'" y="'+(Hh-12)+'" font-size="9" text-anchor="'+_bioAncora(e,x0,x1)+'" fill="#8a948e">'+_bioBR(Math.pow(10,e),4)+'</text>'; }
   h+='<text x="'+((pl+W-pr)/2)+'" y="'+(Hh-1)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+esc(o.xTitulo||'dose (escala log)')+'</text>';
   if(cs.length>1) h+='<path d="'+cs.map(function(p,k){ return (k?'L':'M')+X(p.dose).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ')+'" fill="none" stroke="#1f8a52" stroke-width="2"/>';
-  ps.forEach(function(p){ h+='<circle cx="'+X(p.dose).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.4" fill="#2f85c9" stroke="#fff" stroke-width="1.5"><title>'+esc(_bioBR(p.dose,4)+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title></circle>'; });
+  ps.forEach(function(p){ h+='<circle cx="'+X(p.dose).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.4" fill="#2f85c9" stroke="#fff" stroke-width="1.5">'+(o.arquivo?'':'<title>'+esc(_bioBR(p.dose,4)+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title>')+'</circle>'; });
   if(o.marca && o.marca.dose>0 && Math.log10(o.marca.dose)>=x0 && Math.log10(o.marca.dose)<=x1){
     var xm=X(o.marca.dose);
     h+='<line x1="'+xm.toFixed(1)+'" y1="'+pt+'" x2="'+xm.toFixed(1)+'" y2="'+(Hh-pb)+'" stroke="#b91c1c" stroke-dasharray="4 3"/>'+
@@ -11132,18 +11186,30 @@ function _bioPainelPotter(qid, sid, study, ds, R, refs){
   H+='</tbody></table></div>';
   H+='<div class="e-hint" style="margin:3px 0 0">Mortalidade = mortos ÷ avaliados, somados nas arenas. Eficácia = Abbott (1925) / Schneider-Orelli (1947): (tratado − testemunha) ÷ (100 − testemunha). Leitura com a testemunha acima do limite sai riscada.</div>';
   /* curva de mortalidade no tempo */
-  var series={};
-  trats.forEach(function(t){ series[t.id]=R.leituras.map(function(L){
-    var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]; return (l&&l.mortalidade!=null)?{x:L.dias, y:l.mortalidade, rotulo:L.rotulo}:null; }).filter(Boolean); });
-  if(R.leituras.length>1) H+='<div class="res-title">Mortalidade × tempo</div>'+_bioLinhaSvg(series, trats, test, {yMax:100, yUnid:'%', titulo:'Mortalidade por tratamento ao longo das leituras',
-    xRotulos:R.leituras.map(function(L){ return {x:L.dias, rot:L.rotulo}; })});
+  if(R.leituras.length>1) H+='<div class="res-title">Mortalidade × tempo</div>'+_bioLinhaSvg(_bioSeries(R,trats,'mortalidade'), trats, test, {yMax:100, yUnid:'%', titulo:'Mortalidade por tratamento ao longo das leituras',
+    xRotulos:_bioXRotulos(R)});
+  /* TL50 e TL90: em quanto tempo metade (e 90%) dos indivíduos morre, por
+     tratamento — da curva de sobrevivência de Kaplan & Meier (1958) que o motor
+     "Mortalidade no tempo" já ajusta; o log-rank (Mantel, 1966) compara as
+     curvas inteiras, não só a última leitura. */
+  if(R.leituras.length>1){
+    var tl=_bioTL50(_bioMotor(qid,sid,'__tempo__|'+ds.variavel), study);
+    if(tl && tl.linhas){
+      H+='<div class="res-title">TL50 e TL90 <small style="opacity:.7">(Kaplan &amp; Meier, 1958)</small></div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>TL50</th><th>TL90</th><th>mortos/N</th></tr></thead><tbody>'+
+        tl.linhas.map(function(l){ return '<tr><td class="av-tname">'+esc(l.tratId)+(l.tratId===test?' ●':'')+'</td><td>'+(l.lt50==null?'não chegou':_bioBR(l.lt50,1)+' '+tl.un)+'</td><td>'+(l.lt90==null?'não chegou':_bioBR(l.lt90,1)+' '+tl.un)+'</td><td style="color:#7a877f">'+(l.mortes==null?'—':(l.mortes+'/'+l.n))+'</td></tr>'; }).join('')+
+        '</tbody></table></div>'+(tl.logrank?'<div class="e-hint" style="margin:3px 0 0">Log-rank χ²('+tl.logrank.gl+') = '+_bioBR(tl.logrank.qui2,2)+', p '+(tl.logrank.p<0.001?'< 0,001':'= '+_bioBR(tl.logrank.p,3))+(tl.logrank.significativo?' — as curvas diferem':' — sem diferença entre as curvas')+' (Mantel, 1966). "Não chegou": o tratamento não atingiu a mortalidade no período lido.</div>':'');
+      refs.push('kaplanMeier1958','mantel1966');
+    }else if(tl && tl.pendente){
+      H+='<div class="e-hint" style="margin:6px 0 0">TL50: calculando no motor estatístico…</div>';
+    }
+  }
   /* CL50/CL90 — do motor estatístico, leitura a leitura */
   if(ds.serie){
     var linhas='', ultimoRel=null, ultimoRot='';
     ds.leituras.forEach(function(L){
       var rel=_bioMotor(qid,sid,L.jobKey), a=rel&&rel.ok&&rel.analise;
       if(!a||!a.doses_letais){ linhas+='<tr><td class="av-tname">'+esc(L.rotulo)+'</td><td colspan="4" style="color:#8a948e">'+(rel&&rel.ok===false?esc(rel.erro||'sem curva'):'calculando no motor estatístico…')+'</td></tr>'; return; }
-      function cl(p){ var d=(a.doses_letais||[]).filter(function(x){ return Math.abs(x.p-p)<1e-9; })[0]; if(!d) return '—';
+      function cl(p){ var d=_bioDL(a,p); if(!d) return '—';
         return _bioBR(d.dose,3)+' <small style="color:#7a877f">('+(d.ic_inf!=null?_bioBR(d.ic_inf,3)+'–'+_bioBR(d.ic_sup,3):'IC não estimável')+')</small>'; }
       var rn=a.resposta_natural||{};
       linhas+='<tr><td class="av-tname">'+esc(L.rotulo)+'</td><td>'+cl(0.5)+'</td><td>'+cl(0.9)+'</td><td>'+_bioBR(a.slope,2)+' ± '+_bioBR(a.slope_se,2)+'</td><td>'+
@@ -11153,8 +11219,7 @@ function _bioPainelPotter(qid, sid, study, ds, R, refs){
     H+='<div class="res-title">CL50 e CL90 <small style="opacity:.7">('+esc(ds.serie.unidade||'dose')+' · Robertson et al., 2007)</small></div>'+
        '<div class="av-scroll"><table class="av-table"><thead><tr><th>Leitura</th><th>CL50 (IC 95%)</th><th>CL90 (IC 95%)</th><th>Inclinação</th><th>Aderência · resp. natural</th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
     if(ultimoRel){
-      var a2=ultimoRel.analise, pts=(a2.tabela_doses||[]).filter(function(t){ return t.dose>0; }).map(function(t){ return {dose:t.dose, y:100*(t.prop_obs||0)}; });
-      var c50=(a2.doses_letais||[]).filter(function(x){ return Math.abs(x.p-0.5)<1e-9; })[0];
+      var a2=ultimoRel.analise, pts=_bioPontosPotter(a2), c50=_bioDL(a2,0.5);
       H+='<div class="res-title">Curva de dose-resposta <small style="opacity:.7">('+esc(ultimoRot)+')</small></div>'+
         _bioDoseSvg(pts, _bioCurvaBinomial(ultimoRel), {yMax:100, yUnid:'%', xTitulo:'concentração ('+(ds.serie.unidade||'dose')+', escala log)', marca:c50?{dose:c50.dose, rot:'CL50 '+_bioBR(c50.dose,3)}:null})+
         '<div class="e-hint" style="margin:3px 0 0">Pontos: mortalidade observada em cada concentração. Curva: o modelo com a resposta natural da testemunha (C) — a CL50 é a concentração que mata 50% além da mortalidade natural, por isso ela cruza a curva um pouco acima de 50%.</div>';
@@ -11185,17 +11250,14 @@ function _bioPainelPlaca(qid, sid, study, ds, R, refs){
     H+='</tbody></table></div>';
     H+='<div class="e-hint" style="margin:3px 0 0">Ø médio = média da cruz em cada placa. Crescimento = Ø − disco de '+_bioBR(P.discoMm,1)+' mm. Inibição = (testemunha − tratado) ÷ testemunha, sobre o crescimento (Vincent, 1947). IVCM = Σ(D − D anterior) ÷ dias (Oliveira, 1991). Taxa radial = inclinação do raio no tempo.</div>';
   }
-  var series={};
-  trats.forEach(function(t){ series[t.id]=R.leituras.map(function(L){
-    var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]; return (l&&l.diametro!=null)?{x:L.dias, y:l.diametro, rotulo:L.rotulo}:null; }).filter(Boolean); });
-  if(R.leituras.length>1) H+='<div class="res-title">Crescimento da colônia × dias</div>'+_bioLinhaSvg(series, trats, test, {yMax:P.placaMm||90, yUnid:' mm', titulo:'Diâmetro médio da colônia por tratamento',
-    ref:{y:P.placaMm, rot:'borda da placa'}, xTitulo:'dias após a repicagem', xRotulos:R.leituras.map(function(L){ return {x:L.dias, rot:L.rotulo}; })});
+  if(R.leituras.length>1) H+='<div class="res-title">Crescimento da colônia × dias</div>'+_bioLinhaSvg(_bioSeries(R,trats,'diametro'), trats, test, {yMax:P.placaMm||90, yUnid:' mm', titulo:'Diâmetro médio da colônia por tratamento',
+    ref:{y:P.placaMm, rot:'borda da placa'}, xTitulo:'dias após a repicagem', xRotulos:_bioXRotulos(R)});
   /* CE50 — curva de dose do motor sobre o crescimento (sem o disco) */
   if(ds.serie){
     var Lf=null; ds.leituras.forEach(function(L){ if(F && L.avId===F.avId) Lf=L; });
     var rel=Lf?_bioMotor(qid,sid,Lf.jobKey):null, a=rel&&rel.ok&&rel.analise;
     if(a && a.doses_efetivas_absolutas){
-      var ce=a.doses_efetivas_absolutas.filter(function(q){ return q.nivel===50; })[0];
+      var ce=_bioCE50(a);
       var un=ds.serie.unidade||'', cls=(ce&&ce.dose!=null)?BioensaioCore.classeEdgington(ce.dose, un):null;
       H+='<div class="res-title">CE50 <small style="opacity:.7">('+esc(F.rotulo)+' · curva log-logística sobre o crescimento)</small></div>';
       if(ce && ce.dose!=null){
@@ -11206,12 +11268,8 @@ function _bioPainelPlaca(qid, sid, study, ds, R, refs){
       }else if(ce){
         H+='<div class="e-hint">CE50 não sai: '+esc(ce.motivo||'a curva não chega a 50% de redução')+'.</div>';
       }
-      var pts=[]; (Lf.parcelas||[]).forEach(function(p){
-        var t=trats.filter(function(x){ return x.id===p.tratId; })[0]; if(!t||!(t.dose>0)) return;
-        var dm=(p.sub&&p.sub.length)?BioensaioCore.diametroMedio(p.sub):BioensaioCore.num(p.valor);
-        if(dm!=null) pts.push({dose:t.dose, y:BioensaioCore.crescimento(dm,P.discoMm)}); });
       var curva=(a.curva||[]).map(function(q){ return {dose:q.dose, y:q.ajustado}; });
-      H+=_bioDoseSvg(pts, curva, {yMax:Math.max(P.placaMm||90, 1), yUnid:' mm', xTitulo:'concentração ('+un+', escala log)', marca:(ce&&ce.dose)?{dose:ce.dose, rot:'CE50 '+_bioBR(ce.dose,3)}:null});
+      H+=_bioDoseSvg(_bioPontosPlaca(Lf,trats,P), curva, {yMax:Math.max(P.placaMm||90, 1), yUnid:' mm', xTitulo:'concentração ('+un+', escala log)', marca:(ce&&ce.dose)?{dose:ce.dose, rot:'CE50 '+_bioBR(ce.dose,3)}:null});
       refs.push('edgington1971');
     }else if(Lf){
       H+='<div class="e-hint" style="margin:6px 0 0">'+(rel&&rel.ok===false?('CE50: '+esc(rel.erro||'a curva não fechou')):'CE50: calculando no motor estatístico…')+'</div>';
@@ -11236,6 +11294,182 @@ function bioensaioPainelHtml(qid, sid, study){
   H+=(ds.metodo==='potter')?_bioPainelPotter(qid,sid,study,ds,R,refs):_bioPainelPlaca(qid,sid,study,ds,R,refs);
   if(R.avisos.length) H+='<ul style="margin:6px 0 0;padding-left:16px;font-size:10.5px;color:#8a6d18;line-height:1.5">'+R.avisos.map(function(a){ return '<li>'+esc(a)+'</li>'; }).join('')+'</ul>';
   return H+_bioRefsHtml(refs)+'</div>';
+}
+
+/* ===== O BIOENSAIO NO LAUDO ==================================================
+   O painel acima só existia na tela do estudo: o laudo exportado (Word, PDF,
+   Markdown) levava as médias descritivas e o anexo e deixava de fora justamente
+   o resultado do bioensaio — mortalidade com Abbott, validade da testemunha,
+   TL50, CL50/CE50 e os gráficos. Aqui o mesmo resumo vira seções do laudo
+   (tabelas em texto) e figuras (SVG autônomo, que o relatório desenha como
+   imagem). Os números do motor vêm do que foi PRESERVADO no fechamento — ou do
+   que já está calculado, se o estudo segue aberto: exportar não recalcula
+   nada, e o que faltar sai dito como faltando, com o motivo. */
+function bioensaioRelatorio(qid, study, analise, finalizado){
+  var ds=null; try{ ds=bioensaioDados(study,qid); }catch(e){ ds=null; }
+  if(!ds) return null;
+  var def=BioensaioCore.METODOS[ds.metodo], P=ds.prot||{}, test=ds.testemunha, trats=ds.tratamentos, tit=def.rotulo;
+  var res=(analise&&analise.results)||{}, noManifesto={}, refs=(def.refs||[]).slice(), secoes=[], figuras=[];
+  ((analise&&analise.jobs)||[]).forEach(function(j){ noManifesto[j.jobKey]=1; });
+  function motor(k){ return res[k]||null; }
+  /* por que um número do motor não está no laudo — dito, e não em branco */
+  function motivo(k){
+    var rel=motor(k);
+    if(rel&&rel.ok) return 'o motor não ajustou curva nesta leitura';
+    if(rel) return rel.erro||'o motor estatístico não conseguiu calcular';
+    if(!analise) return finalizado?'o fechamento deste estudo não preservou as análises do motor':'motor estatístico indisponível nesta versão';
+    if(!noManifesto[k]) return 'leitura sem análise automática (repetições ou tratamentos insuficientes)';
+    return finalizado?'não estava calculado no fechamento do estudo':'o motor estatístico ainda calculava quando o laudo foi gerado';
+  }
+  function n(x,c){ return _bioBR(x,c); }
+  function nomeT(id){ return id+(id===test?' (testemunha)':''); }
+  function figura(svg, legenda){
+    if(!svg) return;
+    var m=/width="(\d+)" height="(\d+)"/.exec(svg);
+    figuras.push({svg:svg, legenda:legenda, largura:m?Number(m[1]):520, altura:m?Number(m[2]):240});
+  }
+  /* protocolo: o que foi declarado uma vez */
+  var prot=[['Método', tit+' — '+def.descricao]];
+  if(ds.metodo==='potter'){
+    var dep=BioensaioCore.depositoPotter(P.pesoAntesG,P.pesoDepoisG,P.superficieCm||P.arenaDiametroCm);
+    var al=(dep.mgCm2!=null)?BioensaioCore.depositoNoAlvo(dep.mgCm2,P.depositoAlvo,P.depositoTolPct):null;
+    prot.push(['Organismo', (P.organismo||'Não registrado')+(P.estagio?' · '+P.estagio:'')]);
+    prot.push(['Categoria', P.categoria==='inimigo'?'Inimigo natural (classes IOBC)':'Praga']);
+    prot.push(['Indivíduos por arena', P.individuosPorArena!=null?n(P.individuosPorArena,0):'Não registrado']);
+    prot.push(['Critério de morte', (P.criterio||'Não registrado')+(P.moribundoMorto?' · moribundo conta como morto':' · moribundo conta como vivo')]);
+    prot.push(['Volume pulverizado', P.volumeMl!=null?n(P.volumeMl,2)+' mL':'Não registrado']);
+    prot.push(['Pressão', P.pressaoKpa!=null?n(P.pressaoKpa,1)+' kPa':'Não registrada']);
+    prot.push(['Depósito', dep.mgCm2==null?'Não pesado':(n(dep.mgCm2,2)+' mg/cm²'+(P.depositoAlvo?(' · alvo '+n(P.depositoAlvo,2)+' mg/cm² ± '+n(P.depositoTolPct,0)+'%'+(al?(al.dentro?' · dentro':' · fora ('+n(al.desvioPct,1)+'%)'):'')):''))]);
+    prot.push(['Mortalidade máxima da testemunha', n(P.limiteTestemunha,0)+'%']);
+  }else{
+    prot.push(['Placa (diâmetro interno)', n(P.placaMm,0)+' mm']);
+    prot.push(['Disco de micélio', P.discoMm!=null?n(P.discoMm,1)+' mm':'Não registrado']);
+    prot.push(['Meio de cultura', P.meio||'Não registrado']);
+    prot.push(['Temperatura', P.temperaturaC!=null?n(P.temperaturaC,1)+' °C':'Não registrada']);
+    if(P.fotoperiodo) prot.push(['Fotoperíodo', P.fotoperiodo]);
+    prot.push(['Isolado / espécie', P.isolado||'Não registrado']);
+    prot.push(['Fim do ensaio', 'quando a testemunha chegar a '+n(P.bordaPct,0)+'% da placa']);
+  }
+  prot.push(['Variável lida', ds.variavel||'Nenhuma leitura ainda']);
+  prot.push(['Testemunha', test||'Nenhum tratamento marcado']);
+  if(ds.serie) prot.push(['Série de concentrações', ds.serie.niveis+' níveis ('+(ds.serie.unidade||'dose')+')']);
+  secoes.push({title:tit+' · protocolo', text:'Declarado uma vez no protocolo do estudo. As contas a seguir são automáticas, cada uma com a sua referência.', headers:['Item','Registro'], rows:prot});
+  if(ds.vazio){
+    secoes.push({title:tit+' · resultados', text:'Sem leitura de '+(ds.metodo==='placa'?'diâmetro da colônia':'mortalidade (mortos/N)')+' registrada até a exportação.', headers:[], rows:[]});
+  }else{
+    var R=BioensaioCore.resumo(ds);
+    (R.refs||[]).forEach(function(x){ refs.push(x.chave); });
+    if(ds.metodo==='potter') _bioLaudoPotter(R);
+    else _bioLaudoPlaca(R);
+    if(R.avisos.length) secoes.push({title:tit+' · avisos', text:'Pontos a conferir antes de assinar o laudo.', headers:['Aviso'], rows:R.avisos.map(function(a){ return [a]; })});
+  }
+  var lista=BioensaioCore.refsDe(refs);
+  if(lista.length) secoes.push({title:tit+' · referências', text:'Fontes das fórmulas e dos critérios usados nas seções do bioensaio (ABNT).', headers:['Referência'], rows:lista.map(function(r){ return [r.abnt]; })});
+  return {versao:1, metodo:ds.metodo, titulo:tit, variavel:ds.variavel||'', secoes:secoes, figuras:figuras};
+
+  function _bioLaudoPotter(R){
+    var inimigo=(R.prot.categoria==='inimigo');
+    var cab=['Leitura','Tratamento','Dose','Mortos / avaliados','Arenas','Mortalidade (%)','Eficácia Abbott (%)'].concat(inimigo?['Classe IOBC']:[]), linhas=[];
+    R.leituras.forEach(function(L){
+      var inval=(L.validade.estado==='invalido');
+      trats.forEach(function(t){
+        var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{};
+        var ef=(t.id===test)?'—':(l.abbott==null?'—':n(l.abbott,1)+(inval?' (leitura inválida)':''));
+        linhas.push([L.rotulo, nomeT(t.id), t.doseTexto||'—', l.mortos!=null?(l.mortos+' / '+l.avaliados):'—', l.arenas||'—', l.mortalidade==null?'—':n(l.mortalidade,1), ef]
+          .concat(inimigo?[(l.iobc&&t.id!==test)?(l.iobc.classe+' · '+l.iobc.rotulo):'—']:[]));
+      });
+    });
+    secoes.push({title:tit+' · mortalidade e eficácia', text:'Mortalidade = mortos ÷ avaliados, somados nas arenas. Eficácia = Abbott (1925) / Schneider-Orelli (1947): (tratado − testemunha) ÷ (100 − testemunha). '+
+      'Leitura com a testemunha acima de '+n(R.prot.limiteTestemunha,0)+'% não sustenta eficácia (WHO, 2016) e sai marcada como inválida.'+
+      (inimigo?' Classe IOBC de laboratório (Hassan, 1994; Sterk et al., 1999): 1 inócuo (< 30%), 2 levemente nocivo (30–79%), 3 moderadamente nocivo (80–99%), 4 nocivo (> 99%).':''),
+      headers:cab, rows:linhas});
+    secoes.push({title:tit+' · validade da testemunha', text:'Critério da WHO (2016): até 5% dispensa correção; acima disso a eficácia é corrigida por Abbott; acima do limite do protocolo a leitura é repetida.',
+      headers:['Leitura','Mortalidade da testemunha (%)','Situação'], rows:R.leituras.map(function(L){ return [L.rotulo, n(L.testemunhaMort,1), L.validade.texto]; })});
+    if(R.leituras.length>1){
+      figura(_bioLinhaSvg(_bioSeries(R,trats,'mortalidade'), trats, test, {yMax:100, yUnid:'%', xRotulos:_bioXRotulos(R), arquivo:true}),
+        'Mortalidade (%) por tratamento ao longo das leituras ('+R.leituras.map(function(L){ return L.rotulo; }).join(', ')+'). Linha tracejada: testemunha.');
+      /* TL50 e TL90 — só quando o estudo tem o job de sobrevivência no tempo */
+      var kT='__tempo__|'+ds.variavel;
+      if(noManifesto[kT]||res[kT]){
+        var tl=_bioTL50(motor(kT), study);
+        if(tl && tl.linhas){
+          secoes.push({title:tit+' · TL50 e TL90', text:'Tempo até 50% e 90% de mortalidade, da curva de sobrevivência de Kaplan & Meier (1958), interpolado entre leituras. "Não atingiu": o tratamento não chegou a essa mortalidade no período lido.'+
+            (tl.logrank?(' Log-rank (Mantel, 1966): χ²('+tl.logrank.gl+') = '+n(tl.logrank.qui2,2)+', p '+(tl.logrank.p<0.001?'< 0,001':'= '+n(tl.logrank.p,3))+(tl.logrank.significativo?' — as curvas de sobrevivência diferem.':' — sem diferença entre as curvas.')):''),
+            headers:['Tratamento','TL50','TL90','Mortos / N'],
+            rows:tl.linhas.map(function(l){ return [nomeT(l.tratId), l.lt50==null?'Não atingiu':n(l.lt50,1)+' '+tl.un, l.lt90==null?'Não atingiu':n(l.lt90,1)+' '+tl.un, l.mortes==null?'—':(l.mortes+' / '+l.n)]; })});
+          refs.push('kaplanMeier1958','mantel1966');
+        }else{
+          secoes.push({title:tit+' · TL50 e TL90', text:'TL50 fora deste laudo: '+(tl&&tl.erro?tl.erro:motivo(kT))+'.', headers:[], rows:[]});
+        }
+      }
+    }
+    if(ds.serie){
+      var linhasCL=[], ultimo=null;
+      ds.leituras.forEach(function(L){
+        var rel=motor(L.jobKey), a=rel&&rel.ok&&rel.analise;
+        if(!a||!a.doses_letais){ linhasCL.push([L.rotulo, 'Fora do laudo: '+motivo(L.jobKey), '—', '—', '—']); return; }
+        function cl(p){ var d=_bioDL(a,p); return d?(n(d.dose,3)+' ('+(d.ic_inf!=null?n(d.ic_inf,3)+'–'+n(d.ic_sup,3):'IC não estimável')+')'):'—'; }
+        var rn=a.resposta_natural||{};
+        linhasCL.push([L.rotulo, cl(0.5), cl(0.9), n(a.slope,2)+' ± '+n(a.slope_se,2),
+          (a.p_qui_quadrado==null?'—':'χ² p = '+n(a.p_qui_quadrado,3))+(rn.metodo==='estimada'?' · C = '+n(100*rn.C,1)+'%':'')]);
+        ultimo={rel:rel, L:L};
+      });
+      secoes.push({title:tit+' · CL50 e CL90', text:'Concentração letal em '+(ds.serie.unidade||'dose')+', com intervalo de confiança de 95% (Fieller), por máxima verossimilhança com a mortalidade natural da testemunha dentro do modelo (Robertson et al., 2007; Finney, 1971). C = resposta natural estimada.',
+        headers:['Leitura','CL50 (IC 95%)','CL90 (IC 95%)','Inclinação ± EP','Aderência · resposta natural'], rows:linhasCL});
+      if(ultimo){
+        var a2=ultimo.rel.analise, c50=_bioDL(a2,0.5);
+        figura(_bioDoseSvg(_bioPontosPotter(a2), _bioCurvaBinomial(ultimo.rel), {yMax:100, yUnid:'%', xTitulo:'concentração ('+(ds.serie.unidade||'dose')+', escala log)', marca:c50?{dose:c50.dose, rot:'CL50 '+n(c50.dose,3)}:null, arquivo:true}),
+          'Curva de dose-resposta em '+ultimo.L.rotulo+': pontos = mortalidade observada em cada concentração; linha = modelo com a resposta natural da testemunha; tracejado = CL50.');
+        refs.push('robertson2007','finney1971');
+      }
+    }
+  }
+  function _bioLaudoPlaca(R){
+    var F=R.final;
+    if(F){
+      secoes.push({title:tit+' · '+(R.fim?'leitura final':'última leitura')+' ('+F.rotulo+')',
+        text:(R.fim?R.fim.texto:'A testemunha ainda não chegou a '+n(P.bordaPct,0)+'% da placa: o ensaio segue e esta é a última leitura registrada.')+
+          ' Ø médio = média da cruz em cada placa. Crescimento = Ø − disco de '+n(P.discoMm,1)+' mm. Inibição = (testemunha − tratado) ÷ testemunha, sobre o crescimento (Vincent, 1947). IVCM = Σ(D − D anterior) ÷ dias (Oliveira, 1991). Taxa radial = inclinação do raio no tempo.',
+        headers:['Tratamento','Dose','Placas','Ø médio (mm)','DP (mm)','Crescimento (mm)','Inibição (%)','IVCM','Taxa radial (mm/dia)'],
+        rows:trats.map(function(t){
+          var l=F.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{}, pt=R.porTratamento[t.id]||{};
+          return [nomeT(t.id), t.doseTexto||'—', l.placas||'—', n(l.diametro,1), n(l.dpDiametro,1), n(l.crescimento,1), t.id===test?'—':n(l.inibicao,1), n(pt.ivcm,2), pt.taxa?n(pt.taxa.mmDia,2):'—'];
+        })});
+    }
+    if(R.leituras.length>1){
+      var todas=[];
+      R.leituras.forEach(function(L){ trats.forEach(function(t){
+        var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{};
+        todas.push([L.rotulo, nomeT(t.id), l.placas||'—', n(l.diametro,1), n(l.crescimento,1), t.id===test?'—':n(l.inibicao,1)]);
+      }); });
+      secoes.push({title:tit+' · todas as leituras', text:'Diâmetro médio, crescimento e inibição em cada leitura.', headers:['Leitura','Tratamento','Placas','Ø médio (mm)','Crescimento (mm)','Inibição (%)'], rows:todas});
+      figura(_bioLinhaSvg(_bioSeries(R,trats,'diametro'), trats, test, {yMax:P.placaMm||90, yUnid:' mm', ref:{y:P.placaMm, rot:'borda da placa'}, xTitulo:'dias após a repicagem', xRotulos:_bioXRotulos(R), arquivo:true}),
+        'Diâmetro médio da colônia (mm) por tratamento ao longo das leituras. Linha vermelha: borda da placa de '+n(P.placaMm,0)+' mm; tracejado preto: testemunha.');
+    }
+    if(ds.serie && F){
+      var Lf=null; ds.leituras.forEach(function(L){ if(L.avId===F.avId) Lf=L; });
+      if(Lf && (noManifesto[Lf.jobKey]||res[Lf.jobKey])){
+        var rel=motor(Lf.jobKey), a=rel&&rel.ok&&rel.analise, ce=a?_bioCE50(a):null, un=ds.serie.unidade||'';
+        if(a && a.doses_efetivas_absolutas){
+          var linhasCE=[];
+          if(ce && ce.dose!=null){
+            var cls=BioensaioCore.classeEdgington(ce.dose, un);
+            linhasCE.push(['CE50', n(ce.dose,4)+' '+un]);
+            linhasCE.push(['IC 95%', ce.ic_inf!=null?(n(ce.ic_inf,4)+' a '+n(ce.ic_sup,4)+' '+un):'não estimável']);
+            linhasCE.push(['Dentro das concentrações testadas', ce.extrapolado?'Não — extrapolada':'Sim']);
+            linhasCE.push(['Classe (Edgington et al., 1971)', cls&&cls.classe?cls.rotulo:((cls&&cls.motivo)||'—')]);
+          }else linhasCE.push(['CE50', 'não sai: '+((ce&&ce.motivo)||'a curva não chega a 50% de redução')]);
+          secoes.push({title:tit+' · CE50 ('+F.rotulo+')', text:'Concentração que reduz à metade o crescimento da testemunha, pela curva log-logística de 4 parâmetros ajustada ao crescimento (Ø − disco).', headers:['Item','Resultado'], rows:linhasCE});
+          figura(_bioDoseSvg(_bioPontosPlaca(Lf,trats,P), (a.curva||[]).map(function(q){ return {dose:q.dose, y:q.ajustado}; }),
+            {yMax:Math.max(P.placaMm||90,1), yUnid:' mm', xTitulo:'concentração ('+un+', escala log)', marca:(ce&&ce.dose)?{dose:ce.dose, rot:'CE50 '+n(ce.dose,3)}:null, arquivo:true}),
+            'Curva de dose em '+F.rotulo+': pontos = crescimento (Ø − disco) de cada placa; linha = curva log-logística; tracejado = CE50.');
+          refs.push('edgington1971');
+        }else{
+          secoes.push({title:tit+' · CE50', text:'CE50 fora deste laudo: '+motivo(Lf.jobKey)+'.', headers:[], rows:[]});
+        }
+      }
+    }
+  }
 }
 
 /* Método de UM tratamento. O override só vale se tiver sido declarado — ligar a chave

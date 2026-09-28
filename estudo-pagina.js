@@ -169,7 +169,11 @@ function exportContext(st,s){
  var q=w.data[s.qid]||{},lid=(w.QLOCAL||{})[s.qid],loc=(w.LOCAIS||{})[lid]||{};
  var context={local:{id:lid,nome:loc.nome},quadra:{id:s.qid,nome:s.quadra,tipo:q.tipo,cultura:q.cultura,solo:q.solo},geometria:(w.QGEO||{})[s.qid],vinculos:s.integracoes,consumos:s.consumos,custos:C.custo(s.consumos,s.integracoes),notas:typeof w.notasDoEstudo==='function'?w.notasDoEstudo(s.qid,st):[]};
  var findings=typeof w._forenseAchadosEstudo==='function'?w._forenseAchadosEstudo(st,s.qid):[];
- return clean(protectedReport({schema:'agracta-relatorio-1',generated:new Date().toISOString(),projection:s,study:st,context:context,analysis:analysisData(st,s),forensics:{estudo:findings,eventos:arr(st.avaliacoes).concat(arr(st.aplicacoes)).map(function(a){return {id:a.id,data:a.data,achados:typeof w._forenseAchados==='function'?w._forenseAchados(a):[]};})}},st,s));
+ /* O bioensaio (Potter, placa) entra no laudo com as mesmas contas do painel e os
+    números do motor preservados; passa pelo mesmo cegamento que o resto. */
+ var analysis=analysisData(st,s),bioensaio=null;
+ try{if(typeof w.bioensaioRelatorio==='function')bioensaio=w.bioensaioRelatorio(s.qid,st,analysis,!!s.finalizado);}catch(err){bioensaio=null;}
+ return clean(protectedReport({schema:'agracta-relatorio-1',generated:new Date().toISOString(),projection:s,study:st,context:context,analysis:analysis,bioensaio:bioensaio,forensics:{estudo:findings,eventos:arr(st.avaliacoes).concat(arr(st.aplicacoes)).map(function(a){return {id:a.id,data:a.data,achados:typeof w._forenseAchados==='function'?w._forenseAchados(a):[]};})}},st,s));
 }
 function reportTree(value){
  if(value===null||value===undefined)return '<span>Não disponível</span>';

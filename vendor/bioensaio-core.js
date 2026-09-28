@@ -32,7 +32,7 @@
 (function(root){
   'use strict';
 
-  var VERSAO='1.0.1';
+  var VERSAO='1.1.0';
 
   /* ---------- referências (ABNT) ---------- */
   var REFERENCIAS={
@@ -56,6 +56,8 @@
     mckinney1923:{curta:'McKinney (1923)', abnt:'MCKINNEY, H. H. Influence of soil temperature and moisture on infection of wheat seedlings by Helminthosporium sativum. Journal of Agricultural Research, v. 26, p. 195-217, 1923.'},
     townsendHeuberger1943:{curta:'Townsend & Heuberger (1943)', abnt:'TOWNSEND, G. R.; HEUBERGER, J. W. Methods for estimating losses caused by diseases in fungicide experiments. Plant Disease Reporter, v. 27, p. 340-343, 1943.'},
     pimentelGomes2009:{curta:'Pimentel-Gomes (2009)', abnt:'PIMENTEL-GOMES, F. Curso de estatística experimental. 15. ed. Piracicaba: FEALQ, 2009.'},
+    kaplanMeier1958:{curta:'Kaplan & Meier (1958)', abnt:'KAPLAN, E. L.; MEIER, P. Nonparametric estimation from incomplete observations. Journal of the American Statistical Association, v. 53, p. 457-481, 1958.'},
+    mantel1966:{curta:'Mantel (1966)', abnt:'MANTEL, N. Evaluation of survival data and two new rank order statistics arising in its consideration. Cancer Chemotherapy Reports, v. 50, p. 163-170, 1966.'},
     oliveira1991:{curta:'Oliveira (1991)', abnt:'OLIVEIRA, J. A. Efeito do tratamento fungicida em sementes no controle de tombamento de plântulas de pepino (Cucumis sativus L.) e pimentão (Capsicum annum L.). Dissertação (Mestrado) – Escola Superior de Agricultura de Lavras, Lavras, 1991.'}
   };
   function refsDe(chaves){
