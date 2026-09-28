@@ -301,7 +301,7 @@ function lerCriteriosValidacao(){
    tela travada ao abrir um estudo com três leituras, 2,2 s de uma vez só, num
    computador rápido). No worker o cálculo corre ao lado e a tela segue viva.
    Sem Worker (navegador antigo, ou teste sem ele), vale o caminho de antes. */
-let motorWorker = null, _motorSeq = 0;
+let motorWorker = null, _motorSeq = 0, _motorIniciado = false;
 const _motorPend = new Map();
 function _motorNoWorker(){ return typeof Worker === 'function' && !window.__motorNaPagina; }
 function iniciarMotorWorker(){
@@ -313,13 +313,15 @@ function iniciarMotorWorker(){
     motorWorker = w;
     const falhar = (err) => {
       _motorPend.forEach(p => p.reject(err)); _motorPend.clear();
-      if (motorWorker === w){ motorWorker = null; pyPronto = null; }
+      /* worker que caiu DEPOIS de pronto: a próxima análise sobe outro. Se caiu na
+         partida, quem decide é iniciarPyodide (recua para a página). */
+      if (motorWorker === w){ motorWorker = null; if (_motorIniciado) pyPronto = null; _motorIniciado = false; }
       try{ w.terminate(); }catch(_){}
     };
     w.onmessage = (ev) => {
       const m = ev.data || {};
       if (m.tipo === 'progresso'){ setOverlay(m.msg, m.sub); return; }
-      if (m.tipo === 'pronto'){ Object.assign(ENGINE_HASHES, m.hashes || {}); esconderOverlay(); resolve(); return; }
+      if (m.tipo === 'pronto'){ _motorIniciado = true; Object.assign(ENGINE_HASHES, m.hashes || {}); esconderOverlay(); resolve(); return; }
       if (m.tipo === 'falhou'){ setOverlay("Erro ao carregar o motor", m.erro); const err = new Error(m.erro); falhar(err); reject(err); return; }
       if (m.tipo === 'resposta'){
         const p = _motorPend.get(m.id); if (!p) return;
@@ -344,7 +346,16 @@ function chamarMotor(fnNome, args){
   }));
 }
 async function iniciarPyodide() {
-  if (_motorNoWorker()) return iniciarMotorWorker();
+  if (_motorNoWorker()){
+    try{ return await iniciarMotorWorker(); }
+    catch(e){
+      /* O worker não subiu — por exemplo offline, num navegador que não entrega
+         ao worker o cache do service worker. Em vez de ficar sem estatística no
+         campo, recua para o caminho de antes: o Python na página. */
+      console.warn("[motor] worker indisponível, usando a página:", e);
+      window.__motorNaPagina = true;
+    }
+  }
   try {
     mostrarOverlay("Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
     pyodide = await loadPyodide({ indexURL: "pyodide/" });
