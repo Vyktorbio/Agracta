@@ -25,7 +25,8 @@ assert.match(ficha.textContent,/1B/);assert.match(ficha.textContent,/2 de 3/);as
 assert.equal(ficha.querySelector('[data-v="Severidade"]').value,'20','traz o valor já lançado');
 assert.equal(ficha.querySelectorAll('[data-v="Doentes"]').length,2,'razão n/N usa os mesmos dois campos da tabela');
 assert.equal(ficha.querySelector('.av-photo-btn').dataset.avPhoto,'T1R2','foto da mesma parcela');
-const [ant,,prox]=ficha.querySelectorAll('.av-ficha-nav button');assert.match(ant.textContent,/1A/);assert.match(prox.textContent,/2A/);
+assert.equal(ficha.querySelector('.av-foto-n').dataset.avFotos,'T1R2','contador de fotos da mesma parcela, ao lado do botão');
+const [ant,,prox]=ficha.querySelectorAll('.av-ficha-nav button:not(.av-foto-n)');assert.match(ant.textContent,/1A/);assert.match(prox.textContent,/2A/);
 
 /* Digitar na ficha espelha na tabela, inclusive apagar. */
 const naFicha=ficha.querySelector('[data-v="Severidade"]'),naTabela=d.querySelector('.av-table [data-v="Severidade"]');
@@ -38,7 +39,7 @@ naFicha.focus();naFicha.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter'
 assert.equal(d.activeElement.dataset.v,'Plantas');
 const ultimo=Array.from(ficha.querySelectorAll('.av-cell')).pop();ultimo.focus();
 ultimo.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));assert.deepEqual(selecionadas,['T2R1']);
-pinta();const fim=d.getElementById('avFicha').querySelectorAll('.av-ficha-nav button')[2];assert(fim.disabled,'na última parcela não há próxima');
+pinta();const fim=d.getElementById('avFicha').querySelectorAll('.av-ficha-nav button:not(.av-foto-n)')[2];assert(fim.disabled,'na última parcela não há próxima');
 
 /* No modo automático a caixa dele já é a ficha. */
 w.eval('_avAuto.on=true');assert.equal(w._avFichaHtml(rows,w._avGrid.variaveis),'');

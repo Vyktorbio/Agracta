@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-18";
+const APP_VERSION = "bioensaio-auditoria-19";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -295,7 +295,67 @@ function lerCriteriosValidacao(){
 /* ----------------------------------------------------------------------- */
 /* Inicialização do Pyodide + motor                                        */
 /* ----------------------------------------------------------------------- */
+/* O PYTHON RODA NUM WEB WORKER (motor-worker.js), não na página.
+   Na página ele dividia a linha de execução com a tela — e, embutido no
+   Agracta, com a tela do APP: cada análise congelava tudo (medido: 4,2 s de
+   tela travada ao abrir um estudo com três leituras, 2,2 s de uma vez só, num
+   computador rápido). No worker o cálculo corre ao lado e a tela segue viva.
+   Sem Worker (navegador antigo, ou teste sem ele), vale o caminho de antes. */
+let motorWorker = null, _motorSeq = 0, _motorIniciado = false;
+const _motorPend = new Map();
+function _motorNoWorker(){ return typeof Worker === 'function' && !window.__motorNaPagina; }
+function iniciarMotorWorker(){
+  return new Promise((resolve, reject) => {
+    mostrarOverlay("Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
+    let w;
+    try{ w = new Worker("motor-worker.js?v=" + APP_VERSION); }
+    catch(e){ reject(e); return; }
+    motorWorker = w;
+    const falhar = (err) => {
+      _motorPend.forEach(p => p.reject(err)); _motorPend.clear();
+      /* worker que caiu DEPOIS de pronto: a próxima análise sobe outro. Se caiu na
+         partida, quem decide é iniciarPyodide (recua para a página). */
+      if (motorWorker === w){ motorWorker = null; if (_motorIniciado) pyPronto = null; _motorIniciado = false; }
+      try{ w.terminate(); }catch(_){}
+    };
+    w.onmessage = (ev) => {
+      const m = ev.data || {};
+      if (m.tipo === 'progresso'){ setOverlay(m.msg, m.sub); return; }
+      if (m.tipo === 'pronto'){ _motorIniciado = true; Object.assign(ENGINE_HASHES, m.hashes || {}); esconderOverlay(); resolve(); return; }
+      if (m.tipo === 'falhou'){ setOverlay("Erro ao carregar o motor", m.erro); const err = new Error(m.erro); falhar(err); reject(err); return; }
+      if (m.tipo === 'resposta'){
+        const p = _motorPend.get(m.id); if (!p) return;
+        _motorPend.delete(m.id);
+        if (m.ok) p.resolve(m.json); else p.reject(new Error(m.erro));
+      }
+    };
+    w.onerror = (e) => {
+      const err = new Error((e && e.message) || "o motor estatístico parou");
+      setOverlay("Erro ao carregar o motor", err.message);
+      falhar(err); reject(err);
+    };
+    w.postMessage({ tipo: 'iniciar', cfg: { arquivos: ARQ_ENGINE, versao: ENGINE_VERSION, bridge: BRIDGE } });
+  });
+}
+function chamarMotor(fnNome, args){
+  return garantirPyodide().then(() => new Promise((resolve, reject) => {
+    if (!motorWorker){ reject(new Error("motor estatístico indisponível")); return; }
+    const id = ++_motorSeq;
+    _motorPend.set(id, { resolve, reject });
+    motorWorker.postMessage({ tipo: 'chamar', id: id, fn: fnNome, args: args });
+  }));
+}
 async function iniciarPyodide() {
+  if (_motorNoWorker()){
+    try{ return await iniciarMotorWorker(); }
+    catch(e){
+      /* O worker não subiu — por exemplo offline, num navegador que não entrega
+         ao worker o cache do service worker. Em vez de ficar sem estatística no
+         campo, recua para o caminho de antes: o Python na página. */
+      console.warn("[motor] worker indisponível, usando a página:", e);
+      window.__motorNaPagina = true;
+    }
+  }
   try {
     mostrarOverlay("Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
     pyodide = await loadPyodide({ indexURL: "pyodide/" });
@@ -2567,6 +2627,10 @@ async function rodarPython(fnNome, papeis, opcoes){
 }
 async function rodarPythonComDados(fnNome, dados, papeis, opcoes){
   await garantirPyodide();
+  if (motorWorker){
+    const json = await chamarMotor(fnNome, [JSON.stringify(dados), JSON.stringify(papeis), JSON.stringify(opcoes)]);
+    return JSON.parse(json);
+  }
   const fn = pyodide.globals.get(fnNome);
   try{
     const json = fn(JSON.stringify(dados), JSON.stringify(papeis), JSON.stringify(opcoes));
@@ -3077,6 +3141,7 @@ async function planejarEnsaio(){
   mostrarOverlay('Planejando…','Calculando o poder para cada número de repetições.');
   try{
     await garantirPyodide();
+    if(motorWorker){ renderPlano(JSON.parse(await chamarMotor('_run_planejar',[JSON.stringify(o)]))); return; }
     const fn=pyodide.globals.get('_run_planejar');
     try{ renderPlano(JSON.parse(fn(JSON.stringify(o)))); } finally{ fn.destroy(); }
   }catch(err){ renderPlano({ok:false,erro:String(err&&err.message||err)}); }
