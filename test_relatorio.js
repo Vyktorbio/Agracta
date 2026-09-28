@@ -14,6 +14,13 @@ const parts=D.parts(context,ss);assert(parts.find(f=>f.nome==='word/document.xml
 for(const f of ['relatorio-local.js','vendor/relatorio-core.js','vendor/relatorio-docx.js'])assert(!/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/.test(fs.readFileSync(f,'utf8')),f);
 assert.match(fs.readFileSync('relatorio-local.html','utf8'),/connect-src 'none'/);
 assert.match(fs.readFileSync('sw.js','utf8'),/galeria-local\|relatorio-local/);
+// Bioensaio: as seções entram depois dos resultados e antes da estatística; o JSON completo não carrega o desenho.
+const comBio={...context,bioensaio:{metodo:'potter',titulo:'Torre de Potter',secoes:[{title:'Torre de Potter · mortalidade e eficácia',text:'Abbott (1925).',headers:['Leitura','Tratamento'],rows:[['24 HAT','T1']]}],figuras:[{svg:'<svg xmlns="http://www.w3.org/2000/svg" width="520" height="240"></svg>',legenda:'Mortalidade no tempo',largura:520,altura:240}]}};
+const sb=C.sections(comBio,C.data(comBio)).map(x=>x.title),iBio=sb.indexOf('Torre de Potter · mortalidade e eficácia');
+assert(iBio>sb.indexOf('Resultados por tratamento e data')&&iBio<sb.indexOf('Estatística e investigação forense'),'bioensaio entre os resultados e a estatística');
+assert.equal(C.sections(context,d).length,ss.length,'sem bioensaio, nada muda');
+const rj=C.rFiles(comBio,C.data(comBio)).find(f=>f.nome==='registros_completos.json').text;assert(!rj.includes('<svg')&&rj.includes('Mortalidade no tempo'));
+assert(C.markdown(comBio,C.sections(comBio,C.data(comBio))).includes('## Torre de Potter · mortalidade e eficácia'));
 if(process.env.RELATORIO_QA){fs.mkdirSync(process.env.RELATORIO_QA,{recursive:true});fs.writeFileSync(process.env.RELATORIO_QA+'/exemplo.docx',new Uint8Array(await Z.zip(parts).arrayBuffer()));fs.writeFileSync(process.env.RELATORIO_QA+'/context.json',JSON.stringify(context));fs.writeFileSync(process.env.RELATORIO_QA+'/exemplo_R.zip',new Uint8Array(await Z.zip(rf.map(f=>({nome:f.nome,dados:new TextEncoder().encode(f.text)}))).arrayBuffer()));}
 console.log('Relatório e R: zero, ausências, decimal, randomização, avaliadores, subamostras, uma repetição, CSV, DOCX, sem mutação e sem rede OK.');
 
