@@ -17823,7 +17823,7 @@ function _avFichaHtml(rows,vs){
     }).join('')+'</div>';
   } else h+='<div class="av-hint" style="margin:10px 0">Adicione uma coluna na tabela abaixo para lançar valores nesta parcela.</div>';
   h+='<div class="av-ficha-nav"><button type="button" onclick="avFichaIr(-1)"'+(prev?' aria-label="Parcela anterior: '+nome(prev)+'"':' disabled')+'>‹ '+(prev?nome(prev):'')+'</button>'+
-    '<button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button>'+
+    '<span style="display:inline-flex;align-items:center;justify-content:center"><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button><button type="button" class="av-foto-n" data-av-fotos="'+esc(rw.key)+'" hidden></button></span>'+
     '<button type="button" onclick="avFichaIr(1)"'+(next?' aria-label="Próxima parcela: '+nome(next)+'"':' disabled')+'>'+(next?nome(next):'')+' ›</button></div></div>';
   return h;
 }
@@ -17897,7 +17897,7 @@ function renderAvGrid(){
   rows.forEach(function(rw){
     html+='<tr data-av-row="'+esc(rw.key)+'"><td class="av-tname" title="'+esc((rw.produto||'')+(rw.parcela?' · parcela '+rw.parcela:''))+'">'+esc(rw.label)+'</td>';
     vs.forEach(function(v){ html+='<td>'+_avCellHtml(rw,v)+'</td>'; });
-    html+='<td><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button></td></tr>';
+    html+='<td style="white-space:nowrap"><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button><button type="button" class="av-foto-n" data-av-fotos="'+esc(rw.key)+'" hidden></button></td></tr>';
   });
   html+='</tbody></table></div>';
   if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button>'+
