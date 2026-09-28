@@ -49,5 +49,8 @@ ck(lg==='T2 · Produto X · 1 L/ha · R1 · parcela A2 · 7 DAA · 10/09/2026 08
 ck(F.legenda({treatment:'T2',rep:1,date:'2026-09-10'},{tratamentos:[]})==='T2 · R1 · 10/09/2026','sem cadastro: o essencial');
 ck(F.nomeArquivo({treatment:'T 2/a',rep:3,date:'2026-09-10',type:'image/png'},4)==='005_T_2_a_R3_2026-09-10.png','nome de arquivo estável e sem caracteres perigosos');
 
+ck(F.legenda({treatment:'T1',rep:2,date:'2026-09-08',medicao:{d1Mm:34.1,d2Mm:34,metodo:'auto'}},{tratamentos:[]})==='T1 · R2 · 08/09/2026 · Ø 34,1 × 34,0 mm (medida na foto)','a colônia medida na foto aparece na legenda, com uma casa');
+ck(/tomou a placa\)$/.test(F.legenda({treatment:'T1',rep:1,date:'2026-09-08',medicao:{d1Mm:90,d2Mm:90,metodo:'tomou'}},{})),'e "tomou a placa" quando foi o caso');
+
 console.log('\n'+passes+' ok, '+falhas+' falha(s)');
 process.exit(falhas?1:0);

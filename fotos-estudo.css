@@ -48,3 +48,12 @@ dialog.fe-amplia::backdrop{background:#000}
 /* contador ao lado do botão Foto, na grade e na ficha */
 .av-foto-n{margin-left:4px;min-height:32px;padding:0 8px;border-radius:999px;border:1px solid var(--gp-line-2,#3c4740);
   background:var(--gp-s3,#1b211d);color:var(--gp-text-2,#c8d1cb);font:700 11px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+/* medir a colônia pela foto */
+.cm-palco{background:#000;border-radius:10px;overflow:hidden;margin:0 0 10px}
+.cm-cv{display:block;width:100%;height:auto;touch-action:manipulation;cursor:crosshair}
+.cm-res{display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr;gap:4px 8px;align-items:baseline;margin:0 0 8px;font-size:12px;color:var(--gp-text-3,#8e9991)}
+.cm-res b{font-size:17px;color:var(--gp-text,#e9ede9)}
+.cm-avisos{margin:0 0 8px;padding-left:18px;font-size:12px;color:#e0b44c;line-height:1.45}
+.cm-dica{font-size:12px;color:var(--gp-text-2,#c8d1cb);margin:0 0 10px;line-height:1.45}
+.cm-erro{font-size:13px;color:#ff8a8a;margin:0 0 6px}
+@media(max-width:420px){.cm-res{grid-template-columns:auto 1fr auto 1fr}}
