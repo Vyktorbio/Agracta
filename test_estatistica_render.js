@@ -43,7 +43,7 @@ var ctx={ String:String, Number:Number, Math:Math, isFinite:isFinite, JSON:JSON,
           Date:Date, isoToBR:function(x){return x;} };
 ctx.window=ctx; ctx.self=ctx;
 vm.createContext(ctx);
-['esc','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatCurvaContinuaHtml','_bioestatDecisaoHtml','_bioestatResumoCard']
+['esc','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatCurvaContinuaHtml','_bioestatDecisaoHtml','_cvClassePG','_bioestatResumoCard']
   .forEach(function(n){ vm.runInContext(pega(n),ctx); });
 
 var job={variavel:'Mortalidade',date:'2026-09-09',jobKey:'av1|Mortalidade'};
@@ -107,6 +107,7 @@ ck(/>b</.test(c3),'as letras do teste contra o controle chegam à tabela');
 ck(/Shapiro-Wilk/.test(c3)&&/Levene/.test(c3),'os pressupostos testados continuam na tela');
 ck(/Tabela ANOVA/.test(c3),'a tabela ANOVA continua disponível');
 ck(/CV residual/.test(c3),'o CV residual continua na tela');
+ck(/CV residual [\d,]+% \((baixo|médio|alto|muito alto)\)/.test(c3) && /Pimentel-Gomes \(2009\)/.test(c3),'e vem classificado por Pimentel-Gomes (2009)');
 
 /* ---------------------- 3b. Robertson et al. (2007) e a curva contínua ---- */
 console.log('\nResposta natural estimada, g de Fieller, RR90 e curva contínua');

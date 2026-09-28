@@ -13,6 +13,7 @@ ck(B.abbott(50,100)===null,'testemunha 100%: não existe correção');
 ck(B.abbott(null,10)===null,'sem mortalidade: null');
 ck(perto(B.hendersonTilton(10,100,90,100),(1-(10*100)/(100*90))*100),'Henderson-Tilton: vivos antes/depois = 88,89%');
 ck(B.hendersonTilton(10,0,90,100)===null,'Henderson-Tilton sem contagem prévia: null');
+ck(B.hendersonTilton(10,100,90,0)===null,'testemunha sem população na prévia: null (daria 100% para tudo)');
 
 console.log('\nTestemunha (WHO, 2016)');
 ck(B.validadeTestemunha(3).estado==='ok','3%: dentro do esperado');

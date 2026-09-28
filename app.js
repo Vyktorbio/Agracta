@@ -6502,7 +6502,7 @@ function buildStudyRecord(qid,s){
         _avsR.forEach(function(a,ai){
           var mm=_meansAv[ai], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
           var cell=(mv!=null?String(_r1(mv)):'');
-          if(!isT){ var _c=_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
+          if(!isT){ var _c=_avEficacia(s,a,v,t.id,tm,mv); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
           line+='\t'+cell;
         });
         var au=_audpc(v,t.id), tau=_audpc(v,_test), ac=(au!=null?String(Math.round(au)):'');
@@ -6615,13 +6615,14 @@ function buildStudyModelo(qid, s, opts){
     var be=(typeof _bioestatResumo==='function')?_bioestatResumo(qid,s,a,v):null; /* motor BioEstat: fonte preferida das letras */
     var st=(typeof statDBC==='function')?statDBC(s,a,v):null; /* reserva: ANOVA-DBC + Tukey */
     lbl(13,c0,'AVALIAÇÃO — '+v+' · '+BR(a.data));
-    lbl(14,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(14,c0+1+ri,rl); }); lbl(14,c0+5,'média'); lbl(14,c0+6,'E%'); lbl(14,c0+7,'grupo');
+    var _metP=_avMetodoEficacia(s,a,v);
+    lbl(14,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(14,c0+1+ri,rl); }); lbl(14,c0+5,'média'); lbl(14,c0+6,_metP.metodo==='ht'?'E% (H-T)':(_metP.metodo==='previa'?'prévia':'E%')); lbl(14,c0+7,'grupo');
     function med(tid){ var vs=[]; for(var rp=1;rp<=reps;rp++){ var raw=_avNota(a,{key:_avRowKey(tid,rp),tratId:tid,rep:rp},v); if(raw!=null&&raw!==''){ var n=parseFloat(String(raw).replace(',','.')); if(!isNaN(n))vs.push(n);} } return vs.length?vs.reduce(function(x,y){return x+y;},0)/vs.length:null; }
     var tMed=test?med(test):null;
     trats.forEach(function(t,ti){ var r=15+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
-      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m,_avSentido(a,v),_avTipo(a,v)); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
+      if(test && t.id!==test){ var _ec=_avEficacia(s,a,v,t.id,tMed,m,_metP); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
       var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
       if(letra) put(r,c0+7, letra);
     });
@@ -7209,11 +7210,12 @@ async function downloadStudyWorkbook(qid,sid){
       if(!Object.keys(letras).length&&rapido&&rapido.letras)letras=rapido.letras;
       _xlsPut(ws,15,c0,'AVALIAÇÃO — '+v+' · '+isoToBR(a.data)); _xlsPut(ws,16,c0+7,'grupo');
       function media(tid){var vals=[];for(var rr=1;rr<=reps;rr++){var rv=_avNota(a,{key:_avRowKey(tid,rr),tratId:tid,rep:rr},v),nn=parseFloat(String(rv==null?'':rv).replace(',','.'));if(isFinite(nn))vals.push(nn);}return vals.length?vals.reduce(function(x,y){return x+y;},0)/vals.length:null;}
-      var mediaTest=test?media(test):null;
+      var mediaTest=test?media(test):null, _metX=_avMetodoEficacia(s,a,v);
+      if(_metX.metodo==='ht') _xlsPut(ws,16,c0+6,'E% (H-T)'); else if(_metX.metodo==='previa') _xlsPut(ws,16,c0+6,'prévia');
       (s.tratamentos||[]).forEach(function(t,ti){var r=17+ti;_xlsPut(ws,r,c0,ti+1);
         for(var rp=1;rp<=Math.min(4,reps);rp++){var raw=_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v);_xlsPut(ws,r,c0+rp,raw);}
         var med=media(t.id);if(med!=null)_xlsPut(ws,r,c0+5,Math.round(med*100)/100);
-        if(test&&t.id!==test){var ef=_pctCtrl(mediaTest,med,_avSentido(a,v),_avTipo(a,v));if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
+        if(test&&t.id!==test){var ef=_avEficacia(s,a,v,t.id,mediaTest,med,_metX);if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
         if(letras[t.id])_xlsPut(ws,r,c0+7,letras[t.id]);
       });
     });});
@@ -10624,7 +10626,7 @@ function avConjuntoArena(){
     _avGrid.tipos[it.nome]=it.tipo;
     var cfg={};
     if(it.tipo==='razao'&&it.N>0) cfg.N=it.N;
-    if(it.tipo==='escala'){ cfg.escalaMax=it.escalaMax||4; if(it.escalaNome) cfg.escalaNome=it.escalaNome; }
+    if(it.tipo==='escala'){ cfg.escalaMax=it.escalaMax||4; if(it.escalaMin) cfg.escalaMin=it.escalaMin; if(it.escalaNome) cfg.escalaNome=it.escalaNome; }
     if(it.sentido==='maior') cfg.sentido='maior';
     _avGrid.varcfg[it.nome]=cfg;
   });
@@ -13200,6 +13202,7 @@ function _forenseDominio(av){
       if(n<0) m='negativo';
       else if(cfg.tipo==='pct' && n>100) m='acima de 100%';
       else if(cfg.tipo==='escala' && n>cfg.escalaMax) m='acima do máximo da escala ('+cfg.escalaMax+')';
+      else if(cfg.tipo==='escala' && n<(cfg.escalaMin||0)) m='abaixo do mínimo da escala ('+cfg.escalaMin+')';
       else if(cfg.tipo==='contagem' && Math.abs(n-Math.round(n))>1e-9) m='contagem fracionada';
       if(!m) return;
       var ch=v+'|'+m;
@@ -13384,7 +13387,7 @@ function _pranchaPayload(qid, sid, variavel){
   /* config da variável vem da avaliação mais recente que a define */
   var avRef=(_avCfgDoEstudo(s,variavel)||avs[avs.length-1].av);
   var _vc=_avCfg(avRef,variavel);
-  var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas 0–'+_vc.escalaMax)):'';
+  var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas '+(_vc.escalaMin||0)+'–'+_vc.escalaMax)):'';
   /* cultura: o estudo manda, a quadra é o padrão */
   var _cultura=studyCultura(s,q);
 
@@ -14208,6 +14211,13 @@ function _bioestatBaixarJson(qid,sid,jobKey){
     },null,2)],{type:'application/json'}), 'agracta-estatistica-'+lim(sid)+'-'+lim(jobKey)+'.json');
   }catch(e){ alert('Não foi possível baixar o relatório: '+e); }
 }
+/* CV do ensaio pela tabela de Pimentel-Gomes (2009), a de uso corrente em
+   experimentação agrícola no Brasil: < 10% baixo; 10–20% médio; 20–30% alto;
+   > 30% muito alto. Dá ao número a leitura que quem revisa o laudo faz de cabeça. */
+function _cvClassePG(cv){
+  if(cv==null||!isFinite(cv)) return '';
+  return cv<10?'baixo':(cv<=20?'médio':(cv<=30?'alto':'muito alto'));
+}
 function _bioestatResumoCard(job,rel,qid,sid){
   if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
   var a=rel.analise||{}, cm=rel.comparacao_medias||{};
@@ -14246,7 +14256,7 @@ function _bioestatResumoCard(job,rel,qid,sid){
   var jsonBtn=(qid&&sid&&job&&job.jobKey)?('<button type="button" onclick="_bioestatBaixarJson('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+','+esc(JSON.stringify(job.jobKey))+')" style="margin-top:6px;padding:4px 8px;border:1px solid #cfdfd5;background:#fff;color:#486053;border-radius:7px;font:600 10px system-ui;cursor:pointer">Baixar relatório completo (JSON)</button>'):'';
   return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
-    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV residual '+nf(cv,1)+'%':'')+(cmp?' · comparação <b>'+esc(metodoCmp)+'</b>':'')+(transf?' · transf. '+esc(transf):'')+'</div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · <span title="Pimentel-Gomes (2009): &lt; 10% baixo; 10–20% médio; 20–30% alto; &gt; 30% muito alto">CV residual '+nf(cv,1)+'%'+((typeof _cvClassePG==='function')?(' ('+_cvClassePG(cv)+')'):'')+'</span>':'')+(cmp?' · comparação <b>'+esc(metodoCmp)+'</b>':'')+(transf?' · transf. '+esc(transf):'')+'</div>'+
     pressHtml+
     (rows?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')+
     _bioestatDoseHtml(a,nf,pf)+
@@ -17215,6 +17225,10 @@ function _avCfg(src,v){
     sub:Math.max(1,Math.round(_numBR(c.sub,1))||1),
     N:Math.max(0,Math.round(_numBR(c.N,0))),
     escalaMax:Math.max(1,_numBR(c.escalaMax,4)),
+    /* Escalas da literatura nem sempre começam em 0: a EWRC de fitotoxicidade vai
+       de 1 (sem sintoma) a 9. O índice mede a distância do MÍNIMO — sem isto uma
+       parcela sem sintoma nenhum saía com 11%. */
+    escalaMin:(function(){ var mn=Math.max(0,_numBR(c.escalaMin,0)), mx=Math.max(1,_numBR(c.escalaMax,4)); return (mn<mx)?mn:0; })(),
     escalaNome:c.escalaNome||''
   };
 }
@@ -17245,7 +17259,7 @@ function _avEscala(src,v){
      então as três caem na mesma escala, e não na escala da nota crua. */
   if(cfg.tipo==='pct'||cfg.tipo==='razao'||cfg.tipo==='escala')
     return {min:0,max:100,definida:true,tipo:cfg.tipo,
-            porque:cfg.tipo==='escala'?'índice de McKinney (0 a 100), derivado das notas de 0 a '+cfg.escalaMax
+            porque:cfg.tipo==='escala'?'índice de McKinney (0 a 100), derivado das notas de '+(cfg.escalaMin||0)+' a '+cfg.escalaMax
                   :cfg.tipo==='razao'?'razão n/N em porcentagem':'porcentagem'};
   /* contagem: não existe teto. Quem pinta cor precisa saber que não sabe. */
   return {min:min,max:null,definida:false,tipo:cfg.tipo,
@@ -17283,10 +17297,13 @@ function _avDerivar(cfg,cel){
   if(!vals.length) return '';
   var soma=vals.reduce(function(a,b){ return a+b; },0);
   if(cfg.tipo==='escala'){
-    /* índice de McKinney (índice de doença): Σ(nota) / (nº avaliado × nota máxima) × 100 */
-    var mx=cfg.escalaMax;
-    if(!(mx>0)) return '';
-    return String(Math.round(soma/(vals.length*mx)*1e4)/100);
+    /* índice de McKinney (1923) / Townsend & Heuberger (1943):
+       Σ(nota − mínimo) / (nº avaliado × (máximo − mínimo)) × 100.
+       Com o mínimo em 0 (o caso de sempre) é Σ nota / (n × máximo) × 100. */
+    var mx=cfg.escalaMax, mn=cfg.escalaMin||0;
+    if(!(mx>mn)) return '';
+    var somaE=vals.reduce(function(a,b){ return a+(Math.max(mn,Math.min(mx,b))-mn); },0);
+    return String(Math.round(somaE/(vals.length*(mx-mn))*1e4)/100);
   }
   return String(Math.round(soma/vals.length*100)/100);
 }
@@ -17384,7 +17401,9 @@ var CATALOGO_AVAL={
   ],
   'Seletividade/Fitotoxicidade':[
     {nome:'Fitotoxicidade',tipo:'pct'},
-    {nome:'Nota EWRC',tipo:'escala',escalaMax:9},
+    /* EWRC (1964): 1 = sem sintoma … 9 = morte total. Começa em 1 — o índice
+       conta a partir do 1, senão a testemunha limpa sairia com 11%. */
+    {nome:'Nota EWRC',tipo:'escala',escalaMin:1,escalaMax:9,escalaNome:'EWRC (1964): 1 sem sintoma · 5 médio · 9 morte total'},
     {nome:'Stand de plantas',tipo:'contagem'}
   ],
   /* FITOPATOLOGIA in vitro: mede-se a colônia em dois eixos perpendiculares e a
@@ -17590,6 +17609,7 @@ function _avWriteBruto(key,v,campo,val){
   if(num!==''){
     if(num<0) num=0;
     if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
+    if(cfg.tipo==='escala' && num<(cfg.escalaMin||0)) num=cfg.escalaMin||0;
     if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
     if(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)))) num=Math.floor(num);
   }
@@ -17749,7 +17769,7 @@ function _avCellHtml(rw,v){
       (val===''?'—':esc(val))+'<small>'+ch+'/'+cfg.sub+'</small></button>';
   } else if(cfg.tipo==='escala'){
     var celE=(_avGrid.bruto[rw.key]||{})[v]||{}, e0=((celE.sub||[])[0]);
-    return '<input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="0–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
+    return '<input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="'+(cfg.escalaMin||0)+'–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
       '<div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div>';
   } else if(cfg.tipo==='contagem'){
     return '<div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div>';
@@ -17772,7 +17792,7 @@ function _avFichaHtml(rows,vs){
     '<button type="button" class="av-ficha-x" onclick="avFichaFechar()" aria-label="Fechar a ficha da parcela">×</button></div>';
   if(vs.length){
     h+='<div class="av-ficha-vars">'+vs.map(function(v){
-      var cfg=_avCfg(_avGrid,v), suf=cfg.tipo==='pct'?' %':cfg.tipo==='razao'?' n/N':cfg.tipo==='escala'?' 0–'+cfg.escalaMax:'';
+      var cfg=_avCfg(_avGrid,v), suf=cfg.tipo==='pct'?' %':cfg.tipo==='razao'?' n/N':cfg.tipo==='escala'?' '+(cfg.escalaMin||0)+'–'+cfg.escalaMax:'';
       if(cfg.sub>1) suf+=' ×'+cfg.sub;
       return '<div class="av-ficha-var"><span class="av-ficha-nome">'+esc(v)+(suf?'<small style="opacity:.65">'+esc(suf)+'</small>':'')+'</span>'+_avCellHtml(rw,v)+'</div>';
     }).join('')+'</div>';
@@ -17840,7 +17860,7 @@ function renderAvGrid(){
     var cfg=_avCfg(_avGrid,v), suf='';
     if(cfg.tipo==='pct' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) suf=' <small style="opacity:.6">%</small>'; /* 'Altura (cm) %' confundia */
     else if(cfg.tipo==='razao') suf=' <small style="opacity:.6">n/N</small>';
-    else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">0–'+cfg.escalaMax+'</small>';
+    else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">'+(cfg.escalaMin||0)+'–'+cfg.escalaMax+'</small>';
     if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
     var _vjs=esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     html+='<th>'+esc(v)+suf+
@@ -17941,7 +17961,7 @@ function _avSubRender(){
   /* diâmetro da colônia numa placa: os campos são os dois EIXOS da cruz */
   var _pl=(typeof _avBioPlaca==='function')?_avBioPlaca(v):null, _cruz=!!(_pl&&cfg.sub===2);
   var h='<div class="av-sub-box"><div class="av-sub-title">'+esc(v)+'</div>'+
-    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+(_cruz?'diâmetro em cruz, placa de '+_pl.placaMm+' mm':(cfg.sub+' amostras'))+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
+    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+(_cruz?'diâmetro em cruz, placa de '+_pl.placaMm+' mm':(cfg.sub+' amostras'))+(cfg.tipo==='escala'?(' · escala '+(cfg.escalaMin||0)+'–'+cfg.escalaMax):'')+'</div>'+
     '<div class="av-sub-grid">';
   vals.slice(0,cfg.sub).forEach(function(x,i){
     h+='<div class="av-sub-f"><label>'+(_cruz?(i===0?'Eixo 1':'Eixo 2 ⟂'):(i+1))+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
@@ -18134,7 +18154,7 @@ function renderAvAutoBox(){
   var pctDone=a.total?Math.round(filled/a.total*100):0;
   /* atalhos de valor comum: tocar SALVA e já avança (um toque por amostra) */
   var presets;
-  if(a.tipo==='escala'){ presets=[]; for(var pi=0;pi<=a.cfg.escalaMax&&presets.length<10;pi++) presets.push(String(pi)); }
+  if(a.tipo==='escala'){ presets=[]; for(var pi=(a.cfg.escalaMin||0);pi<=a.cfg.escalaMax&&presets.length<10;pi++) presets.push(String(pi)); }
   else if(a.tipo==='razao'||a.tipo==='contagem') presets=['0','1','2','5','10'];
   else presets=['0','1','5','10','20','40','60','80','100'];
   var presetHtml=presets.map(function(pv){ return '<button type="button" class="av-auto-preset'+(String(val)===pv?' on':'')+'" onclick="avAutoPreset(\''+pv+'\')">'+pv+'</button>'; }).join('');
@@ -18183,6 +18203,7 @@ function avAutoBump(delta){
   var cur=document.getElementById('avAutoInput'), n=parseFloat(cur&&cur.value); if(isNaN(n)) n=0;
   n+=delta; if(n<0)n=0;
   if(a.tipo==='escala'&&n>a.cfg.escalaMax) n=a.cfg.escalaMax;
+  if(a.tipo==='escala'&&n<(a.cfg.escalaMin||0)) n=a.cfg.escalaMin||0;
   var val=(n%1===0)?String(n):n.toFixed(1);
   if(cur)cur.value=val;
   avAutoWrite(val);
@@ -18243,6 +18264,8 @@ function avAddCol(){
     sub:Math.max(1,parseInt(padrao&&padrao.sub)||1),
     N:(padrao&&padrao.N!=null)?padrao.N:20,
     escalaMax:(padrao&&padrao.escalaMax!=null)?padrao.escalaMax:4,
+    escalaMin:(padrao&&padrao.escalaMin!=null)?padrao.escalaMin:0,
+    escalaNome:(padrao&&padrao.escalaNome)||'',
     sentido:(padrao&&padrao.sentido==='maior')?'maior':'menor'
   };
   m.style.display='flex';
@@ -18258,6 +18281,7 @@ function _avColLerOpts(){
   var s=document.getElementById('avColSub'); if(s) o.sub=Math.max(1,Math.round(_numBR(s.value,1))||1);
   var n=document.getElementById('avColN'); if(n) o.N=Math.max(0,Math.round(_numBR(n.value,0)));
   var e=document.getElementById('avColEsc'); if(e) o.escalaMax=Math.max(1,_numBR(e.value,4));
+  var em=document.getElementById('avColEscMin'); if(em){ var mn=Math.max(0,Math.round(_numBR(em.value,0))); o.escalaMin=(mn<o.escalaMax)?mn:0; }
   var sd=document.getElementById('avColSentido'); if(sd) o.sentido=(sd.value==='maior')?'maior':'menor';
   window._avColOpts=o; return o;
 }
@@ -18266,7 +18290,8 @@ function _avColOptsRender(){
   var t=window._avColTipo||'pct', o=window._avColOpts||{sub:1,N:20,escalaMax:4,sentido:'menor'}, h='<div class="avcol-opts">';
   if(t==='razao') h+='<div><label class="avcol-lab">N avaliados (padrão)</label><input id="avColN" class="avcol-inp" type="number" min="0" step="1" value="'+o.N+'"></div>';
   else h+='<div><label class="avcol-lab">Sub-amostras / parcela</label><input id="avColSub" class="avcol-inp" type="number" min="1" step="1" value="'+o.sub+'"></div>';
-  if(t==='escala') h+='<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" min="1" step="1" value="'+o.escalaMax+'"></div>';
+  if(t==='escala') h+='<div><label class="avcol-lab">Nota mínima</label><input id="avColEscMin" class="avcol-inp" type="number" min="0" step="1" value="'+(o.escalaMin||0)+'"></div>'+
+    '<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" min="1" step="1" value="'+o.escalaMax+'"></div>';
   h+='</div>';
   h+='<label class="avcol-lab">No % de controle, o melhor resultado é</label>'+
      '<select id="avColSentido" class="avcol-inp" onchange="_avColLerOpts();_avColOptsRender();">'+
@@ -18275,14 +18300,15 @@ function _avColOptsRender(){
      '</select>';
   if(o.sentido==='maior') h+='<div class="avcol-note">A testemunha é a <b>menor</b>: o % de controle sai pela <b>mortalidade corrigida de Abbott</b> — (tratado − testemunha) / (100 − testemunha).</div>';
   if(t==='razao') h+='<div class="avcol-note">Lança <b>n</b> (mortos/afetados) e <b>N</b> (avaliados) — o % sai sozinho. O N padrão já vem preenchido em toda parcela; só mude onde tiver fugido.</div>';
-  else if(t==='escala') h+='<div class="avcol-note">Lança a <b>classe</b> (0–'+o.escalaMax+'). O derivado é o <b>índice de McKinney</b> em %, que é o que a estatística analisa.</div>';
+  else if(t==='escala') h+='<div class="avcol-note">Lança a <b>classe</b> ('+(o.escalaMin||0)+'–'+o.escalaMax+'). O derivado é o <b>índice de McKinney</b> em % (0% = todas na nota mínima), que é o que a estatística analisa.'+(o.escalaNome?(' <br>'+esc(o.escalaNome)):'')+'</div>';
   else h+='<div class="avcol-note">Com 2 ou mais sub-amostras o bruto de cada uma fica guardado e a parcela entra na análise pela <b>média</b> — sub-amostra não é repetição.</div>';
   box.innerHTML=h;
 }
 function avColPreset(i){
   var it=(window._avColItens||[])[i]; if(!it) return;
   var nome=document.getElementById('avColNome'); if(nome) nome.value=it.nome;
-  window._avColOpts={sub:Math.max(1,parseInt(it.sub)||1), N:(it.N!=null?it.N:20), escalaMax:(it.escalaMax!=null?it.escalaMax:4), sentido:(it.sentido==='maior'?'maior':'menor')};
+  window._avColOpts={sub:Math.max(1,parseInt(it.sub)||1), N:(it.N!=null?it.N:20), escalaMax:(it.escalaMax!=null?it.escalaMax:4),
+    escalaMin:(it.escalaMin!=null?it.escalaMin:0), escalaNome:(it.escalaNome||''), sentido:(it.sentido==='maior'?'maior':'menor')};
   _avColType(it.tipo||'pct');
 }
 /* ===== Busca de alvo biológico (doença, praga, daninha) =====
@@ -18358,7 +18384,7 @@ function avColConfirm(){
   var cfg={};
   if(t==='razao'){ if(o.N>0) cfg.N=o.N; }
   else if(o.sub>1) cfg.sub=o.sub;
-  if(t==='escala') cfg.escalaMax=o.escalaMax;
+  if(t==='escala'){ cfg.escalaMax=o.escalaMax; if(o.escalaMin>0) cfg.escalaMin=o.escalaMin; if(o.escalaNome) cfg.escalaNome=o.escalaNome; }
   if(o.sentido==='maior') cfg.sentido='maior';
   _avGrid.varcfg[name]=cfg;
   var m=document.getElementById('avColModal'); if(m) m.style.display='none';
@@ -18559,6 +18585,64 @@ function _pctCtrl(ref, val, sentido, tipo){
   if(!isFinite(e) || e < -100) return null;
   return e;
 }
+/* ===== EFICÁCIA: A FÓRMULA QUE A LITERATURA MANDA, ESCOLHIDA NUM LUGAR SÓ =======
+   A tabela da avaliação, o ranking, as planilhas e o relatório do cliente
+   calculavam cada um a sua com _pctCtrl — sempre a redução de Abbott, inclusive
+   onde ela não se aplica:
+     - CONTAGEM de indivíduos vivos com leitura ANTES da primeira aplicação (a
+       prévia): as parcelas partem de populações diferentes, e a eficácia é a de
+       Henderson & Tilton (1955), que desconta a partida e a variação da
+       testemunha no tempo: (1 − Ta·Cb / Tb·Ca) × 100;
+     - na própria PRÉVIA não há eficácia: nada foi aplicado ainda, e o "% de
+       controle" que aparecia ali era diferença de partida lida como efeito.
+   Mortalidade (sentido "maior") segue com Abbott (1925) / Schneider-Orelli
+   (1947); severidade, incidência e contagem sem prévia, com a redução de Abbott,
+   (1 − T/C) × 100. A prévia só é reconhecida com aplicação REGISTRADA: sem ela
+   não há como saber o que veio antes. */
+function _avBaseAplicacao(study){
+  var b=null; try{ b=_pranchaBase(study); }catch(e){ b=null; }
+  return (b&&b.fonte==='aplicacao'&&b.data)?b.data:null;
+}
+function _avDataDe(av){ try{ return pD(isoToBR(av&&av.data))||pD(av&&av.data)||null; }catch(e){ return null; } }
+function _avEhPrevia(study, av){
+  var b=_avBaseAplicacao(study), d=_avDataDe(av);
+  return !!(b && d && d<b);
+}
+function _avPreviaDe(study, av, v){
+  var b=_avBaseAplicacao(study), d=_avDataDe(av);
+  if(!b||!d||d<b) return null;
+  var melhor=null, dm=null;
+  (study.avaliacoes||[]).forEach(function(a){
+    if(!a||a===av||(a.variaveis||[]).indexOf(v)<0) return;
+    var da=_avDataDe(a); if(!da||!(da<b)) return;
+    if(!melhor||da>dm){ melhor=a; dm=da; }
+  });
+  return melhor;
+}
+function _avMetodoEficacia(study, av, v){
+  if(_avEhPrevia(study,av)) return {metodo:'previa', rotulo:'prévia (antes da 1ª aplicação)', curto:'prévia', refs:[]};
+  var sent=_avSentido(av,v), tipo=_avTipo(av,v);
+  if(sent==='maior') return {metodo:'abbott-mort', rotulo:'Abbott (1925) / Schneider-Orelli (1947)', curto:'Abbott', refs:['abbott','schneiderOrelli']};
+  if(tipo==='contagem'){
+    var p=_avPreviaDe(study,av,v);
+    if(p) return {metodo:'ht', previa:p, rotulo:'Henderson & Tilton (1955)', curto:'H-T', refs:['hendersonTilton']};
+  }
+  return {metodo:'abbott', rotulo:'Abbott (1925)', curto:'Abbott', refs:['abbott']};
+}
+/* Eficácia de UM tratamento numa leitura. tm e mv são as médias que quem chama já
+   tem (testemunha e tratamento): a fórmula muda, a chamada não. */
+function _avEficacia(study, av, v, tratId, tm, mv, met){
+  met=met||_avMetodoEficacia(study,av,v);
+  if(met.metodo==='previa') return null;
+  if(met.metodo==='ht'){
+    var test=studyTestemunha(study), mp=_avMeans(study,met.previa);
+    var Tb=mp[tratId]&&mp[tratId][v], Cb=mp[test]&&mp[test][v];
+    var e=(window.BioensaioCore)?BioensaioCore.hendersonTilton(mv,Tb,tm,Cb):null;
+    if(e==null||!isFinite(e)||e<-100) return null;
+    return e;
+  }
+  return _pctCtrl(tm,mv,_avSentido(av,v),_avTipo(av,v));
+}
 /* Sentido da variável: 'maior' = quanto maior, melhor (mortalidade). Padrão 'menor'. */
 function _avSentido(src,v){ var c=(src&&src.varcfg&&src.varcfg[v])||{}; return c.sentido==='maior'?'maior':'menor'; }
 /* Última avaliação do estudo que define a variável — de onde sai a config dela nos resumos. */
@@ -18575,13 +18659,18 @@ function avResultHtml(study, av){
     var tm=(means[test]&&means[test][v]);
     /* Em mortalidade o número de Abbott é a EFICÁCIA — chamar de "% controle"
        obriga quem lê o relatório a adivinhar qual das duas fórmulas rodou. */
-    var _efic=(_avSentido(av,v)==='maior');
-    h+='<div class="res-title">'+esc(v)+' · média &amp; '+(_efic?'eficácia (Abbott)':'% controle')+'</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>'+(_efic?'% efic':'% ctrl')+'</th></tr></thead><tbody>';
+    var _efic=(_avSentido(av,v)==='maior'), _met=_avMetodoEficacia(study,av,v);
+    var _col=(_met.metodo==='previa')?'prévia':(_met.metodo==='ht'?'% efic (H-T)':(_efic?'% efic':'% ctrl'));
+    var _tit=(_met.metodo==='previa')?'média · leitura antes da 1ª aplicação':(_met.metodo==='ht'?'média &amp; eficácia (Henderson &amp; Tilton)':(_efic?'média &amp; eficácia (Abbott)':'média &amp; % controle'));
+    h+='<div class="res-title">'+esc(v)+' · '+_tit+'</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th title="'+esc(_met.rotulo)+'">'+_col+'</th></tr></thead><tbody>';
     ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
       if(t.id===test) ctrl='<b>test.</b>';
-      else { var _c=_pctCtrl(tm,mv,_avSentido(av,v),_avTipo(av,v)); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
+      else if(_met.metodo==='previa') ctrl='<span style="color:#8a948e">base</span>';
+      else { var _c=_avEficacia(study,av,v,t.id,tm,mv,_met); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(mv!=null?_r1(mv):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
+    if(_met.metodo==='previa') h+='<div class="e-hint" style="margin:2px 0 6px">Leitura antes da primeira aplicação: é a base da comparação, não resultado — por isso não há eficácia aqui.</div>';
+    else if(_met.metodo==='ht') h+='<div class="e-hint" style="margin:2px 0 6px">Eficácia de Henderson &amp; Tilton (1955): (1 − Ta·Cb ÷ Tb·Ca) × 100, com a contagem prévia de '+esc(isoToBR(_met.previa.data)||_met.previa.data||'')+' — desconta a população de partida de cada parcela e a variação da testemunha.</div>';
   });
   return h;
 }
@@ -18683,14 +18772,14 @@ function studyChartsHtml(study){
   var test=studyTestemunha(study), ts=study.tratamentos||[], H='';
   Object.keys(vars).forEach(function(v){
     var lastAv=null,i; for(i=avsR.length-1;i>=0;i--){ if((avsR[i].variaveis||[]).indexOf(v)>=0){ lastAv=avsR[i]; break; } }
-    if(lastAv){ var _mai=(_avSentido(lastAv,v)==='maior');
+    if(lastAv){ var _mai=(_avSentido(lastAv,v)==='maior'), _metR=_avMetodoEficacia(study,lastAv,v);
       var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
       ts.forEach(function(t,ti){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v];
-        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_pctCtrl(tm,mv,_avSentido(lastAv,v),_avTipo(lastAv,v))}); });
+        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_avEficacia(study,lastAv,v,t.id,tm,mv,_metR)}); });
       /* Do melhor para o pior. É a leitura que o bioensaio pede primeiro, e a
          ordem de cadastro não a responde. Sem valor vai para o fim. */
       bars.sort(function(a,b){ return (b.val==null?-1e9:b.val)-(a.val==null?-1e9:a.val); });
-      if(bars.length) H+='<div class="res-title">'+esc(v)+' · '+(_mai?'eficácia de Abbott':'% de controle')+
+      if(bars.length && _metR.metodo!=='previa') H+='<div class="res-title">'+esc(v)+' · '+(_metR.metodo==='ht'?'eficácia de Henderson & Tilton':(_mai?'eficácia de Abbott':'% de controle'))+
         ' — ranking em '+esc(_momentoRotulo(lastAv))+'</div>'+_barsSvg(bars);
     }
     var pts=avsR.filter(function(a){return (a.variaveis||[]).indexOf(v)>=0;});
@@ -19825,7 +19914,7 @@ function _buildXlsx(soDoLocal){
   var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Tipo_variavel','Valor','Sub_amostras','n_afetados','N_avaliados','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
   var aplH=['Local','Quadra','Cultura','Estudo','Data_aplicacao','BBCH','Obs','Registrado_em','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI'];
   var estH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Testemunha','N_avaliacoes','Area_ha','Comprimento_m','Largura_m','Lat','Lng'];
-  var eficH=['Local','Quadra','Estudo','Variavel','Data_avaliacao','Tratamento','Produto','Testemunha','Media','%_controle'];
+  var eficH=['Local','Quadra','Estudo','Variavel','Data_avaliacao','Tratamento','Produto','Testemunha','Media','%_controle','Metodo_eficacia'];
   var audH=['Local','Quadra','Estudo','Variavel','Tratamento','Produto','Testemunha','N_datas','Dias','AUDPC','%_controle'];
   var tratH=['Local','Quadra','Estudo','Tratamento','Produto','Dose','Volume_calda','Obs','Testemunha'];
   var tidy=[tidyH], apl=[aplH], est=[estH], trat=[tratH], efic=[eficH], aud=[audH];
@@ -19857,7 +19946,7 @@ function _buildXlsx(soDoLocal){
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
-        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
+        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _mE=_avMetodoEficacia(s,a,v), _ce=(t.id===_t)?null:_avEficacia(s,a,v,t.id,tm,mv,_mE); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl,_mE.rotulo]); }); }); });
         var bv={}; _av.forEach(function(a){ if(!a.data)return; var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ (bv[v]=bv[v]||[]).push({date:a.data,m:m}); }); });
         Object.keys(bv).forEach(function(v){ var pts=bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), dys=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); function af(tr){ var sm=0,pv=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(pv!=null)sm+=(pv+y)/2*(dys[i]-pt); pv=y; pt=dys[i]; } return sm; } var ta=af(_t); s.tratamentos.forEach(function(t){ var a=af(t.id); var _ca=(t.id===_t)?null:_pctCtrl(ta,a); var ctrl=(t.id===_t)?'':(_ca!=null?Math.round(_ca*10)/10:''); aud.push([locNome,qn,s.codigo||'',v,t.id,prod[t.id]||'',(t.id===_t?'sim':''),pts.length,dys[dys.length-1],(a!=null?Math.round(a):''),ctrl]); }); });
       })();

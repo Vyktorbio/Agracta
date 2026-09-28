@@ -32,7 +32,7 @@
 (function(root){
   'use strict';
 
-  var VERSAO='1.0.0';
+  var VERSAO='1.0.1';
 
   /* ---------- referências (ABNT) ---------- */
   var REFERENCIAS={
@@ -52,6 +52,10 @@
     groverMoore1962:{curta:'Grover & Moore (1962)', abnt:'GROVER, R. K.; MOORE, J. D. Toximetric studies of fungicides against the brown rot organisms, Sclerotinia fructicola and S. laxa. Phytopathology, v. 52, p. 876-880, 1962.'},
     vincent1947:{curta:'Vincent (1947)', abnt:'VINCENT, J. M. Distortion of fungal hyphae in the presence of certain inhibitors. Nature, v. 159, p. 850, 1947.'},
     edgington1971:{curta:'Edgington et al. (1971)', abnt:'EDGINGTON, L. V.; KHEW, K. L.; BARRON, G. L. Fungitoxic spectrum of benzimidazole compounds. Phytopathology, v. 61, p. 42-44, 1971.'},
+    ewrc1964:{curta:'EWRC (1964)', abnt:'EUROPEAN WEED RESEARCH COUNCIL. Report of the 3rd and 4th meetings of EWRC Committee of Methods in Weed Research. Weed Research, v. 4, p. 88, 1964.'},
+    mckinney1923:{curta:'McKinney (1923)', abnt:'MCKINNEY, H. H. Influence of soil temperature and moisture on infection of wheat seedlings by Helminthosporium sativum. Journal of Agricultural Research, v. 26, p. 195-217, 1923.'},
+    townsendHeuberger1943:{curta:'Townsend & Heuberger (1943)', abnt:'TOWNSEND, G. R.; HEUBERGER, J. W. Methods for estimating losses caused by diseases in fungicide experiments. Plant Disease Reporter, v. 27, p. 340-343, 1943.'},
+    pimentelGomes2009:{curta:'Pimentel-Gomes (2009)', abnt:'PIMENTEL-GOMES, F. Curso de estatística experimental. 15. ed. Piracicaba: FEALQ, 2009.'},
     oliveira1991:{curta:'Oliveira (1991)', abnt:'OLIVEIRA, J. A. Efeito do tratamento fungicida em sementes no controle de tombamento de plântulas de pepino (Cucumis sativus L.) e pimentão (Capsicum annum L.). Dissertação (Mestrado) – Escola Superior de Agricultura de Lavras, Lavras, 1991.'}
   };
   function refsDe(chaves){
@@ -186,10 +190,12 @@
     return (mt-mc)/(100-mc)*100;
   }
   /* Henderson & Tilton (1955): contagens de VIVOS antes (b) e depois (a).
-       E = (1 − (Ta × Cb) / (Tb × Ca)) × 100 */
+       E = (1 − (Ta × Cb) / (Tb × Ca)) × 100
+     Sem população na prévia (Tb ou Cb zero) ou na testemunha depois (Ca zero) a
+     conta não mede nada — com Cb = 0 daria 100% para qualquer tratamento. */
   function hendersonTilton(Ta, Tb, Ca, Cb){
     Ta=num(Ta); Tb=num(Tb); Ca=num(Ca); Cb=num(Cb);
-    if(Ta==null||Tb==null||Ca==null||Cb==null||!(Tb>0)||!(Ca>0)) return null;
+    if(Ta==null||Tb==null||Ca==null||Cb==null||!(Tb>0)||!(Ca>0)||!(Cb>0)) return null;
     return (1-(Ta*Cb)/(Tb*Ca))*100;
   }
   /* WHO (2016): testemunha até 5% dispensa correção; de 5% a 20% corrige por
