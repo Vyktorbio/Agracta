@@ -415,10 +415,13 @@
     var dt = new Date(); dt.setMonth(dt.getMonth() - 6);
     var from = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 
-    fetch(NDVI_PROXY + '/dates?bbox=' + bb.join(',') + '&from=' + from + '&to=' + to)
+    (typeof proxyFetch === 'function' ? proxyFetch : fetch)(NDVI_PROXY + '/dates?bbox=' + bb.join(',') + '&from=' + from + '&to=' + to)
       .then(function(r){ return r.json(); })
       .then(function(arr){
         if(seq !== window._ndviDatesSeq) return;
+        /* recusa de login (sem login, sessão vencida, não é membro): diz isso, e não
+           "não achei imagem nesta área" — que mandaria a pessoa mexer no mapa à toa */
+        if(arr && arr.login){ var e = new Error(arr.error || 'Entre no Agracta para usar o NDVI.'); e.login = true; throw e; }
         if(!arr || arr.error || !arr.length) throw new Error('vazio');
         arr = arr.slice().sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
         _datas = arr;
@@ -439,8 +442,9 @@
           ndviStatus(arr.length + ' datas disponíveis', 'ok');
         }
       })
-      .catch(function(){
+      .catch(function(err){
         if(seq !== window._ndviDatesSeq) return;
+        if(err && err.login){ ndviStatus(err.message, 'err'); return; }
         if(_datas.length){ ndviStatus('Usando a lista de datas guardada no aparelho.'); pintarDatas(); return; }
         diagnosticar();
       });

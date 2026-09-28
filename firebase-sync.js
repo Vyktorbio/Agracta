@@ -1081,6 +1081,14 @@
     return p;
   }
 
+  /* Token de login para o proxy de NDVI, clima e solo — o ndvi-proxy.py confere se
+     quem pede é membro ativo. O SDK devolve o token guardado e só renova perto de
+     vencer; forcar=true pede um novo (o app faz isso uma vez quando o proxy diz 401). */
+  window.agractaTokenLogin=function(forcar){
+    var u=(FB.auth&&FB.auth.currentUser)||FB.user;
+    if(!u||typeof u.getIdToken!=='function')return Promise.resolve(null);
+    return u.getIdToken(!!forcar).catch(function(){return null;});
+  };
   window.cloudInit=function(){return firebaseInit();};
   window.cloudSaveSoon=function(){
     setUnsavedChanges(true);

@@ -51,7 +51,7 @@ var store={};
 var ctx={
   console:console,Promise:Promise,Date:Date,String:String,Number:Number,Math:Math,
   JSON:JSON,isFinite:isFinite,Object:Object,
-  fetch:fetchFake,
+  fetch:fetchFake, proxyFetch:fetchFake,
   NDVI_PROXY:'https://proxy.test',
   NutricaoCore:NutricaoCore,
   APP_VER:'teste',

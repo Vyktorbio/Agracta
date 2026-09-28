@@ -52,7 +52,7 @@ var ctx={
   console:console, Promise:Promise, Date:Date, String:String, Number:Number, Math:Math,
   JSON:JSON, isFinite:isFinite, Object:Object, Array:Array, setImmediate:setImmediate,
   encodeURIComponent:encodeURIComponent, parseInt:parseInt,
-  fetch:fetchFake, NDVI_PROXY:'https://proxy.test', APP_VER:'teste',
+  fetch:fetchFake, proxyFetch:fetchFake, NDVI_PROXY:'https://proxy.test', APP_VER:'teste',
   esc:function(v){ return String(v==null?'':v); },
   isoToBR:function(d){ var x=String(d||'').split('-'); return x.length===3?(x[2]+'/'+x[1]+'/'+x[0]):d; },
   save:function(){ salvou++; },
