@@ -18229,6 +18229,8 @@ function _avSubRender(){
   h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':(_cruz?'Diâmetro médio':'Média da parcela'))+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
   if(_pl) h+='<div class="av-sub-cresc" style="font-size:11px;color:#8a948e;margin:-2px 0 6px">'+_avSubCrescTexto(der,_pl)+'</div>';
   var al=_avSubOutlier(vals)||_avSubPlacaAviso(vals,_pl); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
+  /* a placa é a régua: com o Ø no protocolo, a foto mede a cruz sozinha */
+  if(_cruz&&_pl.placaMm>0&&typeof avSubMedirFoto==='function') h+='<div class="av-sub-btns" style="margin-bottom:6px"><button type="button" class="av-sub-ok" onclick="avSubMedirFoto()" style="flex:1">📷 Medir por foto</button></div>';
   h+='<div class="av-sub-btns">'+(_pl&&_pl.placaMm>0?'<button type="button" class="av-sub-clr" onclick="avSubTomouPlaca()" title="A colônia cobriu a placa inteira">Tomou a placa ('+_pl.placaMm+' mm)</button>':'')+
      '<button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
   m.innerHTML=h;

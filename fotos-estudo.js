@@ -83,7 +83,7 @@ function espacoLivre(){
 }
 
 /* ---------- salvar: a foto nasce identificada ---------- */
-function salvar(files, alvo){
+function salvar(files, alvo, extra){
   var db=banco(alvo.qid,alvo.sid);
   if(!db){ alert('Entre no Agracta para salvar fotos neste aparelho.'); return Promise.resolve(0); }
   try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(function(){}); }catch(e){}
@@ -100,6 +100,7 @@ function salvar(files, alvo){
         var row=FC.novaFoto({blob:file, thumb:mini.blob, type:file.type, tratamento:alvo.tratamento, rep:alvo.rep, parcela:alvo.parcela,
           data:alvo.data||agora.toISOString().slice(0,10), hora:String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0'),
           avaliacao:alvo.avaliacao||'', momento:alvo.momento||'', autor:(typeof w._currentUserName==='function'?w._currentUserName():'')||''});
+        if(extra) Object.keys(extra).forEach(function(k){ row[k]=extra[k]; });
         return db.put([row]).then(function(){ salvas++; });
       });
     });
@@ -169,6 +170,13 @@ function atualizarContagens(){
   }).catch(function(){});
 }
 w.fotosAtualizarContagens=function(){ _cont.chave=null; return atualizarContagens(); };
+/* Guarda a foto de uma parcela da grade aberta com dados junto (a medida da
+   colônia medida na foto, por exemplo). Sem avaliação salva, não guarda: a
+   foto ficaria sem leitura. Devolve quantas guardou. */
+w.fotosGuardarDaGrade=function(key, file, extra){
+  var alvo=alvoDaGrade(key); if(!alvo||!alvo.avaliacao) return Promise.resolve(0);
+  return salvar([file], alvo, extra).then(function(n){ if(n){ _cont.chave=null; atualizarContagens(); } return n; });
+};
 /* A grade é redesenhada inteira a cada lançamento: os contadores vêm junto. */
 (function(){
   var orig=w.renderAvGrid; if(typeof orig!=='function') return;

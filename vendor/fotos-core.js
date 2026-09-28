@@ -14,7 +14,7 @@
    ============================================================================ */
 (function(root){
   'use strict';
-  var VERSAO='1.0.0';
+  var VERSAO='1.1.0';
 
   function br(d){ return /^\d{4}-\d{2}-\d{2}$/.test(d||'')?(d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4)):''; }
   function chaveParcela(tratamento, rep){ return String(tratamento)+'R'+String(rep); }
@@ -113,6 +113,9 @@
     if(f.plot && f.plot!==chaveParcela(f.treatment,f.rep)) partes.push('parcela '+f.plot);
     var quando=[av&&av.rotulo&&av.rotulo!==br(av.data)?av.rotulo:(f.momento||''), br(f.date)+(f.hora?' '+String(f.hora).slice(0,5):'')].filter(Boolean).join(' · ');
     if(quando) partes.push(quando);
+    var m=f.medicao;
+    function um(x){ return Number(x).toFixed(1).replace('.',','); }
+    if(m && m.d1Mm!=null) partes.push('Ø '+um(m.d1Mm)+' × '+um(m.d2Mm)+' mm ('+(m.metodo==='tomou'?'tomou a placa':m.metodo==='manual'?'medida à mão na foto':'medida na foto')+')');
     return partes.join(' · ');
   }
 
