@@ -13759,7 +13759,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-16';
+var MOTOR_VERSAO='agracta-17';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -14074,7 +14074,32 @@ function _bioestatAoaCrescimento(aoa, disco){
     return x;
   }));
 }
+/* O MOTOR SAI DA MEMÓRIA QUANDO NÃO TEM O QUE FAZER.
+   O iframe do motor nascia ao abrir o primeiro estudo e nunca mais saía: o
+   Python (medido: ~150 MB, mais a página do motor) ficava preso até fechar o
+   app, somado ao mapa, ao NDVI e às fotos. No celular é assim que o sistema
+   mata a página — a "tela preta, some tudo e tem que abrir de novo". Fila vazia
+   por 45 s, ou app em segundo plano sem cálculo em andamento: o iframe sai, e
+   com ele o worker do Python. O que já foi calculado fica no cache (memória e
+   IndexedDB); precisando de novo, o motor volta sozinho. */
+var _bioLiberarT=null, _BIO_OCIOSO_MS=45000;
+function _bioestatLiberarMotor(){
+  clearTimeout(_bioLiberarT); _bioLiberarT=null;
+  if(_bioAutoBusy||_bioAutoQueue.length) return false;
+  var f=document.getElementById('bioEngineFrame'); if(!f) return false;
+  try{ f.src='about:blank'; }catch(e){}
+  try{ if(f.parentNode) f.parentNode.removeChild(f); }catch(e){}
+  _bioEngineReady=false;
+  return true;
+}
+function _bioestatAgendarLiberacao(){
+  clearTimeout(_bioLiberarT);
+  _bioLiberarT=setTimeout(_bioestatLiberarMotor,_BIO_OCIOSO_MS);
+}
+try{ document.addEventListener('visibilitychange',function(){ if(document.hidden) _bioestatLiberarMotor(); }); }catch(e){}
 function _bioestatPump(){
+  clearTimeout(_bioLiberarT);
+  if(!_bioAutoBusy && !_bioAutoQueue.length){ if(document.getElementById('bioEngineFrame')) _bioestatAgendarLiberacao(); return; }
   if(!_bioEngineReady||_bioAutoBusy||!_bioAutoQueue.length)return;
   var f=document.getElementById('bioEngineFrame'), item=_bioAutoQueue.shift(); if(!f||!f.contentWindow)return;
   _bioAutoBusy=item.requestId;
