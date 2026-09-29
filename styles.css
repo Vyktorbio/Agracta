@@ -993,6 +993,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   font-weight:760!important;
 }
 .cb-saving{color:#3a4149!important}.cb-error{color:var(--vm-danger)!important}.cb-offline{color:#86621b!important}
+/* Aviso de PROBLEMA na sincronização: o motivo vem no texto e não pode sumir nas
+   reticências da linha única de 52% da tela (theme-2026, celular). Até 3 linhas. */
+/* width:max-content porque o selo é fixed com left:50%: sem isso a largura que
+   "cabe" é só a metade da tela, qualquer que seja o max-width. */
+.cloud-badge.cb-error,.cloud-badge.cb-offline{width:max-content!important;max-width:min(92vw,560px)!important;white-space:normal!important;text-overflow:clip!important;
+  overflow:hidden!important;max-height:4.6em;line-height:1.35!important;text-align:center}
 
 /* Menus injetados */
 .main-menu button,.loc-mi{color:#26312b!important}
