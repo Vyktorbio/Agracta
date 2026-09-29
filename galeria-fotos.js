@@ -20,16 +20,21 @@ w.abrirGaleriaFotos=function(s,initial){
  const frame=document.createElement('iframe');frame.title='Galeria de fotos local do estudo';
  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads allow-modals');
  frame.referrerPolicy='no-referrer';
- frame.src='galeria-local.html?v=5';
+ frame.src='galeria-local.html?v=6';
  const context={owner:String(owner),qid:s.qid,sid:s.sid,codigo:s.codigo,cultura:s.cultura,alvo:s.alvo,local:s.local,reps:study.numRepeticoes,
    tratamentos:s.tratamentos.map(t=>({id:t.id,produto:t.produto,dose:t.dose})),avaliacoes:(study.avaliacoes||[]).map(a=>({id:a.id,data:a.data})),plots:plotOrder(study)};
- if(initial)context.initial={treatment:initial.treatment,rep:initial.rep,assessment:initial.assessment,date:initial.date,plot:initial.plot,filter:initial.filter===true};
+ if(initial)context.initial={treatment:initial.treatment,rep:initial.rep,assessment:initial.assessment,date:initial.date,plot:initial.plot,filter:initial.filter===true,
+   sequence:initial.sequence===true,slides:initial.slides===true};
  const focus=document.activeElement;
  frame.addEventListener('load',()=>{if(dialog.open)frame.contentWindow.postMessage({type:'agracta:fotos-local-context',context},location.origin);},{once:true});
  dialog.append(heading,frame);document.body.appendChild(dialog);dialog.showModal();close.focus();
  const guard=setInterval(()=>{const u=w._authUser;if(!u||String(u.uid||u.id)!==String(owner)||document.documentElement.classList.contains('pre-auth'))dialog.close();},300);
  close.addEventListener('click',()=>dialog.close());
- dialog.addEventListener('close',()=>{clearInterval(guard);frame.remove();dialog.remove();if(focus&&focus.isConnected)focus.focus();},{once:true});
+ dialog.addEventListener('close',()=>{clearInterval(guard);frame.remove();dialog.remove();if(focus&&focus.isConnected)focus.focus();
+  /* As fotos tiradas aqui aparecem na hora no contador da grade e no painel de baixo. */
+  try{if(typeof w.fotosAtualizarContagens==='function')w.fotosAtualizarContagens();}catch(e){}
+  try{const pn=document.getElementById('fotoPainel');if(pn&&pn.open&&typeof pn._recarregar==='function')pn._recarregar();}catch(e){}
+ },{once:true});
 };
 /* Mantém a posição da avaliação: fotografar não avança para outra parcela. */
 w.avFotografarParcela=function(key){

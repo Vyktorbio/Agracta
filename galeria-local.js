@@ -136,10 +136,17 @@ window.addEventListener('message',async function(ev){
    .map(p=>({treatment:p.treatment,rep:Number(p.rep),plot:String(p.plot||p.treatment+'R'+p.rep)}));
   if(plots.length>1){
    $('seq').hidden=false;
-   let lembrar=false;try{lembrar=localStorage.getItem(SEQ_KEY)==='1';}catch(e){}
-   if(lembrar){$('seq-on').checked=true;seqStart();}
+   /* Aberta pelo botão "Fotos em sequência": liga e fica lembrada. Senão, vale
+      a escolha que ficou no aparelho. */
+   let ligar=!!(initial&&initial.sequence===true);
+   if(ligar){try{localStorage.setItem(SEQ_KEY,'1');}catch(e){}}
+   else{try{ligar=localStorage.getItem(SEQ_KEY)==='1';}catch(e){}}
+   if(ligar){$('seq-on').checked=true;seqStart();}
   }
-  photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();message('Galeria pronta. Armazenamento exclusivo deste aparelho.');
+  photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();
+  message(seqOn()?'Sequência ligada. Toque em Tirar foto: depois de salvar, a próxima parcela já fica pronta.':'Galeria pronta. Armazenamento exclusivo deste aparelho.');
+  /* Aberta por "Slides e originais": começa na montagem da apresentação. */
+  if(initial&&initial.slides===true){const ex=document.querySelector('.export');if(ex&&ex.scrollIntoView)ex.scrollIntoView({block:'start'});}
  }catch(err){message('Galeria indisponível: '+err.message,true);}
 });
 $('capture-form').addEventListener('submit',ev=>ev.preventDefault());

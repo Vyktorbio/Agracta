@@ -18410,6 +18410,9 @@ function renderAvGrid(){
       html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle off" onclick="avEnableStudyRandomizado()">Ativar automático randomizado</button><span class="av-auto-note">Modelo disponível: '+esc(mi.nome+' · '+mi.reps+' rep.')+'</span></div>';
     }
   }
+  /* A tela de "fotos seguidas": tira a foto e a identificação já passa para a
+     próxima parcela, sem voltar à grade (fotos-estudo.js, fotosEmSequencia). */
+  if(croquiRows.length>1) html+='<div class="av-foto-seq"><button type="button" class="av-photo-btn" data-av-photo-seq="1">📷 Fotos em sequência</button><span>parcela por parcela, sem voltar à grade</span></div>';
   html+=avCroquiHtml(st,croquiRows,vs);
   html+=_avFichaHtml(croquiRows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
