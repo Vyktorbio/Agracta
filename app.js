@@ -2282,7 +2282,11 @@ function cloudBadge(kind,txt){
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
-  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{ if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
+  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{
+    /* Envio parado na fila do SDK: tocar não adianta mandar de novo (o lote já
+       está lá, e mandar outro só empilha). O toque explica o motivo. */
+    if(window._syncParado && typeof window.agractaSyncExplicar==='function'){ window.agractaSyncExplicar(); return; }
+    if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
   /* "sem internet" era impreciso e assustava sem razão: clima, NDVI e solo seguem
      consultando a rede normalmente nesse estado. O que está parado é a SINCRONIZAÇÃO
      com a nuvem — e é isso que o selo deve dizer. */
