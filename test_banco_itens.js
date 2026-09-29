@@ -273,7 +273,7 @@ console.log('\n--- Justificativa de dose fora da bula é campo próprio ---');
 /* Escondê-la em "observações" seria o mesmo que não pedir. */
 ck(/data-f="justificativaDose"/.test(src),'há campo de justificativa no tratamento');
 ck(/obrigatório para dose fora da bula/.test(src),'que se declara obrigatório');
-ck(/tratDoseForaDaBula\(t\)\)\{/.test(src),'e ele só aparece quando a dose sai da faixa');
+ck(/tratDoseForaDaBula\(t(,\s*s)?\)\)\{/.test(src),'e ele só aparece quando a dose sai da faixa');
 
 console.log('\n--- Novo item é rascunho até salvar ---');
 var abrirNovo=pega('itemAbrirNovo');

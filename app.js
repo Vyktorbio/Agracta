@@ -16534,7 +16534,7 @@ function renderStudyEditModal(){
       return '<option value="'+u+'"'+(u===_du?' selected':'')+'>'+u+'</option>';
     }).join('')+'</select></div>';
   h+='</div>';
-  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Cada tratamento pode ter a sua, no seletor ao lado da dose — T1 em mg/ha, T2 em g/ha e T3 em L/ha no mesmo protocolo. Esta aqui vale para quem ficou só com o número.</div>';
   if(typeof doseUnidadePendente==='function' && doseUnidadePendente(s)){
     h+='<div class="se-warn" style="font-size:11px;margin:-4px 0 8px;color:#d08a3a">⚠ Há tratamento com a dose escrita só com o número e nenhuma unidade declarada. Enquanto ficar assim, o gráfico mostra o número sem unidade e a calculadora não prepara — ela pergunta. Não é chute que resolve: entre L/ha e g/ha há mil vezes de diferença.</div>';
   }
@@ -16638,13 +16638,16 @@ function renderStudyEditModal(){
           (_ia.parcial?' <span style="color:#dccd8c">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
         /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
            PEDE a justificativa, e o campo fica ali mesmo, não escondido em obs. */
-        if(tratDoseForaDaBula(t)){
+        if(tratDoseForaDaBula(t,s)){
           h+='<div class="calc-warn">⚠ Dose fora da faixa registrada — uso experimental.</div>'+
              '<input type="text" data-f="justificativaDose" placeholder="Por que esta dose? (obrigatório para dose fora da bula)" value="'+esc(t.justificativaDose||'')+'"'+
              (t.justificativaDose?'':' style="border-color:#6b531b"')+'>';
         }
       }
-      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':'')+'><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
+      /* Unidade POR TRATAMENTO ao lado da dose (receita estruturada já tem a
+         sua em cada componente; ppm é concentração, não dose por área). */
+      var _uSel=(_cps.length||_dm==='ppm')?'':_seTratUnidadeSelect(i,t,s);
+      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;min-width:0;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':(_uSel?' onchange="seTratDoseDigitada(this)"':''))+'>'+_uSel+'<input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1;min-width:0"></div>';
       /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
          drone: metade dos tratamentos fecha o volume com óleo de soja. Vazio
          continua significando água, então nada muda em estudo antigo. */
@@ -17040,6 +17043,67 @@ function seTratLote(idx,loteId){
   if(loteId && !tratLigarLote(t,loteId)){ alert('Lote não encontrado para este item.'); return; }
   if(!loteId) tratLigarLote(t,'');
   renderStudyEditModal();
+}
+
+/* ===== UNIDADE POR TRATAMENTO =================================================
+   "Quero colocar unidades diferentes no mesmo protocolo, como mg/ha, g/ha e
+   litros por hectare." A unidade MORA NO TEXTO DA DOSE ("500 mg/ha"): é o que
+   toda conta e todo rótulo já leem primeiro (doseUnidadeDe — o que foi escrito
+   na dose manda sobre o que o estudo declarou), e é como a dose do catálogo já
+   chega ao tratamento. O seletor só escreve ali. Nenhuma conta precisa aprender
+   um campo novo — e um campo novo esquecido por uma única conta seria dose mil
+   vezes errada com cara de certa.
+   Devolve '' (só o número: vale a unidade do estudo), a unidade reconhecida, ou
+   null quando a dose não é de uma unidade só (mistura "1,5 + 0,2%", % da calda,
+   unidade que o motor não conhece) — aí a unidade fica escrita em cada parte. */
+function _seTratUnidadeAtual(txt){
+  var s=String(txt==null?'':txt).trim();
+  if(!s) return '';
+  /* mistura primeiro: "1,5 + 2" é só número e mesmo assim não é UMA dose */
+  if(/\+/.test(s.replace(/^\s*\+/,'')) || s.indexOf('%')>=0) return null;
+  if(/^[+-]?\d[\d.,]*$/.test(s)) return '';
+  var BC=(typeof window!=='undefined')?window.BioCalculoCampo:null, u=null;
+  if(BC && BC.parseDose){
+    var d=BC.parseDose(s,'');
+    if(d && !d.erro) u=d.unidade;
+  } else u=_calcDoseUnit(s);
+  return doseUnidades().indexOf(u)>=0?u:null;
+}
+/* O número como foi escrito, com a unidade nova. Sem número ainda, não inventa. */
+function _seTratDoseComUnidade(txt, u){
+  var s=String(txt==null?'':txt);
+  if(_seTratUnidadeAtual(s)===null) return s;     /* mistura, % ou unidade estranha: não mexe */
+  var m=s.trim().match(/^[+-]?\d[\d.,]*/);
+  if(!m) return s;
+  return u?(m[0]+' '+u):m[0];
+}
+function _seTratUnidadeSelect(i, t, s){
+  var atual=_seTratUnidadeAtual(t.dose), du=doseUnidadeDeclarada(s);
+  return '<select data-f="__doseUnid" aria-label="Unidade da dose de '+esc(t.id)+'" style="width:auto;flex:0 0 auto;max-width:9.5em"'+
+    ' title="'+(atual===null?'Mistura ou % da calda: a unidade vai escrita em cada parte da dose':'Unidade desta dose')+'"'+
+    (atual===null?' disabled':'')+' onchange="seTratUnidade(this)">'+
+    '<option value=""'+(atual?'':' selected')+'>'+(du?('estudo ('+esc(du)+')'):'unidade…')+'</option>'+
+    doseUnidades().map(function(u){ return '<option value="'+u+'"'+(atual===u?' selected':'')+'>'+u+'</option>'; }).join('')+
+    '</select>';
+}
+/* Trocou a unidade: reescreve a dose na hora ("500" → "500 mg/ha"; "estudo"
+   volta ao número solto). Sem número ainda, a escolha espera: sai quando a dose
+   for digitada (seTratDoseDigitada). */
+function seTratUnidade(sel){
+  var row=sel&&sel.closest&&sel.closest('.se-trat'), inp=row&&row.querySelector('input[data-f="dose"]');
+  if(!inp) return;
+  inp.value=_seTratDoseComUnidade(inp.value, sel.value);
+  try{ syncTratInputs(); }catch(e){}
+}
+/* Digitou a dose: número solto com unidade já escolhida recebe a unidade; dose
+   escrita com unidade move o seletor para ela. */
+function seTratDoseDigitada(inp){
+  var row=inp&&inp.closest&&inp.closest('.se-trat'), sel=row&&row.querySelector('select[data-f="__doseUnid"]');
+  if(!sel) return;
+  var atual=_seTratUnidadeAtual(inp.value);
+  if(atual==='' && sel.value && /\d/.test(inp.value)) inp.value=_seTratDoseComUnidade(inp.value, sel.value);
+  else { sel.disabled=(atual===null); sel.value=atual||''; }
+  try{ syncTratInputs(); }catch(e){}
 }
 
 function syncTratInputs(){
@@ -24225,13 +24289,22 @@ function tratLigarLote(t,loteId){
 
 /* A dose escolhida bate com o que a bula registra? Não bloqueia — ensaio
    experimental existe para sair da bula. Mas marca, e pede justificativa. */
-function tratDoseForaDaBula(t){
+function tratDoseForaDaBula(t, study){
   var r=t&&t.doseRef; if(!r || r.origem!=='bula') return false;
   var v=_calcNum(t.dose);
   if(!(v>0)) return false;
   var min=(r.valor!=null&&isFinite(r.valor))?r.valor:null;
   var max=(r.valorMax!=null&&isFinite(r.valorMax))?r.valorMax:min;
   if(min==null) return false;
+  /* A faixa da bula está na unidade DELA. Com unidade por tratamento, a dose
+     pode estar escrita noutra ("500 mL/ha" contra 0,5–0,8 L/ha): converte antes
+     de comparar, senão a dose certa saía "fora da bula" e a errada passava. */
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  var u=(typeof doseUnidadeDe==='function')?doseUnidadeDe(study||null, t.dose):'';
+  if(D && D.converter && u && r.unidade && u!==r.unidade){
+    var cv=D.converter(v, u, r.unidade);
+    if(cv && !cv.erro && isFinite(cv.valor)) v=cv.valor;
+  }
   return (v<min-1e-9 || v>max+1e-9);
 }
 
