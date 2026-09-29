@@ -395,6 +395,9 @@ var _saveErrAlerted=false;
 var AGR_LOCAL_STATE_TS_KEY='agracta-local-state-ts';
 function save(){
   var ok=false, savedAt=Date.now(), err=null;
+  /* save() grava o `data` inteiro: a gravação adiada da grade de avaliação fica
+     coberta por esta e não precisa rodar de novo depois. */
+  try{ if(_avGravaTimer){ clearTimeout(_avGravaTimer); _avGravaTimer=null; } }catch(e){}
   /* O indice entre ensaios foi montado a partir do que estava gravado. Gravou de
      novo, ele deixa de valer -- e histórico velho é pior que histórico nenhum. */
   try{ _histInvalida(); }catch(e){}
@@ -6661,7 +6664,7 @@ function buildStudyModelo(qid, s, opts){
          lugar da conta para que a falta seja vista, não deduzida do branco. */
       if(dval>0 && !dunit){
         put(rr,9,'⚠ Unidade da dose não declarada no estudo — sem unidade não há conta. '+
-                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha).');
+                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha).');
       }else if(dval>0 && vol>0){
         /* Mistura também aqui: esta planilha é a que vai para a equipe de campo,
            e usava o motor de produto único — "1,5 L + 0,2%" saía como 1,5 L/ha e
@@ -7873,7 +7876,7 @@ function newStudy(){
        tabela dizerem "500 mL/ha" em vez de chutar L/ha, e o que decide qual
        receita a calculadora do laboratório abre. */
     doseModo:'campo',     /* campo | ppm */
-    /* '' | L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo'.
+    /* '' | L/ha | mL/ha | g/ha | kg/ha | mg/ha — só vale em doseModo 'campo'.
        VAZIO É ESTADO LEGÍTIMO: quer dizer "ninguém declarou ainda", e não se
        resolve por chute. O padrão era 'L/ha', e o chute não ficava no rótulo:
        o motor de campo lê L/ha como valor×1000 em mL de LÍQUIDO, então um
@@ -8032,7 +8035,7 @@ function normalizeStudy(s){
                      .map(function(f){ return {tratId:f.tratId, qid:f.qid||'', areaHa:(f.areaHa!=null&&f.areaHa!==''?Number(f.areaHa):null)}; });
   }else if(s.faixas.length){ s.faixas=[]; }
   if(s.doseModo!=='ppm' && s.doseModo!=='campo') s.doseModo='campo';
-  if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(s.doseUnidade)<0){
+  if(['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(s.doseUnidade)<0){
     var _un={};
     if(typeof _calcDoseUnit==='function'){
       (s.tratamentos||[]).forEach(function(t){
@@ -9140,6 +9143,7 @@ function _calcDoseUnit(raw){
   var u=String(raw||'').toLowerCase();
   if(/m\s*l/.test(u)) return 'mL/ha';            /* mL antes de L */
   if(/k\s*g/.test(u)) return 'kg/ha';            /* kg antes de g */
+  if(/m\s*g/.test(u)) return 'mg/ha';            /* mg antes de g — senão "500 mg" virava 500 g/ha */
   if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
   return 'L/ha';
 }
@@ -9147,7 +9151,7 @@ function _calcDoseUnit(raw){
    que "não declarada" tenha um nome, em vez de ser o `else` de um if. */
 /* Função e não constante: os testes recortam funções nomeadas do app.js para
    rodar sem navegador, e uma `var` no topo do arquivo não vai junto no recorte. */
-function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha']; }
+function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha','mg/ha']; }
 function doseUnidadeDeclarada(study){
   var d=study&&study.doseUnidade;
   return (doseUnidades().indexOf(d)>=0)?d:'';
@@ -12321,7 +12325,7 @@ function calcConfigDoEstudoLab(study, qid){
     var estruturada=Array.isArray(t.componentes)&&t.componentes.length>0;
     var dose=String(t.dose==null?'':t.dose).trim();
     if(t.testemunha&&!estruturada&&(dose===''||LB.parseNum(dose)===0))return false;
-    var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+    var unidade=['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
     var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
     var exigeTaxa=mix.problems.length>0||mix.components.some(function(c){return c.unidade!=='%';});
     var taxa=LB.parseTaxa(t.volume!=null&&String(t.volume).trim()!==''?t.volume:vazaoPadrao);
@@ -12422,7 +12426,7 @@ function calcMemoriaLab(study, cfg){
           fonteTipo:cfg.fonteTipo,fonteValor:cfg.fonteValor,pureza:cfg.pureza,densidade:cfg.densidade});
         reg.componentes.push(Object.assign({nome:t.produto||'Produto'},r));
       }else{
-        var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+        var unidade=['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
         var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
         if(mix.problems.length)throw new Error(mix.problems.join(' '));
         if(!mix.components.length)throw new Error('Informe a dose e a unidade de cada componente.');
@@ -13596,7 +13600,7 @@ function _pranchaPayload(qid, sid, variavel){
      diz por quê — antes, o eixo estampava "10 L/ha" numa dose que ninguém
      declarou, e a figura ia para o relatório do cliente com essa autoridade. */
   if(doseUnidadePendente(s)) avisos.push('Unidade da dose não declarada no estudo: as doses saem '+
-    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha) '+
+    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha) '+
     'e gere a figura de novo.');
   if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
     dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
@@ -15753,7 +15757,7 @@ var _seCompNovoIdx=null;
    nao e uma "unidade geral do estudo": ela pertence a linha do adjuvante, pois
    0,1 % v/v so vira volume depois que a calda final e conhecida. */
 var TRAT_COMP_UNIDADES=[
-  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'],
+  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'], ['mg/ha','mg/ha'],
   ['% v/v','% v/v — adjuvante líquido']
 ];
 function _seCompUnidadeNormalizar(u){
@@ -16522,7 +16526,7 @@ function renderStudyEditModal(){
   var _du=(typeof doseUnidadeDeclarada==='function')?doseUnidadeDeclarada(s):(s.doseUnidade||'');
   h+='<div class="se-field" id="seDoseUnidWrap"'+(_dm==='ppm'?' style="display:none"':'')+'><label>Unidade da dose</label><select id="seDoseUnid">'+
     '<option value=""'+(_du?'':' selected')+'>— não declarada —</option>'+
-    ['L/ha','mL/ha','g/ha','kg/ha'].map(function(u){
+    doseUnidades().map(function(u){
       return '<option value="'+u+'"'+(u===_du?' selected':'')+'>'+u+'</option>';
     }).join('')+'</select></div>';
   h+='</div>';
@@ -16914,6 +16918,7 @@ function _seCompUnidadeDaDose(raw,fallback){
   if(s.indexOf('%')>=0) return '% v/v';
   if(/ml(?:\/ha|ha)?/.test(s)) return 'mL/ha';
   if(/kg(?:\/ha|ha)?/.test(s)) return 'kg/ha';
+  if(/mg(?:\/ha|ha)?/.test(s)) return 'mg/ha';   /* mg antes de g */
   if(/g(?:\/ha|ha)?/.test(s)) return 'g/ha';
   if(/l(?:\/ha|ha)?/.test(s)) return 'L/ha';
   return _seCompUnidadeNormalizar(fallback)||'L/ha';
@@ -18621,6 +18626,27 @@ function _avCloudSoon(){ /* nuvem com FOLGA: no máximo 1 gravação a cada ~15s
   if(_avCloudTimer) return;
   _avCloudTimer=setTimeout(function(){ _avCloudTimer=null; try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){} }, 15000);
 }
+var _avGravaTimer=null;
+function _avGravaLocal(){
+  _avGravaTimer=null;
+  try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){}
+}
+function _avGravaLocalLogo(){
+  if(_avGravaTimer) clearTimeout(_avGravaTimer);
+  _avGravaTimer=setTimeout(_avGravaLocal,700);
+}
+/* Grava o que estiver pendente agora — app indo para segundo plano, avaliação
+   fechando. Sem pendência, não faz nada (não serializa à toa). */
+function _avGravaLocalJa(){
+  if(!_avGravaTimer) return;
+  clearTimeout(_avGravaTimer);
+  _avGravaLocal();
+}
+if(typeof document!=='undefined' && !window.__avGravaEv){
+  window.__avGravaEv=true;
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') _avGravaLocalJa(); });
+  window.addEventListener('pagehide',_avGravaLocalJa);
+}
 function _avPersistNow(){
   try{
     var q=data[curV]; if(!q) return;
@@ -18643,7 +18669,14 @@ function _avPersistNow(){
     else av.notas=_avGrid.notas;
     av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
     av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
-    try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
+    /* A GRAVAÇÃO NO APARELHO ESPERA A PESSOA PARAR DE DIGITAR. Antes era aqui,
+       síncrona, a CADA TECLA do lançamento rápido (oninput) e a cada célula:
+       JSON.stringify do `data` INTEIRO — todos os estudos, e as notas de campo
+       com a foto em base64 dentro. Com alguns MB isso leva centenas de ms num
+       Android, e a grade travava a cada número digitado. A avaliação em memória
+       continua atualizada na hora (as linhas acima); só o disco espera ~0,7 s
+       de silêncio, e é gravado JÁ se o app for para segundo plano ou fechar. */
+    _avGravaLocalLogo();
     if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
     /* nuvem NÃO grava a cada célula (poupa bateria): sobe ao FECHAR a avaliação, no SALVAR, ou no botão "salvar na nuvem". O selo fica "pendente" até lá. */
   }catch(e){}

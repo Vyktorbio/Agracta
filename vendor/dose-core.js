@@ -49,6 +49,7 @@
     'mL/ha':     {familia:'area',  base:'mL/ha', fator:1,    fase:'liquido', rotulo:'mililitros por hectare'},
     'kg/ha':     {familia:'area',  base:'g/ha',  fator:1000, fase:'solido',  rotulo:'quilos por hectare'},
     'g/ha':      {familia:'area',  base:'g/ha',  fator:1,    fase:'solido',  rotulo:'gramas por hectare'},
+    'mg/ha':     {familia:'area',  base:'g/ha',  fator:0.001,fase:'solido',  rotulo:'miligramas por hectare'},
 
     'mL/L':      {familia:'calda', base:'mL/L',  fator:1,    fase:'liquido', rotulo:'mililitros por litro de calda'},
     '% v/v':     {familia:'calda', base:'mL/L',  fator:10,   fase:'liquido', rotulo:'por cento volume/volume'},

@@ -136,6 +136,7 @@
     ["mL/ha", "mL/ha — líquido por área"],
     ["g/ha", "g/ha — sólido por área"],
     ["kg/ha", "kg/ha — sólido por área"],
+    ["mg/ha", "mg/ha — sólido por área"],
     ["g i.a./ha", "g i.a./ha — requer concentração da formulação"],
     ["kg i.a./ha", "kg i.a./ha — requer concentração da formulação"],
     ["%v/v", "% v/v — líquido no volume final"],
@@ -498,6 +499,12 @@
       appliedAmount = dose * areaHa * 1000;
       concentration = operation.targetRate > 0 ? `${formatSmart(dose * 1000 / operation.targetRate,6)} g/L` : "—";
       formula = `(${formatSmart(dose * 1000,6)} g/ha ÷ ${formatSmart(operation.targetRate,6)} L/ha) × ${formatSmart(batchL,6)} L`;
+    } else if (type === "mg/ha") {
+      baseUnit = "mg";
+      batchAmount = operation.targetRate > 0 ? dose / operation.targetRate * batchL : 0;
+      appliedAmount = dose * areaHa;
+      concentration = operation.targetRate > 0 ? `${formatSmart(dose / operation.targetRate,6)} mg/L` : "—";
+      formula = `(${formatSmart(dose,6)} mg/ha ÷ ${formatSmart(operation.targetRate,6)} L/ha) × ${formatSmart(batchL,6)} L`;
     } else if (type === "g i.a./ha" || type === "kg i.a./ha") {
       const activeGHa = type === "kg i.a./ha" ? dose * 1000 : dose;
       const formulationConcentration = parseNumber(component.formulationConcentration);

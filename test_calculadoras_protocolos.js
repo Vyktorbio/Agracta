@@ -15,7 +15,7 @@ for(const pureza of [0,-1,101,'abc',Infinity]){
 for(const densidade of [0,-1,'abc'])assert.throws(()=>LB.calcCampo({dose:100,unidade:'g/ha',vazao:100,volumeMl:50,densidade}));
 for(const dose of ['abc','1,2,3','1 lixo',0,-1,Infinity])assert.throws(()=>LB.calcCampo({dose,unidade:'L/ha',vazao:100,volumeMl:50}));
 assert.throws(()=>LB.calcCampo({dose:110,unidade:'% v/v',volumeMl:50}));
-assert.throws(()=>LB.calcCampo({dose:1,unidade:'mg/ha',volumeMl:50,vazao:100}));
+assert.throws(()=>LB.calcCampo({dose:1,unidade:'µg/ha',volumeMl:50,vazao:100}));
 // 100 mg/L × 0,050 L = 5 mg i.a.; a 500 g/kg, pesar 10 mg de produto.
 const solido=LB.calcPPM({alvoPpm:100,volumeMl:50,fonteTipo:'gkg',fonteValor:500});
 assert.equal(solido.acao,'pesar');near(solido.massaMg,10);

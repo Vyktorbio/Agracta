@@ -23,7 +23,7 @@
 
   var VERSAO='1.0.0';
   /* mg de produto por m² para cada unidade de dose por área */
-  var MG_POR_M2={'kg/ha':100,'g/ha':0.1,'g/m2':1000,'g/m²':1000,'mg/m2':1,'mg/m²':1};
+  var MG_POR_M2={'kg/ha':100,'g/ha':0.1,'mg/ha':0.0001,'g/m2':1000,'g/m²':1000,'mg/m2':1,'mg/m²':1};
   var DESVIO_AVISO=10;   /* % de desvio da dose que vira aviso */
 
   function num(v){
