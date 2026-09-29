@@ -395,6 +395,9 @@ var _saveErrAlerted=false;
 var AGR_LOCAL_STATE_TS_KEY='agracta-local-state-ts';
 function save(){
   var ok=false, savedAt=Date.now(), err=null;
+  /* save() grava o `data` inteiro: a gravação adiada da grade de avaliação fica
+     coberta por esta e não precisa rodar de novo depois. */
+  try{ if(_avGravaTimer){ clearTimeout(_avGravaTimer); _avGravaTimer=null; } }catch(e){}
   /* O indice entre ensaios foi montado a partir do que estava gravado. Gravou de
      novo, ele deixa de valer -- e histórico velho é pior que histórico nenhum. */
   try{ _histInvalida(); }catch(e){}
@@ -2279,7 +2282,11 @@ function cloudBadge(kind,txt){
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
-  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{ if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
+  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{
+    /* Envio parado na fila do SDK: tocar não adianta mandar de novo (o lote já
+       está lá, e mandar outro só empilha). O toque explica o motivo. */
+    if(window._syncParado && typeof window.agractaSyncExplicar==='function'){ window.agractaSyncExplicar(); return; }
+    if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
   /* "sem internet" era impreciso e assustava sem razão: clima, NDVI e solo seguem
      consultando a rede normalmente nesse estado. O que está parado é a SINCRONIZAÇÃO
      com a nuvem — e é isso que o selo deve dizer. */
@@ -6661,7 +6668,7 @@ function buildStudyModelo(qid, s, opts){
          lugar da conta para que a falta seja vista, não deduzida do branco. */
       if(dval>0 && !dunit){
         put(rr,9,'⚠ Unidade da dose não declarada no estudo — sem unidade não há conta. '+
-                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha).');
+                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha).');
       }else if(dval>0 && vol>0){
         /* Mistura também aqui: esta planilha é a que vai para a equipe de campo,
            e usava o motor de produto único — "1,5 L + 0,2%" saía como 1,5 L/ha e
@@ -7873,7 +7880,7 @@ function newStudy(){
        tabela dizerem "500 mL/ha" em vez de chutar L/ha, e o que decide qual
        receita a calculadora do laboratório abre. */
     doseModo:'campo',     /* campo | ppm */
-    /* '' | L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo'.
+    /* '' | L/ha | mL/ha | g/ha | kg/ha | mg/ha — só vale em doseModo 'campo'.
        VAZIO É ESTADO LEGÍTIMO: quer dizer "ninguém declarou ainda", e não se
        resolve por chute. O padrão era 'L/ha', e o chute não ficava no rótulo:
        o motor de campo lê L/ha como valor×1000 em mL de LÍQUIDO, então um
@@ -8032,7 +8039,7 @@ function normalizeStudy(s){
                      .map(function(f){ return {tratId:f.tratId, qid:f.qid||'', areaHa:(f.areaHa!=null&&f.areaHa!==''?Number(f.areaHa):null)}; });
   }else if(s.faixas.length){ s.faixas=[]; }
   if(s.doseModo!=='ppm' && s.doseModo!=='campo') s.doseModo='campo';
-  if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(s.doseUnidade)<0){
+  if(['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(s.doseUnidade)<0){
     var _un={};
     if(typeof _calcDoseUnit==='function'){
       (s.tratamentos||[]).forEach(function(t){
@@ -9140,6 +9147,7 @@ function _calcDoseUnit(raw){
   var u=String(raw||'').toLowerCase();
   if(/m\s*l/.test(u)) return 'mL/ha';            /* mL antes de L */
   if(/k\s*g/.test(u)) return 'kg/ha';            /* kg antes de g */
+  if(/m\s*g/.test(u)) return 'mg/ha';            /* mg antes de g — senão "500 mg" virava 500 g/ha */
   if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
   return 'L/ha';
 }
@@ -9147,7 +9155,7 @@ function _calcDoseUnit(raw){
    que "não declarada" tenha um nome, em vez de ser o `else` de um if. */
 /* Função e não constante: os testes recortam funções nomeadas do app.js para
    rodar sem navegador, e uma `var` no topo do arquivo não vai junto no recorte. */
-function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha']; }
+function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha','mg/ha']; }
 function doseUnidadeDeclarada(study){
   var d=study&&study.doseUnidade;
   return (doseUnidades().indexOf(d)>=0)?d:'';
@@ -12321,7 +12329,7 @@ function calcConfigDoEstudoLab(study, qid){
     var estruturada=Array.isArray(t.componentes)&&t.componentes.length>0;
     var dose=String(t.dose==null?'':t.dose).trim();
     if(t.testemunha&&!estruturada&&(dose===''||LB.parseNum(dose)===0))return false;
-    var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+    var unidade=['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
     var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
     var exigeTaxa=mix.problems.length>0||mix.components.some(function(c){return c.unidade!=='%';});
     var taxa=LB.parseTaxa(t.volume!=null&&String(t.volume).trim()!==''?t.volume:vazaoPadrao);
@@ -12422,7 +12430,7 @@ function calcMemoriaLab(study, cfg){
           fonteTipo:cfg.fonteTipo,fonteValor:cfg.fonteValor,pureza:cfg.pureza,densidade:cfg.densidade});
         reg.componentes.push(Object.assign({nome:t.produto||'Produto'},r));
       }else{
-        var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+        var unidade=['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
         var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
         if(mix.problems.length)throw new Error(mix.problems.join(' '));
         if(!mix.components.length)throw new Error('Informe a dose e a unidade de cada componente.');
@@ -13596,7 +13604,7 @@ function _pranchaPayload(qid, sid, variavel){
      diz por quê — antes, o eixo estampava "10 L/ha" numa dose que ninguém
      declarou, e a figura ia para o relatório do cliente com essa autoridade. */
   if(doseUnidadePendente(s)) avisos.push('Unidade da dose não declarada no estudo: as doses saem '+
-    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha) '+
+    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha) '+
     'e gere a figura de novo.');
   if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
     dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
@@ -15753,7 +15761,7 @@ var _seCompNovoIdx=null;
    nao e uma "unidade geral do estudo": ela pertence a linha do adjuvante, pois
    0,1 % v/v so vira volume depois que a calda final e conhecida. */
 var TRAT_COMP_UNIDADES=[
-  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'],
+  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'], ['mg/ha','mg/ha'],
   ['% v/v','% v/v — adjuvante líquido']
 ];
 function _seCompUnidadeNormalizar(u){
@@ -16522,11 +16530,11 @@ function renderStudyEditModal(){
   var _du=(typeof doseUnidadeDeclarada==='function')?doseUnidadeDeclarada(s):(s.doseUnidade||'');
   h+='<div class="se-field" id="seDoseUnidWrap"'+(_dm==='ppm'?' style="display:none"':'')+'><label>Unidade da dose</label><select id="seDoseUnid">'+
     '<option value=""'+(_du?'':' selected')+'>— não declarada —</option>'+
-    ['L/ha','mL/ha','g/ha','kg/ha'].map(function(u){
+    doseUnidades().map(function(u){
       return '<option value="'+u+'"'+(u===_du?' selected':'')+'>'+u+'</option>';
     }).join('')+'</select></div>';
   h+='</div>';
-  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Cada tratamento pode ter a sua, no seletor ao lado da dose — T1 em mg/ha, T2 em g/ha e T3 em L/ha no mesmo protocolo. Esta aqui vale para quem ficou só com o número.</div>';
   if(typeof doseUnidadePendente==='function' && doseUnidadePendente(s)){
     h+='<div class="se-warn" style="font-size:11px;margin:-4px 0 8px;color:#d08a3a">⚠ Há tratamento com a dose escrita só com o número e nenhuma unidade declarada. Enquanto ficar assim, o gráfico mostra o número sem unidade e a calculadora não prepara — ela pergunta. Não é chute que resolve: entre L/ha e g/ha há mil vezes de diferença.</div>';
   }
@@ -16630,13 +16638,16 @@ function renderStudyEditModal(){
           (_ia.parcial?' <span style="color:#dccd8c">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
         /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
            PEDE a justificativa, e o campo fica ali mesmo, não escondido em obs. */
-        if(tratDoseForaDaBula(t)){
+        if(tratDoseForaDaBula(t,s)){
           h+='<div class="calc-warn">⚠ Dose fora da faixa registrada — uso experimental.</div>'+
              '<input type="text" data-f="justificativaDose" placeholder="Por que esta dose? (obrigatório para dose fora da bula)" value="'+esc(t.justificativaDose||'')+'"'+
              (t.justificativaDose?'':' style="border-color:#6b531b"')+'>';
         }
       }
-      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':'')+'><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
+      /* Unidade POR TRATAMENTO ao lado da dose (receita estruturada já tem a
+         sua em cada componente; ppm é concentração, não dose por área). */
+      var _uSel=(_cps.length||_dm==='ppm')?'':_seTratUnidadeSelect(i,t,s);
+      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;min-width:0;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':(_uSel?' onchange="seTratDoseDigitada(this)"':''))+'>'+_uSel+'<input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1;min-width:0"></div>';
       /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
          drone: metade dos tratamentos fecha o volume com óleo de soja. Vazio
          continua significando água, então nada muda em estudo antigo. */
@@ -16914,6 +16925,7 @@ function _seCompUnidadeDaDose(raw,fallback){
   if(s.indexOf('%')>=0) return '% v/v';
   if(/ml(?:\/ha|ha)?/.test(s)) return 'mL/ha';
   if(/kg(?:\/ha|ha)?/.test(s)) return 'kg/ha';
+  if(/mg(?:\/ha|ha)?/.test(s)) return 'mg/ha';   /* mg antes de g */
   if(/g(?:\/ha|ha)?/.test(s)) return 'g/ha';
   if(/l(?:\/ha|ha)?/.test(s)) return 'L/ha';
   return _seCompUnidadeNormalizar(fallback)||'L/ha';
@@ -17031,6 +17043,67 @@ function seTratLote(idx,loteId){
   if(loteId && !tratLigarLote(t,loteId)){ alert('Lote não encontrado para este item.'); return; }
   if(!loteId) tratLigarLote(t,'');
   renderStudyEditModal();
+}
+
+/* ===== UNIDADE POR TRATAMENTO =================================================
+   "Quero colocar unidades diferentes no mesmo protocolo, como mg/ha, g/ha e
+   litros por hectare." A unidade MORA NO TEXTO DA DOSE ("500 mg/ha"): é o que
+   toda conta e todo rótulo já leem primeiro (doseUnidadeDe — o que foi escrito
+   na dose manda sobre o que o estudo declarou), e é como a dose do catálogo já
+   chega ao tratamento. O seletor só escreve ali. Nenhuma conta precisa aprender
+   um campo novo — e um campo novo esquecido por uma única conta seria dose mil
+   vezes errada com cara de certa.
+   Devolve '' (só o número: vale a unidade do estudo), a unidade reconhecida, ou
+   null quando a dose não é de uma unidade só (mistura "1,5 + 0,2%", % da calda,
+   unidade que o motor não conhece) — aí a unidade fica escrita em cada parte. */
+function _seTratUnidadeAtual(txt){
+  var s=String(txt==null?'':txt).trim();
+  if(!s) return '';
+  /* mistura primeiro: "1,5 + 2" é só número e mesmo assim não é UMA dose */
+  if(/\+/.test(s.replace(/^\s*\+/,'')) || s.indexOf('%')>=0) return null;
+  if(/^[+-]?\d[\d.,]*$/.test(s)) return '';
+  var BC=(typeof window!=='undefined')?window.BioCalculoCampo:null, u=null;
+  if(BC && BC.parseDose){
+    var d=BC.parseDose(s,'');
+    if(d && !d.erro) u=d.unidade;
+  } else u=_calcDoseUnit(s);
+  return doseUnidades().indexOf(u)>=0?u:null;
+}
+/* O número como foi escrito, com a unidade nova. Sem número ainda, não inventa. */
+function _seTratDoseComUnidade(txt, u){
+  var s=String(txt==null?'':txt);
+  if(_seTratUnidadeAtual(s)===null) return s;     /* mistura, % ou unidade estranha: não mexe */
+  var m=s.trim().match(/^[+-]?\d[\d.,]*/);
+  if(!m) return s;
+  return u?(m[0]+' '+u):m[0];
+}
+function _seTratUnidadeSelect(i, t, s){
+  var atual=_seTratUnidadeAtual(t.dose), du=doseUnidadeDeclarada(s);
+  return '<select data-f="__doseUnid" aria-label="Unidade da dose de '+esc(t.id)+'" style="width:auto;flex:0 0 auto;max-width:9.5em"'+
+    ' title="'+(atual===null?'Mistura ou % da calda: a unidade vai escrita em cada parte da dose':'Unidade desta dose')+'"'+
+    (atual===null?' disabled':'')+' onchange="seTratUnidade(this)">'+
+    '<option value=""'+(atual?'':' selected')+'>'+(du?('estudo ('+esc(du)+')'):'unidade…')+'</option>'+
+    doseUnidades().map(function(u){ return '<option value="'+u+'"'+(atual===u?' selected':'')+'>'+u+'</option>'; }).join('')+
+    '</select>';
+}
+/* Trocou a unidade: reescreve a dose na hora ("500" → "500 mg/ha"; "estudo"
+   volta ao número solto). Sem número ainda, a escolha espera: sai quando a dose
+   for digitada (seTratDoseDigitada). */
+function seTratUnidade(sel){
+  var row=sel&&sel.closest&&sel.closest('.se-trat'), inp=row&&row.querySelector('input[data-f="dose"]');
+  if(!inp) return;
+  inp.value=_seTratDoseComUnidade(inp.value, sel.value);
+  try{ syncTratInputs(); }catch(e){}
+}
+/* Digitou a dose: número solto com unidade já escolhida recebe a unidade; dose
+   escrita com unidade move o seletor para ela. */
+function seTratDoseDigitada(inp){
+  var row=inp&&inp.closest&&inp.closest('.se-trat'), sel=row&&row.querySelector('select[data-f="__doseUnid"]');
+  if(!sel) return;
+  var atual=_seTratUnidadeAtual(inp.value);
+  if(atual==='' && sel.value && /\d/.test(inp.value)) inp.value=_seTratDoseComUnidade(inp.value, sel.value);
+  else { sel.disabled=(atual===null); sel.value=atual||''; }
+  try{ syncTratInputs(); }catch(e){}
 }
 
 function syncTratInputs(){
@@ -18401,6 +18474,9 @@ function renderAvGrid(){
       html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle off" onclick="avEnableStudyRandomizado()">Ativar automático randomizado</button><span class="av-auto-note">Modelo disponível: '+esc(mi.nome+' · '+mi.reps+' rep.')+'</span></div>';
     }
   }
+  /* A tela de "fotos seguidas": tira a foto e a identificação já passa para a
+     próxima parcela, sem voltar à grade (fotos-estudo.js, fotosEmSequencia). */
+  if(croquiRows.length>1) html+='<div class="av-foto-seq"><button type="button" class="av-photo-btn" data-av-photo-seq="1">📷 Fotos em sequência</button><span>parcela por parcela, sem voltar à grade</span></div>';
   html+=avCroquiHtml(st,croquiRows,vs);
   html+=_avFichaHtml(croquiRows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
@@ -18621,6 +18697,27 @@ function _avCloudSoon(){ /* nuvem com FOLGA: no máximo 1 gravação a cada ~15s
   if(_avCloudTimer) return;
   _avCloudTimer=setTimeout(function(){ _avCloudTimer=null; try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){} }, 15000);
 }
+var _avGravaTimer=null;
+function _avGravaLocal(){
+  _avGravaTimer=null;
+  try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){}
+}
+function _avGravaLocalLogo(){
+  if(_avGravaTimer) clearTimeout(_avGravaTimer);
+  _avGravaTimer=setTimeout(_avGravaLocal,700);
+}
+/* Grava o que estiver pendente agora — app indo para segundo plano, avaliação
+   fechando. Sem pendência, não faz nada (não serializa à toa). */
+function _avGravaLocalJa(){
+  if(!_avGravaTimer) return;
+  clearTimeout(_avGravaTimer);
+  _avGravaLocal();
+}
+if(typeof document!=='undefined' && !window.__avGravaEv){
+  window.__avGravaEv=true;
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') _avGravaLocalJa(); });
+  window.addEventListener('pagehide',_avGravaLocalJa);
+}
 function _avPersistNow(){
   try{
     var q=data[curV]; if(!q) return;
@@ -18643,7 +18740,14 @@ function _avPersistNow(){
     else av.notas=_avGrid.notas;
     av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
     av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
-    try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
+    /* A GRAVAÇÃO NO APARELHO ESPERA A PESSOA PARAR DE DIGITAR. Antes era aqui,
+       síncrona, a CADA TECLA do lançamento rápido (oninput) e a cada célula:
+       JSON.stringify do `data` INTEIRO — todos os estudos, e as notas de campo
+       com a foto em base64 dentro. Com alguns MB isso leva centenas de ms num
+       Android, e a grade travava a cada número digitado. A avaliação em memória
+       continua atualizada na hora (as linhas acima); só o disco espera ~0,7 s
+       de silêncio, e é gravado JÁ se o app for para segundo plano ou fechar. */
+    _avGravaLocalLogo();
     if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
     /* nuvem NÃO grava a cada célula (poupa bateria): sobe ao FECHAR a avaliação, no SALVAR, ou no botão "salvar na nuvem". O selo fica "pendente" até lá. */
   }catch(e){}
@@ -24185,13 +24289,22 @@ function tratLigarLote(t,loteId){
 
 /* A dose escolhida bate com o que a bula registra? Não bloqueia — ensaio
    experimental existe para sair da bula. Mas marca, e pede justificativa. */
-function tratDoseForaDaBula(t){
+function tratDoseForaDaBula(t, study){
   var r=t&&t.doseRef; if(!r || r.origem!=='bula') return false;
   var v=_calcNum(t.dose);
   if(!(v>0)) return false;
   var min=(r.valor!=null&&isFinite(r.valor))?r.valor:null;
   var max=(r.valorMax!=null&&isFinite(r.valorMax))?r.valorMax:min;
   if(min==null) return false;
+  /* A faixa da bula está na unidade DELA. Com unidade por tratamento, a dose
+     pode estar escrita noutra ("500 mL/ha" contra 0,5–0,8 L/ha): converte antes
+     de comparar, senão a dose certa saía "fora da bula" e a errada passava. */
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  var u=(typeof doseUnidadeDe==='function')?doseUnidadeDe(study||null, t.dose):'';
+  if(D && D.converter && u && r.unidade && u!==r.unidade){
+    var cv=D.converter(v, u, r.unidade);
+    if(cv && !cv.erro && isFinite(cv.valor)) v=cv.valor;
+  }
   return (v<min-1e-9 || v>max+1e-9);
 }
 

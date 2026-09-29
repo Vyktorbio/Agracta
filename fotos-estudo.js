@@ -8,6 +8,9 @@
        e pela avaliação abertas, e o botão passa a mostrar quantas ela tem;
      - "fotos da parcela" mostra a mesma parcela ao longo das leituras;
      - o painel do estudo é a matriz parcela × avaliação.
+   Fotos em sequência e slides continuam na galeria de sempre
+   (galeria-local.html): a tela de "fotos seguidas" e o montador com fotos por
+   slide, prévia, seleção e ordem. Este arquivo só abre a galeria no lugar certo.
    O banco é o MESMO da galeria antiga (FotosStore, só neste aparelho): as fotos
    que já existiam aparecem aqui, e o relatório continua levando todas.
    Memória: na tela só miniaturas (480 px), carregadas quando aparecem; o
@@ -63,7 +66,10 @@ function reduzir(blob, max, qualidade){
     /* decodifica JÁ reduzido (só a largura é dada; a altura segue a proporção):
        uma foto de 12 MP nunca passa inteira pela memória — eram ~48 MB por foto.
        Retrato sai mais alto que "max" e o canvas, já pequeno, acerta o resto. */
-    return w.createImageBitmap(blob,{resizeWidth:max,resizeQuality:'medium'}).then(function(pq){
+    /* orientação pedida por extenso: foto de celular em pé vem deitada no
+       arquivo com a marca EXIF de girar, e navegador que não aplica a marca por
+       padrão entregava a miniatura de lado */
+    return w.createImageBitmap(blob,{imageOrientation:'from-image',resizeWidth:max,resizeQuality:'medium'}).then(function(pq){
       return porCanvas(pq,pq.width,pq.height).then(function(o){ try{ pq.close&&pq.close(); }catch(e){} return o; });
     }).catch(function(){ return viaImagem(); });
   }
@@ -131,15 +137,51 @@ function alvoDaGrade(key){
   return {qid:w.curV, sid:w.curSid, key:rw.key, tratamento:rw.tratId, rep:rw.rep, parcela:String(rw.parcela||rw.campo||rw.label||rw.key),
     avaliacao:av?av.id:'', data:av&&av.data||'', momento:rot};
 }
-w.avFotografarParcela=function(key){
+/* ---------- fotos em sequência: a tela de sempre (galeria-local.html) ----------
+   Cada foto da câmera fica na parcela da vez e a identificação passa sozinha
+   para a próxima, na ordem do campo — é a tela de "fotos seguidas". O painel
+   novo tinha deixado ela escondida atrás de "Galeria completa", e sem a
+   avaliação: quem fotografava parcela por parcela perdeu o caminho. */
+var SEQ_KEY='agracta-fotos-sequencia';
+function sequenciaLembrada(){ try{ return w.localStorage.getItem(SEQ_KEY)==='1'; }catch(e){ return false; } }
+function abrirGaleria(qid, sid, initial){
+  var st=estudo(qid,sid);
+  if(!st||typeof w.abrirGaleriaFotosCompleta!=='function'||!w.agConhecimento) return false;
+  w.abrirGaleriaFotosCompleta(w.agConhecimento.projetar(qid,st,w.data[qid]), initial||null);
+  return true;
+}
+function podeFotografarNaGrade(){
   var user=w._authUser;
-  if(!user||d.documentElement.classList.contains('pre-auth')){ alert('Entre no Agracta para fotografar.'); return; }
-  var st=w._avStudy&&w._avStudy(); if(!st) return;
-  if(w.estudoFinalizado&&w.estudoFinalizado(st)){ alert('Estudo finalizado: não recebe fotos novas.'); return; }
+  if(!user||d.documentElement.classList.contains('pre-auth')){ alert('Entre no Agracta para fotografar.'); return false; }
+  var st=w._avStudy&&w._avStudy(); if(!st) return false;
+  if(w.estudoFinalizado&&w.estudoFinalizado(st)){ alert('Estudo finalizado: não recebe fotos novas.'); return false; }
+  return true;
+}
+function sequenciaDe(alvo){
+  return {treatment:alvo.tratamento, rep:alvo.rep, assessment:alvo.avaliacao, date:alvo.data, plot:alvo.parcela, sequence:true};
+}
+/* Botão "Fotos em sequência" da avaliação: começa na parcela destacada no
+   croqui, senão na da vez do modo automático, senão na primeira. */
+w.fotosEmSequencia=function(){
+  if(!podeFotografarNaGrade()) return;
+  try{ w._avPersistNow(); }catch(e){}
+  var st=w._avStudy(), rows=w._avRowsForStudy(st,true)||[], key=null;
+  if(w._avCroquiKey && rows.some(function(r){ return r.key===w._avCroquiKey; })) key=w._avCroquiKey;
+  if(key==null){ var a=w._avAutoState&&w._avAutoState(); if(a&&a.row) key=a.row.key; }
+  if(key==null&&rows[0]) key=rows[0].key;
+  var alvo=alvoDaGrade(key); if(!alvo) return;
+  if(!alvo.avaliacao){ alert('Salve a avaliação antes de fotografar.'); return; }
+  abrirGaleria(alvo.qid,alvo.sid,sequenciaDe(alvo));
+};
+w.avFotografarParcela=function(key){
+  if(!podeFotografarNaGrade()) return;
   if(key==null){ var a=w._avAutoState&&w._avAutoState(); var inp=d.getElementById('avAutoInput'); if(a&&inp) w.avAutoWrite(inp.value); }
   try{ w._avPersistNow(); }catch(e){}
   var alvo=alvoDaGrade(key); if(!alvo) return;
   if(!alvo.avaliacao){ alert('Salve a avaliação antes de fotografar.'); return; }
+  /* Quem deixou a sequência ligada volta à tela de sempre, já nesta parcela:
+     tirar a foto e seguir para a próxima sem voltar à grade. */
+  if(sequenciaLembrada() && abrirGaleria(alvo.qid,alvo.sid,sequenciaDe(alvo))) return;
   /* a câmera abre no MESMO toque (o navegador só permite abrir no gesto) */
   escolherArquivos(true,function(fs){
     salvar(fs,alvo).then(function(n){
@@ -283,8 +325,13 @@ w.abrirPainelFotos=function(qid, sid){
     var comFoto=M.linhas.filter(function(l){ return l.celulas.some(function(c){ return c.fotos.length; }); }).length;
     var h='<div class="fe-head"><strong>Fotos · '+esc(ctx.codigo)+'</strong><button type="button" class="fe-x" aria-label="Fechar">×</button></div>';
     h+='<div class="fe-resumo">'+M.total+' foto(s) neste aparelho · '+comFoto+' de '+M.linhas.length+' parcelas · '+M.colunasComFoto+' leitura(s) com foto</div>';
-    h+='<div class="fe-acoes"><button type="button" data-p="pptx"'+(M.total?'':' disabled')+'>Apresentação (PPTX)</button><button type="button" data-p="zip"'+(M.total?'':' disabled')+'>Originais (ZIP)</button><button type="button" data-p="antiga">Galeria completa</button></div>';
-    if(!M.total) h+='<p class="fe-vazio">Nenhuma foto ainda. Na avaliação, o botão <b>Foto</b> de cada parcela abre a câmera — a foto já sai identificada.</p>';
+    /* Slides e sequência são os da galeria de sempre: fotos por slide (1 a 8),
+       prévia, seleção e ordem. O PPTX próprio deste painel saía com 4 fotos
+       fixas por slide e a legenda inteira numa linha só — "saiu tudo errado". */
+    var podeFotografar=!(w.estudoFinalizado&&w.estudoFinalizado(ctx.st));
+    h+='<div class="fe-acoes">'+(podeFotografar&&ctx.parcelas.length>1?'<button type="button" data-p="sequencia">📷 Fotos em sequência</button>':'')+
+      '<button type="button" data-p="slides">🖼 Slides e originais</button></div>';
+    if(!M.total) h+='<p class="fe-vazio">Nenhuma foto ainda. Na avaliação, o botão <b>Foto</b> de cada parcela abre a câmera — a foto já sai identificada. Para fotografar uma parcela atrás da outra, use <b>Fotos em sequência</b>.</p>';
     else{
       h+='<div class="fe-matriz-wrap"><table class="fe-matriz"><thead><tr><th>Parcela</th>'+M.colunas.map(function(c){ return '<th>'+esc(c.rotulo)+'</th>'; }).join('')+'</tr></thead><tbody>';
       M.linhas.forEach(function(l){
@@ -312,57 +359,29 @@ w.abrirPainelFotos=function(qid, sid){
       if(f.length) ampliar(f,f[0].id,ctx,db,null);
       return;
     }
-    if(b.dataset.p==='antiga'){ dg.close(); if(typeof w.abrirGaleriaFotosCompleta==='function') w.abrirGaleriaFotosCompleta(w.agConhecimento.projetar(qid,ctx.st,w.data[qid])); return; }
-    exportar(b.dataset.p, dg._fotos||[], ctx, b);
+    /* o painel fica embaixo e se redesenha quando a galeria fecha */
+    if(b.dataset.p==='sequencia') abrirGaleria(qid,sid,sequenciaDoPainel(ctx));
+    else if(b.dataset.p==='slides') abrirGaleria(qid,sid,{slides:true});
   });
   dg.addEventListener('close',function(){ liberar(urls); dg.remove(); },{once:true});
   dg.showModal();
   dg.innerHTML='<div class="fe-head"><strong>Fotos · '+esc(ctx.codigo)+'</strong></div><p class="fe-vazio">Lendo as fotos deste aparelho…</p>';
   dg._recarregar();
 };
-/* O gerador de PPTX/ZIP só é carregado quando alguém exporta: são 22 KB que a
-   abertura do app não precisa ler. Mesmo endereço da lista do sw.js — funciona
-   sem internet. */
-var PPTX_SRC='vendor/fotos-pptx.js?v=3', _pptx=null;
-function carregarPptx(){
-  if(w.FotosPptx) return Promise.resolve(w.FotosPptx);
-  if(_pptx) return _pptx;
-  _pptx=new Promise(function(res,rej){
-    var s=d.createElement('script'); s.src=PPTX_SRC;
-    s.onload=function(){ if(w.FotosPptx) res(w.FotosPptx); else rej(new Error('exportação indisponível nesta versão.')); };
-    s.onerror=function(){ s.remove(); rej(new Error('abra o app com internet uma vez para liberar a exportação.')); };
-    d.head.appendChild(s);
-  });
-  _pptx.catch(function(){ _pptx=null; });
-  return _pptx;
-}
-/* Exporta na ordem da matriz: parcela por parcela, leitura por leitura. */
-function exportar(tipo, fotos, ctx, botao){
-  var M=FC.matriz(fotos, ctx.parcelas, ctx.avaliacoes), ordem=[];
-  M.linhas.forEach(function(l){ l.celulas.forEach(function(c){ c.fotos.forEach(function(f){ ordem.push(f); }); }); });
-  if(!ordem.length) return;
-  var rot=botao.textContent; botao.disabled=true;
-  var nome=String(ctx.codigo||'estudo').replace(/[^a-z0-9_-]/gi,'_').slice(0,80);
-  var passos=ordem.reduce(function(p,f,i){ return p.then(function(acc){
-    botao.textContent='Preparando '+(i+1)+' de '+ordem.length+'…';
-    if(tipo==='pptx') return reduzir(f.blob||f.thumb,2048,0.9).then(function(im){ return im.blob.arrayBuffer().then(function(buf){ acc.push({width:im.largura,height:im.altura,bytes:new Uint8Array(buf),label:FC.legenda(f,ctx),detail:''}); return acc; }); });
-    return (f.blob||f.thumb).arrayBuffer().then(function(buf){ acc.push({nome:FC.nomeArquivo(f,i),dados:new Uint8Array(buf),f:f}); return acc; });
-  }); },carregarPptx().then(function(){ return []; }));
-  passos.then(function(itens){
-    var blob;
-    if(tipo==='pptx') blob=new Blob([w.FotosPptx.build(itens,4,{titulo:ctx.codigo,subtitulo:'Fotos por parcela e leitura'})],{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
-    else{
-      var leg=itens.map(function(x){ return {arquivo:x.nome, legenda:FC.legenda(x.f,ctx), tratamento:x.f.treatment, repeticao:x.f.rep, parcela:x.f.plot, data:x.f.date, hora:x.f.hora||'', avaliacao:x.f.assessment||'', adicionadaEm:x.f.createdAt}; });
-      var files=itens.map(function(x){ return {nome:x.nome,dados:x.dados}; }).concat([{nome:'legendas.json',dados:new TextEncoder().encode(JSON.stringify(leg,null,2))}]);
-      blob=new Blob([w.FotosPptx.zip(files)],{type:'application/zip'});
-    }
-    var u=URL.createObjectURL(blob), a=d.createElement('a'); a.href=u; a.download=nome+(tipo==='pptx'?'_fotos.pptx':'_originais.zip'); d.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(u); },60000);
-  }).catch(function(err){ alert('Não foi possível exportar: '+(err&&err.message||err)); })
-  .then(function(){ botao.disabled=false; botao.textContent=rot; });
+/* Do painel não há avaliação aberta: a sequência vai para a leitura de HOJE,
+   se o estudo tem uma; senão, data livre de hoje, como a galeria sempre fez.
+   Começa na primeira parcela, na ordem do campo. */
+function sequenciaDoPainel(ctx){
+  var hoje='';
+  try{ hoje=(typeof w.todayISO==='function'&&w.todayISO())||''; }catch(e){}
+  var av=(ctx.st.avaliacoes||[]).filter(function(a){ return a&&a.id&&hoje&&a.data===hoje; }).pop();
+  var p=ctx.parcelas[0]||{};
+  return {treatment:p.tratamento, rep:p.rep, plot:p.parcela, assessment:av?av.id:'', date:av?av.data:hoje, sequence:true};
 }
 
-/* A página do estudo chama abrirGaleriaFotos: agora é o painel novo. A galeria
-   antiga segue acessível pelo botão "Galeria completa" (organizar, slides). */
+/* A página do estudo chama abrirGaleriaFotos: abre este painel. A galeria de
+   sempre (sequência, slides e originais) abre pelos botões dele, pelo "Fotos em
+   sequência" da avaliação e pelo botão Foto de quem deixou a sequência ligada. */
 if(typeof w.abrirGaleriaFotos==='function' && !w.abrirGaleriaFotosCompleta) w.abrirGaleriaFotosCompleta=w.abrirGaleriaFotos;
 w.abrirGaleriaFotos=function(s, initial){
   if(!s) return;
@@ -372,8 +391,12 @@ w.abrirGaleriaFotos=function(s, initial){
   }
   w.abrirPainelFotos(s.qid,s.sid);
 };
-/* "N 📷" ao lado do botão Foto: abre as fotos da parcela. */
+/* "N 📷" ao lado do botão Foto: abre as fotos da parcela. "Fotos em sequência"
+   da avaliação: a galeria de sempre, com a sequência ligada. Captura, não
+   bolha: o painel da avaliação (#eePnl) para a propagação do clique. */
 d.addEventListener('click',function(ev){
+  var seq=ev.target.closest&&ev.target.closest('[data-av-photo-seq]');
+  if(seq){ ev.preventDefault(); ev.stopPropagation(); w.fotosEmSequencia(); return; }
   var b=ev.target.closest&&ev.target.closest('[data-av-fotos]'); if(!b) return;
   ev.preventDefault(); ev.stopPropagation();
   var av=w._avEditando&&w._avEditando();

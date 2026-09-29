@@ -47,7 +47,8 @@ w.estudoFinalizado=function(s){ return !!s.finalizado; };
 w._stxToast=function(t){ w.__toasts.push(t); }; w.__toasts=[];
 w.agConhecimento={projetar:function(qid,st){ return {qid:qid,sid:st.id}; }};
 w.renderAvGrid=function(){ w.__render=(w.__render||0)+1; };
-w.abrirGaleriaFotos=function(){ w.__antiga=true; };
+w.abrirGaleriaFotos=function(s,ini){ w.__antiga=true; w.__galeria.push({s:s,ini:ini}); }; w.__galeria=[];
+w.todayISO=function(){ return '2026-09-15'; };
 w.eval(fs.readFileSync('vendor/fotos-core.js','utf8'));
 w.eval(fs.readFileSync('fotos-estudo.js','utf8'));
 
@@ -130,37 +131,48 @@ function entregar(files){ var inp=w.__cliques[w.__cliques.length-1]; Object.defi
   for(i=0;i<100&&!w.document.querySelector('#fotoFolha[open]');i++) await espera();
   ck(!!w.document.querySelector('#fotoFolha[open]'),'chamada com a parcela abre direto as fotos dela');
   w.document.querySelector('#fotoFolha[open]').close();
-  ck(typeof w.abrirGaleriaFotosCompleta==='function','a galeria antiga segue acessível ("Galeria completa")');
+  ck(typeof w.abrirGaleriaFotosCompleta==='function','a galeria de sempre segue carregada');
 
-  console.log('\n[5] exportar: o gerador só é lido quando alguém exporta');
+  console.log('\n[5] slides e fotos em sequência: a galeria de sempre, aberta no lugar certo');
+  /* "Por favor, corrija os slides das fotos, saiu tudo errado, sumiu o botão de
+     escolher quantas fotos por slide" — o PPTX próprio do painel saía com 4
+     fotos fixas por slide e a legenda inteira numa linha. Os slides voltam a
+     ser os da galeria (1 a 8 por slide, prévia, seleção e ordem). */
   ck(!/fotos-pptx/.test(fs.readFileSync('index.html','utf8')),'a abertura do app não carrega o gerador de PPTX/ZIP');
-  /* o que o jsdom não tem para exportar */
-  w.Blob.prototype.arrayBuffer=function(){ var b=this; return new Promise(function(res){ var r=new w.FileReader(); r.onload=function(){ res(r.result); }; r.readAsArrayBuffer(b); }); };
-  w.TextEncoder=require('util').TextEncoder;
-  var pedidos=[], baixados=[];
-  var addHead=w.document.head.appendChild.bind(w.document.head);
-  w.document.head.appendChild=function(el){
-    if(el.tagName==='SCRIPT'){ pedidos.push(el.getAttribute('src'));
-      w.FotosPptx={build:function(itens,n,op){ w.__pptx={itens:itens,op:op}; return new Uint8Array([1]); }, zip:function(files){ w.__zip=files; return new Uint8Array([2]); }};
-      setTimeout(function(){ el.onload(); },5); return el; }
-    return addHead(el);
-  };
-  w.HTMLAnchorElement.prototype.click=function(){ baixados.push(this.download); };
+  ck(!/FotosPptx|carregarPptx/.test(fs.readFileSync('fotos-estudo.js','utf8')),'o painel não tem mais um gerador de slides próprio');
   w.abrirPainelFotos('Q1','S1');
-  for(i=0;i<100&&!w.document.querySelector('#fotoPainel[open] [data-p="pptx"]');i++) await espera();
-  w.document.querySelector('#fotoPainel[open] [data-p="pptx"]').click();
-  for(i=0;i<200&&!baixados.length;i++) await espera();
-  var swAssets=fs.readFileSync('sw.js','utf8');
-  ck(pedidos.length===1 && swAssets.indexOf("'./"+pedidos[0]+"'")>=0,'pede o gerador pelo mesmo endereço que o sw.js guarda — exporta sem internet ('+pedidos[0]+')');
-  ck(baixados[0]==='EST-1_fotos.pptx','baixa EST-1_fotos.pptx');
-  var legs=(w.__pptx&&w.__pptx.itens||[]).map(function(x){ return x.label; });
-  ck(legs.length===2 && /7 DAA/.test(legs[0]) && /14 DAA/.test(legs[1]) && /Fungicida X/.test(legs[0]),'slides na ordem da matriz, com a legenda de cada foto');
-  ck(w.__pptx.itens[0].width===2048,'foto do slide reduzida para 2048 px (o PPTX não carrega os originais inteiros)');
-  w.document.querySelector('#fotoPainel[open] [data-p="zip"]').click();
-  for(i=0;i<200&&baixados.length<2;i++) await espera();
-  var nomes=(w.__zip||[]).map(function(x){ return x.nome; });
-  ck(baixados[1]==='EST-1_originais.zip' && nomes.join()==='001_T2_R1_2026-09-08.jpg,002_T2_R1_2026-09-15.jpg,legendas.json','ZIP com os originais em nome estável e as legendas');
-  ck(pedidos.length===1,'o gerador é lido uma vez só');
+  for(i=0;i<100&&!w.document.querySelector('#fotoPainel[open] [data-p="slides"]');i++) await espera();
+  var pn5=w.document.querySelector('#fotoPainel[open]');
+  ck(!pn5.querySelector('[data-p="pptx"],[data-p="zip"]'),'nada de "Apresentação (PPTX)" com 4 fotos fixas');
+  w.__galeria.length=0;
+  pn5.querySelector('[data-p="slides"]').click();
+  var g=w.__galeria[0];
+  ck(g && g.s.qid==='Q1' && g.s.sid==='S1' && g.ini && g.ini.slides===true,'"Slides e originais" abre a galeria de sempre, já na montagem da apresentação');
+  pn5.querySelector('[data-p="sequencia"]').click();
+  g=w.__galeria[1];
+  ck(g && g.ini.sequence===true && g.ini.treatment==='T1' && g.ini.rep===1 && g.ini.plot==='1A','"Fotos em sequência" abre a tela de fotos seguidas, na primeira parcela');
+  ck(g.ini.assessment==='av2' && g.ini.date==='2026-09-15','e presa à leitura de hoje, quando o estudo tem uma');
+  ck(!!w.document.querySelector('#fotoPainel[open]'),'o painel fica embaixo (redesenha quando a galeria fecha)');
+
+  console.log('\n[5b] na avaliação');
+  w.__avAberta=estudo.avaliacoes[0]; w.__galeria.length=0; w.__cliques.length=0;
+  w.document.body.insertAdjacentHTML('beforeend','<div id="eePnl"><button type="button" data-av-photo-seq="1">📷 Fotos em sequência</button></div>');
+  w.document.getElementById('eePnl').addEventListener('click',function(ev){ ev.stopPropagation(); });
+  w._avCroquiKey='T2R2';
+  w.document.querySelector('[data-av-photo-seq]').click();
+  g=w.__galeria[0];
+  ck(g && g.ini.sequence===true && g.ini.treatment==='T2' && g.ini.rep===2 && g.ini.plot==='2B' && g.ini.assessment==='av1' && g.ini.date==='2026-09-08',
+     'o botão da avaliação abre a sequência na parcela destacada, presa à leitura aberta (mesmo com o painel parando o clique)');
+  ck(!w.__cliques.length,'e não abre a câmera solta');
+  w._avCroquiKey=null;
+  w.localStorage.setItem('agracta-fotos-sequencia','1');
+  w.avFotografarParcela('T1R2');
+  g=w.__galeria[1];
+  ck(g && g.ini.sequence===true && g.ini.plot==='1B' && !w.__cliques.length,'quem deixou a sequência ligada: o botão Foto volta a abrir a tela de fotos seguidas, nesta parcela');
+  w.localStorage.setItem('agracta-fotos-sequencia','0');
+  w.avFotografarParcela('T1R2');
+  ck(w.__galeria.length===2 && w.__cliques.length===1,'sequência desligada: o botão Foto abre a câmera direto, como no painel novo');
+  w.__cliques.length=0;
 
   console.log('\n[6] excluir');
   var pn6=w.document.querySelector('#fotoPainel[open]');

@@ -1012,18 +1012,29 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 	.measure-actions button.on{background:#e9ebef!important;color:#1c1f24!important;border-color:#e9ebef!important}
 	.measure-actions button.danger{background:#7f251f!important;color:#fff!important;border-color:#c44a40!important}
 
-/* ===== Avaliação: contraste no tema claro (fundo claro→texto escuro; card automático escuro→texto claro) ===== */
-.av-table th{background:#eceef1!important;color:#2b3138!important;border-color:#dfe2e6!important}
-.av-tname{background:#eceef1!important;color:#15171a!important}
-.av-cell{background:#fff!important;color:#15171a!important;border-color:#d7dbe0!important}
-.av-cell::placeholder{color:#a0a5ab!important}
-.av-step{background:#f0f1f3!important;color:#2b3138!important;border-color:#d2d6db!important}
-.av-step:active{background:#e3e5e9!important}
-.av-addcol{background:#f0f1f3!important;color:#2b3138!important;border-color:#d2d6db!important}
+/* ===== Avaliação: a grade segue o tema do painel (card automático escuro→texto claro) =====
+   Estas cores eram fixas e CLARAS ("contraste no tema claro"), mas sem html.light:
+   valiam no escuro também. O campo de lançamento escapava — .se-field input do
+   theme-2026 é mais específico e segue o tema —, a coluna presa das parcelas e o
+   cabeçalho não: no tema escuro, células quase brancas com texto cinza no meio de
+   uma tabela preta. Com os tokens do tema, as duas partes andam juntas. */
+.av-table th{background:var(--gp-s3)!important;color:var(--gp-text)!important;border-color:var(--gp-line)!important}
+.av-tname{background:var(--gp-s3)!important;color:var(--gp-text)!important}
+.av-cell{background:var(--gp-s1)!important;color:var(--gp-text)!important;border-color:var(--gp-line-2)!important}
+.av-cell::placeholder{color:var(--gp-text-3)!important}
+.av-step{background:var(--gp-s2)!important;color:var(--gp-text)!important;border-color:var(--gp-line-2)!important}
+.av-step:active{background:var(--gp-s3)!important}
+.av-addcol{background:var(--gp-s2)!important;color:var(--gp-text)!important;border-color:var(--gp-line-2)!important}
 .av-delcol{color:#c0492e!important}
-.av-hint,.av-auto-note{color:#5b616a!important}
-.av-auto-toggle{background:#1f242a!important;color:#f3f5f7!important}
-.av-auto-toggle.off{background:#f0f1f3!important;color:#2b3138!important;border:1px solid #d2d6db!important}
+.av-hint,.av-auto-note{color:var(--gp-text-3)!important}
+.av-auto-toggle{background:var(--gp-text)!important;color:var(--gp-s1)!important}
+/* Campos do tratamento no cadastro (produto, dose, volume): o mesmo caso — #fff
+   fixo do bloco claro com o texto do tema; no escuro, texto claro em campo
+   branco. Seguem o tema como o seletor ao lado (.se-trat select). A borda fica:
+   a justificativa de dose fora da bula avisa por ela. */
+.se-trat input{background:var(--gp-s1)!important;color:var(--gp-text)!important}
+.se-trat input::placeholder{color:var(--gp-text-3)!important}
+.av-auto-toggle.off{background:var(--gp-s2)!important;color:var(--gp-text)!important;border:1px solid var(--gp-line-2)!important}
 /* Card de foco (modo automático): fundo escuro neutro -> texto claro, alto contraste */
 .av-auto-box{background:#1c1f24!important;border:1px solid #343943!important;box-shadow:var(--vm-shadow)!important}
 .av-auto-top{color:#c4c8ce!important}

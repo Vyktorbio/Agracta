@@ -351,9 +351,40 @@
     };
   }
 
+  /* O SDK do Firestore nao entrega a quem grava o erro de cota, de rede ou de
+     login: guarda o lote, tenta de novo e so escreve a queixa no console. O
+     Firestore traz a propria copia do logger (firebase.onLog nao chega nele),
+     entao a escuta e no console: le a linha do SDK, guarda a hora da ultima
+     queixa de cada tipo e entrega a mensagem ao console como sempre. */
+  function _registraQueixa(txt){
+    var t=String(txt||''),tipo='';
+    if(/resource-exhausted|quota exceeded/i.test(t))tipo='cota';
+    else if(/unauthenticated/i.test(t))tipo='login';
+    else if(/permission-denied|insufficient permissions/i.test(t))tipo='permissao';
+    else if(/could not reach cloud firestore|transport errored|unavailable/i.test(t))tipo='rede';
+    if(!tipo)return;
+    FB.queixas=FB.queixas||{};FB.queixas[tipo]=Date.now();FB.ultimaQueixa=t.slice(0,300);
+  }
+  function _escutarQueixasDoSdk(){
+    if(FB.escutaSdk||typeof console==='undefined')return;
+    FB.escutaSdk=true;
+    ['error','warn'].forEach(function(nivel){
+      var orig=console[nivel];
+      if(typeof orig!=='function')return;
+      console[nivel]=function(){
+        try{
+          var a0=arguments[0];
+          if(typeof a0==='string'&&a0.indexOf('@firebase/firestore')>=0)
+            _registraQueixa(Array.prototype.slice.call(arguments,1).join(' '));
+        }catch(e){}
+        return orig.apply(console,arguments);
+      };
+    });
+  }
   function firebaseInit(){
     if(FB.ready)return FB;
     if(!configured())return null;
+    _escutarQueixasDoSdk();
     try{
       FB.app=window.firebase.apps&&window.firebase.apps.length?window.firebase.app():window.firebase.initializeApp(CFG);
       FB.auth=window.firebase.auth();
@@ -850,57 +881,44 @@
     /* O último lote publica a revisão: só pode sair após os anteriores.
        Uma rede lenta mantém um único envio ativo e conserva a edição seguinte. */
     var all=batches.reduce(function(p,b){return p.then(function(){return b.commit();});},Promise.resolve());
-    /* DOIS PRAZOS, DUAS PERGUNTAS DIFERENTES ==================================
-       LENTO nao e PERDIDO, e o remedio de um estraga o outro.
+    /* UM LOTE NA FILA DO SDK, NUNCA DOIS ======================================
+       `commit()` do Firestore nao rejeita quando o servidor recusa por um motivo
+       que o SDK trata como passageiro — sem sinal, COTA ESGOTADA
+       (resource-exhausted), login a renovar. Ele guarda o lote na memoria e
+       tenta de novo sozinho, para sempre; a promessa so fica pendente.
 
-       O cao de guarda de 15 s responde "esta demorando": avisa na tela e NAO
-       solta a tranca. Isso e proposital e esta trancado em teste — numa rede
-       so lenta, disparar um segundo envio por cima do primeiro duplica escrita
-       e gasta cota a toa; a edicao seguinte ja sai sozinha quando o envio em
-       curso responder.
+       Aos 90 s este codigo dava o envio por perdido, soltava a tranca e, 60 s
+       depois, mandava OUTRO lote com tudo de novo. Mas o primeiro nao se perdia:
+       continuava na fila do SDK, e o novo entrava atras dele — a fila e uma so,
+       lote novo nunca passa na frente do velho. Um aparelho parado empilhava um
+       lote a cada 2,5 min, cada um com as mesmas alteracoes e o seu proprio
+       historico. Um computador aberto a noite inteira juntava centenas, e quando
+       o servidor voltava a aceitar (a cota gratuita renova de madrugada) o SDK
+       despejava todos de uma vez: a cota do dia novo acabava logo cedo, e todos
+       os aparelhos voltavam a "N alteracoes aguardando envio" — no celular e no
+       computador ao mesmo tempo, como em 29/09.
 
-       Mas `commit()` do Firestore NAO rejeita quando o aparelho perde o sinal:
-       ele fica PENDENTE ate reconectar, eventualmente para sempre. E
-       `commitState` comeca com "se ja esta enviando, guarda e sai". Entao um
-       unico envio pendurado trancava TODOS os seguintes: o celular seguia
-       gravando no aparelho e nada mais subia para o servidor pela sessao
-       inteira. A nova tentativa de 60 s nem era agendada, porque ela mora no
-       tratamento de ERRO e a promessa nunca chegava a falhar. Mudo e parado,
-       que e a pior combinacao possivel.
-
-       Por isso o segundo prazo, bem mais longo: 90 s sem resposta nao e mais
-       rede lenta, e envio perdido. Ai a tranca se solta e a tentativa e dada
-       como abandonada.
-
-       Uma tentativa abandonada ainda pode responder depois. A ordem de escrita
-       do Firestore e preservada por cliente: os lotes dela, emitidos primeiro,
-       chegam antes dos da proxima, que leva dado mais novo — a mais nova
-       vence. O que ela nao pode fazer e DAR NOTICIA: nao anuncia "salvo", nao
-       move `remoteFlat`/`lastRev` e nao mexe na tranca de quem veio depois. */
-    FB.pushSeq=(FB.pushSeq||0)+1;
-    var _meuEnvio=FB.pushSeq;
-    function _souOEnvioAtual(){ return FB.pushSeq===_meuEnvio; }
+       Agora os dois prazos so AVISAM, e com o motivo que o SDK escreve apenas no
+       console (_motivo). O lote segue o mesmo ate o SDK responder; o que for
+       editado enquanto isso fica em `queuedState` e sobe num lote so, depois.
+       A partir de 90 s o aparelho confere o servidor por fora do SDK, para
+       receber o trabalho do colega mesmo sem conseguir enviar o proprio
+       (_conferirColegaEmEspera). */
     var watchdog=setTimeout(function(){
-      if(FB.pushing&&_souOEnvioAtual()){
+      if(FB.pushing){
         window._cloudSavingActive=false;
-        cloudBadge('offline','=⌛ '+FB.pendingWrites+' alterações aguardando envio');
+        cloudBadge('offline','=⌛ '+FB.pendingWrites+' alterações aguardando o servidor'+_motivoCurto());
       }
     },15000);
-    var perdido=setTimeout(function(){
-      if(FB.pushing&&_souOEnvioAtual()){
-        FB.pushSeq++;                       /* esta tentativa vira passado */
-        FB.pushing=false;FB.pushPromise=null;window._cloudSavingActive=false;
+    var parado=setTimeout(function(){
+      if(FB.pushing){
+        window._cloudSavingActive=false;
         setUnsavedChanges(true);
-        cloudBadge('error','=⚠ o envio não respondeu · salvo neste aparelho · tentando de novo');
-        _agendarNovaTentativa();
+        _entraEmEspera();
       }
     },90000);
     FB.pushPromise=all.then(function(){
-      clearTimeout(watchdog);clearTimeout(perdido);
-      /* Resposta de uma tentativa ja abandonada: as escritas dela chegaram e
-         foram sobrepostas pela mais nova. Quem manda na tela e na contabilidade
-         e o envio ATUAL. */
-      if(!_souOEnvioAtual()) return;
+      clearTimeout(watchdog);clearTimeout(parado);_saiDaEspera();
       FB.pushing=false;window._cloudSavingActive=false;
       FB.pushPromise=null;
       FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
@@ -918,11 +936,8 @@
       if(FB.lerDepois&&typeof window.cloudPull==='function'){FB.lerDepois=false;return window.cloudPull();}
       if(changed)return commitState(latest);
     },function(e){
-      clearTimeout(watchdog);clearTimeout(perdido);
+      clearTimeout(watchdog);clearTimeout(parado);_saiDaEspera();
       console.error('[Agracta Firebase] gravação:',e);
-      /* Falha de uma tentativa abandonada nao repinta a tela nem solta a tranca
-         de quem veio depois: a que vale ja esta correndo. */
-      if(!_souOEnvioAtual()) return;
       FB.pushing=false;window._cloudSavingActive=false;
       FB.pushPromise=null;setUnsavedChanges(true);
       var cod=(e&&(e.code||e.name))||'erro';
@@ -1021,6 +1036,126 @@
       p.then(function(v){clearTimeout(t);ok(v);},function(e){clearTimeout(t);falha(e);});
     });
   }
+
+  /* ===== ENVIO PARADO: DIZER POR QUE, E RECEBER MESMO ASSIM ====================
+     O motivo vem de duas fontes: a queixa que o SDK escreve no console
+     (_escutarQueixasDoSdk guarda a hora da ultima de cada tipo) e a leitura
+     direta da raiz pela REST, que devolve o erro por inteiro. */
+  var QUEIXA_VALE_MS=10*60*1000, ESPERA_CONFERE_MS=60000;
+  function _queixaRecente(tipo){
+    var t=(FB.queixas||{})[tipo]||0;
+    return t>0&&(Date.now()-t)<QUEIXA_VALE_MS;
+  }
+  /* 'cota' | 'rede' | 'travado' (o servidor responde e o envio deste aparelho
+     nao anda) | '' (ainda nao se sabe) */
+  function _motivo(){
+    if(_queixaRecente('cota')||FB.leituraRest==='resource-exhausted')return 'cota';
+    if(typeof navigator!=='undefined'&&navigator.onLine===false)return 'rede';
+    if(FB.leituraRest==='rede')return 'rede';
+    if(FB.leituraRest==='ok')return 'travado';
+    if(_queixaRecente('rede'))return 'rede';
+    return '';
+  }
+  function _motivoCurto(){
+    var m=_motivo();
+    return m==='cota'?' · servidor sem cota':(m==='rede'?' · sem conexão com o servidor':'');
+  }
+  function _pintaEspera(){
+    if(!FB.espera)return;
+    var n=FB.pendingWrites||0,m=_motivo(),guardadas=' · '+n+' alterações guardadas neste aparelho';
+    cloudBadge('error',m==='cota'?('=⚠ servidor sem cota (Firebase)'+guardadas+' · sobem sozinhas · toque'):
+      m==='rede'?('=⌁ sem conexão com o servidor'+guardadas+' · sobem sozinhas'):
+      ('=⚠ o servidor não confirma o envio'+guardadas+' · toque'));
+  }
+  function _entraEmEspera(){
+    if(!FB.espera)FB.espera={desde:Date.now()};
+    window._syncParado=true;
+    _pintaEspera();
+    _conferirColegaEmEspera();
+  }
+  function _saiDaEspera(){
+    if(FB.esperaTimer){clearTimeout(FB.esperaTimer);FB.esperaTimer=null;}
+    FB.espera=null;FB.leituraRest='';window._syncParado=false;
+  }
+  /* A raiz como ESTA NO SERVIDOR. Com uma gravacao nossa pendente, toda leitura
+     pelo SDK devolve a raiz com o NOSSO rev/writeId por cima (compensacao de
+     latencia), e o ouvinte da raiz ignora tudo enquanto `hasPendingWrites`: a
+     gravacao do colega fica invisivel. A conferencia antes de gravar via o
+     proprio rev pendente como "revisao nova" e relia o banco INTEIRO a cada
+     tentativa. Pela REST sai o servidor puro, em 1 leitura — e o erro vem por
+     inteiro: RESOURCE_EXHAUSTED e cota. */
+  function _raizNoServidor(){
+    var u=(FB.auth&&FB.auth.currentUser)||FB.user;
+    if(!u||typeof u.getIdToken!=='function'||typeof fetch!=='function'||!CFG.projectId){
+      var sem=new Error('sem leitura direta');sem.code='indisponivel';return Promise.reject(sem);
+    }
+    return u.getIdToken().then(function(tk){
+      return fetch('https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(CFG.projectId)+
+        '/databases/(default)/documents/'+ROOT,{headers:{Authorization:'Bearer '+tk},cache:'no-store'});
+    }).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(j){
+        var er=(j&&j.error)||{};
+        if(!r.ok){
+          var e=new Error(er.message||('HTTP '+r.status));
+          e.code=String(er.status||'').toLowerCase().replace(/_/g,'-')||('http-'+r.status);throw e;
+        }
+        var f=(j&&j.fields)||{};
+        function val(x){return !x?null:(x.stringValue!=null?x.stringValue:(x.integerValue!=null?x.integerValue:(x.doubleValue!=null?x.doubleValue:null)));}
+        return {rev:Number(val(f.rev))||0,writeId:String(val(f.writeId)||'')};
+      });
+    });
+  }
+  /* A cada minuto com o envio parado (e a tela a vista): 1 leitura da raiz.
+     Gravacao alheia nova -> le e mescla, como sempre; o que a mescla tiver para
+     subir espera o lote parado em `queuedState`. Sem gravacao alheia, nada e
+     relido. */
+  function _conferirColegaEmEspera(){
+    if(FB.esperaTimer){clearTimeout(FB.esperaTimer);FB.esperaTimer=null;}
+    if(!FB.espera||!FB.pushing)return;
+    FB.esperaTimer=setTimeout(_conferirColegaEmEspera,ESPERA_CONFERE_MS);
+    if(FB.conferindoRest)return;
+    if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;
+    FB.conferindoRest=true;
+    _raizNoServidor().then(function(d){
+      FB.conferindoRest=false;FB.leituraRest='ok';
+      var wid=d.writeId;
+      if(wid&&!(FB.myWrites&&FB.myWrites[wid])&&wid!==FB.lastSeenWrite&&wid!==FB.colegaVisto&&
+         FB.espera&&typeof window.cloudPull==='function'){
+        FB.colegaVisto=wid;
+        return Promise.resolve(window.cloudPull()).then(_pintaEspera,_pintaEspera);
+      }
+      _pintaEspera();
+    },function(e){
+      FB.conferindoRest=false;
+      var c=String((e&&e.code)||'');
+      /* fetch que nem chega ao servidor rejeita com TypeError: e rede */
+      FB.leituraRest=c==='resource-exhausted'?c:(((e&&e.name==='TypeError')||/network|unavailable/i.test(c))?'rede':'');
+      _pintaEspera();
+    });
+  }
+  /* Toque no selo com o envio parado: explica o motivo e, quando o problema e
+     deste aparelho (o servidor responde e o envio nao anda), oferece recarregar.
+     Nada se perde: o app sobe de novo a partir do cofre, rele a nuvem, mescla e
+     reenvia — o lote preso na memoria do SDK some junto com a pagina. */
+  window.agractaSyncExplicar=function(){
+    var n=FB.pendingWrites||0,m=_motivo();
+    if(m==='cota'){
+      alert('O servidor do Agracta (Firebase) recusou a gravação por COTA.\n\n'+
+        'No plano gratuito do Firebase há limite diário de leituras e de gravações (renova de madrugada, por volta das 4h de Brasília) e de 1 GB de armazenamento. Enquanto o limite não libera, nenhum aparelho consegue enviar — e por isso um aparelho não recebe o que o outro fez.\n\n'+
+        'Nada se perde: as '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando o servidor voltar a aceitar. Não limpe os dados do navegador.\n\n'+
+        'Para não parar mais: o administrador ativa o plano Blaze no console do Firebase (Uso e faturamento). Ele cobra só o que passar do gratuito.');
+      return;
+    }
+    if(m==='rede'){
+      alert('Sem conexão com o servidor.\n\nAs '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando a conexão voltar.');
+      return;
+    }
+    if(confirm((m==='travado'?'O servidor responde, mas o envio deste aparelho não anda.':'O servidor ainda não confirmou o envio.')+
+      '\n\nRecarregar o app refaz a conexão e reenvia as '+n+' alterações. Nada se perde: está tudo guardado neste aparelho.\n\nRecarregar agora?')){
+      try{if(typeof window.save==='function')window.save();}catch(e){}
+      checkpointPut(localState(),true).then(function(){location.reload();},function(){location.reload();});
+    }
+  };
 
   /* ===== NUNCA GRAVAR POR CIMA DO QUE NAO FOI LIDO ===========================
      commitState grava cada documento que mudou em relacao a ULTIMA LEITURA
