@@ -74,18 +74,26 @@ const nuncaResponde=()=>new Promise(function(){});
   let h=harness({commit:nuncaResponde});
   h.ctx.commitState({estudos:{E1:{v:2}}});await tick();
   ok(h.commits.length===1&&h.ctx.FB.pushing===true,'o primeiro envio saiu e a tranca está posta');
+  const hs=harness({commit:nuncaResponde});
+  hs.ctx.commitState({estudos:{E1:{v:2}}});await tick();prazo(hs,15000).f();
+  ok(/^=⌛ \d+ alterações aguardando o servidor/.test(hs.badges.at(-1)),'sem motivo conhecido: a tela diz quantas alterações aguardam o servidor');
   h.ctx.FB.queixas={cota:Date.now()};           /* o SDK escreveu "resource-exhausted" no console */
+  h.ctx.FB.ultimaQueixa='Firestore (12.15.0): FirebaseError: [code=resource-exhausted]: Quota exceeded.';
   prazo(h,15000).f();
   ok(h.ctx.FB.pushing===true,'o aviso de 15 s NÃO libera um envio concorrente');
-  ok(/aguardando o servidor/.test(h.badges.at(-1)),'a tela diz quantas alterações aguardam o servidor');
-  ok(/sem cota/.test(h.badges.at(-1)),'e diz o motivo que o SDK só escreveu no console: cota');
+  ok(/^=⚠ Servidor sem cota/.test(h.badges.at(-1)),'o MOTIVO vem primeiro — no celular o fim da frase some nas reticências');
+  ok(/guardadas neste aparelho/.test(h.badges.at(-1)),'e diz que as alterações estão guardadas no aparelho');
+  ok(h.ctx._syncParado===true,'já aos 15 s o toque no selo explica, em vez de mandar de novo');
+  let alertas=[];h.ctx.alert=t=>alertas.push(t);h.ctx.window.agractaSyncExplicar();
+  ok(/COTA/.test(alertas[0]||'')&&/Detalhe técnico: FirebaseError: \[code=resource-exhausted\]: Quota exceeded\./.test(alertas[0]||''),
+     'a explicação traz o que o servidor disse, por extenso (dá para mandar print)');
 
   console.log('\n[2] 90 s: também só avisa — nenhum lote novo enquanto o SDK tem o primeiro');
   prazo(h,90000).f();await tick();
   ok(h.ctx.FB.pushing===true,'a tranca continua: o lote segue na fila do SDK');
   ok(h.ctx._unsavedChanges===true,'o estado segue marcado como não enviado');
   ok(h.ctx._syncParado===true,'o app sabe que o envio está parado (o toque no selo explica)');
-  ok(/servidor sem cota/.test(h.badges.at(-1))&&/guardadas neste aparelho/.test(h.badges.at(-1)),
+  ok(/servidor sem cota/i.test(h.badges.at(-1))&&/guardadas neste aparelho/.test(h.badges.at(-1)),
      'a tela diz: servidor sem cota, alterações guardadas neste aparelho');
   const umMinuto=prazo(h,60000);if(umMinuto)umMinuto.f();await tick();
   ok(h.saves===0&&h.commits.length===1,'um minuto depois: nenhuma "nova tentativa" que mandaria outro lote');
@@ -104,12 +112,12 @@ const nuncaResponde=()=>new Promise(function(){});
      'pela REST, direto na raiz — por fora do SDK, que mostraria a nossa gravação pendente por cima');
   ok(h.ultimoFetch.o.headers.Authorization==='Bearer tk','com o token do login');
   ok(h.pulls===0,'a raiz ainda é a que o aparelho leu: nada a reler');
-  ok(/servidor não confirma/.test(h.badges.at(-1)),'servidor responde e o envio não anda: a tela diz, e o toque oferece recarregar');
+  ok(/servidor não confirma/i.test(h.badges.at(-1)),'servidor responde e o envio não anda: a tela diz, e o toque oferece recarregar');
   h.raiz={rev:4,writeId:'w-meu-antigo'};prazo(h,60000).f();await tick();
   ok(h.pulls===0,'gravação deste próprio aparelho não é "do colega"');
   h.raiz={rev:5,writeId:'w-do-pc'};prazo(h,60000).f();await tick();
   ok(h.pulls===1,'o computador gravou: lê e mescla, mesmo sem conseguir enviar');
-  ok(/servidor não confirma/.test(h.badges.at(-1)),'e o aviso volta ao selo depois da leitura');
+  ok(/servidor não confirma/i.test(h.badges.at(-1)),'e o aviso volta ao selo depois da leitura');
   prazo(h,60000).f();await tick();prazo(h,60000).f();await tick();
   ok(h.pulls===1,'a mesma gravação alheia não é relida a cada minuto');
   ok(h.fetches===5,'uma leitura da raiz por minuto, não o banco inteiro');
@@ -121,11 +129,11 @@ const nuncaResponde=()=>new Promise(function(){});
   const hc=harness({commit:nuncaResponde,fetchStatus:{http:429,status:'RESOURCE_EXHAUSTED'}});
   hc.ctx.commitState({estudos:{E1:{v:2}}});await tick();
   prazo(hc,90000).f();await tick();
-  ok(/servidor sem cota/.test(hc.badges.at(-1)),'a REST responde 429 RESOURCE_EXHAUSTED: cota, mesmo sem queixa no console');
+  ok(/servidor sem cota/i.test(hc.badges.at(-1)),'a REST responde 429 RESOURCE_EXHAUSTED: cota, mesmo sem queixa no console');
   const hr=harness({commit:nuncaResponde,fetchFalha:new TypeError('Failed to fetch')});
   hr.ctx.commitState({estudos:{E1:{v:2}}});await tick();
   prazo(hr,90000).f();await tick();
-  ok(/sem conexão com o servidor/.test(hr.badges.at(-1)),'fetch que nem chega ao servidor: sem conexão');
+  ok(/sem conexão com o servidor/i.test(hr.badges.at(-1)),'fetch que nem chega ao servidor: sem conexão');
 
   console.log('\n[4] o SDK responde: conta como envio feito, e a espera sobe num lote só');
   let solta;const h2=harness({commit:()=>h2.commits.length===1?new Promise(r=>{solta=r;}):Promise.resolve()});

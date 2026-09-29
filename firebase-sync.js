@@ -907,7 +907,10 @@
     var watchdog=setTimeout(function(){
       if(FB.pushing){
         window._cloudSavingActive=false;
-        cloudBadge('offline','=⌛ '+FB.pendingWrites+' alterações aguardando o servidor'+_motivoCurto());
+        /* já aqui o toque no selo explica (em vez de mandar de novo o que o SDK já tem) */
+        if(!FB.espera)FB.espera={desde:Date.now()};
+        window._syncParado=true;
+        _pintaEspera();
       }
     },15000);
     var parado=setTimeout(function(){
@@ -1056,16 +1059,21 @@
     if(_queixaRecente('rede'))return 'rede';
     return '';
   }
-  function _motivoCurto(){
-    var m=_motivo();
-    return m==='cota'?' · servidor sem cota':(m==='rede'?' · sem conexão com o servidor':'');
-  }
+  /* O MOTIVO VEM PRIMEIRO. No celular o selo tinha uma linha de 52% da tela com
+     reticências, e o motivo, no fim da frase, sumia: "88 alterações aguardando o
+     s..." (29/09, já com a versão nova). */
   function _pintaEspera(){
     if(!FB.espera)return;
-    var n=FB.pendingWrites||0,m=_motivo(),guardadas=' · '+n+' alterações guardadas neste aparelho';
-    cloudBadge('error',m==='cota'?('=⚠ servidor sem cota (Firebase)'+guardadas+' · sobem sozinhas · toque'):
-      m==='rede'?('=⌁ sem conexão com o servidor'+guardadas+' · sobem sozinhas'):
-      ('=⚠ o servidor não confirma o envio'+guardadas+' · toque'));
+    var n=FB.pendingWrites||0,m=_motivo(),g=n+' alterações guardadas neste aparelho';
+    if(m==='cota')cloudBadge('error','=⚠ Servidor sem cota (Firebase) · '+g+' · toque');
+    else if(m==='rede')cloudBadge('offline','=⌁ Sem conexão com o servidor · '+g);
+    else if(m==='travado')cloudBadge('error','=⚠ Servidor não confirma o envio · '+g+' · toque');
+    else cloudBadge('offline','=⌛ '+n+' alterações aguardando o servidor · toque');
+  }
+  /* O que o servidor disse, por extenso, para quem precisa ver (ou mandar print). */
+  function _detalheTecnico(){
+    var q=FB.ultimaQueixa?String(FB.ultimaQueixa).replace(/^Firestore \([^)]*\):\s*/,'').slice(0,220):'nenhuma queixa do servidor registrada';
+    return '\n\nDetalhe técnico: '+q+(FB.leituraRest?(' · leitura direta: '+FB.leituraRest):'');
   }
   function _entraEmEspera(){
     if(!FB.espera)FB.espera={desde:Date.now()};
@@ -1143,15 +1151,15 @@
       alert('O servidor do Agracta (Firebase) recusou a gravação por COTA.\n\n'+
         'No plano gratuito do Firebase há limite diário de leituras e de gravações (renova de madrugada, por volta das 4h de Brasília) e de 1 GB de armazenamento. Enquanto o limite não libera, nenhum aparelho consegue enviar — e por isso um aparelho não recebe o que o outro fez.\n\n'+
         'Nada se perde: as '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando o servidor voltar a aceitar. Não limpe os dados do navegador.\n\n'+
-        'Para não parar mais: o administrador ativa o plano Blaze no console do Firebase (Uso e faturamento). Ele cobra só o que passar do gratuito.');
+        'Para não parar mais: o administrador ativa o plano Blaze no console do Firebase (Uso e faturamento). Ele cobra só o que passar do gratuito.'+_detalheTecnico());
       return;
     }
     if(m==='rede'){
-      alert('Sem conexão com o servidor.\n\nAs '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando a conexão voltar.');
+      alert('Sem conexão com o servidor.\n\nAs '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando a conexão voltar.'+_detalheTecnico());
       return;
     }
     if(confirm((m==='travado'?'O servidor responde, mas o envio deste aparelho não anda.':'O servidor ainda não confirmou o envio.')+
-      '\n\nRecarregar o app refaz a conexão e reenvia as '+n+' alterações. Nada se perde: está tudo guardado neste aparelho.\n\nRecarregar agora?')){
+      '\n\nRecarregar o app refaz a conexão e reenvia as '+n+' alterações. Nada se perde: está tudo guardado neste aparelho.'+_detalheTecnico()+'\n\nRecarregar agora?')){
       try{if(typeof window.save==='function')window.save();}catch(e){}
       checkpointPut(localState(),true).then(function(){location.reload();},function(){location.reload();});
     }
