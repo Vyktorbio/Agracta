@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-19";
+const APP_VERSION = "bioensaio-auditoria-20";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -175,6 +175,8 @@ function esc(v){
   }[ch]));
 }
 function avisar(msg, tipo="erro"){
+  /* o último aviso de erro vira o motivo de um trabalho do Agracta que parou antes de calcular */
+  if(tipo !== "ok") _agUltimoAviso = { msg: String(msg == null ? "" : msg), em: Date.now() };
   const box = $("#toast");
   if(!box) return;
   clearTimeout(toastTimer);
@@ -303,6 +305,35 @@ function lerCriteriosValidacao(){
    Sem Worker (navegador antigo, ou teste sem ele), vale o caminho de antes. */
 let motorWorker = null, _motorSeq = 0, _motorIniciado = false;
 const _motorPend = new Map();
+/* Em que pé está o motor: parado, carregando (e o quê), pronto ou falhou. O
+   Agracta lê isto para dizer a verdade na tela — sem isso ele não distinguia
+   "baixando o Python pela primeira vez numa rede lenta" de "travou", e o painel
+   ficava em "Carregando…" sem fim. */
+var _motorEstado = { fase: 'parado', msg: '', sub: '', em: 0 };
+function _motorFase(fase, msg, sub){
+  if (fase !== _motorEstado.fase) _motorEstado.em = Date.now();
+  _motorEstado.fase = fase;
+  if (msg != null) _motorEstado.msg = String(msg);
+  if (sub != null) _motorEstado.sub = fase === 'falhou' ? _erroCurto(sub) : String(sub);
+  try{ if (typeof _agPulso === 'function') _agPulso(); }catch(_){}
+}
+/* Erro do Python chega como o traceback inteiro — vinte linhas de "File …" no
+   cartão do celular. Para a tela vale a última linha ("ModuleNotFoundError: …");
+   o traceback segue inteiro nos detalhes técnicos. */
+function _erroCurto(msg){
+  const s = String(msg == null ? "" : msg).trim();
+  if (!/Traceback \(most recent call last\)/.test(s)) return s;
+  const linhas = s.split("\n").map(l => l.trim()).filter(Boolean);
+  for (let i = linhas.length - 1; i >= 0; i--){
+    if (/^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b/.test(linhas[i])) return linhas[i];
+  }
+  return linhas[linhas.length - 1] || s;
+}
+function _relatorioDeErro(e){
+  const bruto = String((e && e.message) || e || "");
+  const curto = _erroCurto(bruto);
+  return curto === bruto ? { ok:false, erro:bruto } : { ok:false, erro:curto, trace:bruto };
+}
 function _motorNoWorker(){ return typeof Worker === 'function' && !window.__motorNaPagina; }
 function iniciarMotorWorker(){
   return new Promise((resolve, reject) => {
@@ -315,12 +346,18 @@ function iniciarMotorWorker(){
       _motorPend.forEach(p => p.reject(err)); _motorPend.clear();
       /* worker que caiu DEPOIS de pronto: a próxima análise sobe outro. Se caiu na
          partida, quem decide é iniciarPyodide (recua para a página). */
-      if (motorWorker === w){ motorWorker = null; if (_motorIniciado) pyPronto = null; _motorIniciado = false; }
+      if (motorWorker === w){
+        motorWorker = null;
+        /* caiu depois de pronto (memória, por exemplo): o erro é DESTA análise, e
+           a próxima sobe outro worker — não é "o motor não carregou" */
+        if (_motorIniciado){ pyPronto = null; _motorFase('parado', '', ''); }
+        _motorIniciado = false;
+      }
       try{ w.terminate(); }catch(_){}
     };
     w.onmessage = (ev) => {
       const m = ev.data || {};
-      if (m.tipo === 'progresso'){ setOverlay(m.msg, m.sub); return; }
+      if (m.tipo === 'progresso'){ setOverlay(m.msg, m.sub); _motorFase('carregando', m.msg, m.sub); return; }
       if (m.tipo === 'pronto'){ _motorIniciado = true; Object.assign(ENGINE_HASHES, m.hashes || {}); esconderOverlay(); resolve(); return; }
       if (m.tipo === 'falhou'){ setOverlay("Erro ao carregar o motor", m.erro); const err = new Error(m.erro); falhar(err); reject(err); return; }
       if (m.tipo === 'resposta'){
@@ -358,11 +395,14 @@ async function iniciarPyodide() {
   }
   try {
     mostrarOverlay("Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
+    _motorFase('carregando', "Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
     pyodide = await loadPyodide({ indexURL: "pyodide/" });
     window.__pyodide = pyodide;
     setOverlay("Carregando bibliotecas…", "numpy, scipy, pandas, statsmodels");
+    _motorFase('carregando', "Carregando bibliotecas…", "numpy, scipy, pandas, statsmodels");
     await pyodide.loadPackage(["numpy", "scipy", "pandas", "statsmodels"]);
     setOverlay("Preparando o motor…", "");
+    _motorFase('carregando', "Preparando o motor…", "");
     const arquivos = {};
     for (const f of ARQ_ENGINE) {
       const r = await fetch("bioengine/" + f + "?v=" + ENGINE_VERSION, { cache: "no-store" });
@@ -391,7 +431,18 @@ if "" not in sys.path:
     throw e;
   }
 }
-function garantirPyodide(){ if(!pyPronto) pyPronto = iniciarPyodide(); return pyPronto; }
+function garantirPyodide(){
+  if(!pyPronto){
+    _motorFase('carregando', "Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
+    const p = iniciarPyodide();
+    pyPronto = p;
+    /* Partida que falhou não fica gravada como resposta definitiva: o próximo
+       pedido tenta subir o motor de novo (a rede pode ter voltado). */
+    p.then(() => { if(pyPronto === p) _motorFase('pronto', '', ''); },
+           (e) => { if(pyPronto === p) pyPronto = null; _motorFase('falhou', "Erro ao carregar o motor", String((e && e.message) || e)); });
+  }
+  return pyPronto;
+}
 
 /* ----------------------------------------------------------------------- */
 /* Overlay                                                                 */
@@ -2640,7 +2691,19 @@ async function rodarPythonComDados(fnNome, dados, papeis, opcoes){
   }
 }
 
-$("#btn-analisar").addEventListener("click", async () => {
+/* O clique é o mesmo para a pessoa e para o Agracta. Quando é um trabalho da
+   fila, ele fica sabendo que a análise começou e, se ela terminar sem relatório
+   (papel faltando, conferência bloqueada), devolve o motivo em vez de nada. */
+$("#btn-analisar").addEventListener("click", () => {
+  const j = _agAtual;
+  if(j) j.clicou = true;
+  const p = executarAnalise();
+  if(j) Promise.resolve(p).catch(e => console.error(e)).then(() => {
+    if(_agAtual === j && !j.emitido) _agractaEmitirResultado({ok:false, erro:_agMotivo(j, "A análise terminou sem relatório.")});
+  });
+  return p;
+});
+async function executarAnalise(){
   if(MODO==="tempo") return analisarTempo();
   if(MODO==="validacao") return analisarValidacao();
   if(MODO==="forense") return analisarForense();
@@ -2676,8 +2739,8 @@ $("#btn-analisar").addEventListener("click", async () => {
     const _rel = await rodarPython("_run_web", papeis, opcoes);
     renderRelatorio(_rel);
     try{ ofertarVariabilidadeDaAnalise(_rel); }catch(_e){}
-  }catch(e){ esconderOverlay(); renderRelatorio({ok:false, erro:e.message}); console.error(e); }
-});
+  }catch(e){ esconderOverlay(); renderRelatorio(_relatorioDeErro(e)); console.error(e); }
+}
 
 async function analisarTempo(){
   if(!validarPipelineAntesDeAnalisar()) return;
@@ -2693,7 +2756,7 @@ async function analisarTempo(){
   try{
     registrarExecucao(papeis, opcoes);
     renderRelatorioTempo(await rodarPython("_run_tempo", papeis, opcoes));
-  }catch(e){ esconderOverlay(); renderRelatorioTempo({ok:false, erro:e.message}); console.error(e); }
+  }catch(e){ esconderOverlay(); renderRelatorioTempo(_relatorioDeErro(e)); console.error(e); }
 }
 async function analisarValidacao(){
   if(!validarPipelineAntesDeAnalisar()) return;
@@ -2710,7 +2773,7 @@ async function analisarValidacao(){
   try{
     registrarExecucao(papeis, opcoes);
     renderRelatorioValidacao(await rodarPython("_run_validacao", papeis, opcoes));
-  }catch(e){ esconderOverlay(); renderRelatorioValidacao({ok:false, erro:e.message}); console.error(e); }
+  }catch(e){ esconderOverlay(); renderRelatorioValidacao(_relatorioDeErro(e)); console.error(e); }
 }
 async function analisarForense(){
   if(!validarPipelineAntesDeAnalisar()) return;
@@ -2730,7 +2793,7 @@ async function analisarForense(){
   try{
     registrarExecucao(papeis, opcoes);
     renderRelatorioForense(await rodarPython("_run_forense", papeis, opcoes));
-  }catch(e){ esconderOverlay(); renderRelatorioForense({ok:false, erro:e.message}); console.error(e); }
+  }catch(e){ esconderOverlay(); renderRelatorioForense(_relatorioDeErro(e)); console.error(e); }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -3905,14 +3968,39 @@ registrarServiceWorker();
    O Agracta grava localStorage['agracta-bioestat-handoff'] = {aoa, modo, titulo} e abre
    este app num iframe. Aqui lemos, parseamos pela via Matriz já existente e carregamos. */
 function _agractaEmitirResultado(rel){
+  var j=_agAtual;
   try{
-    if(!window.__agractaEmbed || window.parent===window || !window.__agractaRequestId) return;
+    if(window.parent===window) return;
+    /* Cada resposta leva o número do trabalho que a produziu. Antes ia o do
+       ÚLTIMO trabalho recebido (window.__agractaRequestId): com o motor ainda
+       subindo no celular, o Agracta desistia de um trabalho, mandava o próximo,
+       e a análise de uma avaliação voltava com o número da outra. */
+    if(j){
+      if(j.emitido) return;
+      /* Motor que não subiu: o erro da análise é o do motor, dito como tal. */
+      if(rel && rel.ok===false && _agMotorResumo().fase==='falhou') rel=Object.assign({}, rel, {erro:_agMotivo(j, rel.erro||'')});
+      var msg={type:'agracta:bioestat-result', requestId:j.requestId, resultado:clonarAuditavel(rel||{}), motor:_agMotorResumo()};
+      j.emitido=true;
+      window.parent.postMessage(msg, window.location.origin);
+      setTimeout(function(){ _agConcluir(j); },0);
+      return;
+    }
+    if(!window.__agractaEmbed || !window.__agractaRequestId) return;
     window.parent.postMessage({
       type:'agracta:bioestat-result',
       requestId:window.__agractaRequestId,
       resultado:clonarAuditavel(rel||{})
     }, window.location.origin);
-  }catch(e){ console.warn('[Agracta motor] não foi possível devolver o resultado',e); }
+  }catch(e){
+    console.warn('[Agracta motor] não foi possível devolver o resultado',e);
+    /* Relatório que não atravessa (clone falhou) ainda deve uma resposta: sem
+       ela o trabalho prende a fila até o Agracta desistir. */
+    if(j && !j.emitido){
+      j.emitido=true;
+      try{ window.parent.postMessage({type:'agracta:bioestat-result', requestId:j.requestId, resultado:{ok:false, erro:'O relatório não pôde ser devolvido ao Agracta: '+String((e&&e.message)||e)}, motor:_agMotorResumo()}, window.location.origin); }catch(_){}
+      setTimeout(function(){ _agConcluir(j); },0);
+    }
+  }
 }
 function _agTipoResp(t){
   t=String(t||'').toLowerCase();
@@ -4035,14 +4123,83 @@ function __agractaHandoff(payload){
   }catch(e){ console.error('[Agracta handoff]', e); return false; }
 }
 window.__agractaHandoff = __agractaHandoff;
+/* ===== FILA DO AGRACTA: UM TRABALHO POR VEZ =================================
+   Os trabalhos chegam por mensagem e a página do motor é UMA só: colunas,
+   modo, papéis e opções são globais dela. Com o Python no worker a página fica
+   livre durante o cálculo, e um trabalho novo que chegasse no meio trocava as
+   colunas do anterior por baixo (a análise lê os dados DEPOIS de esperar o
+   motor subir). Agora eles esperam a vez, e cada um termina com exatamente UMA
+   resposta — inclusive quando a análise desiste antes de começar (papel
+   faltando, conferência bloqueada), que antes não devolvia nada e deixava o
+   Agracta esperando o prazo estourar.
+   Enquanto um trabalho está na mesa, a página avisa o Agracta a cada poucos
+   segundos em que pé está (recebido, motor carregando e o quê, calculando): é
+   isso que separa "baixando o módulo pela primeira vez" de "travou". */
+var _agFila=[], _agAtual=null, _agUltimoAviso=null, _AG_PULSO_MS=4000;
+function _agAvisarApp(tipo, dados){
+  try{
+    if(window.parent===window) return;
+    window.parent.postMessage(Object.assign({type:'agracta:bioestat-'+tipo}, dados||{}), window.location.origin);
+  }catch(e){}
+}
+function _agMotorResumo(){
+  var m=(typeof _motorEstado!=='undefined'&&_motorEstado)||{};
+  return {fase:m.fase||'parado', msg:m.msg||'', sub:m.sub||'', desde:m.em||0};
+}
+function _agPulso(){
+  var j=_agAtual; if(!j) return;
+  var m=_agMotorResumo();
+  var fase=m.fase==='pronto'?'calculando':(m.fase==='carregando'?'motor':(m.fase==='falhou'?'falhou':'recebido'));
+  _agAvisarApp('status',{requestId:j.requestId, fase:fase, msg:m.msg, sub:m.sub, motorDesde:m.desde, naFila:_agFila.length});
+}
+/* O motivo de um trabalho que terminou sem relatório: a falha do motor, se foi
+   ela; senão o último aviso de erro da própria análise ("Defina as colunas…"). */
+function _agMotivo(j, padrao){
+  var m=_agMotorResumo();
+  if(m.fase==='falhou') return 'O motor estatístico não carregou neste aparelho'+(m.sub?(' ('+m.sub+')'):'')+'. No primeiro uso ele precisa de internet para baixar o módulo estatístico.';
+  if(_agUltimoAviso && j && _agUltimoAviso.em>=j.inicio && _agUltimoAviso.msg) return _agUltimoAviso.msg;
+  return padrao;
+}
+function _agConcluir(j){
+  if(!j || _agAtual!==j) return;
+  clearInterval(j.pulso); clearTimeout(j.guarda);
+  _agAtual=null; window.__agractaRequestId='';
+  setTimeout(_agProximo,0);
+}
+function _agProximo(){
+  if(_agAtual || !_agFila.length) return;
+  var p=_agFila.shift()||{};
+  var j={requestId:String(p.requestId||''), emitido:false, clicou:false, inicio:Date.now()};
+  _agAtual=j;
+  j.pulso=setInterval(_agPulso,_AG_PULSO_MS);
+  var ok=false;
+  try{ ok=__agractaHandoff(p); }catch(e){ console.error('[Agracta motor] trabalho',e); }
+  _agPulso();
+  if(!ok){ _agractaEmitirResultado({ok:false, erro:_agMotivo(j,'Os dados deste trabalho não puderam ser carregados no motor.')}); return; }
+  /* Guarda: se a análise nem começou e nada foi devolvido (erro inesperado no
+     preparo), o trabalho não pode prender a fila. */
+  j.guarda=setTimeout(function(){
+    if(_agAtual===j && !j.emitido && !j.clicou) _agractaEmitirResultado({ok:false, erro:_agMotivo(j,'A análise não começou no motor.')});
+  },8000);
+}
 window.addEventListener('message',function(ev){
   try{
     if(ev.origin!==window.location.origin || !ev.data || ev.data.type!=='agracta:bioestat-run') return;
-    __agractaHandoff(ev.data.payload||{});
+    var p=ev.data.payload||{};
+    _agFila.push(p);
+    _agAvisarApp('status',{requestId:String(p.requestId||''), fase:'recebido', naFila:_agFila.length});
+    _agProximo();
   }catch(e){ console.error('[Agracta motor message]',e); }
 });
+/* O motor embutido avisa que já escuta — o Agracta não precisa esperar cada
+   imagem e fonte da página terminar de carregar para mandar trabalho. */
+if(new URLSearchParams(location.search).get('agracta_engine')==='1') _agAvisarApp('ola',{versao:APP_VERSION});
 (function(){
   try{
+    /* O motor invisível não abre a tela de análise: o recado no armazenamento é
+       da tela que a pessoa pediu ("Configurar análise"). Se ele o lesse primeiro,
+       a tela abria vazia e o motor rodava um trabalho que ninguém pediu. */
+    if(new URLSearchParams(location.search).get('agracta_engine')==='1') return;
     var raw = localStorage.getItem('agracta-bioestat-handoff');
     if(!raw) return;
     window.__agractaEmbed = true; /* cedo: 1ª conferência já enxerga o embed */

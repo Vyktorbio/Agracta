@@ -132,7 +132,9 @@ var espera=function(){ return new Promise(function(r){ setTimeout(r,5); }); };
     document:{getElementById:function(id){ return id==='bioEngineFrame'?A.__frame:null; }, hidden:false,
       addEventListener:function(ev,fn){ ouvintes[ev]=fn; }},
     setTimeout:function(fn,ms){ timers.push({fn:fn,ms:ms,ativo:true}); return timers.length; },
-    clearTimeout:function(id){ if(id&&timers[id-1]) timers[id-1].ativo=false; }};
+    clearTimeout:function(id){ if(id&&timers[id-1]) timers[id-1].ativo=false; },
+    /* a vigia das etapas (test_motor_vida.js cobre os prazos) */
+    setInterval:function(){ return 999; }, clearInterval:function(){}};
   vm.createContext(A);
   var bloco=app.slice(app.indexOf('var _bioLiberarT=null'), app.indexOf('function _bioestatPump(){'));
   vm.runInContext(bloco+'\n'+trecho(app,'_bioestatPump'),A);

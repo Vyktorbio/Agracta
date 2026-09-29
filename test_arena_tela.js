@@ -132,6 +132,14 @@ ok(l7.protecao>90,'T07 protege a soja frente à testemunha infestada ('+Math.rou
 ok(cv.linhas.find(l=>l.id==='T01').mortalidadeFinal===null,'T01 sem lesma: mortalidade em branco, não zero');
 ok(/<title>T07 · Moluscicida A — 4 DAT: 3%<\/title>/.test(G),'cada ponto mostra o valor ao passar o dedo/mouse');
 ok(R("arenaGraficosHtml({tipoEstudo:'Mortalidade',tratamentos:[],avaliacoes:[]},'LAB')")==='','outros bioensaios não ganham a seção');
+/* Foto de 29/09: "T1 Testemunha não infestada. (testemunha)" era escrito POR CIMA
+   de Dano final e AACPD — a coluna presa tem teto de largura e o texto não
+   quebrava. O nome vai embaixo do id, dentro da coluna, e a coluna não vaza. */
+ok(/<td class="av-tname av-trat"><b>T02<\/b><small>Testemunha infestada<\/small><small class="av-trat-tag">testemunha<\/small><\/td>/.test(G),
+   'fim do ensaio: id em cima, produto e "testemunha" embaixo, na mesma coluna');
+ok(/<td class="av-tname av-trat"><b>T07<\/b><small>Moluscicida A<\/small><\/td>/.test(html),'a tabela da dose no pote usa a mesma célula');
+{ const regra=(fs.readFileSync('app.js','utf8').match(/'\.av-table th:first-child,\.av-table td:first-child\{[^}]*\}'/)||[''])[0];
+  ok(/white-space:normal/.test(regra)&&/overflow:hidden/.test(regra)&&/overflow-wrap:anywhere/.test(regra),'coluna presa quebra linha e nada escapa dela, em todas as tabelas'); }
 
 console.log('\nArena na tela: '+n+' verificações.');
 fs.writeFileSync(process.env.ARENA_HTML||'/dev/null','<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;max-width:560px;margin:16px auto;background:#f4f6f4">'+

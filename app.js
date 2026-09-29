@@ -10594,14 +10594,15 @@ function arenaDoseHtml(study, qid, onde){
   var h='<div class="se-section-title">'+(onde==='aplicacao'?'O que vai em cada pote':'Dose no pote')+'</div>';
   if(tb.area==null) return h+'<div class="calc-warn">⚠ Declare as medidas da arena no cadastro do estudo (etapa de preparo). Sem área, a dose por hectare não vira quantidade no pote.</div>';
   var semPeso=tb.pesoPelletMg==null;
+  if(typeof _avCss==='function') _avCss();
   h+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th><th>mg / pote</th><th>Pellets</th><th>Dose efetiva</th></tr></thead><tbody>';
   tb.linhas.forEach(function(l){
-    var nome=esc(l.id)+(l.produto?' · '+esc(l.produto):'');
+    var nome=_arenaTratCelula(l.id,l.produto,false);
     if(l.mg==null){
-      h+='<tr><td>'+nome+'</td><td>'+esc(l.dose||'—')+'</td><td colspan="3" style="opacity:.75">'+esc(l.motivo||'—')+'</td></tr>';
+      h+='<tr>'+nome+'<td>'+esc(l.dose||'—')+'</td><td colspan="3" style="opacity:.75">'+esc(l.motivo||'—')+'</td></tr>';
       return;
     }
-    h+='<tr><td>'+nome+'</td><td>'+esc(l.dose)+(l.unidade&&!/[a-zA-Z]/.test(l.dose)?' '+esc(l.unidade):'')+'</td>'+
+    h+='<tr>'+nome+'<td>'+esc(l.dose)+(l.unidade&&!/[a-zA-Z]/.test(l.dose)?' '+esc(l.unidade):'')+'</td>'+
        '<td>'+_arenaBR(l.mg,2)+'</td>'+
        '<td>'+(l.pelletsArred==null?'—':('<b>'+l.pelletsArred+'</b> <small style="opacity:.7">('+_arenaBR(l.pellets,2)+')</small>'))+'</td>'+
        '<td>'+(l.doseEfetiva==null?'—':(_arenaBR(l.doseEfetiva,2)+' '+esc(l.unidade)+(l.desvioPct!=null&&Math.abs(l.desvioPct)>=0.5?' <small style="opacity:.7">('+(l.desvioPct>0?'+':'')+_arenaBR(l.desvioPct,0)+'%)</small>':'')))+'</td></tr>';
@@ -10738,6 +10739,14 @@ function arenaPontos(study){
   });
 }
 function _arenaCor(i){ var p=['#1f8a52','#2f85c9','#d69431','#9b59b6','#e0566b','#16a085','#c0392b','#f39c12','#27ae60','#8e44ad','#d35400','#7f8c8d']; return p[i%p.length]; }
+/* A primeira coluna das tabelas da arena. O nome do produto ia na mesma linha
+   do id e passava por cima das colunas ao lado; agora vai embaixo, dentro da
+   coluna, quebrando linha quando é longo. */
+function _arenaTratCelula(id, produto, testemunha){
+  return '<td class="av-tname av-trat"><b>'+esc(id)+'</b>'+
+    (produto?'<small>'+esc(produto)+'</small>':'')+
+    (testemunha?'<small class="av-trat-tag">testemunha</small>':'')+'</td>';
+}
 function _arenaLinhaSvg(serie, trats, test, rotuloY){
   var W=520,Hh=210,pl=34,pr=12,pt=10,pb=26, dias=[];
   trats.forEach(function(t){ (serie[t.id]||[]).forEach(function(p){ dias.push(p.dia); }); });
@@ -10778,12 +10787,13 @@ function arenaGraficosHtml(study, qid){
   var R=ArenaCore.resumo(cv,trats,test||null), tn={};
   trats.forEach(function(t){ tn[t.id]=t; });
   var ult=pts[pts.length-1];
+  if(typeof _avCss==='function') _avCss();
   var tb='<div class="res-title">Resultado no fim do ensaio <small style="opacity:.7">('+esc(ult.rotulo)+')</small></div>';
   tb+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dano final</th><th>AACPD</th><th>Proteção</th><th>Mortalidade</th><th>Abbott</th><th>≤50% vivos</th><th>Pellets atacados</th></tr></thead><tbody>';
   function pc(x){ return x==null?'—':_arenaBR(x,1)+'%'; }
   R.linhas.forEach(function(l){
     var t=tn[l.id]||{};
-    tb+='<tr'+(l.testemunha?' style="font-weight:700"':'')+'><td>'+esc(l.id)+(t.produto?' <small style="opacity:.7">'+esc(t.produto)+'</small>':'')+(l.testemunha?' <small>(testemunha)</small>':'')+'</td>'+
+    tb+='<tr'+(l.testemunha?' style="font-weight:700"':'')+'>'+_arenaTratCelula(l.id,t.produto,l.testemunha)+
         '<td>'+pc(l.danoFinal)+'</td><td>'+(l.aacpd==null?'—':_arenaBR(l.aacpd,1))+'</td><td>'+pc(l.protecao)+'</td>'+
         '<td>'+pc(l.mortalidadeFinal)+'</td><td>'+pc(l.abbott)+'</td><td>'+(l.dia50==null?'—':'D'+_fmtMom(l.dia50))+'</td><td>'+pc(l.pelletsAtacados)+'</td></tr>';
   });
@@ -13901,7 +13911,7 @@ function _openBioestatFrame(modo){
   ov.style.display='flex';
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
-var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false, _bioAutoWd=null;
+var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false;
 /* ===== QUANDO O ENSAIO É UMA SÉRIE DE DOSES ================================
    O motor estatístico do Agracta tem análise de dose-resposta completa —
    Abbott, GLM, intervalo de Fieller, comparação de curvas — e ela nunca rodou,
@@ -13993,7 +14003,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-17';
+var MOTOR_VERSAO='agracta-18';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -14124,12 +14134,18 @@ function _bioestatSnapshotAvancado(qid,s){
   var indisponiveis=_bioestatPendentes(qid,s).map(function(j){return {avId:j.avId||'',date:j.date||'',variavel:j.variavel,motivo:'Sem comparação automática: delineamento ou repetições insuficientes. Resultados descritivos preservados.'};});
   return JSON.parse(JSON.stringify({versao:1,geradoEm:new Date().toISOString(),motor:MOTOR_CALCULO,assinatura:sig,jobs:jobs,results:results,pendencias:pendencias,indisponiveis:indisponiveis,completo:jobs.length>0&&!pendencias.length&&!indisponiveis.length}));
 }
+/* "Tentar de novo" recomeça também o MOTOR: a página nova esquece o Python que
+   não subiu e o worker que travou. Antes o botão recusava enquanto o estudo
+   estava "carregando" — justamente quando ele mais fazia falta. */
 function _bioestatRepetir(qid,sid){
-  var s=_estudoDe(qid,sid),c=_bioAutoCache[qid+'|'+sid];
-  if(!s||estudoFinalizado(s)||(c&&c.status==='loading'))return;
-  delete _bioAutoCache[qid+'|'+sid];
+  var s=_estudoDe(qid,sid), key=qid+'|'+sid;
+  if(!s||estudoFinalizado(s))return;
+  _bioestatReiniciarMotor();
+  _bioestatDescartarFila(key);
+  delete _bioAutoCache[key];
   _bioestatEnsureStudy(qid,sid);
-  _bioestatRefreshOpen(_bioAutoCache[qid+'|'+sid]);
+  _bioestatPump();   /* o trabalho de outro estudo que estava na mesa volta a andar */
+  _bioestatRefreshOpen(_bioAutoCache[key]);
 }
 function _bioestatSignature(study){
   var slim={motor:MOTOR_CALCULO,config:study.estatisticaPlanejada,protocolo:study.protocolo,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
@@ -14141,13 +14157,34 @@ function _bioestatEnsureFrame(){
   if(f)return f;
   f=document.createElement('iframe'); f.id='bioEngineFrame'; f.title='Motor estatístico Agracta';
   f.style.cssText='position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none';
-  f.onload=function(){_bioEngineReady=true;_bioestatPump();};
+  _bioEngineReady=false; _bioMotorEst.abrindo=0; _bioMotorEst.pronto=false;
+  /* Pronto quando a página do motor diz "olá" (já escuta) ou termina de
+     carregar — o que vier primeiro. Um iframe que não é mais o da vez não
+     manda em nada. */
+  f.onload=function(){ if(document.getElementById('bioEngineFrame')===f) _bioestatMotorAberto(); };
   /* O iframe do motor vinha SEM versão na URL. Como o navegador guarda o
      estatistica/index.html, uma correção no motor não chegava a quem já tinha
      aberto o app uma vez — seguia rodando o Python velho, calado. */
   f.src='estatistica/index.html?agracta_engine=1&v='+MOTOR_VERSAO;
   document.body.appendChild(f);
+  _bioestatPrimeiroUso();
+  _bioestatVigiar();
   return f;
+}
+function _bioestatMotorAberto(){
+  if(_bioEngineReady) return;
+  _bioEngineReady=true;
+  _bioestatPump();
+}
+/* Primeiro uso neste aparelho? O Pyodide (~115 MB) fica no cache do service
+   worker depois da primeira vez; sem ele, a espera é download, e a tela diz
+   isso em vez de só "carregando". Sem Cache Storage, não se afirma nada. */
+function _bioestatPrimeiroUso(){
+  try{
+    if(typeof caches==='undefined'||!caches||!caches.match){ _bioMotorEst.primeiroUso=null; return; }
+    caches.match(new URL('estatistica/pyodide/pyodide.asm.wasm', location.href).href)
+      .then(function(r){ _bioMotorEst.primeiroUso=!r; _bioestatStatusNaTela(); }, function(){ _bioMotorEst.primeiroUso=null; });
+  }catch(e){ _bioMotorEst.primeiroUso=null; }
 }
 /* ===== CACHE DA ESTATÍSTICA NO APARELHO (IndexedDB, por assinatura) =======
    `_bioAutoCache` só existia em memória: fechar o app jogava fora minutos de
@@ -14210,17 +14247,22 @@ function _bioestatEnsureStudy(qid,sid){
   study=normalizeStudy(study);
   var key=qid+'|'+sid, sig=_bioestatSignature(study), jobs=_bioestatJobs(qid,study), c=_bioAutoCache[key];
   var jobsT=_bioestatJobsTempo(qid,study), jobsF=_bioestatJobsForense(qid,study,jobs);
-  if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'))return;
+  /* 'erro' também para aqui: refazer é do botão "Tentar de novo". Se cada
+     repintura tentasse de novo, um erro no preparo virava laço sem fim. */
+  if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'||c.status==='erro'))return;
   /* análise por avaliação/variável; triagem forense e curva de sobrevivência
      uma por variável, porque ambas são do estudo inteiro e não de uma data */
   var total=jobs.length+jobsF.length+jobsT.length;
+  /* Os dados mudaram: o que esperava na fila era de uma grade que não existe
+     mais. Ficava lá, e o motor calculava cada um só para jogar fora — a cada
+     nota lançada, mais uma rodada inteira na frente da que importa. */
+  _bioestatDescartarFila(key);
   c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
   if(!total)return;
-  /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
-     guardado do uso anterior. Estando completo, o estudo abre com a
-     estatística já na tela e nada roda. */
-  _biocLer(key).then(function(sav){
-    if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
+  var seguiu=false;
+  function seguir(sav){
+    if(seguiu||_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
+    seguiu=true;
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
       jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
@@ -14228,8 +14270,28 @@ function _bioestatEnsureStudy(qid,sid){
       jobsT.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
-    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF);
-  });
+    /* Erro ao montar os trabalhos morria calado dentro da promessa, com o
+       estudo marcado "carregando" para sempre. Agora vira cartão com motivo. */
+    try{ _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF); }
+    catch(e){
+      console.error('[bioestat] preparo das análises',e);
+      _bioestatDescartarFila(key);
+      c.status='erro'; c.erro='Não foi possível preparar as análises deste estudo ('+String((e&&e.message)||e)+').';
+      _bioestatRefreshOpen(c);
+    }
+  }
+  /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
+     guardado do uso anterior. Estando completo, o estudo abre com a
+     estatística já na tela e nada roda. O cache em disco é conveniência: se o
+     IndexedDB não responder (acontece com o armazenamento do aparelho cheio),
+     o cálculo segue em 4 s em vez de esperar para sempre. */
+  var prazo=setTimeout(function(){ seguir(null); },4000);
+  _biocLer(key).then(function(sav){ clearTimeout(prazo); seguir(sav); }, function(){ clearTimeout(prazo); seguir(null); });
+}
+function _bioestatDescartarFila(key){
+  for(var i=_bioAutoQueue.length-1;i>=0;i--){
+    if(_bioAutoQueue[i].key===key){ delete _bioAutoPending[_bioAutoQueue[i].requestId]; _bioAutoQueue.splice(i,1); }
+  }
 }
 /* Tipo de dado da triagem forense a partir do TIPO DECLARADO da coluna.
    · contagem de organismo/lesão -> 'count' (índice de Poisson);
@@ -14293,7 +14355,7 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
                tipo:j.variavel,doseUnit:doseUnit,local:loc,quadra:qn,maiorMelhor:_mm}};
     _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
-  _bioestatEnsureFrame(); _bioestatPump();
+  _bioestatEnsureFrame(); _bioestatPump(); _bioestatStatusNaTela();
 }
 /* Diâmetro da colônia → crescimento (diâmetro − disco), só na cópia que vai para a
    curva: a triagem forense e a grade continuam com o dado como foi lido. */
@@ -14317,13 +14379,19 @@ function _bioestatAoaCrescimento(aoa, disco){
    com ele o worker do Python. O que já foi calculado fica no cache (memória e
    IndexedDB); precisando de novo, o motor volta sozinho. */
 var _bioLiberarT=null, _BIO_OCIOSO_MS=45000;
+function _bioestatDestruirFrame(){
+  var f=document.getElementById('bioEngineFrame');
+  if(f){
+    try{ f.src='about:blank'; }catch(e){}
+    try{ if(f.parentNode) f.parentNode.removeChild(f); }catch(e){}
+  }
+  _bioEngineReady=false; _bioAtual=null; _bioAutoBusy=null; _bioMotorEst.pronto=false;
+}
 function _bioestatLiberarMotor(){
   clearTimeout(_bioLiberarT); _bioLiberarT=null;
   if(_bioAutoBusy||_bioAutoQueue.length) return false;
-  var f=document.getElementById('bioEngineFrame'); if(!f) return false;
-  try{ f.src='about:blank'; }catch(e){}
-  try{ if(f.parentNode) f.parentNode.removeChild(f); }catch(e){}
-  _bioEngineReady=false;
+  if(!document.getElementById('bioEngineFrame')) return false;
+  _bioestatDestruirFrame();
   return true;
 }
 function _bioestatAgendarLiberacao(){
@@ -14331,19 +14399,190 @@ function _bioestatAgendarLiberacao(){
   _bioLiberarT=setTimeout(_bioestatLiberarMotor,_BIO_OCIOSO_MS);
 }
 try{ document.addEventListener('visibilitychange',function(){ if(document.hidden) _bioestatLiberarMotor(); }); }catch(e){}
+
+/* ===== CADA ETAPA DO MOTOR COM O SEU PRAZO ==================================
+   Relato de 29/09: "fica sempre carregando verificações avançadas no aparelho
+   e não para". O painel tinha UM prazo para tudo — 70 s por trabalho, contados
+   do envio —, e é o primeiro trabalho que sobe o motor: no primeiro uso são
+   ~115 MB de Python para baixar, e num celular a partida passa de um minuto
+   mesmo com tudo guardado. Estourado o prazo, o app desistia do trabalho e
+   mandava o próximo para a mesma página, que ainda subia: as respostas
+   voltavam trocadas de avaliação. E nada na tela dizia se o motor baixava,
+   calculava ou tinha parado.
+
+   Agora a página do motor avisa a cada 4 s em que pé está, e cada etapa tem o
+   seu prazo — contado só com o app na tela (celular em segundo plano congela a
+   página e o motor juntos; voltar dele não é "motor mudo"):
+     abrir a página do motor ............ 60 s   senão reabre uma vez
+     o motor confirmar o trabalho ....... 20 s   senão reabre e reenvia uma vez
+     silêncio com trabalho na mesa ...... 45 s   idem
+     carregar o motor (1º uso baixa) .... 20 min com o progresso na tela
+     calcular UMA análise ............... 150 s  ela sai com erro; o motor
+                                                 recomeça limpo para as outras
+   O que não deu vira cartão com o motivo e "Tentar de novo" — nunca mais um
+   "carregando" sem fim. */
+var _BIO_ABRIR_MS=60000, _BIO_RECEBIDO_MS=20000, _BIO_SILENCIO_MS=45000, _BIO_PARTIDA_MS=20*60000, _BIO_CALCULO_MS=150000, _BIO_TICK_MS=3000;
+var _bioMotorEst={abrindo:0, reaberturas:0, primeiroUso:null, pronto:false};
+var _bioAtual=null, _bioVigiaT=null, _bioVigiaUlt=0;
+function _bioestatVigiar(){
+  if(_bioVigiaT) return;
+  _bioVigiaUlt=Date.now();
+  _bioVigiaT=setInterval(_bioestatVigia,_BIO_TICK_MS);
+}
+/* O relógio da vigia anda no máximo dois tiques por vez: tique atrasado é
+   página congelada (segundo plano) ou linha de execução presa — nenhum dos
+   dois é o motor demorando. */
+function _bioestatVigia(){
+  var agora=Date.now(), dt=Math.min(2*_BIO_TICK_MS, Math.max(0, agora-_bioVigiaUlt));
+  _bioVigiaUlt=agora;
+  if(document.hidden) dt=0;
+  if(!_bioAutoBusy && !_bioAutoQueue.length){ clearInterval(_bioVigiaT); _bioVigiaT=null; return; }
+  if(!document.getElementById('bioEngineFrame')){ _bioestatPump(); return; }
+  if(!_bioEngineReady){
+    _bioMotorEst.abrindo+=dt;
+    if(_bioMotorEst.abrindo>_BIO_ABRIR_MS) _bioestatMotorFalhou('abrir');
+    else _bioestatStatusNaTela();
+    return;
+  }
+  var a=_bioAtual;
+  if(!a){ _bioestatPump(); return; }
+  a.silencio+=dt; a.naFase+=dt; if(a.fase!=='calculando') a.partida+=dt;
+  if(a.fase==='enviado' && a.naFase>_BIO_RECEBIDO_MS) _bioestatMotorFalhou('surdo');
+  else if(a.silencio>_BIO_SILENCIO_MS) _bioestatMotorFalhou('mudo');
+  else if(a.fase!=='calculando' && a.partida>_BIO_PARTIDA_MS) _bioestatMotorFalhou('partida');
+  else if(a.fase==='calculando' && a.naFase>_BIO_CALCULO_MS) _bioestatMotorFalhou('calculo');
+  else _bioestatStatusNaTela();
+}
+/* O aviso da página do motor sobre o trabalho que está com ela. */
+function _bioestatSinal(d){
+  var a=_bioAtual;
+  if(!a||!d||String(d.requestId||'')!==String(_bioAutoBusy||'')) return;
+  a.silencio=0;
+  var fase=d.fase||a.fase;
+  if(fase==='recebido'&&a.fase!=='enviado') fase=a.fase;   /* a etapa não volta atrás */
+  if(fase!==a.fase){ a.fase=fase; a.naFase=0; }
+  if(fase==='calculando') _bioMotorEst.pronto=true;
+  if(d.msg!=null) a.msg=String(d.msg);
+  if(d.sub!=null) a.sub=String(d.sub);
+  _bioMotorEst.reaberturas=0;
+  _bioestatStatusNaTela();
+}
+function _bioestatMotivo(tipo){
+  if(tipo==='abrir') return 'O motor estatístico não abriu neste aparelho. No primeiro uso ele precisa de internet para baixar o módulo estatístico.';
+  if(tipo==='surdo') return 'O motor estatístico abriu, mas não respondeu. Se é o primeiro uso neste aparelho, ele precisa de internet para baixar o módulo estatístico.';
+  if(tipo==='mudo') return 'O motor estatístico parou de responder no meio do trabalho.';
+  if(tipo==='partida') return 'O motor estatístico não terminou de carregar em '+Math.round(_BIO_PARTIDA_MS/60000)+' min — internet lenta ou pouca memória livre no aparelho. O que já foi baixado fica guardado.';
+  return 'Tempo esgotado: esta análise passou de '+Math.round(_BIO_CALCULO_MS/1000)+' s calculando no aparelho.';
+}
+/* Um trabalho que o motor não vai devolver sai com o motivo, contando como
+   feito — é isso que deixa o estudo sair de "carregando". */
+function _bioestatFalharItem(item,motivo){
+  var c=_bioAutoCache[item.key];
+  if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){
+    c.results[item.job.jobKey]={ok:false,erro:motivo};
+    c.done++; if(c.done>=c.total){ c.status='ready'; _bioestatPersistir(c); }
+  }
+  delete _bioAutoPending[item.requestId];
+}
+function _bioestatFalharFila(motivo,key){
+  var tocados={};
+  for(var i=_bioAutoQueue.length-1;i>=0;i--){
+    var it=_bioAutoQueue[i]; if(key&&it.key!==key) continue;
+    _bioAutoQueue.splice(i,1); _bioestatFalharItem(it,motivo); tocados[it.key]=1;
+  }
+  Object.keys(tocados).forEach(function(k){ _bioestatRefreshOpen(_bioAutoCache[k]); });
+}
+function _bioestatMotorFalhou(tipo){
+  var a=_bioAtual, item=a&&a.item, motivo=_bioestatMotivo(tipo);
+  try{ console.warn('[bioestat] motor ('+tipo+'): '+motivo); }catch(e){}
+  if(tipo==='abrir'){
+    _bioestatDestruirFrame();
+    if(_bioMotorEst.reaberturas<1){ _bioMotorEst.reaberturas++; _bioestatPump(); return; }
+    _bioMotorEst.reaberturas=0;
+    _bioestatFalharFila(motivo);
+    return;
+  }
+  if((tipo==='surdo'||tipo==='mudo') && item && !item.reenviado){
+    /* segunda chance numa página nova, com o mesmo número de trabalho */
+    item.reenviado=true;
+    _bioestatDestruirFrame();
+    _bioAutoQueue.unshift(item);
+    _bioestatPump();
+    return;
+  }
+  _bioestatDestruirFrame();
+  if(item) _bioestatFalharItem(item,motivo);
+  /* Página que não escuta não vai escutar o próximo, e motor que não sobe em
+     20 min também não. Já uma análise lenta, ou um motor que emudeceu uma vez,
+     não condena as outras: elas seguem num motor novo. */
+  if(tipo==='surdo'||tipo==='partida') _bioestatFalharFila(motivo);
+  if(item) _bioestatRefreshOpen(_bioAutoCache[item.key]);
+  _bioestatPump();
+}
+/* Motor novo a pedido ("Tentar de novo"). O trabalho que estava na mesa, se
+   ainda vale, volta para a frente da fila em vez de sumir. */
+function _bioestatReiniciarMotor(){
+  var a=_bioAtual, it=a&&a.item;
+  if(!it&&!document.getElementById('bioEngineFrame')) return;
+  _bioestatDestruirFrame();
+  _bioMotorEst.reaberturas=0;
+  if(it){
+    var c=_bioAutoCache[it.key];
+    if(c&&c.sig===it.sig&&!c.results[it.job.jobKey]) _bioAutoQueue.unshift(it);
+    else delete _bioAutoPending[it.requestId];
+  }
+}
+function _bioDur(ms){
+  var s=Math.round((ms||0)/1000); if(s<5) return '';
+  return ' · '+(s<60?(s+' s'):(Math.floor(s/60)+' min'+(s%60?(' '+(s%60)+' s'):'')));
+}
+/* O que a linha de status diz, a partir do estado REAL do motor. */
+function _bioestatStatusTexto(key){
+  var c=_bioAutoCache[key];
+  if(!c) return {txt:'Preparando as verificações avançadas no aparelho…', sub:''};
+  if(c.status!=='loading') return null;
+  var prontas=c.done+' de '+c.total+' prontas', a=_bioAtual, meu=!!(a&&a.item&&a.item.key===key);
+  var baixando=_bioMotorEst.primeiroUso===true;
+  var subCarga=baixando
+    ? 'Primeiro uso neste aparelho: o módulo estatístico (cerca de 115 MB) é baixado uma vez e fica guardado. Com internet lenta leva alguns minutos; no Wi-Fi é bem mais rápido. A prévia acima já pode ser usada.'
+    : 'O motor estatístico sobe no aparelho e calcula sem internet. A prévia acima já pode ser usada.';
+  if(!document.getElementById('bioEngineFrame')||!_bioEngineReady)
+    return {txt:'Abrindo o motor estatístico no aparelho…'+_bioDur(_bioMotorEst.abrindo), sub:subCarga};
+  if(!meu) return {txt:'Na fila do motor estatístico… '+prontas, sub:'Outra análise está sendo calculada antes destas.'};
+  /* motor já de pé nesta página: entre um trabalho e o próximo continua "calculando" */
+  if(a.fase==='calculando'||(_bioMotorEst.pronto&&(a.fase==='enviado'||a.fase==='recebido'))) return {txt:'Calculando no aparelho… '+prontas, sub:'A prévia acima já pode ser usada; ela será substituída pelo relatório completo.'};
+  /* a etapa que o motor informa, sem repetir o título ("Carregando motor estatístico") */
+  var etapa=[/^carregando (o )?motor estat/i.test(a.msg||'')?'':a.msg,a.sub].filter(Boolean).join(' — ').replace(/…/g,'').replace(/\.$/,'');
+  return {txt:(baixando?'Baixando o módulo estatístico':'Carregando o motor estatístico')+'…'+_bioDur(a.partida)+(etapa?(' ('+etapa+')'):''), sub:subCarga};
+}
+function _bioestatStatusNaTela(){
+  try{
+    var el=document.getElementById('bioAutoStatus'); if(!el) return;
+    var qid=el.getAttribute('data-qid'), sid=el.getAttribute('data-sid'); if(qid==null||sid==null) return;
+    var s=_bioestatStatusTexto(qid+'|'+sid); if(!s) return;
+    var h=esc(s.txt)+(s.sub?'<small>'+esc(s.sub)+'</small>':'');
+    if(el.innerHTML!==h) el.innerHTML=h;
+  }catch(e){}
+}
 function _bioestatPump(){
   clearTimeout(_bioLiberarT);
   if(!_bioAutoBusy && !_bioAutoQueue.length){ if(document.getElementById('bioEngineFrame')) _bioestatAgendarLiberacao(); return; }
-  if(!_bioEngineReady||_bioAutoBusy||!_bioAutoQueue.length)return;
-  var f=document.getElementById('bioEngineFrame'), item=_bioAutoQueue.shift(); if(!f||!f.contentWindow)return;
+  if(_bioAutoBusy||!_bioAutoQueue.length)return;
+  var f=document.getElementById('bioEngineFrame');
+  /* Motor fora da memória (ou reaberto): volta sozinho, e o trabalho espera na
+     fila até a página nova dizer que escuta. Antes ele saía da fila ANTES de
+     conferir o iframe — e sumia sem resposta nenhuma. */
+  if(!f){ _bioestatEnsureFrame(); return; }
+  _bioestatVigiar();
+  if(!_bioEngineReady||!f.contentWindow)return;
+  var item=_bioAutoQueue.shift(), c=_bioAutoCache[item.key];
+  /* órfão: a grade mudou e este cálculo foi substituído */
+  if(!c||c.sig!==item.sig||c.results[item.job.jobKey]){ delete _bioAutoPending[item.requestId]; _bioestatPump(); return; }
   _bioAutoBusy=item.requestId;
-  clearTimeout(_bioAutoWd);
-  _bioAutoWd=setTimeout(function(){ /* job travou: marca erro e segue (não trava a fila) */
-    if(_bioAutoBusy!==item.requestId)return;
-    var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total){ c.status='ready'; _bioestatPersistir(c); } }
-    delete _bioAutoPending[item.requestId]; _bioAutoBusy=null; _bioestatPump(); _bioestatRefreshOpen(c);
-  },70000);
-  f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin);
+  _bioAtual={item:item, fase:'enviado', naFase:0, silencio:0, partida:0, msg:'', sub:''};
+  try{ f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin); }
+  catch(e){ console.error('[bioestat] envio ao motor',e); _bioestatMotorFalhou('surdo'); return; }
+  _bioestatStatusNaTela();
 }
 function _bioestatP(rel){
   var tab=rel&&rel.analise&&rel.analise.tabela_anova||[];
@@ -14478,7 +14717,9 @@ function _cvClassePG(cv){
   return cv<10?'baixo':(cv<=20?'médio':(cv<=30?'alto':'muito alto'));
 }
 function _bioestatResumoCard(job,rel,qid,sid){
-  if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
+  /* a triagem forense não tem UMA data: é a variável inteira (datasTexto) */
+  var _quando=(job.date&&(isoToBR(job.date)||job.date))||job.datasTexto||'';
+  if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+(_quando?' · '+esc(_quando):'')+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
   var a=rel.analise||{}, cm=rel.comparacao_medias||{};
   /* `controle` faltava nesta lista: com comparação contra testemunha o
      relatório traz só essa chave, então Dunnett/Dunn saía calculado e o cartão
@@ -14638,6 +14879,16 @@ function _bioestatForenseCard(job,rel){
     (lis?'<ul style="margin:6px 0 0;padding-left:18px;font-size:11px;color:#5a655e">'+lis+'</ul>':'')+
   '</div>';
 }
+/* A linha de status leva o estudo consigo (data-qid/sid) para ser reescrita no
+   lugar a cada aviso do motor, sem repintar a ficha inteira. */
+function _bioestatStatusDiv(qid,sid,s){
+  return '<div id="bioAutoStatus" class="bio-engine-status" data-qid="'+esc(qid)+'" data-sid="'+esc(sid)+'">'+esc(s.txt)+(s.sub?'<small>'+esc(s.sub)+'</small>':'')+'</div>';
+}
+/* `html` já vem escapado por quem chama. */
+function _bioestatFalhaHtml(qid,sid,html){
+  return '<div style="padding:10px 11px;border:1px solid #edc8c8;background:#fff7f7;border-radius:10px;margin-top:7px;color:#8a4a4a;font-size:11px;font-weight:600;line-height:1.45">'+html+
+    '<button type="button" onclick="_bioestatRepetir('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')" style="display:block;margin-top:7px;padding:7px 12px;border:1px solid #d9a3a3;background:#fff;color:#8a3a3a;border-radius:8px;font:700 11px system-ui;cursor:pointer">Tentar de novo</button></div>';
+}
 function _bioestatIntegratedHtml(qid,sid,study){
   var jobs=_bioestatJobs(qid,study);
   var abrir=study.desenho==='faixas'?'':'<button class="bio-configurar" onclick="openBioestat('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')">Configurar análise <span>Testemunha, modelos mistos e evolução no tempo</span></button>';
@@ -14653,15 +14904,21 @@ function _bioestatIntegratedHtml(qid,sid,study){
   }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
-  var tot=(c&&c.total)||(jobs.length+_bioestatJobsForense(qid,study,jobs).length), body='', fbody='';
+  var tot=(c&&c.sig===sig&&c.total)||(jobs.length+_bioestatJobsForense(qid,study,jobs).length), body='', fbody='';
   if(!c||c.sig!==sig){
     jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
-    body+='<div id="bioAutoStatus" class="bio-engine-status">Carregando verificações avançadas no aparelho… '+((c&&c.done)||0)+' de '+tot+'<small>No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.</small></div>';
+    /* Texto de partida: a linha é reescrita no lugar assim que o motor diz em
+       que pé está (abrindo, baixando, carregando, calculando). */
+    body+=_bioestatStatusDiv(qid,sid,{txt:'Preparando as verificações avançadas no aparelho… 0 de '+tot, sub:'No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.'});
     fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado…<small>Uma por variável, com todas as avaliações juntas. Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
   }
   /* "Repetições insuficientes" era o diagnóstico genérico para qualquer motivo.
      Quando a pendência tem endereço, ela vale mais que a frase. */
   else if(c.status==='empty'){ body=_pendHtml||'<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>'; }
+  else if(c.status==='erro'){
+    jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
+    body+=_bioestatFalhaHtml(qid,sid,'As verificações avançadas não rodaram: '+esc(c.erro||'erro no preparo')+' A prévia acima continua valendo.');
+  }
   else {
     /* Renderização PROGRESSIVA: mostra a análise de cada avaliação assim que o job dela termina,
        sem esperar a triagem forense (que no Pyodide frio pode demorar ~1 min). */
@@ -14681,8 +14938,13 @@ function _bioestatIntegratedHtml(qid,sid,study){
       else _tHtml+='<div class="bio-engine-status">Curva de sobrevivência de <b>'+esc(j.variavel)+'</b> em segundo plano…<small>Ela usa as leituras de todas as datas juntas.</small></div>';
     });
     body=_tHtml+body;
-    if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
+    if(faltamAnalise>0) body+=_bioestatStatusDiv(qid,sid,(c.status==='loading'&&_bioestatStatusTexto(key))||{txt:'Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length, sub:'A prévia acima já pode ser usada; ela será substituída pelo relatório completo.'});
     if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(_jobsF.length-faltamForense)+' de '+_jobsF.length+' variáve'+(_jobsF.length>1?'is':'l')+'<small>Uma triagem por variável, com todas as avaliações juntas.</small></div>';
+    /* Terminou com erro? O motivo está em cada cartão; aqui fica o caminho de
+       volta. Antes o erro ("tempo esgotado") ficava até fechar o app. */
+    var _falhas=Object.keys(res).filter(function(k){ return res[k]&&res[k].ok!==true; }).length;
+    if(_falhas&&c.status!=='loading'&&!estudoFinalizado(study))
+      body+=_bioestatFalhaHtml(qid,sid,_falhas+(_falhas>1?' verificações avançadas terminaram':' verificação avançada terminou')+' com erro — o motivo está no cartão. Se foi o motor (tempo, memória, internet), tente de novo.');
   }
   /* UMA folha por ALVO. Antes era um botão só, cravado na variável mais frequente —
      estudo com alvos diferentes (Mancha angular + Cercospora) só gerava a primeira. */
@@ -14732,12 +14994,28 @@ function _bioestatRefreshOpen(c){
   _bioRefreshT=setTimeout(function(){ if(_estudoNaTela(c.qid,c.sid)) openStudyDetail(c.qid,c.sid); },120);
 }
 window.addEventListener('message',function(ev){
-  if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
+  if(ev.origin!==window.location.origin||!ev.data)return;
+  var tipo=ev.data.type;
+  if(tipo==='agracta:bioestat-ola'||tipo==='agracta:bioestat-status'){
+    /* Só o iframe da vez fala pelo motor: um já desmontado não abre nem pulsa. */
+    var fm=document.getElementById('bioEngineFrame');
+    if(!fm||ev.source!==fm.contentWindow)return;
+    if(tipo==='agracta:bioestat-ola') _bioestatMotorAberto(); else _bioestatSinal(ev.data);
+    return;
+  }
+  if(tipo!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
-  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{ok:false,erro:'Motor não devolveu um relatório'};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
-  delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
-  var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
+  var c=_bioAutoCache[item.key], rel=ev.data.resultado||{ok:false,erro:'Motor não devolveu um relatório'};
+  if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){c.results[item.job.jobKey]=rel;c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
+  delete _bioAutoPending[ev.data.requestId];
+  if(_bioAutoBusy===ev.data.requestId){ _bioAutoBusy=null; _bioAtual=null; }
+  _bioMotorEst.reaberturas=0;
+  /* Motor que não subiu devolve o mesmo erro para cada trabalho, um de cada
+     vez. O motivo já está dito: os outros deste estudo saem com ele agora, e
+     "Tentar de novo" começa com um motor novo. */
+  if(rel.ok!==true&&ev.data.motor&&ev.data.motor.fase==='falhou') _bioestatFalharFila(rel.erro||'O motor estatístico não carregou.', item.key);
   _bioestatPump();
+  _bioestatStatusNaTela();
   /* Atualiza também cada triagem forense na página de Conhecimento. */
   if(c) _bioestatRefreshOpen(c);
 });
@@ -17751,9 +18029,20 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-table{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-content}'+
   '.av-table th,.av-table td{border:1px solid var(--border,#2a3a2a);padding:4px 6px;text-align:center;white-space:nowrap}'+
   '.av-table th{background:var(--surface-2,#11210f);color:var(--text-2,#9ab39a);font-weight:700}'+
-  '.av-table th:first-child,.av-table td:first-child{position:sticky;left:0;z-index:2;min-width:58px;max-width:70px;box-shadow:6px 0 10px rgba(0,0,0,.18)}'+
+  /* A coluna fixa tem teto de largura, e com nowrap o texto que passava do teto
+     era desenhado POR CIMA das colunas vizinhas ("T1 Testemunha não infestada."
+     atravessava Dano final e AACPD). Aqui ele quebra linha dentro da própria
+     coluna e nada escapa dela; o fundo é sólido para a rolagem lateral não
+     aparecer através da coluna presa. */
+  '.av-table th:first-child,.av-table td:first-child{position:sticky;left:0;z-index:2;min-width:58px;max-width:70px;box-shadow:6px 0 10px rgba(0,0,0,.18);white-space:normal;overflow-wrap:anywhere;overflow:hidden}'+
+  '.av-table :where(td:first-child){background:var(--surface,#101613)}'+
   '.av-table th:first-child{z-index:3}'+
   '.av-tname{font-weight:800;color:var(--accent,#37d684);background:var(--surface-2,#11210f);font-size:11px;line-height:1.05}'+
+  /* Tratamento com o produto embaixo: o id manda, o nome ajuda a ler. */
+  '.av-table td.av-trat:first-child{min-width:76px;max-width:128px;text-align:left;line-height:1.2;padding:5px 7px}'+
+  '.av-trat b{display:block;font-size:12px}'+
+  '.av-trat small{display:block;margin-top:1px;font-size:10px;font-weight:500;opacity:.8}'+
+  '.av-trat small.av-trat-tag{font-style:italic;opacity:.65}'+
   '.av-cellwrap{display:flex;align-items:center;gap:3px}'+
   '.av-step{flex:none;width:30px;height:32px;border:1px solid var(--border,#2a3a2a);background:rgba(127,170,127,.14);color:#9ac49a;border-radius:7px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation}'+
   '.av-step:active{background:rgba(127,170,127,.3)}'+
