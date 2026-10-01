@@ -109,9 +109,12 @@ var neg={variaveis:['Insetos'], tipos:{Insetos:'contagem'}, notas:{'T1R1':{Inset
 ck(ctx._forenseDominio(neg)[0].texto.indexOf('negativo')>=0, 'contagem negativa é apontada');
 var frac={variaveis:['Insetos'], tipos:{Insetos:'contagem'}, notas:{'T1R1':{Insetos:'3,5'}}};
 ck(ctx._forenseDominio(frac)[0].texto.indexOf('fracionada')>=0, 'contagem fracionada também');
-var esc={variaveis:['Nota'], tipos:{Nota:'escala'}, varcfg:{Nota:{escalaMax:4}},
+var esc={variaveis:['Nota'], tipos:{Nota:'escala'}, varcfg:{Nota:{escalaMax:4,escalaModo:"nota"}},
   notas:{'T1R1':{Nota:'7'}}};
 ck(ctx._forenseDominio(esc)[0].texto.indexOf('escala')>=0, 'nota acima do máximo da escala idem');
+var indice={variaveis:['Nota'],tipos:{Nota:'escala'},varcfg:{Nota:{escalaMax:4}},notas:{T1R1:{Nota:50}}};
+eq(ctx._forenseDominio(indice).length,0,'índice legado de 50% não é nota acima de 4');
+indice.notas.T1R1.Nota=120;ck(ctx._forenseDominio(indice)[0].texto.indexOf('100%')>=0,'índice percentual acima de 100 gera alerta');
 
 console.log('\n--- Valores válidos não geram achado ---');
 var bom={variaveis:['Severidade'], tipos:{Severidade:'pct'},

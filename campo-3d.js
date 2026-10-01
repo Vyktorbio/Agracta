@@ -432,7 +432,7 @@ function pintar(){
   if(!m.avs.length)avisos.push('Nenhuma avaliação desta variável tem data cadastrada, então não há eixo de tempo para montar.');
   if(m.semData)avisos.push(m.semData+' avaliação(ões) sem data ficaram de fora: sem data não há DAA.');
   if(!m.escala.definida)avisos.push('Esta variável está sem escala definida — '+m.escala.porque+'. As colunas saem cinza e com altura igual: a tela não inventa um máximo.');
-  if(m.ordinal)avisos.push('Escala ordinal: o tempo avança em degraus, sem interpolar, e a AACPD não se aplica. O valor gravado é o índice de McKinney (0 a 100) derivado das notas de 0 a '+mostra(m.escalaMax,0)+'.');
+  if(m.ordinal)avisos.push('Escala ordinal: o tempo avança em degraus, sem interpolar, e a AACPD não se aplica. O valor segue a escala declarada: '+esc(m.escala.porque)+'.');
 
   ov.innerHTML='<section class="c3-shell"><header class="c3-head">'+
     '<div><p class="c3-eyebrow">VER NO CAMPO</p><h2>'+esc(s.codigo)+'</h2>'+
@@ -478,7 +478,7 @@ function pintar(){
       '. O espaçamento é o real, em dias.</p>'+
     '</section>';
   ligarCanvas();
-  if(!estado.laco){estado.laco=true;w.requestAnimationFrame(laco);}
+  if(!estado.laco){estado.laco=true;var atual=estado;w.requestAnimationFrame(function(ts){if(estado===atual)laco(ts);});}
 }
 
 /* A legenda mostra os CORTES, não adjetivos. "Intermediário" não deixa ninguém
@@ -1389,13 +1389,13 @@ function laco(ts){
   }
   var a=assinatura();
   if(estado.sujo||a!==estado.assin){estado.assin=a;estado.sujo=false;desenhar();}
-  w.requestAnimationFrame(laco);
+  var atual=estado;w.requestAnimationFrame(function(ts){if(estado===atual)laco(ts);});
 }
 function sincronizarTempo(){
-  var ov=d.getElementById('campo3dOvl');if(!ov)return;
+  var ov=caixa();if(!ov)return;
   var r=ov.querySelector('[data-c3="tempo"]');if(r)r.value=estado.t;
   var lbl=ov.querySelector('.c3-daa');if(lbl)lbl.textContent=mostra(estado.t,0)+' DAA';
-  var pn=d.getElementById('c3painel');if(pn&&estado.m)pn.innerHTML=painel(estado.m);
+  var pn=ov.querySelector('#c3painel');if(pn&&estado.m)pn.innerHTML=painel(estado.m);
 }
 function dentro(px,py,p){
   var d2=false;
@@ -1464,7 +1464,12 @@ d.addEventListener('click',function(ev){
   var b=ev.target.closest&&ev.target.closest('[data-c3]');
   if(!b||!ov||!ov.contains(b))return;
   if(b.dataset.c3==='fechar')return fechar();
-  if(b.dataset.c3==='rodar'){estado.rodando=!estado.rodando;b.textContent=estado.rodando?'Parar':'Rodar';}
+  if(b.dataset.c3==='rodar'){
+    if(!estado.m||!(estado.m.daaMax>0)){b.textContent='Sem intervalo temporal';return;}
+    estado.rodando=!estado.rodando;estado.ultimo=0;
+    if(estado.rodando&&estado.t>=estado.m.daaMax)estado.t=0;
+    b.textContent=estado.rodando?'Parar':'Rodar';sincronizarTempo();
+  }
   if(b.dataset.c3==='cena'){
     estado.cena=!estado.cena;cenaPref=estado.cena;
     /* Repinta porque a nota que explica a rosa entra e sai com ela — aviso sobre

@@ -9,7 +9,8 @@ const dom=new JSDOM('<!doctype html><html><body><fieldset id="avFs"><div id="avG
 w.esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 w.eval('var _avGrid={variaveis:["Severidade","Plantas","Doentes"],notas:{T1R2:{Severidade:"20"}},tipos:{Plantas:"contagem"},meta:{},varcfg:{},bruto:{}};var _avAuto={on:false,pos:0};var _avCroquiOpen=true,_avCroquiKey=null;');
 w._avCfg=(g,v)=>v==='Doentes'?{tipo:'razao',sub:1,N:10}:{tipo:g.tipos[v]==='contagem'?'contagem':'pct',sub:1};
-w._avSubCheias=()=>0;
+w._avSubCheias=()=>0;w.AvaliacaoCore=require('./vendor/avaliacao-core');
+w.eval(fn('_avDerSuf'));
 const rows=[['T1',1],['T1',2],['T2',1]].map(([t,r])=>({key:t+'R'+r,tratId:t,rep:r,repDisplay:'abc'[r-1],campo:t.slice(1)+'ABC'[r-1],produto:'Produto '+t}));
 w._avStudy=()=>({id:'S'});w._avRowsForStudy=()=>rows;
 const selecionadas=[];w.avCroquiSelect=k=>{selecionadas.push(k);w.eval('_avCroquiKey='+JSON.stringify(k));};
@@ -44,3 +45,19 @@ pinta();const fim=d.getElementById('avFicha').querySelectorAll('.av-ficha-nav bu
 /* No modo automático a caixa dele já é a ficha. */
 w.eval('_avAuto.on=true');assert.equal(w._avFichaHtml(rows,w._avGrid.variaveis),'');
 console.log('Ficha da parcela: abre pelo croqui, mostra valores, espelha na tabela, Enter avança, foto e navegação OK.');
+
+/* O modo guiado não muda o delineamento, nem depende de modelo randomizado. */
+w.eval('var stGuiado={id:"S",randomizado:false,numRepeticoes:2,tratamentos:[{id:"T1"},{id:"T2"}]};');
+w._avStudy=()=>w.stGuiado;
+w.ensureStudyRandomizacao=()=>{throw Error('Não deve randomizar o estudo ao ligar o modo guiado');};
+w._avCss=()=>{};w.avCroquiHtml=()=>'';w._avSyncInputs=()=>{};
+w._avUsaBruto=c=>c.tipo==='razao'||c.tipo==='escala'||c.sub>1;
+['_avLegendaHtml','_avAutoRows','_avAutoSteps','_avAutoState','_avStepVal','renderAvAutoBox','renderAvGrid','avAutoToggle'].forEach(n=>w.eval(fn(n)));
+w._avGrid.bruto={};w._avGrid.varcfg={Doentes:{naTratamentos:['T1']}};
+w._avAuto.on=false;w.renderAvGrid();assert.ok(d.querySelector('.av-auto-toggle'),'botão sem randomização');
+w.avAutoToggle();assert.equal(w._avAuto.on,true);assert.equal(w.stGuiado.randomizado,false);assert.ok(d.getElementById('avAutoInput'));
+assert.ok(w._avAutoSteps().every(s=>!(s.v==='Doentes'&&s.row.tratId==='T1')),'modo guiado pula não aplicáveis');
+w.stGuiado.ambiente='laboratorio';w.renderAvGrid();assert.ok(d.getElementById('avAutoInput'),'mesmo modo guiado na bancada');
+w.avAutoToggle();assert.equal(w._avAuto.on,false);assert.equal(w.stGuiado.randomizado,false);
+console.log('Modo automático disponível no campo e laboratório sem randomizar; NA excluído da sequência OK.');
+dom.window.close();
