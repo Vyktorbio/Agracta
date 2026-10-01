@@ -1,0 +1,24 @@
+/* O retrato da emenda pode conter JSON extenso (por exemplo, regras de
+   avaliação). Ele continua completo no histórico, mas nunca pode aumentar a
+   largura da ficha ou criar rolagem horizontal no celular. */
+#study-protocolo-vivo,
+#study-protocolo-vivo .pv-lista,
+#study-protocolo-vivo .pv-item,
+#study-protocolo-vivo .pv-item > div,
+#study-protocolo-vivo .pv-item ul,
+#study-protocolo-vivo .pv-item li,
+#study-protocolo-vivo .pv-motivo {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#study-protocolo-vivo .pv-item {
+  overflow: hidden;
+}
+
+#study-protocolo-vivo .pv-item li {
+  white-space: normal;
+}
