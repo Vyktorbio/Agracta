@@ -188,6 +188,7 @@ function analysisData(st,s){
 }
 function analyses(st,s){
  var a=analysisData(st,s), html='';
+ if(!s.finalizado&&typeof w._bioBotaoCalcular==='function')html+=w._bioBotaoCalcular(s.qid,s.sid);
  if(!s.finalizado&&typeof w._bioestatEnsureStudy==='function')setTimeout(function(){if(state&&state.s.key===s.key)w._bioestatEnsureStudy(s.qid,s.sid);},0);
  if(!a)return empty(s.finalizado?'Este fechamento antigo não preservou o relatório avançado. A estatística disponível continua na seção Resultados.':'Motor estatístico indisponível nesta versão.');
  a=protectedReport(a,st,s);
@@ -200,7 +201,7 @@ function analyses(st,s){
   var r=a.results[j.jobKey], status=!r?'Pendente':r.ok===true?'Calculado':'Erro de cálculo', title=(j.modo==='forense'?'Triagem forense':j.modo==='tempo'?'Sobrevivência no tempo':'Estatística')+' · '+j.variavel+(j.date?' · '+date(j.date):'');
   html+='<article class="ep-analysis-card"><h4>'+e(title)+'</h4><p class="ep-analysis-status">'+status+'</p>';
   if(j.avId)html+='<button class="con-btn" data-ep-source="'+e(j.avId)+'">Ver repetições desta avaliação</button>';
-  if(!r)html+='<p>'+(s.finalizado?'Não estava calculado no fechamento.':'Aguardando o motor estatístico. O resultado aparecerá aqui automaticamente.')+'</p>';
+  if(!r)html+='<p>'+(s.finalizado?'Não estava calculado no fechamento.':'Use Iniciar cálculos estatísticos para análises. A triagem forense inicia automaticamente.')+'</p>';
   else if(r.ok!==true)html+='<p>'+e(r.erro||'O motor não retornou um relatório válido.')+'</p>';
   else{
    if(j.modo==='forense'){
@@ -376,7 +377,7 @@ function render(s,parts){
     var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=8';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
-   var js=document.createElement('script');js.src='campo-3d.js?v=9';
+   var js=document.createElement('script');js.src='campo-3d.js?v=10';
    js.onload=function(){w.abrirCampo3D?ok():falha(Error('O módulo carregou sem registrar a vista.'));};
    js.onerror=function(){campoCarregando=null;falha(Error('Não foi possível carregar a vista do campo. Sem conexão, ela só abre depois de ter sido aberta uma vez neste aparelho.'));};
    document.head.appendChild(js);

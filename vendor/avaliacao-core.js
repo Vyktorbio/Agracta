@@ -18,7 +18,8 @@ function linhas(st){
 }
 /* A mesma herança da grade, sem escrever campos na avaliação consultada. */
 function esquema(st,av){
-  av=av||{};if(lista(av.variaveis).length)return av;
+  av=av||{};if(lista(av.variaveis).length||av.protocoloIgnorar)return av;
+  if(!av.protocoloIgnorar && st.avaliacaoProtocolo && typeof ProtocoloAvaliacaoCore!=='undefined')return Object.assign({},av,ProtocoloAvaliacaoCore.snapshot(st.avaliacaoProtocolo,av));
   var avs=lista(st.avaliacoes),idx=avs.indexOf(av);
   var prev=avs.map(function(a,i){return {a:a,i:i};}).filter(function(x){
     return x.a&&x.a!==av&&lista(x.a.variaveis).length&&(x.i<idx||String(x.a.data||'')<=String(av.data||''));
@@ -27,7 +28,12 @@ function esquema(st,av){
   var fonte=prev[prev.length-1].a;
   return Object.assign({},av,{variaveis:fonte.variaveis,tipos:fonte.tipos,varcfg:fonte.varcfg});
 }
+function naoAplicavel(av,row,v){
+  var c=(av&&av.varcfg||{})[v]||{};
+  return c.naoAvaliar===true||(c.naTratamentos||[]).indexOf(row.tratId)>=0;
+}
 function celula(av,row,v,somenteLeitor){
+  if(naoAplicavel(av,row,v))return {iniciada:false,completa:true,na:true};
   if(av.duplaLeitura&&!somenteLeitor){
     var leitores=av.avaliadores||{},n=0;
     ['A','B'].forEach(function(k){if(numero(valor((leitores[k]||{}).notas,row,v))!==null)n++;});
@@ -72,7 +78,7 @@ function estudo(st){
   if(!out.complete&&out.pct===100)out.pct=99;
   return out;
 }
-var api={numero:numero,valor:valor,linhas:linhas,esquema:esquema,parcela:parcela,avaliacao:avaliacao,estudo:estudo};
+var api={naoAplicavel:naoAplicavel,numero:numero,valor:valor,linhas:linhas,esquema:esquema,parcela:parcela,avaliacao:avaliacao,estudo:estudo};
 if(typeof module==='object'&&module.exports)module.exports=api;
 root.AvaliacaoCore=api;
 })(typeof self!=='undefined'?self:this);

@@ -91,17 +91,18 @@
     lista(av.variaveis).forEach(function(v){out.tratamentos.forEach(function(t){
         var s=sums[t.id][v];if(!s.n)return;
         var cfg=(av.varcfg||{})[v]||{},tipo=(av.tipos||{})[v]||'pct',sentido=cfg.sentido==='maior'?'maior':'menor';
-        var ref=test&&sums[test.id]&&sums[test.id][v],ctrl=null,met=null;
+        var testVar=cfg.referencia?out.tratamentos.find(function(t){return t.id===cfg.referencia;}):test;
+        var ref=testVar&&sums[testVar.id]&&sums[testVar.id][v],ctrl=null,met=null;
         /* a mesma fórmula da tela: Henderson & Tilton com contagem prévia, nada na
            própria prévia, Abbott nos demais (ver _avMetodoEficacia no app.js) */
         try{ if(typeof w._avMetodoEficacia==='function') met=w._avMetodoEficacia(st,av,v); }catch(e){ met=null; }
-        if(test&&t.id!==test.id&&ref&&ref.n){
+        if(testVar&&t.id!==testVar.id&&ref&&ref.n){
           if(met&&typeof w._avEficacia==='function') ctrl=w._avEficacia(st,av,v,t.id,ref.media,s.media,met);
           else if(typeof w._pctCtrl==='function') ctrl=w._pctCtrl(ref.media,s.media,sentido,tipo);
         }
         var m=av.momento,momento=m&&C.numero(m.valor)!==null&&['HAT','DAT'].indexOf(m.unidade)>=0?n(C.numero(m.valor))+' '+m.unidade:'';
         out.resultados.push(Object.assign({},s,{avaliacao:av.id||'av-'+ai,tratamento:t.id,variavel:v,tipo:tipo,
-          unidade:cfg.unidade||(['pct','razao','escala'].indexOf(tipo)>=0?'%':''),sentido:sentido,controle:ctrl,eficacia:met?met.metodo:'',testemunha:!!(test&&t.id===test.id),
+          unidade:cfg.unidade||(tipo==='escala'&&cfg.escalaModo==='nota'?'nota':(['pct','razao','escala'].indexOf(tipo)>=0?'%':'')),sentido:sentido,controle:ctrl,eficacia:met?met.metodo:'',testemunha:!!(testVar&&t.id===testVar.id),
           momento:momento,data:av.data||'',hora:av.hora||'',clima:clima(av.carimbo&&av.carimbo.clima),ndvi:av.carimbo&&av.carimbo.ndvi||null}));
       });});
     });

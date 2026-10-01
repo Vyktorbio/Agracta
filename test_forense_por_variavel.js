@@ -85,7 +85,7 @@ vm.runInContext("_bioestatEnsureStudy('Q1','S');",A);
 setTimeout(function(){
   var fila=js("_bioAutoQueue.map(function(i){ return {modo:i.payload.modo,k:i.job.jobKey,ft:i.payload.forenseTipo,linhas:i.payload.aoa.length-1}; })");
   var fq=fila.filter(function(i){return i.modo==='forense';});
-  ok(fila.filter(function(i){return i.modo==='analise';}).length===3,'3 análises na fila');
+  ok(fila.filter(function(i){return i.modo==='analise';}).length===0,'análises aguardam botão; não entram automaticamente');
   ok(fq.length===2,'2 triagens forenses na fila (antes: 3)');
   var fs2=fq.filter(function(i){return i.k==='__forense__|Severidade';})[0];
   ok(fs2 && fs2.linhas===18 && fs2.ft==='pct','Severidade vai com as 18 linhas e como estimativa visual');
@@ -105,6 +105,18 @@ setTimeout(function(){
   var lSev=veredictos.filter(function(r){return r[iVar]==='Severidade';})[0];
   ok(lSev && lSev[iData]==='05/03/2026 a 19/03/2026','planilha: a coluna Data traz o período da variável');
 
+  // A autorização é para os dados atuais: uma nova assinatura volta ao modo forense.
+  vm.runInContext("iniciarCalculosEstatisticos('Q1','S');",A);
+  setTimeout(function(){
+    var manual=js("_bioAutoQueue.filter(function(i){return i.payload.modo==='analise';}).length");
+    ok(manual===3,'botão libera as 3 análises estatísticas');
+    vm.runInContext("data.Q1.estudos[0].avaliacoes[0].notas.T1R1.Severidade='99';_bioestatEnsureStudy('Q1','S');",A);
+    setTimeout(function(){
+      ok(js("_bioAutoQueue.filter(function(i){return i.payload.modo==='analise';}).length")===0,'mudança de dados exige novo clique para estatística');
+      if(falhas){ console.log('\n'+falhas+' falha(s).'); process.exitCode=1; }
+      else console.log('Botão estatístico e invalidação após edição OK.');
+    },20);
+  },20);
   if(falhas){ console.log('\n'+falhas+' falha(s).'); process.exitCode=1; }
   else console.log('\nTriagem forense por variável: agrupamento, manifesto, fila, fluxo e planilha OK.');
 },50);
