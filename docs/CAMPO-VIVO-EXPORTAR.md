@@ -11,6 +11,8 @@ formato (PNG / MP4), idioma (Português / English) e quatro caixas de conteúdo
 | `campo-3d.js` | Só ganhou o botão, o carregamento sob demanda e três leituras no `AgCampo3D`: `geometria()`, `prjCru()` e `estadoAtual()` (cópia, só leitura). |
 | `campo-3d-exportar.js` | Composição 1920×1080, PNG, MP4, modal e textos PT/EN. Carregado só no clique. |
 | `vendor/mp4-muxer.js` | mp4-muxer 5.2.2 (MIT, ~74 KB, sem rede). Carregado só ao exportar vídeo. |
+| `campo-3d-realista.js` | Estilo **Realista** (WebGL): blocos de folhagem, solo, gramado até o horizonte, mata ao fundo, luz de fim de tarde. Carregado só quando o estilo realista é escolhido. |
+| `vendor/three-agracta.min.js` | Recorte mínimo do three.js r186 (MIT, ~575 KB, 145 KB comprimido), gerado com esbuild. Carregado junto com o realista. |
 | `test_campo3d_exportar.js` | Testes dos auxiliares (ver abaixo). |
 
 Nada muda no carregamento inicial do Agracta: os dois arquivos novos ficam no
@@ -36,6 +38,17 @@ alguém exporta.
 - **Folhagem é ilustração.** A legenda diz isso; o dado é a cor e a altura.
 - **Nada sai do aparelho.** O quadro é desenhado no canvas e o vídeo é
   codificado pelo próprio navegador (WebCodecs).
+
+## Estilos
+
+- **Realista** (padrão): cada parcela é um bloco de folhagem na posição da
+  grade. **A cor da folhagem é a faixa do dado; a altura é igual para todos**,
+  porque num campo de verdade a doença muda a cor, não faz a planta crescer.
+  Parcela sem avaliação fica com solo nu e contorno tracejado claro. Céu,
+  gramado, mata e luz são cenário.
+- **Esquemático**: o desenho em canvas 2D, com altura = valor, como na tela.
+- Sem WebGL, ou se o three.js não carregar, a exportação sai no esquemático e
+  o modal avisa. Ela não falha.
 
 ## Vídeo
 

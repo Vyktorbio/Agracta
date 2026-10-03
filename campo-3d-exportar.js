@@ -49,7 +49,10 @@
       videoFailed: 'Não foi possível gerar o vídeo.\nOs dados do estudo não foram alterados.\nTente novamente ou use a exportação PNG.',
       imageFailed: 'Não foi possível gerar a imagem.\nOs dados do estudo não foram alterados.',
       noDates: 'Nenhuma avaliação desta variável tem data (DAA): não há o que exportar.',
-      onlyDayMode: 'A exportação mostra o modo "Estado no dia": altura = valor.'
+      onlyDayMode: 'A exportação mostra o modo "Estado no dia".',
+      style: 'Estilo', styleRealistic: 'Realista', styleSchematic: 'Esquemático',
+      realFallback: 'Este aparelho não tem WebGL: saiu no estilo esquemático.',
+      foliageReal: 'Folhagem ilustrativa: o dado é a cor (faixa). A altura dos blocos é igual para todos.'
     },
     en: {
       exportTitle: 'Export Field View', format: 'Format', exportImage: 'PNG image', exportVideo: 'MP4 video',
@@ -70,7 +73,10 @@
       videoFailed: 'The video could not be generated.\nStudy data was not changed.\nPlease try again or use PNG export.',
       imageFailed: 'The image could not be generated.\nStudy data was not changed.',
       noDates: 'No assessment of this variable has a date (DAA): there is nothing to export.',
-      onlyDayMode: 'The export shows the "State on the day" mode: height = value.'
+      onlyDayMode: 'The export shows the "State on the day" mode.',
+      style: 'Style', styleRealistic: 'Realistic', styleSchematic: 'Schematic',
+      realFallback: 'This device has no WebGL: exported in the schematic style.',
+      foliageReal: 'Foliage is illustrative: the data are the colour (band). All blocks have the same height.'
     }
   };
   function tr(lang, k, vars) {
@@ -231,15 +237,17 @@
     return s + '…';
   }
 
-  function ceu(ctx) {
+  function ceu(ctx, hz) {
+    var real = hz != null, hy = real ? Math.max(40, Math.min(H - 40, hz)) : H * 0.5, f = hy / H;
     var g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#f1b77e'); g.addColorStop(0.28, '#f8d3a2'); g.addColorStop(0.47, '#fbe9cf');
-    g.addColorStop(0.5, '#d9dfc2'); g.addColorStop(0.62, '#b9c99a'); g.addColorStop(1, '#93ab72');
+    g.addColorStop(0, '#e9a874'); g.addColorStop(f * 0.55, '#f6cd9c'); g.addColorStop(f * 0.94, '#f3dcc0');
+    g.addColorStop(f, '#f3dcc0'); g.addColorStop(Math.min(1, f + 0.12), '#b9c99a'); g.addColorStop(1, '#93ab72');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     /* sol baixo, à direita, só como luz de fundo */
-    var s = ctx.createRadialGradient(W * 0.74, H * 0.47, 10, W * 0.74, H * 0.47, 520);
+    var s = ctx.createRadialGradient(W * 0.74, hy - 20, 10, W * 0.74, hy - 20, 520);
     s.addColorStop(0, 'rgba(255,240,200,0.95)'); s.addColorStop(0.18, 'rgba(255,214,150,0.55)'); s.addColorStop(1, 'rgba(255,214,150,0)');
-    ctx.fillStyle = s; ctx.fillRect(0, 0, W, H * 0.62);
+    ctx.fillStyle = s; ctx.fillRect(0, 0, W, Math.min(H, hy + 120));
+    if (real) return;
     /* linha de árvores ao longe — silhueta, fora de foco */
     var r = sorteio(77);
     ctx.fillStyle = 'rgba(92,118,92,0.42)';
@@ -357,17 +365,23 @@
       moita(ctx, P, rnd, cor, o.x0 + 0.15, o.y0 + 0.15, o.x1 - 0.15, o.y1 - 0.15, h, h, 1.0, 46, raio);
     });
     /* rótulos: T na frente, bloco do lado — no mesmo lugar da tela */
+    rotulosGrade(ctx, cena, lang, function (x, y, z) { return P(cam.ox + x, cam.oy + y, z); }, 2.4, 3.6);
+  }
+  /* T na frente, bloco do lado — no mesmo lugar da tela. Pg recebe a
+     coordenada da GRADE (origem no canto do T1, repetição 1). */
+  function rotulosGrade(ctx, cena, lang, Pg, frente, lado) {
+    var g = cena.g, m = cena.m;
     ctx.save(); ctx.font = '600 22px ' + FONTE; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     function etiqueta(s, p) {
       var lw = ctx.measureText(s).width + 22;
       caixaArred(ctx, p[0] - lw / 2, p[1] - 17, lw, 34, 10, 'rgba(255,255,255,0.88)', 'rgba(60,70,50,0.25)');
       ctx.fillStyle = '#22301f'; ctx.fillText(s, p[0], p[1] + 1);
     }
-    m.trats.forEach(function (tt, ti) { etiqueta(String(tt.id), P(cam.ox + ti * g.SX + g.PW / 2, cam.oy - 2.4, 0)); });
+    m.trats.forEach(function (tt, ti) { etiqueta(String(tt.id), Pg(ti * g.SX + g.PW / 2, -frente, 0)); });
     var vistos = {};
     m.grade.forEach(function (p) {
       if (vistos[p.rep]) return; vistos[p.rep] = 1;
-      etiqueta(tr(lang, 'block') + ' ' + p.repLabel, P(cam.ox - 3.6, cam.oy + (p.rep - 1) * g.SY + g.PL / 2, 0));
+      etiqueta(tr(lang, 'block') + ' ' + p.repLabel, Pg(-lado, (p.rep - 1) * g.SY + g.PL / 2, 0));
     });
     ctx.restore();
   }
@@ -399,7 +413,7 @@
       texto(ctx, it.texto, x + 84, yy + 26, 25, 600, '#1d2a22');
     });
     ctx.font = '400 17px ' + FONTE;
-    var nota = tr(lang, 'foliage'), linhas = quebra(ctx, nota, larg - 56);
+    var nota = tr(lang, cena.real ? 'foliageReal' : 'foliage'), linhas = quebra(ctx, nota, larg - 56);
     linhas.slice(0, 3).forEach(function (l, i) { texto(ctx, l, x + 28, y + alt - 92 + i * 24, 17, 400, '#5a6a5e'); });
   }
   function quebra(ctx, s, larg) {
@@ -467,11 +481,19 @@
       cena._cam = camera(cena, area, rots); cena._camChave = [temLegenda, temTempo, temTitulo].join();
     }
     cena._rot = q.rot != null ? q.rot : cena.rot0;
-    var P = projetor(cena._cam, cena._rot);
     ctx.save();
-    ceu(ctx);
-    solo(ctx, cena, P, cena._cam);
-    parcelas(ctx, cena, P, q.t, lang);
+    if (cena.real) {
+      if (cena._realChave !== cena._camChave) { cena.real.enquadrar(area, cena.rots || [cena.rot0]); cena._realChave = cena._camChave; }
+      var gl = cena.real.desenhar(q.t, cena._rot);
+      ceu(ctx, cena.real.horizonte());
+      ctx.drawImage(gl, 0, 0);
+      rotulosGrade(ctx, cena, lang, cena.real.projetar, 2.2, 3.2);
+    } else {
+      var P = projetor(cena._cam, cena._rot);
+      ceu(ctx);
+      solo(ctx, cena, P, cena._cam);
+      parcelas(ctx, cena, P, q.t, lang);
+    }
     if (temTitulo) cabecalho(ctx, cena, lang);
     if (temLegenda) painelLegenda(ctx, cena, lang, { x: 1440, y: temTitulo ? 210 : 60, w: 430 });
     if (temTempo) linhaDoTempo(ctx, cena, q, lang, { x: 48, y: 898, w: W - 96, h: 148 });
@@ -505,17 +527,20 @@
     var cena = preparar(base, op);
     if (!cena.daas.length) return Promise.reject(Object.assign(new Error('sem-datas'), { codigo: 'noDates' }));
     var q = instantePNG(cena, typeof base.t === 'number' ? base.t : cena.daas[cena.daas.length - 1]);
-    var cv = novoCanvas();
-    return new Promise(function (ok, falha) {
-      try {
-        compor(cv.getContext('2d'), cena, q);
-        cv.toBlob(function (b) {
-          liberarCanvas(cv);
-          if (!b) return falha(new Error('png-vazio'));
-          var rot = q.real ? num(q.t, 0, 'en') + 'DAA' : num(q.t, 0, 'en') + 'DAA-' + (cena.lang === 'en' ? 'transition' : 'transicao');
-          ok({ blob: b, nome: nomeArquivo(cena.codigo, cena.variavel, rot, 'png') });
-        }, 'image/png');
-      } catch (e) { liberarCanvas(cv); falha(e); }
+    return prepararReal(cena).then(function () {
+      var cv = novoCanvas();
+      return new Promise(function (ok, falha) {
+        try {
+          compor(cv.getContext('2d'), cena, q);
+          soltarReal(cena);
+          cv.toBlob(function (b) {
+            liberarCanvas(cv);
+            if (!b) return falha(new Error('png-vazio'));
+            var rot = q.real ? num(q.t, 0, 'en') + 'DAA' : num(q.t, 0, 'en') + 'DAA-' + (cena.lang === 'en' ? 'transition' : 'transicao');
+            ok({ blob: b, nome: nomeArquivo(cena.codigo, cena.variavel, rot, 'png'), semReal: !!cena.semReal });
+          }, 'image/png');
+        } catch (e) { soltarReal(cena); liberarCanvas(cv); falha(e); }
+      });
     });
   }
 
@@ -544,6 +569,32 @@
     });
     return _muxer;
   }
+  /* Estilo realista: WebGL (three.js) + o renderizador, os dois sob demanda.
+     Qualquer falha — sem WebGL, script que não carrega — devolve null e a
+     exportação segue no esquemático, avisando. */
+  var _scripts = {};
+  function script(src, global) {
+    if (w[global]) return Promise.resolve(w[global]);
+    if (_scripts[src]) return _scripts[src];
+    _scripts[src] = new Promise(function (ok, falha) {
+      var s = w.document.createElement('script'); s.src = src;
+      s.onload = function () { w[global] ? ok(w[global]) : falha(new Error(global + '-ausente')); };
+      s.onerror = function () { delete _scripts[src]; falha(new Error(src + '-nao-carregou')); };
+      w.document.head.appendChild(s);
+    });
+    return _scripts[src];
+  }
+  function prepararReal(cena) {
+    if (cena.op.estilo !== 'realista') return Promise.resolve(cena);
+    return script('vendor/three-agracta.min.js?v=1', 'AgTHREE').then(function () {
+      return script('campo-3d-realista.js?v=1', 'AgCampoRealista');
+    }).then(function (R) {
+      cena.real = R.suportado() ? R.criar(cena, W, H) : null;
+      if (!cena.real) cena.semReal = true;
+      return cena;
+    }, function () { cena.semReal = true; return cena; });
+  }
+  function soltarReal(cena) { if (cena && cena.real) { try { cena.real.destruir(); } catch (e) {} cena.real = null; } }
   function tique() { return new Promise(function (r) { setTimeout(r, 0); }); }
 
   /* Determinístico: cada quadro é desenhado a partir do instante, não gravado
@@ -560,7 +611,7 @@
     aviso({ fase: 'preparing' });
     return escolherCodec().then(function (cfg) {
       if (!cfg) throw Object.assign(new Error('sem-h264'), { codigo: 'videoUnsupported' });
-      return carregarMuxer().then(function (M) {
+      return carregarMuxer().then(function (M) { return prepararReal(cena).then(function () { return M; }); }).then(function (M) {
         var muxer = new M.Muxer({ target: new M.ArrayBufferTarget(), video: { codec: 'avc', width: W, height: H, frameRate: FPS },
           fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
         enc = new w.VideoEncoder({ output: function (ch, meta) { muxer.addVideoChunk(ch, meta); }, error: function (e) { erroEnc = e; } });
@@ -590,13 +641,14 @@
           muxer.finalize();
           var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
           var rot = cena.daas.length > 1 ? num(cena.daas[0], 0, 'en') + '-' + num(cena.daas[cena.daas.length - 1], 0, 'en') + 'DAA' : num(cena.daas[0], 0, 'en') + 'DAA';
-          return { blob: blob, nome: nomeArquivo(cena.codigo, cena.variavel, rot, 'mp4'), quadros: r.quadros, segundos: r.segundos, codec: cfg.codec };
+          return { blob: blob, nome: nomeArquivo(cena.codigo, cena.variavel, rot, 'mp4'), quadros: r.quadros, segundos: r.segundos, codec: cfg.codec, semReal: !!cena.semReal };
         });
       });
     }).then(function (res) { limpar(); return res; }, function (e) { limpar(); throw e; });
     function limpar() {
       if (enc && enc.state !== 'closed') { try { enc.close(); } catch (e) {} }
       if (cv) liberarCanvas(cv);
+      soltarReal(cena);
       enc = null; cv = null;
     }
   }
@@ -623,6 +675,7 @@
     function caixa(k, rot) { return '<label style="display:flex;gap:8px;align-items:center;padding:4px 0;min-height:30px"><input type="checkbox" data-op="' + k + '" checked> ' + rot + '</label>'; }
     function pintarModal(estadoMsg) {
       var fmt = (ov.querySelector('input[name="c3fmt"]:checked') || {}).value || 'png';
+      var est = (ov.querySelector('input[name="c3est"]:checked') || {}).value || 'realista';
       var marcas = {}; Array.prototype.forEach.call(ov.querySelectorAll('[data-op]'), function (c) { marcas[c.dataset.op] = c.checked; });
       var m = C.modelo(base.st, base.variavel);
       var nota = [];
@@ -634,6 +687,8 @@
         '<h2 style="margin:0 0 12px;font-size:19px">' + tr(lang, 'exportTitle') + '</h2>' +
         '<fieldset style="border:0;margin:0 0 8px;padding:0"><legend style="font-weight:700;margin-bottom:2px">' + tr(lang, 'format') + '</legend>' +
           radio('c3fmt', 'png', tr(lang, 'exportImage'), fmt === 'png') + radio('c3fmt', 'mp4', tr(lang, 'exportVideo'), fmt === 'mp4', !temVideo) + '</fieldset>' +
+        '<fieldset style="border:0;margin:0 0 8px;padding:0"><legend style="font-weight:700;margin-bottom:2px">' + tr(lang, 'style') + '</legend>' +
+          radio('c3est', 'realista', tr(lang, 'styleRealistic'), est === 'realista') + radio('c3est', 'esquematico', tr(lang, 'styleSchematic'), est === 'esquematico') + '</fieldset>' +
         '<fieldset style="border:0;margin:0 0 8px;padding:0"><legend style="font-weight:700;margin-bottom:2px">' + tr(lang, 'language') + '</legend>' +
           radio('c3lang', 'pt', 'Português', lang === 'pt') + radio('c3lang', 'en', 'English', lang === 'en') + '</fieldset>' +
         '<fieldset style="border:0;margin:0 0 8px;padding:0"><legend style="font-weight:700;margin-bottom:2px">' + tr(lang, 'content') + '</legend>' +
@@ -669,7 +724,7 @@
       if (b.dataset.c3x === 'cancelar') { if (ocupado) { cancelar = true; return; } return fecharModal(); }
       if (b.dataset.c3x !== 'exportar' || ocupado) return;
       var fmt = (ov.querySelector('input[name="c3fmt"]:checked') || {}).value || 'png';
-      var op = { lang: lang };
+      var op = { lang: lang, estilo: (ov.querySelector('input[name="c3est"]:checked') || {}).value || 'realista' };
       Array.prototype.forEach.call(ov.querySelectorAll('[data-op]'), function (c) { op[c.dataset.op] = c.checked; });
       cancelar = false; trava(true); msg(tr(lang, 'preparing'), 0);
       /* uma cópia do estado: a vista interativa segue intocada enquanto isso */
@@ -681,7 +736,7 @@
           }, function () { return cancelar; })
         : gerarPNG(foto, op);
       job.then(function (res) {
-        baixar(res.blob, res.nome); msg(tr(lang, 'done'), 100); trava(false);
+        baixar(res.blob, res.nome); msg(tr(lang, 'done') + (res.semReal ? '\n' + tr(lang, 'realFallback') : ''), 100); trava(false);
       }, function (e) {
         trava(false);
         var k = e && e.codigo;

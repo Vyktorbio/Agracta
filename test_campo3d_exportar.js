@@ -35,7 +35,7 @@ function carregar(extra) {
       if (t === 'canvas') { const c = { width: 0, height: 0, getContext: () => ctx2d(reg), toBlob: (f) => f({ size: 1, type: 'image/png' }) }; reg.canvases.push(c); return c; }
       return { style: {}, click() {}, remove() {}, setAttribute() {} };
     },
-    body: { appendChild() {} }, head: { appendChild() {} }, getElementById: () => null, querySelector: () => null
+    body: { appendChild() {} }, head: { appendChild(el) { reg.scripts = (reg.scripts || 0) + 1; setTimeout(() => el.onerror && el.onerror(), 0); } }, getElementById: () => null, querySelector: () => null
   };
   const ctx = Object.assign({ console, document: doc, Promise, Blob: class { constructor(p, o) { this.parts = p; this.type = o.type; } },
     URL: { createObjectURL: () => { const u = 'blob:' + reg.urls.length; reg.urls.push(u); return u; }, revokeObjectURL: (u) => reg.revogados.push(u) },
@@ -135,6 +135,13 @@ function estudo(variavel) {
   ok(png.nome === 'agracta_LB-2749-077-26-S_Severidade_30DAA.png', 'nome do PNG: ' + png.nome);
   ok(reg.canvases.every(cv => cv.width === 0), 'canvas do PNG liberado');
   ok(JSON.stringify(st.avaliacoes.map(a => a.id)) === '["A3","A1","A2"]', 'estudo não foi reordenado nem alterado');
+
+  /* estilo realista sem WebGL/three: cai no esquemático e avisa, nunca falha */
+  const pngR = await X.gerarPNG({ s: st, st, variavel: 'Severidade', t: 30, rot: 0.6 }, { lang: 'pt', estilo: 'realista' });
+  ok(pngR.semReal === true && pngR.nome.endsWith('_30DAA.png') && reg.scripts >= 1, 'realista indisponível: PNG esquemático + aviso');
+  ok(X.tr('pt', 'realFallback').includes('esquemático') && X.tr('en', 'styleRealistic') === 'Realistic', 'textos do estilo nos dois idiomas');
+  const semEstilo = await X.gerarPNG({ s: st, st, variavel: 'Severidade', t: 30, rot: 0.6 }, { lang: 'pt' });
+  ok(semEstilo.semReal === false, 'sem pedir realista, nada de WebGL é carregado');
 
   /* MP4 sem WebCodecs: erro claro, não arquivo inválido */
   await X.gerarMP4({ s: st, st, variavel: 'Severidade', rot: 0.6 }, { lang: 'pt' }).then(() => ok(false, 'devia falhar'),

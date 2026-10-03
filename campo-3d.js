@@ -250,13 +250,15 @@ function eixo(m,modo){
    A PRECISÃO NÃO SE PERDE: quem continua contínua é a ALTURA. A coluna sobe no
    valor exato e a cor diz em que faixa ele caiu; clicando, o painel mostra o
    número. Cor categórica com altura contínua lê melhor que as duas contínuas. */
-var BOM=[76,139,43], MEIO=[224,160,32], RUIM=[201,64,60];
 var NFAIXAS=5;
-function mistura(a,b,f){
-  return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+Math.round(a[2]+(b[2]-a[2])*f)+')';
-}
+/* Cinco cores de semáforo, vivas, do melhor ao pior. A rampa anterior
+   (verde-oliva, âmbar e vermelho-tijolo misturados) saía apagada — num quadro
+   em que a cor É o dado, cor sem brilho é dado difícil de ler. Uma cor por
+   faixa, sem mistura: o que a legenda mostra é exatamente o que a coluna pinta. */
+var CORES_FAIXA=['rgb(34,160,70)','rgb(140,198,63)','rgb(250,204,21)','rgb(245,124,0)','rgb(220,38,38)'];
 function corContinua(f){
-  return f<.5?mistura(BOM,MEIO,f/.5):mistura(MEIO,RUIM,(f-.5)/.5);
+  var i=Math.max(0,Math.min(NFAIXAS-1,Math.floor(Math.max(0,Math.min(1,f))*NFAIXAS)));
+  return CORES_FAIXA[i];
 }
 /* As faixas saem da ESCALA da variável, em quintos — nunca de cortes fixos como
    5/20/40/60, que valeriam só para severidade em porcentagem e virariam uma
@@ -1492,7 +1494,7 @@ d.addEventListener('click',function(ev){
     if(w.AgCampoExportar)return w.AgCampoExportar.abrir();
     if(b.dataset.carregando)return;
     b.dataset.carregando='1';
-    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=1';
+    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=2';
     sc.onload=function(){delete b.dataset.carregando;if(w.AgCampoExportar)w.AgCampoExportar.abrir();};
     sc.onerror=function(){delete b.dataset.carregando;b.textContent='Exportar indisponível offline';};
     d.head.appendChild(sc);

@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v338';
+var CACHE = 'agracta-app-v339';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=1', './protocolo-avaliacoes.css?v=1',
@@ -16,7 +16,7 @@ var ASSETS = [
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem
      arquivos da lista. */
-  './campo-3d.js?v=11', './campo-3d.css?v=8', './campo-3d-exportar.js?v=1', './vendor/mp4-muxer.js?v=1',
+  './campo-3d.js?v=12', './campo-3d.css?v=8', './campo-3d-exportar.js?v=2', './vendor/mp4-muxer.js?v=1', './campo-3d-realista.js?v=1', './vendor/three-agracta.min.js?v=1',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=3',
   './', './index.html',
   './integracoes.css?v=4', './integracoes.js?v=14', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
