@@ -320,7 +320,16 @@ w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fra
              brilho:brilho,rumoDaLuz:rumoDaLuz,casco:casco,
              /* Função, não o vetor: este objeto é montado aqui em cima e as
                 constantes do cenário só recebem valor lá embaixo. */
-             normais:function(){return NORMAIS;}};
+             normais:function(){return NORMAIS;},
+             /* Para a exportação (campo-3d-exportar.js): a MESMA grade e a MESMA
+                projeção da tela, lidas daqui em vez de copiadas lá. */
+             geometria:function(){return {TILT:TILT,HMAX:HMAX,PW:PW,PL:PL,SX:SX,SY:SY,MARGEM:MARGEM,ESP:ESP};},
+             prjCru:function(rot,x,y,z){return prjCru(rot,x,y,z);},
+             /* Cópia do que está na tela agora — só leitura; exportar não mexe na vista. */
+             estadoAtual:function(){
+               if(!estado||!estado.st)return null;
+               return {s:estado.s,st:estado.st,variavel:estado.variavel,t:estado.t,rot:estado.rot,modo:estado.modo};
+             }};
 
 /* =========================================================== a tela ===== */
 var estado=null;
@@ -465,7 +474,8 @@ function pintar(){
         'entre dois anéis o que se vê é interpolação, não medição.</p>')+
     '<div class="c3-tempo"><label for="c3rot">Girar</label>'+
       '<input id="c3rot" type="range" data-c3="girar" min="0" max="360" step="1" value="'+Math.round(((estado.rot*180/Math.PI)%360+360)%360)+'">'+
-      '<button type="button" class="c3-btn c3-cena'+(estado.cena?' ativo':'')+'" data-c3="cena" aria-pressed="'+(!!estado.cena)+'">Cenário</button></div>'+
+      '<button type="button" class="c3-btn c3-cena'+(estado.cena?' ativo':'')+'" data-c3="cena" aria-pressed="'+(!!estado.cena)+'">Cenário</button>'+
+      '<button type="button" class="c3-btn" data-c3="exportar">Exportar</button></div>'+
     legenda(m)+
     '<div class="c3-painel" id="c3painel">'+painel(m)+'</div>'+
     avisos.map(function(a){return '<p class="c3-nota">'+esc(a)+'</p>';}).join('')+
@@ -1476,6 +1486,17 @@ d.addEventListener('click',function(ev){
        uma coisa que não está mais na tela é ruído. O giro e o instante não se
        perdem: pintar() escreve os controles a partir do estado, não do zero. */
     pintar();
+  }
+  if(b.dataset.c3==='exportar'){
+    /* SOB DEMANDA: o exportador (e o muxer de vídeo, mais adiante) só baixa aqui. */
+    if(w.AgCampoExportar)return w.AgCampoExportar.abrir();
+    if(b.dataset.carregando)return;
+    b.dataset.carregando='1';
+    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=1';
+    sc.onload=function(){delete b.dataset.carregando;if(w.AgCampoExportar)w.AgCampoExportar.abrir();};
+    sc.onerror=function(){delete b.dataset.carregando;b.textContent='Exportar indisponível offline';};
+    d.head.appendChild(sc);
+    return;
   }
   if(b.dataset.c3==='modo'&&b.dataset.modo!==estado.modo){
     estado.modo=b.dataset.modo;estado.rodando=false;

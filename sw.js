@@ -2,13 +2,13 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v337';
+var CACHE = 'agracta-app-v338';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=1', './protocolo-avaliacoes.css?v=1',
   './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=3',
   './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=2', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=3', './vendor/relatorio-docx.js?v=1',
-  './galeria-fotos.js?v=7', './fotos-estudo.js?v=3', './fotos-estudo.css?v=3', './vendor/fotos-core.js?v=2', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=7', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
+  './galeria-fotos.js?v=8', './fotos-estudo.js?v=3', './fotos-estudo.css?v=3', './vendor/fotos-core.js?v=2', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=8', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
   './croqui-parcelas.js?v=3', './croqui-parcelas.css?v=1',
   './profundidade.css?v=1',
   './estudo-pagina.js?v=20', './estudo-pagina.css?v=8',
@@ -16,7 +16,7 @@ var ASSETS = [
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem
      arquivos da lista. */
-  './campo-3d.js?v=10', './campo-3d.css?v=8',
+  './campo-3d.js?v=11', './campo-3d.css?v=8', './campo-3d-exportar.js?v=1', './vendor/mp4-muxer.js?v=1',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=3',
   './', './index.html',
   './integracoes.css?v=4', './integracoes.js?v=14', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
