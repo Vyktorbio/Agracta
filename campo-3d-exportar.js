@@ -119,7 +119,7 @@
   function roteiro(daas) {
     var n = daas.length;
     if (!n) return null;
-    var parada = n <= 6 ? 1.6 : (n <= 10 ? 1.1 : 0.8), passo = n <= 6 ? 0.7 : 0.5;
+    var parada = n <= 6 ? 1.0 : (n <= 10 ? 0.8 : 0.6), passo = n <= 6 ? 1.3 : (n <= 10 ? 0.9 : 0.6);
     var seg = [{ tipo: 'abertura', i: 0, dur: 1.0 }];
     for (var k = 0; k < n; k++) {
       seg.push({ tipo: 'avaliacao', i: k, dur: parada });
@@ -130,6 +130,9 @@
     return { segmentos: seg, segundos: total, quadros: Math.max(1, Math.round(total * FPS)), fps: FPS, daas: daas.slice() };
   }
   function suave(u) { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); }
+  /* Na transição, quase linear: a curva em S parava a coluna nas duas pontas e,
+     somada à parada na avaliação, o vídeo parecia andar aos solavancos. */
+  function passoSuave(u) { u = Math.max(0, Math.min(1, u)); return 0.75 * u + 0.25 * suave(u); }
   /* Quadro f -> instante. `real` só é verdadeiro parado EM CIMA de uma avaliação. */
   function instante(r, f) {
     var s = f / r.fps, acc = 0, seg = r.segmentos, k;
@@ -138,7 +141,7 @@
     var p = r.quadros > 1 ? f / (r.quadros - 1) : 0.5;
     if (g.tipo === 'transicao') {
       var a = r.daas[g.de], b = r.daas[g.para];
-      return { t: a + (b - a) * suave(u), real: false, i: null, de: g.de, para: g.para, fase: g.tipo, progresso: p };
+      return { t: a + (b - a) * passoSuave(u), real: false, i: null, de: g.de, para: g.para, fase: g.tipo, progresso: p };
     }
     return { t: r.daas[g.i], real: true, i: g.i, fase: g.tipo, progresso: p, entrada: g.tipo === 'abertura' ? u : 1 };
   }
@@ -192,7 +195,27 @@
     var C = w.AgCampo3D, m = cena.m, v = C.valorEm(m, p, t);
     if (v === null) return { v: null, h: 0, cor: null };
     var fr = C.fracao(m, v);
-    return { v: v, h: (fr === null ? 0.45 : Math.max(0.12, fr)) * cena.g.HMAX, cor: C.corDe(C.fracaoRuim(m, v)) };
+    var cor = C.corDe(C.fracaoRuim(m, v));
+    /* ENTRE duas avaliações a cor não pula de faixa: passa da cor da avaliação
+       anterior para a da seguinte. Só no vídeo, só na transição — que o rodapé
+       já marca como "não é avaliação". Em cima de uma avaliação a cor é a
+       faixa exata, igual à da tela e à da legenda. */
+    var daas = cena.daas || [], i;
+    for (i = 0; i < daas.length - 1; i++) {
+      if (t > daas[i] && t < daas[i + 1]) {
+        var va = C.valorEm(m, p, daas[i]), vb = C.valorEm(m, p, daas[i + 1]);
+        if (va !== null && vb !== null) {
+          var ca = C.corDe(C.fracaoRuim(m, va)), cb = C.corDe(C.fracaoRuim(m, vb));
+          if (ca !== cb) cor = misturaCor(ca, cb, (t - daas[i]) / (daas[i + 1] - daas[i]));
+        }
+        break;
+      }
+    }
+    return { v: v, h: (fr === null ? 0.45 : Math.max(0.12, fr)) * cena.g.HMAX, cor: cor };
+  }
+  function misturaCor(a, b, f) {
+    var x = rgb(a), y = rgb(b); f = Math.max(0, Math.min(1, f));
+    return 'rgb(' + Math.round(x[0] + (y[0] - x[0]) * f) + ',' + Math.round(x[1] + (y[1] - x[1]) * f) + ',' + Math.round(x[2] + (y[2] - x[2]) * f) + ')';
   }
 
   /* --------------------------------------------------------- desenho --- */
@@ -582,7 +605,7 @@
   function prepararReal(cena) {
     if (cena.op.estilo !== 'realista') return Promise.resolve(cena);
     return script('vendor/three-agracta.min.js?v=1', 'AgTHREE').then(function () {
-      return script('campo-3d-realista.js?v=2', 'AgCampoRealista');
+      return script('campo-3d-realista.js?v=3', 'AgCampoRealista');
     }).then(function (R) {
       cena.real = R.suportado() ? R.criar(cena, W, H) : null;
       if (!cena.real) cena.semReal = true;

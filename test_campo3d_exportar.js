@@ -100,6 +100,21 @@ function estudo(variavel) {
   const t1 = X.colunaEm(cena, cena.m.grade.find(g => g.chave === 'T1R1'), 7);
   ok(t1.v === 20 && t1.cor === C.corDe(C.fracaoRuim(cena.m, 20)), 'valor e cor iguais aos da tela');
 
+  /* transição: a cor passa de uma faixa para a outra sem salto; em cima da
+     avaliação é a faixa exata */
+  {
+    const pT1 = cena.m.grade.find(g => g.chave === 'T1R1'); /* 5 -> 20 -> 40 */
+    const c7 = X.colunaEm(cena, pT1, 7).cor, c30 = X.colunaEm(cena, pT1, 30).cor;
+    ok(c7 === C.corDe(C.fracaoRuim(cena.m, 20)) && c30 === C.corDe(C.fracaoRuim(cena.m, 40)), 'em cima da avaliação: cor da faixa exata');
+    const meio = X.colunaEm(cena, pT1, 18.5).cor;
+    ok(meio !== c7 && meio !== c30 && /^rgb\(/.test(meio), 'no meio da transição: cor intermediária, sem pulo de faixa');
+    const passos = [8, 12, 16, 20, 24, 28].map(t => X.colunaEm(cena, pT1, t).cor.match(/\d+/g).map(Number));
+    const salto = Math.max(...passos.slice(1).map((c, i) => Math.abs(c[0] - passos[i][0]) + Math.abs(c[1] - passos[i][1]) + Math.abs(c[2] - passos[i][2])));
+    ok(salto < 120, 'passo a passo a cor muda aos poucos (maior salto ' + salto + ')');
+    const r4 = X.roteiro([0, 7, 30, 50]), seg = r4.segmentos;
+    ok(seg.find(x => x.tipo === 'transicao').dur > seg.find(x => x.tipo === 'avaliacao').dur, 'transição mais longa que a parada: sem solavanco');
+  }
+
   /* legenda: mesmos cortes, pior primeiro, + sem avaliação; PT/EN */
   const legPt = X.legendaItens(cena.m, 'pt'), legEn = X.legendaItens(cena.m, 'en');
   ok(legPt.length === 6 && legPt[5].vazio && legPt[5].texto === 'sem avaliação', 'cinco faixas + sem avaliação');

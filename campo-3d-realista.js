@@ -92,7 +92,7 @@
     var T = w.AgTHREE, g = cena.g, m = cena.m;
     var cv = w.document.createElement('canvas'); cv.width = LARG; cv.height = ALT;
     var ren;
-    try { ren = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }); }
+    try { ren = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance', logarithmicDepthBuffer: true }); }
     catch (e) { cv.width = cv.height = 0; return null; }
     ren.setPixelRatio(1); ren.setSize(LARG, ALT, false);
     ren.setClearColor(0x000000, 0);
@@ -116,16 +116,17 @@
     sol.shadow.mapSize.set(1536, 1536);
     var raio = Math.max(larg, alt) * 0.75 + 6;
     sol.shadow.camera.left = -raio; sol.shadow.camera.right = raio; sol.shadow.camera.top = raio; sol.shadow.camera.bottom = -raio;
-    sol.shadow.camera.near = 1; sol.shadow.camera.far = 400; sol.shadow.bias = -0.0005; sol.shadow.normalBias = 0.02;
+    sol.shadow.camera.near = 1; sol.shadow.camera.far = 400; sol.shadow.bias = -0.0015; sol.shadow.normalBias = 0.06;
     sc.add(sol); sc.add(sol.target);
 
     /* gramado até o horizonte */
     var grama = new T.Mesh(new T.PlaneGeometry(4000, 4000), new T.MeshLambertMaterial({ map: texGrama(T) }));
-    grama.rotation.x = -Math.PI / 2; grama.position.y = -0.02; grama.receiveShadow = true; sc.add(grama);
+    grama.rotation.x = -Math.PI / 2; grama.position.y = -0.25; grama.receiveShadow = true; sc.add(grama);
     /* área do ensaio: solo preparado, com a margem do bloco */
     var mg = 1.6;
     var solo = new T.Mesh(new T.PlaneGeometry(larg + 2 * mg, alt + 2 * mg), new T.MeshLambertMaterial({ map: texSolo(T) }));
-    solo.rotation.x = -Math.PI / 2; solo.position.y = 0.0; solo.receiveShadow = true; sc.add(solo);
+    solo.rotation.x = -Math.PI / 2; solo.position.y = 0.0;
+    solo.material.polygonOffset = true; solo.material.polygonOffsetFactor = 1; solo.material.polygonOffsetUnits = 1; solo.receiveShadow = true; sc.add(solo);
 
     /* ---- a parcela é um BLOCO DE FOLHAGEM: folhas cobrindo topo e laterais
        de um volume do tamanho da parcela, sobre um miolo escuro que fecha os
@@ -201,7 +202,7 @@
           var d = new T.Mesh(tracoGeo, traco);
           var horiz = Math.abs(l[3] - l[1]) < 1e-9;
           d.scale.set(horiz ? comp * 0.6 / n : 0.09, 1, horiz ? 0.09 : comp * 0.6 / n);
-          d.position.set(X(mxp), 0.03, Z(myp));
+          d.position.set(X(mxp), 0.06, Z(myp));
           grupo.add(d);
         }
       });
@@ -218,9 +219,15 @@
       var fx = si, fz = -co;
       cam.position.set(alvo.x - fx * dist * Math.cos(ELEV), alvo.y + dist * Math.sin(ELEV), alvo.z - fz * dist * Math.cos(ELEV));
       cam.up.set(0, 1, 0); cam.lookAt(alvo); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-      /* sol atrás e à esquerda de quem olha, alto o bastante para não apagar a cor */
+    }
+    /* Sol atrás e à esquerda de quem olha, alto o bastante para não apagar a
+       cor. FIXO no vídeo inteiro: acompanhando o giro, o mapa de sombra mudava
+       a cada quadro e o chão das parcelas piscava. */
+    function fixarSol(rot) {
+      var si = Math.sin(rot), co = Math.cos(rot);
       var sx = -co * 0.55 + si * 0.45, sz = -si * 0.55 - co * 0.45;
       sol.position.set(sx * 120, 95, -sz * 120); sol.target.position.set(0, 0, 0);
+      sol.target.updateMatrixWorld();
     }
     /* cantos do ensaio (com margem e altura de planta) para o enquadramento */
     var cantos = [];
@@ -249,6 +256,9 @@
         pior = Math.max(pior, hi);
       });
       distFixa = pior;
+      /* sol no giro do meio; near/far justos na distância: precisão de profundidade */
+      fixarSol(rots[Math.floor(rots.length / 2)]);
+      cam.near = Math.max(0.5, distFixa * 0.25); cam.far = distFixa * 4 + 200; cam.updateProjectionMatrix();
     }
     function ajustarCentro() {
       cam.clearViewOffset();
@@ -260,7 +270,7 @@
     }
 
     var ultimo = {};
-    var corT = new T.Color();
+    var corT = new T.Color(), corJ = new T.Color();
     function atualizar(t) {
       var C = cena;
       var mudouCor = false, mudouMat = false;
@@ -285,9 +295,10 @@
         }
         if (!vazio) {
           corT.setStyle(col.cor);
-          hastes.setColorAt(pi.h0, new T.Color(corT.r * 0.45, corT.g * 0.45, corT.b * 0.45));
+          corJ.setRGB(corT.r * 0.45, corT.g * 0.45, corT.b * 0.45); hastes.setColorAt(pi.h0, corJ);
           for (var k = pi.f0; k < pi.f1; k++) {
-            folhas.setColorAt(k, new T.Color(Math.min(1, corT.r * jitter[k * 3]), Math.min(1, corT.g * jitter[k * 3 + 1]), Math.min(1, corT.b * jitter[k * 3 + 2])));
+            corJ.setRGB(Math.min(1, corT.r * jitter[k * 3]), Math.min(1, corT.g * jitter[k * 3 + 1]), Math.min(1, corT.b * jitter[k * 3 + 2]));
+            folhas.setColorAt(k, corJ);
           }
           mudouCor = true;
         }

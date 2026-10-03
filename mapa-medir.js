@@ -73,15 +73,60 @@
     return { quadra: achou, cabem: cabem, total: rets.length };
   }
 
+  /* Item marcado com toque: um ponto (árvore, copa de raio r) ou um retângulo
+     C × L centrado no toque, no giro atual. */
+  function formaLivre(it) {
+    if (it.tipo === 'ponto') return { tipo: 'ponto', centro: [it.lat, it.lng], raio: Math.max(0.2, num(it.raio, 1.5)) };
+    var anc = { lat: it.lat, lng: it.lng, ang: it.ang || 0 }, wv = num(it.largura, 0), hv = num(it.comprimento, 0);
+    return { tipo: 'ret', cantos: cantos({ x: -wv / 2, y: -hv / 2, w: wv, h: hv }, anc) };
+  }
+  function livresNaQuadra(itens, quadras) {
+    var porQ = {};
+    itens.forEach(function (it) {
+      var f = formaLivre(it), pts = f.tipo === 'ponto' ? [f.centro] : f.cantos;
+      Object.keys(quadras || {}).some(function (id) {
+        var p = quadras[id]; if (!p || p.length < 3 || !dentro([it.lat, it.lng], p)) return false;
+        var o = porQ[id] = porQ[id] || { dentro: 0, total: 0 }; o.total++;
+        if (pts.every(function (c) { return dentro(c, p); })) o.dentro++;
+        return true;
+      });
+    });
+    return porQ;
+  }
+
   /* ----------------------------------------------------------- desenho --- */
   function LF() { return w.LF || w.L; }
   function lembrado() { try { return JSON.parse(w.localStorage.getItem(CHAVE)) || null; } catch (e) { return null; } }
   function lembrar(cfg) { try { w.localStorage.setItem(CHAVE, JSON.stringify(cfg)); } catch (e) {} }
 
+  function desenharLivre() {
+    var L = LF(), itens = M.livre.itens;
+    itens.forEach(function (it, i) {
+      var f = formaLivre(it);
+      if (f.tipo === 'ponto') L.circle(f.centro, { radius: f.raio, color: '#ffd24a', weight: 2, fillColor: '#ffd24a', fillOpacity: 0.28, interactive: false }).addTo(M.camada);
+      else L.polygon(f.cantos, { color: '#ffd24a', weight: 2, dashArray: '6 5', fillColor: '#ffd24a', fillOpacity: 0.16, interactive: false }).addTo(M.camada);
+      L.marker([it.lat, it.lng], { interactive: false, icon: L.divIcon({ className: 'medir-n', html: '<span>' + (i + 1) + '</span>', iconSize: [24, 24], iconAnchor: [12, 12] }) }).addTo(M.camada);
+    });
+    var info = M.painel.querySelector('.croqui-info'), q = {};
+    try { if (typeof w.ensureQGEO === 'function') w.ensureQGEO(); q = w.QGEO || {}; } catch (e) {}
+    var porQ = livresNaQuadra(itens, q), txt;
+    if (!itens.length) txt = 'Toque no mapa para marcar ' + (M.livre.tipo === 'ponto' ? 'cada árvore/planta.' : 'cada parcela (' + fmt(num(M.cfg.largura, 0)) + ' × ' + fmt(num(M.cfg.comprimento, 0)) + ' m, no giro atual).');
+    else {
+      txt = '<b>' + itens.length + ' marcado(s)</b>';
+      Object.keys(porQ).forEach(function (id) {
+        var o = porQ[id], nome = typeof w.quadraNome === 'function' ? w.quadraNome(id) : id;
+        txt += '<br>Quadra ' + esc(nome) + ': ' + o.dentro + ' de ' + o.total + ' inteiros dentro';
+      });
+    }
+    info.className = 'croqui-info'; info.innerHTML = txt;
+  }
   function desenhar() {
     if (!M) return;
     var L = LF(), r = retangulos(M.cfg), anc = { lat: M.lat, lng: M.lng, ang: M.ang };
     M.camada.clearLayers();
+    M.painel.classList.toggle('medir-livre', M.modo === 'livre');
+    [M.mover, M.giro].forEach(function (h) { if (h && h.setOpacity) h.setOpacity(M.modo === 'livre' ? 0 : 1); });
+    if (M.modo === 'livre') return desenharLivre();
     r.rets.forEach(function (ret) {
       var cs = cantos(ret, anc);
       L.polygon(cs, { color: '#ffd24a', weight: 2, dashArray: '6 5', fillColor: '#ffd24a', fillOpacity: 0.16, interactive: false }).addTo(M.camada);
@@ -120,7 +165,16 @@
       Object.keys(q).some(function (id) { if (q[id] && q[id].length >= 3 && dentro([c.lat, c.lng], q[id])) { ang = w.quadraEixo(id) || 0; return true; } return false; });
     } catch (e) {}
     var cfg = lembrado() || { comprimento: 30, largura: 12, quantidade: 5, colunas: 5, espaco: 2 };
-    M = { lat: c.lat, lng: c.lng, ang: ang, cfg: cfg, camada: L.layerGroup().addTo(mapa) };
+    M = { lat: c.lat, lng: c.lng, ang: ang, cfg: cfg, camada: L.layerGroup().addTo(mapa), modo: 'grade',
+          livre: { tipo: 'ponto', itens: [] } };
+    if (cfg.raio == null) cfg.raio = 1.5;
+    M.toque = function (ev) {
+      if (!M || M.modo !== 'livre') return;
+      M.livre.itens.push({ tipo: M.livre.tipo, lat: ev.latlng.lat, lng: ev.latlng.lng, ang: M.ang,
+        raio: M.cfg.raio, comprimento: M.cfg.comprimento, largura: M.cfg.largura });
+      desenhar();
+    };
+    mapa.on('click', M.toque);
     M.mover = L.marker([c.lat, c.lng], { draggable: true, zIndexOffset: 1200,
       icon: L.divIcon({ className: 'gr-handle', html: '<div class="gr-h gr-move">&#10010;</div>', iconSize: [32, 32], iconAnchor: [16, 16] }) }).addTo(mapa);
     M.mover.on('drag', function () { var p = M.mover.getLatLng(); M.lat = p.lat; M.lng = p.lng; desenhar(); });
@@ -132,19 +186,26 @@
     p.id = 'medirPanel'; p.className = 'croqui-panel';
     function campo(k, rot, passo) { return '<div><label>' + rot + '</label><input type="number" inputmode="decimal" min="0" step="' + passo + '" data-medir="' + k + '" value="' + esc(cfg[k]) + '"></div>'; }
     p.innerHTML = '<div class="croqui-head"><div class="croqui-title">Medir área</div><button type="button" class="croqui-toggle" data-medir-acao="recolher">Recolher</button><button class="croqui-x" data-medir-acao="fechar" aria-label="Fechar">×</button></div>' +
-      '<div class="croqui-sub">Só para planejar: <b>nada é salvo</b>. ✛ mover · ↻ girar</div>' +
+      '<div class="croqui-sub">Só para planejar: <b>nada é salvo</b>.</div>' +
+      '<div class="croqui-seg"><button type="button" data-medir-modo="grade" class="on">Grade</button><button type="button" data-medir-modo="livre">Tocar no mapa</button></div>' +
+      '<div class="croqui-seg medir-so-livre"><button type="button" data-medir-tipo="ponto" class="on">Ponto (árvore)</button><button type="button" data-medir-tipo="ret">Retângulo C × L</button></div>' +
       '<div class="croqui-nums medir-campos">' + campo('comprimento', 'Comprimento (m)', 0.5) + campo('largura', 'Largura (m)', 0.5) +
       campo('quantidade', 'Quantos', 1) + campo('colunas', 'Lado a lado', 1) + campo('espaco', 'Espaço entre (m)', 0.5) +
-      '<div><label>&nbsp;</label><div class="croqui-mini">cada um = 1 estudo</div></div></div>' +
+      '<div class="medir-so-livre">' + campo('raio', 'Raio da copa (m)', 0.5) + '</div>' +
+      '<div class="medir-so-grade"><label>&nbsp;</label><div class="croqui-mini">grade: ✛ mover · ↻ girar</div></div></div>' +
       '<div class="croqui-info"></div>' +
-      '<div class="croqui-acts"><button class="danger" data-medir-acao="fechar">Limpar</button></div>';
+      '<div class="croqui-acts"><button class="medir-so-livre" data-medir-acao="desfazer">Desfazer</button><button class="danger" data-medir-acao="fechar">Limpar</button></div>';
     d.body.appendChild(p); M.painel = p;
     p.addEventListener('input', function (ev) {
       var k = ev.target.getAttribute('data-medir'); if (!k) return;
       M.cfg[k] = ev.target.value; lembrar(M.cfg); desenhar();
     });
     p.addEventListener('click', function (ev) {
+      var md = ev.target.closest('[data-medir-modo]'), tp = ev.target.closest('[data-medir-tipo]');
+      if (md) { M.modo = md.getAttribute('data-medir-modo'); p.querySelectorAll('[data-medir-modo]').forEach(function (x) { x.classList.toggle('on', x === md); }); desenhar(); return; }
+      if (tp) { M.livre.tipo = tp.getAttribute('data-medir-tipo'); p.querySelectorAll('[data-medir-tipo]').forEach(function (x) { x.classList.toggle('on', x === tp); }); desenhar(); return; }
       var b = ev.target.closest('[data-medir-acao]'); if (!b) return;
+      if (b.getAttribute('data-medir-acao') === 'desfazer') { M.livre.itens.pop(); desenhar(); return; }
       if (b.getAttribute('data-medir-acao') === 'recolher') {
         var rec = p.classList.toggle('medir-recolhido'); b.textContent = rec ? 'Medidas' : 'Recolher'; return;
       }
@@ -164,6 +225,7 @@
     var mapa = w._map;
     try { M.camada.clearLayers(); mapa.removeLayer(M.camada); } catch (e) {}
     try { mapa.removeLayer(M.mover); mapa.removeLayer(M.giro); } catch (e) {}
+    try { mapa.off('click', M.toque); } catch (e) {}
     if (M.painel && M.painel.parentNode) M.painel.parentNode.removeChild(M.painel);
     M = null;
     var bt = d.getElementById('medirBtn'); if (bt) bt.classList.remove('on');
@@ -173,7 +235,10 @@
     var s = d.createElement('style'); s.id = 'medirCss';
     s.textContent = '.medir-n span{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:rgba(20,22,20,.8);color:#ffd24a;font:800 12px system-ui,sans-serif}' +
       '#medirPanel .croqui-nums input{min-height:38px}#medirPanel .croqui-toggle{margin-left:auto;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:6px 10px;font:700 11px system-ui,sans-serif}' +
-      '#medirPanel.medir-recolhido .medir-campos,#medirPanel.medir-recolhido .croqui-sub{display:none}';
+      '#medirPanel.medir-recolhido .medir-campos,#medirPanel.medir-recolhido .croqui-sub,#medirPanel.medir-recolhido .croqui-seg{display:none}' +
+      '#medirPanel .medir-so-livre{display:none}#medirPanel.medir-livre .medir-so-livre{display:block}#medirPanel.medir-livre .croqui-seg.medir-so-livre{display:flex}' +
+      '#medirPanel.medir-livre .medir-so-grade,#medirPanel.medir-livre [data-medir="quantidade"],#medirPanel.medir-livre [data-medir="colunas"],#medirPanel.medir-livre [data-medir="espaco"]{display:none}' +
+      '#medirPanel.medir-livre .croqui-nums>div:has([data-medir="quantidade"]),#medirPanel.medir-livre .croqui-nums>div:has([data-medir="colunas"]),#medirPanel.medir-livre .croqui-nums>div:has([data-medir="espaco"]){display:none}';
     d.head.appendChild(s);
   }
 
@@ -197,6 +262,6 @@
     injetar();
   }
 
-  w.AgMedir = { medidas: medidas, retangulos: retangulos, dentro: dentro, veredito: veredito, abrir: abrir, fechar: fechar, instalar: instalar };
+  w.AgMedir = { formaLivre: formaLivre, livresNaQuadra: livresNaQuadra, medidas: medidas, retangulos: retangulos, dentro: dentro, veredito: veredito, abrir: abrir, fechar: fechar, instalar: instalar };
   instalar();
 })(typeof window !== 'undefined' ? window : this);
