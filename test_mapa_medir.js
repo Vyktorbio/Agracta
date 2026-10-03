@@ -40,3 +40,18 @@ ok(A.dentro([anc.lat, anc.lng], quadra) && !A.dentro(C.pontoLatLng(60, 0, anc), 
 const src = fs.readFileSync('mapa-medir.js', 'utf8');
 ok(!/\bdata\[|saveData|persist|firestore|_avPersist/i.test(src), 'não toca em dados do estudo nem na nuvem');
 console.log('medir no mapa: ' + n + ' verificações OK.');
+
+/* toque livre: pontos (árvores) e retângulos soltos, cada um conferido na quadra */
+{
+  const anc2 = { lat: -21.5, lng: -48.0, ang: 0 };
+  const quadra2 = [C.pontoLatLng(-50, -25, anc2), C.pontoLatLng(50, -25, anc2), C.pontoLatLng(50, 25, anc2), C.pontoLatLng(-50, 25, anc2)];
+  const em = (x, y) => { const p = C.pontoLatLng(x, y, anc2); return { lat: p[0], lng: p[1] }; };
+  const itens = [Object.assign({ tipo: 'ponto', raio: 1.5 }, em(0, 0)), Object.assign({ tipo: 'ponto', raio: 1.5 }, em(49.9, 0)),
+    Object.assign({ tipo: 'ret', comprimento: 10, largura: 4, ang: 0 }, em(10, 10)), Object.assign({ tipo: 'ret', comprimento: 10, largura: 4, ang: 0 }, em(48, 0))];
+  const f = A.formaLivre(itens[2]);
+  const loc = f.cantos.map(c => C.metrosLocais(c[0], c[1], anc2));
+  if (!(Math.abs(loc[0].x - 8) < 0.01 && Math.abs(loc[2].y - 15) < 0.01)) throw new Error('retângulo livre fora do lugar');
+  const q = A.livresNaQuadra(itens, { Q1: quadra2 });
+  if (q.Q1.total !== 4 || q.Q1.dentro !== 3) throw new Error('livre na quadra: esperado 3 de 4, veio ' + JSON.stringify(q));
+  console.log('medir livre: pontos e retângulos soltos OK.');
+}
