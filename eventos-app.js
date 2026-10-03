@@ -160,6 +160,17 @@
     return v === '' ? null : v;
   }
 
+  /* A rubrica do evento aponta para a assinatura do estudo. A assinatura
+     SHA-256 (assinatura-core.js) já é 'sha256:<hash>' e entra como está — é o
+     que liga o evento formal à assinatura que o app confere. Rubrica desenhada
+     antiga (imagem) entra pelo hash, nunca a imagem. */
+  function rubricaDe(o) {
+    var r = o && o.rubrica;
+    if (!r) return 'rubrica-no-estudo';
+    r = String(r);
+    return r.indexOf('sha256:') === 0 ? r : 'sha256:' + root.EventosCore.sha256(r);
+  }
+
   /* ---- tradução: linha da trilha → pedidos de evento ---------------------- */
   function pedidos(study, action, details, extra, qid) {
     var O = root.ObservacaoCore, kEst = O.chaveEstudo(qid, study.id), E = root.EventosCore;
@@ -167,10 +178,11 @@
     extra = extra || {};
     switch (action) {
       case 'Finalização do Estudo': {
-        var rub = study.finalizacao && study.finalizacao.rubrica;
+        var fin = study.finalizacao || {};
         return [{ tipo: 'estudo.finalizado', dados: { entidade: ent,
-          rubrica: rub ? ('sha256:' + E.sha256(String(rub))) : 'rubrica-no-estudo',
-          detalhe: { nResultados: study.finalizacao ? study.finalizacao.nResultados : null } } }];
+          rubrica: rubricaDe(fin),
+          detalhe: { nResultados: fin.nResultados != null ? fin.nResultados : null,
+                     assinatura: (fin.assinatura && fin.assinatura.hash) || null } } }];
       }
       case 'Reabertura do Estudo': {
         var ant = (study.finalizacoesAnteriores || []).slice(-1)[0] || {};
@@ -178,7 +190,9 @@
         return [{ tipo: 'estudo.reaberto', dados: { entidade: ent, motivo: m, rubrica: 'reautenticacao-senha' } }];
       }
       case 'Aprovação do protocolo':
-        return [{ tipo: 'protocolo.aprovado', dados: { entidade: ent, rubrica: 'rubrica-no-estudo' } }];
+        var pv = study.protocoloVivo || {};
+        return [{ tipo: 'protocolo.aprovado', dados: { entidade: ent, rubrica: rubricaDe(pv),
+          detalhe: { assinatura: (pv.assinatura && pv.assinatura.hash) || null } } }];
       case 'Emenda ao protocolo': {
         var v = /versão (\d+) → (\d+)/.exec(String(details || ''));
         return [{ tipo: 'protocolo.emendado', dados: { entidade: ent, motivo: extra.motivo,
@@ -221,6 +235,39 @@
       if (n) agendarEnvio();
       return n;
     });
+  }
+
+  /* ---- trilha antiga --------------------------------------------------------
+     O que aconteceu antes de existir evento formal está só no study.audit.
+     Entram as ações CRÍTICAS (não lembrete de agenda nem dose editada), e só o
+     que é anterior ao primeiro evento formal não-legado do estudo — o que veio
+     depois já tem o seu evento, e importar de novo duplicaria. Os ids são
+     determinísticos: importar duas vezes dá o mesmo registro. */
+  var CRITICAS = { 'Finalização do Estudo': 1, 'Reabertura do Estudo': 1, 'Aprovação do protocolo': 1, 'Emenda ao protocolo': 1 };
+  function importarLegado(study) {
+    if (!study || !study.id) return Promise.resolve(0);
+    var O = root.ObservacaoCore, E = root.EventosCore, qid = qidDoEstudo(study), kEst = O.chaveEstudo(qid, study.id);
+    var audit = (Array.isArray(study.audit) ? study.audit : []).filter(function (a) { return a && CRITICAS[a.action]; });
+    if (!audit.length) return Promise.resolve(0);
+    return enfileirar(function () {
+      return lerFicha(kEst).then(function (f) {
+        var corte = f.eventos.filter(function (e) { return !e.legado; })
+          .map(function (e) { return Date.parse(e.em) || Infinity; })
+          .reduce(function (a, b) { return Math.min(a, b); }, Infinity);
+        var antes = audit.filter(function (a) {
+          var t = Number(a.ts) || Date.parse(a.iso || '') || 0;
+          return t > 0 && t < corte;
+        });
+        if (!antes.length) return 0;
+        var leg = E.deTrilhaLegada(antes, { estudo: kEst, organizacao: null, dispositivo: dispositivo() });
+        var ja = {}; f.eventos.forEach(function (e) { ja[e.id] = 1; });
+        var novos = leg.filter(function (e) { return !ja[e.id]; });
+        if (!novos.length) return 0;
+        f.eventos = E.merge(f.eventos, novos);
+        return gravarFicha(f).then(function () { return novos.length; });
+      });
+    }).then(function (n) { if (n) agendarEnvio(); return n; },
+            function (e) { aviso('trilha antiga não importada', e); return 0; });
   }
 
   /* ---- nuvem ---------------------------------------------------------------
@@ -385,6 +432,10 @@
     registro: function (qid, sid) { return enfileirar(function () { return lerRegistro(root.ObservacaoCore.chaveEstudo(qid, sid)); }); },
     verificar: function (qid, sid) { return api.registro(qid, sid).then(function (r) { return root.EventosCore.verificar(r); }); },
     exportar: function () { return enfileirar(lerTudo); },
+    /* Para a tela da trilha: eventos + quais já estão na nuvem. */
+    ficha: function (qid, sid) { return enfileirar(function () { return lerFicha(root.ObservacaoCore.chaveEstudo(qid, sid)); }); },
+    importarLegado: importarLegado,
+    qidDoEstudo: qidDoEstudo,
     sincronizar: sincronizar,
     estado: function () { return JSON.parse(JSON.stringify(_estado)); },
     ocioso: function () { return _fila; }
