@@ -67,7 +67,7 @@ const semArquivo=estado();semArquivo.data.Q1.estudos[0].finalizacoesAnteriores=[
 ok(Object.keys(F.splitState(semArquivo).estudos_arquivo).length===0,'estudo sem reabertura não cria arquivo');
 
 console.log('\n[4] documento acima de 1 MB é dito pelo nome');
-ok(/_documentoGrandeDemais\(next\)/.test(src)&&/passou de 1 MB/.test(src),'a tela diz qual documento passou do limite');
+ok(/_documentoGrandeDemais\(plan.next\)/.test(src)&&/passou de 1 MB/.test(src),'a tela diz qual documento passou do limite');
 const trecho=src.slice(src.indexOf('  function _documentoGrandeDemais('),src.indexOf('  /* Envio que falhou tenta de novo sozinho'));
 const c2={window:{VersoesCore:require('./vendor/versoes-core.js')},Object,Math,String};vm.createContext(c2);vm.runInContext(trecho,c2);
 const g=c2._documentoGrandeDemais({estudos:{x:{id:'S9',data:{codigo:'AGR-9',p:'x'.repeat(1100000)}}},avaliacoes:{y:{d:1}}});

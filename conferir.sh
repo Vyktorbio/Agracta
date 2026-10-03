@@ -203,29 +203,7 @@ fi
 # Um .py na lista sem arquivo no disco travaria a estatistica no aparelho
 # instalado, calada, com o portao dizendo PODE SUBIR.
 if command -v node >/dev/null 2>&1; then
-  SUMIDOS=$(node - <<'NODE' 2>/dev/null
-var fs=require("fs"), falta=[];
-function confere(base,lista){ lista.forEach(function(u){
-  var p=String(u).replace(/^\.\//,"").replace(/[?#].*$/,"");
-  if(!p || /^(https?:)?\/\//.test(p) || /^data:/.test(p)) return;
-  var alvo=base?base+"/"+p:p;
-  if(!fs.existsSync(alvo) && falta.indexOf(alvo)<0) falta.push(alvo);
-}); }
-function ler(arq){ return fs.existsSync(arq)?fs.readFileSync(arq,"utf8"):""; }
-[ {base:"",           sw:"sw.js",             lista:/var ASSETS\s*=\s*\[([\s\S]*?)\]/,   html:"index.html"},
-  {base:"estatistica",sw:"estatistica/sw.js", lista:/const SHELL\s*=\s*\[([\s\S]*?)\]/, html:"estatistica/index.html"}
-].forEach(function(c){
-  var m=ler(c.sw).match(c.lista);
-  if(m) confere(c.base,(m[1].match(/["'][^"']+["']/g)||[]).map(function(s){return s.slice(1,-1);}));
-  /* \x22 = aspa dupla. Com tres aspas literais nesta linha, o bash 3.2 do macOS
-     (o do duplo clique) nao fechava a substituicao de comando e o portao morria
-     sem veredito; o CI em bash 5 nunca viu o problema */
-  var html=ler(c.html), r=/(?:src|href)=\x22([^\x22]+)\x22/g, x;
-  while((x=r.exec(html))) confere(c.base,[x[1]]);
-});
-console.log(falta.join("\n"));
-NODE
-)
+  SUMIDOS=$(node tests/check-assets.cjs 2>/dev/null)
   if [ -z "$SUMIDOS" ]; then
     ok "todo arquivo pré-carregado existe mesmo (app e estatística)"
   else

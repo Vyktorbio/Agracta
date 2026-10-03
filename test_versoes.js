@@ -109,7 +109,7 @@ ok(L2.length===2 && L2[0].length===2,'par grande sozinho, sem ser partido');
 }
 const sync=fs.readFileSync('firebase-sync.js','utf8');
 ok(/collectionRef\('historico'\)\.doc\(\)/.test(sync),'o sync grava em historico');
-ok(/V\.lotes\(pares\)/.test(sync),'o sync usa os lotes pareados');
+ok(/ops\.push\(w.op,\{type:'set',ref:collectionRef\('historico'\)/.test(sync)&&/ops\.forEach\(function\(o\)\{naBatch\(tx,o\);\}\)/.test(sync),'o sync grava dados e histórico na mesma transação');
 ok(/serverTimestamp\(\)/.test(sync.split("reg.em=")[1]||''),'a hora do registro é a do servidor');
 ok(!/window\.openCloudHistory=function/.test(sync),'o sync não esconde mais o histórico atrás dos backups locais');
 const rules=fs.readFileSync('firestore.rules','utf8');

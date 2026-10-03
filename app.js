@@ -2327,6 +2327,8 @@ function cloudBadge(kind,txt){
 var _cloudPendingParked=false;
 function cloudApply(st){
   if(!st) return;
+  /* Um retorno atrasado não pode desfazer uma restauração já feita aqui. */
+  if(_restoreGeneration(st)<_restoreGeneration({data:data})) return;
   var _parked=_cloudPendingParked; _cloudPendingParked=false;
   /* não atropela edição de quadra em andamento — guarda e aplica ao terminar */
   if(window._qEditing || window._avEditing){ _cloudPending=st; _cloudPendingParked=true; return; }
@@ -2336,13 +2338,17 @@ function cloudApply(st){
     st=cloudMerge(cloudState(), st);
     setTimeout(cloudSaveSoon, 50);
   }
+  var restored=_restoreGeneration(st)>_restoreGeneration(cloudState());
   _cloudApplying=true;
   try{
+    if(restored){
+      _delQuadras={};_delLocais={};_delNotas={};_delItens={};
+    }
     if(st.rev!=null) _cloudRev=st.rev;
     if(st.data && typeof st.data==='object'){ data=st.data; try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} }
     if(st.qgeo && typeof st.qgeo==='object'){ QGEO=st.qgeo; saveQGEO(); }
     if(st.qgeots && typeof st.qgeots==='object'){ QGEO_TS=st.qgeots; saveQGEOTS(); }
-    if(st.georef){ _geo=st.georef; saveGeoref(_geo); }
+    if(Object.prototype.hasOwnProperty.call(st,'georef')){ _geo=st.georef; saveGeoref(_geo); }
     if(st.georefts!=null){ GEOREF_TS=st.georefts; saveGeorefTS(); }
     if(st.locais && typeof st.locais==='object'){ LOCAIS=st.locais; try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} }
     if(st.qlocal && typeof st.qlocal==='object'){ QLOCAL=st.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
@@ -2683,8 +2689,15 @@ function _mergeNota(la,ca){
   if(!m.fotoLocal) m.fotoLocal = la.fotoLocal || ca.fotoLocal;
   return m;
 }
+function _restoreGeneration(st){
+  return Number(st&&st.data&&st.data.__config&&st.data.__config.restoreGeneration)||0;
+}
 function cloudMerge(local,cloud){
   if(!cloud) return local; if(!local) return cloud;
+  var lr=_restoreGeneration(local), cr=_restoreGeneration(cloud);
+  /* Restaurar foi uma substituição explícita. Uma cópia anterior à restauração
+     não pode reintroduzir nem apagar registros quando o aparelho reconectar. */
+  if(lr!==cr)return JSON.parse(JSON.stringify(lr>cr?local:cloud));
   var out={};
   var delQ=_mergeTombs(local._deletedQuadras,cloud._deletedQuadras)||{};
   var delL=_mergeTombs(local._deletedLocais,cloud._deletedLocais)||{};
@@ -5656,14 +5669,27 @@ function deleteNote(noteId){
     }
   }
   if(idx!==-1){
-    _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
-    NOTAS_CAMPO.splice(idx,1);
-    saveNotas();
-    delete _FOTO_NOTA[noteId];
-    try{ var _stF=_fotosNotasStore(); if(_stF) _stF.apagar(noteId).catch(function(){}); }catch(e){}
-    try{ _map.closePopup(); }catch(e){}
-    renderNotas(true);
-    _stxToast("Observação excluída.");
+    /* A foto pode estar só no IndexedDB, ainda não carregada no cache. Antes
+       de apagá-la, inclua o arquivo no retrato e confirme uma cópia gravada. */
+    return _safetySnapshotPhotos(safetySnap()).then(function(snap){
+      var done, archived=new Promise(function(resolve){done=resolve;});
+      var local=safetyBackup('antes de excluir observação de campo',snap,done);
+      return (local?Promise.resolve(true):archived).then(function(guardado){
+        if(!guardado)throw Error('Não consegui guardar a cópia de segurança.');
+        var atual=NOTAS_CAMPO.findIndex(function(n){return n.id===noteId;});
+        if(atual<0)return false;
+        _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
+        NOTAS_CAMPO.splice(atual,1);
+        saveNotas();
+        delete _FOTO_NOTA[noteId];
+        var apagada=Promise.resolve();
+        try{var st=_fotosNotasStore();if(st)apagada=st.apagar(noteId).catch(function(){});}catch(e){}
+        try{ _map.closePopup(); }catch(e){}
+        renderNotas(true);
+        _stxToast("Observação excluída.");
+        return apagada.then(function(){return true;});
+      });
+    }).catch(function(e){alert('Não foi possível guardar a observação e sua foto antes de excluir. A observação foi mantida.\n\n'+e.message);return false;});
   }
 }
 
@@ -20171,7 +20197,10 @@ function safetySnap(){
   try{ if(typeof ensureCfgTS==='function') ensureCfgTS(); }catch(e){}
   try{ if(typeof ensureItens==='function') ensureItens(); }catch(e){}
   try{ if(typeof ensureNotas==='function') ensureNotas(); }catch(e){}
-  return { ts:Date.now(),
+  /* Imutável: editar o estado vivo depois não pode alterar o retrato. A lista
+     explícita também mantém a paridade com exportData verificada no teste. */
+  var snap=JSON.parse(JSON.stringify({
+    ts:Math.max(Date.now(),(window._lastSafetyTs||0)+1),
     georefts:(typeof GEOREF_TS!=='undefined'?GEOREF_TS:0),
     notas_campo:(typeof NOTAS_CAMPO!=='undefined'?NOTAS_CAMPO:[]),
     _deletedQuadras:(typeof _delQuadras!=='undefined'?_delQuadras:{}),
@@ -20190,8 +20219,48 @@ function safetySnap(){
     itens:(typeof ITENS!=='undefined'?ITENS:{}),
     itensts:(typeof ITENS_TS!=='undefined'?ITENS_TS:{}),
     _deletedItens:(typeof _delItens!=='undefined'?_delItens:{}),
-    randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[]) };
+    randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[])
+  }));
+  (snap.notas_campo||[]).forEach(function(n){
+    var foto=typeof _fotoNota==='function'?_fotoNota(n):null;
+    if(foto)n.foto=foto;
+  });
+  window._lastSafetyTs=snap.ts;return snap;
 }
+/* Completa o retrato com os arquivos locais ainda não carregados na memória.
+   Nunca altera a nota ativa nem põe a imagem no caminho da sincronização. */
+function _safetySnapshotPhotos(snap){
+  var faltam=(snap.notas_campo||[]).filter(function(n){return n&&n.fotoLocal&&!n.foto;});
+  var st=typeof _fotosNotasStore==='function'?_fotosNotasStore():null;
+  if(!faltam.length||!st)return Promise.resolve(snap);
+  return st.todas().then(function(fotos){
+    faltam.forEach(function(n){if(fotos[n.id])n.foto=fotos[n.id];});
+    return snap;
+  });
+}
+/* Mantém o identificador da restauração dentro do estado salvo: funciona mesmo
+   restaurando offline e fechando o app antes de enviar. */
+function _markStateRestored(previous,snapshot){
+  var gen=Math.max(Date.now(),previous||0,_restoreGeneration({data:data}))+1;
+  if(!data.__config)data.__config={};
+  data.__config.restoreGeneration=gen;
+  /* As lápides do retrato são parte do estado restaurado. Não eliminá-las
+     pela presença de um registro antigo, que pode estar apagado de propósito. */
+  snapshot=snapshot||{};
+  /* Arquivos legados não tinham mapas de exclusão. Só nesses mapas ausentes,
+     remova a lápide dos IDs explicitamente trazidos de volta pelo arquivo. */
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedQuadras')){
+    Object.keys(snapshot.data||{}).concat(Object.keys(snapshot.qgeo||{})).forEach(function(id){if(id!=='__config')delete _delQuadras[id];});
+  }
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedLocais'))Object.keys(snapshot.locais||{}).forEach(function(id){delete _delLocais[id];});
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedNotas'))(snapshot.notas_campo||[]).forEach(function(n){delete _delNotas[n.id];});
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedItens'))Object.keys(snapshot.itens||{}).forEach(function(id){delete _delItens[id];});
+  if(typeof saveDelTombs==='function')saveDelTombs();
+  try{localStorage.setItem(DELN_KEY,JSON.stringify(_delNotas));if(typeof saveItens==='function')saveItens();}catch(e){}
+  _cloudPending=null;
+  _cloudPendingParked=false;
+}
+
 function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
   Object.keys(d).forEach(function(k){ (d[k].estudos||[]).forEach(function(e){ est++; ap+=(e.aplicacoes||[]).length; av+=(e.avaliacoes||[]).length; }); });
   return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0),
@@ -20227,49 +20296,58 @@ function _safetyMaxCopias(copiaChars, obrigatoria){
   var n=AC.copiasPermitidas(m.total-seg, copiaChars, dados);
   return obrigatoria?Math.max(1,n):n;
 }
-function safetyBackup(motivo){
+function safetyBackup(motivo,prepared,onArchived){
+  var archive=Promise.resolve(false);
   try{
-    var arr=safetyList();
-    var snap=JSON.parse(JSON.stringify(safetySnap()));
-    snap.motivo=motivo||''; snap.counts=_safetyCounts(snap);
+    var arr=safetyList(), snap=prepared||safetySnap();
+    snap.motivo=motivo||'';snap.counts=_safetyCounts(snap);
+    /* Histórico adicional no cofre: fotos grandes continuam recuperáveis
+       mesmo sem cota no localStorage. A promessa assíncrona NÃO vale como
+       confirmação para quem depende do retorno booleano antes de restaurar. */
+    try{
+      if(window.AgractaFirebase&&typeof AgractaFirebase.saveBackup==='function'){
+        archive=_safetySnapshotPhotos(JSON.parse(JSON.stringify(snap))).then(function(full){return AgractaFirebase.saveBackup(full);})
+          .then(function(){return true;},function(e){console.error('[Agracta backup]',e);return false;});
+      }
+    }catch(e){console.error('[Agracta backup]',e);}
+    if(onArchived)archive.then(onArchived);
     arr.push(snap);
     var _max=10;
-    try{ _max=_safetyMaxCopias(JSON.stringify(snap).length, !/^ao abrir/.test(motivo||'')); }catch(e){}
-    if(_max<=0){ try{ localStorage.removeItem('iracema-safety'); }catch(e){} return false; }
-    while(arr.length>Math.min(10,_max)) arr.shift();
+    try{_max=_safetyMaxCopias(JSON.stringify(snap).length,!/^ao abrir/.test(motivo||''));}catch(e){}
+    if(_max<=0){try{localStorage.removeItem('iracema-safety');}catch(e){}return false;}
+    while(arr.length>Math.min(10,_max))arr.shift();
     while(arr.length){
-      try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); return true; }
-      catch(e){ arr.shift(); }   /* não coube: sacrifica o mais antigo e tenta de novo */
+      try{localStorage.setItem('iracema-safety',JSON.stringify(arr));return true;}
+      catch(e){arr.shift();}
     }
-  }catch(e){}
+  }catch(e){if(onArchived)archive.then(onArchived);}
   return false;
 }
-/* NÃO RESTAURA SEM REDE. A tela diz, com todas as letras, que o estado atual
-   é guardado antes — então restaurar sem conseguir guardar seria trocar um
-   estado por outro sem volta, exatamente o oposto do que o botão promete. Com
-   o aparelho sem espaço isso era possível e calado. Devolve true/false para
-   quem chama poder parar antes de anunciar "restaurado". */
+
 function safetyApply(snap){
-  if(!snap || !snap.data || typeof snap.data!=='object' || Array.isArray(snap.data)) return false;
+  if(!snap||!snap.data||typeof snap.data!=='object'||Array.isArray(snap.data))return false;
   if(!safetyBackup('antes de restaurar')){
     alert('Não consegui guardar o estado atual neste aparelho — sem isso a restauração não teria volta.\n\n'+
           'Exporte os dados (o botão de exportar está nesta mesma tela) e libere espaço antes de restaurar.');
     return false;
   }
+  var previous=_restoreGeneration({data:data}),applyingBefore=window._cloudApplying;
   try{
+    snap=JSON.parse(JSON.stringify(snap));
+    /* Só capture um checkpoint quando todas as partes do retrato estiverem
+       no lugar; gravar georef antes de qgeo recriava quadras do estado antigo. */
+    window._cloudApplying=true;
     if(snap.data){ data=snap.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
     if(snap.qgeo){ QGEO=snap.qgeo; if(typeof saveQGEO==='function') saveQGEO(); }
-    if(snap.georef){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
-    if(snap.georefts!=null){ GEOREF_TS=snap.georefts; if(typeof saveGeorefTS==='function') saveGeorefTS(); }
-    /* AS LÁPIDES VOLTAM COM O RESTO — é o que desfaz a exclusão de verdade, em
-       vez de só repor o registro e deixar a lápide de pé. Mesmo caminho que o
-       importData já usa para um backup de arquivo. */
-    if(Array.isArray(snap.notas_campo)){ NOTAS_CAMPO=snap.notas_campo; if(typeof saveNotas==='function') saveNotas(); }
-    if(snap._deletedQuadras && typeof snap._deletedQuadras==='object'){ _delQuadras=snap._deletedQuadras; }
-    if(snap._deletedLocais && typeof snap._deletedLocais==='object'){ _delLocais=snap._deletedLocais; }
-    if(typeof saveDelTombs==='function') saveDelTombs();
-    if(snap._deletedNotas && typeof snap._deletedNotas==='object'){ _delNotas=snap._deletedNotas;
-      try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(_e){} }
+    if(Object.prototype.hasOwnProperty.call(snap,'georef')){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+    if(snap.georefts!=null){GEOREF_TS=snap.georefts;if(typeof saveGeorefTS==='function')saveGeorefTS();}
+    if(Array.isArray(snap.notas_campo)){NOTAS_CAMPO=snap.notas_campo;if(typeof saveNotas==='function')saveNotas();}
+    if(snap._deletedQuadras&&typeof snap._deletedQuadras==='object')_delQuadras=snap._deletedQuadras;
+    if(snap._deletedLocais&&typeof snap._deletedLocais==='object')_delLocais=snap._deletedLocais;
+    if(typeof saveDelTombs==='function')saveDelTombs();
+    if(snap._deletedNotas&&typeof snap._deletedNotas==='object'){
+      _delNotas=snap._deletedNotas;try{localStorage.setItem(DELN_KEY,JSON.stringify(_delNotas));}catch(e){}
+    }
     if(snap.locais){ LOCAIS=snap.locais; if(typeof saveLocais==='function') saveLocais(); }
     if(snap.qlocal){ QLOCAL=snap.qlocal; if(typeof saveQLocal==='function') saveQLocal(); }
     if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
@@ -20286,10 +20364,13 @@ function safetyApply(snap){
     }
     if(Array.isArray(snap.randomizacoes)){ RZLIB=normalizeRZLib(snap.randomizacoes); saveRZLib(); }
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
-    _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
+    _markStateRestored(previous,snap);
+    _cloudReplace=true; /* geração persistente impede recuperar lápides antigas */
+    window._cloudApplying=applyingBefore;
     save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
     return true;
   }catch(e){ alert('Erro ao restaurar: '+e.message); return false; }
+  finally{window._cloudApplying=applyingBefore;}
 }
 /* ===================== HISTÓRICO DA NUVEM (restaurar versões) ===================== */
 function _chShell(inner){
@@ -20518,21 +20599,40 @@ function armFotosAntigas(){
       F.apagar(r.apagaveis).then(function(n){ _armMsg('✓ '+n+' fatia(s) apagada(s) do servidor.'); },function(e){ _armMsg('Não consegui apagar: '+esc((e&&e.message)||e)); });
     };
   },function(e){ _armMsg('Não consegui ler o servidor: '+esc((e&&e.message)||e)); });
+  }
+var _safetyView=[];
+function safetyRestoreAt(i){
+  var snap=_safetyView[i];if(!snap)return;
+  if(confirm('Restaurar este backup? O estado atual será guardado antes.')){
+    if(!safetyApply(snap))return;
+    document.getElementById('bkpModal').style.display='none';alert('✓ Restaurado.');
+  }
 }
 function openBackups(){
+  _showBackups(safetyList());
+  if(window.AgractaFirebase&&typeof AgractaFirebase.listBackups==='function'){
+    AgractaFirebase.listBackups().then(function(stored){
+      var modal=document.getElementById('bkpModal');
+      if(!modal||modal.style.display==='none')return;
+      var by={};safetyList().concat(stored).forEach(function(s){by[s.ts]=s;});
+      _showBackups(Object.keys(by).map(function(k){return by[k];}));
+    }).catch(function(e){console.error('[Agracta backups]',e);});
+  }
+}
+function _showBackups(list){
   var m=document.getElementById('bkpModal');
   if(!m){ m=document.createElement('div'); m.id='bkpModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
-  var arr=safetyList().slice().reverse();
+  var arr=list.slice().sort(function(a,b){return b.ts-a.ts;});_safetyView=arr;
   var rows=arr.length? arr.map(function(s,i){
     var c=s.counts||_safetyCounts(s), dt=new Date(s.ts);
     return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
       '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
       '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
-      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){if(!safetyApply(safetyList().slice().reverse()['+i+']))return;document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
-  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local agora. São criados antes de excluir/importar e ao abrir o app — mas só enquanto sobra espaço: com o armazenamento do aparelho apertado, a folga dos seus dados vem primeiro. O cofre offline e o <b>Histórico da nuvem</b> continuam guardando. Veja em Menu → Armazenamento do aparelho.</div>';
+      '<button onclick="safetyRestoreAt('+i+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cópias automáticas antes de excluir/importar (só neste aparelho). Incluem as observações; mantenha também os arquivos das fotos salvos no aparelho. Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
     rows+
     '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">💾 Exportar tudo agora (arquivo)</button></div>'+
   '</div>';
@@ -20653,19 +20753,30 @@ function importData(ev){
   var f=ev.target.files[0];
   if(!f)return;
   if(!confirm('Importar esse backup vai substituir os dados atuais (e o alinhamento/formato das quadras, se o backup tiver). Continuar?')){ev.target.value='';return}
-  safetyBackup('antes de importar backup');
+  if(!safetyBackup('antes de importar backup')){
+    alert('Não consegui guardar o estado atual neste aparelho. Exporte uma cópia e libere espaço antes de importar.');
+    ev.target.value='';return;
+  }
   var r=new FileReader();
   r.onload=function(e){
+    var applyingBefore=window._cloudApplying;
     try{
       var imported=JSON.parse(e.target.result);
+      var previous=_restoreGeneration(cloudState());
       var dd, qq=null, gg=null, ll=null, ql=null, qn=null, rz=null;
       if(imported && imported._iracema){ dd=imported.data||{}; qq=imported.qgeo||null; gg=imported.georef||null; ll=imported.locais||null; ql=imported.qlocal||null; qn=imported.qnome||null; rz=imported.randomizacoes||null; }
       else { dd=imported; } /* formato antigo: só os dados */
+      if(!dd||typeof dd!=='object'||Array.isArray(dd))throw new Error('Backup sem dados válidos.');
+      Object.keys(dd).forEach(function(k){
+        if(!dd[k]||typeof dd[k]!=='object'||Array.isArray(dd[k]))throw new Error('Registro inválido no backup: '+k);
+      });
+      window._cloudApplying=true;
+      data={};
       Object.keys(dd).forEach(function(k){
         data[k]=dd[k];
-        if(!data[k].estudos || !Array.isArray(data[k].estudos))data[k].estudos=[];
+        if(k!=='__config'&&(!data[k].estudos||!Array.isArray(data[k].estudos)))data[k].estudos=[];
       });
-      if(gg){ _geo=gg; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+      if(gg||(imported&&imported._iracema&&Object.prototype.hasOwnProperty.call(imported,'georef'))){ _geo=gg; if(typeof saveGeoref==='function') saveGeoref(_geo); }
       if(qq){ QGEO=qq; if(typeof saveQGEO==='function') saveQGEO(); }
       if(ll){ LOCAIS=ll; if(typeof saveLocais==='function') saveLocais(); }
       if(ql){ QLOCAL=ql; if(typeof saveQLocal==='function') saveQLocal(); }
@@ -20696,12 +20807,15 @@ function importData(ev){
         }
       }
       if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
+      _markStateRestored(previous,imported&&imported._iracema?imported:{data:dd});
       _cloudReplace=true; /* importar backup SUBSTITUI o estado (como o aviso promete) — sem merge com a nuvem */
+      window._cloudApplying=applyingBefore;
       save();
       try{ if(_map && _geo && typeof geoBounds==='function') _map.fitBounds(geoBounds(_geo)); }catch(_e){}
       render();updateAgendaBadge();
       alert('Backup importado com sucesso'+((qq||gg)?' (incluindo alinhamento e quadras).':' (apenas dados).'));
     }catch(err){alert('Arquivo inválido: '+err.message)}
+    finally{window._cloudApplying=applyingBefore;}
     ev.target.value='';
   };
   r.readAsText(f);

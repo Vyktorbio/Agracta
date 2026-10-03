@@ -5,7 +5,15 @@
    obrigatórios; e a regra genérica do workspace não reabrindo a porta. */
 const fs=require('node:fs');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
-const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,writeBatch,serverTimestamp,Timestamp}=require('firebase/firestore');
+const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,runTransaction,serverTimestamp,Timestamp}=require('firebase/firestore');
+let writeId=0;
+function workspaceCommit(db,write){
+  return runTransaction(db,async tx=>{
+    const root=doc(db,'workspaces/agracta'),snap=await tx.get(root),rev=snap.data().rev+1;
+    write(tx,rev);
+    tx.set(root,{rev,syncProtocol:3,writeId:'historico-test-'+(++writeId),updatedAt:serverTimestamp()},{merge:true});
+  });
+}
 (async()=>{
   const env=await initializeTestEnvironment({projectId:'demo-agracta-integracoes',firestore:{host:'127.0.0.1',port:8088,rules:fs.readFileSync('firestore.rules','utf8')}});
   try{
@@ -22,11 +30,11 @@ const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,writeBatch,serve
     const reg=(email,extra)=>Object.assign({rev:2,colecao:'estudos',docId:'E1',acao:'alterar',
       anterior:{id:'E1',data:{codigo:'A'}},em:serverTimestamp(),por:email,porNome:'Técnico'},extra||{});
 
-    /* O caminho real do app: dado e histórico no mesmo lote. */
-    const b=writeBatch(staff);
-    b.set(doc(staff,'workspaces/agracta/estudos/E1'),{id:'E1',data:{codigo:'B'}});
-    b.set(doc(staff,'workspaces/agracta/historico/h1'),reg('tecnico@example.com'));
-    await assertSucceeds(b.commit());
+    /* O caminho real do app: dado, histórico e revisão na mesma transação. */
+    await assertSucceeds(workspaceCommit(staff,(tx,rev)=>{
+      tx.set(doc(staff,'workspaces/agracta/estudos/E1'),{id:'E1',data:{codigo:'B'}});
+      tx.set(doc(staff,'workspaces/agracta/historico/h1'),reg('tecnico@example.com',{rev}));
+    }));
     await assertSucceeds(getDoc(doc(staff,'workspaces/agracta/historico/h1')));
     await assertSucceeds(getDocs(collection(staff,'workspaces/agracta/historico')));
 
@@ -36,6 +44,11 @@ const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,writeBatch,serve
     await assertFails(deleteDoc(doc(staff,'workspaces/agracta/historico/h1')));
     await assertFails(updateDoc(doc(admin,'workspaces/agracta/historico/h1'),{acao:'criar'}));
     await assertFails(deleteDoc(doc(admin,'workspaces/agracta/historico/h1')));
+    /* Uma revisão válida também não deixa a regra genérica contornar a imutabilidade. */
+    for(const db of [staff,admin]){
+      await assertFails(workspaceCommit(db,tx=>tx.update(doc(db,'workspaces/agracta/historico/h1'),{acao:'criar'})));
+      await assertFails(workspaceCommit(db,tx=>tx.delete(doc(db,'workspaces/agracta/historico/h1'))));
+    }
 
     /* Autor e hora não se forjam. */
     await assertFails(setDoc(doc(staff,'workspaces/agracta/historico/h2'),reg('outra@example.com')));
@@ -48,8 +61,9 @@ const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,writeBatch,serve
     await assertFails(getDoc(doc(anon,'workspaces/agracta/historico/h1')));
     await assertFails(setDoc(doc(fora,'workspaces/agracta/historico/h6'),reg('estranho@example.com')));
 
-    /* O resto do workspace continua como era. */
-    await assertSucceeds(setDoc(doc(staff,'workspaces/agracta/estudos/E2'),{id:'E2'}));
+    /* Dados comuns exigem a revisão atômica; o membro autorizado continua gravando. */
+    await assertFails(setDoc(doc(staff,'workspaces/agracta/estudos/E2'),{id:'E2'}));
+    await assertSucceeds(workspaceCommit(staff,tx=>tx.set(doc(staff,'workspaces/agracta/estudos/E2'),{id:'E2'})));
     console.log('Histórico: append-only, hora do servidor, autor da sessão e isolamento OK.');
   }finally{await env.cleanup();}
 })().catch(err=>{console.error(err);process.exitCode=1;});
