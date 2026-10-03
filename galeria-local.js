@@ -29,14 +29,29 @@ function draw(){
 function imageOf(blob){
  return new Promise((resolve,reject)=>{const u=URL.createObjectURL(blob),img=new Image();img.onload=()=>{URL.revokeObjectURL(u);resolve(img);};img.onerror=()=>{URL.revokeObjectURL(u);reject(Error('Imagem não reconhecida. Escolha JPEG, PNG ou WebP.'));};img.src=u;});
 }
+/* A foto da câmera tem 12 a 50 MP: decodificada inteira são 50 a 200 MB de
+   memória só para tirar uma miniatura de 480 px — dentro de um iframe, por cima
+   do app aberto. No celular isso derrubava a página ("Ah, não!"). Aqui ela já
+   sai do decodificador reduzida (só a largura é dada; a altura segue a
+   proporção, e o canvas acerta o retrato). Navegador sem esse recurso cai na
+   decodificação inteira de antes. */
+async function reduced(blob,max){
+ if(typeof createImageBitmap!=='function')return null;
+ try{return await createImageBitmap(blob,{imageOrientation:'from-image',resizeWidth:max,resizeQuality:'medium'});}catch(e){return null;}
+}
 async function normalized(blob,max){
- const img=await imageOf(blob),w=img.naturalWidth,h=img.naturalHeight;
+ const bmp=await reduced(blob,max);
+ const img=bmp||await imageOf(blob),w=bmp?bmp.width:img.naturalWidth,h=bmp?bmp.height:img.naturalHeight;
+ try{return await desenhar(img,w,h,max);}finally{if(bmp&&bmp.close)bmp.close();}
+}
+async function desenhar(img,w,h,max){
  if(!w||!h||w*h>80000000)throw Error('Imagem muito grande para o aparelho. Use uma foto com até 80 megapixels.');
  const ratio=Math.min(1,max/Math.max(w,h)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(w*ratio));canvas.height=Math.max(1,Math.round(h*ratio));
  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Não foi possível preparar a imagem neste navegador.');
  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
  const result=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Não foi possível preparar a imagem.')),'image/jpeg',.92));
- return {blob:result,width:canvas.width,height:canvas.height};
+ const out={blob:result,width:canvas.width,height:canvas.height};canvas.width=canvas.height=0;
+ return out;
 }
 /* Sequência automática: cada foto da câmera fica na parcela da vez e a
    identificação avança sozinha para a seguinte, na ordem do campo. */

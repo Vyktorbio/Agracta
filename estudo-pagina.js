@@ -2,7 +2,7 @@
 (function(w){
 'use strict';
 var C=w.ConhecimentoCore, state=null;
-var colors=['#16805b','#397be0','#b35a13','#a550ad','#00858c','#bc435d','#797025','#695fbb'];
+var colors=['#16a34a','#2563eb','#ea580c','#9333ea','#0891b2','#e11d48','#ca8a04','#4f46e5'];
 function e(v){return w.agConhecimento.esc(v);}
 function num(v){return w.agConhecimento.numero(v);}
 function arr(v){return Array.isArray(v)?v:[];}
@@ -377,7 +377,7 @@ function render(s,parts){
     var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=8';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
-   var js=document.createElement('script');js.src='campo-3d.js?v=10';
+   var js=document.createElement('script');js.src='campo-3d.js?v=13';
    js.onload=function(){w.abrirCampo3D?ok():falha(Error('O módulo carregou sem registrar a vista.'));};
    js.onerror=function(){campoCarregando=null;falha(Error('Não foi possível carregar a vista do campo. Sem conexão, ela só abre depois de ter sido aberta uma vez neste aparelho.'));};
    document.head.appendChild(js);

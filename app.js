@@ -2278,7 +2278,7 @@ function cloudState(){
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
     var s=document.createElement('style'); s.id='cloudBadgeCss';
-    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
+    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#fbbf24;border-color:#5a4d1f;opacity:1}';
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
@@ -2940,7 +2940,7 @@ function authGateAviso(msg){
   var el=g.querySelector('#authGateAviso');
   if(!el){
     el=document.createElement('div'); el.id='authGateAviso';
-    el.style.cssText='margin-top:10px;font:600 12px/1.5 system-ui,sans-serif;color:#dccd8c;background:rgba(220,205,140,.10);border:1px solid rgba(220,205,140,.32);border-radius:9px;padding:9px 11px';
+    el.style.cssText='margin-top:10px;font:600 12px/1.5 system-ui,sans-serif;color:#fbbf24;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.32);border-radius:9px;padding:9px 11px';
     var box=g.querySelector('.auth-box')||g.firstElementChild||g;
     box.appendChild(el);
   }
@@ -9376,13 +9376,13 @@ function _calcCss(){
   '.calc-mixr.carrier{background:rgba(120,200,150,.06)}.calc-mixr.carrier span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
   /* Produto declarado sem dose: nome inteiro à vista, e no lugar da quantidade a
      palavra que impede de confundir a linha com uma medida. */
-  '.calc-mixr.falta{background:rgba(220,205,140,.10)}.calc-mixr.falta span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
-  '.calc-mixr.falta b,.calc-mixr.falta span:not(:first-child){color:#dccd8c;font-weight:700}'+
+  '.calc-mixr.falta{background:rgba(251,191,36,.10)}.calc-mixr.falta span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
+  '.calc-mixr.falta b,.calc-mixr.falta span:not(:first-child){color:#fbbf24;font-weight:700}'+
   '.calc-prep{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin:2px 0 7px;padding:7px 9px;border-radius:8px;background:rgba(74,170,105,.10);border:1px solid rgba(95,190,125,.24)}'+
   '.calc-prep span{font-size:9px;letter-spacing:.7px;font-weight:900;color:#82c99a}.calc-prep b{font-size:15px;color:var(--text,#e8efe9)}.calc-prep small{font-size:10px;color:var(--text-2,#9fb1a5)}'+
   '.calc-prep.bad{background:rgba(210,75,65,.10);border-color:rgba(230,100,85,.32)}.calc-prep.bad span{color:#ff9a8a}'+
   '.calc-eq{display:block;font-style:normal;font-size:10px;color:var(--text-3,#7f9085);margin-top:1px}'+
-  '.calc-warn{color:#dccd8c;font-size:10px;margin-top:4px}'+
+  '.calc-warn{color:#fbbf24;font-size:10px;margin-top:4px}'+
   /* MODO PREPARO: configuração em uma linha, abas por tratamento, dose editável
      na própria receita, navegação entre tratamentos. */
   '.calc-cfg{border:1px solid var(--border,#26322b);border-radius:10px;margin:6px 0 8px;overflow:hidden}'+
@@ -10329,7 +10329,7 @@ function _calcCompute(){
     /* §7.2 — o método só entra no cartão quando os tratamentos DIVERGEM. Repetir
        "costal CO₂" em cinco cartões idênticos não informa nada; a diferença, sim. */
     var _met=(_metVariam && typeof tratMetodo==='function')?tratMetodo(study,(_calcSel||{}).qid,t):null;
-    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#dccd8c">(test.)</span>':'')+(_met?' <span class="calc-met">'+esc(APLIC_METODOS_CURTO[_met]||_met)+'</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
+    var head='<div class="calc-cardh"><span class="calc-tname">'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+(_isWitness?' <span style="color:#fbbf24">(test.)</span>':'')+(_met?' <span class="calc-met">'+esc(APLIC_METODOS_CURTO[_met]||_met)+'</span>':'')+'</span><span style="font-size:10px;color:#9fb1a5">'+esc((t.dose||'—')+(vol?(' · '+f(vol,0)+' L/ha'):''))+'</span></div>';
     if(_isWitness && !(dval>0)){
       html+='<div class="calc-card">'+head+'<div class="calc-kv"><span>Preparo</span><b>não preparar</b><span>Produto / calda</span><b>0 / 0</b></div><div class="calc-warn" style="color:#7ca88a">Testemunha sem aplicação: nenhuma calda é necessária.</div></div>';
       return;
@@ -14867,7 +14867,7 @@ function _bioestatRapidoCard(job,study){
   /* Sem termo de erro nao ha teste: as MEDIAS ficam (elas estao certas), o
      p-valor e as letras nao aparecem, e o motivo ocupa o lugar deles. */
   var _meta = st.semResiduo
-    ? '<div class="bio-fast-meta" style="color:#dccd8c">⚠ '+esc(st.semResiduo)+'</div>'
+    ? '<div class="bio-fast-meta" style="color:#fbbf24">⚠ '+esc(st.semResiduo)+'</div>'
     : '<div class="bio-fast-meta">ANOVA-DBC · F='+nf(st.F,2)+' · p='+pf(st.p)+' · CV '+nf(st.cv,1)+'% · Tukey 5% · DMS '+nf(st.hsd,2)+'</div>';
   return '<div class="bio-fast-card"><div class="bio-fast-top"><b>'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span>prévia imediata</span></div>'+
     /* A DMS era calculada em todo cálculo e não aparecia em lugar nenhum. É ela
@@ -16679,7 +16679,7 @@ function renderStudyEditModal(){
            tem 250 g/L e a outra 500. */
         var _ia=null; try{ _ia=tratEquivalenteIA(t,s); }catch(e){}
         if(_ia) h+='<div class="e-hint" style="margin:2px 0 0">Equivalente: <b>'+esc(tratEquivalenteIATexto(_ia))+'</b>'+
-          (_ia.parcial?' <span style="color:#dccd8c">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
+          (_ia.parcial?' <span style="color:#fbbf24">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
         /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
            PEDE a justificativa, e o campo fica ali mesmo, não escondido em obs. */
         if(tratDoseForaDaBula(t,s)){
@@ -17427,7 +17427,7 @@ function _aplRenderClimaBox(){
     /* Dia junto quando não é hoje — sem ele, "08:14" de uma aplicação de ontem
        se lê como sendo de hoje, que é exatamente a confusão que se quer evitar. */
     var _d=(o.data&&o.data!==_hoje)?(((typeof isoToBR==='function'&&isoToBR(o.data))||o.data)+' '):'';
-    return '<div><b style="color:var(--accent,#37d684)">'+rot+'</b> '+esc(_d+(o.hora||''))+(cl.temp!=null?' · '+cl.temp+'°C':'')+(cl.umidade!=null?' · '+Math.round(cl.umidade)+'%UR':'')+(cl.vento!=null?' · vento '+cl.vento+'km/h':'')+(cl.clima_falhou?' <span style="color:#dccd8c;font-size:11px">(sem clima — só horário)</span>':'')+'</div>'; }
+    return '<div><b style="color:var(--accent,#37d684)">'+rot+'</b> '+esc(_d+(o.hora||''))+(cl.temp!=null?' · '+cl.temp+'°C':'')+(cl.umidade!=null?' · '+Math.round(cl.umidade)+'%UR':'')+(cl.vento!=null?' · vento '+cl.vento+'km/h':'')+(cl.clima_falhou?' <span style="color:#fbbf24;font-size:11px">(sem clima — só horário)</span>':'')+'</div>'; }
   var dur=_aplDur(ap);
   box.innerHTML=ln('Início',ap&&ap.inicio)+ln('Fim',ap&&ap.fim)+(dur?('<div style="margin-top:4px;color:var(--accent,#37d684)">⏱ Tempo de aplicação: <b>'+dur+'</b></div>'):'');
 }
@@ -18187,7 +18187,7 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-sub-inp:focus{border-color:#37d684;outline:none}'+
   '.av-sub-res{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px;padding-top:9px;border-top:1px solid var(--border,#2a3a2a);font-size:12px;color:#9a8}'+
   '.av-sub-res b{font-size:18px;color:var(--text,#eafaea)}'+ /* var(--text): a caixa segue o tema, texto fixo claro sumia no tema claro */
-  '.av-sub-warn{font-size:10px;color:#dccd8c;margin-top:5px}'+
+  '.av-sub-warn{font-size:10px;color:#fbbf24;margin-top:5px}'+
   '.av-sub-btns{display:flex;gap:8px;margin-top:12px}.av-sub-btns button{flex:1;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer}'+
   '.av-sub-ok{background:#1f5a2a;color:#eafaea}.av-sub-clr{flex:none!important;background:#222;color:#bbb;padding:11px 13px!important}'+
   '.av-auto-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px}'+
@@ -20388,7 +20388,7 @@ function openCloudHistory(){
   m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
   var V=window.AgractaVersoes;
   if(!V || !V.disponivel()){
-    m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora. O histórico fica no servidor e precisa de internet para abrir.</div>'+
+    m.innerHTML=_chShell('<div style="color:#fbbf24;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora. O histórico fica no servidor e precisa de internet para abrir.</div>'+
       '<button onclick="document.getElementById(\'chModal\').style.display=\'none\';openBackups()" style="margin-top:10px;width:100%;background:#16301c;color:#eaf3ed;border:1px solid #2a3a2a;border-radius:9px;padding:10px">Abrir os backups deste aparelho</button>');
     return;
   }
@@ -20409,7 +20409,7 @@ function openCloudHistory(){
     }).join('');
     m.innerHTML=_chShell('<div style="font-size:11px;color:#8aa88a;margin-top:8px">Hora e autor são os do servidor. Estes registros não podem ser editados nem apagados pelo app.</div>'+html);
   }, function(e){
-    m.innerHTML=_chShell('<div style="color:#dccd8c;font-size:13px;margin-top:12px">Não consegui ler o histórico: '+esc((e&&e.message)||'rede')+'.</div>');
+    m.innerHTML=_chShell('<div style="color:#fbbf24;font-size:13px;margin-top:12px">Não consegui ler o histórico: '+esc((e&&e.message)||'rede')+'.</div>');
   });
 }
 function cloudHistoryRestore(rev){
@@ -20499,14 +20499,14 @@ function integridadeScan(){
 function _integToast(){ try{ var ig=integridadeScan(); if(ig.length){ var alta=ig.filter(function(x){return x.sev==='alta';}).length; _stxToast((alta?'⚠ ':'')+ig.length+' aviso'+(ig.length>1?'s':'')+' de integridade — veja no menu'); } }catch(e){} }
 function openIntegridade(){
   var ig=integridadeScan();
-  var sevcor={alta:'#ffb3a8',media:'#dccd8c',baixa:'#9ac49a'}, sevlab={alta:'CRÍTICO',media:'ATENÇÃO',baixa:'INFO'};
+  var sevcor={alta:'#ffb3a8',media:'#fbbf24',baixa:'#9ac49a'}, sevlab={alta:'CRÍTICO',media:'ATENÇÃO',baixa:'INFO'};
   var m=document.getElementById('integModal');
   if(!m){ m=document.createElement('div'); m.id='integModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   var body = ig.length ? ig.map(function(x){ return '<div style="border:1px solid #2a3a2a;border-left:3px solid '+(sevcor[x.sev]||'#888')+';border-radius:8px;padding:9px 11px;margin-top:7px"><div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:'+(sevcor[x.sev]||'#888')+'">'+(sevlab[x.sev]||'')+'</div><div style="font-size:13px;color:#eaf3ed;margin-top:2px">'+esc(x.msg)+'</div></div>'; }).join('')
     : '<div style="text-align:center;color:#9ac49a;font-size:14px;margin:18px 0"><div style="font-size:30px;line-height:1">✓</div>Tudo certo — nenhuma inconsistência encontrada.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Verificação de integridade</b><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Confere estudos, tratamentos, testemunha e vínculos. Não altera nada — só aponta o que revisar.'+(ig.length?(' <b style="color:#dccd8c">'+ig.length+' aviso(s).</b>'):'')+'</div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Confere estudos, tratamentos, testemunha e vínculos. Não altera nada — só aponta o que revisar.'+(ig.length?(' <b style="color:#fbbf24">'+ig.length+' aviso(s).</b>'):'')+'</div>'+
     body+
     '<div style="margin-top:12px"><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
   '</div>';
@@ -23326,7 +23326,7 @@ function histTratHtml(t, cultura){
     if(!r.resolvido){
       /* Nome que a tabela ISO não conhece casou por texto literal. Dizer isso é
          a diferença entre "não achei mais nada" e "não sei procurar direito". */
-      h+='<br><span style="color:#dccd8c">Busca por texto: <b>'+esc(r.rotulo)+
+      h+='<br><span style="color:#fbbf24">Busca por texto: <b>'+esc(r.rotulo)+
          '</b> não está na tabela de nomes ISO, então outra grafia do mesmo ativo não seria encontrada.</span>';
     }
     if(r.naCultura===0 && cultura){
@@ -23534,7 +23534,7 @@ function _itensCss(){
    '.it-row{display:flex;gap:9px}.it-row>*{flex:1;min-width:0}'+
    '.it-btn{background:#1f7a44;color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;font-family:inherit;font-size:13px}'+
    '.it-btn.alt{background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border:1px solid var(--border,#26322b)}'+
-   '.it-dup{background:rgba(220,205,140,.10);border:1px solid rgba(220,205,140,.32);color:#dccd8c;border-radius:9px;padding:8px 10px;font-size:11.5px;line-height:1.5;margin-bottom:9px}'+
+   '.it-dup{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.32);color:#fbbf24;border-radius:9px;padding:8px 10px;font-size:11.5px;line-height:1.5;margin-bottom:9px}'+
    '.it-dose{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 9px;border-radius:9px;border:1px solid var(--border,#26322b);margin-bottom:5px;font-size:12.5px}'+
    '.it-dose b{font-weight:800}.it-vazio{font-size:12px;color:var(--text-3,#7f9085);font-style:italic;padding:10px 0}'+
    /* Busca do Agrofit. A lista tem altura limitada e rola: doze resultados
@@ -23772,7 +23772,7 @@ function _itLeituraHtml(){
         '<div class="it-agf-selh"><b>Li isto</b></div>';
   r.componentes.forEach(function(c){
     h+='<div><span>'+esc(c.nome||'(sem nome)')+'</span><b>'+
-       (c.valor==null?'—':(String(c.valor).replace('.',',')+(c.unidade?(' '+c.unidade):' <span style="color:#dccd8c">?</span>')))+
+       (c.valor==null?'—':(String(c.valor).replace('.',',')+(c.unidade?(' '+c.unidade):' <span style="color:#fbbf24">?</span>')))+
        '</b></div>';
   });
   if(r.formulacao)
@@ -23782,7 +23782,7 @@ function _itLeituraHtml(){
   if(r.semUnidade){
     /* A pergunta que evita o silêncio no fim: sem unidade, o equivalente em i.a.
        simplesmente não sai, e a pessoa só descobre isso muito depois. */
-    h+='<div class="it-hint" style="color:#dccd8c;padding:6px 0 2px">'+
+    h+='<div class="it-hint" style="color:#fbbf24;padding:6px 0 2px">'+
        'Os números estão sem unidade — <b>'+esc(String((r.componentes[0]||{}).valor||''))+
        ' o quê?</b> Sem ela o equivalente em i.a. não é calculado. Se todos forem a mesma:</div>'+
        '<div style="display:flex;gap:6px">'+
@@ -24222,7 +24222,7 @@ function _agLigHtml(it){
     h+='<div style="border-top:1px solid rgba(47,111,72,.25);margin-top:6px;padding-top:6px">'+
        '<div style="font-size:11px;margin-bottom:4px"><b>'+esc(_agLigSel.nome)+'</b> · reg. '+esc(_agLigSel.registro)+'</div>';
     campos.forEach(function(c){
-      var cor=c.diverge?'#dccd8c':(c.vazio?'#7fbf98':'#8a948e');
+      var cor=c.diverge?'#fbbf24':(c.vazio?'#7fbf98':'#8a948e');
       h+='<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-top:1px solid rgba(255,255,255,.05)">'+
          '<span style="color:#8a948e;flex:0 0 34%">'+esc(c.rotulo)+'</span>'+
          '<span style="flex:1;min-width:0;text-align:right;color:'+cor+';word-break:break-word">'+esc(c.novo)+
@@ -24232,7 +24232,7 @@ function _agLigHtml(it){
          '</div>';
     });
     if(divs.length)
-      h+='<div class="it-hint" style="color:#dccd8c">'+divs.length+' campo(s) diferem do que está cadastrado. Não sobrescrevo nada: aplique um a um se quiser.</div>';
+      h+='<div class="it-hint" style="color:#fbbf24">'+divs.length+' campo(s) diferem do que está cadastrado. Não sobrescrevo nada: aplique um a um se quiser.</div>';
     h+='<button class="it-btn" style="margin-top:7px;width:100%" onclick="agrofitLigarPreencherVazios('+esc(JSON.stringify(it.id))+')">'+
        'Preencher os '+vazios+' campo(s) vazio(s)</button>';
     h+='</div>';

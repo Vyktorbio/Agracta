@@ -261,7 +261,37 @@ módulos.
 
 Teste: `test_conhecimento_canonico.js`.
 
-## 7. Caminho de adoção
+## 7. Trilha formal na ficha do estudo
+
+`trilha-formal.js` envolve o `studyAuditHtml` do app. A trilha de sempre continua
+igual e vem primeiro, e logo abaixo entra a seção **Trilha formal**, que se
+preenche sozinha:
+
+- **Selo:** "Íntegra" quando cada evento confere com o próprio SHA-256, ou a lista
+  do que não confere.
+- **Eventos**, do mais novo ao mais antigo, com quem, quando, motivo e de→para
+  nas correções (parcela · variável).
+- **"Só neste aparelho"**: o que ainda não subiu para a nuvem.
+- **Conflitos**: duas correções da mesma nota, feitas a partir do mesmo valor em
+  aparelhos diferentes. As duas ficam guardadas e quem decide é uma pessoa, com
+  uma nova correção.
+
+**Trilha antiga.** Ao abrir a seção, `AgractaEventos.importarLegado(study)` converte
+as ações **críticas** do `study.audit` (finalização, reabertura, aprovação e emenda
+do protocolo) em eventos `legado`. Lembretes de agenda e edições comuns ficam de
+fora. Só entra o que é anterior ao primeiro evento formal do estudo, com folga de
+2 min, porque a linha da trilha é gravada um instante antes do evento da mesma ação.
+O evento legado não leva dispositivo: qualquer aparelho que importe a mesma trilha
+chega aos mesmos ids, e a sincronização não duplica nada.
+
+**Assinatura.** Desde que o `main` passou a assinar finalização e aprovação com
+SHA-256 (`assinatura-core.js`), a `rubrica` do evento formal é a própria
+`sha256:<hash>` da assinatura. É isso que liga o evento à assinatura que o app
+confere.
+
+Teste: `test_trilha_formal.js`.
+
+## 8. Caminho de adoção
 
 Em ordem. Cada passo vale por si:
 
@@ -270,7 +300,7 @@ Em ordem. Cada passo vale por si:
 3. ✅ **Eventos na nuvem** com regras só-de-acréscimo e hash conferido pelo servidor
    (seção 4). Falta **publicar as regras** (`npx firebase-tools deploy --only
    firestore:rules`).
-4. **Correção de dado finalizado** passa a ser `observacao.corrigida` em vez de
+4. ⏸ **Correção de dado finalizado** passa a ser `observacao.corrigida` em vez de
    reabrir o estudo inteiro.
 5. ✅ **Conhecimento** com a aba "Entre estudos" sobre `extrair` + `aplicar` +
    `resumir` (seção 6). As abas antigas ainda leem a projeção própria; migrá-las é

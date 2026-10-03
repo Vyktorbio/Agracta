@@ -37,7 +37,7 @@ var d=w.document, estado=null;
    superfície). Verde e azul nunca dividem o mesmo gráfico — chuva e umidade
    têm cada uma o seu, e a temperatura usa o par vermelho/azul. */
 var COR={
-  claro:{quente:'#c0392b',frio:'#397be0',umidade:'#16805b'},
+  claro:{quente:'#c0392b',frio:'#2563eb',umidade:'#16805b'},
   escuro:{quente:'#e4695c',frio:'#5a95e0',umidade:'#3aa676'}
 };
 function cores(){ return d.documentElement.classList.contains('light')?COR.claro:COR.escuro; }
