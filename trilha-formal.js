@@ -65,7 +65,7 @@
     if (verif.ok) {
       h += '<div data-selo="ok" style="border:1px solid #2f6b47;background:rgba(55,214,132,.08);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:8px">' +
         '✅ <b>Íntegra.</b> ' + eventos.length + ' evento(s); cada um confere com o próprio código SHA-256.' +
-        (pend ? ' <span style="color:#d9b45a">' + pend + ' ainda só neste aparelho.</span>' : ' Tudo na nuvem.') + '</div>';
+        (pend ? ' <span style="color:#f59e0b">' + pend + ' ainda só neste aparelho.</span>' : ' Tudo na nuvem.') + '</div>';
     } else {
       h += '<div data-selo="problema" style="border:1px solid #8a3b3b;background:rgba(255,90,90,.08);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:8px">' +
         '⚠️ <b>A trilha não confere.</b> ' + verif.problemas.length + ' problema(s):<br>' +

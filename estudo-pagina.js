@@ -2,7 +2,7 @@
 (function(w){
 'use strict';
 var C=w.ConhecimentoCore, state=null;
-var colors=['#16805b','#397be0','#b35a13','#a550ad','#00858c','#bc435d','#797025','#695fbb'];
+var colors=['#16a34a','#2563eb','#ea580c','#9333ea','#0891b2','#e11d48','#ca8a04','#4f46e5'];
 function e(v){return w.agConhecimento.esc(v);}
 function num(v){return w.agConhecimento.numero(v);}
 function arr(v){return Array.isArray(v)?v:[];}

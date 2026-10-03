@@ -282,7 +282,7 @@
   function corNuvem(c){
     if(c == null) return '#7f9085';
     if(c <= 12) return '#3bd27f';
-    if(c <= 35) return '#efb24b';
+    if(c <= 35) return '#f59e0b';
     return '#ff7968';
   }
 

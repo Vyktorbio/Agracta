@@ -3,7 +3,7 @@
 'use strict';
 const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels={empty:'Pendente',partial:'Parcial',done:'Concluída',planned:'Sem avaliação'};
-const colors={empty:'#c44747',partial:'#b67b0c',done:'#258553',planned:'#87949f'};
+const colors={empty:'#dc2626',partial:'#d97706',done:'#16a34a',planned:'#87949f'};
 let current=null,dialog=null,focusBefore=null;
 const dates=new WeakMap();
 function study(qid,sid){return ((w.data[qid]||{}).estudos||[]).find(s=>s.id===sid);}

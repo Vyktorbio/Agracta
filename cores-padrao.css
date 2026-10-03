@@ -1,0 +1,39 @@
+/* cores-padrao.css — as cores de ESTADO do Agracta no padrão.
+ *
+ * Carregado por último. O app é neutro (preto, branco, cinza) e só os estados
+ * têm cor: concluído, atenção, informação, erro. Esses estados vinham em tons
+ * apagados — mostarda #9c6817, azul acinzentado #356da4, verde-musgo — e
+ * pareciam sujos. Aqui eles passam à paleta padrão de interface (a mesma
+ * família do Tailwind/Material): verde, âmbar, azul e vermelho de verdade, num
+ * tom para o tema claro e um mais claro para o escuro (contraste).
+ *
+ * Só VARIÁVEIS e os poucos componentes que pintavam o fundo com a cor velha.
+ * Nenhuma regra de layout muda aqui.
+ */
+:root{
+  --ag-ok:#22c55e;   --ag-ok-bg:rgba(34,197,94,.10);   --ag-ok-line:rgba(34,197,94,.30);
+  --ag-warn:#f59e0b; --ag-warn-bg:rgba(245,158,11,.10); --ag-warn-line:rgba(245,158,11,.32);
+  --ag-info:#60a5fa; --ag-info-bg:rgba(96,165,250,.10); --ag-info-line:rgba(96,165,250,.30);
+  --ag-err:#f87171;  --ag-err-bg:rgba(248,113,113,.10); --ag-err-line:rgba(248,113,113,.32);
+  --gp-amber:var(--ag-warn); --gp-blue:var(--ag-info); --gp-red:var(--ag-err);
+  --warn:var(--ag-warn); --info:var(--ag-info); --danger:var(--ag-err);
+  --vm-warn:var(--ag-warn); --vm-danger:var(--ag-err);
+}
+html.light{
+  --ag-ok:#16a34a;   --ag-ok-bg:rgba(22,163,74,.08);   --ag-ok-line:rgba(22,163,74,.28);
+  --ag-warn:#d97706; --ag-warn-bg:rgba(217,119,6,.08); --ag-warn-line:rgba(217,119,6,.30);
+  --ag-info:#2563eb; --ag-info-bg:rgba(37,99,235,.07); --ag-info-line:rgba(37,99,235,.26);
+  --ag-err:#dc2626;  --ag-err-bg:rgba(220,38,38,.07);  --ag-err-line:rgba(220,38,38,.28);
+  --gp-amber:var(--ag-warn); --gp-blue:var(--ag-info); --gp-red:var(--ag-err);
+  --warn:var(--ag-warn); --info:var(--ag-info); --danger:var(--ag-err);
+  --vm-warn:var(--ag-warn); --vm-danger:var(--ag-err);
+}
+
+/* Etapas do estudo (Protocolo → Dossiê): o fundo acompanha a cor nova. */
+.study-workflow-step.complete{color:var(--ag-ok)!important;background:var(--ag-ok-bg)!important}
+.study-workflow-step.complete .study-workflow-n{background:var(--ag-ok-bg)!important;border-color:var(--ag-ok-line)!important;color:var(--ag-ok)!important}
+.study-workflow-step.active{color:var(--ag-info)!important;background:var(--ag-info-bg)!important;border-color:var(--ag-info-line)!important}
+.study-workflow-step.active .study-workflow-n{border-color:var(--ag-info-line)!important;color:var(--ag-info)!important}
+.study-workflow-step.ready{color:var(--ag-warn)!important}
+.study-workflow-step.ready .study-workflow-n{border-color:var(--ag-warn-line)!important;color:var(--ag-warn)!important}
+.study-workflow-step.attention{color:var(--ag-err)!important;background:var(--ag-err-bg)!important}
