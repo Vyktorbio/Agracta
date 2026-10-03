@@ -124,12 +124,16 @@ def candidatos_transformacao(grupos, tipo):
                        else "arcsen√ (proporção 0–1)"),
                       _asin, (lambda z, e=escala: (np.sin(z) ** 2) * e)))
 
-        def _logit(x, e=escala):
-            p = np.clip(np.asarray(x, float) / e, 1e-4, 1 - 1e-4)
-            return np.log(p / (1 - p))
+        # logit só com todos os valores DENTRO de (0, escala): em 0% e 100% ele não existe, e o
+        # recorte (clip) cria extremos artificiais (±9,2 com 1e-4) que podem "ganhar" a disputa
+        # de normalidade — e aí as letras passam a depender de uma constante arbitrária.
+        if minimo > 0 and maximo < escala:
+            def _logit(x, e=escala):
+                p = np.clip(np.asarray(x, float) / e, 1e-4, 1 - 1e-4)
+                return np.log(p / (1 - p))
 
-        cands.append(("logit (proporção)", _logit,
-                      (lambda z, e=escala: e / (1 + np.exp(-z)))))
+            cands.append(("logit (proporção)", _logit,
+                          (lambda z, e=escala: e / (1 + np.exp(-z)))))
         cands.append(("√(x) (proporção)",
                       lambda x: np.sqrt(np.asarray(x, float)), lambda z: z ** 2))
 

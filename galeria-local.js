@@ -3,6 +3,12 @@
 'use strict';
 let context=null,storage=null,photos=[],busy=false,urls=[],selected=new Set(),filterPlot=null,plots=[],seqIndex=-1;
 const SEQ_KEY='agracta-fotos-sequencia';
+/* Antes o teto era 100 fotos fixas por estudo — pouco para uma série diária
+   (ex.: 48 parcelas × 15 dias = 720). O limite real é o espaço do aparelho:
+   confere a folga antes de cada foto e pede ao navegador que não apague o banco. */
+const LIMITE_FOTOS=3000,FOLGA_BYTES=200*1024*1024;let pediuPersistir=false;
+async function espacoLivre(){try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();if(e&&e.quota)return e.quota-(e.usage||0);}}catch(e){}return Infinity;}
+function pedirPersistencia(){if(pediuPersistir)return;pediuPersistir=true;try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}}
 const $=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const br=date=>/^\d{4}-\d{2}-\d{2}$/.test(date||'')?date.slice(8)+'/'+date.slice(5,7)+'/'+date.slice(0,4):'Sem data';
 function message(text,error){$('status').textContent=text;$('status').className=error?'error':'';}
@@ -58,10 +64,11 @@ function binding(){
 async function addFiles(files,fromCamera){
  if(!context||busy||!files.length)return;
  let bind;try{bind=binding();}catch(err){message(err.message,true);return;}
- setBusy(true);let saved=0,failure='';const seqPlot=fromCamera&&seqOn()?plots[seqIndex]:null;
+ setBusy(true);pedirPersistencia();let saved=0,failure='';const seqPlot=fromCamera&&seqOn()?plots[seqIndex]:null;
  try{
   for(const file of files){
-   if(photos.length>=100)throw Error('Esta galeria chegou a 100 fotos. Baixe os originais e remova as fotos que não precisa manter aqui.');
+   if(photos.length>=LIMITE_FOTOS)throw Error('Esta galeria chegou a '+LIMITE_FOTOS+' fotos. Baixe os originais e remova as fotos que não precisa manter aqui.');
+   if(await espacoLivre()<file.size*1.5+FOLGA_BYTES)throw Error('Pouco espaço livre no aparelho. Baixe os originais das fotos já salvas e libere espaço antes de continuar.');
    if(!/^image\/(jpeg|png|webp)$/.test(file.type)||file.size>30*1024*1024)throw Error('Use JPEG, PNG ou WebP com até 30 MB por foto.');
    message('Salvando foto '+(saved+1)+' de '+files.length+' somente neste aparelho…');
    const thumb=await normalized(file,480),row=Object.assign({id:crypto.randomUUID(),order:photos.length?Math.max(...photos.map(p=>p.order))+1:0,createdAt:new Date().toISOString(),blob:file,thumb:thumb.blob,type:file.type},bind);
@@ -129,10 +136,17 @@ window.addEventListener('message',async function(ev){
    .map(p=>({treatment:p.treatment,rep:Number(p.rep),plot:String(p.plot||p.treatment+'R'+p.rep)}));
   if(plots.length>1){
    $('seq').hidden=false;
-   let lembrar=false;try{lembrar=localStorage.getItem(SEQ_KEY)==='1';}catch(e){}
-   if(lembrar){$('seq-on').checked=true;seqStart();}
+   /* Aberta pelo botão "Fotos em sequência": liga e fica lembrada. Senão, vale
+      a escolha que ficou no aparelho. */
+   let ligar=!!(initial&&initial.sequence===true);
+   if(ligar){try{localStorage.setItem(SEQ_KEY,'1');}catch(e){}}
+   else{try{ligar=localStorage.getItem(SEQ_KEY)==='1';}catch(e){}}
+   if(ligar){$('seq-on').checked=true;seqStart();}
   }
-  photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();message('Galeria pronta. Armazenamento exclusivo deste aparelho.');
+  photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();
+  message(seqOn()?'Sequência ligada. Toque em Tirar foto: depois de salvar, a próxima parcela já fica pronta.':'Galeria pronta. Armazenamento exclusivo deste aparelho.');
+  /* Aberta por "Slides e originais": começa na montagem da apresentação. */
+  if(initial&&initial.slides===true){const ex=document.querySelector('.export');if(ex&&ex.scrollIntoView)ex.scrollIntoView({block:'start'});}
  }catch(err){message('Galeria indisponível: '+err.message,true);}
 });
 $('capture-form').addEventListener('submit',ev=>ev.preventDefault());

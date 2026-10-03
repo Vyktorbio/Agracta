@@ -50,7 +50,9 @@ s.tratamentos[1].produto='SEGREDO PRODUTO';s.tratamentos[1].itemId='blind';s.tra
 w.ITENS.blind={id:'blind',nome:'SEGREDO PRODUTO',ativos:'SEGREDO ATIVO',codigoCego:'SC CEGO'};
 s.access_token='NAO_EXPORTAR_TOKEN';s.protocolo={observacao:'SEGREDO PRODUTO e SEGREDO ATIVO'};
 other.descricao='DADOS OUTRO ESTUDO';w.abrirConhecimento({qid:'Q1',sid:'S1'});
+let bioArgs=null;w.bioensaioRelatorio=(qid,st,an,fin)=>{bioArgs={qid,sid:st.id,fin};return {metodo:'potter',secoes:[{title:'Torre de Potter · mortalidade e eficácia',text:'SEGREDO PRODUTO a 10 ppm',headers:['Tratamento'],rows:[['T2 · SEGREDO ATIVO']]}],figuras:[{svg:'<svg xmlns="http://www.w3.org/2000/svg"><text>SEGREDO PRODUTO</text></svg>',legenda:'SEGREDO PRODUTO no tempo',largura:520,altura:240}]};};
 const unchanged=JSON.stringify(w.data);q('[data-ep-action="report"]').click();
+assert.deepEqual(bioArgs,{qid:'Q1',sid:'S1',fin:false});assert.match(exportado.bioensaio.secoes[0].text,/SC CEGO a 10 ppm/);assert.match(exportado.bioensaio.figuras[0].svg,/<text>SC CEGO<\/text>/);
 const serialized=JSON.stringify(exportado);assert(!serialized.includes('SEGREDO'));assert(!serialized.includes('NAO_EXPORTAR_TOKEN'));assert(!serialized.includes('DADOS OUTRO ESTUDO'));assert(serialized.includes('SC CEGO'));assert.equal(JSON.stringify(w.data),unchanged);
 w.close();console.log('Barras agrupadas: uma repetição, zero, Abbott, grade parcial e estudos separados OK.');console.log('Página do estudo: abertura, médias, última data, empates, sentido, valores zero, ausência de data, XSS e leitura sem mutação OK.');
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -63,7 +63,7 @@ titulo "1. Os arquivos abrem sem erro de sintaxe?"
 if ! command -v node >/dev/null 2>&1; then
   avisar "node não encontrado — não dá para conferir sintaxe nem rodar teste."
 else
-  for f in vendor/versoes-core.js vendor/fotos-notas-core.js vendor/arena-core.js vendor/armazenamento-core.js vendor/protocolo-vivo-core.js vendor/observacao-core.js vendor/eventos-core.js vendor/eppo-core.js eventos-app.js conhecimento-canonico.js vendor/avaliacao-core.js vendor/pendencias-core.js vendor/conhecimento-core.js vendor/mascara-core.js vendor/fontes-core.js vendor/portal-core.js vendor/biocalc-campo-core.js vendor/drone-core.js calculadora-drone.js integracoes.js integracoes-fontes.js integracoes-clientes.js cliente.js app.js estatistica.js firebase-sync.js ui-campo.js mesa.js mapa-mesa.js clima-pagina.js acesso-horario.js alvos-catalogo.js estatistica/app.js; do
+  for f in vendor/versoes-core.js vendor/fotos-notas-core.js vendor/arena-core.js vendor/bioensaio-core.js vendor/fotos-core.js fotos-estudo.js vendor/colonia-core.js colonia-medida.js vendor/armazenamento-core.js vendor/protocolo-vivo-core.js vendor/observacao-core.js vendor/eventos-core.js vendor/eppo-core.js eventos-app.js conhecimento-canonico.js vendor/avaliacao-core.js vendor/pendencias-core.js vendor/conhecimento-core.js vendor/mascara-core.js vendor/fontes-core.js vendor/portal-core.js vendor/biocalc-campo-core.js vendor/drone-core.js calculadora-drone.js integracoes.js integracoes-fontes.js integracoes-clientes.js cliente.js app.js estatistica.js firebase-sync.js ui-campo.js mesa.js mapa-mesa.js clima-pagina.js acesso-horario.js alvos-catalogo.js estatistica/app.js; do
     [ -f "$f" ] || continue
     if node -e "new Function(require('fs').readFileSync('$f','utf8'))" 2>/dev/null; then
       ok "$f"
@@ -203,26 +203,7 @@ fi
 # Um .py na lista sem arquivo no disco travaria a estatistica no aparelho
 # instalado, calada, com o portao dizendo PODE SUBIR.
 if command -v node >/dev/null 2>&1; then
-  SUMIDOS=$(node - <<'NODE' 2>/dev/null
-var fs=require("fs"), falta=[];
-function confere(base,lista){ lista.forEach(function(u){
-  var p=String(u).replace(/^\.\//,"").replace(/[?#].*$/,"");
-  if(!p || /^(https?:)?\/\//.test(p) || /^data:/.test(p)) return;
-  var alvo=base?base+"/"+p:p;
-  if(!fs.existsSync(alvo) && falta.indexOf(alvo)<0) falta.push(alvo);
-}); }
-function ler(arq){ return fs.existsSync(arq)?fs.readFileSync(arq,"utf8"):""; }
-[ {base:"",           sw:"sw.js",             lista:/var ASSETS\s*=\s*\[([\s\S]*?)\]/,   html:"index.html"},
-  {base:"estatistica",sw:"estatistica/sw.js", lista:/const SHELL\s*=\s*\[([\s\S]*?)\]/, html:"estatistica/index.html"}
-].forEach(function(c){
-  var m=ler(c.sw).match(c.lista);
-  if(m) confere(c.base,(m[1].match(/["'][^"']+["']/g)||[]).map(function(s){return s.slice(1,-1);}));
-  var html=ler(c.html), r=/(?:src|href)="([^"]+)"/g, x;
-  while((x=r.exec(html))) confere(c.base,[x[1]]);
-});
-console.log(falta.join("\n"));
-NODE
-)
+  SUMIDOS=$(node tests/check-assets.cjs 2>/dev/null)
   if [ -z "$SUMIDOS" ]; then
     ok "todo arquivo pré-carregado existe mesmo (app e estatística)"
   else

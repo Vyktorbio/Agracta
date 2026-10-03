@@ -58,7 +58,27 @@ O Agracta salva primeiro no aparelho e usa a nuvem como sincronização:
 3. o Firestore recebe documentos separados por local, quadra, estudo,
    aplicação, avaliação e lançamento;
 4. alterações feitas sem internet ficam marcadas no checkpoint do Agracta;
-5. quando a conexão volta, o aplicativo reconcilia e envia as pendências.
+5. quando a conexão volta, o aplicativo relê a revisão e reconcilia as pendências;
+6. dados e revisão são enviados juntos em uma transação. Se outro aparelho
+   alterar a base, a reconciliação é refeita antes de tentar novamente.
+
+As regras do Firestore exigem essa gravação atômica (`syncProtocol: 3`). Clientes
+antigos precisam atualizar o aplicativo antes de voltar a enviar; seu trabalho
+local permanece no aparelho. Uma falha de leitura ou envio mantém a pendência,
+sem publicar um estado parcial nem uma revisão falsa.
+
+Backups automáticos incluem observações e registros de exclusão. O cofre também
+inclui as fotos das observações disponíveis neste aparelho; antes de excluir uma
+observação, o app confirma a cópia da imagem. Para transferir os dados a outro
+aparelho por exportação, preserve também os arquivos locais das fotos. Além da
+cópia em localStorage, até dez versões recentes ficam no cofre IndexedDB,
+acessíveis pelo mesmo menu de backups. Restaurar/importar um backup cria uma nova
+geração persistente: uma cópia antiga de outro aparelho não desfaz a restauração.
+Backups legados não passam a conter fotos que nunca foram guardadas neles.
+
+Validação: `npm test` e `npm run test:regras` (emulador local, nunca produção).
+O limite de tamanho de transação do Firestore continua aplicável: se um envio
+excedê-lo, a transação falha inteira e os dados permanecem locais, pendentes.
 
 O IndexedDB interno do Firestore permanece desativado. O Agracta já possui seu
 próprio cofre durável, evitando duas filas offline concorrentes no navegador.
@@ -79,5 +99,6 @@ O selo mostra `salvo neste aparelho` até a sincronização voltar.
    npx firebase-tools deploy --only firestore
    ```
 
-As fotos são fragmentadas em documentos do Firestore durante esta primeira
-fase. Assim a migração não exige ativar o plano Blaze apenas para Storage.
+As fotos ficam no aparelho; a nuvem recebe os metadados das observações.
+Fragmentos antigos no Firestore continuam disponíveis para migração local,
+mas a sincronização não grava novas imagens nem apaga esses fragmentos.

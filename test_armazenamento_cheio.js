@@ -110,31 +110,25 @@ async function celularCheio(){
   /* ---------- [2] conferir a nuvem antes de gravar ---------- */
   console.log('\n[2] antes de gravar, o aparelho confere a nuvem');
   const src=fs.readFileSync('firebase-sync.js','utf8');
-  const trecho=src.slice(src.indexOf('  function commitState('),src.indexOf('\n  window.cloudInit='));
-  const salvar=src.slice(src.indexOf('  window.cloudSave=function(){'),src.indexOf('  window.cloudSyncNow='));
-  function harness(revNuvem,falhaRede){
-    const env={commits:[],pulls:0,badges:[]};
-    const ctx={FB:{user:{email:'t'},lastRev:5,db:{doc:()=>({get:()=>falhaRede?Promise.reject(new Error('sem rede')):Promise.resolve({exists:true,data:()=>({rev:revNuvem})})})}},
-      ROOT:'r',firebaseInit:()=>true,console:{error(){}},Promise,
-      cloudBadge:(k,t)=>env.badges.push(t||k),setUnsavedChanges:b=>{ctx._unsaved=b;},
-      localState:()=>({v:'memoria'}),setTimeout:()=>0,clearTimeout(){},_cloudReplace:false,
-      cloudPull:()=>{env.pulls++;return Promise.resolve(true);}};
-    ctx.window=ctx;vm.createContext(ctx);vm.runInContext(trecho,ctx);
-    ctx.commitState=st=>{env.commits.push(st);return Promise.resolve(true);};
-    vm.runInContext(salvar,ctx);
-    env.ctx=ctx;return env;
-  }
-  let h=harness(5);await h.ctx.cloudSave();
-  ok(h.commits.length===1&&h.pulls===0,'nuvem na mesma revisao: grava direto');
-  h=harness(9);await h.ctx.cloudSave();
-  ok(h.commits.length===0&&h.pulls===1,'nuvem com revisao nova: le e mescla ANTES, sem gravar a copia velha');
-  h=harness(5,true);const r=await h.ctx.cloudSave();
-  ok(r===false&&h.commits.length===0,'sem conexao para conferir: nao grava nada por cima');
-  ok(h.ctx._unsaved===true&&/guardadas neste aparelho/.test(h.badges.join(' ')),'e a edicao fica pendente, com aviso');
-  h=harness(9);h.ctx._cloudReplace=true;await h.ctx.cloudSave();
-  ok(h.commits.length===1&&h.pulls===0,'restaurar backup substitui de proposito: nao mescla');
-  h=harness(9);const p1=h.ctx.cloudSave(),p2=h.ctx.cloudSave();await p1;await p2;
-  ok(h.pulls===1,'duas gravacoes seguidas fazem UMA conferencia');
+  const {initial,database,client,seed,remote,av,edit}=require('./test_sync_envio_pendente.js');
+  const env=database(),a=client(env.db,initial()),b=client(env.db,initial());
+  seed(env,a.c,initial());await a.c.cloudPull();await b.c.cloudPull();env.commits=[];
+  edit(a,'T1R1',7,10);await a.c.cloudSave();
+  ok(env.commits.length===1,'nuvem na mesma revisão: publica uma transação');
+  edit(b,'T1R2',8,20);await b.c.cloudSave();
+  edit(a,'T1R1',9,30);await a.c.cloudSave();
+  ok(av(remote(env,a.c)).notas.T1R2.v===8&&av(remote(env,a.c)).notas.T1R1.v===9,'nuvem com revisão nova: lê e mescla antes de gravar a cópia local');
+  env.offline=true;edit(a,'T1R1',10,40);const antes=JSON.stringify(env.docs);
+  await assert.rejects(a.c.cloudSave(),/sem rede/);
+  ok(JSON.stringify(env.docs)===antes,'sem conexão para conferir: não grava nada por cima');
+  ok(a.c._unsavedChanges===true&&/salvo neste aparelho/.test(a.badges.join(' ')),'edição fica pendente com aviso');
+  env.offline=false;await a.c.cloudSave();env.commits=[];
+  edit(a,'T1R1',11,50);await Promise.all([a.c.cloudSave(),a.c.cloudSave()]);
+  ok(env.commits.length===1,'duas solicitações simultâneas compartilham a mesma gravação');
+  a.state.data.__config.restoreGeneration=Date.now();
+  a.state.data.Q1.estudos[0].codigo='RESTAURADO';
+  await a.c.cloudSave();await b.c.cloudSave();
+  ok(remote(env,a.c).data.Q1.estudos[0].codigo==='RESTAURADO','restauração persistente não é desfeita pela cópia antiga');
 
   /* ---------- [3] aviso de tempo real ---------- */
   console.log('\n[3] revisao avisada nao e revisao lida');
@@ -150,7 +144,7 @@ async function celularCheio(){
   aviso(snap(7));ok(timers.length===1,'o mesmo aviso repetido nao agenda outra leitura');
   s.FB.pushing=true;aviso(snap(8));
   ok(s.FB.lerDepois===true&&timers.length===1,'aviso durante um envio fica para ler logo depois dele');
-  ok(/if\(FB\.lerDepois&&typeof window\.cloudPull==='function'\)\{FB\.lerDepois=false;return window\.cloudPull\(\);\}/.test(trecho),
+  ok(/if\(FB\.lerDepois\)\{[\s\S]*?FB\.lerDepois=false;[\s\S]*?setTimeout\(function\(\)\{window\.cloudResync\(\);\},250\)/.test(src),
     'o fim do envio le o que chegou durante ele');
 
   console.log('\nArmazenamento cheio: '+passes+' verificações — cofre na memória, conferência antes de gravar, aviso de tempo real.');

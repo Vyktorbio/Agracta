@@ -395,6 +395,9 @@ var _saveErrAlerted=false;
 var AGR_LOCAL_STATE_TS_KEY='agracta-local-state-ts';
 function save(){
   var ok=false, savedAt=Date.now(), err=null;
+  /* save() grava o `data` inteiro: a gravação adiada da grade de avaliação fica
+     coberta por esta e não precisa rodar de novo depois. */
+  try{ if(_avGravaTimer){ clearTimeout(_avGravaTimer); _avGravaTimer=null; } }catch(e){}
   /* O indice entre ensaios foi montado a partir do que estava gravado. Gravou de
      novo, ele deixa de valer -- e histórico velho é pior que histórico nenhum. */
   try{ _histInvalida(); }catch(e){}
@@ -2279,7 +2282,11 @@ function cloudBadge(kind,txt){
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
-  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{ if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
+  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{
+    /* Envio parado na fila do SDK: tocar não adianta mandar de novo (o lote já
+       está lá, e mandar outro só empilha). O toque explica o motivo. */
+    if(window._syncParado && typeof window.agractaSyncExplicar==='function'){ window.agractaSyncExplicar(); return; }
+    if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
   /* "sem internet" era impreciso e assustava sem razão: clima, NDVI e solo seguem
      consultando a rede normalmente nesse estado. O que está parado é a SINCRONIZAÇÃO
      com a nuvem — e é isso que o selo deve dizer. */
@@ -2320,6 +2327,8 @@ function cloudBadge(kind,txt){
 var _cloudPendingParked=false;
 function cloudApply(st){
   if(!st) return;
+  /* Um retorno atrasado não pode desfazer uma restauração já feita aqui. */
+  if(_restoreGeneration(st)<_restoreGeneration({data:data})) return;
   var _parked=_cloudPendingParked; _cloudPendingParked=false;
   /* não atropela edição de quadra em andamento — guarda e aplica ao terminar */
   if(window._qEditing || window._avEditing){ _cloudPending=st; _cloudPendingParked=true; return; }
@@ -2329,13 +2338,17 @@ function cloudApply(st){
     st=cloudMerge(cloudState(), st);
     setTimeout(cloudSaveSoon, 50);
   }
+  var restored=_restoreGeneration(st)>_restoreGeneration(cloudState());
   _cloudApplying=true;
   try{
+    if(restored){
+      _delQuadras={};_delLocais={};_delNotas={};_delItens={};
+    }
     if(st.rev!=null) _cloudRev=st.rev;
     if(st.data && typeof st.data==='object'){ data=st.data; try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} }
     if(st.qgeo && typeof st.qgeo==='object'){ QGEO=st.qgeo; saveQGEO(); }
     if(st.qgeots && typeof st.qgeots==='object'){ QGEO_TS=st.qgeots; saveQGEOTS(); }
-    if(st.georef){ _geo=st.georef; saveGeoref(_geo); }
+    if(Object.prototype.hasOwnProperty.call(st,'georef')){ _geo=st.georef; saveGeoref(_geo); }
     if(st.georefts!=null){ GEOREF_TS=st.georefts; saveGeorefTS(); }
     if(st.locais && typeof st.locais==='object'){ LOCAIS=st.locais; try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} }
     if(st.qlocal && typeof st.qlocal==='object'){ QLOCAL=st.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
@@ -2490,6 +2503,26 @@ function _mergeAval(la,ca){
   m.notas=notas;
   m.notasMeta=metas;
   m.bruto=brutos;
+  /* LEITURA DUPLA: A e B costumam ler em celulares diferentes. `avaliadores`
+     vinha inteiro do lado mais novo, e a leitura de um avaliador sumia quando o
+     outro gravava depois. Junta avaliador a avaliador, célula a célula (o lado
+     mais novo vence só onde os dois têm valor), e refaz a média. */
+  if(la.avaliadores||ca.avaliadores){
+    var novo=(_ct>_lt)?ca:la, velho=(novo===ca)?la:ca, av2={};
+    [velho.avaliadores||{},novo.avaliadores||{}].forEach(function(src){
+      Object.keys(src).forEach(function(q){
+        var r=src[q]; if(!r||typeof r!=='object') return;
+        var d=av2[q]||(av2[q]={nome:'',notas:{}});
+        Object.keys(r).forEach(function(f){ if(f!=='notas'&&r[f]!=null&&r[f]!=='') d[f]=r[f]; });
+        Object.keys(r.notas||{}).forEach(function(pc){
+          var lin=r.notas[pc]||{}, dst=d.notas[pc]||(d.notas[pc]={});
+          Object.keys(lin).forEach(function(v){ if(lin[v]!==''&&lin[v]!=null) dst[v]=lin[v]; else if(!(v in dst)) dst[v]=lin[v]; });
+        });
+      });
+    });
+    m.avaliadores=av2;
+    if(m.duplaLeitura&&typeof avConsolidar==='function'){ try{ avConsolidar(m); }catch(e){} }
+  }
   return m;
 }
 /* APLICAÇÃO: a edição mais nova vence — mas REGISTRO DE FATO não se perde.
@@ -2590,6 +2623,23 @@ function _mergeAplicacao(la,ca){
   if(mem.length) m.memoriasAnteriores=mem; else delete m.memoriasAnteriores;
   return m;
 }
+/* ABERTO OU FECHADO: A TRILHA DECIDE ==========================================
+   Reabrir apaga `finalizacao`. Na mescla por campo a cópia mais nova vence nos
+   campos que TEM, e um campo que ela não tem vinha da cópia velha: o
+   `finalizacao` apagado voltava da nuvem e o estudo reaparecia fechado nos
+   outros aparelhos (e no próprio, depois do sync), barrando as avaliações
+   lançadas após a reabertura. A trilha já é unida entre os aparelhos; o último
+   registro entre finalização e reabertura diz o estado. Sem nenhum dos dois na
+   trilha (dado antigo), devolve '' e nada muda. */
+function _estadoFechamentoPelaTrilha(audit){
+  var ult=null;
+  (Array.isArray(audit)?audit:[]).forEach(function(e){
+    if(!e||(e.action!=='Finalização do Estudo'&&e.action!=='Reabertura do Estudo')) return;
+    var t=e.ts||Date.parse(e.iso||'')||0;
+    if(!ult||t>=ult.t) ult={t:t,a:e.action};
+  });
+  return !ult?'':(ult.a==='Reabertura do Estudo'?'aberto':'fechado');
+}
 function _mergeStudy(ls,cs){
   /* escalares do estudo: a edição mais NOVA vence; empate/sem carimbo: local (compat) */
   var lt=ls._ts||0, ct=cs._ts||0, m={},k;
@@ -2601,6 +2651,7 @@ function _mergeStudy(ls,cs){
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
   if(Array.isArray(ls.audit)||Array.isArray(cs.audit)) m.audit=_mergeTrilha(ls.audit,cs.audit);
+  if(_estadoFechamentoPelaTrilha(m.audit)==='aberto'){ delete m.finalizacao; delete m.estatisticaFinal; }
   if(ls.condicaoInicial||cs.condicaoInicial) m.condicaoInicial=_mergeCondInicial(ls.condicaoInicial,cs.condicaoInicial,ct>lt);
   if(typeof ConhecimentoCore!=="undefined" && (ls.integracoes||cs.integracoes)) m.integracoes=ConhecimentoCore.merge(ls.integracoes,cs.integracoes);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
@@ -2638,8 +2689,15 @@ function _mergeNota(la,ca){
   if(!m.fotoLocal) m.fotoLocal = la.fotoLocal || ca.fotoLocal;
   return m;
 }
+function _restoreGeneration(st){
+  return Number(st&&st.data&&st.data.__config&&st.data.__config.restoreGeneration)||0;
+}
 function cloudMerge(local,cloud){
   if(!cloud) return local; if(!local) return cloud;
+  var lr=_restoreGeneration(local), cr=_restoreGeneration(cloud);
+  /* Restaurar foi uma substituição explícita. Uma cópia anterior à restauração
+     não pode reintroduzir nem apagar registros quando o aparelho reconectar. */
+  if(lr!==cr)return JSON.parse(JSON.stringify(lr>cr?local:cloud));
   var out={};
   var delQ=_mergeTombs(local._deletedQuadras,cloud._deletedQuadras)||{};
   var delL=_mergeTombs(local._deletedLocais,cloud._deletedLocais)||{};
@@ -4451,7 +4509,9 @@ function removerCroqui(){
   if(!_croquiEdit) return;
   var st=_estudoDe(_croquiEdit.qid,_croquiEdit.sid); if(!st) return;
   if(!confirm('Tirar o croqui deste ensaio do mapa?\nO ensaio e os dados continuam; só a posição é apagada.')) return;
-  delete st.croqui; st._ts=Date.now();
+  /* null, não delete: na mescla entre aparelhos um campo ausente voltava da
+     cópia mais velha e o croqui removido reaparecia; o null do lado mais novo vence. */
+  st.croqui=null; st._ts=Date.now();
   save();
   fecharCroquiEditor();
   if(typeof _stxToast==='function') _stxToast('Croqui removido do mapa.');
@@ -4639,6 +4699,29 @@ function updateAgendaBadge(){
 /* ============ DETAIL PANEL ============ */
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
 var NDVI_PROXY=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://localhost:8799':'https://ndvi-iracemapolis.onrender.com';
+/* O proxy (NDVI, clima, solo) só atende membro ativo do Agracta: cada pedido leva o
+   token de login do Firebase e o servidor confere — antes, qualquer pessoa com o
+   endereço gastava a cota do Sentinel e as chaves da Ecowitt. Sem login (sessão
+   local), o pedido sai sem token e o proxy decide. Se o token venceu no caminho
+   (401), renova uma vez e repete. /health e a legenda do solo são abertos. */
+function proxyFetch(url,opts){
+  function token(forcar){
+    try{ if(typeof window.agractaTokenLogin==='function') return Promise.resolve(window.agractaTokenLogin(!!forcar)).catch(function(){ return null; }); }catch(e){}
+    return Promise.resolve(null);
+  }
+  function pedir(tk){
+    var o={},k,h={},hs=(opts&&opts.headers)||{};
+    for(k in (opts||{})) o[k]=opts[k];
+    if(tk){ for(k in hs) h[k]=hs[k]; h.Authorization='Bearer '+tk; o.headers=h; }
+    return fetch(url,o);
+  }
+  return token(false).then(function(tk){
+    return pedir(tk).then(function(r){
+      if(!r||r.status!==401||!tk) return r;
+      return token(true).then(function(novo){ return (novo&&novo!==tk)?pedir(novo):r; });
+    });
+  });
+}
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null, ndviZonas=false;
 var _ndviAutoLatest=false,_ndviDatesSeq=0;
 function _lerpColor(a,b,t){ function h(s,i){return parseInt(s.substr(i,2),16);} function c(x){x=Math.max(0,Math.min(255,Math.round(x)));return (x<16?'0':'')+x.toString(16);} return '#'+c(h(a,1)+(h(b,1)-h(a,1))*t)+c(h(a,3)+(h(b,3)-h(a,3))*t)+c(h(a,5)+(h(b,5)-h(a,5))*t); }
@@ -4684,8 +4767,8 @@ function computeQuadraMeans(cb){
   if(_bboxDegenerada(bb)){ falhou('Não consegui definir a área das quadras para medir (mapa sem dimensão ou quadras sem contorno).'); return; }
   try{ ndviStatus('Medindo as quadras…','wait'); }catch(e){}
   var w=bb[0], s=bb[1], e=bb[2], n=bb[3];
-  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
-   .then(function(r){ if(!r.ok) throw new Error('o servidor NDVI respondeu '+r.status); return r.blob(); })
+  proxyFetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
+   .then(function(r){ if(!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error((j&&j.error)||('o servidor NDVI respondeu '+r.status)); }); return r.blob(); })
    .then(function(blob){ if(!blob) throw new Error('resposta vazia do servidor NDVI');
      var bu=URL.createObjectURL(blob), img=new Image();
      img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} falhou('Não consegui ler a imagem bruta do índice.'); };
@@ -4795,7 +4878,7 @@ function onProbeClick(e){
   if(!ndviDate){ ndviStatus('Escolha uma data primeiro.','err'); return; }
   var lat=e.latlng.lat, lng=e.latlng.lng, q=quadraAt(lat,lng);
   var pop=LF.popup({className:'ndvi-pop',maxWidth:230}).setLatLng(e.latlng).setContent('<div class="ndvi-pop-b">Consultando…</div>').openOn(_map);
-  fetch(NDVI_PROXY+'/point?lat='+lat+'&lng='+lng+'&date='+ndviDate)
+  proxyFetch(NDVI_PROXY+'/point?lat='+lat+'&lng='+lng+'&date='+ndviDate)
    .then(function(r){return r.json();}).then(function(d){
      if(d.error){ pop.setContent('<div class="ndvi-pop-b">Erro: '+esc(d.error)+'</div>'); return; }
      function row(l,v){ return '<div class="ndvi-pop-row"><span>'+l+'</span><b>'+(v==null?'—':(v>0?'+':'')+v.toFixed(2))+'</b></div>'; }
@@ -5586,14 +5669,27 @@ function deleteNote(noteId){
     }
   }
   if(idx!==-1){
-    _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
-    NOTAS_CAMPO.splice(idx,1);
-    saveNotas();
-    delete _FOTO_NOTA[noteId];
-    try{ var _stF=_fotosNotasStore(); if(_stF) _stF.apagar(noteId).catch(function(){}); }catch(e){}
-    try{ _map.closePopup(); }catch(e){}
-    renderNotas(true);
-    _stxToast("Observação excluída.");
+    /* A foto pode estar só no IndexedDB, ainda não carregada no cache. Antes
+       de apagá-la, inclua o arquivo no retrato e confirme uma cópia gravada. */
+    return _safetySnapshotPhotos(safetySnap()).then(function(snap){
+      var done, archived=new Promise(function(resolve){done=resolve;});
+      var local=safetyBackup('antes de excluir observação de campo',snap,done);
+      return (local?Promise.resolve(true):archived).then(function(guardado){
+        if(!guardado)throw Error('Não consegui guardar a cópia de segurança.');
+        var atual=NOTAS_CAMPO.findIndex(function(n){return n.id===noteId;});
+        if(atual<0)return false;
+        _delNotas[noteId]=Date.now(); try{ if(typeof dbSoftDelete==='function') dbSoftDelete('notas_campo',noteId); }catch(e){} /* Etapa 3 */
+        NOTAS_CAMPO.splice(atual,1);
+        saveNotas();
+        delete _FOTO_NOTA[noteId];
+        var apagada=Promise.resolve();
+        try{var st=_fotosNotasStore();if(st)apagada=st.apagar(noteId).catch(function(){});}catch(e){}
+        try{ _map.closePopup(); }catch(e){}
+        renderNotas(true);
+        _stxToast("Observação excluída.");
+        return apagada.then(function(){return true;});
+      });
+    }).catch(function(e){alert('Não foi possível guardar a observação e sua foto antes de excluir. A observação foi mantida.\n\n'+e.message);return false;});
   }
 }
 
@@ -5866,7 +5962,7 @@ function climaChipAtualiza(){
     var mac=climaMatch(ll),st=_climaStationByMac(mac);
     _climaChipMac=mac;
     if(!mac){ satelite(); return; }
-    fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(d){
+    proxyFetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(d){
       if(!atual()) return;
       if(!d||d.error){ satelite(); return; }
       var v=function(x){ return (x&&x.value!=null)?x.value:null; };
@@ -5874,7 +5970,7 @@ function climaChipAtualiza(){
     }).catch(satelite);
   }
   if(_climaStations){ comEstacoes(); return; }
-  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(arr){
+  proxyFetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){ if(r&&r.ok===false) throw new Error('HTTP '+r.status); return r.json(); }).then(function(arr){
     if(Array.isArray(arr)) _climaStations=arr;
     comEstacoes();
   }).catch(satelite);   /* proxy dormindo não pode deixar o chip vazio */
@@ -5903,7 +5999,7 @@ function climaChipIniciar(){
 function climaInit(){
   if(_climaStations){ climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad(); return; }
   climaSay('Identificando a melhor fonte para este ponto do mapa…');
-  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
+  proxyFetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
     if(!arr||arr.error){ climaSay((arr&&arr.error)||'Não consegui listar as estações.','err'); return; }
     _climaStations=arr; climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad();
   }).catch(function(){ _climaStations=[];climaMac=null;buildClimaPanel();climaLocalLoad(_climaMapCoord(),false); });
@@ -5921,7 +6017,7 @@ function climaLoad(){
   if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
   var seq=++_climaPanelSeq;
   climaSay('Carregando dados ao vivo…');
-  fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
+  proxyFetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
     if(seq!==_climaPanelSeq) return;
     if(!d||d.error){ climaMac=null;buildClimaPanel();climaLocalLoad(ll,false); return; }
     climaRender(d);
@@ -6044,7 +6140,7 @@ function ndviLoadDates(){
   var dt=new Date(); dt.setMonth(dt.getMonth()-6);
   var from=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   ndviStatus('Buscando datas disponíveis…');
-  fetch(NDVI_PROXY+'/dates?bbox='+bb.join(',')+'&from='+from+'&to='+to).then(function(r){return r.json();}).then(function(arr){
+  proxyFetch(NDVI_PROXY+'/dates?bbox='+bb.join(',')+'&from='+from+'&to='+to).then(function(r){return r.json();}).then(function(arr){
     if(seq!==_ndviDatesSeq)return;
     if(arr.error || !arr.length){ ndviStatus('Lista de datas indisponível — digite uma data no campo acima.'); return; }
     arr=arr.slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
@@ -6072,7 +6168,7 @@ function ndviLoadImage(){
   if(!ndviIndex || !ndviDate) return;
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   ndviStatus('Carregando '+ndviIndex+' de '+ndviDate+'…');
-  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb))
+  proxyFetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb))
    .then(function(r){ if(r.ok) return r.blob(); return r.json().then(function(j){ throw (j.error||'erro'); }); })
    .then(function(blob){
      var bu=URL.createObjectURL(blob), img=new Image();
@@ -6113,7 +6209,7 @@ function ndviSerie(id){
   var from=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   var ix=ndviIndex||'NDVI';
   showSerieModal(id, ix, 'carregando');
-  fetch(NDVI_PROXY+'/stats?index='+ix+'&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
+  proxyFetch(NDVI_PROXY+'/stats?index='+ix+'&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
    .then(function(r){return r.json();}).then(function(arr){
      if(arr.error){ showSerieModal(id, ix, null, arr.error); return; }
      showSerieModal(id, ix, arr);
@@ -6426,19 +6522,20 @@ function buildStudyRecord(qid,s){
   /* RESUMO consolidado: média de cada avaliação (+ % controle) e AUDPC numa tabela só, agrupado por variável */
   var _test=studyTestemunha(s), _avsR=_avsM;
   if(_avsR.length){
-    var _means={}; _avsR.forEach(function(a){ _means[a.data]=_avMeans(s,a); });
-    var _bv={}; _avsR.forEach(function(a){ if(!a.data)return; (a.variaveis||[]).forEach(function(v){ (_bv[v]=_bv[v]||[]).push({date:a.data}); }); });
-    function _audpc(v,tr){ var pts=_bv[v]; if(!pts||pts.length<2)return null; var t0=new Date(pts[0].date), days=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); var ss=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var mm=_means[pts[i].date], y=mm&&mm[tr]&&mm[tr][v]; if(y==null)return null; if(prev!=null)ss+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return ss; }
+    /* médias POR AVALIAÇÃO (não por data): duas avaliações no mesmo dia se sobrescreviam e a 1ª sumia do resumo e do AUDPC */
+    var _meansAv=_avsR.map(function(a){ return _avMeans(s,a); });
+    var _bv={}; _avsR.forEach(function(a,ai){ if(!a.data)return; (a.variaveis||[]).forEach(function(v){ (_bv[v]=_bv[v]||[]).push({date:a.data,m:_meansAv[ai]}); }); });
+    function _audpc(v,tr){ var pts=_bv[v]; if(!pts||pts.length<2)return null; var t0=new Date(pts[0].date), days=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); var ss=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var mm=pts[i].m, y=mm&&mm[tr]&&mm[tr][v]; if(y==null)return null; if(prev!=null)ss+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return ss; }
     L.push(''); L.push('RESUMO — media por avaliacao · (% controle vs testemunha '+_test+') · AUDPC');
     var _rh='Variavel\tTrat'; _avsR.forEach(function(a){ _rh+='\t'+(isoToBR(a.data)||''); }); _rh+='\tAUDPC';
     L.push(_rh);
     _vars.forEach(function(v){
       s.tratamentos.forEach(function(t){
         var isT=(t.id===_test), line=v+'\t'+t.id+(isTestemunha(s,t.id)?' (test.)':'');
-        _avsR.forEach(function(a){
-          var mm=_means[a.data], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
+        _avsR.forEach(function(a,ai){
+          var mm=_meansAv[ai], mv=mm[t.id]&&mm[t.id][v], tm=mm[_test]&&mm[_test][v];
           var cell=(mv!=null?String(_r1(mv)):'');
-          if(!isT){ var _c=_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
+          if(!isT){ var _c=_avEficacia(s,a,v,t.id,tm,mv); if(_c!=null) cell+=' ('+_r1(_c)+'%)'; }
           line+='\t'+cell;
         });
         var au=_audpc(v,t.id), tau=_audpc(v,_test), ac=(au!=null?String(Math.round(au)):'');
@@ -6487,7 +6584,7 @@ function studyFetchNdvi(qid,from,to,cb){
   ensureQGEO(); var pts=QGEO&&QGEO[qid]; if(!pts){ cb(null,'sem geometria'); return; }
   var ring=pts.map(function(p){return [p[1],p[0]];}); ring.push(ring[0]);
   var geom={type:'Polygon',coordinates:[ring]};
-  fetch(NDVI_PROXY+'/stats?index=NDVI&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
+  proxyFetch(NDVI_PROXY+'/stats?index=NDVI&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
    .then(function(r){return r.json();}).then(function(arr){ if(arr&&arr.error){cb(null,arr.error);return;} cb(arr||[]); })
    .catch(function(){ cb(null,'Servidor NDVI fora do ar (pode estar acordando ~50s).'); });
 }
@@ -6551,13 +6648,14 @@ function buildStudyModelo(qid, s, opts){
     var be=(typeof _bioestatResumo==='function')?_bioestatResumo(qid,s,a,v):null; /* motor BioEstat: fonte preferida das letras */
     var st=(typeof statDBC==='function')?statDBC(s,a,v):null; /* reserva: ANOVA-DBC + Tukey */
     lbl(13,c0,'AVALIAÇÃO — '+v+' · '+BR(a.data));
-    lbl(14,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(14,c0+1+ri,rl); }); lbl(14,c0+5,'média'); lbl(14,c0+6,'E%'); lbl(14,c0+7,'grupo');
+    var _metP=_avMetodoEficacia(s,a,v);
+    lbl(14,c0,'Trat.'); ['a','b','c','d'].forEach(function(rl,ri){ lbl(14,c0+1+ri,rl); }); lbl(14,c0+5,'média'); lbl(14,c0+6,_metP.metodo==='ht'?'E% (H-T)':(_metP.metodo==='previa'?'prévia':'E%')); lbl(14,c0+7,'grupo');
     function med(tid){ var vs=[]; for(var rp=1;rp<=reps;rp++){ var raw=_avNota(a,{key:_avRowKey(tid,rp),tratId:tid,rep:rp},v); if(raw!=null&&raw!==''){ var n=parseFloat(String(raw).replace(',','.')); if(!isNaN(n))vs.push(n);} } return vs.length?vs.reduce(function(x,y){return x+y;},0)/vs.length:null; }
     var tMed=test?med(test):null;
     trats.forEach(function(t,ti){ var r=15+ti; put(r,c0,ti+1);
       for(var rp=1;rp<=4;rp++){ var raw=(rp<=reps)?_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v):null; put(r,c0+rp, raw==null?'':raw); }
       var m=med(t.id); put(r,c0+5, m!=null?(Math.round(m*100)/100):'');
-      if(test && t.id!==test){ var _ec=_pctCtrl(tMed,m,_avSentido(a,v),_avTipo(a,v)); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
+      if(test && t.id!==test){ var _ec=_avEficacia(s,a,v,t.id,tMed,m,_metP); if(_ec!=null) put(r,c0+6, Math.round(_ec*10)/10); }
       var letra=(be&&be.letras&&be.letras[t.id]!=null)?be.letras[t.id]:((st&&st.letras)?(st.letras[t.id]||''):'');
       if(letra) put(r,c0+7, letra);
     });
@@ -6596,7 +6694,7 @@ function buildStudyModelo(qid, s, opts){
          lugar da conta para que a falta seja vista, não deduzida do branco. */
       if(dval>0 && !dunit){
         put(rr,9,'⚠ Unidade da dose não declarada no estudo — sem unidade não há conta. '+
-                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha).');
+                 'Declare no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha).');
       }else if(dval>0 && vol>0){
         /* Mistura também aqui: esta planilha é a que vai para a equipe de campo,
            e usava o motor de produto único — "1,5 L + 0,2%" saía como 1,5 L/ha e
@@ -6804,12 +6902,13 @@ function _sinergistaDynamicCells(qid,s){
     if(witness)nm='UNTREATED';
     else try{nm=(typeof tratProdutoNome==='function'?tratProdutoNome(t,true):t.produto)||'';}catch(e){nm=t.produto||'';}
     if(!nm)nm=tits.map(function(x){return x.nome||x.codigo||'';}).filter(Boolean).join(' + ');
-    var eq=null;try{eq=(typeof tratEquivalenteIA==='function')?tratEquivalenteIA(t):null;}catch(e){}
+    var eq=null;try{eq=(typeof tratEquivalenteIA==='function')?tratEquivalenteIA(t,s):null;}catch(e){}
     c['B'+row]=ix+1;c['C'+row]=nm;
     c['D'+row]=t.ingredienteAtivo||t.ia||tits.map(function(x){return x.ativos||'';}).filter(Boolean).join(' + ');
     c['E'+row]=t.concentracao||tits.map(function(x){return x.concentracao||'';}).filter(Boolean).join(' + ');
     c['F'+row]=(typeof doseTextoDe==='function')?doseTextoDe(s,t.dose):(t.dose||'');
-    c['G'+row]=t.concentracaoAtivo||((eq&&eq.valor!=null)?Math.round(eq.valor*1000)/1000:'');
+    /* equivalentesIA devolve UM item por ativo ({itens:[...]}); ler eq.valor deixava a coluna sempre vazia */
+    c['G'+row]=t.concentracaoAtivo||((eq&&eq.itens&&eq.itens.length)?(eq.itens.length===1?Math.round(eq.itens[0].valor*1000)/1000:eq.itens.map(function(x){return String(Math.round(x.valor*1000)/1000).replace('.',',');}).join(' + ')):'');
     c['H'+row]=s.numAplicacoes||'';
     c['I'+row]=(parseInt(s.numAplicacoes)>1)?(s.intervaloDias||''):'';
     c['J'+row]=t.volume||p.volumeCalda||'';
@@ -7036,9 +7135,10 @@ function _bioestatStatSheet(qid,s){
 }
 function _bioestatForensicSheet(qid,s){
   var H=['Local','Quadra','Estudo','Avaliacao_ID','Data','Variavel','Status','Linha','Veredito','Classe','Modo','Flags','Alertas','Testes_previstos','Testes_executados','Inconclusivos','Cobertura_pct','Cobertura_suficiente','Tipo_dado','Controle','N_grupos','Segundo_conjunto','Achado','Severidade','Executado','Estatistica','Leitura','Explicacao_inocente','Resumo','Aviso','Detalhes_JSON','Exportado_em','Exportado_por','Exportado_por_email'];
-  var out=[H],jobs=(typeof _bioestatJobs==='function'?_bioestatJobs(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
+  var out=[H],jobs=(typeof _bioestatJobsForense==='function'?_bioestatJobsForense(qid,s):[]),cache=_bioAutoCache[qid+'|'+s.id],res=cache&&cache.results||{};
   function add(job,status,linha,v,p,a,det){
     v=v||{};p=p||{};a=a||{};var b=_bioestatExportBase(qid,s,job);
+    if(job&&job.datasTexto) b.data=job.datasTexto;   /* triagem por variável: o período, não uma data */
     out.push([b.local,b.quadra,b.estudo,b.avaliacao,b.data,b.variavel,status,linha,v.nivel||'',v.classe||'',v.modo||p.modo||'',v.flags==null?'':v.flags,v.watches==null?'':v.watches,v.testes_previstos==null?'':v.testes_previstos,v.testes_executados==null?'':v.testes_executados,v.testes_inconclusivos==null?'':v.testes_inconclusivos,v.cobertura==null?'':Math.round(v.cobertura*10000)/100,v.cobertura_suficiente==null?'':(v.cobertura_suficiente?'sim':'não'),p.tipo_dado||'',p.controle==null?'':p.controle,p.n_grupos==null?'':p.n_grupos,p.tem_segundo_conjunto==null?'':(p.tem_segundo_conjunto?'sim':'não'),a.nome||'',a.severidade||'',a.executado==null?'':(a.executado?'sim':'não'),a.estatistica||'',a.leitura||'',a.explicacao_inocente||'',v.resumo||'',det&&det.aviso||'',_bioestatExcelJson(det),b.exportadoEm,b.exportadoPor,b.exportadoPorEmail]);
   }
   /* Triagem local de contingência: entrega indicadores descritivos auditáveis
@@ -7061,7 +7161,7 @@ function _bioestatForensicSheet(qid,s){
   }
   if(!jobs.length){add(null,'SEM_DADOS','Resumo',{}, {}, {}, {aviso:'Sem avaliação com dados suficientes para triagem.'});return out;}
   jobs.forEach(function(job){
-    var rel=res[job.jobKey+'|F'];
+    var rel=res[job.jobKey];
     if(!rel){addRapida(job,'');return;}
     if(!rel.ok){addRapida(job,rel.erro||'triagem não concluída');return;}
     var v=rel.veredito||{},p=rel.parametros||{};
@@ -7143,11 +7243,12 @@ async function downloadStudyWorkbook(qid,sid){
       if(!Object.keys(letras).length&&rapido&&rapido.letras)letras=rapido.letras;
       _xlsPut(ws,15,c0,'AVALIAÇÃO — '+v+' · '+isoToBR(a.data)); _xlsPut(ws,16,c0+7,'grupo');
       function media(tid){var vals=[];for(var rr=1;rr<=reps;rr++){var rv=_avNota(a,{key:_avRowKey(tid,rr),tratId:tid,rep:rr},v),nn=parseFloat(String(rv==null?'':rv).replace(',','.'));if(isFinite(nn))vals.push(nn);}return vals.length?vals.reduce(function(x,y){return x+y;},0)/vals.length:null;}
-      var mediaTest=test?media(test):null;
+      var mediaTest=test?media(test):null, _metX=_avMetodoEficacia(s,a,v);
+      if(_metX.metodo==='ht') _xlsPut(ws,16,c0+6,'E% (H-T)'); else if(_metX.metodo==='previa') _xlsPut(ws,16,c0+6,'prévia');
       (s.tratamentos||[]).forEach(function(t,ti){var r=17+ti;_xlsPut(ws,r,c0,ti+1);
         for(var rp=1;rp<=Math.min(4,reps);rp++){var raw=_avNota(a,{key:_avRowKey(t.id,rp),tratId:t.id,rep:rp},v);_xlsPut(ws,r,c0+rp,raw);}
         var med=media(t.id);if(med!=null)_xlsPut(ws,r,c0+5,Math.round(med*100)/100);
-        if(test&&t.id!==test){var ef=_pctCtrl(mediaTest,med,_avSentido(a,v),_avTipo(a,v));if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
+        if(test&&t.id!==test){var ef=_avEficacia(s,a,v,t.id,mediaTest,med,_metX);if(ef!=null)_xlsPut(ws,r,c0+6,Math.round(ef*10)/10);}
         if(letras[t.id])_xlsPut(ws,r,c0+7,letras[t.id]);
       });
     });});
@@ -7155,7 +7256,7 @@ async function downloadStudyWorkbook(qid,sid){
     _bioestatAppendSheet(wb,'Forense',_bioestatForensicSheet(qid,s));
     var nome=(s.codigo||'estudo').replace(/[^\w.-]+/g,'_')+'-Agracta.xlsx';
     XLSX.writeFile(wb,nome,{bookType:'xlsx',cellStyles:true});
-    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]&&cache.results[j.jobKey+'|F']);}).length;
+    var _pend=_aJobs.filter(function(j){return !(cache&&cache.results&&cache.results[j.jobKey]);}).length;
     var _errs=0; if(cache&&cache.results)Object.keys(cache.results).forEach(function(k){if(cache.results[k]&&cache.results[k].ok===false)_errs++;});
     _stxToast(_pend?'✓ Planilha baixada; estatística rápida incluída e '+_pend+' triagem(ns) avançada(s) identificada(s)':(_errs?'✓ Planilha baixada; revise '+_errs+' resultado(s) com alerta':'✓ Planilha completa: dados + estatística + forense'));
   }catch(e){console.error(e);alert('Não consegui gerar a planilha: '+e.message);}
@@ -7805,7 +7906,7 @@ function newStudy(){
        tabela dizerem "500 mL/ha" em vez de chutar L/ha, e o que decide qual
        receita a calculadora do laboratório abre. */
     doseModo:'campo',     /* campo | ppm */
-    /* '' | L/ha | mL/ha | g/ha | kg/ha — só vale em doseModo 'campo'.
+    /* '' | L/ha | mL/ha | g/ha | kg/ha | mg/ha — só vale em doseModo 'campo'.
        VAZIO É ESTADO LEGÍTIMO: quer dizer "ninguém declarou ainda", e não se
        resolve por chute. O padrão era 'L/ha', e o chute não ficava no rótulo:
        o motor de campo lê L/ha como valor×1000 em mL de LÍQUIDO, então um
@@ -7964,7 +8065,7 @@ function normalizeStudy(s){
                      .map(function(f){ return {tratId:f.tratId, qid:f.qid||'', areaHa:(f.areaHa!=null&&f.areaHa!==''?Number(f.areaHa):null)}; });
   }else if(s.faixas.length){ s.faixas=[]; }
   if(s.doseModo!=='ppm' && s.doseModo!=='campo') s.doseModo='campo';
-  if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(s.doseUnidade)<0){
+  if(['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(s.doseUnidade)<0){
     var _un={};
     if(typeof _calcDoseUnit==='function'){
       (s.tratamentos||[]).forEach(function(t){
@@ -8483,6 +8584,7 @@ function _avRowsForStudy(st,randomOrder){
   return out;
 }
 function _avNota(a,row,v){
+  if(typeof AvaliacaoCore!=='undefined'&&AvaliacaoCore.naoAplicavel(a,row,v))return '';
   var notas=(a&&a.notas)||{}, rr=notas[row.key]||{}, val=rr[v];
   if((val===''||val==null) && row.rep===1 && notas[row.tratId]) val=notas[row.tratId][v]; /* compat. notas antigas por tratamento */
   return val==null?'':val;
@@ -8753,8 +8855,9 @@ function _studyWorkflow(qid,study){
   var avs=study.avaliacoes||[], progresso=AvaliacaoCore.estudo(study), avFeitas=progresso.concluidas;
   var avaliacoes={id:'avaliacoes',label:'Avaliações',anchor:'study-stage-avaliacoes',state:!avs.length?'pending':(progresso.complete?'complete':(progresso.started?'active':'ready')),detail:avFeitas+' de '+avs.length+' concluídas'+(progresso.parciais?' · '+progresso.parciais+' parciais':'')};
   var jobs=(typeof _bioestatJobs==='function')?_bioestatJobs(qid,study):[], c=_bioAutoCache[qid+'|'+study.id], rr=c&&c.results||{};
-  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey+'|F'];});
-  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobs.some(function(j){return rr[j.jobKey+'|F']&&rr[j.jobKey+'|F'].ok===false;});
+  var jobsF=(typeof _bioestatJobsForense==='function')?_bioestatJobsForense(qid,study,jobs):[];
+  var anaDone=jobs.length>0&&jobs.every(function(j){return !!rr[j.jobKey];}), forDone=jobsF.length>0&&jobsF.every(function(j){return !!rr[j.jobKey];});
+  var anaErr=jobs.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;}), forErr=jobsF.some(function(j){return rr[j.jobKey]&&rr[j.jobKey].ok===false;});
   var analise={id:'analise',label:'Análise',anchor:'study-stage-analise',state:!progresso.started?'pending':(anaErr?'attention':(anaDone?'complete':(c&&c.status==='loading'?'active':'ready'))),detail:!progresso.started?'Aguardando dados':(anaErr?'Revisar falha de cálculo':(anaDone?'Resultados disponíveis':(c&&c.status==='loading'?'Calculando':'Pronta para calcular')))};
   var dossierOk=anaDone&&forDone&&!anaErr&&!forErr;
   var dossie={id:'dossie',label:'Dossiê',anchor:'study-stage-dossie',state:estudoFinalizado(study)?'complete':((anaErr||forErr)?'attention':(dossierOk?'ready':'pending')),detail:estudoFinalizado(study)?'Finalizado':((anaErr||forErr)?'Revisar pendências':(dossierOk?'Pronto para revisar':'Aguardando resultados'))};
@@ -9071,6 +9174,7 @@ function _calcDoseUnit(raw){
   var u=String(raw||'').toLowerCase();
   if(/m\s*l/.test(u)) return 'mL/ha';            /* mL antes de L */
   if(/k\s*g/.test(u)) return 'kg/ha';            /* kg antes de g */
+  if(/m\s*g/.test(u)) return 'mg/ha';            /* mg antes de g — senão "500 mg" virava 500 g/ha */
   if(/(^|[^k])g(\b|ramas|\s*\/)/.test(u)) return 'g/ha';
   return 'L/ha';
 }
@@ -9078,7 +9182,7 @@ function _calcDoseUnit(raw){
    que "não declarada" tenha um nome, em vez de ser o `else` de um if. */
 /* Função e não constante: os testes recortam funções nomeadas do app.js para
    rodar sem navegador, e uma `var` no topo do arquivo não vai junto no recorte. */
-function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha']; }
+function doseUnidades(){ return ['L/ha','mL/ha','g/ha','kg/ha','mg/ha']; }
 function doseUnidadeDeclarada(study){
   var d=study&&study.doseUnidade;
   return (doseUnidades().indexOf(d)>=0)?d:'';
@@ -10525,14 +10629,15 @@ function arenaDoseHtml(study, qid, onde){
   var h='<div class="se-section-title">'+(onde==='aplicacao'?'O que vai em cada pote':'Dose no pote')+'</div>';
   if(tb.area==null) return h+'<div class="calc-warn">⚠ Declare as medidas da arena no cadastro do estudo (etapa de preparo). Sem área, a dose por hectare não vira quantidade no pote.</div>';
   var semPeso=tb.pesoPelletMg==null;
+  if(typeof _avCss==='function') _avCss();
   h+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th><th>mg / pote</th><th>Pellets</th><th>Dose efetiva</th></tr></thead><tbody>';
   tb.linhas.forEach(function(l){
-    var nome=esc(l.id)+(l.produto?' · '+esc(l.produto):'');
+    var nome=_arenaTratCelula(l.id,l.produto,false);
     if(l.mg==null){
-      h+='<tr><td>'+nome+'</td><td>'+esc(l.dose||'—')+'</td><td colspan="3" style="opacity:.75">'+esc(l.motivo||'—')+'</td></tr>';
+      h+='<tr>'+nome+'<td>'+esc(l.dose||'—')+'</td><td colspan="3" style="opacity:.75">'+esc(l.motivo||'—')+'</td></tr>';
       return;
     }
-    h+='<tr><td>'+nome+'</td><td>'+esc(l.dose)+(l.unidade&&!/[a-zA-Z]/.test(l.dose)?' '+esc(l.unidade):'')+'</td>'+
+    h+='<tr>'+nome+'<td>'+esc(l.dose)+(l.unidade&&!/[a-zA-Z]/.test(l.dose)?' '+esc(l.unidade):'')+'</td>'+
        '<td>'+_arenaBR(l.mg,2)+'</td>'+
        '<td>'+(l.pelletsArred==null?'—':('<b>'+l.pelletsArred+'</b> <small style="opacity:.7">('+_arenaBR(l.pellets,2)+')</small>'))+'</td>'+
        '<td>'+(l.doseEfetiva==null?'—':(_arenaBR(l.doseEfetiva,2)+' '+esc(l.unidade)+(l.desvioPct!=null&&Math.abs(l.desvioPct)>=0.5?' <small style="opacity:.7">('+(l.desvioPct>0?'+':'')+_arenaBR(l.desvioPct,0)+'%)</small>':'')))+'</td></tr>';
@@ -10557,7 +10662,7 @@ function avConjuntoArena(){
     _avGrid.tipos[it.nome]=it.tipo;
     var cfg={};
     if(it.tipo==='razao'&&it.N>0) cfg.N=it.N;
-    if(it.tipo==='escala'){ cfg.escalaMax=it.escalaMax||4; if(it.escalaNome) cfg.escalaNome=it.escalaNome; }
+    if(it.tipo==='escala'){ cfg.escalaMax=it.escalaMax||4; if(it.escalaMin) cfg.escalaMin=it.escalaMin; if(it.escalaNome) cfg.escalaNome=it.escalaNome; }
     if(it.sentido==='maior') cfg.sentido='maior';
     _avGrid.varcfg[it.nome]=cfg;
   });
@@ -10669,6 +10774,14 @@ function arenaPontos(study){
   });
 }
 function _arenaCor(i){ var p=['#1f8a52','#2f85c9','#d69431','#9b59b6','#e0566b','#16a085','#c0392b','#f39c12','#27ae60','#8e44ad','#d35400','#7f8c8d']; return p[i%p.length]; }
+/* A primeira coluna das tabelas da arena. O nome do produto ia na mesma linha
+   do id e passava por cima das colunas ao lado; agora vai embaixo, dentro da
+   coluna, quebrando linha quando é longo. */
+function _arenaTratCelula(id, produto, testemunha){
+  return '<td class="av-tname av-trat"><b>'+esc(id)+'</b>'+
+    (produto?'<small>'+esc(produto)+'</small>':'')+
+    (testemunha?'<small class="av-trat-tag">testemunha</small>':'')+'</td>';
+}
 function _arenaLinhaSvg(serie, trats, test, rotuloY){
   var W=520,Hh=210,pl=34,pr=12,pt=10,pb=26, dias=[];
   trats.forEach(function(t){ (serie[t.id]||[]).forEach(function(p){ dias.push(p.dia); }); });
@@ -10709,12 +10822,13 @@ function arenaGraficosHtml(study, qid){
   var R=ArenaCore.resumo(cv,trats,test||null), tn={};
   trats.forEach(function(t){ tn[t.id]=t; });
   var ult=pts[pts.length-1];
+  if(typeof _avCss==='function') _avCss();
   var tb='<div class="res-title">Resultado no fim do ensaio <small style="opacity:.7">('+esc(ult.rotulo)+')</small></div>';
   tb+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dano final</th><th>AACPD</th><th>Proteção</th><th>Mortalidade</th><th>Abbott</th><th>≤50% vivos</th><th>Pellets atacados</th></tr></thead><tbody>';
   function pc(x){ return x==null?'—':_arenaBR(x,1)+'%'; }
   R.linhas.forEach(function(l){
     var t=tn[l.id]||{};
-    tb+='<tr'+(l.testemunha?' style="font-weight:700"':'')+'><td>'+esc(l.id)+(t.produto?' <small style="opacity:.7">'+esc(t.produto)+'</small>':'')+(l.testemunha?' <small>(testemunha)</small>':'')+'</td>'+
+    tb+='<tr'+(l.testemunha?' style="font-weight:700"':'')+'>'+_arenaTratCelula(l.id,t.produto,l.testemunha)+
         '<td>'+pc(l.danoFinal)+'</td><td>'+(l.aacpd==null?'—':_arenaBR(l.aacpd,1))+'</td><td>'+pc(l.protecao)+'</td>'+
         '<td>'+pc(l.mortalidadeFinal)+'</td><td>'+pc(l.abbott)+'</td><td>'+(l.dia50==null?'—':'D'+_fmtMom(l.dia50))+'</td><td>'+pc(l.pelletsAtacados)+'</td></tr>';
   });
@@ -10724,6 +10838,683 @@ function arenaGraficosHtml(study, qid){
       :'Base da proteção e do Abbott: <b>'+esc(test)+'</b>, a primeira testemunha marcada — deve ser a <b>infestada</b>. A testemunha sem organismo não se marca como testemunha.')+
      ' Proteção = redução da AACPD de dano frente à testemunha. "≤50% vivos" é o primeiro dia em que a média de sobreviventes chegou à metade — leitura, não interpolação.</div>';
   return '<div class="sd-section" id="study-arena-graficos"><div class="sd-section-title">Gráficos da arena</div>'+H+tb+'</div>';
+}
+
+/* ===================== BIOENSAIOS DE BANCADA (vendor/bioensaio-core.js) ==============
+   Torre de Potter (Entomologia) e crescimento micelial em placa (Fitopatologia).
+   O método NÃO é mais uma pergunta: sai do tipo do estudo numa quadra de
+   laboratório. O protocolo é escrito UMA vez, aqui; a primeira avaliação nasce
+   com as variáveis certas e o N de cada arena; o resumo — mortalidade, Abbott,
+   validade da testemunha, IOBC, inibição do crescimento, IVCM, fim pela borda,
+   CL50/CE50 — sai sozinho, com a referência de cada conta ao lado.
+   ===================================================================================== */
+function bioensaioMetodo(study, qid){
+  if(!window.BioensaioCore||!study) return '';
+  var lab=false, met=null;
+  try{ lab=(typeof isQuadraLab==='function')&&!!isQuadraLab(qid); }catch(e){}
+  try{ met=lab?studyMetodo(study,qid):null; }catch(e){}
+  return BioensaioCore.metodoDoEstudo(study, lab, met);
+}
+function bioensaioProt(study, qid){
+  var m=bioensaioMetodo(study,qid); return m?BioensaioCore.protocolo(study,m):null;
+}
+function _bioBR(x,c){ return (x==null||!isFinite(x))?'—':Number(x).toLocaleString('pt-BR',{maximumFractionDigits:(c==null?1:c)}); }
+
+/* ---------- protocolo (editor do estudo) ---------- */
+function _bioCampoHtml(k, rot, val, ph, dica, texto){
+  return '<div class="se-field"><label>'+rot+'</label><input type="text" id="seBio_'+k+'" value="'+
+    esc(val==null?'':(typeof val==='number'?String(val).replace('.',','):String(val)))+'" placeholder="'+esc(ph||'')+'"'+
+    (dica?' oninput="_seBioDica()"':'')+(texto?'':' inputmode="decimal"')+'></div>';
+}
+function bioensaioEditorHtml(s){
+  var m=bioensaioMetodo(s, curV); if(!m) return '';
+  var def=BioensaioCore.METODOS[m], b=((s.bioensaio&&s.bioensaio[m])||{}), P=BioensaioCore.protocolo(s,m);
+  function v(k){ return (b[k]==null||b[k]==='')?'':b[k]; }
+  function pd(k){ var x=def.parametros[k].padrao; return (x==null||x==='')?'':String(x).replace('.',','); }
+  var h='<div class="se-section-title">'+esc(def.rotulo)+' <span style="font-weight:400;opacity:.7">· protocolo do bioensaio</span></div>';
+  h+='<input type="hidden" id="seBioMetodo" value="'+esc(m)+'">';
+  if(m==='potter'){
+    h+='<div class="e-hint" style="margin:2px 0 8px">Escrito uma vez, vale para todas as leituras. O N de cada arena é o <b>nº de organismos por unidade</b> da arena, logo abaixo — a avaliação já nasce com ele (Potter, 1952).</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('volumeMl','Volume pulverizado (mL)',v('volumeMl'),pd('volumeMl'))+
+       _bioCampoHtml('pressaoKpa','Pressão (kPa)',v('pressaoKpa'),'ex.: 68,9')+'</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('depositoAlvo','Depósito alvo (mg/cm²)',v('depositoAlvo'),'do POP do laboratório',true)+
+       _bioCampoHtml('depositoTolPct','Tolerância (%)',v('depositoTolPct'),pd('depositoTolPct'),true)+'</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('pesoAntesG','Calibração: massa antes (g)',v('pesoAntesG'),'0,0000',true)+
+       _bioCampoHtml('pesoDepoisG','massa depois (g)',v('pesoDepoisG'),'0,0000',true)+
+       _bioCampoHtml('superficieCm','Ø da superfície pesada (cm)',v('superficieCm'),'= Ø da arena',true)+'</div>';
+    h+='<div class="e-hint" id="seBioDica" style="margin:-2px 0 8px">'+_bioDicaTexto(m,P)+'</div>';
+    var cat=P.categoria;
+    h+='<div class="se-row"><div class="se-field"><label>O organismo é</label><select id="seBio_categoria">'+
+       '<option value="praga"'+(cat!=='inimigo'?' selected':'')+'>Praga (alvo do produto)</option>'+
+       '<option value="inimigo"'+(cat==='inimigo'?' selected':'')+'>Inimigo natural (seletividade · IOBC)</option></select></div>'+
+       _bioCampoHtml('estagio','Estágio',v('estagio'),'adultos, ninfas, larvas L2…',false,true)+'</div>';
+    h+=_bioCampoHtml('criterio','Critério de morte',v('criterio'),pd('criterio'),false,true);
+    h+='<div class="se-row">'+_bioCampoHtml('limiteTestemunha','Mortalidade máxima da testemunha (%)',v('limiteTestemunha'),pd('limiteTestemunha'))+
+       '<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" id="seBio_moribundoMorto"'+(P.moribundoMorto?' checked':'')+' style="width:auto"> Moribundo conta como morto</label></div></div>';
+    h+='<div class="e-hint" style="margin:-2px 0 8px">Testemunha acima do limite invalida a leitura; entre 5% e o limite, a eficácia é corrigida por Abbott (WHO, 2016). Inimigo natural recebe a classe IOBC do laboratório (Hassan, 1994; Sterk et al., 1999).</div>';
+  }else{
+    h+='<div class="e-hint" style="margin:2px 0 8px">Meio envenenado (Grover &amp; Moore, 1962). A leitura anota o diâmetro da colônia em cruz; a média, o crescimento sem o disco e a inibição saem sozinhos. O Ø da placa também é a escala da medição por foto.</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('placaMm','Ø interno da placa (mm)',v('placaMm'),pd('placaMm'))+
+       _bioCampoHtml('discoMm','Disco de micélio (mm)',v('discoMm'),pd('discoMm'))+
+       _bioCampoHtml('bordaPct','Fim: testemunha a (% da placa)',v('bordaPct'),pd('bordaPct'))+'</div>';
+    h+='<div class="se-row">'+_bioCampoHtml('meio','Meio de cultura',v('meio'),pd('meio'),false,true)+
+       _bioCampoHtml('temperaturaC','Temperatura (°C)',v('temperaturaC'),pd('temperaturaC'))+
+       _bioCampoHtml('fotoperiodo','Fotoperíodo',v('fotoperiodo'),'12 h luz / 12 h escuro',false,true)+'</div>';
+    h+=_bioCampoHtml('isolado','Isolado / espécie',v('isolado'),'ex.: Sclerotinia sclerotiorum, isolado SS-12',false,true);
+  }
+  return h;
+}
+function _bioDicaTexto(m,P){
+  if(m!=='potter'||!window.BioensaioCore) return '';
+  var dep=BioensaioCore.depositoPotter(P.pesoAntesG,P.pesoDepoisG,P.superficieCm||P.arenaDiametroCm);
+  if(dep.mgCm2==null) return 'Depósito: '+esc(dep.motivo)+' — pese a superfície antes e depois da pulverização.';
+  var al=BioensaioCore.depositoNoAlvo(dep.mgCm2,P.depositoAlvo,P.depositoTolPct);
+  return 'Depósito: <b>'+_bioBR(dep.mgCm2,2)+' mg/cm²</b>'+(al?(al.dentro?' ✓ dentro do alvo':' ⚠ '+_bioBR(al.desvioPct,1)+'% do alvo — recalibre a torre'):'');
+}
+function _bioLerCampos(get, metodo){
+  var def=window.BioensaioCore&&BioensaioCore.METODOS[metodo]; if(!def) return null;
+  var o={};
+  Object.keys(def.parametros).forEach(function(k){
+    var e=get('seBio_'+k); if(!e) return;
+    var pd=def.parametros[k].padrao;
+    if(typeof pd==='boolean'){ o[k]=!!e.checked; return; }
+    var t=String(e.value==null?'':e.value).trim(); if(t==='') return;
+    if(typeof pd==='number'||pd===null){ var n=_arenaNum(t); if(n!=null&&n>=0) o[k]=n; }
+    else o[k]=t;
+  });
+  return o;
+}
+function _seBioDica(){
+  var d=document.getElementById('seBioDica'), mEl=document.getElementById('seBioMetodo'); if(!d||!mEl) return;
+  var s=JSON.parse(JSON.stringify(workingStudy||{})); s.bioensaio=s.bioensaio||{};
+  s.bioensaio[mEl.value]=_bioLerCampos(function(id){ return document.getElementById(id); }, mEl.value)||{};
+  try{ if(document.getElementById('seArForma')) s.arena=_arenaLerCampos(function(id){ return document.getElementById(id); }); }catch(e){}
+  d.innerHTML=_bioDicaTexto(mEl.value, BioensaioCore.protocolo(s, mEl.value));
+}
+/* Grava só o método que está na tela; o do outro método (se o tipo do estudo mudou)
+   fica guardado, para não sumir com o que alguém escreveu. */
+function bioensaioLerEditor(get, atual){
+  var mEl=get('seBioMetodo'), m=mEl&&mEl.value, out=JSON.parse(JSON.stringify((atual&&typeof atual==='object')?atual:{}));
+  if(!m) return out;
+  var o=_bioLerCampos(get,m); if(o) out[m]=o;
+  return out;
+}
+function bioensaioResumoTexto(study, qid){
+  var m=bioensaioMetodo(study, qid==null?curV:qid); if(!m) return '';
+  var P=BioensaioCore.protocolo(study,m), t=[];
+  if(m==='potter'){
+    if(P.volumeMl!=null) t.push(_bioBR(P.volumeMl,2)+' mL');
+    if(P.pressaoKpa!=null) t.push(_bioBR(P.pressaoKpa,1)+' kPa');
+    var dep=BioensaioCore.depositoPotter(P.pesoAntesG,P.pesoDepoisG,P.superficieCm||P.arenaDiametroCm);
+    if(dep.mgCm2!=null) t.push('depósito '+_bioBR(dep.mgCm2,2)+' mg/cm²'+(P.depositoAlvo?' (alvo '+_bioBR(P.depositoAlvo,2)+')':''));
+    if(P.individuosPorArena) t.push(_bioBR(P.individuosPorArena,0)+' '+(P.organismo||'indivíduos')+'/arena');
+    if(P.estagio) t.push(P.estagio);
+    t.push(P.categoria==='inimigo'?'inimigo natural':'praga');
+    t.push('testemunha até '+_bioBR(P.limiteTestemunha,0)+'%');
+  }else{
+    t.push('placa Ø '+_bioBR(P.placaMm,0)+' mm'); t.push('disco '+_bioBR(P.discoMm,1)+' mm');
+    if(P.meio) t.push(P.meio); if(P.temperaturaC!=null) t.push(_bioBR(P.temperaturaC,1)+' °C');
+    if(P.fotoperiodo) t.push(P.fotoperiodo); if(P.isolado) t.push(P.isolado);
+  }
+  return t.join(' · ');
+}
+
+/* ---------- avaliação: nasce com o protocolo ---------- */
+/* A PRIMEIRA avaliação de um bioensaio nascia vazia e cada leitura pedia para
+   criar a coluna à mão — nome, tipo, sub-amostras, N. Agora o esquema vem do
+   método (e as seguintes herdam dele, como sempre). */
+function bioensaioSemente(study, qid){
+  var m=bioensaioMetodo(study,qid); if(!m) return null;
+  var P=BioensaioCore.protocolo(study,m), out={metodo:m, variaveis:[], tipos:{}, varcfg:{}};
+  BioensaioCore.variaveisIniciais(m,P).forEach(function(v){
+    out.variaveis.push(v.nome); out.tipos[v.nome]=v.tipo;
+    var c={}; if(v.sub) c.sub=v.sub; if(v.N) c.N=v.N; if(v.sentido) c.sentido=v.sentido;
+    out.varcfg[v.nome]=c;
+  });
+  return out.variaveis.length?out:null;
+}
+/* O N declarado uma vez (organismos por arena) vale de padrão em toda leitura em
+   que a mortalidade n/N ainda não tenha N padrão próprio. */
+function bioensaioPadraoN(study, qid, grid){
+  if(!grid) return;
+  var m=bioensaioMetodo(study,qid); if(m!=='potter') return;
+  var P=BioensaioCore.protocolo(study,m); if(!(P.individuosPorArena>0)) return;
+  (grid.variaveis||[]).forEach(function(v){
+    if(_avTipo(grid,v)!=='razao' || BioensaioCore.papelDaVariavel('potter',v)!=='mortalidade') return;
+    if(!grid.varcfg||typeof grid.varcfg!=='object') grid.varcfg={};
+    var c=grid.varcfg[v]||{};
+    if(!(_numBR(c.N,0)>0)) grid.varcfg[v]=Object.assign({},c,{N:Math.round(P.individuosPorArena)});
+  });
+}
+/* Diâmetro da colônia: o que o editor de sub-amostras precisa saber da placa. */
+function _avBioPlaca(v){
+  try{
+    var st=_avStudy(); if(!st||bioensaioMetodo(st,curV)!=='placa') return null;
+    if(BioensaioCore.papelDaVariavel('placa',v)!=='diametro') return null;
+    return BioensaioCore.protocolo(st,'placa');
+  }catch(e){ return null; }
+}
+function avSubTomouPlaca(){
+  if(!_avSubCtx) return;
+  var P=_avBioPlaca(_avSubCtx.v); if(!P||!(P.placaMm>0)) return;
+  var cfg=_avCfg(_avGrid,_avSubCtx.v);
+  for(var i=0;i<cfg.sub;i++) _avWriteBruto(_avSubCtx.key,_avSubCtx.v,'s'+i,String(P.placaMm));
+  _avPersistNow(); _avSubRender();
+}
+
+/* ---------- os dados do ensaio, lidos da grade ---------- */
+function _bioDias(study, av){
+  var base=study.avalInicio||study.dataInicio||'', daa=null;
+  try{ if(base&&av.data) daa=Math.round((new Date(av.data+'T00:00:00')-new Date(base+'T00:00:00'))/864e5); }catch(e){}
+  var m=avMomento(av, daa==null?0:daa);
+  return {dias:m.dias, rotulo:(m.explicito?m.rotulo:(daa!=null?(daa+' DAT'):(isoToBR(av.data)||av.data||'')))};
+}
+function _bioTestemunha(study){
+  var ts=study.tratamentos||[], t=ts.filter(function(x){ return x&&x.testemunha; })[0];
+  if(t) return t.id;
+  var z=ts.filter(function(x){ var d=_arenaDoseValor(x&&x.dose); return x && d===0; })[0];
+  return z?z.id:'';
+}
+function bioensaioDados(study, qid){
+  var m=bioensaioMetodo(study,qid); if(!m) return null;
+  var P=BioensaioCore.protocolo(study,m), papel=(m==='placa')?'diametro':'mortalidade', nomeVar=null;
+  (study.avaliacoes||[]).forEach(function(av){ (av.variaveis||[]).forEach(function(v){
+    if(!nomeVar && BioensaioCore.papelDaVariavel(m,v)===papel) nomeVar=v; }); });
+  var serie=null; try{ serie=_doseSerieDoEstudo(study); }catch(e){}
+  var test=_bioTestemunha(study);
+  var trats=(study.tratamentos||[]).filter(function(t){ return t&&t.id; }).map(function(t){
+    var d=(serie&&serie.doses[t.id]!=null)?serie.doses[t.id]:_arenaDoseValor(t.dose);
+    return {id:t.id, nome:t.produto||'', dose:d, doseTexto:t.dose||'', testemunha:t.id===test};
+  });
+  var ds={metodo:m, prot:P, testemunha:test, variavel:nomeVar, tratamentos:trats, serie:serie, leituras:[]};
+  if(!nomeVar){ ds.vazio=true; return ds; }
+  var rows=_avRowsForStudy(study,false);
+  (study.avaliacoes||[]).forEach(function(av){
+    if(!av||(av.variaveis||[]).indexOf(nomeVar)<0) return;
+    var tipo=_avTipo(av,nomeVar), parcelas=[];
+    rows.forEach(function(rw){
+      var cel=_avCel(av,rw.key,nomeVar,false), nota=_avNota(av,rw,nomeVar);
+      if(m==='potter'){
+        if(tipo!=='razao'||!cel) return;
+        if(cel.n==null||String(cel.n).trim()==='') return;
+        var N=(cel.N==null||String(cel.N).trim()==='')?((av.varcfg&&av.varcfg[nomeVar]&&av.varcfg[nomeVar].N)||''):cel.N;
+        parcelas.push({tratId:rw.tratId, rep:rw.rep, n:cel.n, N:N});
+      }else{
+        var sub=(cel&&Array.isArray(cel.sub))?cel.sub.filter(function(x){ return x!=null&&String(x).trim()!==''; }):[];
+        if(!sub.length && (nota==null||String(nota).trim()==='')) return;
+        parcelas.push({tratId:rw.tratId, rep:rw.rep, sub:sub, valor:nota});
+      }
+    });
+    if(!parcelas.length) return;
+    var d=_bioDias(study,av);
+    ds.leituras.push({avId:av.id, jobKey:(av.id||av.data)+'|'+nomeVar, rotulo:d.rotulo, dias:d.dias, data:av.data, parcelas:parcelas});
+  });
+  ds.leituras.sort(function(a,b){ return (a.dias||0)-(b.dias||0); });
+  if(!ds.leituras.length) ds.vazio=true;
+  return ds;
+}
+/* O que o motor estatístico já calculou para esta leitura (CL50/CE50 com IC). */
+function _bioMotor(qid, sid, jobKey){
+  try{ var c=_bioAutoCache[qid+'|'+sid]; var r=c&&c.results&&c.results[jobKey]; return r||null; }catch(e){ return null; }
+}
+
+/* TL50/TL90 do motor "Mortalidade no tempo" (Kaplan-Meier + log-rank). */
+function _bioTL50(rel, study){
+  if(!rel) return {pendente:true};
+  if(!rel.ok) return {erro:rel.erro||'não foi possível analisar'};
+  var km=rel.kaplan_meier||{}, curvas=km.curvas||[];
+  if(!curvas.length) return null;
+  var eixo=null; try{ eixo=_bioestatEixoTempo(study); }catch(e){}
+  var un=(eixo&&eixo.unidade==='HAT')?'h':'d';
+  var lr=km.logrank&&km.logrank.p!=null?km.logrank:null;
+  return {un:un, linhas:curvas.map(function(c){ return {tratId:String(c.tratamento), lt50:(c.LT50==null?null:Number(c.LT50)), lt90:(c.LT90==null?null:Number(c.LT90)), mortes:c.mortes, n:c.n}; }), logrank:lr};
+}
+/* ---------- o que o painel e o laudo leem do mesmo jeito ---------- */
+/* Série de um gráfico de linha: por tratamento, o campo de cada leitura. */
+function _bioSeries(R, trats, campo){
+  var s={};
+  trats.forEach(function(t){ s[t.id]=R.leituras.map(function(L){
+    var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0];
+    return (l&&l[campo]!=null)?{x:L.dias, y:l[campo], rotulo:L.rotulo}:null; }).filter(Boolean); });
+  return s;
+}
+function _bioXRotulos(R){ return R.leituras.map(function(L){ return {x:L.dias, rot:L.rotulo}; }); }
+/* Dose letal de probabilidade p (0,5 → CL50) na análise binomial do motor. */
+function _bioDL(a, p){ return ((a&&a.doses_letais)||[]).filter(function(x){ return Math.abs(x.p-p)<1e-9; })[0]||null; }
+function _bioPontosPotter(a){ return ((a&&a.tabela_doses)||[]).filter(function(t){ return t.dose>0; }).map(function(t){ return {dose:t.dose, y:100*(t.prop_obs||0)}; }); }
+/* CE50 absoluta (metade do crescimento da testemunha) da curva contínua. */
+function _bioCE50(a){ return ((a&&a.doses_efetivas_absolutas)||[]).filter(function(q){ return q.nivel===50; })[0]||null; }
+/* Pontos da curva de dose da placa: crescimento (Ø − disco) de cada placa tratada. */
+function _bioPontosPlaca(Lf, trats, P){
+  var pts=[];
+  ((Lf&&Lf.parcelas)||[]).forEach(function(p){
+    var t=trats.filter(function(x){ return x.id===p.tratId; })[0]; if(!t||!(t.dose>0)) return;
+    var dm=(p.sub&&p.sub.length)?BioensaioCore.diametroMedio(p.sub):BioensaioCore.num(p.valor);
+    if(dm!=null) pts.push({dose:t.dose, y:BioensaioCore.crescimento(dm,P.discoMm)}); });
+  return pts;
+}
+/* ---------- gráficos ---------- */
+/* Marcas do eixo em números redondos: 0, 30, 60, 90 mm — e não 23, 45, 68. */
+function _bioMarcas(yMax){
+  var passos=[1,2,2.5,5,10,15,20,25,30,50,100,200,250,500], m=null;
+  for(var i=0;i<passos.length;i++){ var n=yMax/passos[i]; if(n<=6 && Math.abs(n-Math.round(n))<1e-9){ m=passos[i]; break; } }
+  if(!m){ for(var j=0;j<passos.length;j++){ if(yMax/passos[j]<=6){ m=passos[j]; break; } } }
+  if(!m) m=yMax/4;
+  var out=[]; for(var v=0; v<=yMax+1e-9; v+=m) out.push(v);
+  if(out[out.length-1]<yMax-1e-9) out.push(yMax);
+  return out;
+}
+/* rótulo do eixo x colado na borda sai inteiro: âncora no início ou no fim */
+function _bioAncora(x, x0, x1){ return (x<=x0+1e-9)?'start':((x>=x1-1e-9)?'end':'middle'); }
+/* Abertura do SVG: na tela ele se ajusta à largura; no LAUDO (o.arquivo) ele é
+   um arquivo autônomo — namespace, tamanho fixo e fundo branco —, porque vira
+   imagem no DOCX e no PDF. */
+function _bioSvgAbre(W, H, o, rotulo){
+  if(o&&o.arquivo) return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" font-family="Arial, Helvetica, sans-serif"><rect width="'+W+'" height="'+H+'" fill="#ffffff"/>';
+  return '<svg width="100%" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(rotulo||'')+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px;max-width:640px;display:block">';
+}
+function _bioLinhaSvg(series, trats, test, o){
+  var W=520,Hh=220,pl=40,pr=12,pt=12,pb=30, xs=[];
+  trats.forEach(function(t){ (series[t.id]||[]).forEach(function(p){ xs.push(p.x); }); });
+  if(!xs.length) return '';
+  var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs); if(x1<=x0){ x0=x0-1; x1=x1+1; }
+  var yMax=o.yMax||100;
+  function X(v){ return pl+(W-pl-pr)*(v-x0)/(x1-x0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(yMax,y))/yMax); }
+  /* no arquivo a legenda vai DENTRO do desenho: 4 tratamentos por linha */
+  var comDado=trats.filter(function(t){ return (series[t.id]||[]).length; });
+  var linhasLeg=o.arquivo?Math.ceil(comDado.length/4):0, HT=Hh+(linhasLeg?(8+linhasLeg*16):0);
+  var h=_bioSvgAbre(W, HT, o, o.titulo);
+  _bioMarcas(yMax).forEach(function(g){ var y=Y(g);
+    h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'"/>';
+    h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+_bioBR(g,1)+(o.yUnid||'')+'</text>'; });
+  if(o.ref && o.ref.y!=null){ var yr=Y(o.ref.y);
+    h+='<line x1="'+pl+'" y1="'+yr.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+yr.toFixed(1)+'" stroke="#b91c1c" stroke-dasharray="4 3"/>'+
+       '<text x="'+(W-pr)+'" y="'+(yr-3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#b91c1c">'+esc(o.ref.rot||'')+'</text>'; }
+  (o.xRotulos||[]).forEach(function(r){ h+='<text x="'+X(r.x).toFixed(1)+'" y="'+(Hh-12)+'" font-size="9" text-anchor="'+_bioAncora(r.x,x0,x1)+'" fill="#8a948e">'+esc(r.rot)+'</text>'; });
+  if(o.xTitulo) h+='<text x="'+((pl+W-pr)/2)+'" y="'+(Hh-1)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+esc(o.xTitulo)+'</text>';
+  var leg='';
+  trats.forEach(function(t,ti){
+    var ps=series[t.id]||[]; if(!ps.length) return;
+    var col=(t.id===test)?'#222':_arenaCor(ti);
+    h+='<path d="'+ps.map(function(p,k){ return (k?'L':'M')+X(p.x).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ')+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"'+(t.id===test?' stroke-dasharray="5 3"':'')+'/>';
+    /* no arquivo do laudo, sem <title>: dica de mouse não existe numa imagem */
+    ps.forEach(function(p){ h+='<circle cx="'+X(p.x).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.2" fill="'+col+'" stroke="#fff" stroke-width="1.5">'+(o.arquivo?'':'<title>'+esc(t.id+(t.nome?' · '+t.nome:'')+' — '+(p.rotulo||'')+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title>')+'</circle>'; });
+    leg+='<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 2px 0;font-size:10px;color:#26312b"><span style="width:12px;height:3px;background:'+col+';display:inline-block;border-radius:2px"></span>'+esc(t.id)+(t.id===test?' (testemunha)':'')+'</span>';
+  });
+  if(o.arquivo){
+    comDado.forEach(function(t,k){
+      var ti=trats.indexOf(t), col=(t.id===test)?'#222':_arenaCor(ti), lx=pl+(k%4)*120, ly=Hh+14+Math.floor(k/4)*16;
+      h+='<line x1="'+lx+'" y1="'+(ly-3)+'" x2="'+(lx+14)+'" y2="'+(ly-3)+'" stroke="'+col+'" stroke-width="3"'+(t.id===test?' stroke-dasharray="4 2"':'')+'/>'+
+         '<text x="'+(lx+18)+'" y="'+ly+'" font-size="10" fill="#26312b">'+esc(t.id+(t.id===test?' (testemunha)':''))+'</text>';
+    });
+    return h+'</svg>';
+  }
+  return h+'</svg><div style="margin:4px 0 2px;line-height:1.8">'+leg+'</div>';
+}
+/* Curva de dose: pontos observados e a curva ajustada pelo motor, dose em log. */
+function _bioDoseSvg(pontos, curva, o){
+  var ps=(pontos||[]).filter(function(p){ return p.dose>0&&p.y!=null&&isFinite(p.y); });
+  var cs=(curva||[]).filter(function(p){ return p.dose>0&&p.y!=null&&isFinite(p.y); });
+  if(ps.length<2 && cs.length<2) return '';
+  var W=520,Hh=220,pl=40,pr=12,pt=12,pb=30, lx=ps.concat(cs).map(function(p){ return Math.log10(p.dose); });
+  var x0=Math.min.apply(null,lx), x1=Math.max.apply(null,lx); if(x1<=x0){ x0-=1; x1+=1; }
+  var yMax=o.yMax||100;
+  function X(d){ return pl+(W-pl-pr)*(Math.log10(d)-x0)/(x1-x0); } function Y(y){ return pt+(Hh-pt-pb)*(1-Math.max(0,Math.min(yMax,y))/yMax); }
+  var h=_bioSvgAbre(W, Hh, o, o.titulo||'Curva de dose');
+  _bioMarcas(yMax).forEach(function(g){ var y=Y(g);
+    h+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="'+(g===0?'#c9d4cc':'#eef2ee')+'"/>';
+    h+='<text x="'+(pl-4)+'" y="'+(y+3).toFixed(1)+'" font-size="9" text-anchor="end" fill="#8a948e">'+_bioBR(g,1)+(o.yUnid||'')+'</text>'; });
+  for(var e=Math.ceil(x0);e<=Math.floor(x1);e++){ var xe=pl+(W-pl-pr)*(e-x0)/(x1-x0);
+    h+='<text x="'+xe.toFixed(1)+'" y="'+(Hh-12)+'" font-size="9" text-anchor="'+_bioAncora(e,x0,x1)+'" fill="#8a948e">'+_bioBR(Math.pow(10,e),4)+'</text>'; }
+  h+='<text x="'+((pl+W-pr)/2)+'" y="'+(Hh-1)+'" font-size="9" text-anchor="middle" fill="#8a948e">'+esc(o.xTitulo||'dose (escala log)')+'</text>';
+  if(cs.length>1) h+='<path d="'+cs.map(function(p,k){ return (k?'L':'M')+X(p.dose).toFixed(1)+' '+Y(p.y).toFixed(1); }).join(' ')+'" fill="none" stroke="#1f8a52" stroke-width="2"/>';
+  ps.forEach(function(p){ h+='<circle cx="'+X(p.dose).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="3.4" fill="#2f85c9" stroke="#fff" stroke-width="1.5">'+(o.arquivo?'':'<title>'+esc(_bioBR(p.dose,4)+': '+_bioBR(p.y,1)+(o.yUnid||''))+'</title>')+'</circle>'; });
+  if(o.marca && o.marca.dose>0 && Math.log10(o.marca.dose)>=x0 && Math.log10(o.marca.dose)<=x1){
+    var xm=X(o.marca.dose);
+    h+='<line x1="'+xm.toFixed(1)+'" y1="'+pt+'" x2="'+xm.toFixed(1)+'" y2="'+(Hh-pb)+'" stroke="#b91c1c" stroke-dasharray="4 3"/>'+
+       '<text x="'+(xm+3).toFixed(1)+'" y="'+(pt+9)+'" font-size="9" fill="#b91c1c">'+esc(o.marca.rot||'')+'</text>';
+  }
+  return h+'</svg>';
+}
+function _bioCurvaBinomial(rel){
+  /* a curva ajustada do motor: P = C + (1 − C)·F(b0 + b1·log10 dose) */
+  var a=rel&&rel.analise; if(!a||a.slope==null||a.intercepto==null) return [];
+  var C=(a.resposta_natural&&a.resposta_natural.metodo!=='ausente'&&a.resposta_natural.C)||0;
+  var ds=(a.tabela_doses||[]).filter(function(t){ return t.dose>0; }).map(function(t){ return t.dose; });
+  if(ds.length<2) return [];
+  var lo=Math.log10(Math.min.apply(null,ds))-0.3, hi=Math.log10(Math.max.apply(null,ds))+0.3, out=[];
+  function F(z){ if(a.link==='probit'){ var t=1/(1+0.2316419*Math.abs(z)), d=0.3989423*Math.exp(-z*z/2), p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274)))); return z>0?1-p:p; } return 1/(1+Math.exp(-z)); }
+  for(var i=0;i<=60;i++){ var x=lo+(hi-lo)*i/60; out.push({dose:Math.pow(10,x), y:100*(C+(1-C)*F(a.intercepto+a.slope*x))}); }
+  return out;
+}
+
+/* ---------- o painel ---------- */
+function _bioRefsHtml(chaves){
+  var refs=BioensaioCore.refsDe(chaves); if(!refs.length) return '';
+  return '<details class="bio-refs" style="margin-top:8px"><summary style="font-size:10.5px;color:#486053;cursor:pointer">Referências ('+refs.length+')</summary>'+
+    '<ol style="margin:5px 0 0;padding-left:18px;font-size:10px;color:#5f6f66;line-height:1.5">'+refs.map(function(r){ return '<li>'+esc(r.abnt)+'</li>'; }).join('')+'</ol></details>';
+}
+function _bioChip(txt, cor){
+  var c={ok:['#e8f5ec','#1f6f43'],alerta:['#fff6e0','#8a6d18'],erro:['#fdeaea','#a33']}[cor||'ok'];
+  return '<span style="display:inline-block;margin:0 5px 4px 0;padding:2px 7px;border-radius:999px;font-size:10.5px;background:'+c[0]+';color:'+c[1]+'">'+txt+'</span>';
+}
+function _bioPainelPotter(qid, sid, study, ds, R, refs){
+  var H='', test=ds.testemunha, trats=ds.tratamentos;
+  if(R.deposito && R.deposito.mgCm2!=null){
+    var al=R.depositoNoAlvo;
+    H+=_bioChip('Depósito '+_bioBR(R.deposito.mgCm2,2)+' mg/cm²'+(al?(al.dentro?' ✓':' ⚠ '+_bioBR(al.desvioPct,1)+'%'):''), al&&!al.dentro?'alerta':'ok');
+  }
+  R.leituras.forEach(function(L){
+    var v=L.validade, cor=(v.estado==='invalido')?'erro':(v.estado==='sem'?'alerta':'ok');
+    H+=_bioChip(esc(L.rotulo)+': testemunha '+(L.testemunhaMort==null?'—':_bioBR(L.testemunhaMort,1)+'%')+(v.estado==='invalido'?' ✗ repetir':(v.estado==='sem'?'':' ✓')), cor);
+  });
+  /* uma coluna por leitura: mortalidade e eficácia de Abbott */
+  H+='<div class="av-scroll" style="margin-top:4px"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th>';
+  R.leituras.forEach(function(L){ H+='<th>'+esc(L.rotulo)+'<br><small style="font-weight:400">mort. · Abbott</small></th>'; });
+  if(R.prot.categoria==='inimigo') H+='<th>IOBC<br><small style="font-weight:400">'+esc(R.final?R.final.rotulo:'')+'</small></th>';
+  H+='</tr></thead><tbody>';
+  trats.forEach(function(t){
+    H+='<tr'+(t.id===test?' style="font-weight:700"':'')+'><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+esc(t.doseTexto||'')+'</td>';
+    R.leituras.forEach(function(L){
+      var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{};
+      var inval=(L.validade.estado==='invalido');
+      H+='<td title="'+esc((l.mortos!=null?(l.mortos+' de '+l.avaliados+' em '+l.arenas+' arena(s)'):'sem leitura'))+'">'+
+        (l.mortalidade==null?'—':_bioBR(l.mortalidade,1)+'%')+
+        (t.id===test?'':' · '+(l.abbott==null?'—':(inval?'<s>':'')+_bioBR(l.abbott,1)+'%'+(inval?'</s>':'')))+'</td>';
+    });
+    if(R.prot.categoria==='inimigo'){
+      var lf=R.final?R.final.linhas.filter(function(x){ return x.tratId===t.id; })[0]:null;
+      H+='<td>'+((lf&&lf.iobc)?(lf.iobc.classe+' · '+esc(lf.iobc.rotulo)):'—')+'</td>';
+    }
+    H+='</tr>';
+  });
+  H+='</tbody></table></div>';
+  H+='<div class="e-hint" style="margin:3px 0 0">Mortalidade = mortos ÷ avaliados, somados nas arenas. Eficácia = Abbott (1925) / Schneider-Orelli (1947): (tratado − testemunha) ÷ (100 − testemunha). Leitura com a testemunha acima do limite sai riscada.</div>';
+  /* curva de mortalidade no tempo */
+  if(R.leituras.length>1) H+='<div class="res-title">Mortalidade × tempo</div>'+_bioLinhaSvg(_bioSeries(R,trats,'mortalidade'), trats, test, {yMax:100, yUnid:'%', titulo:'Mortalidade por tratamento ao longo das leituras',
+    xRotulos:_bioXRotulos(R)});
+  /* TL50 e TL90: em quanto tempo metade (e 90%) dos indivíduos morre, por
+     tratamento — da curva de sobrevivência de Kaplan & Meier (1958) que o motor
+     "Mortalidade no tempo" já ajusta; o log-rank (Mantel, 1966) compara as
+     curvas inteiras, não só a última leitura. */
+  if(R.leituras.length>1){
+    var tl=_bioTL50(_bioMotor(qid,sid,'__tempo__|'+ds.variavel), study);
+    if(tl && tl.linhas){
+      H+='<div class="res-title">TL50 e TL90 <small style="opacity:.7">(Kaplan &amp; Meier, 1958)</small></div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>TL50</th><th>TL90</th><th>mortos/N</th></tr></thead><tbody>'+
+        tl.linhas.map(function(l){ return '<tr><td class="av-tname">'+esc(l.tratId)+(l.tratId===test?' ●':'')+'</td><td>'+(l.lt50==null?'não chegou':_bioBR(l.lt50,1)+' '+tl.un)+'</td><td>'+(l.lt90==null?'não chegou':_bioBR(l.lt90,1)+' '+tl.un)+'</td><td style="color:#7a877f">'+(l.mortes==null?'—':(l.mortes+'/'+l.n))+'</td></tr>'; }).join('')+
+        '</tbody></table></div>'+(tl.logrank?'<div class="e-hint" style="margin:3px 0 0">Log-rank χ²('+tl.logrank.gl+') = '+_bioBR(tl.logrank.qui2,2)+', p '+(tl.logrank.p<0.001?'< 0,001':'= '+_bioBR(tl.logrank.p,3))+(tl.logrank.significativo?' — as curvas diferem':' — sem diferença entre as curvas')+' (Mantel, 1966). "Não chegou": o tratamento não atingiu a mortalidade no período lido.</div>':'');
+      refs.push('kaplanMeier1958','mantel1966');
+    }else if(tl && tl.pendente){
+      H+='<div class="e-hint" style="margin:6px 0 0">TL50: calculando no motor estatístico…</div>';
+    }
+  }
+  /* CL50/CL90 — do motor estatístico, leitura a leitura */
+  if(ds.serie){
+    var linhas='', ultimoRel=null, ultimoRot='';
+    ds.leituras.forEach(function(L){
+      var rel=_bioMotor(qid,sid,L.jobKey), a=rel&&rel.ok&&rel.analise;
+      if(!a||!a.doses_letais){ linhas+='<tr><td class="av-tname">'+esc(L.rotulo)+'</td><td colspan="4" style="color:#8a948e">'+(rel&&rel.ok===false?esc(rel.erro||'sem curva'):'calculando no motor estatístico…')+'</td></tr>'; return; }
+      function cl(p){ var d=_bioDL(a,p); if(!d) return '—';
+        return _bioBR(d.dose,3)+' <small style="color:#7a877f">('+(d.ic_inf!=null?_bioBR(d.ic_inf,3)+'–'+_bioBR(d.ic_sup,3):'IC não estimável')+')</small>'; }
+      var rn=a.resposta_natural||{};
+      linhas+='<tr><td class="av-tname">'+esc(L.rotulo)+'</td><td>'+cl(0.5)+'</td><td>'+cl(0.9)+'</td><td>'+_bioBR(a.slope,2)+' ± '+_bioBR(a.slope_se,2)+'</td><td>'+
+        (a.p_qui_quadrado==null?'—':('χ² p='+_bioBR(a.p_qui_quadrado,3)))+(rn.metodo==='estimada'?(' · C='+_bioBR(100*rn.C,1)+'%'):'')+'</td></tr>';
+      ultimoRel=rel; ultimoRot=L.rotulo;
+    });
+    H+='<div class="res-title">CL50 e CL90 <small style="opacity:.7">('+esc(ds.serie.unidade||'dose')+' · Robertson et al., 2007)</small></div>'+
+       '<div class="av-scroll"><table class="av-table"><thead><tr><th>Leitura</th><th>CL50 (IC 95%)</th><th>CL90 (IC 95%)</th><th>Inclinação</th><th>Aderência · resp. natural</th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
+    if(ultimoRel){
+      var a2=ultimoRel.analise, pts=_bioPontosPotter(a2), c50=_bioDL(a2,0.5);
+      H+='<div class="res-title">Curva de dose-resposta <small style="opacity:.7">('+esc(ultimoRot)+')</small></div>'+
+        _bioDoseSvg(pts, _bioCurvaBinomial(ultimoRel), {yMax:100, yUnid:'%', xTitulo:'concentração ('+(ds.serie.unidade||'dose')+', escala log)', marca:c50?{dose:c50.dose, rot:'CL50 '+_bioBR(c50.dose,3)}:null})+
+        '<div class="e-hint" style="margin:3px 0 0">Pontos: mortalidade observada em cada concentração. Curva: o modelo com a resposta natural da testemunha (C) — a CL50 é a concentração que mata 50% além da mortalidade natural, por isso ela cruza a curva um pouco acima de 50%.</div>';
+      refs.push('robertson2007','finney1971');
+    }
+  }else if(trats.length>2){
+    H+='<div class="e-hint" style="margin:6px 0 0">CL50 aparece quando os tratamentos formam uma série de concentrações do mesmo produto (3 ou mais níveis, mesma unidade).</div>';
+  }
+  return H;
+}
+function _bioPainelPlaca(qid, sid, study, ds, R, refs){
+  var H='', test=ds.testemunha, trats=ds.tratamentos, P=R.prot, F=R.final;
+  if(R.fim) H+=_bioChip('Fim do ensaio: '+esc(R.fim.rotulo)+' — testemunha na borda', 'ok');
+  else if(R.leituras.length){
+    var ul=R.leituras[R.leituras.length-1];
+    H+=_bioChip('Testemunha em '+_bioBR(ul.testemunhaDiametro,1)+' de '+_bioBR(P.placaMm,0)+' mm — siga as leituras até '+_bioBR(P.bordaPct,0)+'% da placa', 'alerta');
+  }
+  if(F){
+    H+='<div class="res-title">'+esc(F.rotulo)+(R.fim?' · leitura final':' · última leitura')+'</div>';
+    H+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Dose</th><th>Ø médio (mm)</th><th>Crescimento (mm)</th><th>Inibição</th><th>IVCM</th><th>Taxa radial</th></tr></thead><tbody>';
+    trats.forEach(function(t){
+      var l=F.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{}, pt=R.porTratamento[t.id]||{};
+      H+='<tr'+(t.id===test?' style="font-weight:700"':'')+'><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+esc(t.doseTexto||'')+'</td>'+
+        '<td>'+_bioBR(l.diametro,1)+(l.dpDiametro!=null?' <small style="color:#7a877f">± '+_bioBR(l.dpDiametro,1)+'</small>':'')+'</td>'+
+        '<td>'+_bioBR(l.crescimento,1)+'</td><td>'+(t.id===test?'—':(l.inibicao==null?'—':_bioBR(l.inibicao,1)+'%'))+'</td>'+
+        '<td>'+_bioBR(pt.ivcm,2)+'</td><td>'+(pt.taxa?_bioBR(pt.taxa.mmDia,2)+' mm/dia':'—')+'</td></tr>';
+    });
+    H+='</tbody></table></div>';
+    H+='<div class="e-hint" style="margin:3px 0 0">Ø médio = média da cruz em cada placa. Crescimento = Ø − disco de '+_bioBR(P.discoMm,1)+' mm. Inibição = (testemunha − tratado) ÷ testemunha, sobre o crescimento (Vincent, 1947). IVCM = Σ(D − D anterior) ÷ dias (Oliveira, 1991). Taxa radial = inclinação do raio no tempo.</div>';
+  }
+  if(R.leituras.length>1) H+='<div class="res-title">Crescimento da colônia × dias</div>'+_bioLinhaSvg(_bioSeries(R,trats,'diametro'), trats, test, {yMax:P.placaMm||90, yUnid:' mm', titulo:'Diâmetro médio da colônia por tratamento',
+    ref:{y:P.placaMm, rot:'borda da placa'}, xTitulo:'dias após a repicagem', xRotulos:_bioXRotulos(R)});
+  /* CE50 — curva de dose do motor sobre o crescimento (sem o disco) */
+  if(ds.serie){
+    var Lf=null; ds.leituras.forEach(function(L){ if(F && L.avId===F.avId) Lf=L; });
+    var rel=Lf?_bioMotor(qid,sid,Lf.jobKey):null, a=rel&&rel.ok&&rel.analise;
+    if(a && a.doses_efetivas_absolutas){
+      var ce=_bioCE50(a);
+      var un=ds.serie.unidade||'', cls=(ce&&ce.dose!=null)?BioensaioCore.classeEdgington(ce.dose, un):null;
+      H+='<div class="res-title">CE50 <small style="opacity:.7">('+esc(F.rotulo)+' · curva log-logística sobre o crescimento)</small></div>';
+      if(ce && ce.dose!=null){
+        H+='<div style="font-size:12px;margin:2px 0 4px"><b>CE50 = '+_bioBR(ce.dose,4)+' '+esc(un)+'</b> <small style="color:#7a877f">(IC 95% '+(ce.ic_inf!=null?_bioBR(ce.ic_inf,4)+'–'+_bioBR(ce.ic_sup,4):'não estimável')+')</small>'+
+          (ce.extrapolado?' '+_bioChip('fora das concentrações testadas','alerta'):'')+'</div>';
+        if(cls && cls.classe) H+=_bioChip(esc(cls.rotulo)+' (Edgington et al., 1971)', cls.classe<=2?'ok':'alerta');
+        else if(cls && cls.motivo) H+='<div class="e-hint">'+esc(cls.motivo)+'</div>';
+      }else if(ce){
+        H+='<div class="e-hint">CE50 não sai: '+esc(ce.motivo||'a curva não chega a 50% de redução')+'.</div>';
+      }
+      var curva=(a.curva||[]).map(function(q){ return {dose:q.dose, y:q.ajustado}; });
+      H+=_bioDoseSvg(_bioPontosPlaca(Lf,trats,P), curva, {yMax:Math.max(P.placaMm||90, 1), yUnid:' mm', xTitulo:'concentração ('+un+', escala log)', marca:(ce&&ce.dose)?{dose:ce.dose, rot:'CE50 '+_bioBR(ce.dose,3)}:null});
+      refs.push('edgington1971');
+    }else if(Lf){
+      H+='<div class="e-hint" style="margin:6px 0 0">'+(rel&&rel.ok===false?('CE50: '+esc(rel.erro||'a curva não fechou')):'CE50: calculando no motor estatístico…')+'</div>';
+    }
+  }else if(trats.length>2){
+    H+='<div class="e-hint" style="margin:6px 0 0">CE50 aparece quando os tratamentos formam uma série de concentrações do mesmo produto (4 ou mais níveis positivos, mesma unidade).</div>';
+  }
+  return H;
+}
+function bioensaioPainelHtml(qid, sid, study){
+  var ds=null; try{ ds=bioensaioDados(study,qid); }catch(e){ ds=null; }
+  if(!ds) return '';
+  var def=BioensaioCore.METODOS[ds.metodo];
+  var H='<div class="sd-section" id="study-bioensaio"><div class="sd-section-title">'+esc(def.rotulo)+' <span style="font-weight:400;color:#8a948e">· resultado automático</span></div>';
+  var prot=bioensaioResumoTexto(study,qid);
+  if(prot) H+='<div class="e-hint" style="margin:0 0 6px">Protocolo: '+esc(prot)+'</div>';
+  if(ds.vazio){
+    return H+'<div class="e-hint">As contas aparecem quando houver leitura com <b>'+(ds.metodo==='placa'?'Diâmetro da colônia (mm)':'Mortalidade (mortos/N)')+'</b>.</div></div>';
+  }
+  var R=BioensaioCore.resumo(ds), refs=(def.refs||[]).slice();
+  (R.refs||[]).forEach(function(x){ refs.push(x.chave); });
+  H+=(ds.metodo==='potter')?_bioPainelPotter(qid,sid,study,ds,R,refs):_bioPainelPlaca(qid,sid,study,ds,R,refs);
+  if(R.avisos.length) H+='<ul style="margin:6px 0 0;padding-left:16px;font-size:10.5px;color:#8a6d18;line-height:1.5">'+R.avisos.map(function(a){ return '<li>'+esc(a)+'</li>'; }).join('')+'</ul>';
+  return H+_bioRefsHtml(refs)+'</div>';
+}
+
+/* ===== O BIOENSAIO NO LAUDO ==================================================
+   O painel acima só existia na tela do estudo: o laudo exportado (Word, PDF,
+   Markdown) levava as médias descritivas e o anexo e deixava de fora justamente
+   o resultado do bioensaio — mortalidade com Abbott, validade da testemunha,
+   TL50, CL50/CE50 e os gráficos. Aqui o mesmo resumo vira seções do laudo
+   (tabelas em texto) e figuras (SVG autônomo, que o relatório desenha como
+   imagem). Os números do motor vêm do que foi PRESERVADO no fechamento — ou do
+   que já está calculado, se o estudo segue aberto: exportar não recalcula
+   nada, e o que faltar sai dito como faltando, com o motivo. */
+function bioensaioRelatorio(qid, study, analise, finalizado){
+  var ds=null; try{ ds=bioensaioDados(study,qid); }catch(e){ ds=null; }
+  if(!ds) return null;
+  var def=BioensaioCore.METODOS[ds.metodo], P=ds.prot||{}, test=ds.testemunha, trats=ds.tratamentos, tit=def.rotulo;
+  var res=(analise&&analise.results)||{}, noManifesto={}, refs=(def.refs||[]).slice(), secoes=[], figuras=[];
+  ((analise&&analise.jobs)||[]).forEach(function(j){ noManifesto[j.jobKey]=1; });
+  function motor(k){ return res[k]||null; }
+  /* por que um número do motor não está no laudo — dito, e não em branco */
+  function motivo(k){
+    var rel=motor(k);
+    if(rel&&rel.ok) return 'o motor não ajustou curva nesta leitura';
+    if(rel) return rel.erro||'o motor estatístico não conseguiu calcular';
+    if(!analise) return finalizado?'o fechamento deste estudo não preservou as análises do motor':'motor estatístico indisponível nesta versão';
+    if(!noManifesto[k]) return 'leitura sem análise automática (repetições ou tratamentos insuficientes)';
+    return finalizado?'não estava calculado no fechamento do estudo':'o motor estatístico ainda calculava quando o laudo foi gerado';
+  }
+  function n(x,c){ return _bioBR(x,c); }
+  function nomeT(id){ return id+(id===test?' (testemunha)':''); }
+  function figura(svg, legenda){
+    if(!svg) return;
+    var m=/width="(\d+)" height="(\d+)"/.exec(svg);
+    figuras.push({svg:svg, legenda:legenda, largura:m?Number(m[1]):520, altura:m?Number(m[2]):240});
+  }
+  /* protocolo: o que foi declarado uma vez */
+  var prot=[['Método', tit+' — '+def.descricao]];
+  if(ds.metodo==='potter'){
+    var dep=BioensaioCore.depositoPotter(P.pesoAntesG,P.pesoDepoisG,P.superficieCm||P.arenaDiametroCm);
+    var al=(dep.mgCm2!=null)?BioensaioCore.depositoNoAlvo(dep.mgCm2,P.depositoAlvo,P.depositoTolPct):null;
+    prot.push(['Organismo', (P.organismo||'Não registrado')+(P.estagio?' · '+P.estagio:'')]);
+    prot.push(['Categoria', P.categoria==='inimigo'?'Inimigo natural (classes IOBC)':'Praga']);
+    prot.push(['Indivíduos por arena', P.individuosPorArena!=null?n(P.individuosPorArena,0):'Não registrado']);
+    prot.push(['Critério de morte', (P.criterio||'Não registrado')+(P.moribundoMorto?' · moribundo conta como morto':' · moribundo conta como vivo')]);
+    prot.push(['Volume pulverizado', P.volumeMl!=null?n(P.volumeMl,2)+' mL':'Não registrado']);
+    prot.push(['Pressão', P.pressaoKpa!=null?n(P.pressaoKpa,1)+' kPa':'Não registrada']);
+    prot.push(['Depósito', dep.mgCm2==null?'Não pesado':(n(dep.mgCm2,2)+' mg/cm²'+(P.depositoAlvo?(' · alvo '+n(P.depositoAlvo,2)+' mg/cm² ± '+n(P.depositoTolPct,0)+'%'+(al?(al.dentro?' · dentro':' · fora ('+n(al.desvioPct,1)+'%)'):'')):''))]);
+    prot.push(['Mortalidade máxima da testemunha', n(P.limiteTestemunha,0)+'%']);
+  }else{
+    prot.push(['Placa (diâmetro interno)', n(P.placaMm,0)+' mm']);
+    prot.push(['Disco de micélio', P.discoMm!=null?n(P.discoMm,1)+' mm':'Não registrado']);
+    prot.push(['Meio de cultura', P.meio||'Não registrado']);
+    prot.push(['Temperatura', P.temperaturaC!=null?n(P.temperaturaC,1)+' °C':'Não registrada']);
+    if(P.fotoperiodo) prot.push(['Fotoperíodo', P.fotoperiodo]);
+    prot.push(['Isolado / espécie', P.isolado||'Não registrado']);
+    prot.push(['Fim do ensaio', 'quando a testemunha chegar a '+n(P.bordaPct,0)+'% da placa']);
+  }
+  prot.push(['Variável lida', ds.variavel||'Nenhuma leitura ainda']);
+  prot.push(['Testemunha', test||'Nenhum tratamento marcado']);
+  if(ds.serie) prot.push(['Série de concentrações', ds.serie.niveis+' níveis ('+(ds.serie.unidade||'dose')+')']);
+  secoes.push({title:tit+' · protocolo', text:'Declarado uma vez no protocolo do estudo. As contas a seguir são automáticas, cada uma com a sua referência.', headers:['Item','Registro'], rows:prot});
+  if(ds.vazio){
+    secoes.push({title:tit+' · resultados', text:'Sem leitura de '+(ds.metodo==='placa'?'diâmetro da colônia':'mortalidade (mortos/N)')+' registrada até a exportação.', headers:[], rows:[]});
+  }else{
+    var R=BioensaioCore.resumo(ds);
+    (R.refs||[]).forEach(function(x){ refs.push(x.chave); });
+    if(ds.metodo==='potter') _bioLaudoPotter(R);
+    else _bioLaudoPlaca(R);
+    if(R.avisos.length) secoes.push({title:tit+' · avisos', text:'Pontos a conferir antes de assinar o laudo.', headers:['Aviso'], rows:R.avisos.map(function(a){ return [a]; })});
+  }
+  var lista=BioensaioCore.refsDe(refs);
+  if(lista.length) secoes.push({title:tit+' · referências', text:'Fontes das fórmulas e dos critérios usados nas seções do bioensaio (ABNT).', headers:['Referência'], rows:lista.map(function(r){ return [r.abnt]; })});
+  return {versao:1, metodo:ds.metodo, titulo:tit, variavel:ds.variavel||'', secoes:secoes, figuras:figuras};
+
+  function _bioLaudoPotter(R){
+    var inimigo=(R.prot.categoria==='inimigo');
+    var cab=['Leitura','Tratamento','Dose','Mortos / avaliados','Arenas','Mortalidade (%)','Eficácia Abbott (%)'].concat(inimigo?['Classe IOBC']:[]), linhas=[];
+    R.leituras.forEach(function(L){
+      var inval=(L.validade.estado==='invalido');
+      trats.forEach(function(t){
+        var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{};
+        var ef=(t.id===test)?'—':(l.abbott==null?'—':n(l.abbott,1)+(inval?' (leitura inválida)':''));
+        linhas.push([L.rotulo, nomeT(t.id), t.doseTexto||'—', l.mortos!=null?(l.mortos+' / '+l.avaliados):'—', l.arenas||'—', l.mortalidade==null?'—':n(l.mortalidade,1), ef]
+          .concat(inimigo?[(l.iobc&&t.id!==test)?(l.iobc.classe+' · '+l.iobc.rotulo):'—']:[]));
+      });
+    });
+    secoes.push({title:tit+' · mortalidade e eficácia', text:'Mortalidade = mortos ÷ avaliados, somados nas arenas. Eficácia = Abbott (1925) / Schneider-Orelli (1947): (tratado − testemunha) ÷ (100 − testemunha). '+
+      'Leitura com a testemunha acima de '+n(R.prot.limiteTestemunha,0)+'% não sustenta eficácia (WHO, 2016) e sai marcada como inválida.'+
+      (inimigo?' Classe IOBC de laboratório (Hassan, 1994; Sterk et al., 1999): 1 inócuo (< 30%), 2 levemente nocivo (30–79%), 3 moderadamente nocivo (80–99%), 4 nocivo (> 99%).':''),
+      headers:cab, rows:linhas});
+    secoes.push({title:tit+' · validade da testemunha', text:'Critério da WHO (2016): até 5% dispensa correção; acima disso a eficácia é corrigida por Abbott; acima do limite do protocolo a leitura é repetida.',
+      headers:['Leitura','Mortalidade da testemunha (%)','Situação'], rows:R.leituras.map(function(L){ return [L.rotulo, n(L.testemunhaMort,1), L.validade.texto]; })});
+    if(R.leituras.length>1){
+      figura(_bioLinhaSvg(_bioSeries(R,trats,'mortalidade'), trats, test, {yMax:100, yUnid:'%', xRotulos:_bioXRotulos(R), arquivo:true}),
+        'Mortalidade (%) por tratamento ao longo das leituras ('+R.leituras.map(function(L){ return L.rotulo; }).join(', ')+'). Linha tracejada: testemunha.');
+      /* TL50 e TL90 — só quando o estudo tem o job de sobrevivência no tempo */
+      var kT='__tempo__|'+ds.variavel;
+      if(noManifesto[kT]||res[kT]){
+        var tl=_bioTL50(motor(kT), study);
+        if(tl && tl.linhas){
+          secoes.push({title:tit+' · TL50 e TL90', text:'Tempo até 50% e 90% de mortalidade, da curva de sobrevivência de Kaplan & Meier (1958), interpolado entre leituras. "Não atingiu": o tratamento não chegou a essa mortalidade no período lido.'+
+            (tl.logrank?(' Log-rank (Mantel, 1966): χ²('+tl.logrank.gl+') = '+n(tl.logrank.qui2,2)+', p '+(tl.logrank.p<0.001?'< 0,001':'= '+n(tl.logrank.p,3))+(tl.logrank.significativo?' — as curvas de sobrevivência diferem.':' — sem diferença entre as curvas.')):''),
+            headers:['Tratamento','TL50','TL90','Mortos / N'],
+            rows:tl.linhas.map(function(l){ return [nomeT(l.tratId), l.lt50==null?'Não atingiu':n(l.lt50,1)+' '+tl.un, l.lt90==null?'Não atingiu':n(l.lt90,1)+' '+tl.un, l.mortes==null?'—':(l.mortes+' / '+l.n)]; })});
+          refs.push('kaplanMeier1958','mantel1966');
+        }else{
+          secoes.push({title:tit+' · TL50 e TL90', text:'TL50 fora deste laudo: '+(tl&&tl.erro?tl.erro:motivo(kT))+'.', headers:[], rows:[]});
+        }
+      }
+    }
+    if(ds.serie){
+      var linhasCL=[], ultimo=null;
+      ds.leituras.forEach(function(L){
+        var rel=motor(L.jobKey), a=rel&&rel.ok&&rel.analise;
+        if(!a||!a.doses_letais){ linhasCL.push([L.rotulo, 'Fora do laudo: '+motivo(L.jobKey), '—', '—', '—']); return; }
+        function cl(p){ var d=_bioDL(a,p); return d?(n(d.dose,3)+' ('+(d.ic_inf!=null?n(d.ic_inf,3)+'–'+n(d.ic_sup,3):'IC não estimável')+')'):'—'; }
+        var rn=a.resposta_natural||{};
+        linhasCL.push([L.rotulo, cl(0.5), cl(0.9), n(a.slope,2)+' ± '+n(a.slope_se,2),
+          (a.p_qui_quadrado==null?'—':'χ² p = '+n(a.p_qui_quadrado,3))+(rn.metodo==='estimada'?' · C = '+n(100*rn.C,1)+'%':'')]);
+        ultimo={rel:rel, L:L};
+      });
+      secoes.push({title:tit+' · CL50 e CL90', text:'Concentração letal em '+(ds.serie.unidade||'dose')+', com intervalo de confiança de 95% (Fieller), por máxima verossimilhança com a mortalidade natural da testemunha dentro do modelo (Robertson et al., 2007; Finney, 1971). C = resposta natural estimada.',
+        headers:['Leitura','CL50 (IC 95%)','CL90 (IC 95%)','Inclinação ± EP','Aderência · resposta natural'], rows:linhasCL});
+      if(ultimo){
+        var a2=ultimo.rel.analise, c50=_bioDL(a2,0.5);
+        figura(_bioDoseSvg(_bioPontosPotter(a2), _bioCurvaBinomial(ultimo.rel), {yMax:100, yUnid:'%', xTitulo:'concentração ('+(ds.serie.unidade||'dose')+', escala log)', marca:c50?{dose:c50.dose, rot:'CL50 '+n(c50.dose,3)}:null, arquivo:true}),
+          'Curva de dose-resposta em '+ultimo.L.rotulo+': pontos = mortalidade observada em cada concentração; linha = modelo com a resposta natural da testemunha; tracejado = CL50.');
+        refs.push('robertson2007','finney1971');
+      }
+    }
+  }
+  function _bioLaudoPlaca(R){
+    var F=R.final;
+    if(F){
+      secoes.push({title:tit+' · '+(R.fim?'leitura final':'última leitura')+' ('+F.rotulo+')',
+        text:(R.fim?R.fim.texto:'A testemunha ainda não chegou a '+n(P.bordaPct,0)+'% da placa: o ensaio segue e esta é a última leitura registrada.')+
+          ' Ø médio = média da cruz em cada placa. Crescimento = Ø − disco de '+n(P.discoMm,1)+' mm. Inibição = (testemunha − tratado) ÷ testemunha, sobre o crescimento (Vincent, 1947). IVCM = Σ(D − D anterior) ÷ dias (Oliveira, 1991). Taxa radial = inclinação do raio no tempo.',
+        headers:['Tratamento','Dose','Placas','Ø médio (mm)','DP (mm)','Crescimento (mm)','Inibição (%)','IVCM','Taxa radial (mm/dia)'],
+        rows:trats.map(function(t){
+          var l=F.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{}, pt=R.porTratamento[t.id]||{};
+          return [nomeT(t.id), t.doseTexto||'—', l.placas||'—', n(l.diametro,1), n(l.dpDiametro,1), n(l.crescimento,1), t.id===test?'—':n(l.inibicao,1), n(pt.ivcm,2), pt.taxa?n(pt.taxa.mmDia,2):'—'];
+        })});
+    }
+    if(R.leituras.length>1){
+      var todas=[];
+      R.leituras.forEach(function(L){ trats.forEach(function(t){
+        var l=L.linhas.filter(function(x){ return x.tratId===t.id; })[0]||{};
+        todas.push([L.rotulo, nomeT(t.id), l.placas||'—', n(l.diametro,1), n(l.crescimento,1), t.id===test?'—':n(l.inibicao,1)]);
+      }); });
+      secoes.push({title:tit+' · todas as leituras', text:'Diâmetro médio, crescimento e inibição em cada leitura.', headers:['Leitura','Tratamento','Placas','Ø médio (mm)','Crescimento (mm)','Inibição (%)'], rows:todas});
+      figura(_bioLinhaSvg(_bioSeries(R,trats,'diametro'), trats, test, {yMax:P.placaMm||90, yUnid:' mm', ref:{y:P.placaMm, rot:'borda da placa'}, xTitulo:'dias após a repicagem', xRotulos:_bioXRotulos(R), arquivo:true}),
+        'Diâmetro médio da colônia (mm) por tratamento ao longo das leituras. Linha vermelha: borda da placa de '+n(P.placaMm,0)+' mm; tracejado preto: testemunha.');
+    }
+    if(ds.serie && F){
+      var Lf=null; ds.leituras.forEach(function(L){ if(L.avId===F.avId) Lf=L; });
+      if(Lf && (noManifesto[Lf.jobKey]||res[Lf.jobKey])){
+        var rel=motor(Lf.jobKey), a=rel&&rel.ok&&rel.analise, ce=a?_bioCE50(a):null, un=ds.serie.unidade||'';
+        if(a && a.doses_efetivas_absolutas){
+          var linhasCE=[];
+          if(ce && ce.dose!=null){
+            var cls=BioensaioCore.classeEdgington(ce.dose, un);
+            linhasCE.push(['CE50', n(ce.dose,4)+' '+un]);
+            linhasCE.push(['IC 95%', ce.ic_inf!=null?(n(ce.ic_inf,4)+' a '+n(ce.ic_sup,4)+' '+un):'não estimável']);
+            linhasCE.push(['Dentro das concentrações testadas', ce.extrapolado?'Não — extrapolada':'Sim']);
+            linhasCE.push(['Classe (Edgington et al., 1971)', cls&&cls.classe?cls.rotulo:((cls&&cls.motivo)||'—')]);
+          }else linhasCE.push(['CE50', 'não sai: '+((ce&&ce.motivo)||'a curva não chega a 50% de redução')]);
+          secoes.push({title:tit+' · CE50 ('+F.rotulo+')', text:'Concentração que reduz à metade o crescimento da testemunha, pela curva log-logística de 4 parâmetros ajustada ao crescimento (Ø − disco).', headers:['Item','Resultado'], rows:linhasCE});
+          figura(_bioDoseSvg(_bioPontosPlaca(Lf,trats,P), (a.curva||[]).map(function(q){ return {dose:q.dose, y:q.ajustado}; }),
+            {yMax:Math.max(P.placaMm||90,1), yUnid:' mm', xTitulo:'concentração ('+un+', escala log)', marca:(ce&&ce.dose)?{dose:ce.dose, rot:'CE50 '+n(ce.dose,3)}:null, arquivo:true}),
+            'Curva de dose em '+F.rotulo+': pontos = crescimento (Ø − disco) de cada placa; linha = curva log-logística; tracejado = CE50.');
+          refs.push('edgington1971');
+        }else{
+          secoes.push({title:tit+' · CE50', text:'CE50 fora deste laudo: '+motivo(Lf.jobKey)+'.', headers:[], rows:[]});
+        }
+      }
+    }
+  }
 }
 
 /* Método de UM tratamento. O override só vale se tiver sido declarado — ligar a chave
@@ -11565,7 +12356,7 @@ function calcConfigDoEstudoLab(study, qid){
     var estruturada=Array.isArray(t.componentes)&&t.componentes.length>0;
     var dose=String(t.dose==null?'':t.dose).trim();
     if(t.testemunha&&!estruturada&&(dose===''||LB.parseNum(dose)===0))return false;
-    var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+    var unidade=['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
     var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
     var exigeTaxa=mix.problems.length>0||mix.components.some(function(c){return c.unidade!=='%';});
     var taxa=LB.parseTaxa(t.volume!=null&&String(t.volume).trim()!==''?t.volume:vazaoPadrao);
@@ -11666,7 +12457,7 @@ function calcMemoriaLab(study, cfg){
           fonteTipo:cfg.fonteTipo,fonteValor:cfg.fonteValor,pureza:cfg.pureza,densidade:cfg.densidade});
         reg.componentes.push(Object.assign({nome:t.produto||'Produto'},r));
       }else{
-        var unidade=['L/ha','mL/ha','g/ha','kg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
+        var unidade=['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(study.doseUnidade)>=0?study.doseUnidade:'';
         var mix=estruturada?BC.parseStructuredComponents(t.componentes,unidade):BC.parseComponents(t.produto,t.dose,unidade);
         if(mix.problems.length)throw new Error(mix.problems.join(' '));
         if(!mix.components.length)throw new Error('Informe a dose e a unidade de cada componente.');
@@ -12591,9 +13382,7 @@ function protocoloVerificaHtml(study, _pvQid){
      quando ele chegar — o cartão não tem campo de digitação, então repintar
      aqui não arranca nada de ninguém (ver a lição da busca do Agrofit). */
   _agrofitCultCarregar(function(){
-    if(typeof curV!=='undefined' && typeof curSid!=='undefined' &&
-       curV===_pvQid && curSid===((study||{}).id) &&
-       typeof openStudyDetail==='function') openStudyDetail(curV, curSid);
+    if(_estudoNaTela(_pvQid,(study||{}).id)) openStudyDetail(curV, curSid);
   });
   var P=(typeof window!=='undefined')?window.ProtocoloCore:null;
   if(!P||!study) return '';
@@ -12691,7 +13480,9 @@ function _forenseDominio(av){
       var m='';
       if(n<0) m='negativo';
       else if(cfg.tipo==='pct' && n>100) m='acima de 100%';
-      else if(cfg.tipo==='escala' && n>cfg.escalaMax) m='acima do máximo da escala ('+cfg.escalaMax+')';
+      else if(cfg.tipo==='escala' && cfg.escalaModo==='nota' && n>cfg.escalaMax) m='acima do máximo da escala ('+cfg.escalaMax+')';
+      else if(cfg.tipo==='escala' && cfg.escalaModo==='nota' && n<(cfg.escalaMin||0)) m='abaixo do mínimo da escala ('+cfg.escalaMin+')';
+      else if(cfg.tipo==='escala' && cfg.escalaModo!=='nota' && n>100) m='índice acima de 100%';
       else if(cfg.tipo==='contagem' && Math.abs(n-Math.round(n))>1e-9) m='contagem fracionada';
       if(!m) return;
       var ch=v+'|'+m;
@@ -12841,7 +13632,7 @@ function _pranchaPayload(qid, sid, variavel){
      diz por quê — antes, o eixo estampava "10 L/ha" numa dose que ninguém
      declarou, e a figura ia para o relatório do cliente com essa autoridade. */
   if(doseUnidadePendente(s)) avisos.push('Unidade da dose não declarada no estudo: as doses saem '+
-    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha ou kg/ha) '+
+    'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha) '+
     'e gere a figura de novo.');
   if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
     dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
@@ -12876,7 +13667,7 @@ function _pranchaPayload(qid, sid, variavel){
   /* config da variável vem da avaliação mais recente que a define */
   var avRef=(_avCfgDoEstudo(s,variavel)||avs[avs.length-1].av);
   var _vc=_avCfg(avRef,variavel);
-  var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas 0–'+_vc.escalaMax)):'';
+  var escalaTxt=(_vc.tipo==='escala')?(_vc.escalaNome||('Escala de notas '+(_vc.escalaMin||0)+'–'+_vc.escalaMax)):'';
   /* cultura: o estudo manda, a quadra é o padrão */
   var _cultura=studyCultura(s,q);
 
@@ -13156,7 +13947,7 @@ function _openBioestatFrame(modo){
   ov.style.display='flex';
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
-var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false, _bioAutoWd=null;
+var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _bioEngineReady=false;
 /* ===== QUANDO O ENSAIO É UMA SÉRIE DE DOSES ================================
    O motor estatístico do Agracta tem análise de dose-resposta completa —
    Abbott, GLM, intervalo de Fieller, comparação de curvas — e ela nunca rodou,
@@ -13181,7 +13972,7 @@ var _bioAutoCache={}, _bioAutoQueue=[], _bioAutoPending={}, _bioAutoBusy=null, _
    A testemunha (dose zero ou marcada como tal) entra junto: ela e o controle
    que o Abbott usa, e o motor a reconhece pela dose 0. ======================= */
 function _doseSerieDoEstudo(study){
-  var trats=((study||{}).tratamentos||[]).filter(function(t){ return t&&t.id; });
+  var trats=((study||{}).tratamentos||[]).filter(function(t){ return t&&t.id&&t.papelControle!=='sem_alvo'&&t.papelControle!=='positivo'; });
   if(trats.length<3) return null;
   var itens={}, unidades={}, niveis={}, doses={}, comDose=0;
   var testemunha=''; try{ testemunha=studyTestemunha(study)||''; }catch(e){}
@@ -13227,7 +14018,7 @@ function _bioestatJobAoa(qid,study,av,v){
   if(comNN) header=header.concat(['Afetados','N_total']);
   var rows=[header];
   var reps=Math.max(1,parseInt(study.numRepeticoes)||1);
-  (study.tratamentos||[]).forEach(function(t){ for(var r=1;r<=reps;r++){
+  (study.tratamentos||[]).forEach(function(t){ if(serie&&(t.papelControle==='sem_alvo'||t.papelControle==='positivo'))return;for(var r=1;r<=reps;r++){
     var key=_avRowKey(t.id,r);
     var raw=_avNota(av,{key:key,tratId:t.id,rep:r},v);
     if(raw==null||String(raw).trim()===''||isNaN(parseFloat(String(raw).replace(',','.'))))continue;
@@ -13248,7 +14039,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-15';
+var MOTOR_VERSAO='agracta-18';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -13265,8 +14056,19 @@ var MOTOR_VERSAO='agracta-15';
    Mexer só na tela do motor não mexe aqui.
 
    A versão 14 corrige a natureza da variável e os papéis forenses.
+   A versão 16 tria cada VARIÁVEL uma vez, com todas as avaliações juntas.
+   A versão 17 segue Robertson et al. (2007) na dose-resposta — resposta natural
+   estimada com a testemunha no modelo, heterogeneidade só quando significativa —
+   e leva a placa numa série de concentrações para a curva de dose (CE50).
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-15';
+var MOTOR_CALCULO='agracta-18';
+var _bioSolicitado={};
+function iniciarCalculosEstatisticos(qid,sid){
+ var s=_estudoDe(qid,sid);if(!s||estudoFinalizado(s))return;
+ _bioSolicitado[qid+'|'+sid]=_bioestatSignature(s);
+ _bioestatEnsureStudy(qid,sid);_bioestatRefreshOpen(_bioAutoCache[qid+'|'+sid]);
+}
+function _bioBotaoCalcular(qid,sid){return '<button type="button" class="btn-sm" onclick="iniciarCalculosEstatisticos('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')">Iniciar cálculos estatísticos</button>';}
 function _bioestatJobs(qid,study){
   var jobs=[];
   if(study.desenho==='faixas') return jobs;
@@ -13274,9 +14076,46 @@ function _bioestatJobs(qid,study){
     var aoa=_bioestatJobAoa(qid,study,av,v), groups={};
     aoa.slice(1).forEach(function(r){groups[r[7]]=(groups[r[7]]||0)+1;});
     if(Object.keys(groups).filter(function(k){return groups[k]>=2;}).length<2)return;
-    jobs.push({jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa});
+    var job={jobKey:(av.id||av.data)+'|'+v,avId:av.id,date:av.data,variavel:v,tipo:_avTipo(av,v),aoa:aoa};
+    /* Placa numa série de concentrações: a pergunta é a CE50, não quais doses
+       diferem. Vai para a curva de dose sobre o CRESCIMENTO (diâmetro − disco),
+       que é onde "metade da testemunha" tem sentido (Edgington et al., 1971).
+       A curva de 4 parâmetros pede 4 concentrações positivas; com menos, fica a
+       comparação de médias. */
+    try{
+      if(bioensaioMetodo(study,qid)==='placa' && BioensaioCore.papelDaVariavel('placa',v)==='diametro'){
+        var _ser=_doseSerieDoEstudo(study);
+        if(_ser && _ser.niveis>=4){ job.modelo='curva'; job.desconto=BioensaioCore.protocolo(study,'placa').discoMm||0; }
+      }
+    }catch(e){}
+    jobs.push(job);
   }); });
   return jobs;
+}
+/* ===== A TRIAGEM FORENSE É POR VARIÁVEL, NÃO POR DATA =====================
+   Triar avaliação por avaliação custava duas vezes. Poder: uma avaliação com
+   5 tratamentos × 4 repetições tem 20 valores, pouco para dígito final,
+   arredondamento e duplicata, que ficavam inconclusivos. Alarme: N triagens
+   independentes somam N chances de falso positivo no mesmo estudo.
+   Aqui cada variável é triada UMA vez, com todas as avaliações juntas; o motor
+   trata cada data como um estrato (cada uma com a sua escala e os seus grupos)
+   e soma o volume entre elas. Só entram as células que a análise já aceitou.
+   `celulas` evita recalcular _bioestatJobs quando quem chama já tem. */
+function _bioestatJobsForense(qid,study,celulas){
+  var porVar={}, ordem=[];
+  (celulas||_bioestatJobs(qid,study)).forEach(function(j){
+    if(!j||!j.aoa||!j.aoa.length) return;
+    if(!porVar[j.variavel]){ porVar[j.variavel]=[]; ordem.push(j.variavel); }
+    porVar[j.variavel].push(j);
+  });
+  return ordem.map(function(v){
+    var cs=porVar[v], linhas=[], datas={};
+    cs.forEach(function(cj){ cj.aoa.slice(1).forEach(function(r){ linhas.push(r); }); if(cj.date) datas[cj.date]=1; });
+    var ds=Object.keys(datas).sort(), br=function(x){ return isoToBR(x)||x; };
+    return {jobKey:'__forense__|'+v, variavel:v, tipo:cs[0].tipo, datas:ds.length,
+            datasTexto:ds.length>1?(br(ds[0])+' a '+br(ds[ds.length-1])):(ds.length?br(ds[0]):''),
+            n:linhas.length, aoa:[cs[0].aoa[0]].concat(linhas)};
+  });
 }
 /* ===== O CARTÃO DE TEMPO NASCE SOZINHO ====================================
    O painel calcula UMA avaliação por vez: cada cartão é um par (avaliação,
@@ -13325,9 +14164,9 @@ function _bioestatEstadoResultado(r){
 }
 function _bioestatManifesto(qid,s){
   var out=[];
-  _bioestatJobs(qid,s).forEach(function(j){
-    ['analise','forense'].forEach(function(m){out.push({jobKey:j.jobKey+(m==='forense'?'|F':''),avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:m});});
-  });
+  var cel=_bioestatJobs(qid,s);
+  cel.forEach(function(j){out.push({jobKey:j.jobKey,avId:j.avId||'',date:j.date||'',variavel:j.variavel,modo:'analise'});});
+  _bioestatJobsForense(qid,s,cel).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,datas:j.datas,modo:'forense'});});
   _bioestatJobsTempo(qid,s).forEach(function(j){out.push({jobKey:j.jobKey,variavel:j.variavel,unidade:j.unidade,modo:'tempo'});});
   return out;
 }
@@ -13338,15 +14177,21 @@ function _bioestatSnapshotAvancado(qid,s){
   var indisponiveis=_bioestatPendentes(qid,s).map(function(j){return {avId:j.avId||'',date:j.date||'',variavel:j.variavel,motivo:'Sem comparação automática: delineamento ou repetições insuficientes. Resultados descritivos preservados.'};});
   return JSON.parse(JSON.stringify({versao:1,geradoEm:new Date().toISOString(),motor:MOTOR_CALCULO,assinatura:sig,jobs:jobs,results:results,pendencias:pendencias,indisponiveis:indisponiveis,completo:jobs.length>0&&!pendencias.length&&!indisponiveis.length}));
 }
+/* "Tentar de novo" recomeça também o MOTOR: a página nova esquece o Python que
+   não subiu e o worker que travou. Antes o botão recusava enquanto o estudo
+   estava "carregando" — justamente quando ele mais fazia falta. */
 function _bioestatRepetir(qid,sid){
-  var s=_estudoDe(qid,sid),c=_bioAutoCache[qid+'|'+sid];
-  if(!s||estudoFinalizado(s)||(c&&c.status==='loading'))return;
-  delete _bioAutoCache[qid+'|'+sid];
+  var s=_estudoDe(qid,sid), key=qid+'|'+sid;
+  if(!s||estudoFinalizado(s))return;
+  _bioestatReiniciarMotor();
+  _bioestatDescartarFila(key);
+  delete _bioAutoCache[key];
   _bioestatEnsureStudy(qid,sid);
-  _bioestatRefreshOpen(_bioAutoCache[qid+'|'+sid]);
+  _bioestatPump();   /* o trabalho de outro estudo que estava na mesa volta a andar */
+  _bioestatRefreshOpen(_bioAutoCache[key]);
 }
 function _bioestatSignature(study){
-  var slim={motor:MOTOR_CALCULO,config:study.estatisticaPlanejada,protocolo:study.protocolo,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha];}),
+  var slim={motor:MOTOR_CALCULO,config:study.estatisticaPlanejada,protocolo:study.protocolo,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha,t.papelControle];}),
     a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.tipos,a.varcfg,a.momento,a.variaveis,a.notas];})};
   return String(_hashSeed(JSON.stringify(slim)));
 }
@@ -13355,13 +14200,34 @@ function _bioestatEnsureFrame(){
   if(f)return f;
   f=document.createElement('iframe'); f.id='bioEngineFrame'; f.title='Motor estatístico Agracta';
   f.style.cssText='position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none';
-  f.onload=function(){_bioEngineReady=true;_bioestatPump();};
+  _bioEngineReady=false; _bioMotorEst.abrindo=0; _bioMotorEst.pronto=false;
+  /* Pronto quando a página do motor diz "olá" (já escuta) ou termina de
+     carregar — o que vier primeiro. Um iframe que não é mais o da vez não
+     manda em nada. */
+  f.onload=function(){ if(document.getElementById('bioEngineFrame')===f) _bioestatMotorAberto(); };
   /* O iframe do motor vinha SEM versão na URL. Como o navegador guarda o
      estatistica/index.html, uma correção no motor não chegava a quem já tinha
      aberto o app uma vez — seguia rodando o Python velho, calado. */
   f.src='estatistica/index.html?agracta_engine=1&v='+MOTOR_VERSAO;
   document.body.appendChild(f);
+  _bioestatPrimeiroUso();
+  _bioestatVigiar();
   return f;
+}
+function _bioestatMotorAberto(){
+  if(_bioEngineReady) return;
+  _bioEngineReady=true;
+  _bioestatPump();
+}
+/* Primeiro uso neste aparelho? O Pyodide (~115 MB) fica no cache do service
+   worker depois da primeira vez; sem ele, a espera é download, e a tela diz
+   isso em vez de só "carregando". Sem Cache Storage, não se afirma nada. */
+function _bioestatPrimeiroUso(){
+  try{
+    if(typeof caches==='undefined'||!caches||!caches.match){ _bioMotorEst.primeiroUso=null; return; }
+    caches.match(new URL('estatistica/pyodide/pyodide.asm.wasm', location.href).href)
+      .then(function(r){ _bioMotorEst.primeiroUso=!r; _bioestatStatusNaTela(); }, function(){ _bioMotorEst.primeiroUso=null; });
+  }catch(e){ _bioMotorEst.primeiroUso=null; }
 }
 /* ===== CACHE DA ESTATÍSTICA NO APARELHO (IndexedDB, por assinatura) =======
    `_bioAutoCache` só existia em memória: fechar o app jogava fora minutos de
@@ -13423,36 +14289,84 @@ function _bioestatEnsureStudy(qid,sid){
   var q=data[qid]||{}, study=(q.estudos||[]).find(function(s){return s.id===sid;}); if(!study)return;
   study=normalizeStudy(study);
   var key=qid+'|'+sid, sig=_bioestatSignature(study), jobs=_bioestatJobs(qid,study), c=_bioAutoCache[key];
-  var jobsT=_bioestatJobsTempo(qid,study);
-  if(c&&c.sig===sig&&(c.status==='loading'||c.status==='ready'))return;
-  /* por avaliação/variável: análise + triagem forense; mais um por variável
-     com curva de sobrevivência, que é do estudo inteiro e não de uma data */
-  var total=jobs.length*2+jobsT.length;
-  c=_bioAutoCache[key]={sig:sig,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
+  var manual=_bioSolicitado[key]===sig;
+  var jobsT=manual?_bioestatJobsTempo(qid,study):[], jobsF=_bioestatJobsForense(qid,study,jobs);
+  if(!manual)jobs=[];
+  /* 'erro' também para aqui: refazer é do botão "Tentar de novo". Se cada
+     repintura tentasse de novo, um erro no preparo virava laço sem fim. */
+  if(c&&c.sig===sig&&c.manual===manual&&(c.status==='loading'||c.status==='ready'||c.status==='erro'))return;
+  /* análise por avaliação/variável; triagem forense e curva de sobrevivência
+     uma por variável, porque ambas são do estudo inteiro e não de uma data */
+  var total=jobs.length+jobsF.length+jobsT.length;
+  /* Os dados mudaram: o que esperava na fila era de uma grade que não existe
+     mais. Ficava lá, e o motor calculava cada um só para jogar fora — a cada
+     nota lançada, mais uma rodada inteira na frente da que importa. */
+  _bioestatDescartarFila(key);
+  c=_bioAutoCache[key]={sig:sig,manual:manual,status:total?'loading':'empty',done:0,total:total,results:{},qid:qid,sid:sid};
   if(!total)return;
-  /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
-     guardado do uso anterior. Estando completo, o estudo abre com a
-     estatística já na tela e nada roda. */
-  _biocLer(key).then(function(sav){
-    if(_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
+  var seguiu=false;
+  function seguir(sav){
+    if(seguiu||_bioAutoCache[key]!==c) return;   /* outro cálculo já tomou o lugar deste */
+    seguiu=true;
     if(sav&&sav.sig===sig&&sav.motor===MOTOR_CALCULO&&sav.results){
       var res=sav.results, n=0;
-      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; if(_bioestatEstadoResultado(res[j.jobKey+'|F'])==='calculado')n++; });
+      jobs.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
+      jobsF.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       jobsT.forEach(function(j){ if(_bioestatEstadoResultado(res[j.jobKey])==='calculado')n++; });
       if(n>=total){ c.results=res; c.done=n; c.status='ready'; _bioestatRefreshOpen(c); return; }
     }
-    _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT);
-  });
+    /* Erro ao montar os trabalhos morria calado dentro da promessa, com o
+       estudo marcado "carregando" para sempre. Agora vira cartão com motivo. */
+    try{ _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF); }
+    catch(e){
+      console.error('[bioestat] preparo das análises',e);
+      _bioestatDescartarFila(key);
+      c.status='erro'; c.erro='Não foi possível preparar as análises deste estudo ('+String((e&&e.message)||e)+').';
+      _bioestatRefreshOpen(c);
+    }
+  }
+  /* Antes de acordar o Pyodide: o resultado desta MESMA assinatura pode estar
+     guardado do uso anterior. Estando completo, o estudo abre com a
+     estatística já na tela e nada roda. O cache em disco é conveniência: se o
+     IndexedDB não responder (acontece com o armazenamento do aparelho cheio),
+     o cálculo segue em 4 s em vez de esperar para sempre. */
+  var prazo=setTimeout(function(){ seguir(null); },4000);
+  _biocLer(key).then(function(sav){ clearTimeout(prazo); seguir(sav); }, function(){ clearTimeout(prazo); seguir(null); });
+}
+function _bioestatDescartarFila(key){
+  for(var i=_bioAutoQueue.length-1;i>=0;i--){
+    if(_bioAutoQueue[i].key===key){ delete _bioAutoPending[_bioAutoQueue[i].requestId]; _bioAutoQueue.splice(i,1); }
+  }
+}
+/* Tipo de dado da triagem forense a partir do TIPO DECLARADO da coluna.
+   · contagem de organismo/lesão -> 'count' (índice de Poisson);
+   · contagem de estrutura da planta (estande, vagens, grãos) -> 'cont': ela é regulada pelo
+     manejo ou pelo desenvolvimento, subdispersa por natureza, e o teste de Poisson acusaria
+     dado honesto;
+   · estimativa visual (% de severidade/incidência) e escala de notas -> 'pct': o motor não
+     pontua dígito/arredondamento, porque preferir nós de 5 e 10 é o viés normal de quem estima
+     a olho (marcava ~100% dos estudos de severidade honestos);
+   · resto -> 'cont'. Errar para 'cont' só perde um teste; errar para 'count' cria alarme. */
+function _bioestatForenseTipo(j){
+  var nome=String((j&&j.variavel)||'').toLowerCase(), tipo=(j&&j.tipo)||'';
+  if(tipo==='contagem'){
+    var organismo=/inset|lagart|percevej|pulg|ovos|ninf|adult|[áa]caro|mosca|trips|cigarr|besour|les[õo]|col[ôo]n|p[úu]stul|esporo|nemat|daninha|invasor/.test(nome);
+    var regulada=/stand|estande|plantas|vagens|gr[ãa]os|espiga|perfilh|\bnós\b|n[úu]mero de n[óo]s|folhas|ramos|flores|frutos|sementes/.test(nome);
+    return (regulada && !organismo) ? 'cont' : 'count';
+  }
+  if(tipo==='escala') return 'pct';
+  if(tipo==='pct' && (typeof _avEhPercentual==='function'?_avEhPercentual(nome):/sever|incid|%/.test(nome))) return 'pct';
+  return 'cont';
 }
 /* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
    consulta ao cache em disco é assíncrona e precisa vir antes. */
-function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
+function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
   var resp=''; try{resp=_currentUserName();}catch(e){}
   var doseUnit=''; try{var t0=(study.tratamentos||[]).find(function(t){return t.dose;});if(t0)doseUnit=_calcDoseUnit(t0.dose);}catch(e){}
-  function _ftipo(j){ return j.tipo==='contagem'?'count':'cont'; }
+  function _ftipo(j){ return _bioestatForenseTipo(j); }
   var loc=((LOCAIS[QLOCAL[qid]]||{}).nome||''), qn=quadraNome(qid), tit=study.codigo||study.id;
   jobs.forEach(function(j,i){
-    [['analise',j.jobKey,''],['forense',j.jobKey+'|F',_ftipo(j)]].forEach(function(m,mi){
+    [['analise',j.jobKey,'']].forEach(function(m,mi){
       var fjob={jobKey:m[1],avId:j.avId,date:j.date,variavel:j.variavel,tipo:j.tipo};
       var req=key+'|'+sig+'|'+i+'-'+mi+'|'+Date.now();
       /* Sentido da variável, para o motor pôr a letra 'a' no MELHOR tratamento.
@@ -13462,11 +14376,19 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
         var _avJ=(study.avaliacoes||[]).find(function(x){ return x && x.id===j.avId; });
         _mm=(_avSentido(_avJ||_avCfgDoEstudo(study,j.variavel), j.variavel)==='maior');
       }catch(e){}
-      var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:j.aoa,modo:m[0],titulo:tit,
+      var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:(j.modelo==='curva'?_bioestatAoaCrescimento(j.aoa,j.desconto):j.aoa),modo:m[0],titulo:tit,
         responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn,
-        maiorMelhor:_mm}};
+        maiorMelhor:_mm, modelo:(j.modelo||'')}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
+  });
+  /* Triagem forense: uma por variável, com todas as avaliações (estratos por data). */
+  (jobsF||[]).forEach(function(j,i){
+    var req=key+'|'+sig+'|F'+i+'|'+Date.now();
+    var item={requestId:req,key:key,sig:sig,job:{jobKey:j.jobKey,variavel:j.variavel,tipo:j.tipo,datas:j.datas,datasTexto:j.datasTexto},
+      payload:{requestId:req,aoa:j.aoa,modo:'forense',titulo:tit,responsavel:resp,tipo:j.tipo,
+               doseUnit:doseUnit,forenseTipo:_ftipo(j),local:loc,quadra:qn}};
+    _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
   /* A curva de sobrevivência vai por último: ela é a mais cara e as prévias de
      cada data já estarão na tela enquanto ela roda. */
@@ -13478,19 +14400,234 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT){
                tipo:j.variavel,doseUnit:doseUnit,local:loc,quadra:qn,maiorMelhor:_mm}};
     _bioAutoQueue.push(item);_bioAutoPending[req]=item;
   });
-  _bioestatEnsureFrame(); _bioestatPump();
+  _bioestatEnsureFrame(); _bioestatPump(); _bioestatStatusNaTela();
+}
+/* Diâmetro da colônia → crescimento (diâmetro − disco), só na cópia que vai para a
+   curva: a triagem forense e a grade continuam com o dado como foi lido. */
+function _bioestatAoaCrescimento(aoa, disco){
+  if(!Array.isArray(aoa)||!aoa.length) return aoa;
+  var h=aoa[0], iv=h.indexOf('Valor'), ivar=h.indexOf('Variavel'), k=Number(disco)||0;
+  if(iv<0) return aoa;
+  return [h.slice()].concat(aoa.slice(1).map(function(r){
+    var x=r.slice(), n=parseFloat(String(x[iv]).replace(',','.'));
+    if(isFinite(n)) x[iv]=Math.round(Math.max(0,n-k)*1000)/1000;
+    if(ivar>=0) x[ivar]='Crescimento micelial (mm)';
+    return x;
+  }));
+}
+/* O MOTOR SAI DA MEMÓRIA QUANDO NÃO TEM O QUE FAZER.
+   O iframe do motor nascia ao abrir o primeiro estudo e nunca mais saía: o
+   Python (medido: ~150 MB, mais a página do motor) ficava preso até fechar o
+   app, somado ao mapa, ao NDVI e às fotos. No celular é assim que o sistema
+   mata a página — a "tela preta, some tudo e tem que abrir de novo". Fila vazia
+   por 45 s, ou app em segundo plano sem cálculo em andamento: o iframe sai, e
+   com ele o worker do Python. O que já foi calculado fica no cache (memória e
+   IndexedDB); precisando de novo, o motor volta sozinho. */
+var _bioLiberarT=null, _BIO_OCIOSO_MS=45000;
+function _bioestatDestruirFrame(){
+  var f=document.getElementById('bioEngineFrame');
+  if(f){
+    try{ f.src='about:blank'; }catch(e){}
+    try{ if(f.parentNode) f.parentNode.removeChild(f); }catch(e){}
+  }
+  _bioEngineReady=false; _bioAtual=null; _bioAutoBusy=null; _bioMotorEst.pronto=false;
+}
+function _bioestatLiberarMotor(){
+  clearTimeout(_bioLiberarT); _bioLiberarT=null;
+  if(_bioAutoBusy||_bioAutoQueue.length) return false;
+  if(!document.getElementById('bioEngineFrame')) return false;
+  _bioestatDestruirFrame();
+  return true;
+}
+function _bioestatAgendarLiberacao(){
+  clearTimeout(_bioLiberarT);
+  _bioLiberarT=setTimeout(_bioestatLiberarMotor,_BIO_OCIOSO_MS);
+}
+try{ document.addEventListener('visibilitychange',function(){ if(document.hidden) _bioestatLiberarMotor(); }); }catch(e){}
+
+/* ===== CADA ETAPA DO MOTOR COM O SEU PRAZO ==================================
+   Relato de 29/09: "fica sempre carregando verificações avançadas no aparelho
+   e não para". O painel tinha UM prazo para tudo — 70 s por trabalho, contados
+   do envio —, e é o primeiro trabalho que sobe o motor: no primeiro uso são
+   ~115 MB de Python para baixar, e num celular a partida passa de um minuto
+   mesmo com tudo guardado. Estourado o prazo, o app desistia do trabalho e
+   mandava o próximo para a mesma página, que ainda subia: as respostas
+   voltavam trocadas de avaliação. E nada na tela dizia se o motor baixava,
+   calculava ou tinha parado.
+
+   Agora a página do motor avisa a cada 4 s em que pé está, e cada etapa tem o
+   seu prazo — contado só com o app na tela (celular em segundo plano congela a
+   página e o motor juntos; voltar dele não é "motor mudo"):
+     abrir a página do motor ............ 60 s   senão reabre uma vez
+     o motor confirmar o trabalho ....... 20 s   senão reabre e reenvia uma vez
+     silêncio com trabalho na mesa ...... 45 s   idem
+     carregar o motor (1º uso baixa) .... 20 min com o progresso na tela
+     calcular UMA análise ............... 150 s  ela sai com erro; o motor
+                                                 recomeça limpo para as outras
+   O que não deu vira cartão com o motivo e "Tentar de novo" — nunca mais um
+   "carregando" sem fim. */
+var _BIO_ABRIR_MS=60000, _BIO_RECEBIDO_MS=20000, _BIO_SILENCIO_MS=45000, _BIO_PARTIDA_MS=20*60000, _BIO_CALCULO_MS=150000, _BIO_TICK_MS=3000;
+var _bioMotorEst={abrindo:0, reaberturas:0, primeiroUso:null, pronto:false};
+var _bioAtual=null, _bioVigiaT=null, _bioVigiaUlt=0;
+function _bioestatVigiar(){
+  if(_bioVigiaT) return;
+  _bioVigiaUlt=Date.now();
+  _bioVigiaT=setInterval(_bioestatVigia,_BIO_TICK_MS);
+}
+/* O relógio da vigia anda no máximo dois tiques por vez: tique atrasado é
+   página congelada (segundo plano) ou linha de execução presa — nenhum dos
+   dois é o motor demorando. */
+function _bioestatVigia(){
+  var agora=Date.now(), dt=Math.min(2*_BIO_TICK_MS, Math.max(0, agora-_bioVigiaUlt));
+  _bioVigiaUlt=agora;
+  if(document.hidden) dt=0;
+  if(!_bioAutoBusy && !_bioAutoQueue.length){ clearInterval(_bioVigiaT); _bioVigiaT=null; return; }
+  if(!document.getElementById('bioEngineFrame')){ _bioestatPump(); return; }
+  if(!_bioEngineReady){
+    _bioMotorEst.abrindo+=dt;
+    if(_bioMotorEst.abrindo>_BIO_ABRIR_MS) _bioestatMotorFalhou('abrir');
+    else _bioestatStatusNaTela();
+    return;
+  }
+  var a=_bioAtual;
+  if(!a){ _bioestatPump(); return; }
+  a.silencio+=dt; a.naFase+=dt; if(a.fase!=='calculando') a.partida+=dt;
+  if(a.fase==='enviado' && a.naFase>_BIO_RECEBIDO_MS) _bioestatMotorFalhou('surdo');
+  else if(a.silencio>_BIO_SILENCIO_MS) _bioestatMotorFalhou('mudo');
+  else if(a.fase!=='calculando' && a.partida>_BIO_PARTIDA_MS) _bioestatMotorFalhou('partida');
+  else if(a.fase==='calculando' && a.naFase>_BIO_CALCULO_MS) _bioestatMotorFalhou('calculo');
+  else _bioestatStatusNaTela();
+}
+/* O aviso da página do motor sobre o trabalho que está com ela. */
+function _bioestatSinal(d){
+  var a=_bioAtual;
+  if(!a||!d||String(d.requestId||'')!==String(_bioAutoBusy||'')) return;
+  a.silencio=0;
+  var fase=d.fase||a.fase;
+  if(fase==='recebido'&&a.fase!=='enviado') fase=a.fase;   /* a etapa não volta atrás */
+  if(fase!==a.fase){ a.fase=fase; a.naFase=0; }
+  if(fase==='calculando') _bioMotorEst.pronto=true;
+  if(d.msg!=null) a.msg=String(d.msg);
+  if(d.sub!=null) a.sub=String(d.sub);
+  _bioMotorEst.reaberturas=0;
+  _bioestatStatusNaTela();
+}
+function _bioestatMotivo(tipo){
+  if(tipo==='abrir') return 'O motor estatístico não abriu neste aparelho. No primeiro uso ele precisa de internet para baixar o módulo estatístico.';
+  if(tipo==='surdo') return 'O motor estatístico abriu, mas não respondeu. Se é o primeiro uso neste aparelho, ele precisa de internet para baixar o módulo estatístico.';
+  if(tipo==='mudo') return 'O motor estatístico parou de responder no meio do trabalho.';
+  if(tipo==='partida') return 'O motor estatístico não terminou de carregar em '+Math.round(_BIO_PARTIDA_MS/60000)+' min — internet lenta ou pouca memória livre no aparelho. O que já foi baixado fica guardado.';
+  return 'Tempo esgotado: esta análise passou de '+Math.round(_BIO_CALCULO_MS/1000)+' s calculando no aparelho.';
+}
+/* Um trabalho que o motor não vai devolver sai com o motivo, contando como
+   feito — é isso que deixa o estudo sair de "carregando". */
+function _bioestatFalharItem(item,motivo){
+  var c=_bioAutoCache[item.key];
+  if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){
+    c.results[item.job.jobKey]={ok:false,erro:motivo};
+    c.done++; if(c.done>=c.total){ c.status='ready'; _bioestatPersistir(c); }
+  }
+  delete _bioAutoPending[item.requestId];
+}
+function _bioestatFalharFila(motivo,key){
+  var tocados={};
+  for(var i=_bioAutoQueue.length-1;i>=0;i--){
+    var it=_bioAutoQueue[i]; if(key&&it.key!==key) continue;
+    _bioAutoQueue.splice(i,1); _bioestatFalharItem(it,motivo); tocados[it.key]=1;
+  }
+  Object.keys(tocados).forEach(function(k){ _bioestatRefreshOpen(_bioAutoCache[k]); });
+}
+function _bioestatMotorFalhou(tipo){
+  var a=_bioAtual, item=a&&a.item, motivo=_bioestatMotivo(tipo);
+  try{ console.warn('[bioestat] motor ('+tipo+'): '+motivo); }catch(e){}
+  if(tipo==='abrir'){
+    _bioestatDestruirFrame();
+    if(_bioMotorEst.reaberturas<1){ _bioMotorEst.reaberturas++; _bioestatPump(); return; }
+    _bioMotorEst.reaberturas=0;
+    _bioestatFalharFila(motivo);
+    return;
+  }
+  if((tipo==='surdo'||tipo==='mudo') && item && !item.reenviado){
+    /* segunda chance numa página nova, com o mesmo número de trabalho */
+    item.reenviado=true;
+    _bioestatDestruirFrame();
+    _bioAutoQueue.unshift(item);
+    _bioestatPump();
+    return;
+  }
+  _bioestatDestruirFrame();
+  if(item) _bioestatFalharItem(item,motivo);
+  /* Página que não escuta não vai escutar o próximo, e motor que não sobe em
+     20 min também não. Já uma análise lenta, ou um motor que emudeceu uma vez,
+     não condena as outras: elas seguem num motor novo. */
+  if(tipo==='surdo'||tipo==='partida') _bioestatFalharFila(motivo);
+  if(item) _bioestatRefreshOpen(_bioAutoCache[item.key]);
+  _bioestatPump();
+}
+/* Motor novo a pedido ("Tentar de novo"). O trabalho que estava na mesa, se
+   ainda vale, volta para a frente da fila em vez de sumir. */
+function _bioestatReiniciarMotor(){
+  var a=_bioAtual, it=a&&a.item;
+  if(!it&&!document.getElementById('bioEngineFrame')) return;
+  _bioestatDestruirFrame();
+  _bioMotorEst.reaberturas=0;
+  if(it){
+    var c=_bioAutoCache[it.key];
+    if(c&&c.sig===it.sig&&!c.results[it.job.jobKey]) _bioAutoQueue.unshift(it);
+    else delete _bioAutoPending[it.requestId];
+  }
+}
+function _bioDur(ms){
+  var s=Math.round((ms||0)/1000); if(s<5) return '';
+  return ' · '+(s<60?(s+' s'):(Math.floor(s/60)+' min'+(s%60?(' '+(s%60)+' s'):'')));
+}
+/* O que a linha de status diz, a partir do estado REAL do motor. */
+function _bioestatStatusTexto(key){
+  var c=_bioAutoCache[key];
+  if(!c) return {txt:'Preparando as verificações avançadas no aparelho…', sub:''};
+  if(c.status!=='loading') return null;
+  var prontas=c.done+' de '+c.total+' prontas', a=_bioAtual, meu=!!(a&&a.item&&a.item.key===key);
+  var baixando=_bioMotorEst.primeiroUso===true;
+  var subCarga=baixando
+    ? 'Primeiro uso neste aparelho: o módulo estatístico (cerca de 115 MB) é baixado uma vez e fica guardado. Com internet lenta leva alguns minutos; no Wi-Fi é bem mais rápido. A prévia acima já pode ser usada.'
+    : 'O motor estatístico sobe no aparelho e calcula sem internet. A prévia acima já pode ser usada.';
+  if(!document.getElementById('bioEngineFrame')||!_bioEngineReady)
+    return {txt:'Abrindo o motor estatístico no aparelho…'+_bioDur(_bioMotorEst.abrindo), sub:subCarga};
+  if(!meu) return {txt:'Na fila do motor estatístico… '+prontas, sub:'Outra análise está sendo calculada antes destas.'};
+  /* motor já de pé nesta página: entre um trabalho e o próximo continua "calculando" */
+  if(a.fase==='calculando'||(_bioMotorEst.pronto&&(a.fase==='enviado'||a.fase==='recebido'))) return {txt:'Calculando no aparelho… '+prontas, sub:'A prévia acima já pode ser usada; ela será substituída pelo relatório completo.'};
+  /* a etapa que o motor informa, sem repetir o título ("Carregando motor estatístico") */
+  var etapa=[/^carregando (o )?motor estat/i.test(a.msg||'')?'':a.msg,a.sub].filter(Boolean).join(' — ').replace(/…/g,'').replace(/\.$/,'');
+  return {txt:(baixando?'Baixando o módulo estatístico':'Carregando o motor estatístico')+'…'+_bioDur(a.partida)+(etapa?(' ('+etapa+')'):''), sub:subCarga};
+}
+function _bioestatStatusNaTela(){
+  try{
+    var el=document.getElementById('bioAutoStatus'); if(!el) return;
+    var qid=el.getAttribute('data-qid'), sid=el.getAttribute('data-sid'); if(qid==null||sid==null) return;
+    var s=_bioestatStatusTexto(qid+'|'+sid); if(!s) return;
+    var h=esc(s.txt)+(s.sub?'<small>'+esc(s.sub)+'</small>':'');
+    if(el.innerHTML!==h) el.innerHTML=h;
+  }catch(e){}
 }
 function _bioestatPump(){
-  if(!_bioEngineReady||_bioAutoBusy||!_bioAutoQueue.length)return;
-  var f=document.getElementById('bioEngineFrame'), item=_bioAutoQueue.shift(); if(!f||!f.contentWindow)return;
+  clearTimeout(_bioLiberarT);
+  if(!_bioAutoBusy && !_bioAutoQueue.length){ if(document.getElementById('bioEngineFrame')) _bioestatAgendarLiberacao(); return; }
+  if(_bioAutoBusy||!_bioAutoQueue.length)return;
+  var f=document.getElementById('bioEngineFrame');
+  /* Motor fora da memória (ou reaberto): volta sozinho, e o trabalho espera na
+     fila até a página nova dizer que escuta. Antes ele saía da fila ANTES de
+     conferir o iframe — e sumia sem resposta nenhuma. */
+  if(!f){ _bioestatEnsureFrame(); return; }
+  _bioestatVigiar();
+  if(!_bioEngineReady||!f.contentWindow)return;
+  var item=_bioAutoQueue.shift(), c=_bioAutoCache[item.key];
+  /* órfão: a grade mudou e este cálculo foi substituído */
+  if(!c||c.sig!==item.sig||c.results[item.job.jobKey]){ delete _bioAutoPending[item.requestId]; _bioestatPump(); return; }
   _bioAutoBusy=item.requestId;
-  clearTimeout(_bioAutoWd);
-  _bioAutoWd=setTimeout(function(){ /* job travou: marca erro e segue (não trava a fila) */
-    if(_bioAutoBusy!==item.requestId)return;
-    var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){ c.results[item.job.jobKey]={ok:false,erro:'tempo esgotado'}; c.done++; if(c.done>=c.total){ c.status='ready'; _bioestatPersistir(c); } }
-    delete _bioAutoPending[item.requestId]; _bioAutoBusy=null; _bioestatPump(); _bioestatRefreshOpen(c);
-  },70000);
-  f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin);
+  _bioAtual={item:item, fase:'enviado', naFase:0, silencio:0, partida:0, msg:'', sub:''};
+  try{ f.contentWindow.postMessage({type:'agracta:bioestat-run',payload:item.payload},window.location.origin); }
+  catch(e){ console.error('[bioestat] envio ao motor',e); _bioestatMotorFalhou('surdo'); return; }
+  _bioestatStatusNaTela();
 }
 function _bioestatP(rel){
   var tab=rel&&rel.analise&&rel.analise.tabela_anova||[];
@@ -13531,6 +14668,8 @@ function _bioestatDoseHtml(a,nf,pf){
        resultado — e tem de aparecer escrito, não como célula em branco. */
     var linhas=(c.doses_letais||[]).map(function(d){
       var ic=(d.ic_inf!=null&&d.ic_sup!=null)?(nf(d.ic_inf,3)+' – '+nf(d.ic_sup,3)):'não estimável';
+      /* g de Fieller: a partir de 0,5 o intervalo existe mas não serve (Finney, 1971) */
+      if(d.ic_confiavel===false && d.ic_inf!=null) ic+=' · g='+nf(d.g,2)+', pouco útil';
       return '<tr><td class="av-tname">'+esc(_bioestatRotuloDose(d.p))+'</td><td>'+nf(d.dose,3)+(un?(' '+esc(un)):'')+'</td><td style="color:#7a877f">'+esc(ic)+'</td></tr>';
     }).join('');
     var meta=[];
@@ -13538,7 +14677,10 @@ function _bioestatDoseHtml(a,nf,pf){
     if(c.link) meta.push('ligação '+c.link);
     if(c.p_qui_quadrado!=null) meta.push('aderência χ²'+(c.gl!=null?('('+c.gl+')'):'')+'='+nf(c.qui_quadrado,2)+' p'+pf(c.p_qui_quadrado));
     if(c.heterogeneo) meta.push('heterogênea (h='+nf(c.heterogeneidade_h,2)+') — IC alargado por '+(c.criterio_ic||'t de Student'));
-    if(c.abbott_aplicado) meta.push('Abbott sobre a testemunha');
+    var rn=c.resposta_natural||null;
+    if(rn && rn.metodo==='estimada') meta.push('resposta natural estimada C='+nf((rn.C||0)*100,1)+'%'+(rn.C_ep!=null?(' ±'+nf(rn.C_ep*100,1)):'')+' (testemunha no modelo)');
+    else if(rn && rn.metodo==='declarada') meta.push('resposta natural declarada C='+nf((rn.C||0)*100,1)+'%');
+    else if(c.abbott_aplicado) meta.push('Abbott sobre a testemunha');
     return '<div style="margin-top:6px">'+
       (curvas.length>1?'<div style="font-size:10.5px;color:#486053"><b>'+esc(c.grupo||'curva')+'</b></div>':'')+
       (linhas?'<div class="av-scroll" style="margin-top:3px"><table class="av-table"><thead><tr><th>Dose letal</th><th>Estimativa</th><th>IC 95% (Fieller)</th></tr></thead><tbody>'+linhas+'</tbody></table></div>':'')+
@@ -13551,7 +14693,10 @@ function _bioestatDoseHtml(a,nf,pf){
     if(par.erro) l.push('paralelismo não testado: '+String(par.erro));
     if(pot.p!=null) l.push('potência χ²('+pot.gl+')='+nf(pot.qui2,2)+' p'+pf(pot.p)+(pot.difere?' — potências diferentes':' — sem diferença de potência'));
     var rz=(cmp.razoes||[]).map(function(r){
-      return '<tr><td class="av-tname">'+esc(r.grupo)+'</td><td>'+nf(r.lc50,3)+'</td><td>'+nf(r.rr,2)+'×</td><td style="color:#7a877f">'+nf(r.ic_inf,2)+' – '+nf(r.ic_sup,2)+'</td><td>'+(r.referencia?'referência':(r.significativo?'difere':'ns'))+'</td></tr>';
+      /* RR90 junto: com inclinações diferentes a razão muda com a dose, e a
+         resistência pode aparecer só na CL90 (Robertson & Preisler, 1992) */
+      var r90=(r.rr90!=null&&!r.referencia)?(' · RR90 '+nf(r.rr90,2)+'× ('+(r.significativo90?'difere':'ns')+')'):'';
+      return '<tr><td class="av-tname">'+esc(r.grupo)+'</td><td>'+nf(r.lc50,3)+'</td><td>'+nf(r.rr,2)+'×</td><td style="color:#7a877f">'+nf(r.ic_inf,2)+' – '+nf(r.ic_sup,2)+'</td><td>'+(r.referencia?'referência':(r.significativo?'difere':'ns'))+esc(r90)+'</td></tr>';
     }).join('');
     cmpHtml='<div style="margin-top:7px;border-top:1px dashed #d9e5dc;padding-top:6px">'+
       '<div style="font-size:10.5px;color:#486053"><b>Comparação de curvas</b>'+(cmp.referencia?(' <span style="font-weight:400;color:#8a948e">· referência '+esc(cmp.referencia)+'</span>'):'')+'</div>'+
@@ -13562,6 +14707,27 @@ function _bioestatDoseHtml(a,nf,pf){
   return '<div style="margin-top:7px;padding:7px 9px;border:1px solid #d9e5dc;border-radius:8px;background:#fff">'+
     '<div style="font-size:10.5px;color:#26352c"><b>Curva de dose-resposta</b>'+(a.escala_dose?(' <span style="font-weight:400;color:#8a948e">· dose em '+esc(a.escala_dose)+'</span>'):'')+'</div>'+
     blocos+cmpHtml+'</div>';
+}
+/* Curva de dose de resposta CONTÍNUA (log-logística de 4 parâmetros): as doses
+   efetivas relativas e — para resposta que cai, como o crescimento micelial — a
+   CE absoluta, que é a CE50 da fitopatologia (Edgington et al., 1971). */
+function _bioestatCurvaContinuaHtml(a,nf){
+  if(!a||!a.doses_efetivas) return '';
+  var un=a.unidade?(' '+a.unidade):'';
+  var lin=function(q,rot){
+    var ic=(q.ic_inf!=null&&q.ic_sup!=null)?(nf(q.ic_inf,3)+' – '+nf(q.ic_sup,3)):(q.motivo||'não estimável');
+    return '<tr><td class="av-tname">'+esc(rot)+'</td><td>'+(q.dose!=null?nf(q.dose,4)+esc(un):'—')+'</td><td style="color:#7a877f">'+esc(ic)+(q.extrapolado?' · fora do testado':'')+'</td></tr>';
+  };
+  var rel=(a.doses_efetivas||[]).map(function(q){ return lin(q,'DE'+nf(q.nivel,0)+' (relativa)'); }).join('');
+  var abs=(a.doses_efetivas_absolutas||[]).map(function(q){ return lin(q,'CE'+nf(q.nivel,0)+' (vs testemunha)'); }).join('');
+  var ce50=(a.doses_efetivas_absolutas||[]).filter(function(q){ return q.nivel===50&&q.dose!=null; })[0];
+  var cls=(ce50&&window.BioensaioCore)?BioensaioCore.classeEdgington(ce50.dose,a.unidade):null;
+  var p=a.parametros||{};
+  return '<div style="margin-top:7px;padding:7px 9px;border:1px solid #d9e5dc;border-radius:8px;background:#fff">'+
+    '<div style="font-size:10.5px;color:#26352c"><b>Curva de dose</b> <span style="font-weight:400;color:#8a948e">· log-logística de 4 parâmetros'+(a.r2!=null?(' · R² '+nf(a.r2,3)):'')+'</span></div>'+
+    '<div class="av-scroll" style="margin-top:3px"><table class="av-table"><thead><tr><th>Dose efetiva</th><th>Estimativa</th><th>IC 95%</th></tr></thead><tbody>'+abs+rel+'</tbody></table></div>'+
+    '<div style="font-size:10px;color:#728078;margin-top:2px">testemunha (d) '+nf(p.patamar_dose_zero_d,1)+' · dose alta (c) '+nf(p.patamar_dose_alta_c,1)+' · inclinação '+nf(p.inclinacao_b,2)+
+      (cls&&cls.classe?(' · '+esc(cls.rotulo)+' (Edgington et al., 1971)'):'')+'</div></div>';
 }
 /* O LOG DE DECISÃO, na tela e ao lado do número que ele justifica. Recolhido,
    porque no talhão o que importa é a letra; aberto, porque numa auditoria o
@@ -13588,8 +14754,17 @@ function _bioestatBaixarJson(qid,sid,jobKey){
     },null,2)],{type:'application/json'}), 'agracta-estatistica-'+lim(sid)+'-'+lim(jobKey)+'.json');
   }catch(e){ alert('Não foi possível baixar o relatório: '+e); }
 }
+/* CV do ensaio pela tabela de Pimentel-Gomes (2009), a de uso corrente em
+   experimentação agrícola no Brasil: < 10% baixo; 10–20% médio; 20–30% alto;
+   > 30% muito alto. Dá ao número a leitura que quem revisa o laudo faz de cabeça. */
+function _cvClassePG(cv){
+  if(cv==null||!isFinite(cv)) return '';
+  return cv<10?'baixo':(cv<=20?'médio':(cv<=30?'alto':'muito alto'));
+}
 function _bioestatResumoCard(job,rel,qid,sid){
-  if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
+  /* a triagem forense não tem UMA data: é a variável inteira (datasTexto) */
+  var _quando=(job.date&&(isoToBR(job.date)||job.date))||job.datasTexto||'';
+  if(!rel||!rel.ok)return '<div style="padding:10px;border:1px solid #edc8c8;background:#fff7f7;border-radius:9px;margin-top:7px"><b style="color:#a33">'+esc(job.variavel)+(_quando?' · '+esc(_quando):'')+'</b><div style="font-size:11px;color:#8a4a4a;margin-top:3px">'+esc((rel&&rel.erro)||'Não foi possível analisar.')+'</div></div>';
   var a=rel.analise||{}, cm=rel.comparacao_medias||{};
   /* `controle` faltava nesta lista: com comparação contra testemunha o
      relatório traz só essa chave, então Dunnett/Dunn saía calculado e o cartão
@@ -13626,10 +14801,11 @@ function _bioestatResumoCard(job,rel,qid,sid){
   var jsonBtn=(qid&&sid&&job&&job.jobKey)?('<button type="button" onclick="_bioestatBaixarJson('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+','+esc(JSON.stringify(job.jobKey))+')" style="margin-top:6px;padding:4px 8px;border:1px solid #cfdfd5;background:#fff;color:#486053;border-radius:7px;font:600 10px system-ui;cursor:pointer">Baixar relatório completo (JSON)</button>'):'';
   return '<div style="padding:10px;border:1px solid #d9e5dc;background:#fbfdfb;border-radius:9px;margin-top:7px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
-    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · CV residual '+nf(cv,1)+'%':'')+(cmp?' · comparação <b>'+esc(metodoCmp)+'</b>':'')+(transf?' · transf. '+esc(transf):'')+'</div>'+
+    '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · <span title="Pimentel-Gomes (2009): &lt; 10% baixo; 10–20% médio; 20–30% alto; &gt; 30% muito alto">CV residual '+nf(cv,1)+'%'+((typeof _cvClassePG==='function')?(' ('+_cvClassePG(cv)+')'):'')+'</span>':'')+(cmp?' · comparação <b>'+esc(metodoCmp)+'</b>':'')+(transf?' · transf. '+esc(transf):'')+'</div>'+
     pressHtml+
     (rows?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')+
     _bioestatDoseHtml(a,nf,pf)+
+    (typeof _bioestatCurvaContinuaHtml==='function'?_bioestatCurvaContinuaHtml(a,nf):'')+
     (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
     _bioestatDecisaoHtml(rel)+
     jsonBtn+
@@ -13742,11 +14918,21 @@ function _bioestatForenseCard(job,rel){
   var rot=(!v.cobertura_suficiente||achados.some(function(a){return a.executado===false;}))?'Triagem parcial / inconclusiva':flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' atenção'):'sem anomalias');
   var lis=achados.map(function(a){ return '<li style="margin:2px 0"><b>'+esc(a.nome)+'</b>'+(a.leitura?' — '+esc(a.leitura):(a.estatistica?' — '+esc(a.estatistica):''))+'</li>'; }).join('');
   return '<div style="padding:9px 11px;border:1px solid '+bd+';background:'+bg+';border-radius:9px;margin-top:7px">'+
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b>'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:'+cor+'">'+esc(job.variavel)+' · '+esc(job.datasTexto?(job.datasTexto+(job.datas>1?' ('+job.datas+' avaliações)':'')):(isoToBR(job.date)||job.date||''))+'</b>'+
     '<span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+chipbg+';color:'+cor+';white-space:nowrap">'+esc(rot)+'</span></div>'+
     (v.resumo?'<div style="font-size:11px;color:#6a766f;margin-top:3px">'+esc(v.resumo)+'</div>':'')+
     (lis?'<ul style="margin:6px 0 0;padding-left:18px;font-size:11px;color:#5a655e">'+lis+'</ul>':'')+
   '</div>';
+}
+/* A linha de status leva o estudo consigo (data-qid/sid) para ser reescrita no
+   lugar a cada aviso do motor, sem repintar a ficha inteira. */
+function _bioestatStatusDiv(qid,sid,s){
+  return '<div id="bioAutoStatus" class="bio-engine-status" data-qid="'+esc(qid)+'" data-sid="'+esc(sid)+'">'+esc(s.txt)+(s.sub?'<small>'+esc(s.sub)+'</small>':'')+'</div>';
+}
+/* `html` já vem escapado por quem chama. */
+function _bioestatFalhaHtml(qid,sid,html){
+  return '<div style="padding:10px 11px;border:1px solid #edc8c8;background:#fff7f7;border-radius:10px;margin-top:7px;color:#8a4a4a;font-size:11px;font-weight:600;line-height:1.45">'+html+
+    '<button type="button" onclick="_bioestatRepetir('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')" style="display:block;margin-top:7px;padding:7px 12px;border:1px solid #d9a3a3;background:#fff;color:#8a3a3a;border-radius:8px;font:700 11px system-ui;cursor:pointer">Tentar de novo</button></div>';
 }
 function _bioestatIntegratedHtml(qid,sid,study){
   var jobs=_bioestatJobs(qid,study);
@@ -13757,28 +14943,41 @@ function _bioestatIntegratedHtml(qid,sid,study){
   var _pendHtml=_bioestatPendentesHtml(qid,study);
   if(!jobs.length){
     if(!_pendHtml) return '';
-    return '<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
+    return '<div class="sd-section"><div class="sd-section-title">Análise estatística <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
       '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Nenhuma avaliação fecha a grade ainda. O que falta para a análise nascer sozinha:</div>'+
       abrir+_pendHtml+'</div>';
   }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
   setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
-  var tot=(c&&c.total)||jobs.length*2, body='', fbody='';
+  if(_bioSolicitado[key]!==sig && !(c&&c.sig===sig&&c.manual)){
+    var fhtml='';_bioestatJobsForense(qid,study,jobs).forEach(function(j){var r=c&&c.sig===sig&&c.results&&c.results[j.jobKey];if(r)fhtml+=_bioestatForenseCard(j,r);});
+    return '<div class="sd-section"><div class="sd-section-title">Análise estatística</div>'+abrir+_bioBotaoCalcular(qid,sid)+'<p>Os cálculos estatísticos iniciam por este botão. Após mudar os dados, inicie novamente.</p></div><div class="sd-section"><div class="sd-section-title">Triagem forense automática</div>'+(fhtml||'<p>A triagem completa é preparada em segundo plano. Alertas locais aparecem durante a digitação.</p>')+'</div>';
+  }
+  var tot=(c&&c.sig===sig&&c.total)||(jobs.length+_bioestatJobsForense(qid,study,jobs).length), body='', fbody='';
   if(!c||c.sig!==sig){
     jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
-    body+='<div id="bioAutoStatus" class="bio-engine-status">Carregando verificações avançadas no aparelho… '+((c&&c.done)||0)+' de '+tot+'<small>No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.</small></div>';
-    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado… 0 de '+jobs.length+'<small>Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
+    /* Texto de partida: a linha é reescrita no lugar assim que o motor diz em
+       que pé está (abrindo, baixando, carregando, calculando). */
+    body+=_bioestatStatusDiv(qid,sid,{txt:'Preparando as verificações avançadas no aparelho… 0 de '+tot, sub:'No primeiro uso o módulo estatístico é baixado uma vez e depois funciona offline.'});
+    fbody='<div class="bio-engine-status">Triagem forense aguardando o motor avançado…<small>Uma por variável, com todas as avaliações juntas. Ela verifica padrões atípicos sem alterar os dados originais.</small></div>';
   }
   /* "Repetições insuficientes" era o diagnóstico genérico para qualquer motivo.
      Quando a pendência tem endereço, ela vale mais que a frase. */
   else if(c.status==='empty'){ body=_pendHtml||'<div style="font-size:11px;color:#7c8a80">Ainda não há repetições suficientes para análise automática.</div>'; }
+  else if(c.status==='erro'){
+    jobs.forEach(function(j){body+=_bioestatRapidoCard(j,study);});
+    body+=_bioestatFalhaHtml(qid,sid,'As verificações avançadas não rodaram: '+esc(c.erro||'erro no preparo')+' A prévia acima continua valendo.');
+  }
   else {
     /* Renderização PROGRESSIVA: mostra a análise de cada avaliação assim que o job dela termina,
        sem esperar a triagem forense (que no Pyodide frio pode demorar ~1 min). */
     var res=(c&&c.results)||{}, faltamAnalise=0, faltamForense=0;
     jobs.forEach(function(j){
       if(res[j.jobKey]) body+=_bioestatResumoCard(j,res[j.jobKey],qid,sid); else {body+=_bioestatRapidoCard(j,study);faltamAnalise++;}
-      if(res[j.jobKey+'|F']) fbody+=_bioestatForenseCard(j,res[j.jobKey+'|F']); else faltamForense++;
+    });
+    var _jobsF=_bioestatJobsForense(qid,study,jobs);
+    _jobsF.forEach(function(j){
+      if(res[j.jobKey]) fbody+=_bioestatForenseCard(j,res[j.jobKey]); else faltamForense++;
     });
     /* A curva de sobrevivência entra ANTES das análises por data: num
        bioensaio ela é a resposta, e as leituras avulsas são o caminho. */
@@ -13788,8 +14987,13 @@ function _bioestatIntegratedHtml(qid,sid,study){
       else _tHtml+='<div class="bio-engine-status">Curva de sobrevivência de <b>'+esc(j.variavel)+'</b> em segundo plano…<small>Ela usa as leituras de todas as datas juntas.</small></div>';
     });
     body=_tHtml+body;
-    if(faltamAnalise>0) body+='<div id="bioAutoStatus" class="bio-engine-status">Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length+'<small>A prévia acima já pode ser usada; ela será substituída pelo relatório completo.</small></div>';
-    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(jobs.length-faltamForense)+' de '+jobs.length+'</div>';
+    if(faltamAnalise>0) body+=_bioestatStatusDiv(qid,sid,(c.status==='loading'&&_bioestatStatusTexto(key))||{txt:'Verificações avançadas em segundo plano… '+(jobs.length-faltamAnalise)+' de '+jobs.length, sub:'A prévia acima já pode ser usada; ela será substituída pelo relatório completo.'});
+    if(faltamForense>0) fbody+='<div class="bio-engine-status">Triagem forense em segundo plano… '+(_jobsF.length-faltamForense)+' de '+_jobsF.length+' variáve'+(_jobsF.length>1?'is':'l')+'<small>Uma triagem por variável, com todas as avaliações juntas.</small></div>';
+    /* Terminou com erro? O motivo está em cada cartão; aqui fica o caminho de
+       volta. Antes o erro ("tempo esgotado") ficava até fechar o app. */
+    var _falhas=Object.keys(res).filter(function(k){ return res[k]&&res[k].ok!==true; }).length;
+    if(_falhas&&c.status!=='loading'&&!estudoFinalizado(study))
+      body+=_bioestatFalhaHtml(qid,sid,_falhas+(_falhas>1?' verificações avançadas terminaram':' verificação avançada terminou')+' com erro — o motivo está no cartão. Se foi o motor (tempo, memória, internet), tente de novo.');
   }
   /* UMA folha por ALVO. Antes era um botão só, cravado na variável mais frequente —
      estudo com alvos diferentes (Mancha angular + Cercospora) só gerava a primeira. */
@@ -13808,38 +15012,59 @@ function _bioestatIntegratedHtml(qid,sid,study){
     }).join('');
     _btnPrancha='<div style="margin:8px 0 2px"><div style="font-size:11px;color:#728078;margin-bottom:2px">Folha de gráficos para o relatório — uma por alvo avaliado. Baixa em SVG ou PNG.</div>'+_linhas+'</div>';
   }
-  var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística automática <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
+  var sec='<div class="sd-section"><div class="sd-section-title">Análise estatística <span style="font-weight:400;color:#8a948e">· motor Agracta</span></div>'+
     '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">O motor escolhe a rota, verifica pressupostos e compara os tratamentos sem abrir outra tela.</div>'+
     /* As avaliações descartadas entram DEPOIS das analisadas. Um estudo com três
        datas em que só uma fecha mostrava uma análise e duas ausências mudas. */
     abrir+body+_pendHtml+_btnPrancha+'</div>';
   if(fbody) sec+='<div class="sd-section"><div class="sd-section-title">Triagem forense <span style="font-weight:400;color:#8a948e">· integridade dos dados</span></div>'+
-    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
+    '<div style="font-size:11px;color:#728078;margin:-2px 0 7px">Uma triagem por variável, com todas as avaliações juntas. Sinaliza padrões atípicos (dígitos, arredondamento, duplicatas, dispersão, gradiente de campo) p/ conferência — não é prova de fraude.</div>'+fbody+'</div>';
   return sec;
 }
 /* Re-renderiza o detalhe do estudo quando a análise fica pronta — usado tanto pelo handler de
    mensagem quanto pelo watchdog (antes só o handler atualizava, então um job que estourava o
    tempo deixava o spinner preso na tela mesmo com o cache 'ready'). Tolerante: dispara também se
    o spinner ainda estiver na tela, mesmo que a checagem do overlay falhe. */
+/* A ficha deste estudo está na tela agora? Repintar em segundo plano (resultado
+   da estatística, culturas do Agrofit) só pode acontecer com ela aberta: voltar
+   para a quadra não limpa curSid, e o repintar reabria o estudo sozinho. */
+function _estudoNaTela(qid,sid){
+  var ov=document.getElementById('sdOvl');
+  return !!(ov&&ov.classList.contains('open')&&curV===qid&&curSid===sid);
+}
 var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
   /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
      aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
   if(c&&window.AgEstudoPagina&&window.AgEstudoPagina.atualizarAnalises)window.AgEstudoPagina.atualizarAnalises(c);
-  if(!c||curV!==c.qid||curSid!==c.sid)return;
-  var ov=document.getElementById('sdOvl');
-  var open=(ov&&ov.classList.contains('open'))||!!document.getElementById('bioAutoStatus');
-  if(!open)return;
+  /* #bioAutoStatus fica no DOM da ficha fechada: não prova que ela está aberta. */
+  if(!c||!_estudoNaTela(c.qid,c.sid))return;
   clearTimeout(_bioRefreshT);
-  _bioRefreshT=setTimeout(function(){ if(curV===c.qid&&curSid===c.sid) openStudyDetail(c.qid,c.sid); },120);
+  _bioRefreshT=setTimeout(function(){ if(_estudoNaTela(c.qid,c.sid)) openStudyDetail(c.qid,c.sid); },120);
 }
 window.addEventListener('message',function(ev){
-  if(ev.origin!==window.location.origin||!ev.data||ev.data.type!=='agracta:bioestat-result')return;
+  if(ev.origin!==window.location.origin||!ev.data)return;
+  var tipo=ev.data.type;
+  if(tipo==='agracta:bioestat-ola'||tipo==='agracta:bioestat-status'){
+    /* Só o iframe da vez fala pelo motor: um já desmontado não abre nem pulsa. */
+    var fm=document.getElementById('bioEngineFrame');
+    if(!fm||ev.source!==fm.contentWindow)return;
+    if(tipo==='agracta:bioestat-ola') _bioestatMotorAberto(); else _bioestatSinal(ev.data);
+    return;
+  }
+  if(tipo!=='agracta:bioestat-result')return;
   var item=_bioAutoPending[ev.data.requestId]; if(!item)return;
-  var c=_bioAutoCache[item.key]; if(c&&c.sig===item.sig){c.results[item.job.jobKey]=ev.data.resultado||{ok:false,erro:'Motor não devolveu um relatório'};c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
-  delete _bioAutoPending[ev.data.requestId]; _bioAutoBusy=null; clearTimeout(_bioAutoWd);
-  var st=document.getElementById('bioAutoStatus'); if(st&&c)st.textContent='Calculando automaticamente no aparelho… '+c.done+' de '+c.total;
+  var c=_bioAutoCache[item.key], rel=ev.data.resultado||{ok:false,erro:'Motor não devolveu um relatório'};
+  if(c&&c.sig===item.sig&&!c.results[item.job.jobKey]){c.results[item.job.jobKey]=rel;c.done++;if(c.done>=c.total){c.status='ready';_bioestatPersistir(c);}} /* ignora job órfão de cálculo substituído */
+  delete _bioAutoPending[ev.data.requestId];
+  if(_bioAutoBusy===ev.data.requestId){ _bioAutoBusy=null; _bioAtual=null; }
+  _bioMotorEst.reaberturas=0;
+  /* Motor que não subiu devolve o mesmo erro para cada trabalho, um de cada
+     vez. O motivo já está dito: os outros deste estudo saem com ele agora, e
+     "Tentar de novo" começa com um motor novo. */
+  if(rel.ok!==true&&ev.data.motor&&ev.data.motor.fase==='falhou') _bioestatFalharFila(rel.erro||'O motor estatístico não carregou.', item.key);
   _bioestatPump();
+  _bioestatStatusNaTela();
   /* Atualiza também cada triagem forense na página de Conhecimento. */
   if(c) _bioestatRefreshOpen(c);
 });
@@ -14123,13 +15348,14 @@ function openStudyDetail(qid,sid){
   h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
   /* Finalizado: some tudo que escreve. Ler, copiar e baixar continuam valendo. */
   if(!_fin){
-    h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Usar ordem randomizada no modo automático de avaliação">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
+    h+='<button class="btn-sm'+(study.randomizado?' active':'')+'" onclick="toggleStudyRandomizado(\''+qid+'\',\''+sid+'\')" title="Configurar a randomização do estudo">'+(study.randomizado?'Randomizado':'Ativar random.')+'</button>';
     if(study.randomizado) h+='<button class="btn-sm" onclick="openRandomizacaoModal(\''+qid+'\',\''+sid+'\')" title="Colar ou editar a ordem de parcelas randomizadas">Ordem</button>';
     h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">Editar</button>';
   }
   h+='</div>';
   h+='</div>';
 
+  if(!_fin)h+='<button class="btn-sm" onclick="openProtocoloAvaliacoes('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')">Protocolo: avaliações e controles</button>';
   /* Meta info */
   h+='<div class="sd-meta">';
   /* Laboratório não tem planta plantada: mostra a especialidade no lugar da cultura. */
@@ -14305,14 +15531,16 @@ function openStudyDetail(qid,sid){
     h+='<div class="eventos-list">';
     var sortAvs=study.avaliacoes.slice().sort(function(a,b){return (a.data||"").localeCompare(b.data||"")});
     sortAvs.forEach(function(a,i){
-      h+='<div class="evento-item">';
+      var _foldKey=qid+'|'+sid+'|'+a.id;
+      h+='<details class="evento-item" data-av-details="'+esc(_foldKey)+'"'+(_avDetailsOpen[_foldKey]?' open':'')+'><summary>';
       /* Data sozinha não identifica leitura de bancada: 24 e 48 HAT caem no
          mesmo dia. Sai o momento quando declarado, senão a hora da leitura. */
       var _mrot=''; try{ if(a.momento){ var _mm2=avMomento(a,null); if(_mm2&&_mm2.explicito) _mrot=' · '+_mm2.rotulo; } }catch(e){}
       if(!_mrot && a.hora) _mrot=' · '+esc(String(a.hora).slice(0,5));
-      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação rubricada" style="margin-left:6px;font-size:12px">✍️</span>':'');
+      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação assinada" style="margin-left:6px;font-size:12px">✍️</span>':'');
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
+      var _prog=AvaliacaoCore.avaliacao(study,a);h+='<small>'+(_prog.complete?'Concluída':(_prog.started?'Parcial · '+_prog.pending+' campos pendentes':'Pendente'))+'</small></summary>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
         h+='<div class="evento-bbch">'+esc(bbchRotulo(studyCrop,a.bbch))+'</div>';
@@ -14321,14 +15549,17 @@ function openStudyDetail(qid,sid){
       /* §9 — o que aconteceu entre a aplicação e esta leitura. */
       try{ h+=janelaBlocoHtml(qid, sid, a); }catch(e){}
       h+=avGridHtml(a);
-      h+=avResultHtml(study,a);
+      var _res=avResultHtml(study,a);if(_res)h+='<details><summary>Comparação com a referência</summary>'+_res+'</details>';
       h+=carimboHtml(a.carimbo,a.data,a.hora);
-      h+='</div>';
+      h+='</details>';
     });
     h+='</div>';
   }
   h+='</div>';
   h+='<div id="study-stage-analise" class="study-stage-anchor" aria-hidden="true"></div>';
+  /* Bancada: o resultado do bioensaio (Potter ou placa) vem primeiro — é ele que
+     responde o ensaio; a AACPD e a comparação de médias vêm depois. */
+  if(isQuadraLab(qid)){ try{ h+=bioensaioPainelHtml(qid,sid,study); }catch(e){ console.error('[bioensaio painel]',e); } }
   h+=studyAudpcHtml(study);
   h+=studyChartsHtml(study);
   h+=_bioestatIntegratedHtml(qid,sid,study);
@@ -14354,7 +15585,7 @@ function openStudyDetail(qid,sid){
        '<b>🔒 Estudo finalizado</b><span>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+'</span>'+
        '<p>'+esc(String(_finN))+' resultado(s) de estatística congelados — o relatório usa este retrato, não um recálculo.</p>'+
        (_finFuso?('<small>Fuso do carimbo: '+esc(_finFuso)+'</small>'):'')+
-       (study.finalizacao.rubrica?('<div style="margin-top:8px"><img src="'+esc(study.finalizacao.rubrica)+'" alt="Rubrica de quem finalizou" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>'):'')+
+       _seloAssinatura(study.finalizacao.assinatura,(window.AssinaturaCore&&study.finalizacao.assinatura)?AssinaturaCore.conteudoFinalizacao(study):null,study.finalizacao.rubrica,'Rubrica de quem finalizou')+
        '</div>'+
        '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">🔓 Reabrir estudo</button>';
   }else{
@@ -14372,7 +15603,7 @@ function openStudyDetail(qid,sid){
                        :(_closePend.length?('<span class="pend-cab">'+_closePend.length+' pendência'+(_closePend.length===1?'':'s')+' — toque para ir ao registro</span>'+pendListaHtml(qid,sid,_closePend))
                                           :('<ul>'+_closeReview.issues.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>')))+
        (_closeReview.notes.length?'<small>'+esc(_closeReview.notes.join(' · '))+'</small>':'')+'</div>'+
-       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin:9px 0 8px">Finalizar pede senha e rubrica, carimba data e hora e <b>congela a estatística</b>. O estudo passa a somente-leitura e sai da agenda.</div>'+
+       '<div style="font-size:11px;color:#9a8;line-height:1.55;margin:9px 0 8px">Finalizar pede senha e assinatura eletrônica (SHA-256), carimba data e hora e <b>congela a estatística</b>. O estudo passa a somente-leitura e sai da agenda.</div>'+
        '<button class="btn-sm" onclick="finalizarEstudo(\''+qid+'\',\''+sid+'\')">Finalizar estudo</button>';
   }
   h+='</div>';
@@ -14574,7 +15805,7 @@ var _seCompNovoIdx=null;
    nao e uma "unidade geral do estudo": ela pertence a linha do adjuvante, pois
    0,1 % v/v so vira volume depois que a calda final e conhecida. */
 var TRAT_COMP_UNIDADES=[
-  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'],
+  ['L/ha','L/ha'], ['mL/ha','mL/ha'], ['g/ha','g/ha'], ['kg/ha','kg/ha'], ['mg/ha','mg/ha'],
   ['% v/v','% v/v — adjuvante líquido']
 ];
 function _seCompUnidadeNormalizar(u){
@@ -15267,7 +16498,11 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Densidade (g/mL) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabDens" value="'+esc(s.labDensidade==null?'':String(s.labDensidade))+'" placeholder="1,00" inputmode="decimal"></div>';
     h+='</div>';
     h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de laboratório deste estudo. O volume do pote costuma ser o do falcon (50 mL). Densidade é obrigatória quando a fonte é g/kg.</div>';
-    h+=arenaEditorHtml(s);
+    /* Bioensaio de bancada: o protocolo (Torre de Potter ou placa) é escrito aqui,
+       uma vez. A placa não tem arena de pote — a unidade é a própria placa. */
+    var _bioM='';
+    try{ _bioM=bioensaioMetodo(s,curV); h+=bioensaioEditorHtml(s); }catch(e){}
+    if(_bioM!=='placa') h+=arenaEditorHtml(s);
   }else{
     h+='<div class="se-section-title">Preparo de calda</div>';
     h+='<div class="se-row">';
@@ -15290,7 +16525,11 @@ function renderStudyEditModal(){
      momentos não são regulares — 2, 12, 24, 48, 72 h. Forçar "a cada X" ali
      obrigava a digitar avaliação por avaliação, e sem o momento declarado duas
      leituras do mesmo dia se engoliam. */
-  var _emH=(s.avalUnidade==='horas'), _lab=isQuadraLab(curV);
+  /* Bioensaio: a contagem e os momentos têm padrão de método — a Torre de Potter
+     lê em horas (24, 48, 72 h); a placa, em dias, até a testemunha chegar à borda. */
+  var _bioMA=''; try{ _bioMA=bioensaioMetodo(s,curV); }catch(e){}
+  var _emH=(s.avalUnidade==='horas')||(!s.avalUnidade && _bioMA==='potter'), _lab=isQuadraLab(curV);
+  var _momSug=(_bioMA==='potter')?'24, 48, 72':(_bioMA==='placa'?'1, 2, 3, 4, 5, 6, 7':'');
   if(_lab){
     h+='<div class="se-field"><label>Contagem do tempo</label><select id="seAvalUnid" onchange="_seTrocaContagem()">'+
        '<option value="horas"'+(_emH?' selected':'')+'>Horas após o tratamento (HAT)</option>'+
@@ -15304,7 +16543,8 @@ function renderStudyEditModal(){
        2, 12, 24, 36, 72; em dias são DAT 1, DAT 3, DAT 7 — também irregulares.
        A grade "a cada X" é do campo e não descreve nem um nem outro. */
     h+='<div class="se-field"><label>Hora zero</label><input type="time" id="seAvalHora0" value="'+esc(s.avalHora0||'')+'" placeholder="08:00"></div>';
-    h+='<div class="se-field"><label>Momentos ('+(_emH?'h':'dias')+')</label><input type="text" id="seAvalMom" value="'+esc(s.avalMomentos||'')+'" placeholder="'+(_emH?'2, 12, 24, 36, 72':'1, 3, 7')+'" inputmode="decimal"></div>';
+    h+='<div class="se-field"><label>Momentos ('+(_emH?'h':'dias')+')</label><input type="text" id="seAvalMom" value="'+esc(s.avalMomentos||'')+'" placeholder="'+(_momSug||(_emH?'2, 12, 24, 36, 72':'1, 3, 7'))+'" inputmode="decimal">'+
+       ((_momSug&&!s.avalMomentos)?'<button type="button" class="btn-sm" style="margin-top:4px" onclick="var e=document.getElementById(\'seAvalMom\');if(e)e.value=\''+_momSug+'\'">usar '+_momSug+(_bioMA==='potter'?' h':' dias')+'</button>':'')+'</div>';
   }else{
     h+='<div class="se-field"><label>A cada (dias)</label><input type="number" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
     h+='<div class="se-field"><label>Nº avaliações</label><input type="number" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
@@ -15334,11 +16574,11 @@ function renderStudyEditModal(){
   var _du=(typeof doseUnidadeDeclarada==='function')?doseUnidadeDeclarada(s):(s.doseUnidade||'');
   h+='<div class="se-field" id="seDoseUnidWrap"'+(_dm==='ppm'?' style="display:none"':'')+'><label>Unidade da dose</label><select id="seDoseUnid">'+
     '<option value=""'+(_du?'':' selected')+'>— não declarada —</option>'+
-    ['L/ha','mL/ha','g/ha','kg/ha'].map(function(u){
+    doseUnidades().map(function(u){
       return '<option value="'+u+'"'+(u===_du?' selected':'')+'>'+u+'</option>';
     }).join('')+'</select></div>';
   h+='</div>';
-  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Tratamento que já traz a unidade escrita na dose (ex.: "500 mL/ha") continua mandando nela — isto aqui só resolve quem escreveu só o número.</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Sai impressa no rótulo dos tratamentos, no gráfico e na tabela. Cada tratamento pode ter a sua, no seletor ao lado da dose — T1 em mg/ha, T2 em g/ha e T3 em L/ha no mesmo protocolo. Esta aqui vale para quem ficou só com o número.</div>';
   if(typeof doseUnidadePendente==='function' && doseUnidadePendente(s)){
     h+='<div class="se-warn" style="font-size:11px;margin:-4px 0 8px;color:#d08a3a">⚠ Há tratamento com a dose escrita só com o número e nenhuma unidade declarada. Enquanto ficar assim, o gráfico mostra o número sem unidade e a calculadora não prepara — ela pergunta. Não é chute que resolve: entre L/ha e g/ha há mil vezes de diferença.</div>';
   }
@@ -15437,18 +16677,21 @@ function renderStudyEditModal(){
         if(t.doseRef) h+='<div class="e-hint" style="margin:2px 0 0">Dose de: <b>'+esc(doseOrigemRotulo(t.doseRef.origem))+'</b>'+(t.doseRef.documento?(' · '+esc(t.doseRef.documento)):'')+'</div>';
         /* Equivalente em i.a.: duas formulações a 1 L/ha não são a mesma dose se uma
            tem 250 g/L e a outra 500. */
-        var _ia=null; try{ _ia=tratEquivalenteIA(t); }catch(e){}
+        var _ia=null; try{ _ia=tratEquivalenteIA(t,s); }catch(e){}
         if(_ia) h+='<div class="e-hint" style="margin:2px 0 0">Equivalente: <b>'+esc(tratEquivalenteIATexto(_ia))+'</b>'+
           (_ia.parcial?' <span style="color:#dccd8c">· um dos ativos não pôde ser convertido</span>':'')+'</div>';
         /* Dose fora da bula não bloqueia — ensaio experimental existe para isso — mas
            PEDE a justificativa, e o campo fica ali mesmo, não escondido em obs. */
-        if(tratDoseForaDaBula(t)){
+        if(tratDoseForaDaBula(t,s)){
           h+='<div class="calc-warn">⚠ Dose fora da faixa registrada — uso experimental.</div>'+
              '<input type="text" data-f="justificativaDose" placeholder="Por que esta dose? (obrigatório para dose fora da bula)" value="'+esc(t.justificativaDose||'')+'"'+
              (t.justificativaDose?'':' style="border-color:#6b531b"')+'>';
         }
       }
-      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':'')+'><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
+      /* Unidade POR TRATAMENTO ao lado da dose (receita estruturada já tem a
+         sua em cada componente; ppm é concentração, não dose por área). */
+      var _uSel=(_cps.length||_dm==='ppm')?'':_seTratUnidadeSelect(i,t,s);
+      h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1;min-width:0;'+(_cps.length?'opacity:.7':'')+'"'+(_cps.length?' readonly title="Edite a dose em cada componente abaixo"':(_uSel?' onchange="seTratDoseDigitada(this)"':''))+'>'+_uSel+'<input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1;min-width:0"></div>';
       /* Veículo = o que COMPLETA a calda, e que raramente é água em ensaio de
          drone: metade dos tratamentos fecha o volume com óleo de soja. Vazio
          continua significando água, então nada muda em estudo antigo. */
@@ -15669,6 +16912,7 @@ function syncStudyInputs(){
   }
   x=el("seLabVol"); if(x) workingStudy.labVolumeMl=Math.max(0,_numBR(x.value,50))||50;
   if(el("seArForma")) workingStudy.arena=arenaLerEditor(el);
+  if(el("seBioMetodo")) workingStudy.bioensaio=bioensaioLerEditor(el, workingStudy.bioensaio);
   x=el("seLabFonte"); if(x) workingStudy.labFonteTipo=x.value;
   x=el("seLabFonteValor"); if(x) workingStudy.labFonteValor=x.value.trim();
   x=el("seLabPureza"); if(x) workingStudy.labPureza=x.value.trim();
@@ -15694,7 +16938,7 @@ function syncStudyInputs(){
   if(el("seAvalInt")) workingStudy.avalIntervalo=intVal("seAvalInt",workingStudy.avalIntervalo||7);
   if(el("seAvalNum")) workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
   syncTratInputs();
-  var _ft=(workingStudy.tratamentos||[]).find(function(t){return t&&t.testemunha;}); workingStudy.testemunha=_ft?_ft.id:''; /* legado s.testemunha reflete os checkboxes (não ressuscita T1) */
+  workingStudy.testemunha=studyTestemunha(workingStudy); /* legado s.testemunha reflete os checkboxes (não ressuscita T1) */
 }
 
 function seTratCompNovo(idx){
@@ -15725,6 +16969,7 @@ function _seCompUnidadeDaDose(raw,fallback){
   if(s.indexOf('%')>=0) return '% v/v';
   if(/ml(?:\/ha|ha)?/.test(s)) return 'mL/ha';
   if(/kg(?:\/ha|ha)?/.test(s)) return 'kg/ha';
+  if(/mg(?:\/ha|ha)?/.test(s)) return 'mg/ha';   /* mg antes de g */
   if(/g(?:\/ha|ha)?/.test(s)) return 'g/ha';
   if(/l(?:\/ha|ha)?/.test(s)) return 'L/ha';
   return _seCompUnidadeNormalizar(fallback)||'L/ha';
@@ -15844,6 +17089,67 @@ function seTratLote(idx,loteId){
   renderStudyEditModal();
 }
 
+/* ===== UNIDADE POR TRATAMENTO =================================================
+   "Quero colocar unidades diferentes no mesmo protocolo, como mg/ha, g/ha e
+   litros por hectare." A unidade MORA NO TEXTO DA DOSE ("500 mg/ha"): é o que
+   toda conta e todo rótulo já leem primeiro (doseUnidadeDe — o que foi escrito
+   na dose manda sobre o que o estudo declarou), e é como a dose do catálogo já
+   chega ao tratamento. O seletor só escreve ali. Nenhuma conta precisa aprender
+   um campo novo — e um campo novo esquecido por uma única conta seria dose mil
+   vezes errada com cara de certa.
+   Devolve '' (só o número: vale a unidade do estudo), a unidade reconhecida, ou
+   null quando a dose não é de uma unidade só (mistura "1,5 + 0,2%", % da calda,
+   unidade que o motor não conhece) — aí a unidade fica escrita em cada parte. */
+function _seTratUnidadeAtual(txt){
+  var s=String(txt==null?'':txt).trim();
+  if(!s) return '';
+  /* mistura primeiro: "1,5 + 2" é só número e mesmo assim não é UMA dose */
+  if(/\+/.test(s.replace(/^\s*\+/,'')) || s.indexOf('%')>=0) return null;
+  if(/^[+-]?\d[\d.,]*$/.test(s)) return '';
+  var BC=(typeof window!=='undefined')?window.BioCalculoCampo:null, u=null;
+  if(BC && BC.parseDose){
+    var d=BC.parseDose(s,'');
+    if(d && !d.erro) u=d.unidade;
+  } else u=_calcDoseUnit(s);
+  return doseUnidades().indexOf(u)>=0?u:null;
+}
+/* O número como foi escrito, com a unidade nova. Sem número ainda, não inventa. */
+function _seTratDoseComUnidade(txt, u){
+  var s=String(txt==null?'':txt);
+  if(_seTratUnidadeAtual(s)===null) return s;     /* mistura, % ou unidade estranha: não mexe */
+  var m=s.trim().match(/^[+-]?\d[\d.,]*/);
+  if(!m) return s;
+  return u?(m[0]+' '+u):m[0];
+}
+function _seTratUnidadeSelect(i, t, s){
+  var atual=_seTratUnidadeAtual(t.dose), du=doseUnidadeDeclarada(s);
+  return '<select data-f="__doseUnid" aria-label="Unidade da dose de '+esc(t.id)+'" style="width:auto;flex:0 0 auto;max-width:9.5em"'+
+    ' title="'+(atual===null?'Mistura ou % da calda: a unidade vai escrita em cada parte da dose':'Unidade desta dose')+'"'+
+    (atual===null?' disabled':'')+' onchange="seTratUnidade(this)">'+
+    '<option value=""'+(atual?'':' selected')+'>'+(du?('estudo ('+esc(du)+')'):'unidade…')+'</option>'+
+    doseUnidades().map(function(u){ return '<option value="'+u+'"'+(atual===u?' selected':'')+'>'+u+'</option>'; }).join('')+
+    '</select>';
+}
+/* Trocou a unidade: reescreve a dose na hora ("500" → "500 mg/ha"; "estudo"
+   volta ao número solto). Sem número ainda, a escolha espera: sai quando a dose
+   for digitada (seTratDoseDigitada). */
+function seTratUnidade(sel){
+  var row=sel&&sel.closest&&sel.closest('.se-trat'), inp=row&&row.querySelector('input[data-f="dose"]');
+  if(!inp) return;
+  inp.value=_seTratDoseComUnidade(inp.value, sel.value);
+  try{ syncTratInputs(); }catch(e){}
+}
+/* Digitou a dose: número solto com unidade já escolhida recebe a unidade; dose
+   escrita com unidade move o seletor para ela. */
+function seTratDoseDigitada(inp){
+  var row=inp&&inp.closest&&inp.closest('.se-trat'), sel=row&&row.querySelector('select[data-f="__doseUnid"]');
+  if(!sel) return;
+  var atual=_seTratUnidadeAtual(inp.value);
+  if(atual==='' && sel.value && /\d/.test(inp.value)) inp.value=_seTratDoseComUnidade(inp.value, sel.value);
+  else { sel.disabled=(atual===null); sel.value=atual||''; }
+  try{ syncTratInputs(); }catch(e){}
+}
+
 function syncTratInputs(){
   /* Lê os valores atuais dos inputs para não perder dados ao renderizar */
   var trats=document.querySelectorAll("#seTratList .se-trat");
@@ -15949,11 +17255,16 @@ function gerarAvaliacoesAuto(s){
   if(_parseMomentos(s.avalMomentos, s.avalUnidade).length) return _gerarAvalMomentos(s);
   var start=s.avalInicio||s.dataInicio, iv=parseInt(s.avalIntervalo)||0, n=parseInt(s.avalNum)||0;
   if(!start||n<=0) return 0;
+  /* Agenda reancorada na 1ª aplicação real (campo-inteligente.js): as previstas
+     andam junto. Sem isto, salvar o estudo recriaria as datas antigas. */
+  var _desl=parseInt(s.avalDeslocamento)||0;
+  if(_desl) start=_isoShift(start,_desl);
   var temData={}; s.avaliacoes.forEach(function(a){ if(a.data) temData[a.data]=true; });
   var add=0;
   for(var i=0;i<n;i++){
     var d=(iv>0)?_isoShift(start,i*iv):start;
-    if(temData[d]) continue;
+    /* avaliação já feita na data ORIGINAL do horário cobre o horário deslocado */
+    if(temData[d]||(_desl&&temData[_isoShift(d,-_desl)])) continue;
     var _avid='auto_'+d;
     /* o id é determinístico por data, então ele SEMPRE colide com uma exclusão anterior da
        mesma data. Limpa a lápide local e carimba _ts para o merge saber que esta é nova. */
@@ -16016,6 +17327,11 @@ function saveStudyV2(){
     /* preparo no laboratório entra na mesma trilha de auditoria BPL */
     if(_numBR(old.labVolumeMl,50) !== s.labVolumeMl) changes.push('Volume do pote (mL): ' + _numBR(old.labVolumeMl,50) + ' -> ' + s.labVolumeMl);
     if(JSON.stringify(old.arena||{}) !== JSON.stringify(s.arena||{})) changes.push('Unidade experimental (arena): ' + (arenaResumoTexto(old)||'—') + ' -> ' + (arenaResumoTexto(s)||'—'));
+    if(JSON.stringify(old.bioensaio||{}) !== JSON.stringify(s.bioensaio||{})){
+      var _bioAntes='—', _bioDepois='—';
+      try{ _bioAntes=bioensaioResumoTexto(old,curV)||'—'; _bioDepois=bioensaioResumoTexto(s,curV)||'—'; }catch(e){}
+      changes.push('Protocolo do bioensaio: ' + _bioAntes + ' -> ' + _bioDepois);
+    }
     if((old.labFonteTipo||'gL') !== s.labFonteTipo) changes.push('Fonte do produto (lab): "' + (old.labFonteTipo||'gL') + '" -> "' + s.labFonteTipo + '"');
     if(String(old.labFonteValor||'') !== String(s.labFonteValor||'')) changes.push('Valor da fonte (lab): "' + (old.labFonteValor||'—') + '" -> "' + (s.labFonteValor||'—') + '"');
     if(String(old.labPureza||'') !== String(s.labPureza||'')) changes.push('Pureza (lab): "' + (old.labPureza||'—') + '" -> "' + (s.labPureza||'—') + '"');
@@ -16323,7 +17639,7 @@ function _carimboClima(qid, dateStr, horaStr, cb){
     var ep = isPast ? (NDVI_PROXY+'/clima/historico?mac='+encodeURIComponent(mac)+'&date='+encodeURIComponent(dateStr)
                        + (horaStr?('&hora='+encodeURIComponent(String(horaStr).slice(0,5))):''))
                     : (NDVI_PROXY+'/clima?mac='+encodeURIComponent(mac));
-    fetch(ep).then(function(r){return r.json();}).then(function(d){
+    proxyFetch(ep).then(function(r){return r.json();}).then(function(d){
       if(!d||d.error){ openMeteo(); return; }
       function v(n){ return (n&&n.value!=null)?n.value:null; }
       /* sem_amostra = a estação não tinha leitura perto do horário pedido; melhor
@@ -16335,11 +17651,11 @@ function _carimboClima(qid, dateStr, horaStr, cb){
     }).catch(function(){ openMeteo(); });
   }
   if(_climaStations){ station(); }
-  else { fetch(NDVI_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){ if(Array.isArray(arr))_climaStations=arr; station(); }).catch(openMeteo); }
+  else { proxyFetch(NDVI_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){ if(Array.isArray(arr))_climaStations=arr; station(); }).catch(openMeteo); }
 }
 function _carimboNdvi(qid, cb){
   var ctr=quadraCenter(qid); if(!ctr){ cb(null); return; }
-  fetch(NDVI_PROXY+'/point?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6)+'&date='+todayISO()).then(function(r){return r.json();}).then(function(d){
+  proxyFetch(NDVI_PROXY+'/point?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6)+'&date='+todayISO()).then(function(r){return r.json();}).then(function(d){
     if(!d||d.error){ cb(null); return; }
     cb({fonte:'sentinel2',ndvi:d.ndvi,ndre:d.ndre,gndvi:d.gndvi,data:d.date});
   }).catch(function(){ cb(null); });
@@ -16537,10 +17853,25 @@ function saveAplicacao(){
    prancha e o % de controle já consomem. Sub-amostra NÃO é repetição: entrar com
    10 frutos como 10 blocos é pseudorreplicação e infla o grau de liberdade, então
    a ANOVA recebe a média da parcela. */
-var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};
-var AV_TIPO_LABEL={pct:'% / número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
+var AV_TIPOS={pct:1,numero:1,contagem:1,razao:1,escala:1};
+/* 'numero' = MEDIDA livre (altura, produtividade, diâmetro, peso): sem teto de 100 e com
+   decimais. Antes dele, '% / número' era o único tipo digitável — medida com unidade batia
+   no teto de 100 — e os modelos de medida usavam 'contagem', que TRUNCA decimais (12,5 mm
+   virava 12) e manda a variável para análise de contagem. */
+var AV_TIPO_LABEL={pct:'%',numero:'número',contagem:'contagem',razao:'razão n/N',escala:'escala'};
 /* src = uma avaliação (av) ou o rascunho _avGrid — ambos têm .tipos e .varcfg */
 function _avTipo(src,v){ var t=(src&&src.tipos&&src.tipos[v])||'pct'; return AV_TIPOS[t]?t:'pct'; }
+/* "% / número" é o único tipo DIGITÁVEL para variável que não seja contagem, razão ou
+   escala — então altura, produtividade e massa também caem nele. O teto de 100 é o
+   contrato do tipo, mas numa MEDIDA com unidade ele destrói o dado: 110 cm ou 3500 kg/ha
+   viravam 100 (no lançamento rápido, sem aviso). O teto só é dispensado quando o nome diz,
+   sem dúvida, que é medida com unidade; na dúvida ("v1", "Sev"), vale o teto. */
+function _avEhMedidaLivre(v){
+  return /altura|produtiv|rendimento|peso|massa|di[âa]metro|comprimento|largura|biomassa|estande|\bstand\b|\((?:cm|mm|m|g|kg|t|sc|l|ml|m2|m²|cm2|cm²|kg\/ha|t\/ha|sc\/ha|g\/planta|g\/parcela)\)|\b(?:cm|mm|kg\/ha|t\/ha|sc\/ha|g\/planta)\b/i.test(String(v||''));
+}
+function _avTetoPct(v){ return !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)); }
+/* Roteamento da triagem forense: estimativa visual percentual (severidade, incidência…) */
+function _avEhPercentual(v){ return /sev|incid|%|percent|desfolh|efic|cobert|fitotox|dano|infest|propor|queima|mancha/i.test(String(v||'')); }
 function _avCfg(src,v){
   var c=(src&&src.varcfg&&src.varcfg[v])||{};
   return {
@@ -16548,7 +17879,11 @@ function _avCfg(src,v){
     sub:Math.max(1,Math.round(_numBR(c.sub,1))||1),
     N:Math.max(0,Math.round(_numBR(c.N,0))),
     escalaMax:Math.max(1,_numBR(c.escalaMax,4)),
-    escalaNome:c.escalaNome||''
+    /* Escalas da literatura nem sempre começam em 0: a EWRC de fitotoxicidade vai
+       de 1 (sem sintoma) a 9. O índice mede a distância do MÍNIMO — sem isto uma
+       parcela sem sintoma nenhum saía com 11%. */
+    escalaMin:(function(){ var mn=Math.max(0,_numBR(c.escalaMin,0)), mx=Math.max(1,_numBR(c.escalaMax,4)); return (mn<mx)?mn:0; })(),
+    escalaNome:c.escalaNome||'', escalaLegenda:c.escalaLegenda||c.escalaNome||'', escalaModo:c.escalaModo||'indice'
   };
 }
 /* ESCALA DA VARIÁVEL — o mínimo e o máximo em que o valor pode cair.
@@ -16576,9 +17911,10 @@ function _avEscala(src,v){
   /* pct: 0 a 100 por definição. razão n/N e escala guardam PERCENTUAL em notas
      (ver _avDerivar: razão vira n/N×100 e escala vira o índice de McKinney),
      então as três caem na mesma escala, e não na escala da nota crua. */
+  if(cfg.tipo==='escala'&&cfg.escalaModo==='nota')return {min:cfg.escalaMin,max:cfg.escalaMax,definida:true,tipo:'escala',porque:'notas da escala, sem conversão percentual'};
   if(cfg.tipo==='pct'||cfg.tipo==='razao'||cfg.tipo==='escala')
     return {min:0,max:100,definida:true,tipo:cfg.tipo,
-            porque:cfg.tipo==='escala'?'índice de McKinney (0 a 100), derivado das notas de 0 a '+cfg.escalaMax
+            porque:cfg.tipo==='escala'?'índice de McKinney (0 a 100), derivado das notas de '+(cfg.escalaMin||0)+' a '+cfg.escalaMax
                   :cfg.tipo==='razao'?'razão n/N em porcentagem':'porcentagem'};
   /* contagem: não existe teto. Quem pinta cor precisa saber que não sabe. */
   return {min:min,max:null,definida:false,tipo:cfg.tipo,
@@ -16615,11 +17951,15 @@ function _avDerivar(cfg,cel){
   var vals=((cel.sub)||[]).map(function(x){ return _numBR(x,NaN); }).filter(function(x){ return isFinite(x); });
   if(!vals.length) return '';
   var soma=vals.reduce(function(a,b){ return a+b; },0);
+  if(cfg.tipo==='escala'&&cfg.escalaModo==='nota')return String(Math.round(soma/vals.length*100)/100);
   if(cfg.tipo==='escala'){
-    /* índice de McKinney (índice de doença): Σ(nota) / (nº avaliado × nota máxima) × 100 */
-    var mx=cfg.escalaMax;
-    if(!(mx>0)) return '';
-    return String(Math.round(soma/(vals.length*mx)*1e4)/100);
+    /* índice de McKinney (1923) / Townsend & Heuberger (1943):
+       Σ(nota − mínimo) / (nº avaliado × (máximo − mínimo)) × 100.
+       Com o mínimo em 0 (o caso de sempre) é Σ nota / (n × máximo) × 100. */
+    var mx=cfg.escalaMax, mn=cfg.escalaMin||0;
+    if(!(mx>mn)) return '';
+    var somaE=vals.reduce(function(a,b){ return a+(Math.max(mn,Math.min(mx,b))-mn); },0);
+    return String(Math.round(somaE/(vals.length*(mx-mn))*1e4)/100);
   }
   return String(Math.round(soma/vals.length*100)/100);
 }
@@ -16717,7 +18057,9 @@ var CATALOGO_AVAL={
   ],
   'Seletividade/Fitotoxicidade':[
     {nome:'Fitotoxicidade',tipo:'pct'},
-    {nome:'Nota EWRC',tipo:'escala',escalaMax:9},
+    /* EWRC (1964): 1 = sem sintoma … 9 = morte total. Começa em 1 — o índice
+       conta a partir do 1, senão a testemunha limpa sairia com 11%. */
+    {nome:'Nota EWRC',tipo:'escala',escalaMin:1,escalaMax:9,escalaNome:'EWRC (1964): 1 sem sintoma · 5 médio · 9 morte total'},
     {nome:'Stand de plantas',tipo:'contagem'}
   ],
   /* FITOPATOLOGIA in vitro: mede-se a colônia em dois eixos perpendiculares e a
@@ -16725,8 +18067,8 @@ var CATALOGO_AVAL={
      a testemunha (fórmula de Abbott, que o estatistica.js já traz auditado) —
      por isso 'sentido:maior' NÃO se aplica: colônia menor = melhor controle. */
   'Fungo in vitro':[
-    {nome:'Diâmetro da colônia (mm)',tipo:'contagem',sub:2},
-    {nome:'Crescimento micelial (mm/dia)',tipo:'contagem'},
+    {nome:'Diâmetro da colônia (mm)',tipo:'numero',sub:2},
+    {nome:'Crescimento micelial (mm/dia)',tipo:'numero'},
     {nome:'Esporulação (conídios/mL)',tipo:'contagem'}
   ],
   /* FOLHA DESTACADA: bancada, folha ou disco foliar em placa. Serve tanto para
@@ -16736,7 +18078,7 @@ var CATALOGO_AVAL={
   'Folha destacada':[
     {nome:'Mortalidade',tipo:'razao',N:10,sentido:'maior'},
     {nome:'Severidade na folha',tipo:'pct'},
-    {nome:'Diâmetro da lesão (mm)',tipo:'contagem',sub:2},
+    {nome:'Diâmetro da lesão (mm)',tipo:'numero',sub:2},
     {nome:'Nº de indivíduos vivos',tipo:'contagem'}
   ],
   'Fungo in vivo':[
@@ -16764,9 +18106,9 @@ var CATALOGO_AVAL={
     {nome:'Muco (0–2)',tipo:'escala',escalaMax:2,sentido:'maior',escalaNome:'0 normal · 1 aumentado · 2 muito'}
   ],
   'Produtividade':[
-    {nome:'Peso da parcela (g)',tipo:'contagem'},
+    {nome:'Peso da parcela (g)',tipo:'numero'},
     {nome:'Nº de frutos',tipo:'contagem',sub:10},
-    {nome:'Peso de 100 grãos (g)',tipo:'contagem'}
+    {nome:'Peso de 100 grãos (g)',tipo:'numero'}
   ]
 };
 function _avCatalogo(){
@@ -16806,9 +18148,20 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-table{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-content}'+
   '.av-table th,.av-table td{border:1px solid var(--border,#2a3a2a);padding:4px 6px;text-align:center;white-space:nowrap}'+
   '.av-table th{background:var(--surface-2,#11210f);color:var(--text-2,#9ab39a);font-weight:700}'+
-  '.av-table th:first-child,.av-table td:first-child{position:sticky;left:0;z-index:2;min-width:58px;max-width:70px;box-shadow:6px 0 10px rgba(0,0,0,.18)}'+
+  /* A coluna fixa tem teto de largura, e com nowrap o texto que passava do teto
+     era desenhado POR CIMA das colunas vizinhas ("T1 Testemunha não infestada."
+     atravessava Dano final e AACPD). Aqui ele quebra linha dentro da própria
+     coluna e nada escapa dela; o fundo é sólido para a rolagem lateral não
+     aparecer através da coluna presa. */
+  '.av-table th:first-child,.av-table td:first-child{position:sticky;left:0;z-index:2;min-width:58px;max-width:70px;box-shadow:6px 0 10px rgba(0,0,0,.18);white-space:normal;overflow-wrap:anywhere;overflow:hidden}'+
+  '.av-table :where(td:first-child){background:var(--surface,#101613)}'+
   '.av-table th:first-child{z-index:3}'+
   '.av-tname{font-weight:800;color:var(--accent,#37d684);background:var(--surface-2,#11210f);font-size:11px;line-height:1.05}'+
+  /* Tratamento com o produto embaixo: o id manda, o nome ajuda a ler. */
+  '.av-table td.av-trat:first-child{min-width:76px;max-width:128px;text-align:left;line-height:1.2;padding:5px 7px}'+
+  '.av-trat b{display:block;font-size:12px}'+
+  '.av-trat small{display:block;margin-top:1px;font-size:10px;font-weight:500;opacity:.8}'+
+  '.av-trat small.av-trat-tag{font-style:italic;opacity:.65}'+
   '.av-cellwrap{display:flex;align-items:center;gap:3px}'+
   '.av-step{flex:none;width:30px;height:32px;border:1px solid var(--border,#2a3a2a);background:rgba(127,170,127,.14);color:#9ac49a;border-radius:7px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation}'+
   '.av-step:active{background:rgba(127,170,127,.3)}'+
@@ -16923,11 +18276,19 @@ function _avWriteBruto(key,v,campo,val){
   if(num!==''){
     if(num<0) num=0;
     if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
-    if(cfg.tipo==='pct' && num>100) num=100;
-    if(cfg.tipo==='contagem'||cfg.tipo==='razao') num=Math.floor(num);
+    if(cfg.tipo==='escala' && num<(cfg.escalaMin||0)) num=cfg.escalaMin||0;
+    if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
+    if(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)))) num=Math.floor(num);
   }
   var out=(num==='')?'':String(num);
-  if(campo==='n'||campo==='N') cel[campo]=out;
+  if(campo==='n'||campo==='N'){
+    cel[campo]=out;
+    /* A célula MOSTRA o N padrão da variável (varcfg.N — do catálogo ou do nº de
+       organismos por arena do protocolo) enquanto ninguém digita outro. Gravar só
+       o n deixava o N em branco: a tela dizia 5/20 e a porcentagem não saía. O
+       que se vê é o que vale — o padrão passa a ser dado da parcela. */
+    if(campo==='n' && out!=='' && (cel.N==null||String(cel.N).trim()==='') && cfg.N>0) cel.N=String(cfg.N);
+  }
   else {
     var i=parseInt(String(campo).slice(1))||0;
     if(!Array.isArray(cel.sub)) cel.sub=[];
@@ -16943,7 +18304,7 @@ function _avRefreshDer(){
   Array.prototype.forEach.call(w.querySelectorAll('.av-der'), function(el){
     var k=el.getAttribute('data-dt'), v=el.getAttribute('data-dv'); if(!k||!v) return;
     var val=(_avGrid.notas[k]&&_avGrid.notas[k][v]!=null)?String(_avGrid.notas[k][v]):'';
-    el.textContent=(val===''?'—':val+'%');
+    el.textContent=(val===''?'—':val+_avDerSuf(_avCfg(_avGrid,v)));
     el.classList.toggle('vazio', val==='');
   });
   Array.prototype.forEach.call(w.querySelectorAll('.av-subbtn'), function(el){
@@ -16969,6 +18330,7 @@ function avValidateCell(inp){
     return;
   }
   var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+  var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp; /* 'numero' não tem teto de 100 */
   var val=inp.value.trim();
   if(val===''){ _avEspelhar(inp); return; }
   var num=parseFloat(val.replace(',','.'));
@@ -16982,7 +18344,7 @@ function avValidateCell(inp){
     if(num<0){
       num=0;
       _stxToast('Valor menor que 0% ajustado para 0%.');
-    } else if(num>100){
+    } else if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
       num=100;
       _stxToast('Valor maior que 100% ajustado para 100%.');
     }
@@ -16992,7 +18354,7 @@ function avValidateCell(inp){
       num=0;
       _stxToast('Valor negativo ajustado para 0.');
     }
-    inp.value=String(Math.floor(num));
+    inp.value=String((typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))?num:Math.floor(num)); /* medida com unidade não perde decimais */
   }
   _avEspelhar(inp);
   _avPersistNow(); /* autosave da grade manual no blur */
@@ -17057,6 +18419,7 @@ function avCroquiSelect(key){
 /* Conteúdo de uma célula de lançamento. A tabela e a ficha da parcela usam o
    mesmo HTML, então os dois caminhos gravam pelo mesmo avValidateCell. */
 function _avCellHtml(rw,v){
+  if(AvaliacaoCore.naoAplicavel(_avGrid,rw,v))return '<span class="av-na" title="Não se aplica — definido no protocolo">—</span>';
   var row=_avGrid.notas[rw.key]||{}, old=(rw.rep===1&&_avGrid.notas[rw.tratId])?_avGrid.notas[rw.tratId]:{};
   var val=(row[v]!=null&&row[v]!=='')?row[v]:((old&&old[v]!=null)?old[v]:'');
   var cfg=_avCfg(_avGrid,v), k=esc(rw.key), ev=esc(v);
@@ -17067,15 +18430,15 @@ function _avCellHtml(rw,v){
       '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="n" value="'+esc(nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
       '<span class="av-sep">/</span>'+
       '<input class="av-cell av-cell-sm" data-t="'+k+'" data-v="'+ev+'" data-b="N" value="'+esc(Nv)+'" inputmode="numeric" onblur="avValidateCell(this)">'+
-      '</div><div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div>';
+      '</div><div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+_avDerSuf(cfg))+'</div>';
   } else if(cfg.sub>1){
     var celS=(_avGrid.bruto[rw.key]||{})[v]||{}, ch=_avSubCheias(celS);
     return '<button type="button" class="av-subbtn'+(ch>=cfg.sub?' cheia':'')+'" data-dt="'+k+'" data-dv="'+ev+'" onclick="avOpenSub(\''+k+'\',\''+ev.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">'+
       (val===''?'—':esc(val))+'<small>'+ch+'/'+cfg.sub+'</small></button>';
   } else if(cfg.tipo==='escala'){
     var celE=(_avGrid.bruto[rw.key]||{})[v]||{}, e0=((celE.sub||[])[0]);
-    return '<input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="0–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
-      '<div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+'%')+'</div>';
+    return '<input class="av-cell" data-t="'+k+'" data-v="'+ev+'" data-b="s0" value="'+esc(e0==null?'':e0)+'" inputmode="numeric" placeholder="'+(cfg.escalaMin||0)+'–'+cfg.escalaMax+'" onblur="avValidateCell(this)">'+
+      '<div class="av-der'+(val===''?' vazio':'')+'" data-dt="'+k+'" data-dv="'+ev+'">'+(val===''?'—':esc(val)+_avDerSuf(cfg))+'</div>';
   } else if(cfg.tipo==='contagem'){
     return '<div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+k+'" data-v="'+ev+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div>';
   } else {
@@ -17097,13 +18460,13 @@ function _avFichaHtml(rows,vs){
     '<button type="button" class="av-ficha-x" onclick="avFichaFechar()" aria-label="Fechar a ficha da parcela">×</button></div>';
   if(vs.length){
     h+='<div class="av-ficha-vars">'+vs.map(function(v){
-      var cfg=_avCfg(_avGrid,v), suf=cfg.tipo==='pct'?' %':cfg.tipo==='razao'?' n/N':cfg.tipo==='escala'?' 0–'+cfg.escalaMax:'';
+      var cfg=_avCfg(_avGrid,v), suf=cfg.tipo==='pct'?' %':cfg.tipo==='razao'?' n/N':cfg.tipo==='escala'?' '+(cfg.escalaMin||0)+'–'+cfg.escalaMax:'';
       if(cfg.sub>1) suf+=' ×'+cfg.sub;
       return '<div class="av-ficha-var"><span class="av-ficha-nome">'+esc(v)+(suf?'<small style="opacity:.65">'+esc(suf)+'</small>':'')+'</span>'+_avCellHtml(rw,v)+'</div>';
     }).join('')+'</div>';
   } else h+='<div class="av-hint" style="margin:10px 0">Adicione uma coluna na tabela abaixo para lançar valores nesta parcela.</div>';
   h+='<div class="av-ficha-nav"><button type="button" onclick="avFichaIr(-1)"'+(prev?' aria-label="Parcela anterior: '+nome(prev)+'"':' disabled')+'>‹ '+(prev?nome(prev):'')+'</button>'+
-    '<button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button>'+
+    '<span style="display:inline-flex;align-items:center;justify-content:center"><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button><button type="button" class="av-foto-n" data-av-fotos="'+esc(rw.key)+'" hidden></button></span>'+
     '<button type="button" onclick="avFichaIr(1)"'+(next?' aria-label="Próxima parcela: '+nome(next)+'"':' disabled')+'>'+(next?nome(next):'')+' ›</button></div></div>';
   return h;
 }
@@ -17147,36 +18510,36 @@ function renderAvGrid(){
   if(!ts.length){ w.innerHTML='<div class="av-hint">Cadastre os tratamentos do estudo (botão EDITAR) para lançar notas por tratamento.</div>'; return; }
   var vs=_avGrid.variaveis;
   var html='';
-  if(st&&st.randomizado){
-    ensureStudyRandomizacao(st);
-    var rz=st.randomizacao||{}, rzNome=(rz.modelo==='planilha'?((rz.nome||('T'+ts.length))+' · reps '+(rz.reps||('A-'+_repLetter(st.numRepeticoes)))):((rz.key)||_studyProtocolKey(st)));
-    html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle '+(_avAuto.on?'':'off')+'" onclick="avAutoToggle()">'+(_avAuto.on?'Modo automático ligado':'Modo automático')+'</button><span class="av-auto-note">Ordem randomizada: '+esc(rzNome)+'</span></div>';
-    if(_avAuto.on) html+=renderAvAutoBox();
-  }else if(st){
-    var mi=_studyRandomModeloInfo(st);
-    if(mi.ok){
-      html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle off" onclick="avEnableStudyRandomizado()">Ativar automático randomizado</button><span class="av-auto-note">Modelo disponível: '+esc(mi.nome+' · '+mi.reps+' rep.')+'</span></div>';
-    }
+  if(st){
+    if(st.randomizado)ensureStudyRandomizacao(st);
+    html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle '+(_avAuto.on?'':'off')+'" onclick="avAutoToggle()">'+(_avAuto.on?'Modo automático ligado':'Modo automático')+'</button><span class="av-auto-note">'+(st.randomizado?'Ordem randomizada salva':'Ordem sequencial de tratamentos e repetições')+'</span></div>';
+    if(_avAuto.on)html+=renderAvAutoBox();
   }
+  vs.forEach(function(v){html+=_avLegendaHtml(_avGrid,v);});
+  html+='<div id="avForenseLive" class="av-forense-live" role="status" aria-live="polite"></div>';
+  /* A tela de "fotos seguidas": tira a foto e a identificação já passa para a
+     próxima parcela, sem voltar à grade (fotos-estudo.js, fotosEmSequencia). */
+  if(croquiRows.length>1) html+='<div class="av-foto-seq"><button type="button" class="av-photo-btn" data-av-photo-seq="1">📷 Fotos em sequência</button><span>parcela por parcela, sem voltar à grade</span></div>';
   html+=avCroquiHtml(st,croquiRows,vs);
   html+=_avFichaHtml(croquiRows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
   vs.forEach(function(v){
     var cfg=_avCfg(_avGrid,v), suf='';
-    if(cfg.tipo==='pct') suf=' <small style="opacity:.6">%</small>';
+    if(cfg.tipo==='pct' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) suf=' <small style="opacity:.6">%</small>'; /* 'Altura (cm) %' confundia */
     else if(cfg.tipo==='razao') suf=' <small style="opacity:.6">n/N</small>';
-    else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">0–'+cfg.escalaMax+'</small>';
+    else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">'+(cfg.escalaMin||0)+'–'+cfg.escalaMax+'</small>';
     if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
     var _vjs=esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     html+='<th>'+esc(v)+suf+
       '<button type="button" class="av-delcol" title="Corrigir o nome desta coluna" onclick="avRenameCol(\''+_vjs+'\')">✎</button>'+
+      ((cfg.tipo==='pct'||cfg.tipo==='contagem'||cfg.tipo==='numero')?'<button type="button" class="av-delcol" title="'+(cfg.tipo==='numero'?'Tipo: número — tocar para voltar a %':'Transformar em número (medida sem teto de 100, com decimais)')+'" onclick="avTipoCol(\''+_vjs+'\')">'+(cfg.tipo==='numero'?'№':'#')+'</button>':'')+
       '<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+_vjs+'\')">×</button></th>';
   });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
   rows.forEach(function(rw){
     html+='<tr data-av-row="'+esc(rw.key)+'"><td class="av-tname" title="'+esc((rw.produto||'')+(rw.parcela?' · parcela '+rw.parcela:''))+'">'+esc(rw.label)+'</td>';
     vs.forEach(function(v){ html+='<td>'+_avCellHtml(rw,v)+'</td>'; });
-    html+='<td><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button></td></tr>';
+    html+='<td style="white-space:nowrap"><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button><button type="button" class="av-foto-n" data-av-fotos="'+esc(rw.key)+'" hidden></button></td></tr>';
   });
   html+='</tbody></table></div>';
   if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button>'+
@@ -17193,7 +18556,7 @@ function _avSyncInputs(){
 
     var val = inp.value.trim();
     if(val !== '') {
-      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
       var num = parseFloat(val.replace(',', '.'));
       if(isNaN(num)) {
         val = '';
@@ -17201,10 +18564,10 @@ function _avSyncInputs(){
       } else {
         if(tp==='pct'){
           if(num<0) num=0;
-          if(num>100) num=100;
+          if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
         } else {
           if(num<0) num=0;
-          num = Math.floor(num);
+          if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
         }
         val = String(num);
         inp.value = val;
@@ -17262,25 +18625,53 @@ function _avSubRender(){
   if(!rw) rw={label:key,produto:''};
   var cel=_avCel(_avGrid,key,v,true), vals=_avSubList(cel,cfg.sub);
   var der=(_avGrid.notas[key]&&_avGrid.notas[key][v])||'';
+  /* diâmetro da colônia numa placa: os campos são os dois EIXOS da cruz */
+  var _pl=(typeof _avBioPlaca==='function')?_avBioPlaca(v):null, _cruz=!!(_pl&&cfg.sub===2);
   var h='<div class="av-sub-box"><div class="av-sub-title">'+esc(v)+'</div>'+
-    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+cfg.sub+' amostras'+(cfg.tipo==='escala'?(' · escala 0–'+cfg.escalaMax):'')+'</div>'+
+    '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+(_cruz?'diâmetro em cruz, placa de '+_pl.placaMm+' mm':(cfg.sub+' amostras'))+(cfg.tipo==='escala'?(' · escala '+(cfg.escalaMin||0)+'–'+cfg.escalaMax):'')+'</div>'+
     '<div class="av-sub-grid">';
   vals.slice(0,cfg.sub).forEach(function(x,i){
-    h+='<div class="av-sub-f"><label>'+(i+1)+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+(cfg.tipo==='pct'?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
+    h+='<div class="av-sub-f"><label>'+(_cruz?(i===0?'Eixo 1':'Eixo 2 ⟂'):(i+1))+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
   });
   h+='</div>';
-  h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?'Índice de McKinney':'Média da parcela')+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?'%':''))+'</b></div>';
-  var al=_avSubOutlier(vals); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
-  h+='<div class="av-sub-btns"><button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
+  h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?(cfg.escalaModo==='nota'?'Nota média':'Índice de McKinney'):(_cruz?'Diâmetro médio':'Média da parcela'))+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?_avDerSuf(cfg):''))+'</b></div>';
+  if(_pl) h+='<div class="av-sub-cresc" style="font-size:11px;color:#8a948e;margin:-2px 0 6px">'+_avSubCrescTexto(der,_pl)+'</div>';
+  var al=_avSubOutlier(vals)||_avSubPlacaAviso(vals,_pl); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
+  /* a placa é a régua: com o Ø no protocolo, a foto mede a cruz sozinha */
+  if(_cruz&&_pl.placaMm>0&&typeof avSubMedirFoto==='function') h+='<div class="av-sub-btns" style="margin-bottom:6px"><button type="button" class="av-sub-ok" onclick="avSubMedirFoto()" style="flex:1">📷 Medir por foto</button></div>';
+  h+='<div class="av-sub-btns">'+(_pl&&_pl.placaMm>0?'<button type="button" class="av-sub-clr" onclick="avSubTomouPlaca()" title="A colônia cobriu a placa inteira">Tomou a placa ('+_pl.placaMm+' mm)</button>':'')+
+     '<button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
   m.innerHTML=h;
+}
+/* Placa: o que a média da cruz significa — crescimento sem o disco. */
+function _avSubCrescTexto(der, pl){
+  var d=parseFloat(String(der==null?'':der).replace(',','.'));
+  if(!isFinite(d)) return 'Crescimento = diâmetro médio − disco de '+pl.discoMm+' mm.';
+  var c=Math.max(0,d-(pl.discoMm||0));
+  return 'Crescimento: '+String(Math.round(c*10)/10).replace('.',',')+' mm (sem o disco de '+String(pl.discoMm).replace('.',',')+' mm)';
+}
+/* Aponta, não corta: diâmetro acima da placa costuma ser erro de leitura — ou o
+   protocolo tem a placa errada. Quem decide é quem está com a placa na mão. */
+function _avSubPlacaAviso(vals, pl){
+  if(!pl||!(pl.placaMm>0)) return '';
+  var fora=(vals||[]).map(function(x){ return parseFloat(String(x==null?'':x).replace(',','.')); })
+    .filter(function(x){ return isFinite(x) && x>pl.placaMm+0.5; });
+  var peq=(vals||[]).map(function(x){ return parseFloat(String(x==null?'':x).replace(',','.')); })
+    .filter(function(x){ return isFinite(x) && x>0 && pl.discoMm>0 && x<pl.discoMm; });
+  if(fora.length) return 'Diâmetro maior que a placa de '+pl.placaMm+' mm — confira a leitura (ou o Ø da placa no protocolo).';
+  if(peq.length) return 'Menor que o disco de '+pl.discoMm+' mm — o diâmetro inclui o disco; confira.';
+  return '';
 }
 function _avSubResumo(){
   var m=document.getElementById('avSubModal'); if(!m||!_avSubCtx) return;
   var cfg=_avCfg(_avGrid,_avSubCtx.v);
   var der=(_avGrid.notas[_avSubCtx.key]&&_avGrid.notas[_avSubCtx.key][_avSubCtx.v])||'';
-  var b=m.querySelector('.av-sub-res b'); if(b) b.textContent=(der===''?'—':der+(cfg.tipo==='escala'?'%':''));
+  var b=m.querySelector('.av-sub-res b'); if(b) b.textContent=(der===''?'—':der+(cfg.tipo==='escala'?_avDerSuf(cfg):''));
+  var pl=(typeof _avBioPlaca==='function')?_avBioPlaca(_avSubCtx.v):null;
+  var cr=m.querySelector('.av-sub-cresc'); if(cr&&pl) cr.textContent=_avSubCrescTexto(der,pl);
   var w=m.querySelector('.av-sub-warn');
-  if(w){ var txt=_avSubOutlier(_avSubList(_avCel(_avGrid,_avSubCtx.key,_avSubCtx.v,true),cfg.sub)); w.textContent=txt; w.style.display=txt?'':'none'; }
+  if(w){ var vals=_avSubList(_avCel(_avGrid,_avSubCtx.key,_avSubCtx.v,true),cfg.sub);
+    var txt=_avSubOutlier(vals)||_avSubPlacaAviso(vals,pl); w.textContent=txt; w.style.display=txt?'':'none'; }
 }
 function avSubWrite(inp){
   if(!_avSubCtx) return;
@@ -17312,6 +18703,7 @@ function _avAutoSteps(){
   var rows=_avAutoRows(), vars=_avGrid.variaveis||[], steps=[];
   rows.forEach(function(rw,ri){
     vars.forEach(function(v,vi){
+      if(AvaliacaoCore.naoAplicavel(_avGrid,rw,v))return;
       var cfg=_avCfg(_avGrid,v);
       if(cfg.tipo==='razao') steps.push({row:rw,ri:ri,v:v,vi:vi,cfg:cfg,si:-1,campo:'n'});
       else if(_avUsaBruto(cfg)){ for(var i=0;i<cfg.sub;i++) steps.push({row:rw,ri:ri,v:v,vi:vi,cfg:cfg,si:i,campo:'s'+i}); }
@@ -17349,6 +18741,27 @@ function _avCloudSoon(){ /* nuvem com FOLGA: no máximo 1 gravação a cada ~15s
   if(_avCloudTimer) return;
   _avCloudTimer=setTimeout(function(){ _avCloudTimer=null; try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){} }, 15000);
 }
+var _avGravaTimer=null;
+function _avGravaLocal(){
+  _avGravaTimer=null;
+  try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){}
+}
+function _avGravaLocalLogo(){
+  if(_avGravaTimer) clearTimeout(_avGravaTimer);
+  _avGravaTimer=setTimeout(_avGravaLocal,700);
+}
+/* Grava o que estiver pendente agora — app indo para segundo plano, avaliação
+   fechando. Sem pendência, não faz nada (não serializa à toa). */
+function _avGravaLocalJa(){
+  if(!_avGravaTimer) return;
+  clearTimeout(_avGravaTimer);
+  _avGravaLocal();
+}
+if(typeof document!=='undefined' && !window.__avGravaEv){
+  window.__avGravaEv=true;
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') _avGravaLocalJa(); });
+  window.addEventListener('pagehide',_avGravaLocalJa);
+}
 function _avPersistNow(){
   try{
     var q=data[curV]; if(!q) return;
@@ -17370,25 +18783,33 @@ function _avPersistNow(){
     if(typeof avDupla==='function' && avDupla(av) && _q2){ avAvaliadores(av)[_q2].notas=_avGrid.notas; avConsolidar(av); }
     else av.notas=_avGrid.notas;
     av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
+    if(typeof avTriagemImediata==='function')avTriagemImediata();
     av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
-    try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
+    /* A GRAVAÇÃO NO APARELHO ESPERA A PESSOA PARAR DE DIGITAR. Antes era aqui,
+       síncrona, a CADA TECLA do lançamento rápido (oninput) e a cada célula:
+       JSON.stringify do `data` INTEIRO — todos os estudos, e as notas de campo
+       com a foto em base64 dentro. Com alguns MB isso leva centenas de ms num
+       Android, e a grade travava a cada número digitado. A avaliação em memória
+       continua atualizada na hora (as linhas acima); só o disco espera ~0,7 s
+       de silêncio, e é gravado JÁ se o app for para segundo plano ou fechar. */
+    _avGravaLocalLogo();
     if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
     /* nuvem NÃO grava a cada célula (poupa bateria): sobe ao FECHAR a avaliação, no SALVAR, ou no botão "salvar na nuvem". O selo fica "pendente" até lá. */
   }catch(e){}
 }
 function _avSetCell(key,v,val){
   if(val !== '' && val != null) {
-    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
     var num = parseFloat(String(val).replace(',', '.'));
     if(isNaN(num)) {
       val = '';
     } else {
       if(tp==='pct'){
         if(num<0) num=0;
-        if(num>100) num=100;
+        if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
       } else {
         if(num<0) num=0;
-        num = Math.floor(num);
+        if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
       }
       val = String(num);
     }
@@ -17411,7 +18832,7 @@ function renderAvAutoBox(){
   var st=_avStudy(), rows=_avAutoRows(), vars=_avGrid.variaveis||[];
   if(!vars.length) return '<div class="av-auto-box"><div class="av-hint">Adicione pelo menos uma coluna de avaliação para usar o modo automático.</div></div>';
   if(!rows.length) return '<div class="av-auto-box"><div class="av-hint">Cadastre tratamentos e repetições para usar o modo automático.</div></div>';
-  var a=_avAutoState(); if(!a)return '';
+  var a=_avAutoState(); if(!a)return '<p>Não há campos aplicáveis para preencher nesta avaliação.</p>';
   var val=_avStepVal(a);
   var prod=a.row.produto?(' · '+a.row.produto):'';
   var locLabel=(a.row.parcela?('Parcela '+a.row.parcela):(a.row.campo||a.row.label||a.row.tratId+_repDisplay(a.row.rep)));
@@ -17432,7 +18853,7 @@ function renderAvAutoBox(){
   var pctDone=a.total?Math.round(filled/a.total*100):0;
   /* atalhos de valor comum: tocar SALVA e já avança (um toque por amostra) */
   var presets;
-  if(a.tipo==='escala'){ presets=[]; for(var pi=0;pi<=a.cfg.escalaMax&&presets.length<10;pi++) presets.push(String(pi)); }
+  if(a.tipo==='escala'){ presets=[]; for(var pi=(a.cfg.escalaMin||0);pi<=a.cfg.escalaMax&&presets.length<10;pi++) presets.push(String(pi)); }
   else if(a.tipo==='razao'||a.tipo==='contagem') presets=['0','1','2','5','10'];
   else presets=['0','1','5','10','20','40','60','80','100'];
   var presetHtml=presets.map(function(pv){ return '<button type="button" class="av-auto-preset'+(String(val)===pv?' on':'')+'" onclick="avAutoPreset(\''+pv+'\')">'+pv+'</button>'; }).join('');
@@ -17441,15 +18862,15 @@ function renderAvAutoBox(){
   if(a.si>=0 && a.cfg.sub>1) passo+=' <small style="font-size:13px;opacity:.75">· amostra '+(a.si+1)+'/'+a.cfg.sub+'</small>';
   if(_avUsaBruto(a.cfg)){
     var d=(_avGrid.notas[a.row.key]&&_avGrid.notas[a.row.key][a.v])||'';
-    var rot=(a.tipo==='escala')?'Índice':((a.tipo==='razao')?'Resultado':'Média da parcela');
-    var suf=(a.tipo==='escala'||a.tipo==='razao')?'%':'';
+    var rot=(a.tipo==='escala')?(a.cfg.escalaModo==='nota'?'Nota média':'Índice'):((a.tipo==='razao')?'Resultado':'Média da parcela');
+    var suf=(a.tipo==='razao'||(a.tipo==='escala'&&a.cfg.escalaModo!=='nota'))?'%':'';
     if(d!=='') der='<div class="av-auto-sub">'+rot+': <b style="color:#9fe0b6">'+esc(d)+suf+'</b></div>';
   }
   return '<div class="av-auto-box">'+
     '<div class="av-auto-top"><span>'+esc(locLabel)+'</span><span>parc '+(a.ri+1)+'/'+rows.length+' · var '+(a.vi+1)+'/'+vars.length+'</span></div>'+
     '<div class="av-auto-prog"><div class="av-auto-prog-fill" style="width:'+pctDone+'%"></div></div>'+
     '<div class="av-auto-progtxt">'+filled+' de '+a.total+' preenchidas'+(filled>=a.total?' ✓':'')+'</div>'+
-    '<div class="av-auto-card"><div><div class="av-auto-main">'+passo+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div>'+der+'</div>'+input+'</div>'+
+    '<div class="av-auto-card"><div><div class="av-auto-main">'+passo+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div>'+_avLegendaHtml(_avGrid,a.v)+der+'</div>'+input+'</div>'+
     '<button type="button" class="av-photo-btn" data-av-photo-auto="1">Fotografar esta parcela</button>'+
     '<div class="av-auto-presets">'+presetHtml+'</div>'+
     '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">‹ Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo ›</button></div>'+
@@ -17481,6 +18902,7 @@ function avAutoBump(delta){
   var cur=document.getElementById('avAutoInput'), n=parseFloat(cur&&cur.value); if(isNaN(n)) n=0;
   n+=delta; if(n<0)n=0;
   if(a.tipo==='escala'&&n>a.cfg.escalaMax) n=a.cfg.escalaMax;
+  if(a.tipo==='escala'&&n<(a.cfg.escalaMin||0)) n=a.cfg.escalaMin||0;
   var val=(n%1===0)?String(n):n.toFixed(1);
   if(cur)cur.value=val;
   avAutoWrite(val);
@@ -17517,14 +18939,15 @@ function avAddCol(){
   m.innerHTML='<div class="avcol-box">'+
     '<div class="avcol-title">Nova coluna de avaliação</div>'+
     '<label class="avcol-lab">Nome da variável <span class="avcol-lab-dim">— doença, praga, daninha ou medida</span></label>'+
-    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
+    '<input id="avColNome" class="avcol-inp" placeholder="ex.: Ferrugem, Severidade, Stand" autocomplete="off" oninput="_alvoRender();_avColSugereTipo()" onfocus="_alvoRender()" onkeydown="if(event.key===\'Enter\')avColConfirm()">'+
     '<div id="avColAlvos" class="alvo-lista"></div>'+
     '<label class="avcol-lab">Como você vai lançar?</label>'+
     '<div class="avcol-types">'+
-      '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\')">% / número<small>digita (severidade)</small></button>'+
-      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\')">Contagem<small>botões − / +</small></button>'+
-      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\')">Razão n/N<small>mortalidade, incidência</small></button>'+
-      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\')">Escala<small>nota de classe → índice</small></button>'+
+      '<button type="button" class="avcol-type on" data-t="pct" onclick="_avColType(\'pct\',true)">%<small>0–100: severidade</small></button>'+
+      '<button type="button" class="avcol-type" data-t="numero" onclick="_avColType(\'numero\',true)">Número<small>altura, peso, produtividade</small></button>'+
+      '<button type="button" class="avcol-type" data-t="contagem" onclick="_avColType(\'contagem\',true)">Contagem<small>botões − / +</small></button>'+
+      '<button type="button" class="avcol-type" data-t="razao" onclick="_avColType(\'razao\',true)">Razão n/N<small>mortalidade, incidência</small></button>'+
+      '<button type="button" class="avcol-type" data-t="escala" onclick="_avColType(\'escala\',true)">Escala<small>nota de classe → índice</small></button>'+
     '</div>'+
     '<div id="avColOpts"></div>'+
     '<div class="avcol-btns"><button type="button" class="avcol-ok" onclick="avColConfirm()">Adicionar</button>'+
@@ -17535,10 +18958,13 @@ function avAddCol(){
      % num de eficácia). Só que agora ela vem pronta em vez de exigir um toque. */
   var padrao=(cat.itens&&cat.itens[0])||null;
   window._avColTipo=(padrao&&AV_TIPOS[padrao.tipo])?padrao.tipo:'pct';
+  window._avColTipoEscolhido=false;
   window._avColOpts={
     sub:Math.max(1,parseInt(padrao&&padrao.sub)||1),
     N:(padrao&&padrao.N!=null)?padrao.N:20,
     escalaMax:(padrao&&padrao.escalaMax!=null)?padrao.escalaMax:4,
+    escalaMin:(padrao&&padrao.escalaMin!=null)?padrao.escalaMin:0,
+    escalaNome:(padrao&&padrao.escalaNome)||'',
     sentido:(padrao&&padrao.sentido==='maior')?'maior':'menor'
   };
   m.style.display='flex';
@@ -17554,6 +18980,7 @@ function _avColLerOpts(){
   var s=document.getElementById('avColSub'); if(s) o.sub=Math.max(1,Math.round(_numBR(s.value,1))||1);
   var n=document.getElementById('avColN'); if(n) o.N=Math.max(0,Math.round(_numBR(n.value,0)));
   var e=document.getElementById('avColEsc'); if(e) o.escalaMax=Math.max(1,_numBR(e.value,4));
+  var em=document.getElementById('avColEscMin'); if(em){ var mn=Math.max(0,Math.round(_numBR(em.value,0))); o.escalaMin=(mn<o.escalaMax)?mn:0; }
   var sd=document.getElementById('avColSentido'); if(sd) o.sentido=(sd.value==='maior')?'maior':'menor';
   window._avColOpts=o; return o;
 }
@@ -17562,7 +18989,8 @@ function _avColOptsRender(){
   var t=window._avColTipo||'pct', o=window._avColOpts||{sub:1,N:20,escalaMax:4,sentido:'menor'}, h='<div class="avcol-opts">';
   if(t==='razao') h+='<div><label class="avcol-lab">N avaliados (padrão)</label><input id="avColN" class="avcol-inp" type="number" min="0" step="1" value="'+o.N+'"></div>';
   else h+='<div><label class="avcol-lab">Sub-amostras / parcela</label><input id="avColSub" class="avcol-inp" type="number" min="1" step="1" value="'+o.sub+'"></div>';
-  if(t==='escala') h+='<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" min="1" step="1" value="'+o.escalaMax+'"></div>';
+  if(t==='escala') h+='<div><label class="avcol-lab">Nota mínima</label><input id="avColEscMin" class="avcol-inp" type="number" min="0" step="1" value="'+(o.escalaMin||0)+'"></div>'+
+    '<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" min="1" step="1" value="'+o.escalaMax+'"></div>';
   h+='</div>';
   h+='<label class="avcol-lab">No % de controle, o melhor resultado é</label>'+
      '<select id="avColSentido" class="avcol-inp" onchange="_avColLerOpts();_avColOptsRender();">'+
@@ -17571,14 +18999,15 @@ function _avColOptsRender(){
      '</select>';
   if(o.sentido==='maior') h+='<div class="avcol-note">A testemunha é a <b>menor</b>: o % de controle sai pela <b>mortalidade corrigida de Abbott</b> — (tratado − testemunha) / (100 − testemunha).</div>';
   if(t==='razao') h+='<div class="avcol-note">Lança <b>n</b> (mortos/afetados) e <b>N</b> (avaliados) — o % sai sozinho. O N padrão já vem preenchido em toda parcela; só mude onde tiver fugido.</div>';
-  else if(t==='escala') h+='<div class="avcol-note">Lança a <b>classe</b> (0–'+o.escalaMax+'). O derivado é o <b>índice de McKinney</b> em %, que é o que a estatística analisa.</div>';
+  else if(t==='escala') h+='<div class="avcol-note">Lança a <b>classe</b> ('+(o.escalaMin||0)+'–'+o.escalaMax+'). O derivado é o <b>índice de McKinney</b> em % (0% = todas na nota mínima), que é o que a estatística analisa.'+(o.escalaNome?(' <br>'+esc(o.escalaNome)):'')+'</div>';
   else h+='<div class="avcol-note">Com 2 ou mais sub-amostras o bruto de cada uma fica guardado e a parcela entra na análise pela <b>média</b> — sub-amostra não é repetição.</div>';
   box.innerHTML=h;
 }
 function avColPreset(i){
   var it=(window._avColItens||[])[i]; if(!it) return;
   var nome=document.getElementById('avColNome'); if(nome) nome.value=it.nome;
-  window._avColOpts={sub:Math.max(1,parseInt(it.sub)||1), N:(it.N!=null?it.N:20), escalaMax:(it.escalaMax!=null?it.escalaMax:4), sentido:(it.sentido==='maior'?'maior':'menor')};
+  window._avColOpts={sub:Math.max(1,parseInt(it.sub)||1), N:(it.N!=null?it.N:20), escalaMax:(it.escalaMax!=null?it.escalaMax:4),
+    escalaMin:(it.escalaMin!=null?it.escalaMin:0), escalaNome:(it.escalaNome||''), sentido:(it.sentido==='maior'?'maior':'menor')};
   _avColType(it.tipo||'pct');
 }
 /* ===== Busca de alvo biológico (doença, praga, daninha) =====
@@ -17626,22 +19055,35 @@ function _alvoEscolher(i){
   if(inp){ inp.value=a.comum; inp.focus(); }
   var box=document.getElementById('avColAlvos'); if(box) box.innerHTML='';
 }
-function _avColType(t){ if(document.getElementById('avColOpts')) _avColLerOpts();
+function _avColType(t, porClique){ if(document.getElementById('avColOpts')) _avColLerOpts();
   window._avColTipo=AV_TIPOS[t]?t:'pct';
+  if(porClique) window._avColTipoEscolhido=true;
   Array.prototype.forEach.call(document.querySelectorAll('#avColModal .avcol-type'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===window._avColTipo); });
   _avColOptsRender();
+}
+/* Enquanto se digita: nome de MEDIDA com unidade e ninguém tocou num tipo -> o destaque
+   vai para Número (e volta, se o nome deixar de ser de medida). Escolha explícita manda. */
+function _avColSugereTipo(){
+  if(window._avColTipoEscolhido) return;
+  var i=document.getElementById('avColNome'), nome=i?i.value:'';
+  var medida=(typeof _avEhMedidaLivre==='function') && _avEhMedidaLivre(nome);
+  if(medida && window._avColTipo!=='numero'){ window._avColTipoAntesDaSugestao=window._avColTipo||'pct'; _avColType('numero'); }
+  else if(!medida && window._avColTipo==='numero' && window._avColTipoAntesDaSugestao){ _avColType(window._avColTipoAntesDaSugestao); window._avColTipoAntesDaSugestao=null; }
 }
 function avColConfirm(){
   var i=document.getElementById('avColNome'); var name=(i?i.value:'').trim();
   if(!name){ if(i){ i.focus(); i.style.borderColor='#d84b43'; } return; }
   var t=window._avColTipo||'pct', o=_avColLerOpts();
+  /* Ninguém escolheu o tipo e o nome é de MEDIDA com unidade ("Altura (cm)", "Peso de
+     100 grãos (g)"): nasce como número, não como % com teto de 100. */
+  if(t==='pct' && !window._avColTipoEscolhido && typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(name)) t='numero';
   if(_avGrid.variaveis.indexOf(name)<0) _avGrid.variaveis.push(name);
   _avGrid.tipos[name]=t;
   if(!_avGrid.varcfg) _avGrid.varcfg={};
   var cfg={};
   if(t==='razao'){ if(o.N>0) cfg.N=o.N; }
   else if(o.sub>1) cfg.sub=o.sub;
-  if(t==='escala') cfg.escalaMax=o.escalaMax;
+  if(t==='escala'){ cfg.escalaMax=o.escalaMax; if(o.escalaMin>0) cfg.escalaMin=o.escalaMin; if(o.escalaNome) cfg.escalaNome=o.escalaNome; }
   if(o.sentido==='maior') cfg.sentido='maior';
   _avGrid.varcfg[name]=cfg;
   var m=document.getElementById('avColModal'); if(m) m.style.display='none';
@@ -17697,6 +19139,33 @@ function avRenameCol(name){
   renderAvGrid();
   if(typeof _stxToast==='function') _stxToast('Coluna renomeada para "'+novo+'"');
 }
+/* Trocar o TIPO de uma coluna já lançada, entre %, contagem e número. Só entre estes três:
+   neles o valor da célula é o próprio número digitado — razão guarda n/N e escala guarda
+   classes, e trocar exigiria relançar. Os valores gravados NÃO mudam; muda como são validados
+   daqui em diante e como a estatística os trata (número entra como variável contínua).
+   Vale para todas as avaliações do estudo, como o renomear, e vai para a trilha. */
+function avTipoCol(name){
+  _avSyncInputs();
+  var st=_avStudy(), atual=_avTipo(_avGrid,name);
+  if(st && typeof estudoFinalizado==='function' && estudoFinalizado(st)){ if(typeof _stxToast==='function') _stxToast('Estudo finalizado: reabra para mudar o tipo da variável.'); return; }
+  if(atual==='razao'||atual==='escala'){ alert('Razão n/N e escala guardam o dado de outro jeito (n e N, classes). Trocar o tipo exigiria relançar as notas.'); return; }
+  var novo=(atual==='numero')?'pct':'numero';
+  var msg=(novo==='numero')
+    ? 'Transformar "'+name+'" em NÚMERO (medida livre: sem teto de 100 e com decimais)?\n\nVale para todas as avaliações deste estudo. Os valores já lançados não mudam; a estatística passa a tratar a variável como contínua.'
+    : 'Voltar "'+name+'" para % (0 a 100)?\n\nVale para todas as avaliações deste estudo. Os valores já lançados não mudam; valores acima de 100 passam a ser limitados na digitação.';
+  if(!confirm(msg)) return;
+  function troca(o){ if(!o||!o.tipos) return 0; var tem=(o.variaveis||[]).indexOf(name)>=0 || Object.prototype.hasOwnProperty.call(o.tipos,name); if(!tem) return 0; o.tipos[name]=novo; return 1; }
+  if(!_avGrid.tipos) _avGrid.tipos={};
+  _avGrid.tipos[name]=novo;
+  var n=1; ((st&&st.avaliacoes)||[]).forEach(function(a){ if(a && (a.variaveis||[]).indexOf(name)>=0){ if(!a.tipos) a.tipos={}; n+=troca(a); } });
+  if(st){
+    try{ logStudyAuditInObject(st,'Tipo de variável','"'+name+'": '+(AV_TIPO_LABEL[atual]||atual)+' -> '+(AV_TIPO_LABEL[novo]||novo)+' (em todas as avaliações do estudo)'); }catch(e){}
+    st._ts=Date.now();
+  }
+  try{ save(); }catch(e){}
+  renderAvGrid();
+  if(typeof _stxToast==='function') _stxToast('"'+name+'" agora é '+(AV_TIPO_LABEL[novo]||novo));
+}
 function avDelCol(name){
   _avSyncInputs();
   _avGrid.variaveis=_avGrid.variaveis.filter(function(v){return v!==name;});
@@ -17751,7 +19220,7 @@ function avGridHtml(a){
         var br=rw?_avBrutoTxt(a,rw.key,v):'';
         var num=parseFloat(String(val==null?'':val).replace(',','.'));
         if(isFinite(num)){ soma+=num; n++; }
-        h+='<td style="text-align:center"'+(br?' title="'+esc(br)+'"':'')+'>'+esc(val||'—')+'</td>';
+        h+='<td style="text-align:center"'+(br?' title="'+esc(br)+'"':'')+'>'+(rw&&AvaliacaoCore.naoAplicavel(a,rw,v)?'<span title="Não se aplica">—</span>':esc(val==null||val===''?'':val))+'</td>';
       });
       h+='<td style="text-align:center;font-weight:700">'+(n?esc(_fmtBR(Math.round(soma/n*10)/10)):'—')+'</td></tr>';
     });
@@ -17815,6 +19284,69 @@ function _pctCtrl(ref, val, sentido, tipo){
   if(!isFinite(e) || e < -100) return null;
   return e;
 }
+/* ===== EFICÁCIA: A FÓRMULA QUE A LITERATURA MANDA, ESCOLHIDA NUM LUGAR SÓ =======
+   A tabela da avaliação, o ranking, as planilhas e o relatório do cliente
+   calculavam cada um a sua com _pctCtrl — sempre a redução de Abbott, inclusive
+   onde ela não se aplica:
+     - CONTAGEM de indivíduos vivos com leitura ANTES da primeira aplicação (a
+       prévia): as parcelas partem de populações diferentes, e a eficácia é a de
+       Henderson & Tilton (1955), que desconta a partida e a variação da
+       testemunha no tempo: (1 − Ta·Cb / Tb·Ca) × 100;
+     - na própria PRÉVIA não há eficácia: nada foi aplicado ainda, e o "% de
+       controle" que aparecia ali era diferença de partida lida como efeito.
+   Mortalidade (sentido "maior") segue com Abbott (1925) / Schneider-Orelli
+   (1947); severidade, incidência e contagem sem prévia, com a redução de Abbott,
+   (1 − T/C) × 100. A prévia só é reconhecida com aplicação REGISTRADA: sem ela
+   não há como saber o que veio antes. */
+function _avBaseAplicacao(study){
+  var b=null; try{ b=_pranchaBase(study); }catch(e){ b=null; }
+  return (b&&b.fonte==='aplicacao'&&b.data)?b.data:null;
+}
+function _avDataDe(av){ try{ return pD(isoToBR(av&&av.data))||pD(av&&av.data)||null; }catch(e){ return null; } }
+function _avEhPrevia(study, av){
+  var b=_avBaseAplicacao(study), d=_avDataDe(av);
+  return !!(b && d && d<b);
+}
+function _avPreviaDe(study, av, v){
+  var b=_avBaseAplicacao(study), d=_avDataDe(av);
+  if(!b||!d||d<b) return null;
+  var melhor=null, dm=null;
+  (study.avaliacoes||[]).forEach(function(a){
+    if(!a||a===av||(a.variaveis||[]).indexOf(v)<0) return;
+    var da=_avDataDe(a); if(!da||!(da<b)) return;
+    if(!melhor||da>dm){ melhor=a; dm=da; }
+  });
+  return melhor;
+}
+function _avMetodoEficacia(study, av, v){
+  var cfg=(av.varcfg||{})[v]||{};
+  if(cfg.calculoControle==='nenhum'||(cfg.escalaModo==='nota'&&_avTipo(av,v)==='escala'))return {metodo:'nenhum',rotulo:'Sem cálculo de controle',curto:'',refs:[]};
+  if(_avEhPrevia(study,av)) return {metodo:'previa', rotulo:'prévia (antes da 1ª aplicação)', curto:'prévia', refs:[]};
+  var sent=_avSentido(av,v), tipo=_avTipo(av,v);
+  if(sent==='maior') return {metodo:'abbott-mort', rotulo:'Abbott (1925) / Schneider-Orelli (1947)', curto:'Abbott', refs:['abbott','schneiderOrelli']};
+  if(tipo==='contagem'){
+    var p=_avPreviaDe(study,av,v);
+    if(p) return {metodo:'ht', previa:p, rotulo:'Henderson & Tilton (1955)', curto:'H-T', refs:['hendersonTilton']};
+  }
+  return {metodo:'abbott', rotulo:'Abbott (1925)', curto:'Abbott', refs:['abbott']};
+}
+/* Eficácia de UM tratamento numa leitura. tm e mv são as médias que quem chama já
+   tem (testemunha e tratamento): a fórmula muda, a chamada não. */
+function _avEficacia(study, av, v, tratId, tm, mv, met){
+  met=met||_avMetodoEficacia(study,av,v);
+  if(met.metodo==='previa'||met.metodo==='nenhum') return null;
+  var cfg=(av.varcfg||{})[v]||{}, tr=(study.tratamentos||[]).find(function(t){return t.id===tratId;});
+  if(tr&&tr.papelControle==='sem_alvo')return null;
+  if(cfg.referencia){var mm=_avMeans(study,av);tm=mm[cfg.referencia]&&mm[cfg.referencia][v];}
+  if(met.metodo==='ht'){
+    var test=((av.varcfg||{})[v]||{}).referencia||studyTestemunha(study), mp=_avMeans(study,met.previa);
+    var Tb=mp[tratId]&&mp[tratId][v], Cb=mp[test]&&mp[test][v];
+    var e=(window.BioensaioCore)?BioensaioCore.hendersonTilton(mv,Tb,tm,Cb):null;
+    if(e==null||!isFinite(e)||e<-100) return null;
+    return e;
+  }
+  return _pctCtrl(tm,mv,_avSentido(av,v),_avTipo(av,v));
+}
 /* Sentido da variável: 'maior' = quanto maior, melhor (mortalidade). Padrão 'menor'. */
 function _avSentido(src,v){ var c=(src&&src.varcfg&&src.varcfg[v])||{}; return c.sentido==='maior'?'maior':'menor'; }
 /* Última avaliação do estudo que define a variável — de onde sai a config dela nos resumos. */
@@ -17828,16 +19360,24 @@ function avResultHtml(study, av){
   var means=_avMeans(study,av); if(!Object.keys(means).length) return '';
   _avCss(); var test=studyTestemunha(study), ts=(study.tratamentos||[]), h='';
   vars.forEach(function(v){
+    var cfg=(av.varcfg||{})[v]||{};if(cfg.naoAvaliar||cfg.calculoControle==='nenhum')return;
+    test=cfg.referencia||studyTestemunha(study);
     var tm=(means[test]&&means[test][v]);
     /* Em mortalidade o número de Abbott é a EFICÁCIA — chamar de "% controle"
        obriga quem lê o relatório a adivinhar qual das duas fórmulas rodou. */
-    var _efic=(_avSentido(av,v)==='maior');
-    h+='<div class="res-title">'+esc(v)+' · média &amp; '+(_efic?'eficácia (Abbott)':'% controle')+'</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th>'+(_efic?'% efic':'% ctrl')+'</th></tr></thead><tbody>';
+    var _efic=(_avSentido(av,v)==='maior'), _met=_avMetodoEficacia(study,av,v);
+    var _col=(_met.metodo==='previa')?'prévia':(_met.metodo==='ht'?'% efic (H-T)':(_efic?'% efic':'% ctrl'));
+    var _tit=(_met.metodo==='previa')?'média · leitura antes da 1ª aplicação':(_met.metodo==='ht'?'média &amp; eficácia (Henderson &amp; Tilton)':(_efic?'média &amp; eficácia (Abbott)':'média &amp; % controle'));
+    h+='<div class="res-title">'+esc(v)+' · '+_tit+'</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>Média</th><th title="'+esc(_met.rotulo)+'">'+_col+'</th></tr></thead><tbody>';
     ts.forEach(function(t){ var mv=means[t.id]&&means[t.id][v], ctrl;
-      if(t.id===test) ctrl='<b>test.</b>';
-      else { var _c=_pctCtrl(tm,mv,_avSentido(av,v),_avTipo(av,v)); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
+      if(t.id===test) ctrl='<b>ref.</b>';
+      else if(t.papelControle==='sem_alvo')ctrl='<span>sem alvo</span>';
+      else if(_met.metodo==='previa') ctrl='<span style="color:#8a948e">base</span>';
+      else { var _c=_avEficacia(study,av,v,t.id,tm,mv,_met); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(mv!=null?_r1(mv):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
+    if(_met.metodo==='previa') h+='<div class="e-hint" style="margin:2px 0 6px">Leitura antes da primeira aplicação: é a base da comparação, não resultado — por isso não há eficácia aqui.</div>';
+    else if(_met.metodo==='ht') h+='<div class="e-hint" style="margin:2px 0 6px">Eficácia de Henderson &amp; Tilton (1955): (1 − Ta·Cb ÷ Tb·Ca) × 100, com a contagem prévia de '+esc(isoToBR(_met.previa.data)||_met.previa.data||'')+' — desconta a população de partida de cada parcela e a variação da testemunha.</div>';
   });
   return h;
 }
@@ -17848,11 +19388,17 @@ function studyAudpcHtml(study){
   var test=studyTestemunha(study), ts=(study.tratamentos||[]), h='';
   Object.keys(byVar).forEach(function(v){
     var pts=byVar[v]; if(pts.length<2) return;
+    var _ac=_avCfgDoEstudo(study,v),_ar=(_ac&&_ac.varcfg||{})[v]||{};
+    if(_ar.calculoControle==='nenhum'||_avTipo(_ac,v)==='escala')return;
+    test=_ar.referencia||studyTestemunha(study);
     /* Bioensaio não tem AACPD. A área sob a curva de knockdown não é resultado
        de nada — mortalidade a 24 h é a leitura daquela hora, não um acumulado.
        Numa variável de sentido 'maior' a seção inteira sai de cena, e quem
        responde é o ranking de eficácia de Abbott, logo acima. */
     if(_avSentido(_avCfgDoEstudo(study,v),v)==='maior') return;
+    /* Diâmetro de colônia em placa também não tem AACPD: o crescimento micelial
+       se resume por inibição e IVCM, no painel do bioensaio. */
+    if(study.tipoEstudo==='Fungo in vitro' && window.BioensaioCore && BioensaioCore.papelDaVariavel('placa',v)==='diametro') return;
     var t0=new Date(pts[0].date), days=pts.map(function(p){ return Math.max(0,Math.round((new Date(p.date)-t0)/864e5)); });
     function audpc(tr){ var s=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null) return null; if(prev!=null) s+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return s; }
     var ta=audpc(test);
@@ -17861,6 +19407,7 @@ function studyAudpcHtml(study){
     h+='<div class="res-title">'+esc(v)+' · '+pts.length+' datas, '+days[days.length-1]+'d</div><div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th><th>AUDPC</th><th>% ctrl</th></tr></thead><tbody>';
     ts.forEach(function(t){ var a=audpc(t.id), ctrl;
       if(t.id===test) ctrl='<b>test.</b>';
+      else if(t.papelControle==='sem_alvo')ctrl='—';
       else { var _c=_pctCtrl(ta,a,'menor'); ctrl=(_c!=null)?(_r1(_c)+'%'):'—'; }
       h+='<tr><td class="av-tname">'+esc(t.id)+(t.id===test?' ●':'')+'</td><td>'+(a!=null?Math.round(a):'—')+'</td><td>'+ctrl+'</td></tr>'; });
     h+='</tbody></table></div>';
@@ -17936,14 +19483,14 @@ function studyChartsHtml(study){
   var test=studyTestemunha(study), ts=study.tratamentos||[], H='';
   Object.keys(vars).forEach(function(v){
     var lastAv=null,i; for(i=avsR.length-1;i>=0;i--){ if((avsR[i].variaveis||[]).indexOf(v)>=0){ lastAv=avsR[i]; break; } }
-    if(lastAv){ var _mai=(_avSentido(lastAv,v)==='maior');
+    if(lastAv){ test=((lastAv.varcfg||{})[v]||{}).referencia||studyTestemunha(study);var _mai=(_avSentido(lastAv,v)==='maior'), _metR=_avMetodoEficacia(study,lastAv,v);
       var m=_avMeans(study,lastAv), tm=m[test]&&m[test][v], bars=[];
-      ts.forEach(function(t,ti){ if(t.id===test)return; var mv=m[t.id]&&m[t.id][v];
-        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_pctCtrl(tm,mv,_avSentido(lastAv,v),_avTipo(lastAv,v))}); });
+      ts.forEach(function(t,ti){ if(t.id===test||t.papelControle==='sem_alvo')return; var mv=m[t.id]&&m[t.id][v];
+        bars.push({label:t.id, nome:(t.produto||''), cor:_chartPal(ti), val:_avEficacia(study,lastAv,v,t.id,tm,mv,_metR)}); });
       /* Do melhor para o pior. É a leitura que o bioensaio pede primeiro, e a
          ordem de cadastro não a responde. Sem valor vai para o fim. */
       bars.sort(function(a,b){ return (b.val==null?-1e9:b.val)-(a.val==null?-1e9:a.val); });
-      if(bars.length) H+='<div class="res-title">'+esc(v)+' · '+(_mai?'eficácia de Abbott':'% de controle')+
+      if(bars.length && _metR.metodo!=='previa' && _metR.metodo!=='nenhum') H+='<div class="res-title">'+esc(v)+' · '+(_metR.metodo==='ht'?'eficácia de Henderson & Tilton':(_mai?'eficácia de Abbott':'% de controle'))+
         ' — ranking em '+esc(_momentoRotulo(lastAv))+'</div>'+_barsSvg(bars);
     }
     var pts=avsR.filter(function(a){return (a.variaveis||[]).indexOf(v)>=0;});
@@ -17982,6 +19529,16 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
       avVars=herdado.variaveis.slice();avTipos=JSON.parse(JSON.stringify(herdado.tipos||{}));avCfg=JSON.parse(JSON.stringify(herdado.varcfg||{}));
     }
   }
+  /* Bioensaio de bancada: sem leitura anterior de onde herdar, o esquema vem do
+     PROTOCOLO — Mortalidade n/N com o N da arena (Potter) ou o diâmetro da colônia
+     em cruz (placa). Ninguém cria coluna à mão numa leitura de bancada. */
+  var _bioSem=null;
+  if(!avVars.length){
+    try{
+      _bioSem=bioensaioSemente(study,curV);
+      if(_bioSem){ avVars=_bioSem.variaveis.slice(); avTipos=JSON.parse(JSON.stringify(_bioSem.tipos)); avCfg=JSON.parse(JSON.stringify(_bioSem.varcfg)); }
+    }catch(e){ _bioSem=null; }
+  }
   /* §10 — em leitura dupla a grade carrega a leitura de QUEM está com a prancheta.
      É aqui que o cegamento acontece: os valores do outro avaliador nem entram no
      rascunho, então não há o que escurecer nem o que esconder na pintura. */
@@ -17995,6 +19552,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
     bruto:JSON.parse(JSON.stringify(av.bruto||{}))
   };
   _avHerdarN(study, av, _avGrid);
+  try{ bioensaioPadraoN(study, curV, _avGrid); }catch(e){}
   if(study.randomizado) ensureStudyRandomizacao(study);
   _avAuto={on:!!study.randomizado,pos:0};
   var bbchList=bbchListDaQuadra(curV, studyCultura(study,q));
@@ -18007,9 +19565,15 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
   if(av.carimbo){ assinPor=_identidadeBPL(av.carimbo.rubricaNome,av.carimbo.rubricaPor).nome; }
 
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()" aria-label="Fechar avaliação" title="Fechar">×</button></div>';
-  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+'</div>'; }
+  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+
+    ((locked&&av.carimbo.assinatura&&window.AssinaturaCore)?_seloAssinatura(av.carimbo.assinatura,AssinaturaCore.conteudoAvaliacao(av)):'')+'</div>'; }
   if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
   if(inheritedFrom){h+='<div class="av-schema-inherited">✓ Campos herdados da avaliação de '+esc(isoToBR(inheritedFrom.data)||inheritedFrom.data||'data anterior')+'. A grade veio vazia para esta leitura.</div>';}
+  else if(_bioSem){
+    var _bioN=(_bioSem.varcfg[_bioSem.variaveis[0]]||{}).N;
+    h+='<div class="av-schema-inherited">✓ Campos do protocolo ('+esc(BioensaioCore.METODOS[_bioSem.metodo].rotulo)+'): '+
+      esc(_bioSem.variaveis.join(', '))+(_bioSem.metodo==='placa'?' — dois eixos em cruz por placa; a média sai sozinha.':(_bioN?(' — N = '+_bioN+' por arena, do protocolo.'):' — declare o nº de organismos por arena no estudo e o N vem pronto.'))+'</div>';
+  }
   h+='<fieldset id="avFs"'+(locked?' disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">';
   h+='<div class="se-field"><label>Data</label><input type="date" id="vData" value="'+esc(av.data)+'"></div>';
   /* Momento explícito — OPCIONAL. Em branco, o app segue derivando o DAA da data,
@@ -18177,8 +19741,8 @@ function finalizarEstudo(qid,sid){
              (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
              'Depois disso o estudo fica somente-leitura e sai da agenda.';
   requireDeletePassword(resumo, function(){
-    openRubrica(function(url){
-      if(!url){ alert('Sem a rubrica o estudo não é finalizado.'); return; }
+    openRubrica(function(ok){
+      if(!ok){ alert('Sem a assinatura o estudo não é finalizado.'); return; }
       var st=_estudoDe(qid,sid); if(!st) return;
       st.estatisticaFinal=_statSnapshot(st);   /* recalcula na hora do aceite, não a prévia */
       st.estatisticaFinal.avancado=_bioestatSnapshotAvancado(qid,st);
@@ -18187,15 +19751,17 @@ function finalizarEstudo(qid,sid){
         em:new Date().toISOString(),
         por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
         nome:_nomeParaAssinatura(),
-        rubrica:url,
         significado:'Estudo finalizado — relatórios disponíveis e pendências preservados',
         analiseCompleta:st.estatisticaFinal.avancado.completo,
         fuso:AGRACTA_TIME_ZONE,
         nAvaliacoes:(st.avaliacoes||[]).length,
         nResultados:(st.estatisticaFinal.itens||[]).length
       };
+      /* A assinatura cobre a estatística congelada e o conteúdo de cada avaliação. */
+      st.finalizacao.assinatura=_assinaturaNova('estudo.finalizacao',AssinaturaCore.conteudoFinalizacao(st),st.finalizacao.significado);
+      st.finalizacao.rubrica=AssinaturaCore.rubricaDe(st.finalizacao.assinatura);
       logStudyAuditInObject(st,'Finalização do Estudo',
-        'Estudo finalizado e travado. '+st.finalizacao.nResultados+' resultado(s) de estatística congelados.',
+        'Estudo finalizado e travado. '+st.finalizacao.nResultados+' resultado(s) de estatística congelados. Assinatura SHA-256 '+st.finalizacao.assinatura.hash+'.',
         {rubrica:1});
       st._ts=Date.now();
       save();
@@ -18204,7 +19770,7 @@ function finalizarEstudo(qid,sid){
             _agFormatDateTime(st.finalizacao.em)+'.\n\nEle saiu da agenda e dos lembretes de hoje.');
       _refazTelasDoEstudo();
       openStudyDetail(qid,sid);
-    }, 'Rubrique para finalizar o estudo '+(s.codigo||s.id));
+    }, 'Finalizar o estudo '+(s.codigo||s.id));
   }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
 }
 function reabrirEstudo(qid,sid){
@@ -18264,7 +19830,8 @@ function protocoloVivoHtml(qid,sid,study){
     var quem=_identidadeBPL(inf.nome,inf.por).nome;
     h+='<div class="pv-card pv-aprovado"><b>Aprovado · versão '+esc(String(inf.versao))+'</b>'+
        '<span>'+esc(_agFormatDateTime(inf.em))+(quem&&quem!=='Não identificado'?(' · '+esc(quem)):'')+'</span>'+
-       (study.protocoloVivo.rubrica?('<img src="'+esc(study.protocoloVivo.rubrica)+'" alt="Rubrica da aprovação" class="pv-rubrica">'):'')+'</div>';
+       (study.protocoloVivo.assinatura?_seloAssinatura(study.protocoloVivo.assinatura,AssinaturaCore.conteudoProtocolo(study.protocoloVivo)):
+        (study.protocoloVivo.rubrica&&!(window.AssinaturaCore&&AssinaturaCore.ehEletronica(study.protocoloVivo.rubrica))?('<img src="'+esc(study.protocoloVivo.rubrica)+'" alt="Rubrica da aprovação" class="pv-rubrica">'):''))+'</div>';
   }
   var ems=study.emendas||[];
   if(ems.length){
@@ -18300,17 +19867,20 @@ function aprovarProtocolo(qid,sid){
     (r.tratamentos||[]).length+' tratamento(s) · '+r.numRepeticoes+' repetição(ões) · '+r.numAplicacoes+' aplicação(ões)'+
     '\n\nDepois disso, mudar o protocolo pede motivo e vira emenda.';
   requireDeletePassword(resumo, function(){
-    openRubrica(function(url){
-      if(!url){ alert('Sem a rubrica o protocolo não é aprovado.'); return; }
+    openRubrica(function(ok){
+      if(!ok){ alert('Sem a assinatura o protocolo não é aprovado.'); return; }
       var st=_estudoDe(qid,sid); if(!st) return;
-      var a=_pvAutor(); a.rubrica=url;
+      var a=_pvAutor();
       st.protocoloVivo=PV.aprovar(st,a);
-      logStudyAuditInObject(st,'Aprovação do protocolo','Protocolo aprovado como versão 1.',{rubrica:1});
+      /* A assinatura cobre o retrato do protocolo congelado na aprovação. */
+      st.protocoloVivo.assinatura=_assinaturaNova('protocolo.aprovado',AssinaturaCore.conteudoProtocolo(st.protocoloVivo),'Protocolo aprovado como versão 1');
+      st.protocoloVivo.rubrica=AssinaturaCore.rubricaDe(st.protocoloVivo.assinatura);
+      logStudyAuditInObject(st,'Aprovação do protocolo','Protocolo aprovado como versão 1. Assinatura SHA-256 '+st.protocoloVivo.assinatura.hash+'.',{rubrica:1});
       st._ts=Date.now(); save();
       try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(qid,st); }catch(e){}
       _stxToast('✓ Protocolo aprovado · versão 1');
       openStudyDetail(qid,sid);
-    }, 'Rubrique para aprovar o protocolo de '+(s.codigo||s.id));
+    }, 'Aprovar o protocolo de '+(s.codigo||s.id));
   }, {title:'Aprovar protocolo', ok:'Aprovar'});
 }
 function registrarDesvio(qid,sid){
@@ -18335,52 +19905,45 @@ function registrarDesvio(qid,sid){
 }
 
 /* ===== RUBRICA (assinatura por toque) — módulo isolado, aditivo ===== */
-var _rubricaCb=null,_rubricaCtx=null,_rubricaDrawing=false,_rubricaDirty=false;
-function _rubricaPos(cv,e){ var r=cv.getBoundingClientRect(); var t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; return {x:t.clientX-r.left,y:t.clientY-r.top}; }
-function _rubricaBind(cv){
-  if(cv._rbBound) return; cv._rbBound=true;
-  function start(e){ if(e.cancelable)e.preventDefault(); _rubricaDrawing=true; if(!_rubricaCtx)return; var p=_rubricaPos(cv,e); _rubricaCtx.beginPath(); _rubricaCtx.moveTo(p.x,p.y); _rubricaCtx.lineTo(p.x+0.1,p.y+0.1); _rubricaCtx.stroke(); _rubricaDirty=true; }
-  function move(e){ if(!_rubricaDrawing||!_rubricaCtx)return; if(e.cancelable)e.preventDefault(); var p=_rubricaPos(cv,e); _rubricaCtx.lineTo(p.x,p.y); _rubricaCtx.stroke(); _rubricaDirty=true; }
-  function end(){ _rubricaDrawing=false; }
-  cv.addEventListener('touchstart',start,{passive:false}); cv.addEventListener('touchmove',move,{passive:false}); cv.addEventListener('touchend',end); cv.addEventListener('touchcancel',end);
-  cv.addEventListener('mousedown',start); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
-}
+/* ===== ASSINATURA ELETRÔNICA (no lugar da rubrica desenhada) =====================
+   openRubrica só CONFIRMA: mostra quem vai assinar e o quê, e devolve true no
+   "Assinar". Quem chamou monta o conteúdo e gera a assinatura por
+   _assinaturaNova — SHA-256 do conteúdo + quem, quando e o significado
+   (vendor/assinatura-core.js). Quem assina é o usuário logado no aparelho.
+   Rubricas desenhadas já gravadas continuam aparecendo; nada é reescrito. */
+var _rubricaCb=null;
 function openRubrica(onDone,info){
-  var ovl=document.getElementById('rubricaOvl'), cv=document.getElementById('rubricaCanvas');
-  if(!ovl||!cv){ if(onDone)onDone(null); return; }
-  _rubricaCb=onDone||null; _rubricaDirty=false;
-  ovl.style.display='flex';
+  var ovl=document.getElementById('rubricaOvl');
+  if(!ovl){ if(onDone)onDone(null); return; }
+  _rubricaCb=onDone||null;
   var inf=document.getElementById('rubricaInfo'); if(inf) inf.textContent=info||'';
-  setTimeout(function(){
-    var r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
-    var w=Math.round(r.width)||(cv.parentElement?cv.parentElement.clientWidth:0)||window.innerWidth;
-    var h=Math.round(r.height)||(cv.parentElement?cv.parentElement.clientHeight:0)||(window.innerHeight-130);
-    cv.width=Math.max(1,Math.round(w*dpr)); cv.height=Math.max(1,Math.round(h*dpr));
-    _rubricaCtx=cv.getContext('2d'); _rubricaCtx.setTransform(dpr,0,0,dpr,0,0);
-    _rubricaCtx.lineWidth=2.6; _rubricaCtx.lineCap='round'; _rubricaCtx.lineJoin='round'; _rubricaCtx.strokeStyle='#13202b';
-    _rubricaCtx.clearRect(0,0,w,h);
-    _rubricaBind(cv);
-  },60);
+  var quem=document.getElementById('rubricaQuem');
+  if(quem){ var email=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; quem.textContent=_currentUserName()+(email?(' · '+email):''); }
+  ovl.style.display='flex';
+  var b=document.getElementById('rubricaAssinar'); if(b) try{ b.focus(); }catch(e){}
 }
-function rubricaClear(){ var cv=document.getElementById('rubricaCanvas'); if(_rubricaCtx&&cv){ var r=cv.getBoundingClientRect(); _rubricaCtx.clearRect(0,0,r.width,r.height); } _rubricaDirty=false; }
 function _rubricaClose(){ var ovl=document.getElementById('rubricaOvl'); if(ovl) ovl.style.display='none'; }
 function rubricaSkip(){ _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(null); }
-/* A rubrica era o PNG da tela inteira (1080 × 2000 px no celular), em cada
-   avaliação assinada e em cada finalização. Agora sai só a área com tinta,
-   reduzida a no máximo 600 × 240 px: a mesma assinatura, uma fração do espaço.
-   Rubricas já gravadas NÃO são reescritas — assinatura feita não se mexe. */
-function _rubricaCompacta(cv){
-  var AC=window.ArmazenamentoCore, ctx=cv.getContext('2d');
-  var im=ctx.getImageData(0,0,cv.width,cv.height), bx=AC?AC.caixaDaTinta(im.data,cv.width,cv.height):null;
-  if(!bx) return cv.toDataURL('image/png');
-  var pad=Math.round(8*(window.devicePixelRatio||1));
-  var x=Math.max(0,bx.x-pad), y=Math.max(0,bx.y-pad), w=Math.min(cv.width-x,bx.w+2*pad), h=Math.min(cv.height-y,bx.h+2*pad);
-  var k=Math.min(1,600/w,240/h), out=document.createElement('canvas');
-  out.width=Math.max(1,Math.round(w*k)); out.height=Math.max(1,Math.round(h*k));
-  var o=out.getContext('2d'); o.imageSmoothingQuality='high'; o.drawImage(cv,x,y,w,h,0,0,out.width,out.height);
-  return out.toDataURL('image/png');
+function rubricaConfirm(){ _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(true); }
+/* Gera a assinatura do usuário logado sobre `conteudo`. */
+function _assinaturaNova(escopo,conteudo,significado){
+  return AssinaturaCore.assinar(escopo,conteudo,{
+    por:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'',
+    nome:_nomeParaAssinatura(), significado:significado||''});
 }
-function rubricaConfirm(){ var cv=document.getElementById('rubricaCanvas'),url=null; try{ if(_rubricaDirty&&cv){ try{ url=_rubricaCompacta(cv); }catch(e2){ url=cv.toDataURL('image/png'); } } }catch(e){} _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(url); }
+/* Selo da assinatura para as telas: hash curto e se o conteúdo ainda bate. */
+function _seloAssinatura(ass,conteudo,rubricaAntiga,alt){
+  if(ass&&window.AssinaturaCore){
+    var c=AssinaturaCore.conferir(ass,conteudo);
+    return '<div title="SHA-256 '+esc(ass.hash)+'" style="margin-top:8px;padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.4;'+
+      (c.ok?'background:#e8f4ec;color:#1d5a34;border:1px solid #b9dcc5':'background:#fdecea;color:#8a2a1f;border:1px solid #efb9b1')+'">'+
+      (c.ok?'✓ Assinatura eletrônica':'⚠ '+(c.motivo==='conteudo'?'Conteúdo alterado depois da assinatura':'Assinatura não confere'))+
+      ' · SHA-256 <code>'+esc(AssinaturaCore.curto(ass.hash))+'…</code></div>';
+  }
+  if(rubricaAntiga&&!(window.AssinaturaCore&&AssinaturaCore.ehEletronica(rubricaAntiga)))
+    return '<div style="margin-top:8px"><img src="'+esc(rubricaAntiga)+'" alt="'+esc(alt||'Rubrica')+'" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>';
+  return '';
+}
 /* ===== DIÁRIO DE AVALIAÇÕES (rede de segurança no aparelho) =====================
    Caixa-preta append-only em IndexedDB (independente do blob/localStorage): toda
    avaliação salva fica registrada localmente, p/ recuperar mesmo se a sincronização
@@ -18556,7 +20119,7 @@ function saveAvaliacao(){
   var _reab = (_avReopen && _avReopen.avid===av.id) ? _avReopen : null;
   var _motivo = _reab ? _reab.motivo : null;
   /* editar avaliação ASSINADA invalida a assinatura → exige NOVA (exigência BPL) */
-  if(_reab && av.carimbo && av.carimbo.rubrica){ av.carimbo.rubrica=null; av.carimbo.rubricaEm=null; av.carimbo.rubricaPor=null; av.carimbo.rubricaNome=null; av.carimbo.rubricaSignificado=null; }
+  if(_reab && av.carimbo && av.carimbo.rubrica){ av.carimbo.rubrica=null; av.carimbo.rubricaEm=null; av.carimbo.rubricaPor=null; av.carimbo.rubricaNome=null; av.carimbo.rubricaSignificado=null; av.carimbo.assinatura=null; }
   logStudyAuditInObject(study, action, details, { mudancas:(_mud&&_mud.length?_mud.slice(0,80):null), total_mudancas:(_mud?_mud.length:null), motivo:_motivo });
   save();
   /* rede de segurança no aparelho: registra a avaliação no diário (IndexedDB). Best-effort, nunca quebra o salvar. */
@@ -18573,11 +20136,14 @@ function saveAvaliacao(){
   try{
     if(typeof openRubrica==='function' && !(av.carimbo&&av.carimbo.rubrica)){
       var _rqid=curV,_rsid=curSid,_raid=av.id,_rdata=av.data;
-      openRubrica(function(url){ if(!url) return; try{
+      openRubrica(function(ok){ if(!ok) return; try{
         var _q=data[_rqid], _st=_q&&(_q.estudos||[]).find(function(s){return s.id===_rsid;});
         var _a=_st&&(_st.avaliacoes||[]).find(function(x){return x.id===_raid;});
-        if(_a){ if(!_a.carimbo)_a.carimbo={}; _a.carimbo.rubrica=url; _a.carimbo.rubricaEm=new Date().toISOString();
-          _a.carimbo.rubricaPor=(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''; _a.carimbo.rubricaNome=_nomeParaAssinatura(); _a.carimbo.rubricaSignificado='Conferido e assinado';
+        if(_a){ if(!_a.carimbo)_a.carimbo={};
+          /* A assinatura cobre o que foi medido: variáveis, notas e dado bruto. */
+          var _ass=_assinaturaNova('avaliacao',AssinaturaCore.conteudoAvaliacao(_a),'Conferido e assinado');
+          _a.carimbo.assinatura=_ass; _a.carimbo.rubrica=AssinaturaCore.rubricaDe(_ass); _a.carimbo.rubricaEm=_ass.em;
+          _a.carimbo.rubricaPor=_ass.por; _a.carimbo.rubricaNome=_ass.nome; _a.carimbo.rubricaSignificado=_ass.significado;
           save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSave==='function')cloudSave();
           if(typeof openStudyDetail==='function')openStudyDetail(_rqid,_rsid); }
       }catch(e){} }, 'Avaliação '+(isoToBR(_rdata)||_rdata||''));
@@ -18631,7 +20197,10 @@ function safetySnap(){
   try{ if(typeof ensureCfgTS==='function') ensureCfgTS(); }catch(e){}
   try{ if(typeof ensureItens==='function') ensureItens(); }catch(e){}
   try{ if(typeof ensureNotas==='function') ensureNotas(); }catch(e){}
-  return { ts:Date.now(),
+  /* Imutável: editar o estado vivo depois não pode alterar o retrato. A lista
+     explícita também mantém a paridade com exportData verificada no teste. */
+  var snap=JSON.parse(JSON.stringify({
+    ts:Math.max(Date.now(),(window._lastSafetyTs||0)+1),
     georefts:(typeof GEOREF_TS!=='undefined'?GEOREF_TS:0),
     notas_campo:(typeof NOTAS_CAMPO!=='undefined'?NOTAS_CAMPO:[]),
     _deletedQuadras:(typeof _delQuadras!=='undefined'?_delQuadras:{}),
@@ -18650,8 +20219,48 @@ function safetySnap(){
     itens:(typeof ITENS!=='undefined'?ITENS:{}),
     itensts:(typeof ITENS_TS!=='undefined'?ITENS_TS:{}),
     _deletedItens:(typeof _delItens!=='undefined'?_delItens:{}),
-    randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[]) };
+    randomizacoes:(typeof RZLIB!=='undefined'?RZLIB:[])
+  }));
+  (snap.notas_campo||[]).forEach(function(n){
+    var foto=typeof _fotoNota==='function'?_fotoNota(n):null;
+    if(foto)n.foto=foto;
+  });
+  window._lastSafetyTs=snap.ts;return snap;
 }
+/* Completa o retrato com os arquivos locais ainda não carregados na memória.
+   Nunca altera a nota ativa nem põe a imagem no caminho da sincronização. */
+function _safetySnapshotPhotos(snap){
+  var faltam=(snap.notas_campo||[]).filter(function(n){return n&&n.fotoLocal&&!n.foto;});
+  var st=typeof _fotosNotasStore==='function'?_fotosNotasStore():null;
+  if(!faltam.length||!st)return Promise.resolve(snap);
+  return st.todas().then(function(fotos){
+    faltam.forEach(function(n){if(fotos[n.id])n.foto=fotos[n.id];});
+    return snap;
+  });
+}
+/* Mantém o identificador da restauração dentro do estado salvo: funciona mesmo
+   restaurando offline e fechando o app antes de enviar. */
+function _markStateRestored(previous,snapshot){
+  var gen=Math.max(Date.now(),previous||0,_restoreGeneration({data:data}))+1;
+  if(!data.__config)data.__config={};
+  data.__config.restoreGeneration=gen;
+  /* As lápides do retrato são parte do estado restaurado. Não eliminá-las
+     pela presença de um registro antigo, que pode estar apagado de propósito. */
+  snapshot=snapshot||{};
+  /* Arquivos legados não tinham mapas de exclusão. Só nesses mapas ausentes,
+     remova a lápide dos IDs explicitamente trazidos de volta pelo arquivo. */
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedQuadras')){
+    Object.keys(snapshot.data||{}).concat(Object.keys(snapshot.qgeo||{})).forEach(function(id){if(id!=='__config')delete _delQuadras[id];});
+  }
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedLocais'))Object.keys(snapshot.locais||{}).forEach(function(id){delete _delLocais[id];});
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedNotas'))(snapshot.notas_campo||[]).forEach(function(n){delete _delNotas[n.id];});
+  if(!Object.prototype.hasOwnProperty.call(snapshot,'_deletedItens'))Object.keys(snapshot.itens||{}).forEach(function(id){delete _delItens[id];});
+  if(typeof saveDelTombs==='function')saveDelTombs();
+  try{localStorage.setItem(DELN_KEY,JSON.stringify(_delNotas));if(typeof saveItens==='function')saveItens();}catch(e){}
+  _cloudPending=null;
+  _cloudPendingParked=false;
+}
+
 function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
   Object.keys(d).forEach(function(k){ (d[k].estudos||[]).forEach(function(e){ est++; ap+=(e.aplicacoes||[]).length; av+=(e.avaliacoes||[]).length; }); });
   return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0),
@@ -18687,49 +20296,58 @@ function _safetyMaxCopias(copiaChars, obrigatoria){
   var n=AC.copiasPermitidas(m.total-seg, copiaChars, dados);
   return obrigatoria?Math.max(1,n):n;
 }
-function safetyBackup(motivo){
+function safetyBackup(motivo,prepared,onArchived){
+  var archive=Promise.resolve(false);
   try{
-    var arr=safetyList();
-    var snap=JSON.parse(JSON.stringify(safetySnap()));
-    snap.motivo=motivo||''; snap.counts=_safetyCounts(snap);
+    var arr=safetyList(), snap=prepared||safetySnap();
+    snap.motivo=motivo||'';snap.counts=_safetyCounts(snap);
+    /* Histórico adicional no cofre: fotos grandes continuam recuperáveis
+       mesmo sem cota no localStorage. A promessa assíncrona NÃO vale como
+       confirmação para quem depende do retorno booleano antes de restaurar. */
+    try{
+      if(window.AgractaFirebase&&typeof AgractaFirebase.saveBackup==='function'){
+        archive=_safetySnapshotPhotos(JSON.parse(JSON.stringify(snap))).then(function(full){return AgractaFirebase.saveBackup(full);})
+          .then(function(){return true;},function(e){console.error('[Agracta backup]',e);return false;});
+      }
+    }catch(e){console.error('[Agracta backup]',e);}
+    if(onArchived)archive.then(onArchived);
     arr.push(snap);
     var _max=10;
-    try{ _max=_safetyMaxCopias(JSON.stringify(snap).length, !/^ao abrir/.test(motivo||'')); }catch(e){}
-    if(_max<=0){ try{ localStorage.removeItem('iracema-safety'); }catch(e){} return false; }
-    while(arr.length>Math.min(10,_max)) arr.shift();
+    try{_max=_safetyMaxCopias(JSON.stringify(snap).length,!/^ao abrir/.test(motivo||''));}catch(e){}
+    if(_max<=0){try{localStorage.removeItem('iracema-safety');}catch(e){}return false;}
+    while(arr.length>Math.min(10,_max))arr.shift();
     while(arr.length){
-      try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); return true; }
-      catch(e){ arr.shift(); }   /* não coube: sacrifica o mais antigo e tenta de novo */
+      try{localStorage.setItem('iracema-safety',JSON.stringify(arr));return true;}
+      catch(e){arr.shift();}
     }
-  }catch(e){}
+  }catch(e){if(onArchived)archive.then(onArchived);}
   return false;
 }
-/* NÃO RESTAURA SEM REDE. A tela diz, com todas as letras, que o estado atual
-   é guardado antes — então restaurar sem conseguir guardar seria trocar um
-   estado por outro sem volta, exatamente o oposto do que o botão promete. Com
-   o aparelho sem espaço isso era possível e calado. Devolve true/false para
-   quem chama poder parar antes de anunciar "restaurado". */
+
 function safetyApply(snap){
-  if(!snap || !snap.data || typeof snap.data!=='object' || Array.isArray(snap.data)) return false;
+  if(!snap||!snap.data||typeof snap.data!=='object'||Array.isArray(snap.data))return false;
   if(!safetyBackup('antes de restaurar')){
     alert('Não consegui guardar o estado atual neste aparelho — sem isso a restauração não teria volta.\n\n'+
           'Exporte os dados (o botão de exportar está nesta mesma tela) e libere espaço antes de restaurar.');
     return false;
   }
+  var previous=_restoreGeneration({data:data}),applyingBefore=window._cloudApplying;
   try{
+    snap=JSON.parse(JSON.stringify(snap));
+    /* Só capture um checkpoint quando todas as partes do retrato estiverem
+       no lugar; gravar georef antes de qgeo recriava quadras do estado antigo. */
+    window._cloudApplying=true;
     if(snap.data){ data=snap.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
     if(snap.qgeo){ QGEO=snap.qgeo; if(typeof saveQGEO==='function') saveQGEO(); }
-    if(snap.georef){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
-    if(snap.georefts!=null){ GEOREF_TS=snap.georefts; if(typeof saveGeorefTS==='function') saveGeorefTS(); }
-    /* AS LÁPIDES VOLTAM COM O RESTO — é o que desfaz a exclusão de verdade, em
-       vez de só repor o registro e deixar a lápide de pé. Mesmo caminho que o
-       importData já usa para um backup de arquivo. */
-    if(Array.isArray(snap.notas_campo)){ NOTAS_CAMPO=snap.notas_campo; if(typeof saveNotas==='function') saveNotas(); }
-    if(snap._deletedQuadras && typeof snap._deletedQuadras==='object'){ _delQuadras=snap._deletedQuadras; }
-    if(snap._deletedLocais && typeof snap._deletedLocais==='object'){ _delLocais=snap._deletedLocais; }
-    if(typeof saveDelTombs==='function') saveDelTombs();
-    if(snap._deletedNotas && typeof snap._deletedNotas==='object'){ _delNotas=snap._deletedNotas;
-      try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(_e){} }
+    if(Object.prototype.hasOwnProperty.call(snap,'georef')){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+    if(snap.georefts!=null){GEOREF_TS=snap.georefts;if(typeof saveGeorefTS==='function')saveGeorefTS();}
+    if(Array.isArray(snap.notas_campo)){NOTAS_CAMPO=snap.notas_campo;if(typeof saveNotas==='function')saveNotas();}
+    if(snap._deletedQuadras&&typeof snap._deletedQuadras==='object')_delQuadras=snap._deletedQuadras;
+    if(snap._deletedLocais&&typeof snap._deletedLocais==='object')_delLocais=snap._deletedLocais;
+    if(typeof saveDelTombs==='function')saveDelTombs();
+    if(snap._deletedNotas&&typeof snap._deletedNotas==='object'){
+      _delNotas=snap._deletedNotas;try{localStorage.setItem(DELN_KEY,JSON.stringify(_delNotas));}catch(e){}
+    }
     if(snap.locais){ LOCAIS=snap.locais; if(typeof saveLocais==='function') saveLocais(); }
     if(snap.qlocal){ QLOCAL=snap.qlocal; if(typeof saveQLocal==='function') saveQLocal(); }
     if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
@@ -18746,10 +20364,13 @@ function safetyApply(snap){
     }
     if(Array.isArray(snap.randomizacoes)){ RZLIB=normalizeRZLib(snap.randomizacoes); saveRZLib(); }
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
-    _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
+    _markStateRestored(previous,snap);
+    _cloudReplace=true; /* geração persistente impede recuperar lápides antigas */
+    window._cloudApplying=applyingBefore;
     save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
     return true;
   }catch(e){ alert('Erro ao restaurar: '+e.message); return false; }
+  finally{window._cloudApplying=applyingBefore;}
 }
 /* ===================== HISTÓRICO DA NUVEM (restaurar versões) ===================== */
 function _chShell(inner){
@@ -18805,6 +20426,15 @@ function cloudHistoryRestore(rev){
   }, {title:'Confirmar restauração', ok:'Restaurar'});
 }
 /* ===================== VERIFICADOR DE INTEGRIDADE ===================== */
+/* Data de registro válida: aceita dd/mm/aaaa (como o plantio é gravado) e aaaa-mm-dd, e
+   recusa o que o calendário não tem. new Date() lia dd/mm como mês/dia; pD() sozinho aceita
+   "30/02" e rola para 2 de março — então a data precisa sobreviver à ida e volta. */
+function _dataRegistroValida(s){
+  var t=String(s==null?'':s).trim();
+  var iso=/^\d{4}-\d{2}-\d{2}/.test(t)?t.slice(0,10):brToIso(t);
+  var d=pD(t);
+  return !!(iso && d && !isNaN(d) && fDIso(d)===iso);
+}
 function integridadeScan(){
   var out=[];
   try{
@@ -18858,7 +20488,7 @@ function integridadeScan(){
         var orf={};
         (s.avaliacoes||[]).forEach(function(a){
           if(!a) return;
-          if(a.data && isNaN(new Date(a.data).getTime())) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): avaliação com data inválida.'});
+          if(a.data && !_dataRegistroValida(a.data)) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): avaliação com data inválida.'});
           if(nTrat) Object.keys(a.notas||{}).forEach(function(k){ var tid=String(k).replace(/R\d+$/,''); if(tid && !tids[tid] && !orf[tid]){ orf[tid]=1; out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): há notas de um tratamento (“'+tid+'”) que não está mais na lista — o dado pode ficar invisível.'}); } });
         });
       });
@@ -18969,21 +20599,40 @@ function armFotosAntigas(){
       F.apagar(r.apagaveis).then(function(n){ _armMsg('✓ '+n+' fatia(s) apagada(s) do servidor.'); },function(e){ _armMsg('Não consegui apagar: '+esc((e&&e.message)||e)); });
     };
   },function(e){ _armMsg('Não consegui ler o servidor: '+esc((e&&e.message)||e)); });
+  }
+var _safetyView=[];
+function safetyRestoreAt(i){
+  var snap=_safetyView[i];if(!snap)return;
+  if(confirm('Restaurar este backup? O estado atual será guardado antes.')){
+    if(!safetyApply(snap))return;
+    document.getElementById('bkpModal').style.display='none';alert('✓ Restaurado.');
+  }
 }
 function openBackups(){
+  _showBackups(safetyList());
+  if(window.AgractaFirebase&&typeof AgractaFirebase.listBackups==='function'){
+    AgractaFirebase.listBackups().then(function(stored){
+      var modal=document.getElementById('bkpModal');
+      if(!modal||modal.style.display==='none')return;
+      var by={};safetyList().concat(stored).forEach(function(s){by[s.ts]=s;});
+      _showBackups(Object.keys(by).map(function(k){return by[k];}));
+    }).catch(function(e){console.error('[Agracta backups]',e);});
+  }
+}
+function _showBackups(list){
   var m=document.getElementById('bkpModal');
   if(!m){ m=document.createElement('div'); m.id='bkpModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
-  var arr=safetyList().slice().reverse();
+  var arr=list.slice().sort(function(a,b){return b.ts-a.ts;});_safetyView=arr;
   var rows=arr.length? arr.map(function(s,i){
     var c=s.counts||_safetyCounts(s), dt=new Date(s.ts);
     return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
       '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
       '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
-      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){if(!safetyApply(safetyList().slice().reverse()['+i+']))return;document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
-  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local agora. São criados antes de excluir/importar e ao abrir o app — mas só enquanto sobra espaço: com o armazenamento do aparelho apertado, a folga dos seus dados vem primeiro. O cofre offline e o <b>Histórico da nuvem</b> continuam guardando. Veja em Menu → Armazenamento do aparelho.</div>';
+      '<button onclick="safetyRestoreAt('+i+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cópias automáticas antes de excluir/importar (só neste aparelho). Incluem as observações; mantenha também os arquivos das fotos salvos no aparelho. Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
     rows+
     '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">💾 Exportar tudo agora (arquivo)</button></div>'+
   '</div>';
@@ -19045,11 +20694,12 @@ function _buildXlsx(soDoLocal){
   var XLSX=window.XLSX;
   function num(x){ return (x==null||x==='')?'':x; }
   function toNum(x){ if(x==null||x==='') return ''; if(typeof x==='number') return isFinite(x)?x:''; var s=String(x).trim().replace(',','.'); if(s==='') return ''; var n=Number(s); return isFinite(n)?n:String(x); }
-  function dap(pl,when){ try{ if(!pl||!when) return ''; var p=new Date(pl), w=new Date(when); if(isNaN(p)||isNaN(w)) return ''; return Math.round((w-p)/864e5); }catch(e){ return ''; } }
+  /* pD, não new Date: o plantio fica gravado em dd/mm/aaaa, que new Date lê como mês/dia (dia>12 = Invalid Date; dia<=12 = data trocada) */
+  function dap(pl,when){ try{ if(!pl||!when) return ''; var p=pD(pl), w=pD(when); if(!p||!w||isNaN(p)||isNaN(w)) return ''; return daysBetween(p,w); }catch(e){ return ''; } }
   var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Tipo_variavel','Valor','Sub_amostras','n_afetados','N_avaliados','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
   var aplH=['Local','Quadra','Cultura','Estudo','Data_aplicacao','BBCH','Obs','Registrado_em','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI'];
   var estH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Testemunha','N_avaliacoes','Area_ha','Comprimento_m','Largura_m','Lat','Lng'];
-  var eficH=['Local','Quadra','Estudo','Variavel','Data_avaliacao','Tratamento','Produto','Testemunha','Media','%_controle'];
+  var eficH=['Local','Quadra','Estudo','Variavel','Data_avaliacao','Tratamento','Produto','Testemunha','Media','%_controle','Metodo_eficacia'];
   var audH=['Local','Quadra','Estudo','Variavel','Tratamento','Produto','Testemunha','N_datas','Dias','AUDPC','%_controle'];
   var tratH=['Local','Quadra','Estudo','Tratamento','Produto','Dose','Volume_calda','Obs','Testemunha'];
   var tidy=[tidyH], apl=[aplH], est=[estH], trat=[tratH], efic=[eficH], aud=[audH];
@@ -19081,7 +20731,7 @@ function _buildXlsx(soDoLocal){
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
-        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _ce=(t.id===_t)?null:_pctCtrl(tm,mv,_avSentido(a,v),_avTipo(a,v)); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl]); }); }); });
+        _av.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_t]&&m[_t][v]; s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var _mE=_avMetodoEficacia(s,a,v), _ce=(t.id===_t)?null:_avEficacia(s,a,v,t.id,tm,mv,_mE); var ctrl=(t.id===_t)?'':(_ce!=null?Math.round(_ce*10)/10:''); efic.push([locNome,qn,s.codigo||'',v,isoToBR(a.data)||'',t.id,prod[t.id]||'',(t.id===_t?'sim':''),(mv!=null?Math.round(mv*100)/100:''),ctrl,_mE.rotulo]); }); }); });
         var bv={}; _av.forEach(function(a){ if(!a.data)return; var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ (bv[v]=bv[v]||[]).push({date:a.data,m:m}); }); });
         Object.keys(bv).forEach(function(v){ var pts=bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), dys=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));}); function af(tr){ var sm=0,pv=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(pv!=null)sm+=(pv+y)/2*(dys[i]-pt); pv=y; pt=dys[i]; } return sm; } var ta=af(_t); s.tratamentos.forEach(function(t){ var a=af(t.id); var _ca=(t.id===_t)?null:_pctCtrl(ta,a); var ctrl=(t.id===_t)?'':(_ca!=null?Math.round(_ca*10)/10:''); aud.push([locNome,qn,s.codigo||'',v,t.id,prod[t.id]||'',(t.id===_t?'sim':''),pts.length,dys[dys.length-1],(a!=null?Math.round(a):''),ctrl]); }); });
       })();
@@ -19103,19 +20753,30 @@ function importData(ev){
   var f=ev.target.files[0];
   if(!f)return;
   if(!confirm('Importar esse backup vai substituir os dados atuais (e o alinhamento/formato das quadras, se o backup tiver). Continuar?')){ev.target.value='';return}
-  safetyBackup('antes de importar backup');
+  if(!safetyBackup('antes de importar backup')){
+    alert('Não consegui guardar o estado atual neste aparelho. Exporte uma cópia e libere espaço antes de importar.');
+    ev.target.value='';return;
+  }
   var r=new FileReader();
   r.onload=function(e){
+    var applyingBefore=window._cloudApplying;
     try{
       var imported=JSON.parse(e.target.result);
+      var previous=_restoreGeneration(cloudState());
       var dd, qq=null, gg=null, ll=null, ql=null, qn=null, rz=null;
       if(imported && imported._iracema){ dd=imported.data||{}; qq=imported.qgeo||null; gg=imported.georef||null; ll=imported.locais||null; ql=imported.qlocal||null; qn=imported.qnome||null; rz=imported.randomizacoes||null; }
       else { dd=imported; } /* formato antigo: só os dados */
+      if(!dd||typeof dd!=='object'||Array.isArray(dd))throw new Error('Backup sem dados válidos.');
+      Object.keys(dd).forEach(function(k){
+        if(!dd[k]||typeof dd[k]!=='object'||Array.isArray(dd[k]))throw new Error('Registro inválido no backup: '+k);
+      });
+      window._cloudApplying=true;
+      data={};
       Object.keys(dd).forEach(function(k){
         data[k]=dd[k];
-        if(!data[k].estudos || !Array.isArray(data[k].estudos))data[k].estudos=[];
+        if(k!=='__config'&&(!data[k].estudos||!Array.isArray(data[k].estudos)))data[k].estudos=[];
       });
-      if(gg){ _geo=gg; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+      if(gg||(imported&&imported._iracema&&Object.prototype.hasOwnProperty.call(imported,'georef'))){ _geo=gg; if(typeof saveGeoref==='function') saveGeoref(_geo); }
       if(qq){ QGEO=qq; if(typeof saveQGEO==='function') saveQGEO(); }
       if(ll){ LOCAIS=ll; if(typeof saveLocais==='function') saveLocais(); }
       if(ql){ QLOCAL=ql; if(typeof saveQLocal==='function') saveQLocal(); }
@@ -19146,12 +20807,15 @@ function importData(ev){
         }
       }
       if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
+      _markStateRestored(previous,imported&&imported._iracema?imported:{data:dd});
       _cloudReplace=true; /* importar backup SUBSTITUI o estado (como o aviso promete) — sem merge com a nuvem */
+      window._cloudApplying=applyingBefore;
       save();
       try{ if(_map && _geo && typeof geoBounds==='function') _map.fitBounds(geoBounds(_geo)); }catch(_e){}
       render();updateAgendaBadge();
       alert('Backup importado com sucesso'+((qq||gg)?' (incluindo alinhamento e quadras).':' (apenas dados).'));
     }catch(err){alert('Arquivo inválido: '+err.message)}
+    finally{window._cloudApplying=applyingBefore;}
     ev.target.value='';
   };
   r.readAsText(f);
@@ -20376,7 +22040,7 @@ function consultarSolo(id, cb, forcar){
   _soloEstado[id]='buscando';
   try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
 
-  fetch(SOLO_PROXY+'/solo?geom='+encodeURIComponent(JSON.stringify(geom)))
+  proxyFetch(SOLO_PROXY+'/solo?geom='+encodeURIComponent(JSON.stringify(geom)))
     .then(function(r){ if(r&&r.ok===false) throw new Error('o servidor respondeu '+r.status); return r.json(); })
     .then(function(d){
       if(seq!==_soloSeq) return;                    /* resposta atrasada de outra quadra */
@@ -20584,7 +22248,7 @@ function consultarSoloPropriedades(id, cb, forcar){
   _soloPropEstado[id]='buscando';
   try{ if(curV===id && typeof showD==='function') showD(id); }catch(e){}
 
-  fetch(SOLO_PROXY+'/solo/propriedades?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6))
+  proxyFetch(SOLO_PROXY+'/solo/propriedades?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6))
     .then(function(r){ if(r&&r.ok===false) throw new Error('o servidor respondeu '+r.status); return r.json(); })
     .then(function(d){
       if(seq!==_soloPropSeq) return;
@@ -20876,7 +22540,7 @@ function consultarPos(qid, sid, ap, horas, forcar, cb){
           '&data='+encodeURIComponent(ap.data)+
           (ap.hora?('&hora='+encodeURIComponent(String(ap.hora).slice(0,5))):'')+
           '&horas='+encodeURIComponent(h);
-  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+  proxyFetch(url).then(function(r){ return r.json(); }).then(function(d){
     if(seq!==_posSeq && _posEstado[chave]!=='buscando') return;
     if(!d || d.error){ _posEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui ler a chuva depois da aplicação.'}); return; }
     _posEstado[chave]=null;
@@ -21504,11 +23168,20 @@ function _tratProximoId(study){
 
    NÃO SE SOMA os ativos: gramas de 2,4-D e gramas de picloram não são a mesma
    grandeza, e um total único faria parecer que são. Sai uma linha por ativo. */
-function tratEquivalenteIA(t){
+function tratEquivalenteIA(t, study){
   var D=(typeof window!=='undefined')?window.DoseCore:null;
   if(!D || !D.equivalentesIA) return null;
   var it=tratItem(t); if(!it || !it.concentracao) return null;
-  var v=_calcNum(t.dose), u=_calcDoseUnit(t.dose);
+  /* A dose lida como foi ESCRITA, pelo mesmo núcleo da calculadora. _calcDoseUnit()
+     mandava "0,5% v/v" e dose sem unidade para L/ha, e o "Equivalente" exibido saía
+     na grandeza errada. % da calda não é dose por área (depende do volume) e dose
+     sem unidade, num estudo que não declarou nenhuma, não tem conta: não se mostra. */
+  var BC=(typeof window!=='undefined')?window.BioCalculoCampo:null, v, u;
+  if(BC && BC.parseDose){
+    var dd=BC.parseDose(t.dose, study?doseUnidadeDeclarada(study):'');
+    if(!dd || dd.erro || doseUnidades().indexOf(dd.unidade)<0) return null;
+    v=dd.valor; u=dd.unidade;
+  } else { v=_calcNum(t.dose); u=_calcDoseUnit(t.dose); }
   if(!(v>0)) return null;
   var r=D.equivalentesIA(v, u, it.concentracao);
   return (r&&!r.erro&&r.itens&&r.itens.length)?r:null;
@@ -22761,13 +24434,22 @@ function tratLigarLote(t,loteId){
 
 /* A dose escolhida bate com o que a bula registra? Não bloqueia — ensaio
    experimental existe para sair da bula. Mas marca, e pede justificativa. */
-function tratDoseForaDaBula(t){
+function tratDoseForaDaBula(t, study){
   var r=t&&t.doseRef; if(!r || r.origem!=='bula') return false;
   var v=_calcNum(t.dose);
   if(!(v>0)) return false;
   var min=(r.valor!=null&&isFinite(r.valor))?r.valor:null;
   var max=(r.valorMax!=null&&isFinite(r.valorMax))?r.valorMax:min;
   if(min==null) return false;
+  /* A faixa da bula está na unidade DELA. Com unidade por tratamento, a dose
+     pode estar escrita noutra ("500 mL/ha" contra 0,5–0,8 L/ha): converte antes
+     de comparar, senão a dose certa saía "fora da bula" e a errada passava. */
+  var D=(typeof window!=='undefined')?window.DoseCore:null;
+  var u=(typeof doseUnidadeDe==='function')?doseUnidadeDe(study||null, t.dose):'';
+  if(D && D.converter && u && r.unidade && u!==r.unidade){
+    var cv=D.converter(v, u, r.unidade);
+    if(cv && !cv.erro && isFinite(cv.valor)) v=cv.valor;
+  }
   return (v<min-1e-9 || v>max+1e-9);
 }
 
@@ -23159,7 +24841,7 @@ function consultarJanela(qid, sid, av, forcar, cb){
   _janelaEstado[chave]='buscando';
   var url=NDVI_PROXY+'/clima/janela?mac='+encodeURIComponent(mac)+
           '&de='+encodeURIComponent(ap.data)+'&ate='+encodeURIComponent(av.data);
-  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+  proxyFetch(url).then(function(r){ return r.json(); }).then(function(d){
     if(seq!==_janelaSeq && _janelaEstado[chave]!=='buscando') return;
     if(!d || d.error){ _janelaEstado[chave]='erro'; cb({erro:(d&&d.error)||'Não consegui montar a janela.'}); return; }
     _janelaEstado[chave]=null;
@@ -23343,6 +25025,23 @@ function _soloAnFormPinta(id, a){
   alvo.innerHTML=h; alvo.style.display='block';
 }
 
+/* Conferência de UNIDADE antes de gravar o laudo. Os campos pedem mmolc/dm³, mas muitos
+   laboratórios laudam em cmolc/dm³ (fator 10) e o K costuma vir em mg/dm³ (fator 39,1).
+   Digitado sem converter, cmolc dá calagem 10× MENOR; K em mg/dm³ infla a soma de bases e
+   o app diz que não precisa de calcário. Não bloqueia (solo arenoso existe): mostra a
+   suspeita e pergunta. Limiares folgados para não incomodar laudo correto:
+   CTC (Ca+Mg+K+H+Al) abaixo de 15 mmolc/dm³ ou K acima de 15 mmolc/dm³. */
+function soloUnidadeSuspeita(res){
+  res=res||{}; var avisos=[];
+  function n(k){ var v=res[k]; return (v===''||v==null||!isFinite(Number(v)))?null:Number(v); }
+  var Ca=n('Ca'), Mg=n('Mg'), K=n('K'), HAl=n('HAl');
+  if(Ca!=null&&Mg!=null&&K!=null&&HAl!=null){
+    var T=Ca+Mg+K+HAl;
+    if(T>0 && T<15) avisos.push('A CTC deu '+(Math.round(T*10)/10)+' mmolc/dm³ — valor típico de laudo em cmolc/dm³. Se for o caso, multiplique Ca, Mg, K, H+Al e Al por 10; sem isso a calagem sai 10 vezes menor.');
+  }
+  if(K!=null && K>15) avisos.push('K = '+K+' mmolc/dm³ é muito alto — parece mg/dm³. Nesse caso divida por 39,1 (ex.: 120 mg/dm³ = 3,1 mmolc/dm³); sem isso a saturação por bases fica inflada e a calagem pode sumir.');
+  return avisos;
+}
 function soloSalvarAnalise(id){
   if(!data[id]) return;
   var dataColeta=_soloVal('soloAnData');
@@ -23353,6 +25052,8 @@ function soloSalvarAnalise(id){
     if(v!==''){ res[c.k]=Number(v); algum=true; }
   });
   if(!algum){ alert('Preencha ao menos um resultado do laudo.'); return; }
+  var _susp=soloUnidadeSuspeita(res);
+  if(_susp.length && !confirm('Confira as unidades do laudo:\n\n• '+_susp.join('\n\n• ')+'\n\nSalvar assim mesmo?')) return;
 
   var lista=((data[id].solo||{}).analises||[]).slice();
   var antiga=lista.filter(function(x){ return x.id===_soloAnEdit; })[0]||null;
@@ -23846,7 +25547,7 @@ function soloCarregarMapa(silencioso){
   if(!silencioso){try{if(typeof _stxToast==='function')_stxToast('Carregando mapa de solos…');}catch(e){}}
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   var seq=++_soloMapaSeq;
-  fetch(SOLO_PROXY+'/solo/mapa?bbox='+bb.join(',')+'&width='+ndviPx(bb))
+  proxyFetch(SOLO_PROXY+'/solo/mapa?bbox='+bb.join(',')+'&width='+ndviPx(bb))
     .then(function(r){
       if(r.ok){
         try{_soloCamadaMapa=r.headers&&r.headers.get?r.headers.get('X-Solo-Camada'):null;}catch(e){_soloCamadaMapa=null;}
@@ -23931,3 +25632,40 @@ if(document.readyState==='loading'){
 }
 window.addEventListener('load',function(){setTimeout(init,100)});
 setInterval(function(){try{if(editMode||drawMode||_grOn)return;render();updateAgendaBadge();if(typeof updateTodayBadge==='function')updateTodayBadge();if(agO)renderAgenda();}catch(e){}},60000);
+
+/* Legenda sempre ao alcance da leitura, inclusive na ficha e no modo guiado. */
+function _avDerSuf(cfg){return cfg.tipo==='razao'||(cfg.tipo==='escala'&&cfg.escalaModo!=='nota')?'%':'';}
+function _avLegendaHtml(src,v){
+ var c=_avCfg(src,v);if(c.tipo!=='escala')return '';
+ return '<div class="av-scale-legend"><b>'+esc(v)+' · notas '+c.escalaMin+'–'+c.escalaMax+'</b><br>'+esc(c.escalaLegenda||'Legenda não cadastrada: configure no protocolo.')+'<br>'+esc(c.escalaModo==='nota'?'Resultado em notas, sem conversão percentual.':'Resultado derivado: índice percentual de McKinney.')+'</div>';
+}
+/* Triagem local imediata: alertas para revisão, nunca correção automática. */
+function avTriagemImediata(inp){
+ var box=document.getElementById('avForenseLive');if(!box)return;
+ var alerts=[],rows=_avRowsForStudy(_avStudy(),false);
+ if(inp&&inp.dataset){var v=inp.dataset.v, cfg=v?_avCfg(_avGrid,v):null,n=AvaliacaoCore.numero(inp.value);
+  if(cfg&&n!==null){
+   if(n<0||(cfg.tipo==='pct'&&_avTetoPct(v)&&n>100)||(cfg.tipo==='escala'&&(n<cfg.escalaMin||n>cfg.escalaMax)))alerts.push(v+': valor fora dos limites declarados; confira antes de confirmar.');
+   if((cfg.tipo==='contagem'||cfg.tipo==='escala')&&n%1!==0)alerts.push(v+': confira a nota/contagem fracionada.');
+  }
+ }
+ if(typeof _forenseAchados==='function')_forenseAchados(_avGrid).forEach(function(f){if(f.texto)alerts.push(f.texto);});
+ (_avGrid.variaveis||[]).forEach(function(v){
+  var xs=rows.filter(function(r){return !AvaliacaoCore.naoAplicavel(_avGrid,r,v);}).map(function(r){return {row:r,n:AvaliacaoCore.numero(_avNota(_avGrid,r,v))};}).filter(function(x){return x.n!==null;});
+  if(xs.length<5)return;
+  var sorted=xs.map(function(x){return x.n;}).sort(function(a,b){return a-b;}),med=sorted[Math.floor(sorted.length/2)],dev=sorted.map(function(n){return Math.abs(n-med);}).sort(function(a,b){return a-b;}),mad=dev[Math.floor(dev.length/2)];
+  if(mad>0)xs.forEach(function(x){if(Math.abs(x.n-med)>6*mad)alerts.push(v+' · '+x.row.key+': '+x.n+' destoa do conjunto; confira (pode ser efeito real do tratamento).');});
+ });
+ box.textContent=alerts.length?'Triagem imediata: '+alerts.join(' '):'Triagem imediata: sem alerta de dispersão com os dados disponíveis. Isso não valida o ensaio; a triagem forense completa verifica outros padrões.';
+}
+
+if(typeof document!=='undefined')document.addEventListener('input',function(ev){
+ if(ev.target&&ev.target.closest&&ev.target.closest('#avGridWrap')&&ev.target.matches('input')){
+   avTriagemImediata(ev.target);
+ }
+});
+
+var _avDetailsOpen={};
+if(typeof document!=='undefined')document.addEventListener('toggle',function(ev){
+ var key=ev.target&&ev.target.dataset&&ev.target.dataset.avDetails;if(key)_avDetailsOpen[key]=ev.target.open;
+},true);

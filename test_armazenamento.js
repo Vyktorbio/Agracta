@@ -86,7 +86,12 @@ const src=fs.readFileSync('firebase-sync.js','utf8');
 const bloco=src.slice(src.indexOf('  window.AgractaFotosAntigas={'),src.indexOf('  var esc = window.esc ||'));
 const docs=[{id:'m1',noteId:'N1',data:'a'.repeat(10)},{id:'m2',noteId:'N1',data:'b'},{id:'m3',noteId:'N2',data:'c'},{id:'m4',noteId:'N3',data:'d'},{id:'m5',noteId:'N4',data:'e'}];
 const apagados=[];
-const sctx={window:{},FB:{user:{},db:{batch:()=>({delete:r=>apagados.push(r.id),commit:()=>Promise.resolve()})}},firebaseInit:()=>true,Promise,Object,
+let raiz={rev:7,writeId:'anterior'};
+const sctx={window:{firebase:{firestore:{FieldValue:{serverTimestamp:()=>123}}}},ROOT:'workspaces/agracta',FB:{user:{email:'admin@test'},db:{doc:id=>({id}),runTransaction:async f=>{
+  const deletes=[];let next;
+  await f({get:async()=>({exists:true,data:()=>raiz}),delete:r=>deletes.push(r.id),set:(r,d)=>{next=d;}});
+  apagados.push(...deletes);raiz=next;
+}}},firebaseInit:()=>true,Promise,Object,
   collectionRef:()=>({get:()=>Promise.resolve({forEach:f=>docs.forEach(d=>f({id:d.id,data:()=>d}))}),doc:id=>({id})})};
 vm.createContext(sctx);vm.runInContext(bloco,sctx);
 (async()=>{
@@ -95,6 +100,7 @@ vm.createContext(sctx);vm.runInContext(bloco,sctx);
   ok(r.nPendentes===2,'ficam: N2 e N4 — só existem no servidor (N4 é nota que este aparelho nem conhece)');
   await sctx.window.AgractaFotosAntigas.apagar(r.apagaveis);
   ok(apagados.sort().join()==='m1,m2,m4','apaga exatamente as que podem sair');
+  ok(raiz.rev===8&&raiz.syncProtocol===3&&raiz.writeId!=='anterior','limpeza publica uma revisão nova junto com as exclusões');
   const menu=fs.readFileSync('app.js','utf8');
   ok(/openArmazenamento\(\)">'\+ic\('archive'\)\+' Armazenamento do aparelho/.test(menu),'Menu → Armazenamento do aparelho');
   /* A barra de baixo abre a gaveta de ui-campo.js, não o menu antigo: a porta

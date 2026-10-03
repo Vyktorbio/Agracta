@@ -23,7 +23,7 @@
     'machadovictorchaves@gmail.com':true,
     'vyktorbio@gmail.com':true
   };
-  var COLLECTIONS=['locais','quadras','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
+  var COLLECTIONS=['locais','quadras','estudos_arquivo','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
   /* `media` (fotos das notas em fatias de base64) é só LEITURA desde a 14a
      publicação: a foto mora no aparelho (vendor/fotos-notas-core.js). As fatias
      antigas continuam sendo lidas, para cada aparelho migrar as suas, mas o app
@@ -351,9 +351,40 @@
     };
   }
 
+  /* O SDK do Firestore nao entrega a quem grava o erro de cota, de rede ou de
+     login: guarda o lote, tenta de novo e so escreve a queixa no console. O
+     Firestore traz a propria copia do logger (firebase.onLog nao chega nele),
+     entao a escuta e no console: le a linha do SDK, guarda a hora da ultima
+     queixa de cada tipo e entrega a mensagem ao console como sempre. */
+  function _registraQueixa(txt){
+    var t=String(txt||''),tipo='';
+    if(/resource-exhausted|quota exceeded/i.test(t))tipo='cota';
+    else if(/unauthenticated/i.test(t))tipo='login';
+    else if(/permission-denied|insufficient permissions/i.test(t))tipo='permissao';
+    else if(/could not reach cloud firestore|transport errored|unavailable/i.test(t))tipo='rede';
+    if(!tipo)return;
+    FB.queixas=FB.queixas||{};FB.queixas[tipo]=Date.now();FB.ultimaQueixa=t.slice(0,300);
+  }
+  function _escutarQueixasDoSdk(){
+    if(FB.escutaSdk||typeof console==='undefined')return;
+    FB.escutaSdk=true;
+    ['error','warn'].forEach(function(nivel){
+      var orig=console[nivel];
+      if(typeof orig!=='function')return;
+      console[nivel]=function(){
+        try{
+          var a0=arguments[0];
+          if(typeof a0==='string'&&a0.indexOf('@firebase/firestore')>=0)
+            _registraQueixa(Array.prototype.slice.call(arguments,1).join(' '));
+        }catch(e){}
+        return orig.apply(console,arguments);
+      };
+    });
+  }
   function firebaseInit(){
     if(FB.ready)return FB;
     if(!configured())return null;
+    _escutarQueixasDoSdk();
     try{
       FB.app=window.firebase.apps&&window.firebase.apps.length?window.firebase.app():window.firebase.initializeApp(CFG);
       FB.auth=window.firebase.auth();
@@ -534,6 +565,24 @@
     showAuthGate();
   };
 
+  /* Arquivo de finalizações anteriores: só recebe itens (BPL — nada sai).
+     Junta sem perder: o que veio no documento do estudo (aparelho em versão
+     antiga ainda grava ali) e o que está em `estudos_arquivo`, sem repetir,
+     em ordem de reabertura. */
+  function _chaveArquivo(item){
+    item=item||{};
+    return String(item.reabertoEm||'')+'|'+String(item.reabertoPor||'')+'|'+String(item.motivo||'').slice(0,60);
+  }
+  function _arquivoFinalizacoes(){
+    var vistos={},out=[];
+    Array.prototype.forEach.call(arguments,function(lista){
+      (Array.isArray(lista)?lista:[]).forEach(function(item){
+        if(!item||typeof item!=='object')return;
+        var k=_chaveArquivo(item);if(vistos[k])return;vistos[k]=1;out.push(item);
+      });
+    });
+    return out.sort(function(a,b){return String(a.reabertoEm||'').localeCompare(String(b.reabertoEm||''));});
+  }
   function splitState(st){
     var flat={};
     COLLECTIONS.forEach(function(c){flat[c]={};});
@@ -570,6 +619,19 @@
         if(!s||!s.id)return;
         var study=clone(s),apps=study.aplicacoes||[],avs=study.avaliacoes||[];
         delete study.aplicacoes;delete study.avaliacoes;
+        /* O arquivo de finalizações anteriores sai do documento do estudo: cada
+           reabertura guarda a finalização inteira (com rubrica desenhada antiga,
+           ~110 KB) e ele só cresce — algumas reaberturas levariam o estudo além
+           de 1 MB, que o Firestore recusa, e aí nada mais sobe. Uma finalização
+           arquivada por documento. `estudos_arquivo` vem antes de `estudos` na
+           gravação: o arquivo existe no servidor antes de sair do estudo. */
+        var arq=_arquivoFinalizacoes(study.finalizacoesAnteriores);
+        delete study.finalizacoesAnteriores;
+        arq.forEach(function(item){
+          var chave=s.id+'|fin|'+_chaveArquivo(item);
+          flat.estudos_arquivo[docId(chave)]=clean({chave:chave,estudoId:s.id,tipo:'finalizacaoAnterior',
+            reabertoEm:item.reabertoEm||'',data:item});
+        });
         flat.estudos[docId(s.id)]=clean({id:s.id,quadraId:qid,order:si,data:study});
         apps.forEach(function(a,ai){
           if(a&&a.id)flat.aplicacoes[docId(a.id)]=clean({id:a.id,estudoId:s.id,order:ai,data:a});
@@ -673,6 +735,15 @@
     Object.keys(st.data).forEach(function(qid){
       if(qid!=='__config')st.data[qid].estudos=(st.data[qid].estudos||[]).sort(function(a,b){return a.order-b.order;}).map(function(x){return x.value;});
     });
+    var arquivo={};
+    Object.keys(flat.estudos_arquivo||{}).forEach(function(k){
+      var r=flat.estudos_arquivo[k];
+      if(r&&r.tipo==='finalizacaoAnterior'&&r.data)(arquivo[r.estudoId]=arquivo[r.estudoId]||[]).push(clone(r.data));
+    });
+    Object.keys(studies).forEach(function(id){
+      var s=studies[id].value,junto=_arquivoFinalizacoes(s.finalizacoesAnteriores,arquivo[id]);
+      if(junto.length)s.finalizacoesAnteriores=junto;
+    });
     Object.keys(flat.aplicacoes).forEach(function(k){
       var r=flat.aplicacoes[k],s=studies[r.estudoId];
       if(s)s.value.aplicacoes.push({order:r.order||0,value:clone(r.data||{})});
@@ -721,35 +792,111 @@
   }
 
   function collectionRef(name){return FB.db.doc(ROOT).collection(name);}
+  function remoteToken(meta){return stable(meta||{});}
+  function syncConflict(){
+    var e=new Error('A nuvem mudou durante a sincronização.');
+    e.code='agracta/conflict';return e;
+  }
   function readCollection(name){
-    return collectionRef(name).get().then(function(snap){
+    return _comPrazo(collectionRef(name).get({source:'server'}),12000).then(function(snap){
       var out={};snap.forEach(function(d){out[d.id]=d.data();});return out;
     });
   }
-  function readRemote(){
-    if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
-    FB.pulling=true;
-    var reads=COLLECTIONS.map(readCollection);
-    reads.push(FB.db.doc(ROOT).get());
-    return Promise.all(reads).then(function(all){
-      var flat={};COLLECTIONS.forEach(function(c,i){flat[c]=all[i]||{};});
-      var root=all[COLLECTIONS.length],meta=(root&&root.exists)?root.data():{};
-      FB.remoteFlat=flat;FB.lastRev=meta.rev||0;FB.pulling=false;
-      return {flat:flat,meta:meta,state:buildState(flat,meta)};
-    }).catch(function(e){FB.pulling=false;throw e;});
+  function rememberRemote(r){
+    FB.remoteFlat=r.flat;FB.lastRev=r.meta.rev||0;
+    FB.lastSeenWrite=r.meta.writeId||'';FB.remoteToken=remoteToken(r.meta);
   }
-  function queueOps(next){
-    var prev=FB.remoteFlat||{},ops=[];
-    COLLECTIONS_GRAVACAO.forEach(function(c){
-      var n=next[c]||{},p=prev[c]||{};
-      Object.keys(n).forEach(function(id){
-        if(!p[id]||stable(p[id])!==stable(n[id]))ops.push({type:'set',ref:collectionRef(c).doc(id),data:n[id]});
+  async function readRemote(force){
+    if(!firebaseInit()||!FB.user)throw new Error('sem login');
+    FB.pulling=true;
+    try{
+      for(var attempt=0;attempt<5;attempt++){
+        var root=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000);
+        var meta=root.exists?root.data():{};
+        /* A raiz é barata; só relê as coleções quando a versão mudou. O carimbo
+           também detecta os revs repetidos publicados por clientes antigos. */
+        if(!force&&FB.remoteFlat&&remoteToken(meta)===FB.remoteToken)
+          return {flat:FB.remoteFlat,meta:meta,state:buildState(FB.remoteFlat,meta)};
+        var all=await Promise.all(COLLECTIONS.map(readCollection));
+        var end=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000);
+        if(remoteToken(meta)!==remoteToken(end.exists?end.data():{}))continue;
+        var flat={};COLLECTIONS.forEach(function(c,i){flat[c]=all[i]||{};});
+        var r={flat:flat,meta:meta,state:buildState(flat,meta)};
+        rememberRemote(r);return r;
+      }
+      throw syncConflict();
+    }finally{FB.pulling=false;}
+  }
+  function sameWritable(a,b){
+    return COLLECTIONS_GRAVACAO.every(function(c){return stable(a[c]||{})===stable(b[c]||{});});
+  }
+  function queueOps(next,prev,rev){
+    prev=prev||{};var ops=[],V=window.VersoesCore;
+    FB.historicoAtivo=!!(V&&!FB.semHistorico);
+    if(FB.historicoAtivo){
+      var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
+      V.mudancas(prev,next,COLLECTIONS_GRAVACAO).forEach(function(m){
+        var w=opEscrita(m.colecao,m.docId,m.anterior,m.novo);
+        if(w.campos)m.campos=w.campos;
+        var reg=V.registro(m,rev);
+        reg.em=window.firebase.firestore.FieldValue.serverTimestamp();
+        reg.por=FB.user.email||'';reg.porNome=String(porNome).slice(0,120);
+        ops.push(w.op,{type:'set',ref:collectionRef('historico').doc(),data:reg});
       });
-      Object.keys(p).forEach(function(id){
-        if(!n[id])ops.push({type:'delete',ref:collectionRef(c).doc(id)});
+    }else{
+      COLLECTIONS_GRAVACAO.forEach(function(c){
+        var n=next[c]||{},p=prev[c]||{};
+        Object.keys(n).forEach(function(id){
+          if(!p[id]||stable(p[id])!==stable(n[id]))ops.push(opEscrita(c,id,p[id],n[id]).op);
+        });
+        Object.keys(p).forEach(function(id){if(!n[id])ops.push({type:'delete',ref:collectionRef(c).doc(id)});});
       });
-    });
+    }
     return ops;
+  }
+  async function writeReconciled(st){
+    for(var attempt=0;attempt<6;attempt++){
+      var r=await readRemote(attempt>0);
+      var merged=typeof cloudMerge==='function'?cloudMerge(st,r.state):st;
+      var next=splitState(merged),newRev=(Number(r.meta.rev)||0)+1;
+      var ops=queueOps(next,r.flat,newRev);
+      FB.writePlan={next:next,ops:ops};FB.pendingWrites=ops.length;
+      if(!ops.length){
+        merged.rev=r.meta.rev||0;
+        return {state:merged,flat:next,rev:merged.rev,written:false};
+      }
+      cloudBadge('saving','· '+ops.length+' alterações');
+      try{
+        var writeId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+        /* Dados, histórico e revisão são uma única gravação. Se outro aparelho
+           avançou a raiz, relê e refaz o merge antes de tentar novamente. */
+        await FB.db.runTransaction(async function(tx){
+          var root=await tx.get(FB.db.doc(ROOT)),meta=root.exists?root.data():{};
+          if(remoteToken(meta)!==remoteToken(r.meta))throw syncConflict();
+          ops.forEach(function(o){naBatch(tx,o);});
+          tx.set(FB.db.doc(ROOT),{
+            rev:newRev,writeId:writeId,syncProtocol:3,
+            updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy:FB.user.email||'',
+            updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
+            schema:2
+          },{merge:true});
+        });
+        merged.rev=newRev;
+        /* Fotos antigas são só leitura e ficam no cache de leitura até a
+           próxima revisão. Não comparar essas fatias com o estado gravável. */
+        FB.remoteFlat=Object.assign({},next,{media:r.flat.media||{}});
+        FB.lastRev=newRev;FB.lastSeenWrite=writeId;FB.remoteToken=null;
+        FB.myWrites=FB.myWrites||{};FB.myWrites[writeId]=1;
+        try{
+          var confirmed=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000),cm=confirmed.exists?confirmed.data():{};
+          if(cm.rev===newRev&&cm.writeId===writeId)FB.remoteToken=remoteToken(cm);
+          else FB.lerDepois=true;
+        }catch(_e){FB.lerDepois=true;}
+        return {state:merged,flat:next,rev:newRev,written:true};
+      }catch(e){if(e.code!=='agracta/conflict')throw e;}
+    }
+    throw syncConflict();
   }
   function commitState(st){
     if(!firebaseInit()||!FB.user){
@@ -758,150 +905,118 @@
         cloudBadge('error','— falha ao salvar neste aparelho');throw e;
       });
     }
-    if(FB.pushing){
-      FB.queuedState=st;
-      return FB.pushPromise||Promise.resolve(false);
-    }
+    if(FB.pushing){FB.queuedState=st;return FB.pushPromise||Promise.resolve(false);}
     FB.pushing=true;window._cloudSavingActive=true;
-    var next=splitState(st),newRev=Math.max(FB.lastRev||0,st.rev||0)+1;
-    var ops=[],batches=[];
-    /* Histórico de versões no servidor (vendor/versoes-core.js). Cada documento
-       alterado leva, no MESMO lote, um registro em `historico` com o conteúdo
-       anterior dele. As regras aceitam criar esse registro e recusam editar ou
-       apagar. Sem o motor carregado, grava como antes — nunca deixa de salvar
-       por causa do histórico. */
-    var V=window.VersoesCore;
-    if(V&&!FB.semHistorico){
-      var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
-      var pares=V.mudancas(FB.remoteFlat||{},next,COLLECTIONS_GRAVACAO).map(function(m){
-        var ref=collectionRef(m.colecao).doc(m.docId);
-        var dado=m.acao==='apagar'?{type:'delete',ref:ref,bytes:64}:{type:'set',ref:ref,data:m.novo};
-        var reg=V.registro(m,newRev);
-        reg.em=window.firebase.firestore.FieldValue.serverTimestamp();
-        reg.por=FB.user.email||'';reg.porNome=String(porNome).slice(0,120);
-        return [dado,{type:'set',ref:collectionRef('historico').doc(),data:reg,
-          bytes:reg.anterior?V.bytes(reg.anterior):256}];
-      });
-      V.lotes(pares).forEach(function(l){
-        var batch=FB.db.batch();
-        l.forEach(function(o){ops.push(o);if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
-        batches.push(batch);
-      });
-      FB.historicoAtivo=true;
-    }else{
-      ops=queueOps(next);
-      for(var i=0;i<ops.length;i+=400){
-        var batch=FB.db.batch();
-        ops.slice(i,i+400).forEach(function(o){if(o.type==='delete')batch.delete(o.ref);else batch.set(o.ref,o.data);});
-        batches.push(batch);
-      }
-    }
-    if(!batches.length)batches.push(FB.db.batch());
-    batches[batches.length-1].set(FB.db.doc(ROOT),{
-      rev:newRev,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy:FB.user.email||'',
-      updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
-      schema:2
-    },{merge:true});
-    FB.pendingWrites=ops.length;
-    cloudBadge('saving',ops.length?('· '+ops.length+' alterações'):'');
-    /* O último lote publica a revisão: só pode sair após os anteriores.
-       Uma rede lenta mantém um único envio ativo e conserva a edição seguinte. */
-    var all=batches.reduce(function(p,b){return p.then(function(){return b.commit();});},Promise.resolve());
-    /* DOIS PRAZOS, DUAS PERGUNTAS DIFERENTES ==================================
-       LENTO nao e PERDIDO, e o remedio de um estraga o outro.
-
-       O cao de guarda de 15 s responde "esta demorando": avisa na tela e NAO
-       solta a tranca. Isso e proposital e esta trancado em teste — numa rede
-       so lenta, disparar um segundo envio por cima do primeiro duplica escrita
-       e gasta cota a toa; a edicao seguinte ja sai sozinha quando o envio em
-       curso responder.
-
-       Mas `commit()` do Firestore NAO rejeita quando o aparelho perde o sinal:
-       ele fica PENDENTE ate reconectar, eventualmente para sempre. E
-       `commitState` comeca com "se ja esta enviando, guarda e sai". Entao um
-       unico envio pendurado trancava TODOS os seguintes: o celular seguia
-       gravando no aparelho e nada mais subia para o servidor pela sessao
-       inteira. A nova tentativa de 60 s nem era agendada, porque ela mora no
-       tratamento de ERRO e a promessa nunca chegava a falhar. Mudo e parado,
-       que e a pior combinacao possivel.
-
-       Por isso o segundo prazo, bem mais longo: 90 s sem resposta nao e mais
-       rede lenta, e envio perdido. Ai a tranca se solta e a tentativa e dada
-       como abandonada.
-
-       Uma tentativa abandonada ainda pode responder depois. A ordem de escrita
-       do Firestore e preservada por cliente: os lotes dela, emitidos primeiro,
-       chegam antes dos da proxima, que leva dado mais novo — a mais nova
-       vence. O que ela nao pode fazer e DAR NOTICIA: nao anuncia "salvo", nao
-       move `remoteFlat`/`lastRev` e nao mexe na tranca de quem veio depois. */
-    FB.pushSeq=(FB.pushSeq||0)+1;
-    var _meuEnvio=FB.pushSeq;
-    function _souOEnvioAtual(){ return FB.pushSeq===_meuEnvio; }
+    FB.writePlan=null;
+    /* Os prazos avisam sem liberar um segundo envio. A leitura de colegas
+       continua disponível durante uma conexão lenta. */
     var watchdog=setTimeout(function(){
-      if(FB.pushing&&_souOEnvioAtual()){
+      if(FB.pushing){
         window._cloudSavingActive=false;
-        cloudBadge('offline','=⌛ '+FB.pendingWrites+' alterações aguardando envio');
+        if(!FB.espera)FB.espera={desde:Date.now()};
+        window._syncParado=true;_pintaEspera();
       }
     },15000);
-    var perdido=setTimeout(function(){
-      if(FB.pushing&&_souOEnvioAtual()){
-        FB.pushSeq++;                       /* esta tentativa vira passado */
-        FB.pushing=false;FB.pushPromise=null;window._cloudSavingActive=false;
-        setUnsavedChanges(true);
-        cloudBadge('error','=⚠ o envio não respondeu · salvo neste aparelho · tentando de novo');
-        _agendarNovaTentativa();
-      }
+    var parado=setTimeout(function(){
+      if(FB.pushing){window._cloudSavingActive=false;setUnsavedChanges(true);_entraEmEspera();}
     },90000);
-    FB.pushPromise=all.then(function(){
-      clearTimeout(watchdog);clearTimeout(perdido);
-      /* Resposta de uma tentativa ja abandonada: as escritas dela chegaram e
-         foram sobrepostas pela mais nova. Quem manda na tela e na contabilidade
-         e o envio ATUAL. */
-      if(!_souOEnvioAtual()) return;
-      FB.pushing=false;window._cloudSavingActive=false;
-      FB.pushPromise=null;
-      FB.remoteFlat=next;FB.lastRev=newRev;FB.pendingWrites=0;
-      window._cloudRev=newRev;
-      var latest=localState()||FB.queuedState||st;
-      FB.queuedState=null;
-      var changed=stable(splitState(latest))!==stable(next);
+    function settled(){
+      clearTimeout(watchdog);clearTimeout(parado);_saiDaEspera();
+      FB.pushing=false;window._cloudSavingActive=false;FB.pushPromise=null;
+    }
+    FB.pushPromise=writeReconciled(st).then(function(result){
+      settled();
+      /* Inclui a leitura estacionada durante uma edição e tudo o que foi
+         digitado enquanto a transação aguardava. Mantém também fotos locais. */
+      var latest=stateForCommit()||FB.queuedState||st;FB.queuedState=null;
+      var current=typeof cloudMerge==='function'?cloudMerge(latest,result.state):result.state;
+      current.rev=Math.max(result.rev,latest.rev||0);
+      var changed=!sameWritable(splitState(current),result.flat);
+      setUnsavedChanges(false);cloudApply(current);
+      window._cloudRev=current.rev;FB.pendingWrites=0;FB.writePlan=null;
       setUnsavedChanges(changed);cloudBadge(changed?'saving':'saved');
-      /* Uma resposta antiga da rede nunca substitui o cofre com estado antigo. */
-      checkpointPut(latest).catch(checkpointFalhou);
-      // O portal recebe somente a cópia confirmada, nunca lançamentos em edição.
-      try{window.dispatchEvent(new CustomEvent('agracta:sincronizado',{detail:{state:st,rev:newRev}}));}catch(_e){}
+      checkpointPut(current).catch(checkpointFalhou);
+      if(result.written){
+        try{window.dispatchEvent(new CustomEvent('agracta:sincronizado',{detail:{state:result.state,rev:result.rev}}));}catch(_e){}
+      }
       clearTimeout(FB.timer);FB.timer=null;
-      /* Outro aparelho gravou enquanto este enviava: le e mescla antes de seguir. */
-      if(FB.lerDepois&&typeof window.cloudPull==='function'){FB.lerDepois=false;return window.cloudPull();}
-      if(changed)return commitState(latest);
-    },function(e){
-      clearTimeout(watchdog);clearTimeout(perdido);
+      if(changed)return commitState(current);
+      if(FB.lerDepois){
+        FB.lerDepois=false;
+        FB.timer=setTimeout(function(){window.cloudResync();},250);
+      }
+      return true;
+    }).catch(function(e){
+      settled();setUnsavedChanges(true);
       console.error('[Agracta Firebase] gravação:',e);
-      /* Falha de uma tentativa abandonada nao repinta a tela nem solta a tranca
-         de quem veio depois: a que vale ja esta correndo. */
-      if(!_souOEnvioAtual()) return;
-      FB.pushing=false;window._cloudSavingActive=false;
-      FB.pushPromise=null;setUnsavedChanges(true);
-      var cod=(e&&(e.code||e.name))||'erro';
-      /* O HISTORICO NUNCA IMPEDE O DADO DE SUBIR. Se o servidor recusou o lote
-         e ele levava registros de historico (regra do banco mais estrita que o
-         app, campo inesperado), o mesmo envio sai de novo SEM o historico. O
-         dado e o que importa; a falta do historico fica registrada na tela. */
+      var cod=(e&&(e.code||e.name))||'erro',plan=FB.writePlan||{ops:[],next:null};
+      if(!FB.semParcial&&plan.ops.some(function(o){return o.type==='update';})&&
+         (cod==='not-found'||cod==='invalid-argument'||cod==='failed-precondition')){
+        FB.semParcial={em:Date.now(),codigo:cod};
+        return commitState(stateForCommit()||st);
+      }
       if(FB.historicoAtivo&&!FB.semHistorico&&(cod==='permission-denied'||cod==='invalid-argument')){
         FB.semHistorico={em:Date.now(),codigo:cod};FB.historicoAtivo=false;
-        console.warn('[Agracta Firebase] histórico recusado pelo servidor ('+cod+'); gravando sem ele nesta sessão.');
-        return commitState(localState()||st);
+        return commitState(stateForCommit()||st);
       }
-      cloudBadge('error','=⚠ não subiu ('+cod+') · salvo neste aparelho · toque para tentar de novo');
+      var grandeDemais=cod==='invalid-argument'?_documentoGrandeDemais(plan.next):null;
+      if(grandeDemais)
+        cloudBadge('error','=⚠ não subiu: '+grandeDemais.nome+' passou de 1 MB ('+grandeDemais.kb+' KB) · salvo neste aparelho');
+      else cloudBadge('error','=⚠ não subiu ('+cod+') · salvo neste aparelho · toque para tentar de novo');
       _agendarNovaTentativa();
       throw e;
     });
-    /* Mantém a rejeição para quem aguarda; chamadas de autosave podem não aguardar. */
     FB.pushPromise.catch(function(){});
     return FB.pushPromise;
   }
 
+  /* SÓ O QUE MUDOU SOBE (vendor/versoes-core.js, `campos`). Documento grande
+     que já existe no servidor vai por update() dos campos alterados, não por
+     set() do documento inteiro: lançar uma nota num estudo de 400 KB mandava
+     ~1 MB por salvamento e estourava o prazo de envio no 4G. Documento pequeno
+     segue inteiro (nada a ganhar). Se o servidor recusar o update (documento
+     apagado por outro aparelho, caminho inesperado), `FB.semParcial` volta
+     ao set() inteiro pelo resto da sessão — nunca deixa de salvar por isso. */
+  var PARCIAL_MIN_BYTES=16384;
+  function opEscrita(c,id,prevDoc,nextDoc){
+    var ref=collectionRef(c).doc(id),V=window.VersoesCore;
+    if(!nextDoc)return {op:{type:'delete',ref:ref,bytes:64},campos:null};
+    if(prevDoc&&V&&typeof V.campos==='function'&&!FB.semParcial&&V.bytes(nextDoc)>=PARCIAL_MIN_BYTES){
+      var cs=V.campos(prevDoc,nextDoc);
+      if(cs.length){
+        var b=0;cs.forEach(function(x){b+=x.ausente?32:V.bytes(x.valor);});
+        return {op:{type:'update',ref:ref,campos:cs,bytes:b+64},campos:cs};
+      }
+    }
+    return {op:{type:'set',ref:ref,data:nextDoc},campos:null};
+  }
+  function naBatch(batch,o){
+    if(o.type==='delete')return batch.delete(o.ref);
+    if(o.type==='update'){
+      var fs=window.firebase.firestore,args=[o.ref];
+      o.campos.forEach(function(x){
+        args.push(new (Function.prototype.bind.apply(fs.FieldPath,[null].concat(x.caminho)))());
+        args.push(x.ausente?fs.FieldValue.delete():x.valor);
+      });
+      return batch.update.apply(batch,args);
+    }
+    return batch.set(o.ref,o.data);
+  }
+  function _documentoGrandeDemais(flat){
+    var V=window.VersoesCore,pior=null;
+    if(!V||!flat)return null;
+    Object.keys(flat).forEach(function(c){
+      Object.keys(flat[c]||{}).forEach(function(id){
+        var b=V.bytes(flat[c][id]);
+        if(b>1000000&&(!pior||b>pior.b)){
+          var d=flat[c][id]||{},cod=(d.data&&d.data.codigo)||d.id||d.key||id;
+          pior={b:b,colecao:c,id:id,kb:Math.round(b/1024),
+            nome:(c==='estudos'?'o estudo ':c==='avaliacoes'?'a avaliação ':c+' ')+String(cod).slice(0,40)};
+        }
+      });
+    });
+    return pior;
+  }
   /* Envio que falhou tenta de novo sozinho, em 60 s, enquanto houver edição
      pendente. Antes, ficava parado até alguém tocar no selo ou reabrir o app. */
   function _agendarNovaTentativa(){
@@ -920,6 +1035,131 @@
     });
   }
 
+  /* ===== ENVIO PARADO: DIZER POR QUE, E RECEBER MESMO ASSIM ====================
+     O motivo vem de duas fontes: a queixa que o SDK escreve no console
+     (_escutarQueixasDoSdk guarda a hora da ultima de cada tipo) e a leitura
+     direta da raiz pela REST, que devolve o erro por inteiro. */
+  var QUEIXA_VALE_MS=10*60*1000, ESPERA_CONFERE_MS=60000;
+  function _queixaRecente(tipo){
+    var t=(FB.queixas||{})[tipo]||0;
+    return t>0&&(Date.now()-t)<QUEIXA_VALE_MS;
+  }
+  /* 'cota' | 'rede' | 'travado' (o servidor responde e o envio deste aparelho
+     nao anda) | '' (ainda nao se sabe) */
+  function _motivo(){
+    if(_queixaRecente('cota')||FB.leituraRest==='resource-exhausted')return 'cota';
+    if(typeof navigator!=='undefined'&&navigator.onLine===false)return 'rede';
+    if(FB.leituraRest==='rede')return 'rede';
+    if(FB.leituraRest==='ok')return 'travado';
+    if(_queixaRecente('rede'))return 'rede';
+    return '';
+  }
+  /* O MOTIVO VEM PRIMEIRO. No celular o selo tinha uma linha de 52% da tela com
+     reticências, e o motivo, no fim da frase, sumia: "88 alterações aguardando o
+     s..." (29/09, já com a versão nova). */
+  function _pintaEspera(){
+    if(!FB.espera)return;
+    var n=FB.pendingWrites||0,m=_motivo(),g=n+' alterações guardadas neste aparelho';
+    if(m==='cota')cloudBadge('error','=⚠ Servidor sem cota (Firebase) · '+g+' · toque');
+    else if(m==='rede')cloudBadge('offline','=⌁ Sem conexão com o servidor · '+g);
+    else if(m==='travado')cloudBadge('error','=⚠ Servidor não confirma o envio · '+g+' · toque');
+    else cloudBadge('offline','=⌛ '+n+' alterações aguardando o servidor · toque');
+  }
+  /* O que o servidor disse, por extenso, para quem precisa ver (ou mandar print). */
+  function _detalheTecnico(){
+    var q=FB.ultimaQueixa?String(FB.ultimaQueixa).replace(/^Firestore \([^)]*\):\s*/,'').slice(0,220):'nenhuma queixa do servidor registrada';
+    return '\n\nDetalhe técnico: '+q+(FB.leituraRest?(' · leitura direta: '+FB.leituraRest):'');
+  }
+  function _entraEmEspera(){
+    if(!FB.espera)FB.espera={desde:Date.now()};
+    window._syncParado=true;
+    _pintaEspera();
+    _conferirColegaEmEspera();
+  }
+  function _saiDaEspera(){
+    if(FB.esperaTimer){clearTimeout(FB.esperaTimer);FB.esperaTimer=null;}
+    FB.espera=null;FB.leituraRest='';window._syncParado=false;
+  }
+  /* A raiz como ESTA NO SERVIDOR. Com uma gravacao nossa pendente, toda leitura
+     pelo SDK devolve a raiz com o NOSSO rev/writeId por cima (compensacao de
+     latencia), e o ouvinte da raiz ignora tudo enquanto `hasPendingWrites`: a
+     gravacao do colega fica invisivel. A conferencia antes de gravar via o
+     proprio rev pendente como "revisao nova" e relia o banco INTEIRO a cada
+     tentativa. Pela REST sai o servidor puro, em 1 leitura — e o erro vem por
+     inteiro: RESOURCE_EXHAUSTED e cota. */
+  function _raizNoServidor(){
+    var u=(FB.auth&&FB.auth.currentUser)||FB.user;
+    if(!u||typeof u.getIdToken!=='function'||typeof fetch!=='function'||!CFG.projectId){
+      var sem=new Error('sem leitura direta');sem.code='indisponivel';return Promise.reject(sem);
+    }
+    return u.getIdToken().then(function(tk){
+      return fetch('https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(CFG.projectId)+
+        '/databases/(default)/documents/'+ROOT,{headers:{Authorization:'Bearer '+tk},cache:'no-store'});
+    }).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(j){
+        var er=(j&&j.error)||{};
+        if(!r.ok){
+          var e=new Error(er.message||('HTTP '+r.status));
+          e.code=String(er.status||'').toLowerCase().replace(/_/g,'-')||('http-'+r.status);throw e;
+        }
+        var f=(j&&j.fields)||{};
+        function val(x){return !x?null:(x.stringValue!=null?x.stringValue:(x.integerValue!=null?x.integerValue:(x.doubleValue!=null?x.doubleValue:null)));}
+        return {rev:Number(val(f.rev))||0,writeId:String(val(f.writeId)||'')};
+      });
+    });
+  }
+  /* A cada minuto com o envio parado (e a tela a vista): 1 leitura da raiz.
+     Gravacao alheia nova -> le e mescla, como sempre; o que a mescla tiver para
+     subir espera o lote parado em `queuedState`. Sem gravacao alheia, nada e
+     relido. */
+  function _conferirColegaEmEspera(){
+    if(FB.esperaTimer){clearTimeout(FB.esperaTimer);FB.esperaTimer=null;}
+    if(!FB.espera||!FB.pushing)return;
+    FB.esperaTimer=setTimeout(_conferirColegaEmEspera,ESPERA_CONFERE_MS);
+    if(FB.conferindoRest)return;
+    if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;
+    FB.conferindoRest=true;
+    _raizNoServidor().then(function(d){
+      FB.conferindoRest=false;FB.leituraRest='ok';
+      var wid=d.writeId;
+      if(wid&&!(FB.myWrites&&FB.myWrites[wid])&&wid!==FB.lastSeenWrite&&wid!==FB.colegaVisto&&
+         FB.espera&&typeof window.cloudPull==='function'){
+        FB.colegaVisto=wid;
+        return Promise.resolve(window.cloudPull()).then(_pintaEspera,_pintaEspera);
+      }
+      _pintaEspera();
+    },function(e){
+      FB.conferindoRest=false;
+      var c=String((e&&e.code)||'');
+      /* fetch que nem chega ao servidor rejeita com TypeError: e rede */
+      FB.leituraRest=c==='resource-exhausted'?c:(((e&&e.name==='TypeError')||/network|unavailable/i.test(c))?'rede':'');
+      _pintaEspera();
+    });
+  }
+  /* Toque no selo com o envio parado: explica o motivo e, quando o problema e
+     deste aparelho (o servidor responde e o envio nao anda), oferece recarregar.
+     Nada se perde: o app sobe de novo a partir do cofre, rele a nuvem, mescla e
+     reenvia — o lote preso na memoria do SDK some junto com a pagina. */
+  window.agractaSyncExplicar=function(){
+    var n=FB.pendingWrites||0,m=_motivo();
+    if(m==='cota'){
+      alert('O servidor do Agracta (Firebase) recusou a gravação por COTA.\n\n'+
+        'No plano gratuito do Firebase há limite diário de leituras e de gravações (renova de madrugada, por volta das 4h de Brasília) e de 1 GB de armazenamento. Enquanto o limite não libera, nenhum aparelho consegue enviar — e por isso um aparelho não recebe o que o outro fez.\n\n'+
+        'Nada se perde: as '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando o servidor voltar a aceitar. Não limpe os dados do navegador.\n\n'+
+        'Para não parar mais: o administrador ativa o plano Blaze no console do Firebase (Uso e faturamento). Ele cobra só o que passar do gratuito.'+_detalheTecnico());
+      return;
+    }
+    if(m==='rede'){
+      alert('Sem conexão com o servidor.\n\nAs '+n+' alterações estão guardadas neste aparelho e sobem sozinhas quando a conexão voltar.'+_detalheTecnico());
+      return;
+    }
+    if(confirm((m==='travado'?'O servidor responde, mas o envio deste aparelho não anda.':'O servidor ainda não confirmou o envio.')+
+      '\n\nRecarregar o app refaz a conexão e reenvia as '+n+' alterações. Nada se perde: está tudo guardado neste aparelho.'+_detalheTecnico()+'\n\nRecarregar agora?')){
+      try{if(typeof window.save==='function')window.save();}catch(e){}
+      checkpointPut(localState(),true).then(function(){location.reload();},function(){location.reload();});
+    }
+  };
+
   /* ===== NUNCA GRAVAR POR CIMA DO QUE NAO FOI LIDO ===========================
      commitState grava cada documento que mudou em relacao a ULTIMA LEITURA
      deste aparelho. Se outro aparelho gravou depois dela, este gravava a sua
@@ -930,29 +1170,41 @@
      inteiro). Revisao nova na nuvem -> le tudo, MESCLA com o aparelho (uniao) e
      grava a uniao. Sem conexao para conferir -> NAO grava: a edicao fica no
      aparelho e no cofre e sobe quando a conexao voltar. */
-  function conferirAntesDeGravar(st){
-    if(!firebaseInit()||!FB.user||!FB.db)return commitState(st);
-    if(FB.pushing)return commitState(st);
-    if(FB.conferindo)return FB.conferindo;
-    var p=_comPrazo(FB.db.doc(ROOT).get(),12000).then(function(snap){
-      FB.conferindo=null;
-      var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
-      if(rev>(FB.lastRev||0)&&typeof window.cloudPull==='function')return window.cloudPull();
-      return commitState(localState()||st);
-    },function(e){
-      FB.conferindo=null;
-      setUnsavedChanges(true);
-      cloudBadge('offline','=⌁ sem conexão com o servidor ('+((e&&(e.code||e.name))||'erro')+') · alterações guardadas neste aparelho');
-      console.error('[Agracta Firebase] conferência antes de gravar:',e);
-      _agendarNovaTentativa();
-      return false;
-    });
-    FB.conferindo=p;
-    return p;
+  /* O QUE GRAVAR: o estado local MAIS o remoto que chegou durante uma edição e ficou
+     PENDENTE (cloudApply adia a aplicação enquanto uma quadra/avaliação está aberta).
+     Sem isto, qualquer decisão tomada com localState() puro via o trabalho do colega
+     só no pendente, e não no local — e tratava essa AUSÊNCIA como edição deste aparelho.
+     O caso concreto: o pull durante a edição gravava o estado mesclado, e logo depois
+     a "edição pendente segue sozinha" comparava o local (sem o colega) com o que acabara
+     de subir e enviava a diferença — apagando do servidor, em segundos, o que o outro
+     técnico tinha acabado de salvar. O merge é o mesmo do pull (união com lápides). */
+  function stateForCommit(){
+    var st=localState(),p=window._cloudPending;
+    if(st&&p&&typeof cloudMerge==='function'){
+      try{st=cloudMerge(st,clone(p));}catch(e){console.error('[Agracta Firebase] merge do pendente:',e);}
+    }
+    return st;
+  }
+  /* writeId identifica também gravações de clientes legados que repetiam rev.
+     A transação atual sempre avança a revisão a partir da raiz do servidor. */
+  function gravacaoAlheia(d){
+    d=d||{};var rev=d.rev||0,wid=d.writeId||'';
+    if(!wid)return rev>(FB.lastRev||0);
+    if(FB.myWrites&&FB.myWrites[wid])return rev>(FB.lastRev||0);
+    return wid!==FB.lastSeenWrite;
   }
 
+  /* Token de login para o proxy de NDVI, clima e solo — o ndvi-proxy.py confere se
+     quem pede é membro ativo. O SDK devolve o token guardado e só renova perto de
+     vencer; forcar=true pede um novo (o app faz isso uma vez quando o proxy diz 401). */
+  window.agractaTokenLogin=function(forcar){
+    var u=(FB.auth&&FB.auth.currentUser)||FB.user;
+    if(!u||typeof u.getIdToken!=='function')return Promise.resolve(null);
+    return u.getIdToken(!!forcar).catch(function(){return null;});
+  };
   window.cloudInit=function(){return firebaseInit();};
   window.cloudSaveSoon=function(){
+    if(window._cloudApplying)return Promise.resolve(false);
     setUnsavedChanges(true);
     var localPromise=checkpointPut(localState());
     if(!FB.user){
@@ -967,12 +1219,11 @@
   };
   window.cloudSave=function(){
     clearTimeout(FB.timer);
-    var st=localState();if(!st)return;
-    /* Restaurar backup ou importar SUBSTITUI de proposito: nao passa pelo merge. */
-    var substituir=!!window._cloudReplace;
+    if(window._cloudApplying)return Promise.resolve(false);
+    /* A geração da restauração viaja no estado, inclusive após reabrir offline. */
     window._cloudReplace=false;
-    if(substituir)return commitState(st);
-    return conferirAntesDeGravar(st);
+    var st=stateForCommit();if(!st)return Promise.resolve(false);
+    return commitState(st);
   };
   window.cloudSyncNow=function(){return cloudSave();};
   function _agractaAcessoBanner(email){
@@ -990,23 +1241,27 @@
   }
   window.cloudPull=function(){
     if(!FB.user){showAuthGate();return Promise.resolve(false);}
+    if(FB.pullPromise)return FB.pullPromise;
     cloudBadge('saving');
-    return readRemote().then(function(r){
+    var pulling=readRemote().then(async function(r){
       /* Só um login que também conseguiu ler o workspace autoriza a futura
          entrada offline. Conta inativa/sem permissão não transforma o aparelho
          em confiável apenas por existir no Firebase Auth. */
       rememberTrustedUser(FB.user,(window._authUser&&window._authUser.displayName)||'');
       window._cloudInitDone=true;
-      if(meaningful(r.state)){
-        var merged=(typeof cloudMerge==='function')?cloudMerge(localState(),r.state):r.state;
-        cloudApply(merged);
-        checkpointPut(merged).catch(checkpointFalhou);
-        if(stable(splitState(merged))!==stable(r.flat))commitState(merged);
-        else cloudBadge('saved');
-      }else if(meaningful(localState()))commitState(localState());
-      else cloudBadge('saved');
+      var current=stateForCommit();
+      var merged=(typeof cloudMerge==='function')?cloudMerge(current,r.state):r.state;
+      merged.rev=r.meta.rev||0;
+      var changed=!sameWritable(splitState(merged),r.flat);
+      setUnsavedChanges(false);cloudApply(merged);setUnsavedChanges(changed||FB.pushing);
+      checkpointPut(merged).catch(checkpointFalhou);
       try{syncAllowedUsersToMembers();}catch(e){}
       try{authBusy(false);authErr('');hideAuthGate();}catch(e){}
+      /* Uma leitura durante o envio recebe o colega sem aguardar a própria
+         promessa de escrita. O envio ativo refaz a comparação ao concluir. */
+      if(FB.pullPromise===pulling)FB.pullPromise=null;
+      if(changed&&!FB.pushing)await commitState(merged);
+      else if(!FB.pushing)cloudBadge('saved');
       return true;
     }).catch(function(e){
       cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');
@@ -1022,7 +1277,9 @@
         try{showAuthGate();authBusy(false);authErr('Não foi possível validar este aparelho. Conecte-se à internet e tente novamente.');}catch(_e){}
       }
       return false;
-    });
+    }).finally(function(){if(FB.pullPromise===pulling)FB.pullPromise=null;});
+    FB.pullPromise=pulling;
+    return pulling;
   };
   /* Resync barato: 1 leitura (o doc raiz) para conferir o 'rev' e só então decidir.
      Antes isto chamava cloudPull() direto, e cloudPull relê todas as coleções INTEIRAS.
@@ -1033,10 +1290,10 @@
     if(window._unsavedChanges){cloudSave();return;}
     if(!FB.db||FB.resyncing){return;}
     FB.resyncing=true;
-    FB.db.doc(ROOT).get().then(function(snap){
+    _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000).then(function(snap){
       FB.resyncing=false;
-      var rev=(snap&&snap.exists&&(snap.data()||{}).rev)||0;
-      if(rev>FB.lastRev)cloudPull();
+      var dR=(snap&&snap.exists&&snap.data())||null;
+      if(dR&&((typeof gravacaoAlheia==='function')?gravacaoAlheia(dR):((dR.rev||0)>FB.lastRev)))cloudPull();
       else cloudBadge('saved');
     }).catch(function(e){
       FB.resyncing=false;
@@ -1049,13 +1306,14 @@
     if(FB.unsub){FB.unsub();FB.unsub=null;}
     FB.unsub=FB.db.doc(ROOT).onSnapshot({includeMetadataChanges:true},function(snap){
       if(!snap.exists||snap.metadata.hasPendingWrites)return;
-      var rev=(snap.data()||{}).rev||0;
+      var d=snap.data()||{},rev=d.rev||0,aviso=(d.writeId||'')+'|'+rev;
       /* `lastRev` so muda quando a leitura ACONTECE (readRemote). Marca-lo aqui
          fazia a conferencia antes de gravar achar que o aparelho ja tinha lido
          uma revisao que ainda estava a caminho. */
-      if(rev>FB.lastRev&&FB.pushing){FB.lerDepois=true;return;}
-      if(rev>FB.lastRev&&rev!==FB.revAvisado){
-        FB.revAvisado=rev;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
+      if(!((typeof gravacaoAlheia==='function')?gravacaoAlheia(d):(rev>(FB.lastRev||0))))return;
+      if(FB.pushing){FB.lerDepois=true;return;}
+      if(aviso!==FB.revAvisado){
+        FB.revAvisado=aviso;clearTimeout(window._fbPullTimer);window._fbPullTimer=setTimeout(cloudPull,250);
       }
     },function(){cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');});
   };
@@ -1158,7 +1416,16 @@
       if(!firebaseInit()||!FB.user)return Promise.reject(new Error('sem login'));
       var lotes=[];for(var i=0;i<(ids||[]).length;i+=400)lotes.push(ids.slice(i,i+400));
       return lotes.reduce(function(p,l){return p.then(function(){
-        var b=FB.db.batch();l.forEach(function(id){b.delete(collectionRef('media').doc(id));});return b.commit();
+        return FB.db.runTransaction(async function(tx){
+          var root=FB.db.doc(ROOT),snap=await tx.get(root),meta=snap.exists?snap.data():{};
+          l.forEach(function(id){tx.delete(collectionRef('media').doc(id));});
+          tx.set(root,{
+            rev:(Number(meta.rev)||0)+1,syncProtocol:3,
+            writeId:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),
+            updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy:FB.user.email||'',schema:2
+          },{merge:true});
+        }).then(function(){FB.remoteToken=null;});
       });},Promise.resolve()).then(function(){return (ids||[]).length;});
     }
   };
@@ -1446,12 +1713,28 @@
 
   window._dwOn=function(){return false;};
   try{localStorage.setItem('agracta-dualwrite','0');}catch(e){}
+  function safetyArchive(snap){
+    var record={_agractaSafety:true,ts:snap.ts,snapshot:clone(snap)};
+    return checkpointOpen().then(function(db){return new Promise(function(resolve,reject){
+      var tx=db.transaction(CHECKPOINT_STORE,'readwrite'),os=tx.objectStore(CHECKPOINT_STORE);
+      os.put(record,'backup:'+snap.ts);var req=os.getAll();
+      req.onsuccess=function(){(req.result||[]).filter(function(r){return r&&r._agractaSafety;}).sort(function(a,b){return b.ts-a.ts;}).slice(10).forEach(function(r){os.delete('backup:'+r.ts);});};
+      tx.oncomplete=function(){db.close();resolve(true);};tx.onerror=tx.onabort=function(){db.close();reject(tx.error||new Error('Falha ao guardar backup.'));};
+    });});
+  }
+  function safetyArchives(){
+    return checkpointOpen().then(function(db){return new Promise(function(resolve,reject){
+      var tx=db.transaction(CHECKPOINT_STORE,'readonly'),req=tx.objectStore(CHECKPOINT_STORE).getAll();
+      req.onsuccess=function(){resolve((req.result||[]).filter(function(r){return r&&r._agractaSafety;}).sort(function(a,b){return b.ts-a.ts;}).map(function(r){return r.snapshot;}));};
+      req.onerror=function(){reject(req.error);};tx.oncomplete=tx.onabort=function(){db.close();};
+    });});
+  }
   window.AgractaFirebase={
     configured:configured,
     status:function(){return {configured:configured(),user:FB.user&&FB.user.email,ready:FB.ready,rev:FB.lastRev,pendingWrites:FB.pendingWrites};},
     pull:cloudPull,push:cloudSave,checkpoint:checkpointGet,
     flushLocal:function(){return checkpointPut(localState(),true);},
     offlineAccessAllowed:offlineAccessAllowed,trustedDevice:trustedDevice,
-    splitState:splitState,buildState:buildState
+    splitState:splitState,buildState:buildState,saveBackup:safetyArchive,listBackups:safetyArchives
   };
 })();

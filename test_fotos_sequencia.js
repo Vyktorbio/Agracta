@@ -61,5 +61,23 @@ async function foto(w,id){
  await abrir(w,{owner:'um',plots:[{treatment:'T1',rep:1,plot:'1A'}]});
  assert.equal(d.getElementById('seq').hidden,true);assert.equal(d.getElementById('camera-label').textContent,'Tirar foto');
  w.close();
+ /* Botão "Fotos em sequência": liga mesmo sem nada lembrado, na parcela de onde
+    veio, e fica lembrado para o botão Foto da avaliação voltar a esta tela. */
+ w=pagina();d=w.document;$=id=>d.getElementById(id);
+ w.localStorage.setItem('agracta-fotos-sequencia','0');
+ await abrir(w,{owner:'botao',initial:{treatment:'T2',rep:1,plot:'2A',sequence:true}});
+ assert.equal($('seq-on').checked,true,'o botão liga a sequência');
+ assert.equal($('seq-plot').textContent,'2A','na parcela de onde veio');
+ assert.equal(w.localStorage.getItem('agracta-fotos-sequencia'),'1','e fica lembrada');
+ assert.match($('status').textContent,/Sequência ligada/);
+ w.close();
+ /* "Slides e originais" do painel: abre na montagem, com a escolha de fotos por slide. */
+ w=pagina();d=w.document;
+ let rolou=null;w.HTMLElement.prototype.scrollIntoView=function(){rolou=this;};
+ await abrir(w,{owner:'slides',initial:{slides:true}});
+ assert.ok(rolou&&rolou.classList.contains('export'),'abre na seção de montar a apresentação');
+ assert.deepEqual(Array.from(d.getElementById('per-slide').options).map(o=>o.value),['1','2','4','6','8'],'com a escolha de 1, 2, 4, 6 ou 8 fotos por slide');
+ assert.equal(d.getElementById('seq-on').checked,false,'sem ligar a sequência');
+ w.close();
  console.log('Sequência de fotos: avança após cada foto da câmera, pula, volta, reposiciona, para na última e lembra a escolha OK.');
 })().catch(err=>{console.error(err);process.exit(1);});

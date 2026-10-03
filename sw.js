@@ -2,37 +2,38 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v312';
+var CACHE = 'agracta-app-v336';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
-  './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=2',
-  './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=1', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=2', './vendor/relatorio-docx.js?v=1',
-  './galeria-fotos.js?v=5', './galeria-local.html', './galeria-local.js?v=5', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
+  './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=1', './protocolo-avaliacoes.css?v=1',
+  './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=3',
+  './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=2', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=3', './vendor/relatorio-docx.js?v=1',
+  './galeria-fotos.js?v=7', './fotos-estudo.js?v=3', './fotos-estudo.css?v=3', './vendor/fotos-core.js?v=2', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=7', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
   './croqui-parcelas.js?v=3', './croqui-parcelas.css?v=1',
   './profundidade.css?v=1',
-  './estudo-pagina.js?v=17', './estudo-pagina.css?v=8',
+  './estudo-pagina.js?v=20', './estudo-pagina.css?v=8',
   /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem
      arquivos da lista. */
-  './campo-3d.js?v=9', './campo-3d.css?v=8',
+  './campo-3d.js?v=10', './campo-3d.css?v=8',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=3',
   './', './index.html',
-  './integracoes.css?v=4', './integracoes.js?v=12', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
-  './vendor/avaliacao-core.js?v=1', './vendor/pendencias-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=1', './vendor/croqui-campo-core.js?v=3', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
+  './integracoes.css?v=4', './integracoes.js?v=14', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
+  './vendor/avaliacao-core.js?v=2', './vendor/pendencias-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=1', './vendor/croqui-campo-core.js?v=3', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=35', './theme-2026.css?v=9', './ui-campo.css?v=11', './app.js?v=183',
-  './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './eventos-app.js?v=2',
+  './styles.css?v=38', './theme-2026.css?v=9', './ui-campo.css?v=11', './app.js?v=203',
+  './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=2',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
-  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=8', './vendor/aplicacao-core.js?v=1', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=6', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=1', './vendor/versoes-core.js?v=1', './vendor/fotos-notas-core.js?v=1', './vendor/arena-core.js?v=2', './vendor/armazenamento-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=3', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
+  './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=9', './vendor/aplicacao-core.js?v=2', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=7', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=2', './vendor/versoes-core.js?v=3', './vendor/campo-inteligente-core.js?v=1', './campo-inteligente.js?v=2', './vendor/fotos-notas-core.js?v=1', './vendor/arena-core.js?v=3', './vendor/bioensaio-core.js?v=3', './vendor/armazenamento-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=4', './vendor/supabase.js', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
-  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=18',
-  './acesso-horario.js?v=3', './ui-campo.js?v=23', './alvos-catalogo.js?v=2',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=25',
+  './acesso-horario.js?v=3', './ui-campo.js?v=24', './alvos-catalogo.js?v=2',
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js', './croqui.html', './prancha.html',
@@ -105,8 +106,16 @@ self.addEventListener('fetch', function(e){
   if(isHTML){
     e.respondWith(
       fetch(e.request).then(function(resp){
-        var copy = resp.clone();
-        caches.open(CACHE).then(function(c){ c.put('./index.html', copy); });
+        /* Só a PRÓPRIA página do app, íntegra, vira o shell offline. Um 404 (endereço
+           digitado errado) ou a página de login de um Wi-Fi com portal cativo (resposta
+           redirecionada, status 200) era gravado como index.html, e offline no campo o
+           app abria essa página no lugar do Agracta. */
+        var raiz = new URL('./', self.registration.scope).pathname;
+        var ehApp = (u.pathname === raiz || u.pathname === raiz + 'index.html');
+        if(ehApp && resp && resp.ok && !resp.redirected && resp.type === 'basic'){
+          var copy = resp.clone();
+          caches.open(CACHE).then(function(c){ c.put('./index.html', copy); });
+        }
         return resp;
       }).catch(function(){ return caches.match('./index.html').then(function(r){ return r || caches.match('./'); }); })
     );

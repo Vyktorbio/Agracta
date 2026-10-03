@@ -71,7 +71,7 @@ function aparelho(opts){
   ctx.window=ctx; ctx.globalThis=ctx;
   vm.createContext(ctx);
   vm.runInContext([pega('safetySnap'),pega('_safetyCounts'),pega('safetyList'),
-                   pega('safetyBackup'),pega('safetyApply')].join('\n'),ctx);
+                   pega('safetyBackup'),pega('_restoreGeneration'),pega('_markStateRestored'),pega('safetyApply')].join('\n'),ctx);
   return ctx;
 }
 

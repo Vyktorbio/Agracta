@@ -61,6 +61,7 @@
     if(s==="ml"||s==="ml/ha"||s==="mlha")return"mL/ha";
     if(s==="kg"||s==="kg/ha"||s==="kgha")return"kg/ha";
     if(s==="g"||s==="g/ha"||s==="gha")return"g/ha";
+    if(s==="mg"||s==="mg/ha"||s==="mgha")return"mg/ha";
     return raw;
   }
 
@@ -70,13 +71,17 @@
     if(unit==="L/ha")return{perHa:numeric*1000,productUnit:"mL",concentrationUnit:"mL/L",liquid:true};
     if(unit==="mL/ha")return{perHa:numeric,productUnit:"mL",concentrationUnit:"mL/L",liquid:true};
     if(unit==="kg/ha")return{perHa:numeric*1000,productUnit:"g",concentrationUnit:"g/L",liquid:false};
+    /* mg/ha segue a mesma base em GRAMA do g/ha: todo o resto do motor (lote,
+       frasco, memória) já pensa em g, e formatAmount mostra em mg o que for
+       menor que 1 g — 500 mg/ha numa parcela de 15 m² sai "0,75 mg". */
+    if(unit==="mg/ha")return{perHa:numeric/1000,productUnit:"g",concentrationUnit:"g/L",liquid:false};
     return{perHa:numeric,productUnit:"g",concentrationUnit:"g/L",liquid:false};
   }
 
   function calculateTreatment(input){
     input=recipeInput(input);
     var unit=normalizeDoseUnit(input.doseUnit||"L/ha");
-    if(['L/ha','mL/ha','g/ha','kg/ha'].indexOf(unit)<0)throw new Error('Unidade da dose não reconhecida.');
+    if(['L/ha','mL/ha','g/ha','kg/ha','mg/ha'].indexOf(unit)<0)throw new Error('Unidade da dose não reconhecida.');
     var dose=parseStrictNumber(input.doseHa,false);
     if(!(dose>0))throw new Error('A dose deve ser um número maior que zero.');
     var cfg=doseConfig(dose,unit);
@@ -230,14 +235,14 @@
        3. deixar o veículo (o que completa o volume) ser óleo, não só água.
 
      Base de cada componente:
-       "area" — L/ha, mL/ha, g/ha, kg/ha: dose por hectare, independe da calda.
+       "area" — L/ha, mL/ha, g/ha, kg/ha, mg/ha: dose por hectare, independe da calda.
        "pct"  — % v/v SOBRE A CALDA FINAL. 0,2% em 3 L/ha de calda = 6 mL/ha.
 
      O veículo não é dose: é o resto. Volume de calda menos a soma dos líquidos.
      É por isso que ele precisa ser nomeado — em metade dos tratamentos de drone
      o resto é óleo de soja, e chamar isso de "água" no preparo é erro de bancada. */
 
-  var DOSE_UNITS=["L/ha","mL/ha","g/ha","kg/ha","%"];
+  var DOSE_UNITS=["L/ha","mL/ha","g/ha","kg/ha","mg/ha","%"];
 
   /* Uma dose isolada: "1,5 L" -> {valor:1.5, unidade:"L/ha"}; "0,033%" -> pct.
      Sem unidade escrita, cai em `fallbackUnit` (o que o estudo declarou). */
@@ -254,8 +259,8 @@
     var valor=parseStrictNumber(m[1],unidade==='%');
     var erro=null;
     if(!unidade) erro='A dose "'+s+'" está sem unidade e o estudo não declarou nenhuma. '+
-      'Declare a unidade da dose (L/ha, mL/ha, g/ha ou kg/ha) — entre L/ha e g/ha há mil vezes de diferença.';
-    else if(DOSE_UNITS.indexOf(unidade)<0) erro='Unidade não reconhecida em "'+s+'". Use L/ha, mL/ha, g/ha, kg/ha ou % v/v.';
+      'Declare a unidade da dose (L/ha, mL/ha, g/ha, kg/ha ou mg/ha) — entre L/ha e g/ha há mil vezes de diferença.';
+    else if(DOSE_UNITS.indexOf(unidade)<0) erro='Unidade não reconhecida em "'+s+'". Use L/ha, mL/ha, g/ha, kg/ha, mg/ha ou % v/v.';
     if(!Number.isFinite(valor))erro='Número inválido na dose "'+s+'".';
     return{valor:valor,unidade:unidade,texto:s,erro:erro};
   }
@@ -322,7 +327,7 @@
         problems.push(_escrita
           ? "Unidade \""+_escrita+"\" não reconhecida em "+nome+"."
           : "O componente "+nome+" está sem unidade e o estudo não declarou nenhuma. "+
-            "Declare a unidade da dose (L/ha, mL/ha, g/ha ou kg/ha).");
+            "Declare a unidade da dose (L/ha, mL/ha, g/ha, kg/ha ou mg/ha).");
         /* Antes o último recurso era `unidade="L/ha"`: o problema ia para a
            lista E a conta seguia em litros assim mesmo. Componente sem unidade
            reconhecida fica SEM unidade; `problems` já barra o preparo, e agora
@@ -495,7 +500,7 @@
   /* Versao do motor. Vai gravada na memoria de calculo de cada aplicacao: sem
      ela, um resultado guardado em 2026 nao teria como ser reconferido depois que
      a formula mudasse. Subir aqui sempre que o calculo mudar de resultado. */
-  var VERSION="1.3.0";
+  var VERSION="1.4.0";
 
   return{
     VERSION:VERSION,

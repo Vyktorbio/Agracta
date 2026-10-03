@@ -25,8 +25,11 @@ Endpoints (uso interno do app):
   GET /solo?geom=<GeoJSON urlencoded> (unidades sob a quadra, com % de area de cada)
   GET /solo/propriedades?lat=..&lng=..  (argila/areia/silte/pH/COS/CTC — SoilGrids)
   GET /solo/mapa?bbox=w,s,e,n&width=1024 (PNG do mapa pedologico, para recortar no app)
+
+Login: fora /health e /solo/legenda, todo pedido leva  Authorization: Bearer <ID token do
+Firebase>  de um membro ativo do Agracta (veja a seção "login"). Local, sem $PORT, é livre.
 """
-import json, math, os, re, time, urllib.request, urllib.parse, urllib.error
+import base64, hashlib, hmac, json, math, os, re, threading, time, urllib.request, urllib.parse, urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -1435,6 +1438,237 @@ def do_solo_legenda(camada_nome):
         raise RuntimeError("SOLO:o servidor da Embrapa nao devolveu a legenda (%s)." %
                            (ctype or "sem tipo"))
     return dados, ctype
+# ---------------------------------------------------------------- login
+# O proxy gasta cota limitada do Sentinel Hub e usa as chaves da Ecowitt do laboratório.
+# Antes bastava saber o endereço para usar tudo isso. Agora cada pedido traz o token de
+# login do Firebase (Authorization: Bearer <ID token>) e só passa quem é membro ativo do
+# Agracta — a mesma regra do firestore.rules. O token é conferido aqui, sem biblioteca:
+# assinatura RS256 com as chaves públicas do Google, projeto, emissor e validade; o
+# cadastro é lido no Firestore com o próprio token de quem pediu.
+#
+# EXIGIR_LOGIN (env): "1" recusa desde já quem vier sem login; "0" libera tudo (chave de
+# emergência). Sem a variável vale a TRANSIÇÃO: até TRANSICAO_ATE o pedido sem login ainda
+# passa — só é contado em /health —, para o app aberto antes da atualização não quebrar no
+# meio do trabalho; depois dessa data a recusa começa sozinha. Rodando no próprio
+# computador (sem $PORT), o proxy segue livre para desenvolvimento.
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "agracta-vyktorbio")
+JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+MEMBRO_URL = ("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/"
+              "workspaces/agracta/members/%s")
+ADMINS = {"machadovictorchaves@gmail.com", "vyktorbio@gmail.com"}   # os mesmos de firestore.rules
+ROTAS_ABERTAS = {"/health", "/solo/legenda"}   # acordar o servidor; legenda pública da Embrapa
+TRANSICAO_ATE = "2026-10-04"
+FOLGA_RELOGIO = 120   # s de tolerância entre o relógio deste servidor e o do Google
+
+MSG_LOGIN = {
+    "sem_token": "Entre no Agracta para usar mapas NDVI, clima e solo.",
+    "token_invalido": "Seu login venceu ou não foi reconhecido. Entre de novo no Agracta.",
+    "nao_membro": "Este login não é de um membro ativo do Agracta.",
+    "indisponivel": "Não consegui confirmar seu login agora. Tente de novo em instantes.",
+}
+CODIGO_LOGIN = {"sem_token": 401, "token_invalido": 401, "nao_membro": 403, "indisponivel": 503}
+
+class LoginRecusado(Exception):
+    def __init__(self, motivo, detalhe=""):
+        Exception.__init__(self, detalhe or motivo)
+        self.motivo = motivo
+
+_trava_login = threading.Lock()
+_jwks = {"chaves": {}, "ate": 0.0, "forcado": 0.0}
+_membros = {}   # e-mail -> (ativo, válido até)
+_contagem = {"ok": 0, "sem_token": 0, "token_invalido": 0, "nao_membro": 0, "indisponivel": 0}
+
+def modo_login(agora=None):
+    v = (os.environ.get("EXIGIR_LOGIN") or "").strip().lower()
+    if v in ("1", "sim", "true", "yes", "on"):
+        return "exigir"
+    if v in ("0", "nao", "não", "false", "no", "off"):
+        return "livre"
+    if HOST == "127.0.0.1":
+        return "livre"
+    hoje = time.strftime("%Y-%m-%d", time.gmtime(time.time() if agora is None else agora))
+    return "transicao" if hoje <= TRANSICAO_ATE else "exigir"
+
+def _b64url(s):
+    if isinstance(s, str):
+        s = s.encode("ascii")
+    return base64.urlsafe_b64decode(s + b"=" * (-len(s) % 4))
+
+def _baixar_chaves():
+    req = urllib.request.Request(JWKS_URL, headers={"User-Agent": "agracta-proxy"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        dados = json.loads(r.read().decode())
+        cc = r.headers.get("Cache-Control") or ""
+    m = re.search(r"max-age=(\d+)", cc)
+    chaves = {}
+    for k in dados.get("keys", []):
+        if k.get("kty") == "RSA" and k.get("kid") and k.get("n") and k.get("e"):
+            chaves[k["kid"]] = (int.from_bytes(_b64url(k["n"]), "big"),
+                                int.from_bytes(_b64url(k["e"]), "big"))
+    return chaves, (int(m.group(1)) if m else 3600)
+
+def chaves_google(kid=None, agora=None):
+    """Chaves públicas que assinam os tokens do Firebase, guardadas pelo tempo que o Google
+    manda (Cache-Control). Um kid desconhecido força nova busca — o Google troca as chaves
+    de tempos em tempos —, mas no máximo uma vez a cada 5 min: um token forjado com kid
+    inventado não vira uma enxurrada de pedidos ao Google."""
+    agora = time.time() if agora is None else agora
+    with _trava_login:
+        ch = _jwks["chaves"]
+        valido = bool(ch) and agora < _jwks["ate"]
+        if valido and (kid is None or kid in ch or agora - _jwks["forcado"] < 300):
+            return ch
+        if valido:
+            _jwks["forcado"] = agora
+    try:
+        novas, validade = _baixar_chaves()
+    except Exception:
+        if ch:
+            return ch      # sem conversa com o Google: as chaves de antes ainda servem
+        raise
+    with _trava_login:
+        _jwks["chaves"] = novas
+        _jwks["ate"] = agora + max(60, min(validade, 6 * 3600))
+    return novas
+
+_DIGESTINFO_SHA256 = bytes.fromhex("3031300d060960864801650304020105000420")
+
+def rs256_confere(n, e, mensagem, assinatura):
+    """RSASSA-PKCS1-v1_5 com SHA-256 (RFC 8017, seção 8.2.2)."""
+    k = (n.bit_length() + 7) // 8
+    if len(assinatura) != k:
+        return False
+    s = int.from_bytes(assinatura, "big")
+    if s >= n:
+        return False
+    t = _DIGESTINFO_SHA256 + hashlib.sha256(mensagem).digest()
+    if k < len(t) + 11:
+        return False
+    esperado = b"\x00\x01" + b"\xff" * (k - len(t) - 3) + b"\x00" + t
+    return hmac.compare_digest(pow(s, e, n).to_bytes(k, "big"), esperado)
+
+def _numero(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+def verificar_token(token, agora=None, chaves=None):
+    """Confere o ID token como a documentação do Firebase manda fazer com biblioteca de
+    terceiros: RS256 com kid das chaves do Google, aud = projeto, iss =
+    securetoken.google.com/<projeto>, exp no futuro, iat e auth_time no passado, sub não
+    vazio. Devolve as declarações do token ou levanta LoginRecusado."""
+    agora = time.time() if agora is None else agora
+    partes = (token or "").split(".")
+    if len(partes) != 3:
+        raise LoginRecusado("token_invalido", "token mal formado")
+    try:
+        cab = json.loads(_b64url(partes[0]))
+        dec = json.loads(_b64url(partes[1]))
+        sig = _b64url(partes[2])
+    except Exception:
+        raise LoginRecusado("token_invalido", "token ilegível")
+    if not isinstance(cab, dict) or not isinstance(dec, dict):
+        raise LoginRecusado("token_invalido", "token ilegível")
+    if cab.get("alg") != "RS256":
+        raise LoginRecusado("token_invalido", "algoritmo %r" % (cab.get("alg"),))
+    kid = cab.get("kid")
+    if chaves is None:
+        try:
+            chaves = chaves_google(kid, agora)
+        except Exception as e:
+            raise LoginRecusado("indisponivel", "chaves do Google: %r" % (e,))
+    if not isinstance(kid, str) or kid not in chaves:
+        raise LoginRecusado("token_invalido", "chave desconhecida")
+    n, e = chaves[kid]
+    if not rs256_confere(n, e, (partes[0] + "." + partes[1]).encode("ascii"), sig):
+        raise LoginRecusado("token_invalido", "assinatura não confere")
+    if dec.get("aud") != FIREBASE_PROJECT_ID:
+        raise LoginRecusado("token_invalido", "token de outro projeto")
+    if dec.get("iss") != "https://securetoken.google.com/" + FIREBASE_PROJECT_ID:
+        raise LoginRecusado("token_invalido", "emissor inesperado")
+    if not _numero(dec.get("exp")) or dec["exp"] <= agora - FOLGA_RELOGIO:
+        raise LoginRecusado("token_invalido", "token vencido")
+    if not _numero(dec.get("iat")) or dec["iat"] > agora + FOLGA_RELOGIO:
+        raise LoginRecusado("token_invalido", "token emitido no futuro")
+    if "auth_time" in dec and (not _numero(dec["auth_time"]) or dec["auth_time"] > agora + FOLGA_RELOGIO):
+        raise LoginRecusado("token_invalido", "login no futuro")
+    sub = dec.get("sub")
+    if not isinstance(sub, str) or not sub or len(sub) > 128:
+        raise LoginRecusado("token_invalido", "token sem usuário")
+    email = dec.get("email")
+    if not isinstance(email, str) or "@" not in email:
+        raise LoginRecusado("nao_membro", "login sem e-mail")
+    return dec
+
+def _ler_membro(email, token):
+    url = MEMBRO_URL % (FIREBASE_PROJECT_ID, urllib.parse.quote(email, safe="@."))
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token,
+                                               "User-Agent": "agracta-proxy"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404):
+            return None      # sem cadastro (ou a regra não deixou ler): não é membro
+        raise
+
+def membro_ativo(email, token, agora=None, ler=None):
+    """Administrador (a lista de firestore.rules) ou members/<e-mail> com active == true.
+    O cadastro é lido com o token de quem pediu — a regra deixa cada um ler o próprio —,
+    então o proxy não precisa de conta de serviço. A resposta fica guardada 10 min quando
+    é sim (desativar alguém vale em até 10 min) e 1 min quando é não."""
+    agora = time.time() if agora is None else agora
+    if email.lower() in ADMINS:
+        return True
+    with _trava_login:
+        c = _membros.get(email)
+    if c and agora < c[1]:
+        return c[0]
+    try:
+        doc = (ler or _ler_membro)(email, token)
+    except Exception as e:
+        if c and c[0] and agora < c[1] + 24 * 3600:
+            return True      # Google fora do ar: vale o sim das últimas 24 h
+        raise LoginRecusado("indisponivel", "cadastro: %r" % (e,))
+    campos = (doc or {}).get("fields") or {}
+    ativo = (campos.get("active") or {}).get("booleanValue") is True
+    with _trava_login:
+        _membros[email] = (ativo, agora + (600 if ativo else 60))
+    return ativo
+
+def autorizar(cabecalho, rota, agora=None):
+    """None quando o pedido pode seguir; senão (código HTTP, motivo). Na transição o
+    pedido sempre segue — só é contado, para /health mostrar quem ainda vem sem login."""
+    if rota in ROTAS_ABERTAS:
+        return None
+    modo = modo_login(agora)
+    if modo == "livre":
+        return None
+    cab = (cabecalho or "").strip()
+    token = cab[7:].strip() if cab[:7].lower() == "bearer " else ""
+    motivo, detalhe = "ok", ""
+    try:
+        if not token:
+            raise LoginRecusado("sem_token")
+        dec = verificar_token(token, agora)
+        if not membro_ativo(dec["email"], token, agora):
+            raise LoginRecusado("nao_membro", dec["email"])
+    except LoginRecusado as e:
+        motivo, detalhe = e.motivo, str(e)
+    except Exception as e:           # defeito aqui não pode virar porta aberta
+        motivo, detalhe = "indisponivel", repr(e)
+    with _trava_login:
+        _contagem[motivo] = _contagem.get(motivo, 0) + 1
+    if motivo == "ok":
+        return None
+    if motivo != "sem_token":
+        print("[login] %s %s: %s" % (modo, rota, detalhe), flush=True)
+    if modo == "transicao":
+        return None
+    return CODIGO_LOGIN[motivo], motivo
+
+def estado_login():
+    with _trava_login:
+        return {"modo": modo_login(), "transicao_ate": TRANSICAO_ATE, "contagem": dict(_contagem)}
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -1443,8 +1677,11 @@ class H(BaseHTTPRequestHandler):
         if origin_permitida(origin):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Headers", "*")
+            # "*" não cobre Authorization (regra do Fetch): o cabeçalho do login precisa
+            # ser listado pelo nome, senão o navegador barra o pedido antes de sair.
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+            self.send_header("Access-Control-Max-Age", "7200")
             # O mapa informa qual levantamento foi desenhado para o navegador
             # pedir a legenda correspondente. Header customizado só fica legível
             # fora da origem do proxy quando é exposto explicitamente pelo CORS.
@@ -1456,6 +1693,13 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
     def do_OPTIONS(self):
         self.send_response(204); self._cors(); self.end_headers()
+    def _login_ok(self, rota):
+        r = autorizar(self.headers.get("Authorization"), rota)
+        if r is None:
+            return True
+        codigo, motivo = r
+        self._json({"error": MSG_LOGIN[motivo], "login": motivo}, codigo)
+        return False
     def _err(self, e):
         import urllib.error as ue
         if isinstance(e, RuntimeError) and str(e) == "SEM_CREDENCIAL":
@@ -1467,6 +1711,8 @@ class H(BaseHTTPRequestHandler):
         return self._json({"error": repr(e)}, 500)
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
+        if not self._login_ok(u.path):
+            return
         try:
             ln = int(self.headers.get("Content-Length", 0) or 0)
             body = json.loads(self.rfile.read(ln).decode()) if ln else {}
@@ -1484,11 +1730,14 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+        if not self._login_ok(u.path):
+            return
         try:
             if u.path == "/health":
                 cid, _ = load_creds()
                 eapp, _ = load_ecowitt()
-                return self._json({"ok": True, "hasCreds": bool(cid), "hasEcowitt": bool(eapp)})
+                return self._json({"ok": True, "hasCreds": bool(cid), "hasEcowitt": bool(eapp),
+                                   "login": estado_login()})
             if u.path == "/clima/estacoes":
                 return self._json(do_estacoes())
             if u.path == "/clima":
@@ -1595,6 +1844,8 @@ if __name__ == "__main__":
     print(" Proxy NDVI - Estacao Iracemapolis")
     print(" Porta:  http://localhost:%d" % PORT)
     print(" Credencial:", "OK (validada)" if valid else ("encontrada, mas nao validou" if cid else "NAO configurada"))
+    print(" Login:", {"livre": "livre (uso local)", "transicao": "transicao ate " + TRANSICAO_ATE,
+                      "exigir": "exigido"}[modo_login()])
     print(" Deixe esta janela aberta enquanto usa o app.")
     print("=" * 56)
     ThreadingHTTPServer((HOST, PORT), H).serve_forever()

@@ -28,7 +28,7 @@ function gira(){return new Promise(function(resolve){setImmediate(resolve);});}
 
 var ctx={
   console:console,Promise:Promise,Date:Date,String:String,Number:Number,Math:Math,isFinite:isFinite,
-  fetch:fetchFake,CLIMA_PROXY:'https://proxy.test',
+  fetch:fetchFake,proxyFetch:fetchFake,CLIMA_PROXY:'https://proxy.test',
   document:{getElementById:function(id){return id==='climaChip'?el:null;}},
   ic:function(){return '';},esc:function(v){return String(v);},
   LOCAIS:{

@@ -41,7 +41,7 @@
     ['avalInicio','Início das avaliações'], ['avalIntervalo','Intervalo das avaliações'],
     ['avalNum','Nº de avaliações'], ['avalMomentos','Momentos de avaliação'],
     ['avalUnidade','Unidade dos momentos'],
-    ['tratamentos','Tratamentos']
+    ['tratamentos','Tratamentos'], ['avaliacaoProtocolo','Regras de avaliação']
   ];
   var ROTULO={}; CAMPOS.forEach(function(c){ ROTULO[c[0]]=c[1]; });
 

@@ -116,7 +116,7 @@ assert(context.AgractaFirebase.buildState(legado, { rev: 7 }).notas_campo[0].fot
 var migrada = JSON.parse(JSON.stringify(legado));
 Object.keys(migrada.notas_campo).forEach(function(k){ migrada.notas_campo[k].data.fotoLocal = { nome: 'Agracta_x.jpg' }; });
 assert(!context.AgractaFirebase.buildState(migrada, { rev: 7 }).notas_campo[0].foto, 'nota migrada não pode receber a foto antiga de novo');
-assert(syncSrc.indexOf("COLLECTIONS_GRAVACAO.forEach") >= 0 && syncSrc.indexOf('V.mudancas(FB.remoteFlat||{},next,COLLECTIONS_GRAVACAO)') >= 0, 'gravação não pode tocar a coleção media');
+assert(syncSrc.indexOf("COLLECTIONS_GRAVACAO.forEach") >= 0 && syncSrc.indexOf('V.mudancas(prev,next,COLLECTIONS_GRAVACAO)') >= 0, 'gravação não pode tocar a coleção media');
 assert(rebuilt.itens.IT1.nome === 'Produto A', 'item não voltou');
 assert(rebuilt.itens.IT1.lotes[0].eventos[0].saldoApos === 500, 'cadeia de custódia do item não voltou');
 assert(rebuilt.itens.IT1.vinculosHistoricos[0].estudoId === 'E9', 'vínculo histórico do item não voltou');

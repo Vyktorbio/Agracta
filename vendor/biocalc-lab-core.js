@@ -237,7 +237,7 @@
   function calcCampo(input){
     input=input||{};
     var unidade=input.unidade||"mL/ha";
-    if(['mL/ha','L/ha','g/ha','kg/ha','% v/v'].indexOf(unidade)<0)throw new Error("Unidade da dose não reconhecida: "+unidade+".");
+    if(['mL/ha','L/ha','g/ha','kg/ha','mg/ha','% v/v'].indexOf(unidade)<0)throw new Error("Unidade da dose não reconhecida: "+unidade+".");
     var dose=parseNum(input.dose,unidade==='% v/v');
     var vazao=parseTaxa(input.vazao), volumeMl=parseNum(input.volumeMl);
     var base=input.base||"formulado";
@@ -275,8 +275,8 @@
     else{
       var val=parseNum(input.iaValor), iaU=input.iaUnid||"g/L";
       if(!(val>0))throw new Error("Informe a concentração de i.a. no produto.");
-      if(!(unidade==="g/ha"||unidade==="kg/ha"))throw new Error("Quando a dose é em i.a., use g/ha ou kg/ha.");
-      var dg0=unidade==="kg/ha"?dose*1000:dose;
+      if(!(unidade==="g/ha"||unidade==="kg/ha"||unidade==="mg/ha"))throw new Error("Quando a dose é em i.a., use g/ha, kg/ha ou mg/ha.");
+      var dg0=unidade==="kg/ha"?dose*1000:(unidade==="mg/ha"?dose/1000:dose);
       if(iaU==="g/L"||iaU==="mg/mL"){ df=dg0/val; uf="L/ha"; }
       else if(iaU==="g/kg"){
         if(val>1000)throw new Error("O teor em g/kg não pode superar 1000.");
@@ -294,7 +294,7 @@
       cr=dml/(vazao*1000); volProd=volumeMl*cr; acao="pipetar";
       out.concentracaoBase="v/v";
     }else{
-      var dg=uf==="kg/ha"?df*1000:df;
+      var dg=uf==="kg/ha"?df*1000:(uf==="mg/ha"?df/1000:df);
       cr=dg/(vazao*1000); massaG=volumeMl*cr;
       out.concentracaoBase="m/v";
       if(densDada){ volProd=massaG/dens; acao="pipetar"; } else { acao="pesar"; }

@@ -9,7 +9,7 @@ for(const texto of ['0.033%','0,033%']){
 assert.equal(B.parseDose('1.500 g/ha').valor,1500);
 assert.equal(B.parseDose('0.125 L/ha').valor,.125);
 assert.equal(B.parseDose('1.500%').valor,1.5,'em porcentagem, o ponto é decimal');
-for(const texto of ['500 mg/ha','2 g/L','1,5 lixo','1,2,3 L','0,2% m/v']){
+for(const texto of ['500 µg/ha','2 g/L','1,5 lixo','1,2,3 L','0,2% m/v']){
   assert.ok(B.parseComponents('Produto',texto,'L/ha').problems.length,texto+' deve ser recusado, sem mudar a unidade');
 }
 for(const valor of ['1,5abc','1,2,3',-1,0,Infinity]){
@@ -17,5 +17,5 @@ for(const valor of ['1,5abc','1,2,3',-1,0,Infinity]){
   assert.ok(p.problems.length,'dose inválida não passa pela receita estruturada');
   assert.throws(()=>B.calculateMixture({...base,components:[{nome:'Produto',valor,unidade:'L/ha'}]}));
 }
-assert.throws(()=>B.calculateMixture({...base,components:[{nome:'Produto',valor:3,unidade:'mg/ha'}]}),/Unidade/);
+assert.throws(()=>B.calculateMixture({...base,components:[{nome:'Produto',valor:3,unidade:'µg/ha'}]}),/Unidade/); /* mg/ha virou unidade válida (set/2026); µg/ha continua fora */
 console.log('Dose: ponto e vírgula decimal, milhar, percentuais, unidades e entradas inválidas.');

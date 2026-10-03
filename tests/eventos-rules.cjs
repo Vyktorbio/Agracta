@@ -6,8 +6,16 @@
    e a regra genérica do workspace não reabrindo a porta. */
 const fs=require('node:fs');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
-const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,serverTimestamp,Timestamp}=require('firebase/firestore');
+const {doc,setDoc,getDoc,getDocs,collection,updateDoc,deleteDoc,runTransaction,serverTimestamp,Timestamp}=require('firebase/firestore');
 const E=require('../vendor/eventos-core');
+let writeId=0;
+function workspaceCommit(db,write){
+  return runTransaction(db,async tx=>{
+    const root=doc(db,'workspaces/agracta'),snap=await tx.get(root),rev=snap.data().rev+1;
+    write(tx);
+    tx.set(root,{rev,syncProtocol:3,writeId:'eventos-test-'+(++writeId),updatedAt:serverTimestamp()},{merge:true});
+  });
+}
 (async()=>{
   const env=await initializeTestEnvironment({projectId:'demo-agracta-integracoes',firestore:{host:'127.0.0.1',port:8088,rules:fs.readFileSync('firestore.rules','utf8')}});
   try{
@@ -38,6 +46,11 @@ const E=require('../vendor/eventos-core');
     await assertFails(deleteDoc(ref(staff)));
     await assertFails(updateDoc(ref(admin),{tipo:'estudo.finalizado'}));
     await assertFails(deleteDoc(ref(admin)));
+    /* Nem uma revisão válida permite usar a regra genérica para reescrever eventos. */
+    for(const db of [staff,admin]){
+      await assertFails(workspaceCommit(db,tx=>tx.update(ref(db),{tipo:'estudo.finalizado'})));
+      await assertFails(workspaceCommit(db,tx=>tx.delete(ref(db))));
+    }
 
     /* O id tem que ser o hash do conteúdo. */
     const outro=json.replace('nota trocada','outro motivo');
@@ -57,8 +70,9 @@ const E=require('../vendor/eventos-core');
     await assertFails(getDoc(ref(anon)));
     await assertFails(setDoc(doc(fora,id2),docu('estranho@example.com',{json:j2})));
 
-    /* E o resto do workspace continua como era. */
-    await assertSucceeds(setDoc(doc(staff,'workspaces/agracta/estudos/E2'),{id:'E2'}));
+    /* Dados comuns exigem a revisão atômica; o membro autorizado continua gravando. */
+    await assertFails(setDoc(doc(staff,'workspaces/agracta/estudos/E2'),{id:'E2'}));
+    await assertSucceeds(workspaceCommit(staff,tx=>tx.set(doc(staff,'workspaces/agracta/estudos/E2'),{id:'E2'})));
     console.log('Eventos: append-only, id conferido pelo servidor, remetente e hora do servidor e isolamento OK.');
   }finally{await env.cleanup();}
 })().catch(err=>{console.error(err);process.exitCode=1;});

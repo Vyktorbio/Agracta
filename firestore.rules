@@ -72,8 +72,24 @@ service cloud.firestore {
       return isAdmin() || isActiveMember();
     }
 
+    function workspacePath() {
+      return /databases/$(database)/documents/workspaces/agracta;
+    }
+    // Dados e revisão precisam pertencer à mesma transação. Um app antigo,
+    // com batch sem conferência de revisão, não pode regravar uma cópia obsoleta.
+    function atomicWorkspaceCommit() {
+      let next = getAfter(workspacePath()).data;
+      let previous = exists(workspacePath()) ? get(workspacePath()).data : {};
+      return next.get('syncProtocol', 0) == 3
+        && next.get('rev', 0) == previous.get('rev', 0) + 1
+        && next.get('writeId', '') is string
+        && next.get('writeId', '').size() > 0
+        && next.get('writeId', '') != previous.get('writeId', '');
+    }
+
     match /workspaces/agracta {
-      allow read, write: if canUseAgracta();
+      allow read: if canUseAgracta();
+      allow create, update: if canUseAgracta() && atomicWorkspaceCommit();
 
       /* O membro precisa ler o próprio cadastro mesmo fora do horário — é assim
          que o app descobre por que travou e quando volta a abrir. */
@@ -128,7 +144,8 @@ service cloud.firestore {
          propósito: no Firestore basta UMA regra permitir para o acesso valer,
          e esta aqui permitiria reescrevê-los. */
       match /{collection}/{document} {
-        allow read, write: if collection != 'members' && collection != 'historico' && collection != 'eventos' && canUseAgracta();
+        allow read: if collection != 'members' && canUseAgracta();
+        allow write: if collection != 'members' && collection != 'historico' && collection != 'eventos' && canUseAgracta() && atomicWorkspaceCommit();
       }
     }
 

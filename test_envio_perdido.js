@@ -1,89 +1,63 @@
-/* Um envio pendurado não pode trancar todos os seguintes.
- *
- * O QUE ACONTECEU
- *   "Salva no celular e no servidor não." O `commit()` do Firestore NÃO rejeita
- *   quando o aparelho perde o sinal: fica PENDENTE até reconectar. E
- *   `commitState` começa com "se já está enviando, guarda e sai". Um único envio
- *   pendurado trancava todos os seguintes — o aparelho seguia gravando local e
- *   nada mais subia, pela sessão inteira. A nova tentativa de 60 s do #129 nem
- *   era agendada: ela mora no tratamento de ERRO, e a promessa nunca falhava.
- *
- * O QUE ESTE TESTE TRANCA
- *   [1] 15 s (rede LENTA) avisa e NÃO solta a tranca — continua um envio só;
- *   [2] 90 s (envio PERDIDO) solta a tranca, avisa e reagenda;
- *   [3] a tentativa abandonada, se responder depois, não dá notícia nem mexe
- *       na contabilidade de quem veio depois.
- *
- * Rodar: node test_envio_perdido.js
- */
+/* Um envio lento nunca libera outro; o aparelho continua recebendo o colega. */
 'use strict';
-const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
-const VersoesCore=require('./vendor/versoes-core.js');
-let n=0;const ok=(c,m)=>{assert.ok(c,m);n++;console.log('  ok    '+m);};
-const src=fs.readFileSync('firebase-sync.js','utf8');
-const trecho=src.slice(src.indexOf('  function commitState('),src.indexOf('\n  window.cloudInit='));
-const tick=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
-
-function harness(opts){
-  const env={commits:[],badges:[],timers:[],saves:0};
-  const ctx={
-    FB:{user:{email:'tecnico@x.com'},lastRev:3,remoteFlat:{estudos:{E1:{v:1}}},
-      db:{doc:()=>({get:()=>Promise.resolve({exists:true,data:()=>({rev:3})})}),
-        batch:()=>{const ops=[];return {set:(r,d)=>ops.push({path:r.path,d}),delete:r=>ops.push({path:r.path,del:true}),
-          commit:()=>{env.commits.push(ops.slice());return opts.commit(ops);}};}}},
-    ROOT:'workspaces/agracta',COLLECTIONS_GRAVACAO:['estudos'],VersoesCore,
-    firebaseInit:()=>true,splitState:s=>JSON.parse(JSON.stringify(s)),stable:JSON.stringify,
-    queueOps:next=>Object.keys(next.estudos).map(id=>({type:'set',ref:{path:'estudos/'+id},data:next.estudos[id]})),
-    collectionRef:c=>({doc:id=>({path:c+'/'+(id||'auto')})}),
-    firebase:{firestore:{FieldValue:{serverTimestamp:()=>'TS'}}},
-    cloudBadge:(k,t)=>env.badges.push((t||k)+''),setUnsavedChanges:b=>{ctx._unsavedChanges=b;},
-    checkpointPut:()=>Promise.resolve(),checkpointFalhou:()=>{},
-    localState:()=>({estudos:{E1:{v:2}}}),CustomEvent:function(){},dispatchEvent:()=>{},
-    setTimeout:(f,ms)=>{const t={f,ms};env.timers.push(t);return t;},clearTimeout:t=>{if(t)t.cancelado=true;},
-    console:{error(){},warn(){}},Promise,Error,Object,Math,JSON,String};
-  ctx.window=ctx;vm.createContext(ctx);vm.runInContext(trecho,ctx);
-  ctx.cloudSave=()=>{env.saves++;};
-  env.ctx=ctx;return env;
+const assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
+const {initial,database,client,seed,edit,root,tick,withDeadline}=require('./test_sync_envio_pendente.js');
+const prazo=(a,ms)=>a.c.__timers.filter(t=>t.ms===ms&&!t.cancelled).at(-1);
+async function fixture(options={}){
+ const env=database(),a=client(env.db,initial());seed(env,a.c,initial());env.docs[root].writeId='w-lido';await a.c.cloudPull();
+ env.attempts=[];env.commits=[];
+ env.raiz={rev:env.docs[root].rev,writeId:env.docs[root].writeId};env.fetches=0;env.pulls=0;
+ a.c.AGRACTA_FIREBASE_CONFIG.projectId='agracta-teste';a.c.__testFB.user.getIdToken=()=>Promise.resolve('tk');
+ a.c.fetch=(url,opts)=>{env.fetches++;env.ultimoFetch={url,opts};
+  if(options.fetchFalha)return Promise.reject(options.fetchFalha);
+  if(options.fetchStatus)return Promise.resolve({ok:false,status:429,json:async()=>({error:{status:'RESOURCE_EXHAUSTED',message:'Quota exceeded.'}})});
+  return Promise.resolve({ok:true,status:200,json:async()=>({fields:{rev:{integerValue:String(env.raiz.rev)},writeId:{stringValue:env.raiz.writeId}}})});
+ };
+ const pull=a.c.cloudPull;a.c.cloudPull=function(){env.pulls++;return pull();};
+ env.beforeCommit=()=>new Promise(resolve=>env.release=resolve);
+ edit(a,'T1R1',7,100);env.sending=a.c.cloudSave();await tick();assert.equal(env.attempts.length,1);
+ return {env,a};
 }
-const prazo=(env,ms)=>env.timers.find(t=>t.ms===ms&&!t.cancelado);
-/* O celular perdeu o sinal: a promessa do commit não resolve NEM rejeita. */
-const nuncaResponde=()=>new Promise(function(){});
-
 (async()=>{
-  console.log('\n[1] 15 s é rede LENTA: avisa, não solta a tranca');
-  const h=harness({commit:nuncaResponde});
-  h.ctx.commitState({estudos:{E1:{v:2}}});await tick();
-  ok(h.commits.length===1&&h.ctx.FB.pushing===true,'o primeiro envio saiu e a tranca está posta');
-  const cao=prazo(h,15000);
-  ok(!!cao,'o aviso de 15 s existe');
-  cao.f();
-  ok(h.ctx.FB.pushing===true,'aviso de rede lenta NÃO libera um envio concorrente');
-  ok(/aguardando envio/.test(h.badges.at(-1)),'e a tela diz quantas alterações estão aguardando envio');
-  h.ctx.commitState({estudos:{E1:{v:3}}});await tick();
-  ok(h.commits.length===1,'rede lenta não duplica escrita: continua um envio só');
-
-  console.log('\n[2] 90 s é envio PERDIDO: solta a tranca e tenta de novo');
-  const perdido=prazo(h,90000);
-  ok(!!perdido,'o prazo de 90 s existe');
-  perdido.f();
-  ok(h.ctx.FB.pushing===false,'a tranca é solta — o aparelho volta a poder enviar');
-  ok(h.ctx._unsavedChanges===true,'o estado segue marcado como não enviado');
-  ok(/não respondeu/.test(h.badges.at(-1)),'a tela diz que o envio não respondeu');
-  ok(!!prazo(h,60000),'uma nova tentativa fica agendada sozinha');
-  h.ctx.commitState({estudos:{E1:{v:3}}});await tick();
-  ok(h.commits.length===2,'e o envio seguinte SAI, em vez de ficar guardado para sempre');
-
-  console.log('\n[3] a tentativa abandonada não dá notícia se responder depois');
-  let solta;const h2=harness({commit:()=>h2.commits.length===1?new Promise(r=>{solta=r;}):Promise.resolve()});
-  h2.ctx.commitState({estudos:{E1:{v:2}}});await tick();
-  prazo(h2,90000).f();                       /* abandona a primeira */
-  h2.ctx._unsavedChanges=true;
-  const revAntes=h2.ctx.FB.lastRev, badgesAntes=h2.badges.length;
-  solta();await tick();                      /* a primeira responde tarde */
-  ok(h2.ctx.FB.lastRev===revAntes,'resposta tardia não move a revisão do aparelho');
-  ok(h2.ctx._unsavedChanges===true,'resposta tardia não anuncia que tudo foi salvo');
-  ok(h2.badges.length===badgesAntes,'resposta tardia não repinta a tela');
-  ok(h2.ctx.FB.pushing===false,'e não mexe na tranca de quem veio depois');
-
-  console.log('\n'+n+' verificações, nenhuma falha.');
+ let {env,a}=await fixture();prazo(a,15000).fn();
+ assert.ok(/^=⌛ \d+ alterações aguardando o servidor/.test(a.badges.at(-1)));
+ assert.equal(a.c.__testFB.pushing,true);
+ a.c.__testFB.queixas={cota:Date.now()};a.c.__testFB.ultimaQueixa='Firestore (12.15.0): FirebaseError: [code=resource-exhausted]: Quota exceeded.';
+ prazo(a,15000).fn();assert.ok(/^=⚠ Servidor sem cota/.test(a.badges.at(-1)));
+ assert.equal(a.c._syncParado,true);let alertText='';a.c.alert=s=>alertText=s;a.c.agractaSyncExplicar();
+ assert.ok(/COTA/.test(alertText)&&/Detalhe técnico: FirebaseError/.test(alertText));
+ prazo(a,90000).fn();await tick();
+ assert.equal(a.c.__testFB.pushing,true);assert.equal(a.c._unsavedChanges,true);
+ for(let i=0;i<50;i++){edit(a,'T1R2',i+20,200+i);a.c.cloudSave();}
+ for(let i=0;i<10;i++){const p=prazo(a,60000);if(p)p.fn();await tick();}
+ assert.equal(env.attempts.length,1,'50 pedidos e 10 minutos depois há uma só transação em andamento');
+ // REST diagnostics read the server root once per interval, never resend the transaction.
+ ({env,a}=await fixture());a.c.__testFB.myWrites={'w-meu-antigo':1};
+ prazo(a,90000).fn();await tick();
+ assert.equal(env.fetches,1);assert.ok(env.ultimoFetch.url.endsWith('/documents/workspaces/agracta'));
+ assert.equal(env.ultimoFetch.opts.headers.Authorization,'Bearer tk');assert.equal(env.pulls,0);
+ assert.ok(/servidor não confirma/i.test(a.badges.at(-1)));
+ env.raiz={rev:4,writeId:'w-meu-antigo'};prazo(a,60000).fn();await tick();assert.equal(env.pulls,0);
+ env.raiz={rev:5,writeId:'w-do-pc'};prazo(a,60000).fn();await tick();assert.equal(env.pulls,1);
+ prazo(a,60000).fn();await tick();prazo(a,60000).fn();await tick();
+ assert.equal(env.pulls,1,'a mesma revisão alheia não é relida');assert.equal(env.fetches,5);assert.equal(env.attempts.length,1);
+ a.c.document.visibilityState='hidden';prazo(a,60000).fn();await tick();assert.equal(env.fetches,5);
+ const quota=await fixture({fetchStatus:true});prazo(quota.a,90000).fn();await tick();assert.ok(/servidor sem cota/i.test(quota.a.badges.at(-1)));
+ const offline=await fixture({fetchFalha:new TypeError('Failed to fetch')});prazo(offline.a,90000).fn();await tick();assert.ok(/sem conexão com o servidor/i.test(offline.a.badges.at(-1)));
+ // The late confirmation completes that exact transaction, then sends queued edits once.
+ ({env,a}=await fixture());const firstRev=env.docs[root].rev;
+ prazo(a,90000).fn();await tick();edit(a,'T1R2',99,500);a.c.cloudSave();a.c.cloudSave();
+ assert.equal(env.attempts.length,1);env.beforeCommit=null;env.release();await withDeadline(env.sending,'confirmação tardia');
+ assert.equal(env.commits.length,2);assert.equal(env.docs[root].rev,firstRev+2);
+ assert.equal(a.c._syncParado,false);assert.ok(!a.c.__testFB.espera);assert.ok(!prazo(a,60000));
+ // Pure console interception is checked independently, with no real console mutation.
+ const src=fs.readFileSync('firebase-sync.js','utf8'),start=src.indexOf('  function _registraQueixa('),end=src.indexOf('  function firebaseInit(');
+ const output=[],c={FB:{},Array,String,Date,console:{error:(...x)=>output.push(x),warn:(...x)=>output.push(x),log(){}}};
+ vm.createContext(c);vm.runInContext(src.slice(start,end),c);vm.runInContext('_escutarQueixasDoSdk();_escutarQueixasDoSdk();',c);
+ c.console.error('@firebase/firestore:','Firestore (12.15.0): FirebaseError: [code=resource-exhausted]: Quota exceeded.');
+ assert.ok(c.FB.queixas.cota>0);assert.equal(output.length,1);
+ c.console.warn('@firebase/firestore:','Firestore (12.15.0): Could not reach Cloud Firestore backend. Connection failed 1 times.');
+ assert.ok(c.FB.queixas.rede>0);
+ c.console.error('[Agracta Firebase] gravação:','resource-exhausted');assert.equal(Object.keys(c.FB.queixas).length,2);
+ console.log('Envio lento: tranca 15/90s, causa visível, REST sem duplicação, confirmação tardia e captura do SDK OK.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

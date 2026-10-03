@@ -5,7 +5,7 @@ const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py"
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
                     "validacao.py","forense.py"];
-const APP_VERSION = "bioensaio-auditoria-12";
+const APP_VERSION = "bioensaio-auditoria-20";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
 const AUDIT_FORMAT = "BioEnsaio audit package v2";
@@ -175,6 +175,8 @@ function esc(v){
   }[ch]));
 }
 function avisar(msg, tipo="erro"){
+  /* o último aviso de erro vira o motivo de um trabalho do Agracta que parou antes de calcular */
+  if(tipo !== "ok") _agUltimoAviso = { msg: String(msg == null ? "" : msg), em: Date.now() };
   const box = $("#toast");
   if(!box) return;
   clearTimeout(toastTimer);
@@ -295,14 +297,112 @@ function lerCriteriosValidacao(){
 /* ----------------------------------------------------------------------- */
 /* Inicialização do Pyodide + motor                                        */
 /* ----------------------------------------------------------------------- */
+/* O PYTHON RODA NUM WEB WORKER (motor-worker.js), não na página.
+   Na página ele dividia a linha de execução com a tela — e, embutido no
+   Agracta, com a tela do APP: cada análise congelava tudo (medido: 4,2 s de
+   tela travada ao abrir um estudo com três leituras, 2,2 s de uma vez só, num
+   computador rápido). No worker o cálculo corre ao lado e a tela segue viva.
+   Sem Worker (navegador antigo, ou teste sem ele), vale o caminho de antes. */
+let motorWorker = null, _motorSeq = 0, _motorIniciado = false;
+const _motorPend = new Map();
+/* Em que pé está o motor: parado, carregando (e o quê), pronto ou falhou. O
+   Agracta lê isto para dizer a verdade na tela — sem isso ele não distinguia
+   "baixando o Python pela primeira vez numa rede lenta" de "travou", e o painel
+   ficava em "Carregando…" sem fim. */
+var _motorEstado = { fase: 'parado', msg: '', sub: '', em: 0 };
+function _motorFase(fase, msg, sub){
+  if (fase !== _motorEstado.fase) _motorEstado.em = Date.now();
+  _motorEstado.fase = fase;
+  if (msg != null) _motorEstado.msg = String(msg);
+  if (sub != null) _motorEstado.sub = fase === 'falhou' ? _erroCurto(sub) : String(sub);
+  try{ if (typeof _agPulso === 'function') _agPulso(); }catch(_){}
+}
+/* Erro do Python chega como o traceback inteiro — vinte linhas de "File …" no
+   cartão do celular. Para a tela vale a última linha ("ModuleNotFoundError: …");
+   o traceback segue inteiro nos detalhes técnicos. */
+function _erroCurto(msg){
+  const s = String(msg == null ? "" : msg).trim();
+  if (!/Traceback \(most recent call last\)/.test(s)) return s;
+  const linhas = s.split("\n").map(l => l.trim()).filter(Boolean);
+  for (let i = linhas.length - 1; i >= 0; i--){
+    if (/^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b/.test(linhas[i])) return linhas[i];
+  }
+  return linhas[linhas.length - 1] || s;
+}
+function _relatorioDeErro(e){
+  const bruto = String((e && e.message) || e || "");
+  const curto = _erroCurto(bruto);
+  return curto === bruto ? { ok:false, erro:bruto } : { ok:false, erro:curto, trace:bruto };
+}
+function _motorNoWorker(){ return typeof Worker === 'function' && !window.__motorNaPagina; }
+function iniciarMotorWorker(){
+  return new Promise((resolve, reject) => {
+    mostrarOverlay("Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
+    let w;
+    try{ w = new Worker("motor-worker.js?v=" + APP_VERSION); }
+    catch(e){ reject(e); return; }
+    motorWorker = w;
+    const falhar = (err) => {
+      _motorPend.forEach(p => p.reject(err)); _motorPend.clear();
+      /* worker que caiu DEPOIS de pronto: a próxima análise sobe outro. Se caiu na
+         partida, quem decide é iniciarPyodide (recua para a página). */
+      if (motorWorker === w){
+        motorWorker = null;
+        /* caiu depois de pronto (memória, por exemplo): o erro é DESTA análise, e
+           a próxima sobe outro worker — não é "o motor não carregou" */
+        if (_motorIniciado){ pyPronto = null; _motorFase('parado', '', ''); }
+        _motorIniciado = false;
+      }
+      try{ w.terminate(); }catch(_){}
+    };
+    w.onmessage = (ev) => {
+      const m = ev.data || {};
+      if (m.tipo === 'progresso'){ setOverlay(m.msg, m.sub); _motorFase('carregando', m.msg, m.sub); return; }
+      if (m.tipo === 'pronto'){ _motorIniciado = true; Object.assign(ENGINE_HASHES, m.hashes || {}); esconderOverlay(); resolve(); return; }
+      if (m.tipo === 'falhou'){ setOverlay("Erro ao carregar o motor", m.erro); const err = new Error(m.erro); falhar(err); reject(err); return; }
+      if (m.tipo === 'resposta'){
+        const p = _motorPend.get(m.id); if (!p) return;
+        _motorPend.delete(m.id);
+        if (m.ok) p.resolve(m.json); else p.reject(new Error(m.erro));
+      }
+    };
+    w.onerror = (e) => {
+      const err = new Error((e && e.message) || "o motor estatístico parou");
+      setOverlay("Erro ao carregar o motor", err.message);
+      falhar(err); reject(err);
+    };
+    w.postMessage({ tipo: 'iniciar', cfg: { arquivos: ARQ_ENGINE, versao: ENGINE_VERSION, bridge: BRIDGE } });
+  });
+}
+function chamarMotor(fnNome, args){
+  return garantirPyodide().then(() => new Promise((resolve, reject) => {
+    if (!motorWorker){ reject(new Error("motor estatístico indisponível")); return; }
+    const id = ++_motorSeq;
+    _motorPend.set(id, { resolve, reject });
+    motorWorker.postMessage({ tipo: 'chamar', id: id, fn: fnNome, args: args });
+  }));
+}
 async function iniciarPyodide() {
+  if (_motorNoWorker()){
+    try{ return await iniciarMotorWorker(); }
+    catch(e){
+      /* O worker não subiu — por exemplo offline, num navegador que não entrega
+         ao worker o cache do service worker. Em vez de ficar sem estatística no
+         campo, recua para o caminho de antes: o Python na página. */
+      console.warn("[motor] worker indisponível, usando a página:", e);
+      window.__motorNaPagina = true;
+    }
+  }
   try {
     mostrarOverlay("Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
+    _motorFase('carregando', "Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
     pyodide = await loadPyodide({ indexURL: "pyodide/" });
     window.__pyodide = pyodide;
     setOverlay("Carregando bibliotecas…", "numpy, scipy, pandas, statsmodels");
+    _motorFase('carregando', "Carregando bibliotecas…", "numpy, scipy, pandas, statsmodels");
     await pyodide.loadPackage(["numpy", "scipy", "pandas", "statsmodels"]);
     setOverlay("Preparando o motor…", "");
+    _motorFase('carregando', "Preparando o motor…", "");
     const arquivos = {};
     for (const f of ARQ_ENGINE) {
       const r = await fetch("bioengine/" + f + "?v=" + ENGINE_VERSION, { cache: "no-store" });
@@ -331,7 +431,18 @@ if "" not in sys.path:
     throw e;
   }
 }
-function garantirPyodide(){ if(!pyPronto) pyPronto = iniciarPyodide(); return pyPronto; }
+function garantirPyodide(){
+  if(!pyPronto){
+    _motorFase('carregando', "Carregando motor estatístico…", "Inicializando bibliotecas científicas.");
+    const p = iniciarPyodide();
+    pyPronto = p;
+    /* Partida que falhou não fica gravada como resposta definitiva: o próximo
+       pedido tenta subir o motor de novo (a rede pode ter voltado). */
+    p.then(() => { if(pyPronto === p) _motorFase('pronto', '', ''); },
+           (e) => { if(pyPronto === p) pyPronto = null; _motorFase('falhou', "Erro ao carregar o motor", String((e && e.message) || e)); });
+  }
+  return pyPronto;
+}
 
 /* ----------------------------------------------------------------------- */
 /* Overlay                                                                 */
@@ -768,7 +879,9 @@ function linhasMatrizDeAoa(aoa){
       dose:textoLimpo(valorLinha(obj,["Dose"])),
       tempo:textoLimpo(valorLinha(obj,["Tempo"])),
       n_total:textoLimpo(valorLinha(obj,["N_total","N total"])),
-      n_vivos:textoLimpo(valorLinha(obj,["N_vivos","N vivos"]))
+      n_vivos:textoLimpo(valorLinha(obj,["N_vivos","N vivos"])),
+      /* mortos/afetados de uma razão n/N: com N_total é o "x de n" binomial */
+      afetados:textoLimpo(valorLinha(obj,["Afetados"]))
     });
   });
   return linhas;
@@ -1126,9 +1239,10 @@ function papeisDeExemploValidacao(p){
 function papeisDeExemploForense(p){
   const map={};
   COLUNAS.forEach(c=>map[c.nome]="ignorar");
-  ["resposta","tratamento","resposta2"].forEach(k=>{
+  ["resposta","tratamento","resposta2","repeticao"].forEach(k=>{
     if(p[k]) map[p[k]]=k;
   });
+  (Array.isArray(p.estrato) ? p.estrato : (p.estrato?[p.estrato]:[])).forEach(c=>{ if(c in map) map[c]="estrato"; });
   return map;
 }
 function renderPreview(){
@@ -1161,6 +1275,8 @@ const PAPEL_OPCOES_VALIDACAO = [
 const PAPEL_OPCOES_FORENSE = [
   ["resposta","Resposta (numérica)"],
   ["tratamento","Tratamento/grupo"],
+  ["repeticao","Repetição/bloco (opcional)"],
+  ["estrato","Estrato: avaliação/variável (opcional)"],
   ["resposta2","2ª avaliação (opcional)"],
   ["ignorar","Ignorar"]
 ];
@@ -1253,7 +1369,9 @@ function adivinharPapeisForense(){
   const papeis={};
   COLUNAS.forEach(col=>{
     const n=col.nome.toLowerCase(); let p="ignorar";
-    if(/trat|produto|grupo|isolad|cultivar|variedad|fator|parcela/.test(n)) p="tratamento";
+    if(/^(bloco|repeticao|repetição|rep)$|repeti/.test(n)) p="repeticao";
+    else if(/^(data|variavel|variável)$|data_aval|aval_data/.test(n)) p="estrato";
+    else if(/trat|grupo|isolad|cultivar|variedad|fator|parcela/.test(n)) p="tratamento";
     else if(/resposta2|aval2|leitura2|segunda|conta2|valor2|y2|2$/.test(n)) p="resposta2";
     else if(/resp|result|conta|colon|sever|nota|valor|leitura|incid|mort|num|y$/.test(n)) p="resposta";
     papeis[col.nome]=p;
@@ -1365,11 +1483,13 @@ function lerPapeisValidacao(){
   return r;
 }
 function lerPapeisForense(){
-  const r={};
+  const r={}, estrato=[];
   document.querySelectorAll("#papeis-lista select").forEach(sel=>{
     const col=sel.dataset.coluna, p=sel.value;
-    if(p==="resposta"||p==="tratamento"||p==="resposta2") r[p]=col;
+    if(p==="resposta"||p==="tratamento"||p==="resposta2"||p==="repeticao") r[p]=col;
+    else if(p==="estrato") estrato.push(col); /* data + variável combinam num rótulo só */
   });
+  if(estrato.length) r.estrato=estrato;
   return r;
 }
 
@@ -1748,11 +1868,11 @@ function avaliarPipelineForense(){
   const nLin=COLUNAS[0]?.valores.length || 0;
   const rota={
     titulo:"Triagem forense de dados",
-    descricao:"Rastrear padrões atípicos (subdispersão, homogeneidade de variância, último dígito, arredondamento, duplicatas, extremos, acoplamento) que merecem verificação humana.",
-    chips:["triagem","não é prova","verificar fonte"]
+    descricao:"Rastrear padrões atípicos (subdispersão de Poisson, homogeneidade de variância, dígito final, arredondamento, duplicatas, extremos, gradiente de campo, ordem das repetições, acoplamento) que merecem verificação humana. Cada teste tem p-valor calibrado por reamostragem e severidade corrigida por Benjamini-Hochberg.",
+    chips:["triagem","não é prova","verificar fonte","p calibrado"]
   };
   pushCheck(checks,"ok","Dados carregados",`${nLin} linha(s) e ${COLUNAS.length} coluna(s).`);
-  ["resposta","tratamento","resposta2"].forEach(p=>{
+  ["resposta","tratamento","resposta2","repeticao"].forEach(p=>{
     if((sel.porPapel[p]||[]).length>1) pushCheck(checks,"critico","Papéis conflitantes",`Mais de uma coluna marcada como ${p}: ${sel.porPapel[p].join(", ")}.`, true);
   });
   if(!papeis.resposta) pushCheck(checks,"critico","Resposta ausente","Marque a coluna de resposta (numérica).", true);
@@ -1772,6 +1892,16 @@ function avaliarPipelineForense(){
       pushCheck(checks,"ok","Grupos detectados",`${niveis} grupo(s); ${com3} com ≥3 repetições (índice de dispersão exige ≥3).`);
       if(com3<2) pushCheck(checks,"aviso","Poucas repetições por grupo","Vários testes (dispersão, último dígito, heaping) ficam fracos ou inativos com poucas repetições.");
     }
+  }
+  if(papeis.repeticao){
+    pushCheck(checks,"ok","Gradiente de campo habilitado","Repetição/bloco marcada: o motor desconta o efeito de bloco e roda os testes de gradiente de campo e de ordem das repetições.");
+  } else {
+    pushCheck(checks,"aviso","Sem repetição/bloco","Sem ela, um gradiente de campo pode imitar anomalia — homogeneidade e extremos ficam limitados a ATENÇÃO — e dois testes não rodam.");
+  }
+  if(papeis.estrato && papeis.estrato.length){
+    pushCheck(checks,"ok","Triagem em estratos",`${papeis.estrato.join(" + ")} define(m) os estratos: cada um mantém sua escala e os testes somam volume entre eles.`);
+  } else if(nLin < 40){
+    pushCheck(checks,"aviso","Pouco volume para os testes de dígito","Dígito final (≥20 inteiros), arredondamento (≥15) e duplicatas precisam de volume. Marque data/variável como Estrato para triar várias avaliações de uma vez.");
   }
   if(papeis.resposta2){
     const taxa=taxaNumerica(valoresColuna(papeis.resposta2));
@@ -2548,6 +2678,10 @@ async function rodarPython(fnNome, papeis, opcoes){
 }
 async function rodarPythonComDados(fnNome, dados, papeis, opcoes){
   await garantirPyodide();
+  if (motorWorker){
+    const json = await chamarMotor(fnNome, [JSON.stringify(dados), JSON.stringify(papeis), JSON.stringify(opcoes)]);
+    return JSON.parse(json);
+  }
   const fn = pyodide.globals.get(fnNome);
   try{
     const json = fn(JSON.stringify(dados), JSON.stringify(papeis), JSON.stringify(opcoes));
@@ -2557,7 +2691,19 @@ async function rodarPythonComDados(fnNome, dados, papeis, opcoes){
   }
 }
 
-$("#btn-analisar").addEventListener("click", async () => {
+/* O clique é o mesmo para a pessoa e para o Agracta. Quando é um trabalho da
+   fila, ele fica sabendo que a análise começou e, se ela terminar sem relatório
+   (papel faltando, conferência bloqueada), devolve o motivo em vez de nada. */
+$("#btn-analisar").addEventListener("click", () => {
+  const j = _agAtual;
+  if(j) j.clicou = true;
+  const p = executarAnalise();
+  if(j) Promise.resolve(p).catch(e => console.error(e)).then(() => {
+    if(_agAtual === j && !j.emitido) _agractaEmitirResultado({ok:false, erro:_agMotivo(j, "A análise terminou sem relatório.")});
+  });
+  return p;
+});
+async function executarAnalise(){
   if(MODO==="tempo") return analisarTempo();
   if(MODO==="validacao") return analisarValidacao();
   if(MODO==="forense") return analisarForense();
@@ -2593,8 +2739,8 @@ $("#btn-analisar").addEventListener("click", async () => {
     const _rel = await rodarPython("_run_web", papeis, opcoes);
     renderRelatorio(_rel);
     try{ ofertarVariabilidadeDaAnalise(_rel); }catch(_e){}
-  }catch(e){ esconderOverlay(); renderRelatorio({ok:false, erro:e.message}); console.error(e); }
-});
+  }catch(e){ esconderOverlay(); renderRelatorio(_relatorioDeErro(e)); console.error(e); }
+}
 
 async function analisarTempo(){
   if(!validarPipelineAntesDeAnalisar()) return;
@@ -2610,7 +2756,7 @@ async function analisarTempo(){
   try{
     registrarExecucao(papeis, opcoes);
     renderRelatorioTempo(await rodarPython("_run_tempo", papeis, opcoes));
-  }catch(e){ esconderOverlay(); renderRelatorioTempo({ok:false, erro:e.message}); console.error(e); }
+  }catch(e){ esconderOverlay(); renderRelatorioTempo(_relatorioDeErro(e)); console.error(e); }
 }
 async function analisarValidacao(){
   if(!validarPipelineAntesDeAnalisar()) return;
@@ -2627,23 +2773,27 @@ async function analisarValidacao(){
   try{
     registrarExecucao(papeis, opcoes);
     renderRelatorioValidacao(await rodarPython("_run_validacao", papeis, opcoes));
-  }catch(e){ esconderOverlay(); renderRelatorioValidacao({ok:false, erro:e.message}); console.error(e); }
+  }catch(e){ esconderOverlay(); renderRelatorioValidacao(_relatorioDeErro(e)); console.error(e); }
 }
 async function analisarForense(){
   if(!validarPipelineAntesDeAnalisar()) return;
   const papeis = lerPapeisForense();
   if(!papeis.resposta){ avisar("Defina a coluna de Resposta."); return; }
   if(!papeis.tratamento){ avisar("Defina a coluna de Tratamento (grupo)."); return; }
+  const tipoSel = $("#opt-forense-tipo").value; // "count" | "cont" | "pct"
   const opcoes = {
-    tipo: $("#opt-forense-tipo").value,        // "count" | "cont"
+    tipo: tipoSel==="pct" ? "cont" : tipoSel,
     modo: $("#opt-forense-modo").value,        // "conservador" | "sensivel"
   };
+  /* estimativa visual (%): o motor não pontua dígito/arredondamento — preferir nós de 5 e
+     10 é o viés normal de quem estima a olho — e confere os limites 0–100 */
+  if(tipoSel==="pct") opcoes.escala="pct";
   const ctrl = ($("#opt-forense-controle").value||"").trim();
   if(ctrl) opcoes.controle = ctrl.replace(",", ".");
   try{
     registrarExecucao(papeis, opcoes);
     renderRelatorioForense(await rodarPython("_run_forense", papeis, opcoes));
-  }catch(e){ esconderOverlay(); renderRelatorioForense({ok:false, erro:e.message}); console.error(e); }
+  }catch(e){ esconderOverlay(); renderRelatorioForense(_relatorioDeErro(e)); console.error(e); }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -2730,15 +2880,29 @@ function renderDose(out, a){
       `<dt>Modelo</dt><dd>${c.tipo_analise} ${chip("ligação: "+c.link,"chip-info")}</dd>`+
       `<dt>Inclinação (slope)</dt><dd>${fmt(c.slope,3)} ± ${fmt(c.slope_se,3)}</dd>`+
       `<dt>χ² aderência</dt><dd>${fmt(c.qui_quadrado,2)} (gl=${c.gl}) ${p_chip(c.p_qui_quadrado)}</dd>`+
-      `<dt>Heterogeneidade (h)</dt><dd>${fmt(c.heterogeneidade_h,2)} ${c.heterogeneo?chip("heterogêneo → IC por t","chip-alerta"):chip("homogêneo","chip-ok")}</dd>`+
-      (c.abbott_aplicado?`<dt>Abbott</dt><dd>${chip("corrigido (controle "+fmt(c.controle_mortalidade*100,1)+"%)","chip-info")}</dd>`:"")+
+      `<dt>Heterogeneidade (h)</dt><dd>${fmt(c.heterogeneidade_h,2)} ${c.heterogeneo?chip("heterogênea (p&lt;0,05) → IC por t e h","chip-alerta"):chip("sem heterogeneidade significativa","chip-ok")}</dd>`+
+      respostaNaturalDose(c)+
       `</div>`;
     const colDose = "Dose" + (uni ? ` (${uni})` : "");
-    h += `<div class="tab-rolavel"><table><thead><tr><th>Letal</th><th>${esc(colDose)}</th><th>IC95% inf.</th><th>IC95% sup.</th></tr></thead><tbody>`;
+    const temG = c.doses_letais.some(dl=>dl.g!=null);
+    h += `<div class="tab-rolavel"><table><thead><tr><th>Letal</th><th>${esc(colDose)}</th><th>IC95% inf.</th><th>IC95% sup.</th>${temG?'<th>g</th>':''}</tr></thead><tbody>`;
     c.doses_letais.forEach(dl=>{
-      h += `<tr><td>CL/DL${Math.round(dl.p*100)}</td><td><b>${fmt(dl.dose,3)}${sufUni}</b></td><td>${fmt(dl.ic_inf,3)}</td><td>${fmt(dl.ic_sup,3)}</td></tr>`;
+      const gTxt = dl.g==null ? '' : `<td>${fmt(dl.g,3)}${dl.ic_confiavel===false?' '+chip('IC pouco útil','chip-alerta'):''}</td>`;
+      h += `<tr><td>CL/DL${Math.round(dl.p*100)}</td><td><b>${fmt(dl.dose,3)}${sufUni}</b></td><td>${fmt(dl.ic_inf,3)}</td><td>${fmt(dl.ic_sup,3)}</td>${gTxt}</tr>`;
     });
     h += `</tbody></table></div>`;
+    if(temG) h += `<p class="dica">g de Fieller: quanto menor, mais preciso o intervalo; a partir de 0,5 ele fica largo demais para ser útil (Finney, 1971).</p>`;
+    if(Array.isArray(c.tabela_doses) && c.tabela_doses.length){
+      h += `<div class="tab-rolavel"><table><thead><tr><th>Dose</th><th>n</th><th>Respostas</th><th>Observado</th><th>Esperado</th><th>Resíduo</th></tr></thead><tbody>`;
+      c.tabela_doses.forEach(t=>{
+        const r = t.residuo==null ? '—' : fmt(t.residuo,2);
+        const alto = t.residuo!=null && Math.abs(t.residuo)>2;
+        h += `<tr><td>${t.testemunha?'testemunha':fmt(t.dose,4)+sufUni}</td><td>${fmt(t.n,0)}</td><td>${fmt(t.respostas,0)}</td>`+
+             `<td>${fmt(100*(t.prop_obs||0),1)}%</td><td>${fmt(100*t.prop_esperada,1)}%</td><td>${alto?'<b>'+r+'</b>':r}</td></tr>`;
+      });
+      h += `</tbody></table></div><p class="dica">Observado × esperado pelo modelo, dose a dose. Resíduo acima de 2 em módulo aponta a dose que o modelo descreve mal.</p>`;
+    }
+    if(Array.isArray(c.referencias) && c.referencias.length) h += `<p class="dica">Método: ${esc(c.referencias.join('; '))}.</p>`;
     if(c.modelo_natural_mle) h += `<p class="dica">Modelo com mortalidade natural estimada (Finney): C=${fmt(c.modelo_natural_mle.C*100,1)}%.</p>`;
     const b = secao(titulo, h);
     const cv = el("canvas"); cv.width=600; cv.height=320; b.appendChild(cv);
@@ -2746,6 +2910,17 @@ function renderDose(out, a){
     desenharDose(cv, c, uni);
   });
   if(a.comparacao) renderComparacaoCurvas(out, a.comparacao, uni);
+}
+
+function respostaNaturalDose(c){
+  const rn = c.resposta_natural;
+  if(rn && rn.metodo && rn.metodo!=='ausente'){
+    const ep = rn.C_ep!=null ? ' ± '+fmt(rn.C_ep*100,1) : '';
+    const obs = (rn.testemunha_observada!=null && rn.metodo==='estimada') ? ' · testemunha observada '+fmt(rn.testemunha_observada*100,1)+'%' : '';
+    return `<dt>Resposta natural</dt><dd>${chip('C = '+fmt((rn.C||0)*100,1)+'%'+ep,'chip-info')} <span class="dica">${esc(rn.rotulo||rn.metodo)}${obs}</span></dd>`;
+  }
+  if(c.abbott_aplicado) return `<dt>Abbott</dt><dd>${chip("corrigido (controle "+fmt(c.controle_mortalidade*100,1)+"%)","chip-info")}</dd>`;
+  return '';
 }
 
 function renderComparacaoCurvas(out, comp, uni){
@@ -2767,16 +2942,20 @@ function renderComparacaoCurvas(out, comp, uni){
   }
   h += `<p class="dica">Referência (RR=1): <b>${comp.referencia||"—"}</b> — menor CL50 (mais sensível/potente). `+
        `RR &gt; 1 = menos sensível (mais resistente / menos potente).</p>`;
+  const tem90 = (comp.razoes||[]).some(r=>r.rr90!=null);
   h += `<div class="tab-rolavel"><table><thead><tr><th>Produto/Pop.</th><th>CL50${uni?" ("+uni+")":""}</th>`+
-       `<th>Razão (RR)</th><th>IC95%</th></tr></thead><tbody>`;
+       `<th>Razão (RR50)</th><th>IC95%</th>`+(tem90?`<th>CL90${uni?" ("+uni+")":""}</th><th>RR90</th><th>IC95%</th>`:'')+`</tr></thead><tbody>`;
   (comp.razoes||[]).forEach(r=>{
     const sig = r.significativo && !r.referencia ? " significativo" : "";
+    const sig90 = r.significativo90 && !r.referencia ? " significativo" : "";
     const tag = r.referencia ? ` <span class="op-tag">ref</span>` : "";
     h += `<tr><td>${esc(r.grupo)}${tag}</td><td>${fmt(r.lc50,3)}${sufUni}</td>`+
          `<td><b>${fmt(r.rr,2)}×</b>${sig}</td>`+
-         `<td>${r.referencia?"—":fmt(r.ic_inf,2)+" – "+fmt(r.ic_sup,2)}</td></tr>`;
+         `<td>${r.referencia?"—":fmt(r.ic_inf,2)+" – "+fmt(r.ic_sup,2)}</td>`+
+         (tem90?`<td>${fmt(r.lc90,3)}${sufUni}</td><td>${r.rr90!=null?'<b>'+fmt(r.rr90,2)+'×</b>'+sig90:'—'}</td>`+
+                `<td>${r.referencia||r.rr90==null?"—":fmt(r.ic90_inf,2)+" – "+fmt(r.ic90_sup,2)}</td>`:'')+`</tr>`;
   });
-  h += `</tbody></table></div><p class="dica">Significativo = RR significativamente diferente de 1 (IC não inclui 1).</p>`;
+  h += `</tbody></table></div><p class="dica">Teste de razão de doses letais (Robertson &amp; Preisler, 1992): a razão é significativa quando o IC não inclui 1 (Wheeler et al., 2006). Vale mesmo com inclinações diferentes — por isso RR90 também aparece.</p>`;
   out.appendChild(secao("Comparação de potência / resistência", h));
 }
 
@@ -2920,6 +3099,16 @@ function renderCurvaDose(out,a){
        `<td>${q.extrapolado?chip('fora do testado','chip-alerta'):''}</td></tr>`;
   });
   h+='</tbody></table></div><p class="dica">Intervalos assimétricos porque vêm do logaritmo da dose.</p>';
+  const abs=(a.doses_efetivas_absolutas||[]).filter(q=>q.dose!=null);
+  if(abs.length){
+    h+='<div class="tab-rolavel"><table><thead><tr><th>Redução em relação à testemunha</th><th>Dose</th><th>IC 95%</th><th></th></tr></thead><tbody>';
+    (a.doses_efetivas_absolutas||[]).forEach(q=>{
+      h+=`<tr><td>CE${fmt(q.nivel,0)} absoluta</td><td>${q.dose!=null?fmt(q.dose,4)+esc(u):'—'}</td>`+
+         `<td>${q.ic_inf!=null?fmt(q.ic_inf,4)+' a '+fmt(q.ic_sup,4):(q.motivo?esc(q.motivo):'—')}</td>`+
+         `<td>${q.extrapolado?chip('fora do testado','chip-alerta'):''}</td></tr>`;
+    });
+    h+='</tbody></table></div><p class="dica">CE absoluta: a dose que reduz a resposta a (100 − nível)% da testemunha — a CE50 da fitopatologia (Edgington et al., 1971). Só coincide com a DE50 (e) quando o patamar de dose alta é zero.</p>';
+  }
   const bloco=secao('Doses efetivas',h);
   if(a.curva?.length){
     const cv=el('canvas');cv.width=760;cv.height=340;bloco.appendChild(cv);
@@ -3015,6 +3204,7 @@ async function planejarEnsaio(){
   mostrarOverlay('Planejando…','Calculando o poder para cada número de repetições.');
   try{
     await garantirPyodide();
+    if(motorWorker){ renderPlano(JSON.parse(await chamarMotor('_run_planejar',[JSON.stringify(o)]))); return; }
     const fn=pyodide.globals.get('_run_planejar');
     try{ renderPlano(JSON.parse(fn(JSON.stringify(o)))); } finally{ fn.destroy(); }
   }catch(err){ renderPlano({ok:false,erro:String(err&&err.message||err)}); }
@@ -3339,9 +3529,14 @@ function renderRelatorioForense(rel){
     `${chip(`${v.testes_executados||0}/${v.testes_previstos||0} testes executados`, v.cobertura_suficiente?"chip-ok":"chip-alerta")}</div>`+
     `<p class="dica">${esc(v.resumo||"")}</p>`));
 
-  // Achados
+  // Ajustes que o motor fez sozinho (ex.: "contagem" com decimais tratada como contínua)
+  (rel.avisos||[]).forEach(a=> out.appendChild(htmlBloco(`<div class="aviso"><b>Ajuste automático:</b> ${esc(a)}</div>`)));
+
+  // Achados separados por papel: sinais, testes que passaram, contexto e não avaliados.
+  // Misturados numa lista só, um "não avaliado" parecia aprovação.
   const achados = rel.achados || [];
-  const itens = achados.map(a=>{
+  const bloco = (sevs) => achados.filter(a=>sevs.includes(a.severidade));
+  const item = (a) => {
     const sev = FORENSE_SEV[a.severidade] || FORENSE_SEV.clear;
     return `<li class="qa-item ${sev.item}">`+
       `<b>${esc(a.nome)} ${chip(sev.rotulo, sev.chip)}</b>`+
@@ -3349,20 +3544,51 @@ function renderRelatorioForense(rel){
       `<span>${esc(a.leitura||"")}</span>`+
       (a.explicacao_inocente ? `<span class="dica"><i>Explicação inocente possível:</i> ${esc(a.explicacao_inocente)}</span>` : "")+
       `</li>`;
-  }).join("");
-  out.appendChild(secao("Achados (ordenados por severidade)", `<ul class="qa-list">${itens}</ul>`));
+  };
+  const sinais = bloco(["flag","watch"]);
+  if(sinais.length){
+    const m = v.testes_executados||0;
+    out.appendChild(secao("Sinais a verificar",
+      `<p class="dica">A severidade vem do <b>q-valor</b> (p corrigido por Benjamini-Hochberg para o nº de testes), não do p bruto — sem essa correção, ${m} testes a 5% dariam ~${Math.round((1-Math.pow(0.95,m))*100)}% de chance de ao menos um alarme falso em dados honestos.</p>`+
+      `<ul class="qa-list">${sinais.map(item).join("")}</ul>`));
+  }
+  const limpos = bloco(["clear"]).filter(a=>a.p!=null);
+  if(limpos.length) out.appendChild(secao(`Testes sem sinal (${limpos.length})`, `<ul class="qa-list">${limpos.map(item).join("")}</ul>`));
+  const contexto = bloco(["clear"]).filter(a=>a.p==null);
+  if(contexto.length){
+    out.appendChild(secao(`Contexto (${contexto.length})`,
+      `<p class="dica">Informação para a leitura do laudo — não é pontuada. Inclui padrões com causa legítima comum que nenhuma estatística separa de fabricação (ex.: gradiente comum entre repetições).</p>`+
+      `<ul class="qa-list">${contexto.map(item).join("")}</ul>`));
+  }
+  const naoAval = bloco(["na"]);
+  if(naoAval.length){
+    out.appendChild(secao(`Não avaliados (${naoAval.length})`,
+      `<p class="dica"><b>Não são resultados limpos.</b> Estes testes não puderam rodar por falta de dados — ausência de sinal aqui não é ausência de problema.</p>`+
+      `<ul class="qa-list">${naoAval.map(item).join("")}</ul>`));
+  }
 
-  // Parâmetros
+  // Parâmetros e reprodutibilidade
   const par = rel.parametros || {};
   out.appendChild(secao("Parâmetros da triagem",
     `<div>`+
+    chip("motor: "+(rel.versao||"forense"), "chip-info")+
     chip("tipo: "+(par.tipo_dado||"—"), "chip-info")+
+    (par.escala ? chip("escala: "+par.escala, "chip-info") : "")+
     chip("régua: "+(par.modo||"—"), "chip-info")+
+    chip("estratos: "+(par.n_estratos!=null?par.n_estratos:"—"), "chip-info")+
     chip("grupos: "+(par.n_grupos!=null?par.n_grupos:"—"), "chip-info")+
     chip("seed: "+(par.seed!=null?par.seed:"—"), "chip-info")+
+    chip("reamostras: "+(par.reamostras!=null?par.reamostras:"—"), "chip-info")+
+    (par.correcao_multiplicidade ? chip("multiplicidade: "+par.correcao_multiplicidade, "chip-info") : "")+
+    chip("repetição/bloco: "+(par.tem_repeticao?"sim":"não"), par.tem_repeticao?"chip-ok":"chip-info")+
+    (par.tem_repeticao ? chip("bloco descontado: "+(par.bloco_descontado?"sim":"não"), par.bloco_descontado?"chip-ok":"chip-alerta") : "")+
+    (par.escala_registro ? chip("grade de registro: "+par.escala_registro, "chip-info") : "")+
     (par.controle!=null ? chip("controle: "+fmt(par.controle,2), "chip-info") : "")+
     (par.tem_segundo_conjunto ? chip("2ª avaliação: sim", "chip-info") : chip("2ª avaliação: não", "chip-info"))+
-    `</div>`));
+    `</div>`+
+    `<p class="dica">A semente fixa as reamostragens: repetir a triagem sobre os mesmos dados e parâmetros reproduz os mesmos p-valores.`+
+    (par.tem_repeticao ? "" : " <b>Sem a coluna de repetição/bloco</b>, os testes de gradiente de campo e de ordem das repetições não rodam, e homogeneidade/extremos ficam limitados a ATENÇÃO.")+
+    `</p>`));
 
   // Disclaimer (sempre visível)
   if(rel.aviso) out.appendChild(htmlBloco(`<div class="aviso"><b>Importante:</b> ${esc(rel.aviso)}</div>`));
@@ -3742,18 +3968,46 @@ registrarServiceWorker();
    O Agracta grava localStorage['agracta-bioestat-handoff'] = {aoa, modo, titulo} e abre
    este app num iframe. Aqui lemos, parseamos pela via Matriz já existente e carregamos. */
 function _agractaEmitirResultado(rel){
+  var j=_agAtual;
   try{
-    if(!window.__agractaEmbed || window.parent===window || !window.__agractaRequestId) return;
+    if(window.parent===window) return;
+    /* Cada resposta leva o número do trabalho que a produziu. Antes ia o do
+       ÚLTIMO trabalho recebido (window.__agractaRequestId): com o motor ainda
+       subindo no celular, o Agracta desistia de um trabalho, mandava o próximo,
+       e a análise de uma avaliação voltava com o número da outra. */
+    if(j){
+      if(j.emitido) return;
+      /* Motor que não subiu: o erro da análise é o do motor, dito como tal. */
+      if(rel && rel.ok===false && _agMotorResumo().fase==='falhou') rel=Object.assign({}, rel, {erro:_agMotivo(j, rel.erro||'')});
+      var msg={type:'agracta:bioestat-result', requestId:j.requestId, resultado:clonarAuditavel(rel||{}), motor:_agMotorResumo()};
+      j.emitido=true;
+      window.parent.postMessage(msg, window.location.origin);
+      setTimeout(function(){ _agConcluir(j); },0);
+      return;
+    }
+    if(!window.__agractaEmbed || !window.__agractaRequestId) return;
     window.parent.postMessage({
       type:'agracta:bioestat-result',
       requestId:window.__agractaRequestId,
       resultado:clonarAuditavel(rel||{})
     }, window.location.origin);
-  }catch(e){ console.warn('[Agracta motor] não foi possível devolver o resultado',e); }
+  }catch(e){
+    console.warn('[Agracta motor] não foi possível devolver o resultado',e);
+    /* Relatório que não atravessa (clone falhou) ainda deve uma resposta: sem
+       ela o trabalho prende a fila até o Agracta desistir. */
+    if(j && !j.emitido){
+      j.emitido=true;
+      try{ window.parent.postMessage({type:'agracta:bioestat-result', requestId:j.requestId, resultado:{ok:false, erro:'O relatório não pôde ser devolvido ao Agracta: '+String((e&&e.message)||e)}, motor:_agMotorResumo()}, window.location.origin); }catch(_){}
+      setTimeout(function(){ _agConcluir(j); },0);
+    }
+  }
 }
 function _agTipoResp(t){
   t=String(t||'').toLowerCase();
   if(t==='pct'||t==='proporcao')return 'proporcao';
+  /* 'numero' é o tipo de MEDIDA do Agracta (altura, peso, diâmetro). Tem de vir antes das
+     expressões abaixo: a de contagem casa "n[úu]mero" e mandaria altura para Poisson. */
+  if(t==='numero')return 'continua';
   if(t==='continua')return 'continua';
   if(t==='contagem')return 'contagem';
   if(/sever|incid|fitotox|efic|propor|%/.test(t)) return 'proporcao';
@@ -3777,7 +4031,10 @@ function __agractaHandoff(payload){
        todas — e as colunas são montadas AQUI, antes de setModo, então ajustar
        o filtro só lá dentro chegaria tarde: `carregarColunas` logo abaixo
        sobrescreveria com as colunas de uma data só. */
-    if(modo==='tempo'){
+    /* Forense também: a triagem é por VARIÁVEL, com todas as avaliações juntas
+       (cada data vira um estrato). Com o filtro na primeira data, ela analisaria
+       só uma avaliação e perderia o volume que é a razão de ser por variável. */
+    if(modo==='tempo' || modo==='forense'){
       var _ds=document.getElementById('matriz-data');
       if(_ds && [].some.call(_ds.options,function(o){return o.value==='__todas';})){
         _ds.value='__todas'; atualizarMatrizFiltros();
@@ -3786,6 +4043,22 @@ function __agractaHandoff(payload){
     var lv = matrizLinhasFiltradas();
     var resposta = (lv[0] && lv[0].variavel) || 'valor';
     var cols = colunasBioensaioDeMatriz(lv, resposta, false);
+    /* Razão n/N numa série de doses: o Agracta manda os mortos (Afetados) e os
+       avaliados (N_total) de cada parcela — é o "x de n" binomial que a
+       dose-resposta de Robertson et al. (2007) pede. Sem este passo o motor
+       recebia só a porcentagem, adivinhava "contagem" e recusava a curva: a CL50
+       automática nunca saía. Só vale quando TODA linha tem o par completo. */
+    var _n = function(v){ var t=String(v==null?'':v).trim(); return t===''?NaN:Number(t.replace(',','.')); };
+    var _binom = modo==='analise' && lv.length>0 && lv.every(function(r){
+      var a=_n(r.afetados), n=_n(r.n_total);
+      return Number.isFinite(a) && Number.isFinite(n) && n>0 && a>=0 && a<=n;
+    });
+    if(_binom){
+      cols = cols.filter(function(c){ return c.nome!=='tempo_n_total'; }).map(function(c){
+        return c.nome===resposta ? {nome:resposta, valores:lv.map(function(r){ return String(_n(r.afetados)); })} : c;
+      });
+      cols.push({nome:'n_total', valores:lv.map(function(r){ return String(_n(r.n_total)); })});
+    }
     var ref = lv[0] || {};
     /* Cada handoff é uma nova execução, inclusive quando reutiliza o iframe.
        Campo ausente também substitui o anterior: a custódia pertence ao estudo atual. */
@@ -3804,21 +4077,31 @@ function __agractaHandoff(payload){
         _set('audit-observacao-custodia', '');
         preencherIdentificacaoSeVazia(payload.titulo || gerarIdAuditoria('AGRACTA', [ref.estudo, ref.data, resposta].filter(Boolean).join(' ')), payload.responsavel || 'Agracta');
         setModo(modo);
-        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento'} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
+        /* forense leva a repetição: com ela o motor desconta o efeito de bloco (senão um gradiente
+           de campo imita 'variâncias uniformes' e 'dados lisos') e roda os testes de gradiente e de
+           ordem das repetições */
+        var papeis = modo === 'forense' ? {resposta: resposta, tratamento: 'tratamento', repeticao: 'bloco', estrato: ['data_avaliacao']} : (modo === 'analise' ? {resposta: resposta, fatores: ['tratamento'], bloco: 'bloco'} : null);
         /* A dose só viaja quando o Agracta já provou que o ensaio É uma série
            de doses (mesmo item, 3+ níveis, mesma unidade). Chegando, ela tem
            de vir com papel: sem isso a coluna existe e a rota continua sendo
            comparação de médias. */
         if(papeis && cols.some(function(c){ return c.nome==='dose'; })) papeis.dose='dose';
+        if(papeis && _binom) papeis.n_total='n_total';
+        /* Série de doses do MESMO produto é UMA curva: a dose já identifica o
+           tratamento. Com "tratamento" como fator, o motor fazia uma curva por
+           tratamento — cada uma com uma dose só — e nenhuma CL50 saía. */
+        if(papeis && _binom && papeis.dose) papeis.fatores=[];
         carregarColunas(cols, papeis, {origem:'agracta', estudo: ref.estudo||'', data: ref.data||'', variavel: resposta});
-        $('#opt-modelo').value='auto';
+        /* O Agracta pode pedir o modelo: crescimento micelial numa série de
+           concentrações vai para a curva de dose (CE50), não para a ANOVA. */
+        $('#opt-modelo').value=(payload.modelo==='curva' && papeis && papeis.dose) ? 'curva' : 'auto';
         $('#opt-comparacao').value='todos';
         $('#opt-testemunha').value=payload.controle||'';
         /* A natureza registrada tem precedência sobre adivinhar pela aparência
            dos números: uma contagem pequena não vira medida contínua. */
         var tipoEl=document.getElementById('opt-tipo');
         if(tipoEl) tipoEl.value='';
-        _setSel('opt-tipo', _agTipoResp((payload.tipos||{})[resposta]||payload.tipo)||_agTipoResp(resposta));
+        _setSel('opt-tipo', _binom ? 'binomial' : (_agTipoResp((payload.tipos||{})[resposta]||payload.tipo)||_agTipoResp(resposta)));
         if((payload.sentidos||{})[resposta]!=null)window.__agractaMaiorMelhor=!!payload.sentidos[resposta];
         _set('opt-unidade', payload.doseUnit);
         if(modo==='forense' && payload.forenseTipo) _setSel('opt-forense-tipo', payload.forenseTipo);
@@ -3840,14 +4123,83 @@ function __agractaHandoff(payload){
   }catch(e){ console.error('[Agracta handoff]', e); return false; }
 }
 window.__agractaHandoff = __agractaHandoff;
+/* ===== FILA DO AGRACTA: UM TRABALHO POR VEZ =================================
+   Os trabalhos chegam por mensagem e a página do motor é UMA só: colunas,
+   modo, papéis e opções são globais dela. Com o Python no worker a página fica
+   livre durante o cálculo, e um trabalho novo que chegasse no meio trocava as
+   colunas do anterior por baixo (a análise lê os dados DEPOIS de esperar o
+   motor subir). Agora eles esperam a vez, e cada um termina com exatamente UMA
+   resposta — inclusive quando a análise desiste antes de começar (papel
+   faltando, conferência bloqueada), que antes não devolvia nada e deixava o
+   Agracta esperando o prazo estourar.
+   Enquanto um trabalho está na mesa, a página avisa o Agracta a cada poucos
+   segundos em que pé está (recebido, motor carregando e o quê, calculando): é
+   isso que separa "baixando o módulo pela primeira vez" de "travou". */
+var _agFila=[], _agAtual=null, _agUltimoAviso=null, _AG_PULSO_MS=4000;
+function _agAvisarApp(tipo, dados){
+  try{
+    if(window.parent===window) return;
+    window.parent.postMessage(Object.assign({type:'agracta:bioestat-'+tipo}, dados||{}), window.location.origin);
+  }catch(e){}
+}
+function _agMotorResumo(){
+  var m=(typeof _motorEstado!=='undefined'&&_motorEstado)||{};
+  return {fase:m.fase||'parado', msg:m.msg||'', sub:m.sub||'', desde:m.em||0};
+}
+function _agPulso(){
+  var j=_agAtual; if(!j) return;
+  var m=_agMotorResumo();
+  var fase=m.fase==='pronto'?'calculando':(m.fase==='carregando'?'motor':(m.fase==='falhou'?'falhou':'recebido'));
+  _agAvisarApp('status',{requestId:j.requestId, fase:fase, msg:m.msg, sub:m.sub, motorDesde:m.desde, naFila:_agFila.length});
+}
+/* O motivo de um trabalho que terminou sem relatório: a falha do motor, se foi
+   ela; senão o último aviso de erro da própria análise ("Defina as colunas…"). */
+function _agMotivo(j, padrao){
+  var m=_agMotorResumo();
+  if(m.fase==='falhou') return 'O motor estatístico não carregou neste aparelho'+(m.sub?(' ('+m.sub+')'):'')+'. No primeiro uso ele precisa de internet para baixar o módulo estatístico.';
+  if(_agUltimoAviso && j && _agUltimoAviso.em>=j.inicio && _agUltimoAviso.msg) return _agUltimoAviso.msg;
+  return padrao;
+}
+function _agConcluir(j){
+  if(!j || _agAtual!==j) return;
+  clearInterval(j.pulso); clearTimeout(j.guarda);
+  _agAtual=null; window.__agractaRequestId='';
+  setTimeout(_agProximo,0);
+}
+function _agProximo(){
+  if(_agAtual || !_agFila.length) return;
+  var p=_agFila.shift()||{};
+  var j={requestId:String(p.requestId||''), emitido:false, clicou:false, inicio:Date.now()};
+  _agAtual=j;
+  j.pulso=setInterval(_agPulso,_AG_PULSO_MS);
+  var ok=false;
+  try{ ok=__agractaHandoff(p); }catch(e){ console.error('[Agracta motor] trabalho',e); }
+  _agPulso();
+  if(!ok){ _agractaEmitirResultado({ok:false, erro:_agMotivo(j,'Os dados deste trabalho não puderam ser carregados no motor.')}); return; }
+  /* Guarda: se a análise nem começou e nada foi devolvido (erro inesperado no
+     preparo), o trabalho não pode prender a fila. */
+  j.guarda=setTimeout(function(){
+    if(_agAtual===j && !j.emitido && !j.clicou) _agractaEmitirResultado({ok:false, erro:_agMotivo(j,'A análise não começou no motor.')});
+  },8000);
+}
 window.addEventListener('message',function(ev){
   try{
     if(ev.origin!==window.location.origin || !ev.data || ev.data.type!=='agracta:bioestat-run') return;
-    __agractaHandoff(ev.data.payload||{});
+    var p=ev.data.payload||{};
+    _agFila.push(p);
+    _agAvisarApp('status',{requestId:String(p.requestId||''), fase:'recebido', naFila:_agFila.length});
+    _agProximo();
   }catch(e){ console.error('[Agracta motor message]',e); }
 });
+/* O motor embutido avisa que já escuta — o Agracta não precisa esperar cada
+   imagem e fonte da página terminar de carregar para mandar trabalho. */
+if(new URLSearchParams(location.search).get('agracta_engine')==='1') _agAvisarApp('ola',{versao:APP_VERSION});
 (function(){
   try{
+    /* O motor invisível não abre a tela de análise: o recado no armazenamento é
+       da tela que a pessoa pediu ("Configurar análise"). Se ele o lesse primeiro,
+       a tela abria vazia e o motor rodava um trabalho que ninguém pediu. */
+    if(new URLSearchParams(location.search).get('agracta_engine')==='1') return;
     var raw = localStorage.getItem('agracta-bioestat-handoff');
     if(!raw) return;
     window.__agractaEmbed = true; /* cedo: 1ª conferência já enxerga o embed */
