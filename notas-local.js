@@ -89,10 +89,16 @@
     var C = w.CroquiCore;
     if (!loc) return { nivel: 'sem-local' };
     if (!parcela || !anc) return { nivel: 'sem-croqui' };
-    var m = C.metrosLocais(loc.lat, loc.lng, anc);
-    var dx = Math.max(parcela.x - m.x, 0, m.x - (parcela.x + parcela.w));
-    var dy = Math.max(parcela.y - m.y, 0, m.y - (parcela.y + parcela.h));
-    var dist = Math.sqrt(dx * dx + dy * dy), acc = +loc.acc || 0;
+    var m = C.metrosLocais(loc.lat, loc.lng, anc), dist;
+    /* mesma conta do "Onde estou": retângulo da grade, ou a planta mais
+       próxima numa parcela livre de plantas */
+    if (C.relacaoComParcela) dist = C.relacaoComParcela(m.x, m.y, parcela).dist;
+    else {
+      var dx = Math.max(parcela.x - m.x, 0, m.x - (parcela.x + parcela.w));
+      var dy = Math.max(parcela.y - m.y, 0, m.y - (parcela.y + parcela.h));
+      dist = Math.sqrt(dx * dx + dy * dy);
+    }
+    var acc = +loc.acc || 0;
     if (dist <= 0) return { nivel: 'dentro', dist: 0 };
     if (dist <= Math.max(acc, 3)) return { nivel: 'perto', dist: dist };
     return { nivel: 'longe', dist: dist };

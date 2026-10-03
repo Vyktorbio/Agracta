@@ -3810,7 +3810,20 @@ function croquiPos(st){
     colunas:Math.max(0,parseInt(c.colunas,10)||0),
     serpentina:(c.serpentina===undefined)?true:!!c.serpentina,
     espacamento:Math.max(0,parseFloat(c.espacamento)||0),
-    carreador:Math.max(0,parseFloat(c.carreador)||0) };
+    carreador:Math.max(0,parseFloat(c.carreador)||0),
+    /* parcelas marcadas uma a uma no mapa (croqui-livre.js); sem isso, grade */
+    livre:(typeof _croquiLivreLimpo==='function'?_croquiLivreLimpo(c.livre):null) };
+}
+function _croquiLivreLimpo(l){
+  if(!l||!Array.isArray(l.itens)||!l.itens.length) return null;
+  var n=function(v){ v=parseFloat(v); return isFinite(v)?v:0; };
+  var itens=l.itens.filter(function(it){ return it&&parseInt(it.ordem,10)>0; }).map(function(it){
+    var o={ordem:parseInt(it.ordem,10)};
+    if(Array.isArray(it.partes)&&it.partes.length) o.partes=it.partes.map(function(q){ return {x:n(q.x),y:n(q.y),r:Math.max(0.2,n(q.r)||1)}; });
+    else { o.x=n(it.x); o.y=n(it.y); o.w=Math.max(0.2,n(it.w)); o.h=Math.max(0.2,n(it.h)); }
+    return o;
+  });
+  return itens.length?{tipo:(l.tipo==='ret'?'ret':'ponto'),itens:itens}:null;
 }
 /* O desenho experimental que o motor precisa, tirado do estudo. */
 function croquiGrade(st,pos){
@@ -3823,6 +3836,7 @@ function croquiGrade(st,pos){
     comprimento:dim?dim.comprimento:0, largura:dim?dim.largura:0,
     colunas:pos.colunas, serpentina:pos.serpentina,
     espacamento:pos.espacamento, carreador:pos.carreador,
+    livre:pos.livre||null,
     ordem:ordem });
 }
 
@@ -4231,7 +4245,11 @@ function croquiEditPanel(g){
      ficha inteira — e, por um tempo, procurar um campo que nem existia. */
   if(falta.some(function(x){ return /tamanho da parcela/i.test(x); }))
     falta.push('Preencha em: ficha do ensaio → Editar planejamento → etapa Protocolo → Tamanho da parcela.');
-  var corpo=(g&&g.parcelas.length)
+  var corpo=(g&&g.parcelas.length&&g.livre)
+    ? '<b>'+g.parcelas.length+' parcela(s) marcada(s) no mapa</b>'+(g.faltam?' · <span style="color:#e8c37a">'+g.faltam+' sem lugar</span>':' · todas com lugar')
+      +'<br>Área ocupada: '+_croquiNum(g.largura-(g.x0||0))+' × '+_croquiNum(g.comprimento-(g.y0||0))+' m'
+      +(falta.filter(function(x){ return !/sem lugar marcado/.test(x); }).length?('<br><span style="color:#e8c37a">'+esc(falta.filter(function(x){ return !/sem lugar marcado/.test(x); }).join(' '))+'</span>'):'')
+    : (g&&g.parcelas.length)
     ? '<b>'+g.parcelas.length+' parcelas</b> · '+g.colunas+' col. × '+g.linhas+' lin. · '
       +_croquiNum(g.largura)+' × '+_croquiNum(g.comprimento)+' m · '+_croquiNum(CroquiCore.areaHa(g),3)+' ha'
       +'<br>Instalação: '+(g.serpentina?'sobe por uma coluna e desce pela seguinte':'todas as colunas no mesmo sentido')
@@ -4492,8 +4510,10 @@ function salvarCroqui(){
   var g=croquiGrade(st,_croquiEdit.pos);
   if(!g.parcelas.length){ alert((g.problemas||[]).join('\n')||'Não há o que desenhar.'); return; }
   var p=_croquiEdit.pos;
-  st.croqui={lat:p.lat,lng:p.lng,ang:p.ang,colunas:g.colunas,serpentina:p.serpentina,
+  st.croqui={lat:p.lat,lng:p.lng,ang:p.ang,colunas:(g.livre?p.colunas:g.colunas),serpentina:p.serpentina,
              espacamento:p.espacamento,carreador:p.carreador};
+  /* parcelas livres viajam junto; sem elas o campo nem existe (grade pura) */
+  var _livre=_croquiLivreLimpo(p.livre); if(_livre) st.croqui.livre=_livre;
   /* DE ONDE VEIO O CANTO. Um croqui marcado no GPS com ±2 m e um arrastado no
      olho por cima da imagem são coisas diferentes, e daqui a seis meses
      ninguém lembra qual foi. A procedência fica junto da posição. */

@@ -90,8 +90,14 @@ function grade(cfg){
   var esp=Math.max(0,num(cfg.espacamento)), carr=Math.max(0,num(cfg.carreador));
   var serp=(cfg.serpentina===undefined)?true:!!cfg.serpentina;
   var problemas=[];
+  /* PARCELAS LIVRES: quem marcou cada parcela tocando no mapa (pomar com
+     árvores espalhadas, 3 árvores por tratamento, parcela fora da grade). A
+     forma vem de cada item — retângulo próprio ou grupo de plantas —, então o
+     tamanho de parcela do protocolo não é exigido. A ORDEM continua sendo a do
+     sorteio: o item k é a k-ésima parcela da fila. */
+  var livre=(cfg.livre&&Array.isArray(cfg.livre.itens)&&cfg.livre.itens.length)?cfg.livre:null;
 
-  if(!(comp>0&&larg>0)) problemas.push('Sem o tamanho da parcela no protocolo. Sem ele não há croqui: o desenho teria medida inventada.');
+  if(!(comp>0&&larg>0) && !livre) problemas.push('Sem o tamanho da parcela no protocolo. Sem ele não há croqui: o desenho teria medida inventada.');
   if(!nTrat) problemas.push('Sem tratamentos cadastrados.');
   if(!nRep) problemas.push('Sem repetições cadastradas.');
   if(problemas.length) return {parcelas:[],largura:0,comprimento:0,colunas:0,linhas:0,serpentina:serp,problemas:problemas};
@@ -115,6 +121,7 @@ function grade(cfg){
     for(var r=1;r<=nRep;r++) for(var t=1;t<=nTrat;t++) fila.push({rep:r,tratNum:t});
   }
 
+  if(livre) return gradeLivre(fila, total, livre, serp, problemas);
   var celulas=[];
   fila.forEach(function(p,k){
     if(k>=total) return;                       /* fila maior que o desenho: não inventa lugar */
@@ -139,24 +146,68 @@ function grade(cfg){
   };
 }
 
-/* Os quatro cantos de uma parcela, em [lat,lng], prontos para o polígono. */
+/* A grade das parcelas livres. Cada item diz a ordem (1..total) e a forma:
+     {ordem, x, y, w, h}            retângulo em metros locais
+     {ordem, partes:[{x,y,r}, ...]}  plantas (copa de raio r) da mesma parcela
+   A parcela ganha x,y,w,h = a caixa que a envolve (quem só sabe de retângulo
+   continua funcionando) e `partes` para quem desenha e localiza de verdade. */
+function gradeLivre(fila, total, livre, serp, problemas){
+  var porOrdem={};
+  livre.itens.forEach(function(it){ if(it && inteiro(it.ordem)) porOrdem[inteiro(it.ordem)]=it; });
+  var celulas=[], x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, faltam=0;
+  fila.forEach(function(p,k){
+    if(k>=total) return;
+    var it=porOrdem[k+1]; if(!it){ faltam++; return; }
+    var c={col:0, lin:k, ordem:k+1,
+      rep:inteiro(p.rep)||1, pos:inteiro(p.parcela)||inteiro(p.pos)||(k+1),
+      tratId:p.tratId||'', tratNum:inteiro(p.tratNum)||0,
+      campo:p.campo||'', repLabel:p.repLabel||'', produto:p.produto||'', livre:true};
+    if(Array.isArray(it.partes)&&it.partes.length){
+      c.partes=it.partes.map(function(q){ return {x:num(q.x), y:num(q.y), r:Math.max(0.2,num(q.r)||1)}; });
+      var a=Infinity,b=Infinity,cc=-Infinity,d=-Infinity;
+      c.partes.forEach(function(q){ a=Math.min(a,q.x-q.r); b=Math.min(b,q.y-q.r); cc=Math.max(cc,q.x+q.r); d=Math.max(d,q.y+q.r); });
+      c.x=a; c.y=b; c.w=cc-a; c.h=d-b;
+    }else{
+      c.x=num(it.x); c.y=num(it.y); c.w=Math.max(0.2,num(it.w)); c.h=Math.max(0.2,num(it.h));
+    }
+    x0=Math.min(x0,c.x); y0=Math.min(y0,c.y); x1=Math.max(x1,c.x+c.w); y1=Math.max(y1,c.y+c.h);
+    celulas.push(c);
+  });
+  if(faltam) problemas.push(faltam+' parcela(s) ainda sem lugar marcado no mapa.');
+  if(!celulas.length) return {parcelas:[],largura:0,comprimento:0,colunas:0,linhas:0,serpentina:serp,problemas:problemas,livre:true};
+  return {parcelas:celulas, livre:true, x0:x0, y0:y0, largura:x1, comprimento:y1,
+          colunas:1, linhas:celulas.length, serpentina:serp, problemas:problemas, faltam:faltam};
+}
+
+/* A forma da parcela em metros locais, como lista de anéis: o retângulo da
+   grade é um anel só; uma parcela de plantas é um círculo (16 lados) por
+   planta. */
+function formaLocal(p){
+  if(p&&Array.isArray(p.partes)&&p.partes.length){
+    return p.partes.map(function(q){
+      var anel=[]; for(var i=0;i<16;i++){ var a=i/16*Math.PI*2; anel.push([q.x+q.r*Math.cos(a), q.y+q.r*Math.sin(a)]); }
+      return anel;
+    });
+  }
+  return [[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]]];
+}
+/* Os cantos de uma parcela, em [lat,lng], prontos para o polígono. Retângulo:
+   os quatro cantos, como sempre. Plantas: um polígono por planta, no formato
+   de multipolígono do Leaflet ([[anel], [anel]]). */
 function cantosDaParcela(p,anc){
-  return [
-    pontoLatLng(p.x,        p.y,        anc),
-    pontoLatLng(p.x+p.w,    p.y,        anc),
-    pontoLatLng(p.x+p.w,    p.y+p.h,    anc),
-    pontoLatLng(p.x,        p.y+p.h,    anc)
-  ];
+  var aneis=formaLocal(p).map(function(anel){ return anel.map(function(v){ return pontoLatLng(v[0],v[1],anc); }); });
+  return aneis.length===1 ? aneis[0] : aneis.map(function(a){ return [a]; });
 }
 
 /* O retângulo que envolve o croqui inteiro — serve de moldura e de alvo de
    toque para arrastar o conjunto. */
 function cantosDoConjunto(g,anc){
+  var x0=num(g.x0), y0=num(g.y0);
   return [
-    pontoLatLng(0,          0,            anc),
-    pontoLatLng(g.largura,  0,            anc),
+    pontoLatLng(x0,         y0,            anc),
+    pontoLatLng(g.largura,  y0,            anc),
     pontoLatLng(g.largura,  g.comprimento, anc),
-    pontoLatLng(0,          g.comprimento, anc)
+    pontoLatLng(x0,         g.comprimento, anc)
   ];
 }
 
@@ -179,6 +230,8 @@ function caminho(g){
 function setas(g){
   var out=[];
   if(!g||!g.parcelas||!g.parcelas.length) return out;
+  /* parcelas livres não têm coluna: o caminho já diz a ordem */
+  if(g.livre) return out;
   var porCol={};
   g.parcelas.forEach(function(p){ (porCol[p.col]=porCol[p.col]||[]).push(p); });
   Object.keys(porCol).forEach(function(c){
@@ -280,6 +333,15 @@ function metrosLocais(lat,lng,anc){
    folga = positiva dentro (o quanto sobra até a borda mais próxima),
            negativa fora. É ela que decide se a precisão do GPS resolve. */
 function _relacaoComParcela(x,y,p){
+  /* parcela de plantas: a planta mais próxima decide (dentro da copa = dentro) */
+  if(p&&Array.isArray(p.partes)&&p.partes.length){
+    var melhor=null;
+    p.partes.forEach(function(q){
+      var d=Math.sqrt((x-q.x)*(x-q.x)+(y-q.y)*(y-q.y)), r={dist:Math.max(0,d-q.r), folga:q.r-d};
+      if(!melhor || r.folga>melhor.folga) melhor=r;
+    });
+    return melhor;
+  }
   var dx=Math.max(p.x-x, 0, x-(p.x+p.w));
   var dy=Math.max(p.y-y, 0, y-(p.y+p.h));
   return {
@@ -374,6 +436,8 @@ var api={
   caminho:caminho,
   setas:setas,
   cantosDaParcela:cantosDaParcela,
+  formaLocal:formaLocal,
+  relacaoComParcela:function(x,y,p){ return _relacaoComParcela(x,y,p); },
   cantosDoConjunto:cantosDoConjunto,
   centro:centro,
   pegadorDeGiro:pegadorDeGiro,
