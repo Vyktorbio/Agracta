@@ -2,14 +2,14 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v348';
+var CACHE = 'agracta-app-v349';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=1', './protocolo-avaliacoes.css?v=1',
   './interface-neutra.css?v=3', './clima-pagina.css?v=4', './clima-pagina.js?v=4',
   './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=2', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=3', './vendor/relatorio-docx.js?v=1',
   './galeria-fotos.js?v=8', './fotos-estudo.js?v=3', './fotos-estudo.css?v=3', './vendor/fotos-core.js?v=2', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=8', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
-  './croqui-parcelas.js?v=6', './mapa-medir.js?v=3', './notas-local.js?v=2', './croqui-livre.js?v=2', './mapa-inicio.js?v=1', './cores-padrao.css?v=1', './croqui-parcelas.css?v=3',
+  './croqui-parcelas.js?v=6', './mapa-medir.js?v=3', './notas-local.js?v=2', './croqui-livre.js?v=2', './mapa-inicio.js?v=2', './cores-padrao.css?v=1', './croqui-parcelas.css?v=3',
   './profundidade.css?v=1',
   './estudo-pagina.js?v=24', './estudo-pagina.css?v=9',
   /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
