@@ -129,6 +129,61 @@
     try { botao(); } catch (e) {}
   }
 
-  w.AgMapaInicio = { pref: pref, gravar: gravar, escolher: escolher, irParaInicio: irParaInicio, instalar: function () { instalarAbertura(); instalarMenu(); instalarBotao(); } };
+  /* NO CELULAR os controles do mapa (engrenagem, Croqui, Onde estou, Notas,
+     ⌂) ficam escondidos: a tela de campo mostra só o mapa e a barra de baixo,
+     e o botão "Mapa" abre a gaveta "Ferramentas do mapa". É lá que eles
+     precisam estar — relato: "não achei". Duas seções no topo da gaveta. */
+  function linhaGaveta(id, icone, titulo, sub, comChave) {
+    return '<button class="ag-row" id="' + id + '" type="button"><span class="ag-ic" style="font-size:18px;line-height:1">' + icone + '</span>' +
+      '<span class="ag-lbl">' + esc(titulo) + '<span class="ag-sub">' + esc(sub) + '</span></span>' + (comChave ? '<span class="ag-chk"></span>' : '') + '</button>';
+  }
+  function sincronizarGaveta() {
+    var c = d.getElementById('agRowCroquiOn'); if (c) c.classList.toggle('on', !!w._croquiOn);
+    var e = d.getElementById('agRowOndeEstou'); if (e) e.classList.toggle('on', typeof w.croquiEuLigado === 'function' && w.croquiEuLigado());
+    var n = d.getElementById('agRowNotasMapa'); if (n) n.classList.toggle('on', !!d.getElementById('notasMapaPanel'));
+    var i = d.getElementById('agRowInicio'); if (i) { var sb = i.querySelector('.ag-sub'); if (sb) sb.textContent = rotulo() + ' · toque para ir'; }
+    var a = d.getElementById('agRowAbrirEm'); if (a) { var sa = a.querySelector('.ag-sub'); if (sa) sa.textContent = 'Agora: ' + rotulo(); }
+  }
+  function instalarGaveta() {
+    var dw = d.getElementById('agDrawer'), corpo = dw && dw.querySelector('.ag-dw-body');
+    if (!corpo || corpo.querySelector('[data-inicio-gaveta]')) { sincronizarGaveta(); return; }
+    var sec = d.createElement('div'); sec.setAttribute('data-inicio-gaveta', '1');
+    sec.innerHTML = '<div class="ag-sec"><div class="ag-sec-t">Início</div>' +
+      linhaGaveta('agRowInicio', '⌂', 'Voltar ao início', '') +
+      linhaGaveta('agRowAbrirEm', '⚑', 'Abrir o app em', '') + '</div>' +
+      '<div class="ag-sec"><div class="ag-sec-t">Ensaios no mapa</div>' +
+      linhaGaveta('agRowCroquiOn', '▦', 'Croqui dos ensaios', 'Mostrar ou esconder as parcelas no mapa', true) +
+      linhaGaveta('agRowOndeEstou', '◎', 'Onde estou', 'Em que parcela do croqui você está (GPS)', true) +
+      linhaGaveta('agRowNotasMapa', '•', 'Notas no mapa', 'Onde cada nota foi lançada · supervisão', true) + '</div>';
+    corpo.insertBefore(sec, corpo.firstChild);
+    function fechar() { try { w.agToggleDrawer(false); } catch (e) {} }
+    var acoes = {
+      agRowInicio: function () { fechar(); irParaInicio(); },
+      agRowAbrirEm: function () { fechar(); escolher(); },
+      agRowCroquiOn: function () { try { w.toggleCroquis(); } catch (e) {} sincronizarGaveta(); },
+      agRowOndeEstou: function () { fechar(); try { w.croquiEuAlternar(); } catch (e) {} },
+      agRowNotasMapa: function () { fechar(); try { if (w.AgNotasLocal) w.AgNotasLocal.abrir(); } catch (e) {} }
+    };
+    Object.keys(acoes).forEach(function (id) { var b = d.getElementById(id); if (b) b.addEventListener('click', acoes[id]); });
+    sincronizarGaveta();
+  }
+  /* A gaveta é montada e aberta por dentro do ui-campo.js (sem passar por um
+     nome global), então em vez de envolver função, observa: quando ela entra
+     na página, as seções entram; quando ela abre, os estados se atualizam. */
+  var _obsGaveta = null;
+  function instalarNaGaveta() {
+    if (_obsGaveta || typeof w.MutationObserver !== 'function' || !d.body) { try { instalarGaveta(); } catch (e) {} return; }
+    function vigiar(dw) {
+      try { instalarGaveta(); } catch (e) {}
+      if (dw.__inicioObs) return; dw.__inicioObs = true;
+      new w.MutationObserver(function () { if (dw.classList.contains('on')) { try { instalarGaveta(); } catch (e) {} } })
+        .observe(dw, { attributes: true, attributeFilter: ['class'] });
+    }
+    var ja = d.getElementById('agDrawer'); if (ja) vigiar(ja);
+    _obsGaveta = new w.MutationObserver(function () { var dw = d.getElementById('agDrawer'); if (dw) vigiar(dw); });
+    _obsGaveta.observe(d.body, { childList: true });
+  }
+
+  w.AgMapaInicio = { pref: pref, gravar: gravar, escolher: escolher, irParaInicio: irParaInicio, instalar: function () { instalarAbertura(); instalarMenu(); instalarBotao(); instalarNaGaveta(); } };
   w.AgMapaInicio.instalar();
 })(typeof window !== 'undefined' ? window : this);
