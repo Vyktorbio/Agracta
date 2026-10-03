@@ -254,12 +254,18 @@
         var corte = f.eventos.filter(function (e) { return !e.legado; })
           .map(function (e) { return Date.parse(e.em) || Infinity; })
           .reduce(function (a, b) { return Math.min(a, b); }, Infinity);
+        /* Folga de 2 min: a linha da trilha de sempre é gravada um instante
+           ANTES do evento formal da mesma ação — sem a folga, ela entraria de
+           novo como legado. */
         var antes = audit.filter(function (a) {
           var t = Number(a.ts) || Date.parse(a.iso || '') || 0;
-          return t > 0 && t < corte;
+          return t > 0 && t < corte - 120000;
         });
         if (!antes.length) return 0;
-        var leg = E.deTrilhaLegada(antes, { estudo: kEst, organizacao: null, dispositivo: dispositivo() });
+        /* Sem dispositivo: a trilha antiga não é de aparelho nenhum, e o id
+           tem de sair igual em qualquer aparelho que a importe — senão dois
+           aparelhos geram dois eventos para o mesmo fato. */
+        var leg = E.deTrilhaLegada(antes, { estudo: kEst, organizacao: null, dispositivo: null });
         var ja = {}; f.eventos.forEach(function (e) { ja[e.id] = 1; });
         var novos = leg.filter(function (e) { return !ja[e.id]; });
         if (!novos.length) return 0;
