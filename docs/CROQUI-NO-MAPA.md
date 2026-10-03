@@ -408,3 +408,36 @@ A máscara das quadras usa a paleta padrão (`vendor/mascara-core.js`):
 | Selecionada | azul `#2563eb` |
 
 O controle de opacidade da máscara continua valendo.
+
+---
+
+## Menu do Protocolo (`protocolo-menu.js`)
+
+O protocolo de um estudo estava espalhado em sete lugares: as quatro etapas do
+**Editar**, o botão "Protocolo: avaliações e controles", os botões do cabeçalho
+(randomização, Calc), a seção do croqui e o "Protocolo vivo" no fim da ficha.
+
+O botão **📋 Protocolo (tudo)**, no topo da ficha do estudo, abre uma tela só.
+
+**No topo:** "Falta para o protocolo ficar completo", em que cada item tem um
+link que leva ao lugar certo.
+
+**As seções:**
+1. **Identificação:** código, tipo, objetivo, cultura, alvo e tamanho da
+   parcela. Também dá para importar da planilha.
+2. **Tratamentos, doses e papéis:** a tabela dos tratamentos com o papel de
+   cada um.
+3. **Delineamento e parcelas:** repetições, randomização, croqui em grade e
+   parcelas livres.
+4. **Aplicação:** método, datas, número de aplicações, janela, calda e
+   calculadora.
+5. **Avaliações:** variáveis, escalas, aplicabilidade e programação das datas.
+6. **Aprovação, emendas e desvios.**
+
+**Como a tela funciona:**
+- Ela não duplica formulário. Cada botão abre o editor que já existe, na etapa
+  certa (`_seStudyGo(n)`).
+- Nada é gravado nela.
+- Ela **aponta a testemunha marcada só num dos dois lugares**: o checkbox
+  "Testemunha / check" (`t.testemunha`) e o papel do tratamento
+  (`t.papelControle`). Hoje os dois existem e podem discordar.
