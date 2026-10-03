@@ -312,3 +312,99 @@ enquanto `accuracy: 1.5` chega na hora. Um aparelho real entrega ±20 m sem
 problema. Para exercitar o caminho do sinal ruim, injete a leitura direto em
 `navigator.geolocation.watchPosition` — assim o teste cobra o código do app, e
 não o mock.
+
+---
+
+## Ferramentas do mapa — outubro/2026
+
+Tudo que é coordenada passa pelo mesmo motor (`CroquiCore`): GPS → metros locais
+→ parcela. O croqui de grade, as parcelas livres, o "Onde estou", o Medir e a
+camada de notas usam a mesma conta. Mover ou girar o croqui recalcula tudo.
+
+### Onde cada coisa fica
+
+| Onde | No celular | No computador |
+|---|---|---|
+| Voltar ao início (⌂) | **Mapa** (barra de baixo) → Início → Voltar ao início | botão ⌂ no grupo da ⚙, canto superior esquerdo |
+| Abrir o app em | **Mapa** → Início → Abrir o app em | chip do local no topo → "⌂ Abrir o app em" |
+| Croqui / Onde estou / Notas no mapa | **Mapa** → Ensaios no mapa (chaves) | botões no grupo da ⚙ |
+| Medição, Grade de estudos, Parcelas de um estudo | **Mapa** → Campo → Medir área → "Planejar parcelas" | o mesmo, pelo leque de ferramentas |
+
+No celular a tela de campo esconde a ⚙ e o chip do local. Por isso tudo isso
+fica na gaveta que o botão **Mapa** abre (`mapa-inicio.js` põe as seções
+"Início" e "Ensaios no mapa" no topo dela).
+
+### Abrir o app em (`mapa-inicio.js`)
+
+- A escolha é entre um **local salvo** (ex.: Iracemápolis) e **minha posição
+  (GPS)**.
+- **Local salvo:** ele vira o local ativo, gravado pela mesma preferência do
+  menu de locais (id + nome). Ao abrir, o GPS **não** move o mapa, porque era o
+  `autoLocateOnOpen` que o tirava de Iracemápolis.
+- **GPS:** comportamento de sempre. O mapa abre no local e depois vai para a
+  posição.
+- **⌂:** volta para o lugar escolhido. No computador, segurar o botão troca o
+  lugar.
+- A escolha fica neste aparelho. Ela é sobre como a tela abre, não sobre o
+  ensaio.
+
+### Medir: grade provisória (`mapa-medir.js`)
+
+- **Onde:** Medição → **Grade de estudos**.
+- **Grade:** comprimento, largura, quantos, quantos lado a lado e espaço entre
+  eles. O conjunto arrasta (✛) e gira (↻).
+- **Tocar no mapa:** cada toque marca um ponto (árvore, com o raio da copa) ou
+  um retângulo C × L. Tem Desfazer.
+- O painel diz **quantos ficam inteiros dentro da quadra**.
+- **Nada é gravado.** "Limpar" apaga tudo; só as medidas digitadas ficam
+  lembradas.
+
+### Parcelas livres no croqui do estudo (`croqui-livre.js`)
+
+Serve para o que a grade não descreve: pomar com árvores espalhadas, 3 árvores
+por tratamento, parcela fora do alinhamento.
+
+- **Onde:** Medição → **Parcelas de um estudo**, ou no próprio *Posicionar
+  croqui*: **Grade | Parcelas livres**.
+- Cada toque marca a parcela da vez, na **ordem do sorteio**:
+  - **Plantas:** cada toque é uma planta. Com "Plantas por parcela" = 3, o
+    terceiro toque fecha a parcela e passa para a próxima.
+  - **Retângulo C × L:** cada toque é uma parcela.
+- Também dá para desfazer, voltar ou pular parcela e apagar tudo.
+- **O que é salvo:** `st.croqui.livre`, em metros a partir da âncora. Arrastar
+  ou girar o croqui leva as parcelas junto.
+- No mapa aparece **um círculo por planta**. O "Onde estou" e a consulta das
+  parcelas também contam pela planta mais próxima.
+- **Enquanto se marca**, as quadras e os croquis de outros estudos não abrem o
+  menu deles (`window._agDesenhoLivre`). O toque é do desenho.
+
+### Notas no mapa — supervisão (`notas-local.js`)
+
+- **Gravação:** cada nota lançada passa a guardar **onde** foi digitada
+  (`notasMeta[parcela][variável].loc = {lat, lng, acc, t}`), no mesmo carimbo
+  que já levava a hora e o autor.
+  - Vale só daqui para a frente.
+  - Sem GPS, a nota é salva igual, só sem local.
+  - Leitura com precisão pior que 80 m é descartada.
+- **Camada "Notas no mapa":**
+  - mostra uma marca do tamanho de uma pessoa onde cada nota foi lançada, com
+    o círculo da precisão;
+  - com o croqui posicionado, a cor diz se a nota caiu **dentro** da parcela
+    avaliada (verde), **perto**, dentro da margem do GPS (âmbar), ou **longe**
+    (vermelho, com a distância).
+- **Rota (opcional):** liga as notas na ordem em que foram lançadas, por
+  avaliador. Não é rastreio contínuo do GPS.
+- O **valor** da nota não aparece (cegamento).
+
+### Cores do mapa
+
+A máscara das quadras usa a paleta padrão (`vendor/mascara-core.js`):
+
+| Estado | Cor |
+|---|---|
+| Avaliada | verde `#16a34a` |
+| Parcial | âmbar `#f59e0b` |
+| Pendente | vermelho `#dc2626` |
+| Selecionada | azul `#2563eb` |
+
+O controle de opacidade da máscara continua valendo.
