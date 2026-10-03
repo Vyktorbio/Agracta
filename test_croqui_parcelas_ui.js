@@ -70,4 +70,17 @@ w.croquiToggleAjustes();assert.equal(panel.querySelector('button').getAttribute(
 w.croquiToggleAjustes();assert.equal(panel.querySelector('button').textContent,'Ajustes');assert.equal(fitted.paddingBottomRight[1],240);
 size={x:1360,y:900};panel.getBoundingClientRect=()=>({left:12,right:312,top:380,bottom:820,height:440});w.croquiEnquadrar();assert.equal(fitted.paddingTopLeft[0],332,'desktop aproveita o espaço ao lado do painel');
 assert.equal(redraws>0,true);
+
+// Enquadramento é só visual: seleção e dados sobrevivem a ampliar/enquadrar.
+st.finalizacao=null;P.open('Q','S','T8R4');
+assert(d.querySelector('.pc-viewport').classList.contains('pc-fit'));
+const fitBefore=JSON.stringify(st);
+d.querySelector('[data-pc-action="fit"]').click();
+assert(!d.querySelector('.pc-viewport').classList.contains('pc-fit'));
+assert.equal(d.querySelector('[data-pc-action="fit"]').textContent,'Enquadrar tudo');
+d.querySelector('[data-pc-action="fit"]').click();
+assert(d.querySelector('.pc-viewport').classList.contains('pc-fit'));
+assert.equal(d.querySelector('.pc-cell.selected').dataset.pcPick,'T8R4');
+assert.equal(JSON.stringify(st),fitBefore);
+
 dom.window.close();console.log('Croqui interativo: geometria, serpentina, zeros, data, leitura cegada, parcela correta, fotos, finalização e painel recolhível OK.');

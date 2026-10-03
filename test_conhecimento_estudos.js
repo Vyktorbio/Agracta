@@ -131,6 +131,19 @@ w.data.Q1.estudos[0].avaliacoes=aval;
 /* ---------- 5. e nada disso escreveu no acervo ---------- */
 assert.equal(JSON.stringify(w.data),antes,'a tela de conhecimento continua só lendo');
 
+// Cadastro vazio não deve parecer progresso medido em zero por cento.
+{
+  w.data={Q1:{estudos:[{id:'EMPTY',codigo:'SEM AVALIAÇÕES',tratamentos:[],avaliacoes:[]}]}};
+  w.abrirConhecimento({aba:'estudos'});
+  const card=q('.con-cartao');
+  assert.match(card.textContent,/Sem avaliações cadastradas/);
+  assert.doesNotMatch(card.textContent,/0 de 0/);
+  assert.equal(card.querySelector('.con-barra'),null);
+  assert.match(card.textContent,/Cultura não informada/);
+  assert.match(card.textContent,/Alvo não informado/);
+  w.data=antesData;
+}
+
 /* ---------- 5b. tela menor NUNCA desce calada ----------
    Se o dossiê não chega ao aparelho, a ficha do estudo cai numa versão reduzida
    — sem gráficos, sem a vista do campo, sem estatística. Isso descia sem aviso:

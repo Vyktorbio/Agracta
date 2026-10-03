@@ -747,6 +747,8 @@ function initMap(){
      As outras camadas continuam disponíveis no seletor do mapa. */
   _baseSat=_bases['H\u00edbrido (Google)']; _baseSat.addTo(_map);
   try{ LF.control.layers(_bases, null, { position:'topleft', collapsed:true }).addTo(_map); }catch(e){}
+  _map.on('dragstart',function(){_mapInitialLocalPending=false;});
+  _map.getContainer().addEventListener('wheel',function(){_mapInitialLocalPending=false;},{passive:true});
   _qLayer = LF.layerGroup().addTo(_map);
   _notesLayer = LF.layerGroup().addTo(_map);
   _map.attributionControl.setPrefix('');
@@ -1548,6 +1550,23 @@ function quadrasDoLocal(id){
 }
 function quadrasAtivas(){ return quadrasDoLocal(localAtivo); }
 function novoLocalId(){ return 'loc'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
+/* Aguarda geometria real na primeira sincronização; não recentraliza a cada atualização. */
+var _mapInitialLocalPending=true;
+function enquadrarLocalInicial(){
+  if(!_mapInitialLocalPending||!_map)return;
+  ensureLocais();
+  var loc=LOCAIS[localAtivo];if(!loc)return;
+  var temQuadra=quadrasDoLocal(localAtivo).some(function(q){
+    return (QGEO&&QGEO[q]&&QGEO[q].length)||quadraPonto(q);
+  });
+  var centro=loc.centro;
+  var temCentro=Array.isArray(centro)&&centro.length===2&&centro.every(Number.isFinite)&&
+    (centro[0]!==ESTACAO_CENTER[0]||centro[1]!==ESTACAO_CENTER[1]);
+  if(!temQuadra&&!temCentro)return;
+  _map.invalidateSize();
+  flyToLocal(localAtivo);
+  _mapInitialLocalPending=false;
+}
 function flyToLocal(id){
   if(!_map) initMap(); ensureLocais(); var Lc=LOCAIS[id]; if(!Lc) return;
   var qs=quadrasDoLocal(id);
@@ -1618,6 +1637,7 @@ function setLocalAtivo(id){
 /* Tudo o que a tela precisa refazer quando o lugar muda. Não sabe, e não deve
    saber, se a troca foi escolha ou GPS. */
 function _localAplicaTroca(id){
+  _mapInitialLocalPending=false;
   ndviMeans=null; if(ndviOverlay&&_map){ try{_map.removeLayer(ndviOverlay);}catch(e){} ndviOverlay=null; }
   closeLocalMenu();
   flyToLocal(id); render(); buildLocalChip(); if(typeof renderNdviRank==='function') renderNdviRank();
@@ -2369,7 +2389,8 @@ function cloudApply(st){
     saveDelTombs();
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
     ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
-    render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+    render(); try{ enquadrarLocalInicial(); }catch(e){}
+    if(typeof updateAgendaBadge==='function') updateAgendaBadge();
     enforceAccess();
   }catch(e){}
   _cloudApplying=false;
@@ -3422,7 +3443,8 @@ function _applyRowsState(S){
     if(Array.isArray(S.notas_campo)){ NOTAS_CAMPO=S.notas_campo; try{ localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO)); }catch(e){} }
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
     ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
-    render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+    render(); try{ enquadrarLocalInicial(); }catch(e){}
+    if(typeof updateAgendaBadge==='function') updateAgendaBadge();
     if(typeof enforceAccess==='function') enforceAccess();
   }catch(e){}
   _cloudApplying=false;
@@ -4977,6 +4999,7 @@ function locateMe(opts){
   document.body.classList.toggle('gps-manual-visible',!automatic);
   var centered=false;
   function center(b, fim){
+    _mapInitialLocalPending=false;
     var ll=[b.lat,b.lng];
     /* A primeira leitura abre logo no lugar; a leitura final reposiciona uma
        única vez caso o aparelho tenha refinado bastante a coordenada. */
@@ -21441,7 +21464,7 @@ function init(){
     document.getElementById("dateInfo").textContent=_agFormatDateTime(Date.now(),{day:'numeric',month:'short',year:'numeric'});
     render();
   updateTodayBadge();renderLeg();updateAgendaBadge();
-  ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
+  ensureLocais(); buildLocalChip(); try{ enquadrarLocalInicial(); }catch(e){}
   /* O Local ativo é a reserva; com permissão, o mapa passa para onde a pessoa
      realmente está, como o botão de localização do Maps. */
   try{ autoLocateOnOpen(); }catch(e){}

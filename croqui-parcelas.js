@@ -117,8 +117,8 @@ function render(){
  const st=study(current.qid,current.sid);if(!st||!allowed()){close();return;}
  const old=dialog.querySelector('.pc-viewport'),scroll=old?{top:old.scrollTop,left:old.scrollLeft}:null;
  const g=layout(st),av=chosen(st);
- dialog.innerHTML='<header class="pc-head"><div><p>CROQUI DAS PARCELAS</p><h2>'+e(st.codigo||st.nome||st.id)+'</h2><span>'+e(w.quadraNome(current.qid))+' · '+e((st.protocolo||{}).tamanhoParcela||'Dimensões não informadas')+'</span></div><button type="button" data-pc-action="close" aria-label="Fechar croqui">×</button></header><div class="pc-toolbar"><label>Avaliação<select id="pc-assessment">'+(av?assessments(st).map(a=>'<option value="'+e(a.id)+'"'+(a.id===av.id?' selected':'')+'>'+e(dateText(a))+'</option>').join(''):'<option value="">Nenhuma avaliação cadastrada</option>')+'</select></label>'+(!w.estudoFinalizado(st)?'<button type="button" data-pc-action="position">'+(g.pos?'Ajustar posição':'Posicionar no mapa')+'</button>':'')+'</div><div class="pc-body"><section class="pc-drawing">'+diagram(st,g,av,current.key,'pick')+rowList(st,g)+(g.parcelas.length&&(g.problemas||[]).length?'<p class="pc-notice">'+e(g.problemas.join(' '))+'</p>':'')+'</section><aside class="pc-detail" aria-labelledby="pc-detail-title">'+detail(st)+'</aside></div>';
- const next=dialog.querySelector('.pc-viewport');if(scroll&&next){next.scrollTop=scroll.top;next.scrollLeft=scroll.left;}
+ dialog.innerHTML='<header class="pc-head"><div><p>CROQUI DAS PARCELAS</p><h2>'+e(st.codigo||st.nome||st.id)+'</h2><span>'+e(w.quadraNome(current.qid))+' · '+e((st.protocolo||{}).tamanhoParcela||'Dimensões não informadas')+'</span></div><button type="button" data-pc-action="close" aria-label="Fechar croqui">×</button></header><div class="pc-toolbar"><label>Avaliação<select id="pc-assessment">'+(av?assessments(st).map(a=>'<option value="'+e(a.id)+'"'+(a.id===av.id?' selected':'')+'>'+e(dateText(a))+'</option>').join(''):'<option value="">Nenhuma avaliação cadastrada</option>')+'</select></label><button type="button" data-pc-action="fit">'+(current.fit?'Ampliar croqui':'Enquadrar tudo')+'</button>'+(!w.estudoFinalizado(st)?'<button type="button" data-pc-action="position">'+(g.pos?'Ajustar posição':'Posicionar no mapa')+'</button>':'')+'</div><div class="pc-body"><section class="pc-drawing">'+diagram(st,g,av,current.key,'pick')+rowList(st,g)+(g.parcelas.length&&(g.problemas||[]).length?'<p class="pc-notice">'+e(g.problemas.join(' '))+'</p>':'')+'</section><aside class="pc-detail" aria-labelledby="pc-detail-title">'+detail(st)+'</aside></div>';
+ const next=dialog.querySelector('.pc-viewport');if(next)next.classList.toggle('pc-fit',!!current.fit);if(scroll&&next){next.scrollTop=scroll.top;next.scrollLeft=scroll.left;}
 }
 function close(){if(dialog&&dialog.open)dialog.close();}
 function locate(){
@@ -129,7 +129,7 @@ function locate(){
 function open(qid,sid,key){
  if(!allowed())return;
  const st=study(qid,sid);if(!st)return;
- current={qid,sid,key:key||null};focusBefore=document.activeElement;
+ current={qid,sid,key:key||null,fit:true};focusBefore=document.activeElement;
  if(!dialog){
   dialog=document.createElement('dialog');dialog.id='parcelasCampoDialog';dialog.className='pc-dialog';document.body.appendChild(dialog);
   dialog.addEventListener('close',()=>{if(focusBefore&&focusBefore.isConnected)focusBefore.focus();});
@@ -142,6 +142,7 @@ function open(qid,sid,key){
    const s=study(current.qid,current.sid);if(!s||!allowed()){close();return;}
    const action=b.dataset.pcAction;
    if(action==='close'){close();return;}
+   if(action==='fit'){current.fit=!current.fit;render();const vp=dialog.querySelector('.pc-viewport');if(vp){vp.scrollTop=0;vp.scrollLeft=0;}if(!current.fit)locate();return;}
    if(action==='position'){if(w.estudoFinalizado(s))return;close();w.posicionarCroquiDoEstudo(current.qid,current.sid);return;}
    const row=rowFor(s,current.key);if(!row)return;
    const av=chosen(s);
@@ -159,7 +160,7 @@ function open(qid,sid,key){
   dialog.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('[data-pc-pick]')){ev.preventDefault();ev.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}});
  }
  if(!dialog.open)dialog.showModal();render();
- if(current.key)locate();else{const vp=dialog.querySelector('.pc-viewport');if(vp)vp.scrollTop=vp.scrollHeight;dialog.querySelector('[data-pc-action="close"]').focus();}
+ if(current.key)locate();else{const vp=dialog.querySelector('.pc-viewport');if(vp&&!current.fit)vp.scrollTop=vp.scrollHeight;dialog.querySelector('[data-pc-action="close"]').focus();}
 }
 function refreshMap(){if(typeof w.renderCroquis==='function')w.renderCroquis();}
 function mapStyle(st,p){
