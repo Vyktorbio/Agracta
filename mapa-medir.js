@@ -120,8 +120,15 @@
     }
     info.className = 'croqui-info'; info.innerHTML = txt;
   }
+  function desenhoLivre(on) {
+    if (!!w._agDesenhoLivre === !!on) return;
+    w._agDesenhoLivre = !!on;
+    try { if (typeof w.render === 'function') w.render(); } catch (e) {}
+    try { if (typeof w.renderCroquis === 'function') w.renderCroquis(); } catch (e) {}
+  }
   function desenhar() {
     if (!M) return;
+    desenhoLivre(M.modo === 'livre');
     var L = LF(), r = retangulos(M.cfg), anc = { lat: M.lat, lng: M.lng, ang: M.ang };
     M.camada.clearLayers();
     M.painel.classList.toggle('medir-livre', M.modo === 'livre');
@@ -228,6 +235,7 @@
     try { mapa.off('click', M.toque); } catch (e) {}
     if (M.painel && M.painel.parentNode) M.painel.parentNode.removeChild(M.painel);
     M = null;
+    desenhoLivre(false);
     var bt = d.getElementById('medirBtn'); if (bt) bt.classList.remove('on');
   }
   function estilo() {
@@ -253,15 +261,59 @@
     ref.parentNode.appendChild(b);
     return true;
   }
+  /* O ATALHO MORA NA MEDIÇÃO do leque de ferramentas do mapa (pedido de quem
+     usa): ali já se mede área e perímetro, e é ali que se procura "medir".
+     Dois botões no painel dela: a grade provisória deste módulo e as parcelas
+     livres de um estudo (croqui-livre.js). O botão solto que ficava junto do
+     Croqui saiu — dois "Medir" em lugares diferentes confundiam. */
+  function estudosParaLivre() {
+    var out = [];
+    try {
+      var qs = typeof w.quadrasAtivas === 'function' ? w.quadrasAtivas() : Object.keys(w.data || {});
+      qs.forEach(function (q) {
+        ((w.data && w.data[q] && w.data[q].estudos) || []).forEach(function (st) {
+          if (!st || !st.id || !(st.tratamentos || []).length) return;
+          if (typeof w.estudoFinalizado === 'function' && w.estudoFinalizado(st)) return;
+          out.push({ qid: q, sid: st.id, nome: (st.codigo || st.nome || st.id) + ' · ' + (typeof w.quadraNome === 'function' ? w.quadraNome(q) : q) });
+        });
+      });
+    } catch (e) {}
+    return out;
+  }
+  function atalhosNaMedicao() {
+    var p = d.getElementById('measurePanel'); if (!p || p.querySelector('[data-medir-atalho]')) return;
+    var est = estudosParaLivre();
+    var box = d.createElement('div');
+    box.setAttribute('data-medir-atalho', '1');
+    box.style.cssText = 'margin-top:9px;padding-top:9px;border-top:1px solid var(--border,#26322b);display:grid;gap:7px';
+    box.innerHTML = '<div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3,#7c8a80)">Planejar parcelas</div>' +
+      '<div class="measure-actions" style="grid-template-columns:1fr 1fr"><button type="button" data-medir-atalho-acao="grade">Grade de estudos</button>' +
+      '<button type="button" data-medir-atalho-acao="livre"' + (est.length ? '' : ' disabled title="Nenhum estudo com tratamentos neste local"') + '>Parcelas de um estudo</button></div>' +
+      '<div data-medir-atalho-lista style="display:none;gap:6px"><select style="width:100%;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);color:var(--text,#e8efe9);border-radius:9px;padding:8px">' +
+      est.map(function (x, i) { return '<option value="' + i + '">' + esc(x.nome) + '</option>'; }).join('') + '</select>' +
+      '<div class="measure-actions" style="grid-template-columns:1fr"><button type="button" class="on" data-medir-atalho-acao="abrir">Marcar parcelas no mapa</button></div></div>';
+    p.appendChild(box);
+    box.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-medir-atalho-acao]'); if (!b || b.disabled) return;
+      ev.stopPropagation();
+      var a = b.getAttribute('data-medir-atalho-acao');
+      if (a === 'grade') { try { w.closeMeasure(); } catch (e) {} abrir(); }
+      else if (a === 'livre') { var l = box.querySelector('[data-medir-atalho-lista]'); l.style.display = l.style.display === 'none' ? 'grid' : 'none'; }
+      else if (a === 'abrir') {
+        var x = est[+box.querySelector('select').value]; if (!x) return;
+        try { w.closeMeasure(); } catch (e) {}
+        if (w.AgCroquiLivre && w.AgCroquiLivre.abrirLivre) w.AgCroquiLivre.abrirLivre(x.qid, x.sid);
+      }
+    });
+  }
   function instalar() {
-    var orig = w.addCroquiControl;
+    var orig = w.measureRenderPanel;
     if (typeof orig === 'function' && !orig.__medir) {
-      var envolto = function () { var r = orig.apply(this, arguments); try { injetar(); } catch (e) {} return r; };
-      envolto.__medir = true; w.addCroquiControl = envolto;
+      var envolto = function () { var r = orig.apply(this, arguments); try { atalhosNaMedicao(); } catch (e) {} return r; };
+      envolto.__medir = true; w.measureRenderPanel = envolto;
     }
-    injetar();
   }
 
-  w.AgMedir = { formaLivre: formaLivre, livresNaQuadra: livresNaQuadra, medidas: medidas, retangulos: retangulos, dentro: dentro, veredito: veredito, abrir: abrir, fechar: fechar, instalar: instalar };
+  w.AgMedir = { formaLivre: formaLivre, livresNaQuadra: livresNaQuadra, medidas: medidas, retangulos: retangulos, dentro: dentro, veredito: veredito, abrir: abrir, fechar: fechar, instalar: instalar, estudosParaLivre: estudosParaLivre, injetar: injetar };
   instalar();
 })(typeof window !== 'undefined' ? window : this);

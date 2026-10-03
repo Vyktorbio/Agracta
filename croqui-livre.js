@@ -118,9 +118,18 @@
     for (var k = de; k <= ED.fila.length; k++) if (!tem[k]) return k;
     return ED.fila.length + 1;
   }
+  /* Enquanto se marca parcela, o toque é do desenho: quadras e croquis de
+     outros estudos param de abrir o menu deles (app.js lê esta marca). */
+  function desenhoLivre(on) {
+    if (!!w._agDesenhoLivre === !!on) return;
+    w._agDesenhoLivre = !!on;
+    try { if (typeof w.render === 'function') w.render(); } catch (e) {}
+    try { if (typeof w.renderCroquis === 'function') w.renderCroquis(); } catch (e) {}
+  }
   function modo(m) {
     var painel = d.getElementById('croquiPanel'), E = w._croquiEdit; if (!painel || !E || !ED) return;
     ED.modo = m;
+    desenhoLivre(m === 'livre');
     painel.classList.toggle('croqui-modo-livre', m === 'livre');
     painel.querySelectorAll('[data-livre-modo]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-livre-modo') === m); });
     /* Voltar para a grade não apaga o que foi marcado: fica guardado e volta
@@ -168,8 +177,16 @@
     }
     aplicar();
   }
-  function soltar() { try { if (w._map) w._map.off('click', aoTocar); } catch (e) {} ED = null; }
+  function soltar() { try { if (w._map) w._map.off('click', aoTocar); } catch (e) {} if (ED) desenhoLivre(false); ED = null; }
 
+  /* Atalho (menu de Medição): abre o Posicionar croqui do estudo já em
+     "Parcelas livres". */
+  function abrirLivre(qid, sid) {
+    if (typeof w.abrirCroquiEditor !== 'function') return false;
+    w.abrirCroquiEditor(qid, sid);
+    if (ED && d.getElementById('croquiPanel')) modo('livre');
+    return !!ED;
+  }
   function instalar() {
     var abrir = w.abrirCroquiEditor, fechar = w.fecharCroquiEditor;
     if (typeof abrir === 'function' && !abrir.__livre) {
@@ -182,6 +199,6 @@
     }
   }
 
-  w.AgCroquiLivre = { filaDoEstudo: filaDoEstudo, adicionar: adicionar, desfazer: desfazer, plantasNa: plantasNa, instalar: instalar };
+  w.AgCroquiLivre = { desenhoLivre: desenhoLivre, abrirLivre: abrirLivre, filaDoEstudo: filaDoEstudo, adicionar: adicionar, desfazer: desfazer, plantasNa: plantasNa, instalar: instalar };
   instalar();
 })(typeof window !== 'undefined' ? window : this);
