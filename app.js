@@ -19456,7 +19456,9 @@ function _progressSvg(study,v,avs,test,ts){
   var means=avs.map(function(a){return _avMeans(study,a);}), allv=[];
   ts.forEach(function(t){ means.forEach(function(m){ var y=m[t.id]&&m[t.id][v]; if(y!=null)allv.push(y); }); });
   var mx=allv.length?Math.max.apply(null,allv):1; if(mx<=0)mx=1;
-  function X(d){ return pad+(W-2*pad)*(d/maxD); } function Y(y){ return Hh-pad-(Hh-2*pad)*(y/mx); }
+  /* % e índice de escala param em 100 no eixo — nunca 105. */
+  var _tp=_avTipo(avs[avs.length-1],v); if(_tp==='pct'||_tp==='escala'){ mx=Math.min(100,Math.max(5,Math.ceil(mx/5)*5)); }
+  function X(d){ return pad+(W-2*pad)*(d/maxD); } function Y(y){ return Hh-pad-(Hh-2*pad)*(Math.min(y,mx)/mx); }
   var h='<svg width="100%" viewBox="0 0 '+W+' '+Hh+'" style="background:#fff;border:1px solid #e2e8e3;border-radius:8px;margin-top:2px">';
   h+='<line x1="'+pad+'" y1="'+(Hh-pad)+'" x2="'+(W-pad)+'" y2="'+(Hh-pad)+'" stroke="#cdd6cf"/><line x1="'+pad+'" y1="'+pad+'" x2="'+pad+'" y2="'+(Hh-pad)+'" stroke="#cdd6cf"/>';
   h+='<text x="4" y="'+(pad+4)+'" font-size="9" fill="#8a948e">'+Math.round(mx)+'</text><text x="8" y="'+(Hh-pad)+'" font-size="9" fill="#8a948e">0</text>';

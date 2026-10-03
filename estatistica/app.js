@@ -3747,7 +3747,9 @@ function desenharLinhasTempo(cv, linhas, tratamentos, ylabel, categorias){
   const ml=46,mr=120,mt=14,mb=40, pw=W-ml-mr, ph=H-mt-mb;
   const tempos=linhas.map(l=>l.tempo); const tmin=Math.min(...tempos), tmax=Math.max(...tempos);
   let vmax=0; linhas.forEach(l=>tratamentos.forEach(t=>{ const m=(l.medias||{})[t]; if(m!=null&&m>vmax)vmax=m; }));
-  vmax=Math.max(vmax*1.1,1);
+  /* % não passa de 100: a folga de 10% levava o eixo de mortalidade a 110%. */
+  const ehPct=/%/.test(String(ylabel||''));
+  vmax=Math.max(vmax*1.1,1); if(ehPct) vmax=Math.min(100,Math.max(vmax,5));
   const vmin=Math.min(0,...linhas.flatMap(l=>tratamentos.map(t=>l.medias?.[t]??0)));
   const X=t=> ml+(tmax===tmin?0.5:(t-tmin)/(tmax-tmin))*pw, Y=v=> mt+ph-((v-vmin)/(vmax-vmin))*ph;
   ctx.strokeStyle="#cbd5e1"; ctx.beginPath(); ctx.moveTo(ml,mt); ctx.lineTo(ml,mt+ph); ctx.lineTo(ml+pw,mt+ph); ctx.stroke();

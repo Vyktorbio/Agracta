@@ -1,13 +1,13 @@
 /* Service worker - cache local do app.
    App shell, ícones, fontes, bioengine e Pyodide ficam em cache para uso offline. */
-const CACHE = "bioensaio-v56-motor-fila";
+const CACHE = "bioensaio-v57-motor-fila";
 const SHELL = [
   "../interface-neutra.css?v=1",
   /* MANTER igual ao estatistica/index.html: o pré-cache é por URL. Uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede, e deixa sem
      pré-carga justamente o que o HTML vai buscar — a casa parece offline e
      não está. O portão passa a conferir este pareamento (conferir.sh). */
-  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-20", "./app.js?v=bioensaio-auditoria-20", "./exemplos.js?v=bioensaio-auditoria-20", "./motor-worker.js?v=bioensaio-auditoria-20",
+  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-20", "./app.js?v=bioensaio-auditoria-21", "./exemplos.js?v=bioensaio-auditoria-20", "./motor-worker.js?v=bioensaio-auditoria-20",
   "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-20",
   "./fonts/inter.woff2", "./fonts/sora.woff2",
   "./lib/xlsx.full.min.js",
