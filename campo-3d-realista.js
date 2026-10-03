@@ -47,7 +47,7 @@
   }
   function texGrama(T) {
     return canvasTex(T, 512, 512, function (g, L, A) {
-      g.fillStyle = '#7c9152'; g.fillRect(0, 0, L, A);
+      g.fillStyle = '#76a24c'; g.fillRect(0, 0, L, A);
       var r = sorteio(23);
       for (var i = 0; i < 14000; i++) {
         var x = r() * L, y = r() * A, h = 3 + r() * 7, v = r();
@@ -100,8 +100,7 @@
     ren.shadowMap.enabled = true; ren.shadowMap.type = T.PCFShadowMap;
 
     var sc = new T.Scene();
-    var HORIZ = 0xf3dcc0;            /* mesma cor da faixa do horizonte do céu 2D */
-    sc.fog = new T.Fog(HORIZ, 140, 700);
+    sc.fog = null;
 
     /* coordenadas: x da grade -> X; y da grade -> -Z (assim o giro da tela e o
        daqui concordam: o T1 fica do mesmo lado nas duas vistas) */
@@ -127,20 +126,6 @@
     var mg = 1.6;
     var solo = new T.Mesh(new T.PlaneGeometry(larg + 2 * mg, alt + 2 * mg), new T.MeshLambertMaterial({ map: texSolo(T) }));
     solo.rotation.x = -Math.PI / 2; solo.position.y = 0.0; solo.receiveShadow = true; sc.add(solo);
-
-    /* árvores ao longe: só silhueta, quem dá o "lugar" é a névoa */
-    var rr = sorteio(97), arv = [];
-    var copa = new T.SphereGeometry(1, 10, 8), tronco = new T.CylinderGeometry(0.25, 0.35, 1, 6);
-    var nArv = 900, mCopa = new T.InstancedMesh(copa, new T.MeshLambertMaterial({ color: 0x46613a }), nArv);
-    var mTr = new T.InstancedMesh(tronco, new T.MeshLambertMaterial({ color: 0x4a3a2a }), nArv);
-    var o = new T.Object3D();
-    for (var i = 0; i < nArv; i++) {
-      var ang = rr() * Math.PI * 2, dist = 380 + rr() * 160, s = 7 + rr() * 6;
-      var ax = Math.cos(ang) * dist, az = Math.sin(ang) * dist;
-      o.position.set(ax, s * 0.55 + 2, az); o.scale.set(s * 1.3, s * (0.55 + rr() * 0.3), s * 1.3); o.rotation.set(0, 0, 0); o.updateMatrix(); mCopa.setMatrixAt(i, o.matrix);
-      o.position.set(ax, 2.5, az); o.scale.set(1.6, 5, 1.6); o.updateMatrix(); mTr.setMatrixAt(i, o.matrix);
-    }
-    sc.add(mCopa); sc.add(mTr);
 
     /* ---- a parcela é um BLOCO DE FOLHAGEM: folhas cobrindo topo e laterais
        de um volume do tamanho da parcela, sobre um miolo escuro que fecha os
@@ -224,8 +209,8 @@
     });
 
     /* ---- câmera: mesma direção do giro da tela, mais baixa, com perspectiva ---- */
-    var cam = new T.PerspectiveCamera(58, LARG / ALT, 0.5, 3000);
-    var ELEV = 13.5 * Math.PI / 180;
+    var cam = new T.PerspectiveCamera(30, LARG / ALT, 0.5, 3000);
+    var ELEV = 38 * Math.PI / 180;
     var alvo = new T.Vector3(0, 0.3, 0);
     function posicionar(rot, dist) {
       var si = Math.sin(rot), co = Math.cos(rot);
@@ -239,7 +224,7 @@
     }
     /* cantos do ensaio (com margem e altura de planta) para o enquadramento */
     var cantos = [];
-    [[-mg - 2.6, -mg - 2.6], [larg + mg, -mg - 2.6], [larg + mg, alt + mg], [-mg - 2.6, alt + mg]].forEach(function (c) {
+    [[-mg - 1.8, -mg - 1.8], [larg + mg, -mg - 1.8], [larg + mg, alt + mg], [-mg - 1.8, alt + mg]].forEach(function (c) {
       [0, H0 * 1.2].forEach(function (z) { cantos.push(new T.Vector3(X(c[0]), z, Z(c[1]))); });
     });
     var tmp = new T.Vector3();

@@ -1494,7 +1494,7 @@ d.addEventListener('click',function(ev){
     if(w.AgCampoExportar)return w.AgCampoExportar.abrir();
     if(b.dataset.carregando)return;
     b.dataset.carregando='1';
-    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=2';
+    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=3';
     sc.onload=function(){delete b.dataset.carregando;if(w.AgCampoExportar)w.AgCampoExportar.abrir();};
     sc.onerror=function(){delete b.dataset.carregando;b.textContent='Exportar indisponível offline';};
     d.head.appendChild(sc);

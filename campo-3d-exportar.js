@@ -237,23 +237,18 @@
     return s + '…';
   }
 
-  function ceu(ctx, hz) {
-    var real = hz != null, hy = real ? Math.max(40, Math.min(H - 40, hz)) : H * 0.5, f = hy / H;
+  /* Fundo: gramado, sem céu (pedido de quem usa: o céu tirava espaço do
+     campo e não dizia nada). Verde de grama com leve variação, fixa. */
+  function ceu(ctx) {
     var g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#e9a874'); g.addColorStop(f * 0.55, '#f6cd9c'); g.addColorStop(f * 0.94, '#f3dcc0');
-    g.addColorStop(f, '#f3dcc0'); g.addColorStop(Math.min(1, f + 0.12), '#b9c99a'); g.addColorStop(1, '#93ab72');
+    g.addColorStop(0, '#6f9a4a'); g.addColorStop(0.5, '#7aa653'); g.addColorStop(1, '#5f8a3e');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    /* sol baixo, à direita, só como luz de fundo */
-    var s = ctx.createRadialGradient(W * 0.74, hy - 20, 10, W * 0.74, hy - 20, 520);
-    s.addColorStop(0, 'rgba(255,240,200,0.95)'); s.addColorStop(0.18, 'rgba(255,214,150,0.55)'); s.addColorStop(1, 'rgba(255,214,150,0)');
-    ctx.fillStyle = s; ctx.fillRect(0, 0, W, Math.min(H, hy + 120));
-    if (real) return;
-    /* linha de árvores ao longe — silhueta, fora de foco */
     var r = sorteio(77);
-    ctx.fillStyle = 'rgba(92,118,92,0.42)';
-    ctx.beginPath(); ctx.moveTo(0, H * 0.5);
-    for (var x = 0; x <= W; x += 24) ctx.lineTo(x, H * 0.5 - 10 - 26 * r() - 14 * Math.sin(x / 140));
-    ctx.lineTo(W, H * 0.52); ctx.lineTo(0, H * 0.52); ctx.closePath(); ctx.fill();
+    for (var i = 0; i < 9000; i++) {
+      var x = r() * W, y = r() * H, h = 4 + r() * 8, v = r();
+      ctx.strokeStyle = v < 0.5 ? 'rgba(70,110,40,0.35)' : (v < 0.85 ? 'rgba(140,180,90,0.30)' : 'rgba(190,200,120,0.25)');
+      ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (r() - 0.5) * 3, y - h); ctx.stroke();
+    }
   }
 
   /* Câmera: a mesma projeção da tela (prjCru), com escala FIXA para o vídeo
@@ -485,7 +480,7 @@
     if (cena.real) {
       if (cena._realChave !== cena._camChave) { cena.real.enquadrar(area, cena.rots || [cena.rot0]); cena._realChave = cena._camChave; }
       var gl = cena.real.desenhar(q.t, cena._rot);
-      ceu(ctx, cena.real.horizonte());
+      ceu(ctx);
       ctx.drawImage(gl, 0, 0);
       rotulosGrade(ctx, cena, lang, cena.real.projetar, 2.2, 3.2);
     } else {
@@ -587,7 +582,7 @@
   function prepararReal(cena) {
     if (cena.op.estilo !== 'realista') return Promise.resolve(cena);
     return script('vendor/three-agracta.min.js?v=1', 'AgTHREE').then(function () {
-      return script('campo-3d-realista.js?v=1', 'AgCampoRealista');
+      return script('campo-3d-realista.js?v=2', 'AgCampoRealista');
     }).then(function (R) {
       cena.real = R.suportado() ? R.criar(cena, W, H) : null;
       if (!cena.real) cena.semReal = true;

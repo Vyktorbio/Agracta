@@ -44,8 +44,8 @@ alguém exporta.
 - **Realista** (padrão): cada parcela é um bloco de folhagem na posição da
   grade. **A cor da folhagem é a faixa do dado; a altura é igual para todos**,
   porque num campo de verdade a doença muda a cor, não faz a planta crescer.
-  Parcela sem avaliação fica com solo nu e contorno tracejado claro. Céu,
-  gramado, mata e luz são cenário.
+  Parcela sem avaliação fica com solo nu e contorno tracejado claro. Fundo de
+  gramado, sem céu (o campo ocupa mais o quadro). Grama e luz são cenário.
 - **Esquemático**: o desenho em canvas 2D, com altura = valor, como na tela.
 - Sem WebGL, ou se o three.js não carregar, a exportação sai no esquemático e
   o modal avisa. Ela não falha.
