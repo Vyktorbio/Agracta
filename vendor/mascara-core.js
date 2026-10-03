@@ -26,12 +26,16 @@
 
 /* Fora do estudo fica translúcido de propósito: a quadra existe, o mapa não
    esconde ela, mas ela não disputa atenção com quem tem trabalho pendente. */
+/* Cores PADRÃO e vivas (as mesmas dos estados do app, cores-padrao.css). As
+   anteriores — verde-musgo, mostarda, vermelho fosco — sobre o satélite e a
+   50% de opacidade ficavam pastéis, apagadas: "as cores no mapa continuam
+   feias". Por cima da imagem a cor precisa de saturação para ser lida. */
 var CORES={
-  avaliada:    {cor:'#46a35a', preenchimento:0.50, rotulo:'Avaliada'},
-  parcial:     {cor:'#e3b341', preenchimento:0.50, rotulo:'Parcial'},
-  pendente:    {cor:'#e0584c', preenchimento:0.50, rotulo:'Pendente'},
-  selecionada: {cor:'#2e86f0', preenchimento:0.55, rotulo:'Selecionada'},
-  fora:        {cor:'#9aa0a6', preenchimento:0.16, rotulo:'Fora do estudo'}
+  avaliada:    {cor:'#16a34a', preenchimento:0.50, rotulo:'Avaliada'},
+  parcial:     {cor:'#f59e0b', preenchimento:0.50, rotulo:'Parcial'},
+  pendente:    {cor:'#dc2626', preenchimento:0.50, rotulo:'Pendente'},
+  selecionada: {cor:'#2563eb', preenchimento:0.55, rotulo:'Selecionada'},
+  fora:        {cor:'#9ca3af', preenchimento:0.16, rotulo:'Fora do estudo'}
 };
 
 function inteiro(v){ var n=Number(v); return (isFinite(n)&&n>0)?Math.floor(n):0; }

@@ -38,7 +38,7 @@ ok(A.dentro([anc.lat, anc.lng], quadra) && !A.dentro(C.pontoLatLng(60, 0, anc), 
 
 /* nada gravado no estudo: o módulo não conhece "data" nem chama gravação */
 const src = fs.readFileSync('mapa-medir.js', 'utf8');
-ok(!/\bdata\[|saveData|persist|firestore|_avPersist/i.test(src), 'não toca em dados do estudo nem na nuvem');
+ok(!/saveData|\bsave\(|persist|firestore|_avPersist|\.croqui\s*=|\.estudos\s*=|setItem\(\s*['"]iracema/i.test(src), 'só lê a lista de estudos: não grava estudo, croqui nem nuvem');
 console.log('medir no mapa: ' + n + ' verificações OK.');
 
 /* toque livre: pontos (árvores) e retângulos soltos, cada um conferido na quadra */

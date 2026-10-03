@@ -3939,7 +3939,7 @@ function croquiDesenhar(camada,st,pos,emEdicao,qid){
     var poly=LF.polygon(CroquiCore.cantosDaParcela(p,pos),
       {color:'#fff',weight:1,opacity:emEdicao?.95:.8,
        fill:true,fillOpacity:emEdicao?.10:.04,fillColor:'#fff'});
-    if(!emEdicao&&qid&&window.AgractaParcelas){
+    if(!emEdicao&&qid&&window.AgractaParcelas&&!window._agDesenhoLivre){
       var estilo=window.AgractaParcelas.mapStyle(st,p);
       if(estilo)poly.setStyle(estilo);
       poly.options.bubblingMouseEvents=false;
@@ -4601,7 +4601,7 @@ function render(){
        controle e o realce do ponteiro leem o mesmo número. */
     var _zfoBase=_zona?0.62:(_mask?_mask.preenchimento:(isEd?0.18:0.26));
     var _borda=isEd?(_mask?_mask.cor:'#ffce00'):_zc;
-    var poly=LF.polygon(latlngs,{className:'q-poly',color:_borda,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfoBase,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw'))});
+    var poly=LF.polygon(latlngs,{className:'q-poly',color:_borda,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfoBase,interactive:(!drawMode && !ndviProbe && !scoutingModeActive && !(_measure&&_measure.mode==='draw') && !window._agDesenhoLivre)});
     /* O NDVI fica de fora do controle: ali a cor É medida do satélite, e ele
        já tem a opacidade dele no painel de índices. O que o controle mexe é a
        tinta que o app põe por cima do satélite. */
@@ -4610,7 +4610,7 @@ function render(){
     if(!_zona) _mascaraPolys.push(poly);
     (function(qid,zona){
       if(!drawMode){
-        poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
+        poly.on('click',function(){ if(scoutingModeActive) return; /* modo observação: o toque é da NOTA, não abre a quadra */ if(_measure&&_measure.mode==='draw') return; /* marcando parcelas livres / medindo: o toque é do desenho */ if(window._agDesenhoLivre) return; if(editMode) selectQuadra(qid); else showD(qid); });
         /* O realce do ponteiro soma ao que já está pintado. Fixo em 0.38 ele
            CLAREAVA uma máscara de estado (0.50) em vez de destacá-la. */
         if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:Math.min(0.82,_mascaraFill(this)+0.22),weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:_mascaraFill(this),weight:2});}); }
