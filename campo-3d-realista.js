@@ -34,22 +34,27 @@
     t.anisotropy = 4;
     return t;
   }
+  /* Terra: manchas largas e de pouco contraste. Grão fino e contrastado
+     cintilava no vídeo (aliasing): de um quadro para o outro o pixel caía ora
+     no grão claro, ora no escuro. */
   function texSolo(T) {
-    return canvasTex(T, 512, 512, function (g, L, A) {
-      g.fillStyle = '#7a5a3c'; g.fillRect(0, 0, L, A);
+    var t = canvasTex(T, 512, 512, function (g, L, A) {
+      g.fillStyle = '#7d5c3e'; g.fillRect(0, 0, L, A);
       var r = sorteio(11);
-      for (var i = 0; i < 9000; i++) {
-        var k = r(), s = 1 + r() * 3;
-        g.fillStyle = k < 0.45 ? 'rgba(60,42,26,' + (0.25 + r() * 0.35) + ')' : (k < 0.85 ? 'rgba(150,116,82,' + (0.2 + r() * 0.3) + ')' : 'rgba(200,180,150,0.35)');
+      for (var i = 0; i < 1400; i++) {
+        var k = r(), s = 6 + r() * 16;
+        g.fillStyle = k < 0.5 ? 'rgba(96,68,44,' + (0.10 + r() * 0.12) + ')' : 'rgba(140,108,78,' + (0.08 + r() * 0.12) + ')';
         g.beginPath(); g.ellipse(r() * L, r() * A, s, s * (0.6 + r() * 0.4), r() * 3, 0, 6.3); g.fill();
       }
-    }, [6, 6]);
+    }, [3, 3]);
+    t.anisotropy = 8;
+    return t;
   }
   function texGrama(T) {
     return canvasTex(T, 512, 512, function (g, L, A) {
       g.fillStyle = '#76a24c'; g.fillRect(0, 0, L, A);
       var r = sorteio(23);
-      for (var i = 0; i < 14000; i++) {
+      for (var i = 0; i < 5000; i++) {
         var x = r() * L, y = r() * A, h = 3 + r() * 7, v = r();
         g.strokeStyle = v < 0.5 ? 'rgba(84,118,48,0.7)' : (v < 0.85 ? 'rgba(128,160,72,0.6)' : 'rgba(170,176,96,0.5)');
         g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y - h); g.stroke();

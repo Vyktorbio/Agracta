@@ -119,13 +119,21 @@
   function roteiro(daas) {
     var n = daas.length;
     if (!n) return null;
-    var parada = n <= 6 ? 1.0 : (n <= 10 ? 0.8 : 0.6), passo = n <= 6 ? 1.3 : (n <= 10 ? 0.9 : 0.6);
+    /* Lento e contínuo (pedido de quem usa): a passagem entre avaliações dura
+       em proporção aos DIAS reais (0,15 s por dia, de 2,5 a 4,5 s), com a
+       parada na avaliação curta — só o bastante para ler o rótulo. Vídeo com
+       muitas avaliações encolhe as passagens para não passar de ~40 s. */
+    var parada = 0.6, POR_DIA = 0.15, MIN = 2.5, MAX = 4.5, TETO = 40;
+    var trans = [];
+    for (var k = 0; k < n - 1; k++) trans.push(Math.max(MIN, Math.min(MAX, (daas[k + 1] - daas[k]) * POR_DIA)));
+    var fixo = 1.0 + 1.2 + n * parada, soma = trans.reduce(function (a, b) { return a + b; }, 0);
+    if (soma && fixo + soma > TETO) { var f = Math.max(0.35, (TETO - fixo) / soma); trans = trans.map(function (t) { return t * f; }); }
     var seg = [{ tipo: 'abertura', i: 0, dur: 1.0 }];
-    for (var k = 0; k < n; k++) {
+    for (k = 0; k < n; k++) {
       seg.push({ tipo: 'avaliacao', i: k, dur: parada });
-      if (k < n - 1) seg.push({ tipo: 'transicao', de: k, para: k + 1, dur: passo });
+      if (k < n - 1) seg.push({ tipo: 'transicao', de: k, para: k + 1, dur: trans[k] });
     }
-    seg.push({ tipo: 'encerramento', i: n - 1, dur: 1.0 });
+    seg.push({ tipo: 'encerramento', i: n - 1, dur: 1.2 });
     var total = seg.reduce(function (a, s) { return a + s.dur; }, 0);
     return { segmentos: seg, segundos: total, quadros: Math.max(1, Math.round(total * FPS)), fps: FPS, daas: daas.slice() };
   }
@@ -141,7 +149,7 @@
     var p = r.quadros > 1 ? f / (r.quadros - 1) : 0.5;
     if (g.tipo === 'transicao') {
       var a = r.daas[g.de], b = r.daas[g.para];
-      return { t: a + (b - a) * passoSuave(u), real: false, i: null, de: g.de, para: g.para, fase: g.tipo, progresso: p };
+      return { t: a + (b - a) * suave(u), real: false, i: null, de: g.de, para: g.para, fase: g.tipo, progresso: p };
     }
     return { t: r.daas[g.i], real: true, i: g.i, fase: g.tipo, progresso: p, entrada: g.tipo === 'abertura' ? u : 1 };
   }
@@ -605,7 +613,7 @@
   function prepararReal(cena) {
     if (cena.op.estilo !== 'realista') return Promise.resolve(cena);
     return script('vendor/three-agracta.min.js?v=1', 'AgTHREE').then(function () {
-      return script('campo-3d-realista.js?v=3', 'AgCampoRealista');
+      return script('campo-3d-realista.js?v=4', 'AgCampoRealista');
     }).then(function (R) {
       cena.real = R.suportado() ? R.criar(cena, W, H) : null;
       if (!cena.real) cena.semReal = true;
@@ -624,8 +632,10 @@
     if (!cena.daas.length) return Promise.reject(Object.assign(new Error('sem-datas'), { codigo: 'noDates' }));
     r = roteiro(cena.daas);
     /* giro lento: 8° no vídeo inteiro, centrado onde a pessoa deixou a câmera */
-    var amp = 8 * Math.PI / 180;
-    cena.rots = [cena.rot0 - amp / 2, cena.rot0, cena.rot0 + amp / 2];
+    /* Câmera PARADA: o giro lento fazia o granulado da terra cintilar a cada
+       quadro, e comparar avaliações pede o mesmo ponto de vista. */
+    var amp = 0;
+    cena.rots = [cena.rot0];
     aviso({ fase: 'preparing' });
     return escolherCodec().then(function (cfg) {
       if (!cfg) throw Object.assign(new Error('sem-h264'), { codigo: 'videoUnsupported' });
