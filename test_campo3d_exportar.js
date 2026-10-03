@@ -84,7 +84,8 @@ function estudo(variavel) {
   ok(X.roteiro([]) === null, 'sem avaliação, sem roteiro');
   const r1 = X.roteiro([14]);
   ok(r1.quadros > 0 && [...Array(r1.quadros).keys()].every(f => X.instante(r1, f).real), 'uma avaliação: vídeo parado nela, sempre real');
-  ok(X.roteiro(Array.from({ length: 14 }, (_, i) => i * 7)).segundos <= 32, 'muitas avaliações não viram novela');
+  ok(X.roteiro(Array.from({ length: 14 }, (_, i) => i * 7)).segundos <= 41, 'muitas avaliações não viram novela');
+  { const r2 = X.roteiro([0, 7, 35]); const tr = r2.segmentos.filter(x => x.tipo === 'transicao'); ok(tr[1].dur > tr[0].dur && tr[0].dur >= 2.5, 'passagem proporcional aos dias, nunca menos de 2,5 s'); }
 
   /* modelo: ordem por DAA e variável selecionada */
   const st = estudo('Severidade');

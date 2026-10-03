@@ -57,7 +57,7 @@ alguém exporta.
 - Renderização determinística: cada quadro é desenhado a partir do instante.
   Nada é gravado da tela, então o resultado é o mesmo em máquina lenta ou
   rápida.
-- Duração: abertura de 1 s, cada avaliação 1,6 s (1,1 s com mais de 6; 0,8 s
+- Duração: abertura de 1 s, parada de 0,6 s em cada avaliação, passagem proporcional aos dias (0,15 s por dia, de 2,5 a 4,5 s, em curva suave), encerramento de 1,2 s; teto de ~40 s. Câmera parada.
   com mais de 10), transições de 0,7 s (0,5 s com mais de 6), encerramento de
   1 s. Quatro avaliações dão cerca de 10,5 s.
 - Navegador sem H.264 no WebCodecs: mensagem clara sugerindo o PNG. O

@@ -64,17 +64,19 @@ function diagram(st,g,av,selected,mode,grid){
  if(!g.parcelas.length)return '<p class="pc-notice">'+e((g.problemas||[]).join(' '))+'</p>';
  const vars=grid?grid.variaveis:schema(st,av),map=grid?grid.notas:notes(av),counts={empty:0,partial:0,done:0};
  if(!av&&!grid){delete counts.empty;delete counts.partial;delete counts.done;counts.planned=0;}
- const angle=g.pos.ang||0,ca=Math.cos(angle),sa=Math.sin(angle),scale=Math.max(48/g.parcelas[0].w,48/g.parcelas[0].h);
+ const angle=g.pos.ang||0,ca=Math.cos(angle),sa=Math.sin(angle),scale=g.livre?Math.min(30,Math.max(4,48/Math.max(1,Math.min(...g.parcelas.map(p=>Math.max(p.w,p.h)))))):Math.max(48/g.parcelas[0].w,48/g.parcelas[0].h);
  const xy=(x,y)=>[(x*ca-y*sa)*scale,-(x*sa+y*ca)*scale];
- const corners=g.parcelas.map(p=>[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]].map(v=>xy(v[0],v[1])));
- const pts=corners.flat(),minX=Math.min(...pts.map(p=>p[0]))-44,maxX=Math.max(...pts.map(p=>p[0]))+44,minY=Math.min(...pts.map(p=>p[1]))-44,maxY=Math.max(...pts.map(p=>p[1]))+44;
+ // Grade: um retângulo. Parcela livre de plantas: um círculo por planta (CroquiCore.formaLocal).
+ const forma=p=>(w.CroquiCore.formaLocal?w.CroquiCore.formaLocal(p):[[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]]]);
+ const corners=g.parcelas.map(p=>forma(p).map(anel=>anel.map(v=>xy(v[0],v[1]))));
+ const pts=corners.flat(2),minX=Math.min(...pts.map(p=>p[0]))-44,maxX=Math.max(...pts.map(p=>p[0]))+44,minY=Math.min(...pts.map(p=>p[1]))-44,maxY=Math.max(...pts.map(p=>p[1]))+44;
  const width=maxX-minX,height=maxY-minY;
  const point=p=>p.map(n=>Math.round(n*100)/100).join(',');
  let svg='<svg xmlns="http://www.w3.org/2000/svg" class="pc-svg" width="'+width+'" height="'+height+'" viewBox="'+[minX,minY,width,height].join(' ')+'" aria-label="Disposição física das parcelas e percurso">';
  g.parcelas.forEach((p,i)=>{
   const state=status(p.row,vars,map,!!av||!!grid,source(st,av,grid),!!grid);counts[state]=(counts[state]||0)+1;
   const name=p.row.campo||p.row.label||p.key,center=xy(p.x+p.w/2,p.y+p.h/2);
-  svg+='<g role="button" tabindex="0" data-pc-'+mode+'="'+e(p.key)+'" data-order="'+p.ordem+'" data-col="'+p.col+'" data-line="'+p.lin+'" aria-pressed="'+(selected===p.key)+'" aria-label="'+e(name+' · '+p.ordem+'ª no percurso · '+labels[state])+'" class="pc-cell '+state+(selected===p.key?' selected':'')+'"><title>'+e(name+' · '+p.row.tratId+' · '+p.ordem+'ª no percurso · '+labels[state])+'</title><polygon points="'+corners[i].map(point).join(' ')+'"/><text x="'+center[0]+'" y="'+(center[1]-4)+'">'+e(name)+'</text><text class="pc-order" x="'+center[0]+'" y="'+(center[1]+12)+'">'+p.ordem+'º</text></g>';
+  svg+='<g role="button" tabindex="0" data-pc-'+mode+'="'+e(p.key)+'" data-order="'+p.ordem+'" data-col="'+p.col+'" data-line="'+p.lin+'" aria-pressed="'+(selected===p.key)+'" aria-label="'+e(name+' · '+p.ordem+'ª no percurso · '+labels[state])+'" class="pc-cell '+state+(selected===p.key?' selected':'')+'"><title>'+e(name+' · '+p.row.tratId+' · '+p.ordem+'ª no percurso · '+labels[state])+'</title>'+corners[i].map(anel=>'<polygon points="'+anel.map(point).join(' ')+'"/>').join('')+'<text x="'+center[0]+'" y="'+(center[1]-4)+'">'+e(name)+'</text><text class="pc-order" x="'+center[0]+'" y="'+(center[1]+12)+'">'+p.ordem+'º</text></g>';
  });
  // A mesma linha e as mesmas setas do mapa; não há reordenação por bloco.
  const path=w.CroquiCore.caminho(g);
@@ -82,7 +84,7 @@ function diagram(st,g,av,selected,mode,grid){
  w.CroquiCore.setas(g).forEach(s=>{svg+='<polyline class="pc-arrow" points="'+s.map(p=>point(xy(p[0],p[1]))).join(' ')+'"/>';});
  const first=g.parcelas[0],start=xy(first.x,first.y);
  svg+='<circle class="pc-start" cx="'+start[0]+'" cy="'+start[1]+'" r="5"/><text class="pc-start-label" x="'+start[0]+'" y="'+(start[1]+22)+'">Início</text></svg>';
- return '<div class="pc-map-meta"><span>'+g.colunas+' colunas × '+g.linhas+' linhas · '+e(g.serpentina?'Vai e volta':'Sempre no mesmo sentido')+'</span><span title="Norte geográfico">↑ N</span></div><div class="pc-viewport" tabindex="0" aria-label="Croqui rolável">'+svg+'</div>'+legend(counts)+'<p class="pc-hint">Toque na parcela. Arraste a área ou use a rolagem para percorrer o desenho. Dimensões, vãos e orientação seguem o croqui salvo.</p>';
+ return '<div class="pc-map-meta"><span>'+(g.livre?(g.parcelas.length+' parcelas marcadas no mapa'+(g.faltam?' · '+g.faltam+' sem lugar':'')):(g.colunas+' colunas × '+g.linhas+' linhas · '+e(g.serpentina?'Vai e volta':'Sempre no mesmo sentido')))+'</span><span title="Norte geográfico">↑ N</span></div><div class="pc-viewport" tabindex="0" aria-label="Croqui rolável">'+svg+'</div>'+legend(counts)+'<p class="pc-hint">Toque na parcela. Arraste a área ou use a rolagem para percorrer o desenho. Dimensões, vãos e orientação seguem o croqui salvo.</p>';
 }
 function rowList(st,g){
  if(g.parcelas.length)return '';
