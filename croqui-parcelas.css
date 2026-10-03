@@ -9,3 +9,8 @@
 .croqui-panel.pc-position{display:flex;flex-direction:column;max-height:calc(100dvh - 145px);padding:10px;box-sizing:border-box}
 .pc-position .croqui-head{flex:none;gap:8px}.pc-position .croqui-title{font-size:11px;flex:1}.pc-position .croqui-toggle{background:#26312b;color:#e7efe9;border:1px solid #46594d;border-radius:8px;min-height:36px;padding:6px 9px;font:700 11px system-ui,sans-serif;cursor:pointer}.pc-position .croqui-x{min-width:28px;min-height:36px}.pc-position .croqui-ajustes{min-height:0;overflow:auto;overscroll-behavior:contain}.pc-position .croqui-resumo{margin-bottom:8px}.pc-position .croqui-acts{flex:none;margin-top:5px}.pc-position .croqui-acts button{min-height:40px}.pc-position .croqui-remove{background:transparent;color:#f0a3a3;border:1px solid #5a2f2f;border-radius:8px;padding:8px;width:100%;margin-bottom:8px;cursor:pointer}.pc-position.croqui-compacto .croqui-ajustes{display:none}.pc-position .croqui-acc{flex:none;max-height:15dvh;overflow:auto}.pc-position .croqui-nums input{min-height:36px}
 @media(max-width:700px){.croqui-panel.pc-position{left:8px;right:8px;bottom:calc(82px + env(safe-area-inset-bottom));width:auto;max-width:none;max-height:52dvh;border-radius:12px}.pc-position .croqui-ajustes{max-height:calc(52dvh - 135px)}}
+
+/* Visão geral preserva o viewBox; ampliar restaura o tamanho legível e a rolagem. */
+.pc-viewport.pc-fit{height:52dvh;overflow:hidden;scrollbar-gutter:auto}
+.pc-fit .pc-svg{width:100%;height:100%;max-width:100%;overflow:hidden}
+@media(max-width:700px){.pc-viewport.pc-fit{height:42dvh}}

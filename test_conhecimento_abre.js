@@ -93,3 +93,12 @@ assert.ok(!/x\.av/.test(REC),
 assert.match(REC,/evs\.push\(\{s:s,quando:/,'e ela continua empilhando estudo + carimbo');
 
 console.log('Conhecimento abre: "Mexido por último" não lê avaliação que não tem, e a tela inteira deixa de cair por causa de uma lista OK.');
+
+// Datas negativas nunca entram em Próximas; limites de hoje/14 dias e finalização.
+const agenda=pegar('proximasAvaliacoes',{diasDe:x=>x});
+const ag=agenda([{...comAv,avaliacoes:[-110,-1,0,14,15].map((d,i)=>({id:'date'+i,data:d,completa:false})).concat({id:'done',data:0,completa:true})},{...comAv,finalizado:true,avaliacoes:[{id:'closed',data:0}]}]);
+const [futuro,atrasado]=ag.split('<h3>Avaliações atrasadas</h3>');
+assert.match(futuro,/data-av="date2"/);assert.match(futuro,/data-av="date3"/);
+assert.doesNotMatch(futuro,/date0|date1|date4|done|closed/);
+assert.match(atrasado,/data-av="date0"/);assert.match(atrasado,/data-av="date1"/);
+assert.doesNotMatch(atrasado,/date2|date3|date4|done|closed/);

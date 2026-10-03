@@ -163,7 +163,7 @@
     var rodape=s.finalizado
       ? 'Finalizado em '+dataHoraBR(s.finalizadoEm)+(s.finalizadoPor?' por '+e(s.finalizadoPor):'')
       : e(s.local)+' · '+(s.ambiente==='laboratorio'?'Laboratório':'Campo')+' · '+s.resultados.length+' resultados';
-    return bot('estudo','<b>'+e(s.codigo)+'</b><span>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+'</span>'+selo(s)+
+    return bot('estudo','<b>'+e(s.codigo)+'</b><span>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+'</span>'+selo(s)+
       '<small>'+rodape+'</small>','data-key="'+e(s.key)+'"','card');
   }
   /* Nenhuma destas acoes escreve daqui: cada uma chama a mesma funcao do
@@ -272,16 +272,16 @@
     var linhas=[rotulo(s.local),cli,s.inicio?'Início em '+dataBR(s.inicio):''].filter(Boolean);
     return '<article class="con-cartao">'+
       '<div class="con-cartao-faixa" style="--tom:'+tomDaCultura(s.cultura)+'">'+
-        '<span class="con-cultura">'+e(rotulo(s.cultura)||'Sem cultura')+'</span>'+
+        '<span class="con-cultura">'+e(rotulo(s.cultura)||'Cultura não informada')+'</span>'+
         '<span class="con-selo '+st.chave+'">'+e(st.rot)+'</span></div>'+
-      bot('estudo','<b>'+e(rotulo(s.codigo)||s.sid)+'</b><span>'+e(rotulo(s.alvo)||'Sem alvo')+'</span>'+
+      bot('estudo','<b>'+e(rotulo(s.codigo)||s.sid)+'</b><span>'+e(rotulo(s.alvo)||'Alvo não informado')+'</span>'+
         '<small>'+linhas.map(e).join('<br>')+'</small>','data-key="'+e(s.key)+'"','cartao-corpo')+
       '<div class="con-medidas">'+
         '<div><b>'+(s.tratamentos.length*s.repeticoes)+'</b><span>parcelas</span></div>'+
-        '<div><b>'+pr.feitas+' de '+pr.total+'</b><span>avaliações concluídas</span></div>'+
+        (pr.total?'<div><b>'+pr.feitas+' de '+pr.total+'</b><span>avaliações concluídas</span></div>':'<div><span>Sem avaliações cadastradas</span></div>')+
         faisca(s)+'</div>'+
-      '<div class="con-barra" role="img" aria-label="'+pr.pct+'% das avaliações cadastradas estão completas">'+
-        '<span style="width:'+pr.pct+'%"></span></div>'+
+      (pr.total?'<div class="con-barra" role="img" aria-label="'+pr.pct+'% das avaliações cadastradas estão completas">'+
+        '<span style="width:'+pr.pct+'%"></span></div>':'')+
       /* Num estudo assinado o que importa é quando e por quem, não há quanto
          tempo alguém mexeu: o que valia mudar já não muda mais. */
       '<p class="con-cartao-pe">'+(s.finalizado
@@ -321,14 +321,19 @@
         itens.push({s:s,av:av,dias:d});});
     });
     itens.sort(function(a,b){return a.dias-b.dias;});
-    if(!itens.length)return '<h3>Próximas avaliações</h3>'+vazio('Nenhuma avaliação cadastrada para os próximos 14 dias.');
-    return '<h3>Próximas avaliações</h3><ul class="con-agenda">'+itens.slice(0,8).map(function(x){
-      var quando=x.dias<0?'atrasada '+Math.abs(x.dias)+' d':x.dias===0?'hoje':'em '+x.dias+' d';
-      return '<li'+(x.dias<0?' class="atrasada"':'')+'>'+
-        bot('avaliacao','<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.cultura))+' · '+dataBR(x.av.data)+'</span>',
-            'data-key="'+e(x.s.key)+'" data-av="'+e(x.av.id)+'"','link')+'<em>'+e(quando)+'</em></li>';
-    }).join('')+'</ul>'+
-    (itens.length>8?'<p class="con-note">e mais '+(itens.length-8)+' nas próximas duas semanas.</p>':'');
+    function secao(titulo,grupo,nenhuma,restante){
+      return '<h3>'+titulo+'</h3>'+(grupo.length?'<ul class="con-agenda">'+grupo.slice(0,8).map(function(x){
+        var quando=x.dias<0?'atrasada '+Math.abs(x.dias)+' d':x.dias===0?'hoje':'em '+x.dias+' d';
+        return '<li'+(x.dias<0?' class="atrasada"':'')+'>'+bot('avaliacao',
+          '<b>'+e(rotulo(x.s.codigo)||x.s.sid)+'</b><span>'+e(rotulo(x.s.cultura))+' · '+dataBR(x.av.data)+'</span>',
+          'data-key="'+e(x.s.key)+'" data-av="'+e(x.av.id)+'"','link')+'<em>'+e(quando)+'</em></li>';
+      }).join('')+'</ul>'+(grupo.length>8?'<p class="con-note">e mais '+(grupo.length-8)+' '+restante+'</p>':''):
+      '<p class="con-note">'+nenhuma+'</p>');
+    }
+    return secao('Próximas avaliações',itens.filter(function(x){return x.dias>=0;}),
+      'Nenhuma avaliação pendente para os próximos 14 dias.','nas próximas duas semanas.')+
+      secao('Avaliações atrasadas',itens.filter(function(x){return x.dias<0;}),
+      'Nenhuma avaliação atrasada.','avaliações atrasadas.');
   }
 
   function atividadeRecente(todos){
@@ -479,7 +484,7 @@
       '<p class="con-empty">O dossiê completo deste estudo não carregou, então esta é a ficha reduzida: '+
       'sem gráficos, sem a vista do campo e sem a estatística. Nada foi perdido — o arquivo do dossiê '+
       'não chegou a este aparelho. Feche o Agracta por inteiro e abra de novo <b>com conexão</b>; '+
-      'depois disso ele funciona offline.</p>'+'<div class="con-titulo"><div><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Sem cultura')+' · '+e(s.alvo||'Sem alvo')+' · '+e(s.local)+' · '+e(s.quadra)+'</p></div>'+bot('original','Abrir estudo','data-key="'+e(s.key)+'"')+'</div><p class="con-note">'+e(s.desenho)+' · '+e(s.metodo)+' · '+(s.finalizado?'Finalizado':'Em execução')+'</p>'+tabela(C.resultados([s],{}))+
+      'depois disso ele funciona offline.</p>'+'<div class="con-titulo"><div><h2>'+e(s.codigo)+'</h2><p>'+e(s.cultura||'Cultura não informada')+' · '+e(s.alvo||'Alvo não informado')+' · '+e(s.local)+' · '+e(s.quadra)+'</p></div>'+bot('original','Abrir estudo','data-key="'+e(s.key)+'"')+'</div><p class="con-note">'+e(s.desenho)+' · '+e(s.metodo)+' · '+(s.finalizado?'Finalizado':'Em execução')+'</p>'+tabela(C.resultados([s],{}))+
       contextoHtml(s)+integracoesHtml(s)+custosHtml(s);
   }
   function pintar(){
