@@ -50,7 +50,7 @@ html .con-estudo>.con-btn.card{background:transparent!important}
 html .con-btn.link{color:var(--text)!important;text-decoration:underline;text-underline-offset:3px}
 html :is(.con-btn,.btn-cancel):hover{box-shadow:0 0 0 2px #77777725}
 html :is(.ep-facts>div,.ep-analysis-card,.av-auto-box,.bio-fast-card,.bio-engine-status,.av-schema-inherited){background:var(--surface-2)!important;border-color:var(--border)!important;color:var(--text)!important}
-html :is(.con-overlay,.sd-overlay,.today-overlay,.studies-overlay){background:var(--bg)!important;background-image:none!important}
+html :is(.con-overlay,.sd-overlay,.today-overlay){background:var(--bg)!important;background-image:none!important}
 html :is(input,select,textarea){accent-color:#25272c}
 html :is(button,input,select,textarea,a):focus-visible{outline:3px solid #1477e5!important;outline-offset:3px}
 /* Janelas locais de fotos e relatórios: mesmas superfícies, sem recolorir figuras. */

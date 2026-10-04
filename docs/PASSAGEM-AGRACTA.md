@@ -280,6 +280,9 @@ estado real:
 
 ### B5. Limpeza (leva separada, opcional)
 
+> **Feito na 20ª publicação (04/10/2026):** o Supabase saiu do `app.js`, do
+> `index.html`, do pré-cache e do repositório (`.sql` e `supabase/functions/`).
+
 Sobra muito Supabase morto: `var SB`, `cloudInit` original, `vendor/supabase.js`
 no `index.html` e no pré-cache, os `.sql` e `supabase/functions/`. Não é bug,
 mas confunde auditoria e pesa no carregamento. Fazer sozinha, com o portão

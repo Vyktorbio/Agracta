@@ -1,5 +1,13 @@
 # Agracta — Validação do Sistema Computadorizado (CSV)
 
+> **Atenção (20ª publicação, 04/10/2026):** este documento ainda descreve a época do
+> Supabase (perfis + RLS, funções `criar-tecnico`/`remover-tecnico`, tabelas da Fase 4).
+> Esses artefatos saíram do app e do repositório nesta publicação. O controle de acesso
+> real hoje é o do Firebase: cadastro em `workspaces/agracta/members/{email}` (ativo +
+> janela de horário) e as `firestore.rules`; revogar é desativar ou apagar o cadastro no
+> Painel Admin. A reescrita para o estado atual é o item B3 do `docs/PASSAGEM-AGRACTA.md`.
+> Os arquivos antigos seguem no histórico do git (antes do commit `bb8b7da`).
+
 > Conforme **OECD Advisory Document Nº 17 (2016)** / **NIT-Dicla-038** (ciclo de vida, abordagem baseada em risco)
 > e boas práticas **GAMP 5**. Sistema **customizado** → exige URS + qualificação (IQ/OQ/PQ) + revisão de código + controle de mudanças.
 > Documento controlado — manter atualizado a cada mudança relevante de versão.

@@ -114,7 +114,11 @@ var html = fs.readFileSync('index.html', 'utf8');
 var nomes = funcoesDosHandlers(html).filter(function(n){ return !IGNORAR[n]; });
 
 S('index.html: cada onclick aponta para função existente');
-check(nomes.length > 20, 'o HTML tem handlers para conferir  (' + nomes.length + ' funções distintas)');
+/* Piso de sanidade, não contagem de recursos: se o extrator quebrar e não achar
+   nada, as checagens abaixo passariam sem conferir coisa alguma. Era > 20; na
+   20a publicação saíram do HTML os painéis mortos (editor antigo e Central de
+   ensaios) e ficaram 20 funções. */
+check(nomes.length > 10, 'o HTML tem handlers para conferir  (' + nomes.length + ' funções distintas)');
 
 var faltando = [];
 nomes.forEach(function(n){

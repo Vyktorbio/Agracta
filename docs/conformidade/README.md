@@ -1,5 +1,13 @@
 # Conformidade do Agracta — GLP/BPL + ISO/IEC 27001
 
+> **Atenção (20ª publicação, 04/10/2026):** este documento ainda descreve a época do
+> Supabase (perfis + RLS, funções `criar-tecnico`/`remover-tecnico`, tabelas da Fase 4).
+> Esses artefatos saíram do app e do repositório nesta publicação. O controle de acesso
+> real hoje é o do Firebase: cadastro em `workspaces/agracta/members/{email}` (ativo +
+> janela de horário) e as `firestore.rules`; revogar é desativar ou apagar o cadastro no
+> Painel Admin. A reescrita para o estado atual é o item B3 do `docs/PASSAGEM-AGRACTA.md`.
+> Os arquivos antigos seguem no histórico do git (antes do commit `bb8b7da`).
+
 Este pacote documenta como o **Agracta** (sistema computadorizado de registro de ensaios
 de campo) apoia a **integridade de dados** e a **rastreabilidade** exigidas pelas Boas
 Práticas de Laboratório (BPL/GLP) e os **controles de segurança da informação** da

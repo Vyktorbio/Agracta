@@ -6,7 +6,7 @@ const dom=new JSDOM('<!doctype html><html><body><div id="card"></div></body></ht
 w.todayISO=()=>'2026-09-19';w.AvaliacaoCore=C;w.normalizeStudy=s=>s;w._bioAutoCache={};w._bioestatJobs=()=>[];w._studyRandomOk=()=>true;
 w.studyTestemunha=()=> 'T1';w.studyCultura=()=> 'Soja';w.isQuadraLab=()=>false;w.estudoFinalizado=s=>!!(s.finalizacao&&s.finalizacao.em);
 w._currentUserName=()=> 'Teste';w._bioestatSnapshotAvancado=()=>({pendencias:[],indisponiveis:[]});
-const names=['pD','isoToBR','addDays','daysBetween','today0','nextEventV2','_avCroquiEscJs','_avCroquiStatus','studyEventsV2','_studyPanelProgress','_studyPanelState','_studyWorkflow','_studyFinalizationReview','_mascaraContagem','renderTodayCard','quickRegisterAvaliacao','collectTodayEvents','closeAgendaAndOpen'];
+const names=['pD','isoToBR','addDays','daysBetween','today0','nextEventV2','_avCroquiEscJs','_avCroquiStatus','studyEventsV2','_studyWorkflow','_studyFinalizationReview','_mascaraContagem','renderTodayCard','quickRegisterAvaliacao','collectTodayEvents','closeAgendaAndOpen'];
 for(const n of names){const match=src.match(new RegExp('function '+n+'\\([^]*?\\n}'));assert(match,n);w.eval(match[0]);}
 w._agEstaDispensado=()=>false;w._agEvKey=ev=>ev.id;w.quadraNome=q=>q;w.esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 w._avRowsForStudy=C.linhas;w.estudosAtivos=q=>(w.data[q].estudos||[]).filter(s=>!w.estudoFinalizado(s));
@@ -21,7 +21,7 @@ function check(filled,complete){
  const before=JSON.stringify(st),p=C.avaliacao(st,av);
  assert.equal(p.filled,filled);assert.equal(p.complete,complete);
  assert.equal(ev().realizada,complete,'agenda exige conclusão da grade, não flag legada');
- assert.equal(w._studyPanelProgress(st).complete,complete);
+ assert.equal(C.estudo(st).complete,complete);
  assert.equal(w._studyWorkflow('Q',st).avaliacoes.state==='complete',complete);
  assert.equal(projected().avaliacoes[0].completa,complete);
  assert.equal(w.collectTodayEvents(1).length,complete?0:1,'parcial continua no Hoje');
@@ -57,7 +57,7 @@ check(8,true);assert.equal(w._mascaraContagem('Q').done,4);
 assert.equal(w._avCroquiStatus(C.linhas(st)[0],av.variaveis),'done');
 av.notas.T2R2.Inc='texto';check(7,false);av.notas.T2R2.Inc='';check(7,false);av.notas.T2R2.Inc=0;
 const future={id:'B',data:'2026-12-30',variaveis:[],notas:{}};st.avaliacoes.push(future);
-assert.equal(C.avaliacao(st,future).total,8,'herda a grade sem copiar notas');assert.equal(w._studyPanelProgress(st).pct,50);assert.equal(C.estudo(st).concluidas,1);assert.equal(future.variaveis.length,0);st.avaliacoes.pop();
+assert.equal(C.avaliacao(st,future).total,8,'herda a grade sem copiar notas');assert.equal(C.estudo(st).pct,50);assert.equal(C.estudo(st).concluidas,1);assert.equal(future.variaveis.length,0);st.avaliacoes.pop();
 st.finalizacao={em:'2026-09-19'};av.notas.T2R2.Inc='';assert.equal(w.collectTodayEvents(1).length,0);assert.equal(w._mascaraContagem('Q').done,0);
 w.quickRegisterAvaliacao('Q','S','Mort',av.id);assert.equal(opened.length,1,'atalho antigo não edita estudo finalizado');
 // Subamostras e razão: média parcial não significa coleta terminada, N sozinho não é leitura.

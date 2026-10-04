@@ -1,5 +1,13 @@
 # Agracta — Conformidade BPL/GLP + ISO/IEC 27001 (dossiê mestre)
 
+> **Atenção (20ª publicação, 04/10/2026):** este documento ainda descreve a época do
+> Supabase (perfis + RLS, funções `criar-tecnico`/`remover-tecnico`, tabelas da Fase 4).
+> Esses artefatos saíram do app e do repositório nesta publicação. O controle de acesso
+> real hoje é o do Firebase: cadastro em `workspaces/agracta/members/{email}` (ativo +
+> janela de horário) e as `firestore.rules`; revogar é desativar ou apagar o cadastro no
+> Painel Admin. A reescrita para o estado atual é o item B3 do `docs/PASSAGEM-AGRACTA.md`.
+> Os arquivos antigos seguem no histórico do git (antes do commit `bb8b7da`).
+
 > Documento de referência da Instalação de Teste. Versão controlada — registre alterações no fim.
 > Alinhado às fontes oficiais:
 > - **OECD GLP** — *OECD Principles of Good Laboratory Practice* (Doc. Nº 1) e **NIT-Dicla-035** (tradução Inmetro).

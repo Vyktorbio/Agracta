@@ -148,14 +148,6 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .e-btn:hover{filter:brightness(1.2)}.e-save{background:#1e3a1e;color:#8c8}.e-cancel{background:#222;color:#888}
 .e-btn-del{background:#3a1e1e;color:#f88;margin-top:12px;width:100%;padding:8px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:1px;border:none}
 
-.eval-dates{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
-.eval-chip{background:#060a06;border:1px solid #1e2e1e;border-radius:5px;padding:4px 8px;font-size:11px;color:#ddd;display:flex;align-items:center;gap:6px}
-.eval-chip-rm{background:none;border:none;color:#666;cursor:pointer;font-size:13px;padding:0;line-height:1}
-.eval-chip-rm:hover{color:#ff5252}
-.eval-add-row{display:flex;gap:6px;margin-top:6px}
-.eval-add-row input{flex:1}
-.eval-add-btn{background:#1a2a1a;color:#8a8;border:1px solid rgba(76,175,80,.27);padding:0 12px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:700}
-
 .legend-panel{position:fixed;top:80px;left:8px;background:rgba(8,14,8,0.95);border:1px solid #1a2a1a;border-radius:10px;padding:12px;z-index:60;max-width:280px;display:none;backdrop-filter:blur(10px)}
 .legend-panel.open{display:block}
 .lg-title{font-size:9px;color:#555;letter-spacing:2px;font-weight:700;margin-bottom:6px}
@@ -322,7 +314,6 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .study-card-v2-next.soon{background:rgba(255,152,0,0.15);color:#fc8}
 .study-card-v2-next.normal{background:rgba(33,150,243,0.12);color:#8bf}
 
-
 /* ============ CSS NOVOS PAINÉIS v3 ============ */
 
 /* HOJE e busca são .btn-sm normais + cores especiais quando urgente */
@@ -398,7 +389,6 @@ html.light .clima-chip .cc-src.sat{color:#2f6098;border-color:rgba(47,96,152,.28
 .search-item-sub{font-size:12px;color:#8a9;margin-top:4px}
 .search-item-meta{font-size:11px;color:#557;margin-top:4px}
 .search-empty{text-align:center;color:#789;padding:40px 20px;font-size:14px}
-
 
 /* ==================== bloco layout/paineis (ex-index.html) ==================== */
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
@@ -615,7 +605,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 /* ---- Botões "verdes" -> emerald coeso ---- */
 .gr-ok,.e-save,.btn-save,.today-card-quick,.se-add-trat,.sd-add{background:linear-gradient(180deg,#1f9a5d,#178048);color:#eafff2;border:none}
 .gr-ok:hover,.e-save:hover,.btn-save:hover,.today-card-quick:hover{filter:brightness(1.08)}
-.p-btn-edit,.studies-add,.eval-add-btn,.studies-add{background:var(--accent-soft);color:var(--accent);border:1px solid #244a36}
+.p-btn-edit,.studies-add,.studies-add{background:var(--accent-soft);color:var(--accent);border:1px solid #244a36}
 .ndvi-ix.on{background:var(--accent-deep);color:#bff3d4;border-color:var(--accent-d)}
 .gr-cancel,.e-cancel,.btn-cancel,.p-btn-close{background:#1b211d;color:var(--text-2);border:1px solid var(--border)}
 .gr-reset{background:#2a2418;color:#e0bd72;border:none}
@@ -700,7 +690,7 @@ html,body{background:var(--bg)} body{color:var(--text)}
 .studies-wrap{border-top-color:var(--border)} .q-noest{background:#f6f8f7;border:1px dashed var(--border);color:var(--text-3)}
 .study-card,.study-card-v2{background:#f6f8f7;border-color:var(--border)} .study-card-v2:hover{border-color:#bfe0cd}
 .study-name,.study-card-v2-codigo{color:#1d2723} .study-meta,.study-card-v2-desc,.study-card-v2-meta{color:var(--text-2)}
-.studies-add,.sd-add,.se-add-trat,.eval-add-btn{background:var(--accent-soft);color:var(--accent-d);border:1px solid #bfe0cd}
+.studies-add,.sd-add,.se-add-trat{background:var(--accent-soft);color:var(--accent-d);border:1px solid #bfe0cd}
 .p-btn-close,.e-cancel,.btn-cancel,.gr-cancel{background:#eef1ef;color:var(--text-2);border:1px solid var(--border)}
 .e-inp,.gr-ctl select,.search-box input,.se-field input,.se-field select,.se-field textarea,.loc-box input,.auth-i,.se-trat input{color:var(--text);background:#fff}
 .e-inp::placeholder,.search-box input::placeholder,.auth-i::placeholder,.loc-box input::placeholder{color:#9aa49e}
@@ -928,7 +918,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .study-card-v2-desc,.study-card-v2-meta,.study-meta,.search-item-sub,.search-item-meta{color:var(--vm-muted-dark)!important}
 
 /* Botões internos */
-.studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
+.studies-add,.sd-add,.se-add-trat,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
   background:linear-gradient(180deg,#2c323a,#1d2229)!important;
   color:#fff!important;
   border:1px solid #15191e!important;
@@ -1273,7 +1263,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .bpl-vals strong.bpl-bad{color:var(--gp-red)!important}
 
 /* ---- Botões: retangulares, precisos ---- */
-.studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
+.studies-add,.sd-add,.se-add-trat,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
   background:var(--gp-green-deep)!important;
   color:#fff!important;
   border:1px solid rgba(255,255,255,.10)!important;
@@ -1282,7 +1272,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   box-shadow:0 2px 10px rgba(0,0,0,.35)!important;
   transition:background .13s ease,transform .1s ease;
 }
-.studies-add:hover,.sd-add:hover,.se-add-trat:hover,.eval-add-btn:hover,.btn-save:hover,.today-card-quick:hover,.gr-ok:hover,.e-save:hover,.p-btn-edit:hover{background:var(--gp-green-hover)!important;filter:none!important}
+.studies-add:hover,.sd-add:hover,.se-add-trat:hover,.btn-save:hover,.today-card-quick:hover,.gr-ok:hover,.e-save:hover,.p-btn-edit:hover{background:var(--gp-green-hover)!important;filter:none!important}
 .studies-add:active,.btn-save:active,.today-card-quick:active,.e-save:active{transform:scale(.98)}
 .btn-save,.today-card-quick{padding:11px!important;font-size:13px!important}
 .btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back,.ndvi-ix,.sd-actions .btn-sm,.search-close{
@@ -1567,7 +1557,7 @@ html.light .overlay,html.light .search-overlay,html.light .se-overlay,html.light
 html.light .today-head,html.light .sd-header{background:rgba(242,243,241,.82)!important}
 html.light .prog-bar{background:rgba(15,25,19,.10)!important}
 html.light .rot-ctl button,html.light .tool-ico{box-shadow:0 4px 14px rgba(20,30,24,.16)!important}
-html.light .studies-add,html.light .sd-add,html.light .se-add-trat,html.light .eval-add-btn,html.light .btn-save,html.light .today-card-quick,html.light .gr-ok,html.light .e-save,html.light .p-btn-edit{box-shadow:0 2px 10px rgba(29,122,68,.25)!important}
+html.light .studies-add,html.light .sd-add,html.light .se-add-trat,html.light .btn-save,html.light .today-card-quick,html.light .gr-ok,html.light .e-save,html.light .p-btn-edit{box-shadow:0 2px 10px rgba(29,122,68,.25)!important}
 html.light ::selection{background:rgba(23,138,72,.22);color:#0b130e}
 html.light .today-badge{background:var(--gp-green-deep)!important;color:#fff!important}
 html.light .auth-gate{background:
@@ -1606,7 +1596,7 @@ html.light .top-bar .btn-sm{background:transparent!important;border-color:transp
 html.light .top-bar .btn-sm:hover{background:rgba(15,25,19,.06)!important;border-color:rgba(15,25,19,.10)!important}
 html.light .loc-chip{background:transparent!important;border-color:rgba(15,25,19,.12)!important;box-shadow:none!important}
 /* Claro: CTA verde plano, sombra tingida discreta, sem borda */
-html.light .studies-add,html.light .sd-add,html.light .se-add-trat,html.light .eval-add-btn,html.light .btn-save,html.light .today-card-quick,html.light .gr-ok,html.light .e-save,html.light .p-btn-edit,html.light .p-btn.p-btn-edit,html.light .auth-btn{
+html.light .studies-add,html.light .sd-add,html.light .se-add-trat,html.light .btn-save,html.light .today-card-quick,html.light .gr-ok,html.light .e-save,html.light .p-btn-edit,html.light .p-btn.p-btn-edit,html.light .auth-btn{
   border-color:transparent!important;
   box-shadow:0 1px 2px rgba(29,122,68,.28),0 4px 14px rgba(29,122,68,.18)!important;
 }
@@ -1868,32 +1858,6 @@ html.light .btn-cancel,html.light .e-cancel,html.light .gr-cancel,html.light .p-
    O mapa continua a ser a tela de território. Esta tela é a de trabalho:
    responde "o que existe, o que vence agora e em que ponto está" sem exigir
    que o técnico percorra todas as quadras. */
-.studies-overlay{position:fixed;inset:0;z-index:1080;display:none;overflow-y:auto;background:var(--gp-bg,#101513);color:var(--gp-text,#e9ede9)}
-.studies-overlay.open{display:block}
-#studiesPnl{width:min(1120px,100%);margin:0 auto;padding:18px 18px calc(38px + env(safe-area-inset-bottom));box-sizing:border-box}
-.studies-dashboard-head{position:sticky;top:-18px;z-index:3;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 0 15px;background:linear-gradient(var(--gp-bg,#101513) 82%,rgba(16,21,19,.92));border-bottom:1px solid var(--gp-line,#263029);backdrop-filter:blur(12px)}
-.studies-dashboard-kicker{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--gp-text-3,#8e9991);text-transform:uppercase}
-.studies-dashboard-title{font-size:clamp(23px,4vw,34px);font-weight:820;letter-spacing:-.035em;color:var(--gp-text,#e9ede9);margin-top:3px}
-.studies-dashboard-sub{margin-top:4px;font-size:12px;color:var(--gp-text-3,#8e9991)}
-.studies-dashboard-actions{display:flex;align-items:center;gap:7px;flex:none}
-.studies-dashboard-new{border:1px solid var(--gp-green,#34d178);border-radius:10px;background:var(--gp-green,#34d178);color:#0b1710;padding:9px 12px;font:800 12px inherit;cursor:pointer}
-.studies-dashboard-close{flex:none;border:1px solid var(--gp-line-2,#3c4740);border-radius:10px;background:var(--gp-s2,#151a17);color:var(--gp-text,#e9ede9);padding:9px 12px;font:700 12px inherit;cursor:pointer}
-.studies-new-study{display:grid;grid-template-columns:minmax(145px,.7fr) minmax(220px,1.5fr) auto auto;align-items:center;gap:9px;margin:14px 0 2px;padding:12px;border:1px solid rgba(52,209,120,.36);border-radius:13px;background:rgba(52,209,120,.07)}
-.studies-new-copy b,.studies-new-copy span{display:block}.studies-new-copy b{font-size:13px;color:var(--gp-text,#e9ede9)}.studies-new-copy span{margin-top:3px;font-size:10px;color:var(--gp-text-3,#8e9991)}
-.studies-new-study select{min-width:0;width:100%;border:1px solid var(--gp-line-2,#3c4740);border-radius:9px;background:var(--gp-s2,#151a17);color:var(--gp-text,#e9ede9);padding:9px 10px;font:600 12px inherit;outline:none}.studies-new-study select:focus{border-color:var(--gp-green,#34d178);box-shadow:0 0 0 3px rgba(52,209,120,.12)}
-.studies-new-continue,.studies-new-cancel{border-radius:9px;padding:9px 11px;font:800 11px inherit;cursor:pointer}.studies-new-continue{border:1px solid var(--gp-green,#34d178);background:var(--gp-green,#34d178);color:#0b1710}.studies-new-cancel{border:1px solid var(--gp-line-2,#3c4740);background:transparent;color:var(--gp-text-2,#c8d1cb)}.studies-new-empty{font-size:11px;color:var(--gp-amber,#d9a13b)}
-.studies-dashboard-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:18px 0 15px}
-.study-summary-card{padding:13px 14px;border:1px solid var(--gp-line,#263029);border-radius:13px;background:var(--gp-s2,#151a17);font:inherit;text-align:left;cursor:pointer;transition:border-color .14s,background .14s,transform .14s}.study-summary-card:hover{transform:translateY(-1px);border-color:var(--gp-line-2,#3c4740)}.study-summary-card.active{border-color:var(--gp-green,#34d178);background:rgba(52,209,120,.07);box-shadow:0 0 0 2px rgba(52,209,120,.08)}
-.study-summary-card b{display:block;font-size:24px;line-height:1;color:var(--gp-text,#e9ede9);font-variant-numeric:tabular-nums}.study-summary-card span{display:block;margin-top:6px;font-size:10px;color:var(--gp-text-3,#8e9991);font-weight:750;letter-spacing:.08em;text-transform:uppercase}
-.study-summary-card.urgent b{color:var(--gp-red,#e5484d)}.study-summary-card.done b{color:var(--gp-green,#34d178)}
-.studies-dashboard-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.study-filter{border:1px solid var(--gp-line,#263029);border-radius:999px;padding:7px 10px;background:var(--gp-s2,#151a17);color:var(--gp-text-2,#c8d1cb);font:700 11px inherit;cursor:pointer}.study-filter.active{background:var(--gp-text,#e9ede9);color:#101513;border-color:var(--gp-text,#e9ede9)}
-.study-filter-search{margin-left:auto;min-width:220px;max-width:100%;flex:1;border:1px solid var(--gp-line,#263029);border-radius:10px;background:var(--gp-s2,#151a17);color:var(--gp-text,#e9ede9);padding:9px 11px;font:500 13px inherit;outline:none}.study-filter-search:focus{border-color:var(--gp-green,#34d178);box-shadow:0 0 0 3px rgba(52,209,120,.12)}
-.studies-dashboard-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:10px}
-.study-dashboard-card{position:relative;text-align:left;border:1px solid var(--gp-line,#263029);border-radius:14px;background:var(--gp-s2,#151a17);color:var(--gp-text,#e9ede9);padding:14px;cursor:pointer;font:inherit;transition:transform .14s,border-color .14s,background .14s;overflow:hidden}.study-dashboard-card:hover{transform:translateY(-1px);border-color:var(--gp-line-2,#3c4740);background:var(--gp-s3,#1b211d)}.study-dashboard-card:focus-visible{outline:3px solid rgba(52,209,120,.36);outline-offset:2px}
-.study-dashboard-top{display:flex;align-items:flex-start;gap:8px}.study-dashboard-code{min-width:0;flex:1;font-size:14px;font-weight:820;letter-spacing:-.01em}.study-dashboard-status{flex:none;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:850;letter-spacing:.06em;text-transform:uppercase}.study-dashboard-status.urgent{background:rgba(229,72,77,.13);color:var(--gp-red,#e5484d)}.study-dashboard-status.soon{background:rgba(217,161,59,.13);color:var(--gp-amber,#d9a13b)}.study-dashboard-status.go{background:rgba(111,168,220,.13);color:var(--gp-blue,#6fa8dc)}.study-dashboard-status.done{background:rgba(52,209,120,.12);color:var(--gp-green,#34d178)}.study-dashboard-status.final{background:rgba(142,153,145,.14);color:var(--gp-text-3,#8e9991)}
-.study-dashboard-name{margin-top:7px;font-size:12px;line-height:1.4;color:var(--gp-text-2,#c8d1cb);min-height:34px}.study-dashboard-where{margin-top:8px;font-size:11px;color:var(--gp-text-3,#8e9991);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.study-dashboard-where b{color:var(--gp-text-2,#c8d1cb)}.study-dashboard-crop{margin-top:3px;font-size:10px;color:var(--gp-text-3,#8e9991);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.study-dashboard-progress{height:5px;margin-top:13px;border-radius:999px;background:var(--gp-line,#263029);overflow:hidden}.study-dashboard-progress i{display:block;height:100%;border-radius:inherit;background:var(--gp-green,#34d178)}.study-dashboard-meta{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:10px;color:var(--gp-text-3,#8e9991);font-variant-numeric:tabular-nums}.study-dashboard-next{margin-top:10px;border-top:1px solid var(--gp-line,#263029);padding-top:9px;font-size:11px;color:var(--gp-text-2,#c8d1cb)}.study-dashboard-next b{color:var(--gp-text,#e9ede9)}.studies-dashboard-empty{grid-column:1/-1;padding:54px 16px;text-align:center;border:1px dashed var(--gp-line-2,#3c4740);border-radius:14px;color:var(--gp-text-3,#8e9991);font-size:13px}
 
 /* Croqui operacional dentro da avaliação. Não é GPS: é a disposição do DBC/
    randomização para que a pessoa enxergue a parcela certa antes de lançar. */
