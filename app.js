@@ -3596,9 +3596,23 @@ function _mascaraContagem(qid){
 }
 /* Estilo da máscara de uma quadra. Devolve null quando o motor não carregou,
    e aí render() mantém o comportamento antigo. */
+/* A cor da quadra é LEMBRETE DE DATA: o evento pendente mais próximo da
+   agenda (aplicação ou avaliação, não feita, não dispensada). Uma passada pela
+   agenda por desenho do mapa, não uma por quadra. */
+var _mascaraPrazoCache=null;
+function _mascaraPrazos(){
+  if(_mascaraPrazoCache) return _mascaraPrazoCache;
+  var m={};
+  try{ allUpcomingEvents(4).forEach(function(e){ if(m[e.qid]==null||e.diff<m[e.qid]) m[e.qid]=e.diff; }); }catch(e){}
+  return (_mascaraPrazoCache=m);
+}
 function _mascaraEstilo(qid,selecionada){
   if(typeof MascaraCore!=='object'||!MascaraCore) return null;
-  try{ return MascaraCore.estilo(MascaraCore.estadoQuadra(_mascaraContagem(qid),{selecionada:!!selecionada})); }
+  try{
+    if(!MascaraCore.estadoPrazo) return MascaraCore.estilo(MascaraCore.estadoQuadra(_mascaraContagem(qid),{selecionada:!!selecionada}));
+    var dif=_mascaraPrazos()[qid];
+    return MascaraCore.estilo(MascaraCore.estadoPrazo({temEstudo:estudosAtivos(qid).length>0, menorDiff:(dif==null?null:dif)},{selecionada:!!selecionada}));
+  }
   catch(e){ return null; }
 }
 
@@ -3698,7 +3712,7 @@ function buildMascaraPanel(){
    segunda tabela aqui sairia do lugar assim que a primeira mudasse. */
 function _mascaraLegendaHtml(){
   if(typeof MascaraCore!=='object'||!MascaraCore||!MascaraCore.CORES) return '';
-  var ordem=['pendente','parcial','avaliada','fora'], C=MascaraCore.CORES, h='';
+  var ordem=MascaraCore.ORDEM_PRAZO||['pendente','parcial','avaliada','fora'], C=MascaraCore.CORES, h='';
   for(var i=0;i<ordem.length;i++){
     var c=C[ordem[i]]; if(!c) continue;
     h+='<div class="masc-item"><i class="masc-sw" data-base="'+c.preenchimento+'" data-cor="'+c.cor+'" '+
@@ -4579,6 +4593,7 @@ function render(){
   if(!_qLayer) return;
   _qLayer.clearLayers();
   _mascaraPolys=[];   /* a camada foi limpa: as referências de antes são lixo */
+  _mascaraPrazoCache=null;   /* prazos relidos a cada desenho (o dia vira, a nota entra) */
   ensureQGEO(); ensureLocais();
   if(!QGEO) return;
   _editPoly=null;

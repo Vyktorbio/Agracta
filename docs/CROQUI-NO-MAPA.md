@@ -402,15 +402,25 @@ por tratamento, parcela fora do alinhamento.
 
 ### Cores do mapa
 
-A máscara das quadras, as parcelas do croqui (`croqui-parcelas.js`) e os
-pontos das notas (`notas-local.js`) usam as cores puras:
+**Quadras: a cor é lembrete de data** (`vendor/mascara-core.js`, `estadoPrazo`).
+Os eventos são os mesmos da agenda: aplicação ou avaliação ainda não feita e não
+dispensada, de estudo não finalizado. Manda o evento mais urgente da quadra.
 
-| Estado | Cor |
+| Quadra | Cor |
 |---|---|
-| Avaliada / concluída / dentro | verde puro `#00ff00` |
-| Parcial / perto | amarelo puro `#ffff00` |
-| Pendente / longe | vermelho puro `#ff0000` |
+| Evento hoje ou atrasado | vermelho puro `#ff0000` |
+| Evento nos próximos 3 dias | amarelo puro `#ffff00` |
+| Com estudo e no prazo | verde puro `#00ff00` |
+| Sem estudo ativo | cinza `#9ca3af` (translúcido) |
 | Selecionada | azul `#2563eb` |
+
+Dispensar o lembrete na agenda tira a quadra do vermelho. Com o NDVI ligado,
+a cor é a do índice.
+
+As **parcelas do croqui** (`croqui-parcelas.js`) e os **pontos das notas**
+(`notas-local.js`) continuam falando de andamento e de local, com as mesmas
+cores puras: verde concluída/dentro, amarelo parcial/perto, vermelho
+pendente/longe.
 
 O controle de opacidade da máscara continua valendo.
 
