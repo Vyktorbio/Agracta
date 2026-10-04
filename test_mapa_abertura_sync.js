@@ -11,7 +11,7 @@ c.enquadrarLocalInicial();assert.equal(calls.length,1,'sync posterior não move 
 c._mapInitialLocalPending=false;c.QGEO={C5:[[-22.6,-47.6]]};c.enquadrarLocalInicial();assert.equal(calls.length,1,'navegação/GPS cancelam a centralização pendente');
 c._mapInitialLocalPending=true;c.QGEO={};c.LOCAIS.home.centro=[-22,-47];c.enquadrarLocalInicial();assert.equal(calls.length,2,'local com centro cadastrado funciona sem polígonos');
 c._mapInitialLocalPending=true;c.LOCAIS.home.centro=[NaN,-47];c.enquadrarLocalInicial();assert.equal(calls.length,2,'centro inválido não consome a tentativa');
-for(const name of ['cloudApply','_applyRowsState']){
+for(const name of ['cloudApply']){
  const a=src.indexOf('function '+name+'('),b=src.indexOf('\nfunction ',a+1);
  assert.match(src.slice(a,b),/enquadrarLocalInicial\(\)/,name+' refaz enquadramento após receber dados');
 }

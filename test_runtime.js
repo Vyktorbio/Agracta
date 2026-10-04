@@ -182,15 +182,11 @@ try {
       if (data.__config.adminPassword !== '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f') throw new Error("default password hash incorrect");
       if (data.__config.adminEmail !== 'machadovictorchaves@gmail.com') throw new Error("default admin email incorrect");
 
-      var isAllowed = checkAccess('machadovictorchaves@gmail.com');
-      if (!isAllowed) throw new Error("Admin email should be allowed");
-
-      var isAllowed2 = checkAccess('tech@agracta.com');
-      if (isAllowed2) throw new Error("Non-authorized technician should not have access");
-
+      // checkAccess saiu na 20a publicação: era o controle de acesso da época do
+      // Supabase. Quem entra hoje é decidido pelos membros do Firestore
+      // (firestore.rules). O nome do roster continua valendo para a trilha,
+      // conferida logo abaixo.
       data.__config.allowedUsers.push({ email: 'tech@agracta.com', nome: 'John Doe' });
-      var isAllowed3 = checkAccess('tech@agracta.com');
-      if (!isAllowed3) throw new Error("Authorized technician should have access");
 
       // 2. Trilha de auditoria: NOME é nome de pessoa, nunca rótulo nem e-mail.
       //
@@ -263,12 +259,9 @@ try {
       avValidateCell(inpInvalid);
       if (inpInvalid.value !== '') throw new Error("Invalid number input should be reset to empty");
 
-      // 4. Secure local storage cache clearing
-      localStorage.setItem('iracema-v7', '{"test":"data"}');
-      localStorage.setItem('iracema-safety', '[]');
-      clearLocalStorageData();
-      if (localStorage.getItem('iracema-v7') !== null) throw new Error("clearLocalStorageData did not clear iracema-v7");
-      if (localStorage.getItem('iracema-safety') !== null) throw new Error("clearLocalStorageData did not clear iracema-safety");
+      // 4. clearLocalStorageData saiu com o logout do Supabase. O logout do
+      //    Firebase guarda os dados no aparelho (local-first) e desautoriza o
+      //    aparelho para o modo offline — isso está em test_offline_local.js.
 
       // 5. Config merge logic role priority (admin vs tech)
       var localConf = {

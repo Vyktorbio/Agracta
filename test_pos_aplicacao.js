@@ -47,7 +47,7 @@ function responde(obj){ pendentes.shift().res({ok:true,json:function(){return Pr
 function falha(){ pendentes.shift().rej(new Error('rede')); }
 function gira(){ return new Promise(function(r){ setImmediate(function(){ setImmediate(r); }); }); }
 
-var salvou=0, upserts=[], toasts=[], ehLab=false, semEstacao=false;
+var salvou=0, toasts=[], ehLab=false, semEstacao=false;
 var ctx={
   console:console, Promise:Promise, Date:Date, String:String, Number:Number, Math:Math,
   JSON:JSON, isFinite:isFinite, Object:Object, Array:Array, setImmediate:setImmediate,
@@ -56,7 +56,6 @@ var ctx={
   esc:function(v){ return String(v==null?'':v); },
   isoToBR:function(d){ var x=String(d||'').split('-'); return x.length===3?(x[2]+'/'+x[1]+'/'+x[0]):d; },
   save:function(){ salvou++; },
-  dbUpsertAplicacao:function(q,s,a){ upserts.push(a.id); },
   _stxToast:function(m){ toasts.push(m); },
   _stationMacForQuadra:function(qid){ return (!semEstacao && qid==='Q1')?'AA:BB':null; },
   isQuadraLab:function(){ return ehLab; },
@@ -99,8 +98,7 @@ var RESP={horas:48, hora_conhecida:true, completa:true, dias:3, dias_com_leitura
   eq(ap.pos.primeiraChuvaHoras, 3, 'e quando veio a primeira chuva');
   ck(!!ap.pos.ts && !!ap.pos.iso, 'carimbada com o instante da leitura');
   eq(ap.pos.mac, 'AA:BB', 'e com a estação que respondeu');
-  ck(salvou>0, 'salvou');
-  eq(upserts[0], 'ap1', 'e subiu para o banco');
+  ck(salvou>0, 'salvou — e o save é o que leva à nuvem (firebase-sync.js)');
   var antes=pedidos.length;
   ctx.consultarPos('Q1','s1',ap,48,false,function(){});
   await gira();

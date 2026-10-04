@@ -199,7 +199,6 @@ context.document = {
   body: {appendChild: function(){}},
   addEventListener: function(){}, querySelector: function(){ return null; }
 };
-context.SB = null;                                    /* Supabase, nao */
 var versoesReal = context.AgractaVersoes;
 context.AgractaVersoes = { disponivel: function(){ return false; } };   /* sem nuvem */
 

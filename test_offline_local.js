@@ -105,6 +105,24 @@ var estado={
   assert(a.ctx.AgractaFirebase.offlineAccessAllowed()===true,
     'aparelho validado com dados locais pode entrar sem conexão');
 
+  console.log('\n--- Sair desautoriza o APARELHO, não só a sessão ---');
+  /* Senão o próximo a abrir offline entraria pela porta que este logout fechou.
+     A garantia morava no test_acesso_offline.js, que testava o authInit da época
+     do Supabase — código que o firebase-sync.js substituía na carga e que saiu
+     na 20a publicação. Aqui ela vale para o que roda. */
+  var z=makeContext({state:estado,store:{'agracta-trusted-device':JSON.stringify({
+    v:2,uid:'u1',email:'tecnico@example.com',name:'Técnico',authenticatedAt:100
+  })}});
+  await tick();await tick();
+  assert(z.ctx.AgractaFirebase.offlineAccessAllowed()===true,'antes de sair, o aparelho entra offline');
+  z.ctx.showAuthGate=function(){};
+  z.ctx.doLogout();
+  await tick();
+  assert(!Object.prototype.hasOwnProperty.call(z.store,'agracta-trusted-device'),'sair apaga a marca do aparelho');
+  assert(z.ctx.AgractaFirebase.offlineAccessAllowed()===false,'e o mesmo aparelho, offline, volta a pedir login');
+  assert(/os dados continuam em localStorage,\s*em claro/.test(source),
+    'o código registra o que o portão NÃO resolve: o armazenamento local segue em claro');
+
   console.log('\n--- Confirmação espera a gravação durável ---');
   var terminou=false,p=a.ctx.AgractaFirebase.flushLocal().then(function(v){terminou=true;return v;});
   assert(terminou===false,'a promessa não confirma antes do fim da transação');

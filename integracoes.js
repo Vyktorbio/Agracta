@@ -507,7 +507,6 @@
     st.integracoes=C.merge(st.integracoes,{eventos:ev});st._ts=ts;
     if(w.logStudyAuditInObject)w.logStudyAuditInObject(st,'integrações.registro',ev.map(function(x){return x.tipo+(x.chave?' · '+x.chave:'')+(x.descricao?' · '+x.descricao:'');}).join('; '));
     if(w.save()===false)throw Error('O registro foi mantido em memória, mas o armazenamento local falhou. Confira a sincronização.');
-    if(w.dbUpsertEstudo)w.dbUpsertEstudo(s.qid,st);
     construir();pintar();msg('Registro salvo com autoria e data.');
   }
   function form(id){var f=document.getElementById(id);if(!f)return {};var o={};new FormData(f).forEach(function(v,k){o[k]=String(v).trim();});return o;}

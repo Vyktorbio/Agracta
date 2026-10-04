@@ -4,8 +4,8 @@
  * recebe uma versão normalizada por entidade e sincroniza entre aparelhos.
  * O cofre offline e a fila de alterações pertencem ao próprio Agracta: não
  * ativamos o IndexedDB interno do Firestore, que pode quebrar ao retomar uma
- * aba suspensa. O Supabase antigo fica dormente para permitir rollback durante
- * a migração.
+ * aba suspensa. Este arquivo é a única camada de nuvem: a do Supabase, que ele
+ * substituía na carga, saiu do app.js na 20a publicação.
  */
 (function(){
   'use strict';
@@ -425,6 +425,15 @@
     var t=trustedDevice();
     return !!(t&&user&&String(t.uid)===String(user.uid)&&t.email===String(user.email||'').trim().toLowerCase());
   }
+  /* APARELHO AUTORIZADO. O modo offline existe para quem JÁ ENTROU: o técnico que
+     autenticou de manhã e passa o dia no talhão sem sinal. Não é porta lateral para
+     quem nunca entrou: sem a marca de um login real (rememberTrustedUser, gravada só
+     depois de ler o workspace), offline mostra a tela de login. Sair apaga a marca.
+
+     O QUE ISTO NÃO RESOLVE, e é honesto dizer: os dados continuam em localStorage,
+     em claro. Quem tiver o aparelho desbloqueado e abrir o inspetor do navegador lê
+     tudo, com ou sem portão. Fechar isso exige cifrar o armazenamento local, que é
+     outra decisão. */
   function offlineAccessAllowed(){return !!(trustedDevice()&&hasLocalRecords());}
   function startLocal(txt){
     if(!window._appStarted)window._appStarted=true;
@@ -1596,6 +1605,63 @@
     });
   };
 
+  /* APAGAR O CADASTRO =========================================================
+     Relato de uso: "quero excluir e-mails de registro de pessoas, lá no painel
+     admin". O botão nasceu chamando a função de servidor do Supabase; na
+     migração ela ficou para trás, e o botão terminava sempre em "Sem conexão."
+     depois das duas perguntas.
+
+     O app não apaga a conta de login de outra pessoa: no Firebase isso exige o
+     SDK de administrador, num servidor. O que ele apaga é o CADASTRO
+     (members/<e-mail>), e é o cadastro que dá acesso: as firestore.rules
+     recusam tudo a quem não tem um, e só administrador grava ali. A conta de
+     login continua existindo, sem abrir nada.
+
+     APAGAR NÃO É DESATIVAR. Desativar mantém o cadastro (nome, horário) e dá
+     para reativar: é o caminho para quem trabalhou no ensaio. Apagar tira o
+     cadastro da lista: é para cadastro de teste, e-mail errado, gente que não
+     devia estar aqui.
+
+     O QUE NÃO SE PERDE. A trilha BPL não depende do cadastro: cada avaliação e
+     cada aplicação guardam o nome e o e-mail de quem assinou dentro do próprio
+     registro. O aviso promete só o que é verdade.
+
+     E O E-MAIL SAI TAMBÉM DO ROSTER LOCAL (_esquecerDoRoster), com lápide:
+     allowedUsers sincroniza por união, e sem a lápide o e-mail voltaria de
+     outro aparelho — e syncAllowedUsersToMembers recriaria o cadastro. */
+  window.apagarContaTecnico = function(i){
+    var p = (window._perfisCache || [])[i];
+    if(!p) return;
+    var email = String(p.email || '').trim().toLowerCase();
+    if(!email) return;
+    var toast = function(t){ if(typeof _stxToast === 'function') _stxToast(t); };
+    /* Administrador vem das regras, não do cadastro: apagar o dele não tira
+       acesso nenhum. A lista nem mostra o botão nessa linha. */
+    if(p.papel === 'admin' || isFirebaseAdminEmail(email)){ toast('Administrador não se apaga por aqui.'); return; }
+    var quem = (p.nome || '') + (p.nome ? ' ' : '') + '<' + email + '>';
+    if(!confirm('APAGAR o cadastro de ' + quem + '?\n\n' +
+      'O cadastro sai da lista e a pessoa deixa de conseguir entrar. O nome e o horário\n' +
+      'cadastrados se perdem: para ela voltar, é preciso cadastrar de novo.\n\n' +
+      'O que CONTINUA: as avaliações e aplicações que ela lançou, com o nome e o e-mail dela\n' +
+      'gravados em cada registro — a trilha de auditoria não é tocada.\n\n' +
+      'Se a intenção é só tirar o acesso de alguém que trabalhou no ensaio, use DESATIVAR:\n' +
+      'mantém o cadastro e dá para reativar depois.')) return;
+    /* Segunda pergunta, com o e-mail digitado: a primeira é fácil de confirmar no
+       impulso, e esta lista é de gente — errar a linha apaga a pessoa errada. */
+    var conf = prompt('Para confirmar, digite o e-mail que será apagado:\n\n' + email);
+    if(conf === null) return;
+    if(String(conf).trim().toLowerCase() !== email){ toast('E-mail não confere — nada foi apagado.'); return; }
+    if(!firebaseInit() || !FB.db){ toast('Sem conexão.'); return; }
+    toast('Apagando…');
+    FB.db.doc(ROOT).collection('members').doc(email).delete().then(function(){
+      if(typeof _esquecerDoRoster === 'function') _esquecerDoRoster(email);
+      toast('Cadastro de ' + (p.nome || email) + ' apagado.');
+      if(typeof window._carregarPerfis === 'function') window._carregarPerfis();
+    }).catch(function(err){
+      toast('Erro: ' + ((err && err.message) || err));
+    });
+  };
+
   window.salvarNomePerfil = function(i){
     var p = (window._perfisCache || [])[i];
     if(!p || !firebaseInit() || !FB.db) return;
@@ -1711,8 +1777,6 @@
     };
   }
 
-  window._dwOn=function(){return false;};
-  try{localStorage.setItem('agracta-dualwrite','0');}catch(e){}
   function safetyArchive(snap){
     var record={_agractaSafety:true,ts:snap.ts,snapshot:clone(snap)};
     return checkpointOpen().then(function(db){return new Promise(function(resolve,reject){
