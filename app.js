@@ -11053,7 +11053,8 @@ function _bioDias(study, av){
   return {dias:m.dias, rotulo:(m.explicito?m.rotulo:(daa!=null?(daa+' DAT'):(isoToBR(av.data)||av.data||'')))};
 }
 function _bioTestemunha(study){
-  var ts=study.tratamentos||[], t=ts.filter(function(x){ return x&&x.testemunha; })[0];
+  /* a infestada (sem intervenção) vem antes da não infestada / do padrão */
+  var ts=study.tratamentos||[], t=ts.filter(function(x){ return x&&x.testemunha&&x.papelControle!=='sem_alvo'&&x.papelControle!=='positivo'; })[0]||ts.filter(function(x){ return x&&x.testemunha; })[0];
   if(t) return t.id;
   var z=ts.filter(function(x){ var d=_arenaDoseValor(x&&x.dose); return x && d===0; })[0];
   return z?z.id:'';

@@ -14,7 +14,7 @@ const st = { id: 'S1', codigo: 'E1', numRepeticoes: 4, dataInicio: '2026-03-01',
 let dg = M.diagnostico('Q', st);
 ok(!dg.falta.length && !dg.aviso.length, 'protocolo completo: nada a apontar');
 st.tratamentos[1].papelControle = 'sem_intervencao';
-ok(M.testemunhaConflitos(st).length === 1 && /T2 tem papel "Testemunha"/.test(M.testemunhaConflitos(st)[0]), 'papel Testemunha sem a marca: apontado');
+ok(M.testemunhaConflitos(st).length === 1 && /T2 tem papel "Testemunha \(controle negativo\)"/.test(M.testemunhaConflitos(st)[0]), 'papel Testemunha sem a marca: apontado');
 st.tratamentos[1].papelControle = 'positivo'; st.tratamentos[1].testemunha = true;
 ok(M.testemunhaConflitos(st).length === 0, 'padrão marcado como check: regra única, não é conflito');
 st.tratamentos[1].papelControle = 'experimental';
@@ -27,7 +27,7 @@ delete st.protocolo; delete st.dataInicio;
 dg = M.diagnostico('Q', st);
 ok(dg.aviso.some(f => /tamanho da parcela/.test(f.txt) && f.etapa === 1) && dg.aviso.some(f => /1ª aplicação/.test(f.txt) && f.etapa === 2), 'avisos com a etapa certa');
 const r = M.resumo('Q', st);
-ok(r.tratamentos[0].papel === 'Testemunha' && r.parcelas === 12 && r.croqui === 'não posicionado', 'resumo: papéis, parcelas e croqui');
+ok(r.tratamentos[0].papel === 'Testemunha (controle negativo)' && r.parcelas === 12 && r.croqui === 'não posicionado', 'resumo: papéis, parcelas e croqui');
 const antes = JSON.stringify(st);
 M.html('Q', st);
 ok(JSON.stringify(st) === antes, 'montar a tela não altera o estudo');

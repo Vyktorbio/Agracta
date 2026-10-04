@@ -2,7 +2,7 @@
 (function(w){
 'use strict';
 var ctx=null,copy=function(x){return JSON.parse(JSON.stringify(x));};
-var papeis={experimental:'Tratamento experimental',sem_intervencao:'Testemunha sem intervenção',sem_alvo:'Referência sem alvo / inoculação',positivo:'Controle positivo / padrão'};
+var papeis={experimental:'Tratamento experimental',sem_intervencao:'Testemunha (controle negativo)',sem_alvo:'Testemunha não infestada (sem alvo)',positivo:'Padrão (controle positivo)'};
 function option(value,label,current){return '<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(label)+'</option>';}
 function campo(label,html){return '<label class="pa-campo">'+label+html+'</label>';}
 function input(k,v,type){return '<input data-pa="'+k+'" type="'+(type||'text')+'" value="'+esc(v==null?'':String(v))+'">';}

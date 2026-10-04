@@ -15,7 +15,7 @@
 (function (w) {
   'use strict';
   var d = w.document;
-  var PAPEIS = { experimental: 'Experimental', sem_intervencao: 'Testemunha', sem_alvo: 'Referência sem alvo', positivo: 'Padrão / controle positivo' };
+  var PAPEIS = { experimental: 'Experimental', sem_intervencao: 'Testemunha (controle negativo)', sem_alvo: 'Testemunha não infestada', positivo: 'Padrão (controle positivo)' };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function estudo(qid, sid) { return ((w.data && w.data[qid] && w.data[qid].estudos) || []).filter(function (s) { return s && s.id === sid; })[0] || null; }
