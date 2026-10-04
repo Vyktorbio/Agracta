@@ -31,9 +31,9 @@
    50% de opacidade ficavam pastéis, apagadas: "as cores no mapa continuam
    feias". Por cima da imagem a cor precisa de saturação para ser lida. */
 var CORES={
-  avaliada:    {cor:'#16a34a', preenchimento:0.50, rotulo:'Avaliada'},
-  parcial:     {cor:'#f59e0b', preenchimento:0.50, rotulo:'Parcial'},
-  pendente:    {cor:'#dc2626', preenchimento:0.50, rotulo:'Pendente'},
+  avaliada:    {cor:'#00ff00', preenchimento:0.50, rotulo:'Avaliada'},
+  parcial:     {cor:'#ffff00', preenchimento:0.50, rotulo:'Parcial'},
+  pendente:    {cor:'#ff0000', preenchimento:0.50, rotulo:'Pendente'},
   selecionada: {cor:'#2563eb', preenchimento:0.55, rotulo:'Selecionada'},
   fora:        {cor:'#9ca3af', preenchimento:0.16, rotulo:'Fora do estudo'}
 };

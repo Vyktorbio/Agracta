@@ -17204,6 +17204,7 @@ function syncTratInputs(){
       var f=inp.getAttribute("data-f");
       if(f)t[f]=(inp.type==='checkbox')?inp.checked:inp.value;
     });
+    _tratAlinharPapel(t);
     /* O método é <select>, não <input>: sem isto ele seria perdido a cada
        redesenho da lista, calado — que é a classe de bug que este arquivo já
        cansou de ver em saveE. Ele mora em t.aplicacao, não solto em t. */
@@ -19274,9 +19275,27 @@ function avGridHtml(a){
 /* número no padrão do país, para a coluna de média da grade */
 function _fmtBR(x){ return (x==null||!isFinite(x))?'—':String(x).replace('.',','); }
 /* ===== Análise: testemunha selecionável, % de controle e AUDPC ===== */
+/* Testemunha e papel do tratamento contam a mesma coisa. Regra única (a mesma
+   do protocolo-avaliacoes.js): marcado como testemunha ⇔ papel ≠ experimental.
+   A caixinha é o atalho: marcar sem papel vira "sem intervenção"; desmarcar
+   volta a "experimental". Papel positivo/sem alvo continua marcado. */
+function _tratAlinharPapel(t){
+  if(!t) return t;
+  var p=t.papelControle||'';
+  if(t.testemunha && (!p || p==='experimental')) t.papelControle='sem_intervencao';
+  else if(!t.testemunha && p && p!=='experimental') t.papelControle='experimental';
+  return t;
+}
 function studyTestemunha(s){ /* base do % de controle: 1ª testemunha marcada (preserva a antiga se ainda marcada). */
   var ts=(s.tratamentos||[]), ids=ts.map(function(t){return t.id;});
-  if(s.testemunha && ids.indexOf(s.testemunha)>=0){ var pt=ts.find(function(t){return t.id===s.testemunha;}); if(pt&&pt.testemunha) return s.testemunha; }
+  /* Controle positivo e referência sem alvo são "checks", mas não podem ser a
+     base do % de controle quando existe uma testemunha de verdade marcada. */
+  function _testemunhaPodeSerBase(t){ return !!(t && t.testemunha && t.papelControle!=='positivo' && t.papelControle!=='sem_alvo'); }
+  var pt=s.testemunha ? ts.find(function(t){return t&&t.id===s.testemunha;}) : null;
+  if(_testemunhaPodeSerBase(pt)) return s.testemunha;
+  for(var j=0;j<ts.length;j++){ if(_testemunhaPodeSerBase(ts[j])) return ts[j].id; }
+  /* sem testemunha "de verdade": comportamento antigo, intacto */
+  if(pt&&pt.testemunha) return s.testemunha;
   for(var i=0;i<ts.length;i++){ if(ts[i]&&ts[i].testemunha) return ts[i].id; }
   return (s.testemunha&&ids.indexOf(s.testemunha)>=0)?s.testemunha:(ids[0]||'');
 }

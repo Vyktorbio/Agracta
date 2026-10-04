@@ -398,13 +398,65 @@ por tratamento, parcela fora do alinhamento.
 
 ### Cores do mapa
 
-A máscara das quadras usa a paleta padrão (`vendor/mascara-core.js`):
+A máscara das quadras, as parcelas do croqui (`croqui-parcelas.js`) e os
+pontos das notas (`notas-local.js`) usam as cores puras:
 
 | Estado | Cor |
 |---|---|
-| Avaliada | verde `#16a34a` |
-| Parcial | âmbar `#f59e0b` |
-| Pendente | vermelho `#dc2626` |
+| Avaliada / concluída / dentro | verde puro `#00ff00` |
+| Parcial / perto | amarelo puro `#ffff00` |
+| Pendente / longe | vermelho puro `#ff0000` |
 | Selecionada | azul `#2563eb` |
 
 O controle de opacidade da máscara continua valendo.
+
+---
+
+## Menu do Protocolo (`protocolo-menu.js`)
+
+O protocolo de um estudo estava espalhado em sete lugares: as quatro etapas do
+**Editar**, o botão "Protocolo: avaliações e controles", os botões do cabeçalho
+(randomização, Calc), a seção do croqui e o "Protocolo vivo" no fim da ficha.
+
+O botão **📋 Protocolo (tudo)**, no topo da ficha do estudo, abre uma tela só.
+
+**No topo:** "Falta para o protocolo ficar completo", em que cada item tem um
+link que leva ao lugar certo.
+
+**As seções:**
+1. **Identificação:** código, tipo, objetivo, cultura, alvo e tamanho da
+   parcela. Também dá para importar da planilha.
+2. **Tratamentos, doses e papéis:** a tabela dos tratamentos com o papel de
+   cada um.
+3. **Delineamento e parcelas:** repetições, randomização, croqui em grade e
+   parcelas livres.
+4. **Aplicação:** método, datas, número de aplicações, janela, calda e
+   calculadora.
+5. **Avaliações:** variáveis, escalas, aplicabilidade e programação das datas.
+6. **Aprovação, emendas e desvios.**
+
+**Como a tela funciona:**
+- Ela não duplica formulário. Cada botão abre o editor que já existe, na etapa
+  certa (`_seStudyGo(n)`).
+- Nada é gravado nela.
+- Ela **aponta a testemunha marcada só num dos dois lugares**: o checkbox
+  "Testemunha / check" (`t.testemunha`) e o papel do tratamento
+  (`t.papelControle`).
+
+### Testemunha × papel do tratamento
+
+Regra única, a mesma no editor, no "Protocolo: avaliações e controles" e no menu:
+**marcado como testemunha ⇔ papel diferente de experimental.**
+
+- Marcar a caixinha "Testemunha / check" num tratamento sem papel (ou
+  experimental) grava o papel "sem intervenção". Desmarcar grava
+  "experimental". Padrão/positivo e sem alvo continuam marcados (são checks).
+- **Base do % de controle** (`studyTestemunha`): só muda num caso. Quando um
+  padrão/positivo ou uma referência sem alvo ocupava a base e existe uma
+  testemunha sem intervenção marcada, a base passa a ser essa testemunha.
+  Estudos sem papel definido têm exatamente a mesma base de antes.
+- Se só o padrão estiver marcado, a base continua nele, como antes, e o menu
+  avisa.
+- Nada é migrado sozinho: estudos antigos com caixinha e papel discordando
+  aparecem no menu, e salvar os papéis alinha.
+- Testes: `test_testemunha_papel.js`.
