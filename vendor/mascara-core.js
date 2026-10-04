@@ -1,4 +1,7 @@
-/* Máscara das quadras no mapa — a cor diz o estado do lançamento.
+/* Máscara das quadras no mapa — a cor é lembrete de PRAZO (estadoPrazo):
+ * vermelho hoje/atrasado, amarelo em até 3 dias, verde no prazo, cinza sem
+ * estudo, azul selecionada. O estado do lançamento (estadoQuadra, abaixo)
+ * continua no motor e no croqui das parcelas.
  *
  * Motor puro: entra contagem de parcelas por estado, sai a cor. Sem DOM, sem
  * Leaflet, sem estado global — por isso o teste roda sem navegador.
@@ -35,8 +38,17 @@ var CORES={
   parcial:     {cor:'#ffff00', preenchimento:0.50, rotulo:'Parcial'},
   pendente:    {cor:'#ff0000', preenchimento:0.50, rotulo:'Pendente'},
   selecionada: {cor:'#2563eb', preenchimento:0.55, rotulo:'Selecionada'},
-  fora:        {cor:'#9ca3af', preenchimento:0.16, rotulo:'Fora do estudo'}
+  fora:        {cor:'#9ca3af', preenchimento:0.16, rotulo:'Fora do estudo'},
+  /* A COR DA QUADRA É LEMBRETE DE DATA (pedido de uso): o que importa de longe
+     é "onde tenho que ir". Mesmos eventos da agenda — aplicação ou avaliação
+     ainda não feita e não dispensada. */
+  vencida:     {cor:'#ff0000', preenchimento:0.50, rotulo:'Hoje ou atrasado'},
+  proxima:     {cor:'#ffff00', preenchimento:0.50, rotulo:'Nos próximos 3 dias'},
+  emdia:       {cor:'#00ff00', preenchimento:0.50, rotulo:'No prazo'},
+  semestudo:   {cor:'#9ca3af', preenchimento:0.16, rotulo:'Sem estudo'}
 };
+/* Ordem da legenda da máscara de prazos. */
+var ORDEM_PRAZO=['vencida','proxima','emdia','semestudo','selecionada'];
 
 function inteiro(v){ var n=Number(v); return (isFinite(n)&&n>0)?Math.floor(n):0; }
 
@@ -64,9 +76,22 @@ function estadoQuadra(contagem, opcoes){
   return 'parcial';
 }
 
+/* Estado da quadra pelo PRAZO. `menorDiff` = dias até o evento pendente mais
+   próximo (negativo = atrasado; null = nenhum evento pendente). Sem estudo
+   ativo é cinza mesmo com evento: não há o que lembrar. */
+function estadoPrazo(info, opcoes){
+  var o=opcoes||{}, i=info||{};
+  if(o.selecionada) return 'selecionada';
+  if(!i.temEstudo) return 'semestudo';
+  var d=(i.menorDiff==null||!isFinite(Number(i.menorDiff)))?null:Number(i.menorDiff);
+  if(d!==null&&d<=0) return 'vencida';
+  if(d!==null&&d<=3) return 'proxima';
+  return 'emdia';
+}
+
 function estilo(chave){ return CORES[chave]||CORES.fora; }
 
-var api={CORES:CORES, estadoParcela:estadoParcela, estadoQuadra:estadoQuadra, estilo:estilo};
+var api={CORES:CORES, ORDEM_PRAZO:ORDEM_PRAZO, estadoParcela:estadoParcela, estadoQuadra:estadoQuadra, estadoPrazo:estadoPrazo, estilo:estilo};
 if(typeof module==='object'&&module.exports) module.exports=api;
 root.MascaraCore=api;
 })(typeof self!=='undefined'?self:this);
