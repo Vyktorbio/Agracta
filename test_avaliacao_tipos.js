@@ -107,19 +107,24 @@ context._avWriteBruto('T1R1','Mortalidade','N','20');
 eq(context._avGrid.notas.T1R1.Mortalidade, '35', 'notas recebe o derivado (7/20 = 35%)');
 eq(context._avGrid.bruto.T1R1.Mortalidade.n, '7', 'bruto guarda o n');
 eq(context._avGrid.bruto.T1R1.Mortalidade.N, '20', 'bruto guarda o N');
+context._avWriteBruto('T1R1','Mortalidade','n','25');
+eq(context._avGrid.bruto.T1R1.Mortalidade.n, '', 'n maior que N é recusado (não vira 100%)');
+context._avWriteBruto('T1R1','Mortalidade','n','7');
 check(context._avGrid.meta.T1R1 && context._avGrid.meta.T1R1.Mortalidade, 'a célula recebe carimbo de edição (para o merge)');
 
 context._avGrid = {variaveis:['Nota'], notas:{}, tipos:{Nota:'escala'}, meta:{}, varcfg:{Nota:{sub:4, escalaMax:4}}, bruto:{}};
 context._avWriteBruto('T2R1','Nota','s0','9');
-eq(context._avGrid.bruto.T2R1.Nota.sub[0], '4', 'nota acima do máximo da escala é limitada ao máximo');
+eq(context._avGrid.bruto.T2R1.Nota.sub[0], '', 'nota acima do máximo da escala é recusada (não vira o máximo)');
+context._avWriteBruto('T2R1','Nota','s0','4');
 context._avWriteBruto('T2R1','Nota','s3','-2');
-eq(context._avGrid.bruto.T2R1.Nota.sub[3], '0', 'nota negativa vira zero');
+eq(context._avGrid.bruto.T2R1.Nota.sub[3], '', 'nota negativa é recusada');
+context._avWriteBruto('T2R1','Nota','s3','0');
 eq(context._avGrid.bruto.T2R1.Nota.sub.length, 4, 'as posições intermediárias existem em branco');
 eq(context._avDerivar(context._avCfg(context._avGrid,'Nota'), context._avGrid.bruto.T2R1.Nota), '50', 'índice usa só as sub-amostras preenchidas');
 
 context._avGrid = {variaveis:['Sev'], notas:{}, tipos:{Sev:'pct'}, meta:{}, varcfg:{Sev:{sub:10}}, bruto:{}};
 context._avWriteBruto('T1R1','Sev','s0','150');
-eq(context._avGrid.bruto.T1R1.Sev.sub[0], '100', 'porcentagem acima de 100 é limitada');
+eq(context._avGrid.bruto.T1R1.Sev.sub[0], '', 'porcentagem acima de 100 é recusada (não vira 100)');
 
 /* "% / número" é o único tipo digitável para MEDIDA também: com unidade no nome, o teto
    de 100 destruía o dado (110 cm virava 100). */

@@ -152,7 +152,7 @@ function avMomento(av, daaDerivado){
 function _fmtMom(v){ return (Math.round(v*100)/100).toString().replace('.',','); }
 function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x}
 
-function cDAP(p){var d=pD(p);return d&&!isNaN(d)?Math.floor((today0()-d)/864e5):null}
+function cDAP(p){var d=pD(p);return d&&!isNaN(d)?daysBetween(d,today0()):null} /* round: dia com troca de horário tem 23 ou 25 h */
 function gS(c,dap){
   if(dap===null)return{s:"\u2014",l:"Sem data",c:"#616161"};
   if(dap<0)return{s:"PLAN",l:"Plantio em "+Math.abs(dap)+"d",c:"#42a5f5"};
@@ -518,12 +518,22 @@ function nextEvent(study){
    fica gravada no próprio estudo (portanto acompanha o dado entre aparelhos) e
    entra na trilha BPL, com quem e quando. Dá pra trazer de volta. */
 var agVerDispensados=false;
-function _agEvKey(ev){ return ev.type+':'+ev.idx; }
+/* Avaliação se identifica pelo ID, não pela posição: com 'eval:3', excluir a
+   avaliação 1 fazia a dispensa da antiga 3 cair na antiga 4 — que sumia da
+   agenda sem ninguém ter pedido. Aplicação segue por número (a programação é
+   ordinal: 1ª, 2ª, 3ª). */
+function _agEvKey(ev){ return (ev.type==='eval'&&ev.id!=null&&ev.id!=='')?('eval#'+ev.id):(ev.type+':'+ev.idx); }
 function _agDisp(study){ if(!Array.isArray(study.dispensados)) study.dispensados=[]; return study.dispensados; }
 function _agEstaDispensado(study, ev){
   if(!study || !Array.isArray(study.dispensados) || !study.dispensados.length) return false;
-  var k=_agEvKey(ev);
-  return study.dispensados.some(function(d){ return d && d.k===k; });
+  var k=_agEvKey(ev), velha=ev.type+':'+ev.idx;
+  return study.dispensados.some(function(d){
+    if(!d) return false;
+    if(d.k===k) return true;
+    /* dispensa gravada no formato antigo: vale e passa a apontar pelo id */
+    if(k!==velha && d.k===velha){ d.k=k; return true; }
+    return false;
+  });
 }
 function _agAcharEstudo(qid, sid){
   var q=data[qid]; if(!q || !Array.isArray(q.estudos)) return null;
@@ -4713,10 +4723,11 @@ function renderAgenda(){
       else if(e.diff<0)dateLabel='há '+Math.abs(e.diff)+'d';
       else dateLabel='em '+e.diff+'d';
       var color = e.diff<=0?'#ff5252':(e.diff<=3?'#ffb74d':'#64b5f6');
-      var _k=_agEvKey(e.event), _sid=e.study.id;
+      /* id com aspas ("A'2") quebrava o onclick: escapa para JS e depois para o atributo */
+      var _k=esc(_avCroquiEscJs(_agEvKey(e.event))), _sid=esc(_avCroquiEscJs(e.study.id)), _q=esc(_avCroquiEscJs(e.qid));
       var _btn = e.dispensado
-        ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
-        : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\',\''+typeLabel+'\')">&times;</button>';
+        ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+_q+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
+        : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+_q+'\',\''+_sid+'\',\''+_k+'\',\''+typeLabel+'\')">&times;</button>';
       gh+='<div class="ag-item '+cls+(e.dispensado?' ag-dispensado':'')+'" onclick="closeAgendaAndOpen(\''+esc(_avCroquiEscJs(e.qid))+'\',\''+esc(_avCroquiEscJs(e.study.id))+'\',\''+esc(_avCroquiEscJs(e.event.type==='eval'?e.event.id||'':''))+'\')">';
       gh+='<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(e.qid))+'</span><span class="ag-item-date" style="color:'+color+'">'+dateLabel+'</span>'+_btn+'</div>';
       gh+='<div class="ag-item-name">'+esc(e.study.nome)+'</div>';
@@ -8662,13 +8673,25 @@ function studyEventsV2(study){
   if(start&&!isNaN(start)){
     var n=Math.max(1,parseInt(study.numAplicacoes)||1);
     var iv=parseInt(study.intervaloDias)||0;
+    /* QUAL APLICAÇÃO REGISTRADA CUMPRE QUAL PLANEJADA.
+       Antes: "existe registro a até 2 dias da data planejada". Chuva que atrasava
+       a aplicação 3 dias deixava a planejada pendente PARA SEMPRE — atrasada na
+       agenda e a quadra vermelha no mapa, com a aplicação feita e registrada.
+       Agora cada planejada tem a sua janela: de um pouco antes dela (metade do
+       intervalo, no mínimo 2 dias) até o início da janela da próxima; a última
+       vai até o fim. Cada registro cumpre UMA planejada só (o mais cedo da
+       janela), então uma reaplicação na mesma janela não adianta a seguinte. */
+    var folga=Math.max(2,Math.floor(iv/2)), usados={};
+    var regs=(study.aplicacoes||[]).map(function(a,ri){ return {ri:ri,d:pD(isoToBR(a.data))||pD(a.data)}; })
+      .filter(function(r){ return r.d&&!isNaN(r.d); }).sort(function(a,b){ return a.d-b.d; });
     for(var i=0;i<n;i++){
       var dt=(iv>0)?addDays(start,i*iv):new Date(start);
-      /* Verifica se já foi realizada */
-      var realizada=(study.aplicacoes||[]).find(function(a){
-        var ad=pD(isoToBR(a.data))||pD(a.data);
-        return ad&&Math.abs(daysBetween(dt,ad))<=2;
-      });
+      var ini=addDays(dt,-folga), fim=(iv>0&&i<n-1)?addDays(addDays(start,(i+1)*iv),-folga):null;
+      var realizada=null;
+      for(var rj=0;rj<regs.length;rj++){
+        var rg=regs[rj]; if(usados[rg.ri]) continue;
+        if(daysBetween(ini,rg.d)>=0&&(!fim||daysBetween(rg.d,fim)>0)){ realizada=rg; usados[rg.ri]=1; break; }
+      }
       out.push({
         type:'apl',
         idx:i+1,
@@ -18333,20 +18356,50 @@ function _avHerdarN(study, av, grid){
     }
   });
 }
-function _avWriteBruto(key,v,campo,val){
+/* O QUE FOI DIGITADO NA GRADE, LIDO SEM ADIVINHAR.
+   parseFloat aceitava qualquer coisa: "12a" virava 12, "1,5,3" virava 1,5 e uma
+   contagem "1.200" virava 1,2 e depois 1 — calada. Agora:
+     · só número de verdade (vírgula ou ponto decimal; espaço ignorado);
+     · "1.200" (ponto de milhar) só vale onde o número é INTEIRO (contagem,
+       n/N); numa porcentagem ou medida ele é ambíguo e volta com aviso;
+     · inteiro esperado e veio decimal: recusa, não trunca.
+   Devolve {n} ou {erro}. Quem chama mostra o erro e não grava. */
+function _avLerDigitado(val, inteiro){
+  var s=String(val==null?'':val).trim().replace(/\s+/g,'');
+  if(s==='') return {vazio:true};
+  if(/^\d{1,3}(\.\d{3})+$/.test(s)){
+    if(!inteiro) return {erro:'"'+s+'" é ambíguo: use vírgula para decimal (ex.: 1,25).'};
+    s=s.replace(/\./g,'');
+  }
+  if(/^-/.test(s)) return {erro:'Valor negativo não existe aqui: "'+String(val).trim()+'".'};
+  if(!/^(\d+([.,]\d+)?|[.,]\d+)$/.test(s)) return {erro:'"'+String(val).trim()+'" não é um número.'};
+  var n=Number(s.replace(',','.'));
+  if(!isFinite(n)) return {erro:'Número inválido.'};
+  if(inteiro && n!==Math.floor(n)) return {erro:'Contagem é número inteiro: "'+String(val).trim()+'".'};
+  return {n:n};
+}
+function _avAviso(msg){ try{ if(typeof _stxToast==='function') _stxToast(msg); }catch(e){} }
+function _avWriteBruto(key,v,campo,val,quieto){
   var cfg=_avCfg(_avGrid,v), cel=_avCel(_avGrid,key,v,true);
-  var s=String(val==null?'':val).trim().replace(',','.');
-  var num=(s==='')?'':parseFloat(s);
-  if(s!=='' && isNaN(num)) num='';
-  if(num!==''){
-    if(num<0) num=0;
-    if(cfg.tipo==='escala' && num>cfg.escalaMax) num=cfg.escalaMax;
-    if(cfg.tipo==='escala' && num<(cfg.escalaMin||0)) num=cfg.escalaMin||0;
-    if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
-    if(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v)))) num=Math.floor(num);
+  var _avAviso=quieto?function(){}:window._avAviso||function(){};
+  var inteiro=(cfg.tipo==='razao' || (cfg.tipo==='contagem' && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))));
+  var lido=_avLerDigitado(val,inteiro), num='';
+  /* Fora da faixa NÃO vira o limite: nota 12 numa escala 0–9 não é 9, é erro de
+     digitação — gravar 9 inventaria o máximo. Recusa com aviso e não grava. */
+  if(lido.erro){ _avAviso(lido.erro); }
+  else if(!lido.vazio){
+    num=lido.n;
+    if(cfg.tipo==='escala' && (num>cfg.escalaMax || num<(cfg.escalaMin||0))){ _avAviso(v+': nota '+num+' fora da escala ('+(cfg.escalaMin||0)+'–'+cfg.escalaMax+'). Confira.'); num=''; }
+    else if(cfg.tipo==='pct' && num>100 && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ _avAviso(v+': '+num+'% passa de 100%. Confira.'); num=''; }
   }
   var out=(num==='')?'':String(num);
   if(campo==='n'||campo==='N'){
+    /* n maior que N virava 100% calado (o derivado corta n em N). É erro de
+       digitação em um dos dois: o que acabou de entrar não é gravado. */
+    var outro=(campo==='n')?_numBR(cel.N,NaN):_numBR(cel.n,NaN);
+    if(out!=='' && isFinite(outro) && ((campo==='n'&&num>outro)||(campo==='N'&&outro>num))){
+      _avAviso(v+': n ('+(campo==='n'?num:outro)+') maior que N ('+(campo==='N'?num:outro)+'). Confira.'); out='';
+    }
     cel[campo]=out;
     /* A célula MOSTRA o N padrão da variável (varcfg.N — do catálogo ou do nº de
        organismos por arena do protocolo) enquanto ninguém digita outro. Gravar só
@@ -18398,29 +18451,19 @@ function avValidateCell(inp){
   var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp; /* 'numero' não tem teto de 100 */
   var val=inp.value.trim();
   if(val===''){ _avEspelhar(inp); return; }
-  var num=parseFloat(val.replace(',','.'));
-  if(isNaN(num)){
+  /* Recusa em vez de ajustar: "150" num % não é 100, "2,7" numa contagem não é
+     2 — gravar o limite ou o truncado inventaria um dado com cara de lido. */
+  var _inteiro=(tp!=='pct') && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v));
+  var lido=_avLerDigitado(val,_inteiro), num=lido.n;
+  if(!lido.erro && tp==='pct' && num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v)))
+    lido={erro:v+': '+num+'% passa de 100%. Confira.'};
+  if(lido.erro){
     inp.value='';
     _avEspelhar(inp);
-    _stxToast('Valor inválido. Digite um número.');
+    _stxToast(lido.erro);
     return;
   }
-  if(tp==='pct'){
-    if(num<0){
-      num=0;
-      _stxToast('Valor menor que 0% ajustado para 0%.');
-    } else if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){
-      num=100;
-      _stxToast('Valor maior que 100% ajustado para 100%.');
-    }
-    inp.value=String(num);
-  } else {
-    if(num<0){
-      num=0;
-      _stxToast('Valor negativo ajustado para 0.');
-    }
-    inp.value=String((typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))?num:Math.floor(num)); /* medida com unidade não perde decimais */
-  }
+  inp.value=String(num);
   _avEspelhar(inp);
   _avPersistNow(); /* autosave da grade manual no blur */
 }
@@ -18614,27 +18657,25 @@ function renderAvGrid(){
 
 function _avSyncInputs(){
   var w=document.getElementById('avGridWrap'); if(!w) return;
+  var _recusados=0;
   Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(inp){
     var t=inp.getAttribute('data-t'), v=inp.getAttribute('data-v'), b=inp.getAttribute('data-b');
-    if(b && t && v){ inp.value=_avWriteBruto(t,v,b,inp.value); return; } /* razão / escala / sub-amostra */
+    if(b && t && v){ var _antes=String(inp.value||'').trim(); inp.value=_avWriteBruto(t,v,b,inp.value,true); if(_antes!==''&&inp.value==='')_recusados++; return; } /* razão / escala / sub-amostra */
     if(!_avGrid.notas[t]) _avGrid.notas[t]={};
 
     var val = inp.value.trim();
     if(val !== '') {
       var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
-      var num = parseFloat(val.replace(',', '.'));
-      if(isNaN(num)) {
+      /* mesma leitura do avValidateCell: recusa, não ajusta */
+      var _int=(tp!=='pct') && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v));
+      var lido=_avLerDigitado(val,_int);
+      if(!lido.erro && tp==='pct' && lido.n>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) lido={erro:'acima de 100%'};
+      if(lido.erro) {
         val = '';
         inp.value = '';
+        _recusados++;
       } else {
-        if(tp==='pct'){
-          if(num<0) num=0;
-          if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))) num=100;
-        } else {
-          if(num<0) num=0;
-          if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
-        }
-        val = String(num);
+        val = String(lido.n);
         inp.value = val;
       }
     }
@@ -18645,6 +18686,7 @@ function _avSyncInputs(){
       _avTouchCell(t,v);
     }
   });
+  if(_recusados) _avAviso(_recusados+(_recusados>1?' valores não foram gravados':' valor não foi gravado')+' (inválido ou fora da faixa). Confira as células vazias.');
 }
 
 function avBump(el,delta){
@@ -18696,7 +18738,7 @@ function _avSubRender(){
     '<div class="av-sub-sub">'+esc(rw.label||key)+(rw.produto?' · '+esc(rw.produto):'')+' — '+(_cruz?'diâmetro em cruz, placa de '+_pl.placaMm+' mm':(cfg.sub+' amostras'))+(cfg.tipo==='escala'?(' · escala '+(cfg.escalaMin||0)+'–'+cfg.escalaMax):'')+'</div>'+
     '<div class="av-sub-grid">';
   vals.slice(0,cfg.sub).forEach(function(x,i){
-    h+='<div class="av-sub-f"><label>'+(_cruz?(i===0?'Eixo 1':'Eixo 2 ⟂'):(i+1))+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
+    h+='<div class="av-sub-f"><label>'+(_cruz?(i===0?'Eixo 1':'Eixo 2 ⟂'):(i+1))+'</label><input class="av-sub-inp" data-i="'+i+'" value="'+esc(x==null?'':x)+'" inputmode="'+((cfg.tipo==='pct'||cfg.tipo==='numero')?'decimal':'numeric')+'" oninput="avSubWrite(this)" onblur="avSubConfere(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();avSubNext(this);}"></div>';
   });
   h+='</div>';
   h+='<div class="av-sub-res"><span>'+(cfg.tipo==='escala'?(cfg.escalaModo==='nota'?'Nota média':'Índice de McKinney'):(_cruz?'Diâmetro médio':'Média da parcela'))+'</span><b>'+(der===''?'—':esc(der)+(cfg.tipo==='escala'?_avDerSuf(cfg):''))+'</b></div>';
@@ -18740,8 +18782,14 @@ function _avSubResumo(){
 }
 function avSubWrite(inp){
   if(!_avSubCtx) return;
-  _avWriteBruto(_avSubCtx.key,_avSubCtx.v,'s'+(inp.getAttribute('data-i')||0),inp.value);
+  /* a cada tecla: quieto ("1," é número pela metade); o aviso vem ao sair do campo */
+  _avWriteBruto(_avSubCtx.key,_avSubCtx.v,'s'+(inp.getAttribute('data-i')||0),inp.value,true);
   _avSubResumo(); _avPersistNow();
+}
+function avSubConfere(inp){
+  if(!_avSubCtx||String(inp.value||'').trim()==='') return;
+  var out=_avWriteBruto(_avSubCtx.key,_avSubCtx.v,'s'+(inp.getAttribute('data-i')||0),inp.value);
+  if(out===''){ inp.value=''; _avSubResumo(); _avPersistNow(); }
 }
 function avSubNext(inp){
   var m=document.getElementById('avSubModal'); if(!m) return;
@@ -18865,19 +18913,13 @@ function _avPersistNow(){
 function _avSetCell(key,v,val){
   if(val !== '' && val != null) {
     var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; var _tr=(typeof _avTipo==='function')?_avTipo(_avGrid,v):tp;
-    var num = parseFloat(String(val).replace(',', '.'));
-    if(isNaN(num)) {
-      val = '';
-    } else {
-      if(tp==='pct'){
-        if(num<0) num=0;
-        if(num>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v))){ num=100; if(typeof _stxToast==='function') _stxToast('Valor maior que 100% ajustado para 100%.'); }
-      } else {
-        if(num<0) num=0;
-        if(!(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v))) num = Math.floor(num);
-      }
-      val = String(num);
-    }
+    /* chamado a cada tecla (modo automático) e pelos atalhos: lê estrito e em
+       silêncio — o que não é número válido não grava; o aviso vem no blur
+       (avValidateCell), com o campo inteiro digitado */
+    var _int=(tp!=='pct') && !(typeof _avEhMedidaLivre==='function' && _avEhMedidaLivre(v));
+    var lido=_avLerDigitado(val,_int);
+    if(lido.erro || lido.vazio || (tp==='pct' && lido.n>100 && _tr!=='numero' && (typeof _avTetoPct!=='function' || _avTetoPct(v)))) val='';
+    else val=String(lido.n);
   }
 
   if(!_avGrid.notas[key]) _avGrid.notas[key]={};
@@ -18959,7 +19001,7 @@ function avEnableStudyRandomizado(){
 }
 function avAutoWrite(val){
   var a=_avAutoState(); if(!a)return;
-  if(a.campo){ _avWriteBruto(a.row.key,a.v,a.campo,val); _avPersistNow(); }
+  if(a.campo){ _avWriteBruto(a.row.key,a.v,a.campo,val,true); _avPersistNow(); } /* a cada tecla: quieto; o aviso vem no blur (avValidateCell) */
   else _avSetCell(a.row.key,a.v,val);
 }
 function avAutoBump(delta){
@@ -21097,10 +21139,10 @@ function renderTodayCard(e){
     ('Avaliação'+(e.ev.tipo?' — '+esc(e.ev.tipo):''));
   var iconCls=e.ev.type==='apl'?'apl':'eval';
 
-  var _k=_agEvKey(e.ev), _sid=e.study.id;
+  var _k=esc(_avCroquiEscJs(_agEvKey(e.ev))), _sid=esc(_avCroquiEscJs(e.study.id)), _q=esc(_avCroquiEscJs(e.qid));
   var _btn = e.dispensado
-    ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
-    : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+e.qid+'\',\''+_sid+'\',\''+_k+'\',\''+esc(typeName)+'\')">&times;</button>';
+    ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+_q+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
+    : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+_q+'\',\''+_sid+'\',\''+_k+'\',\''+esc(_avCroquiEscJs(typeName))+'\')">&times;</button>';
   var h='<div class="today-card '+cls+(e.dispensado?' ag-dispensado':'')+'">';
   h+='<div class="today-card-head">';
   h+='<span class="today-card-badge '+iconCls+'">'+(e.ev.type==='apl'?'APL':'AV')+'</span>';

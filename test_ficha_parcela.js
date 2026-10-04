@@ -15,7 +15,7 @@ const rows=[['T1',1],['T1',2],['T2',1]].map(([t,r])=>({key:t+'R'+r,tratId:t,rep:
 w._avStudy=()=>({id:'S'});w._avRowsForStudy=()=>rows;
 const selecionadas=[];w.avCroquiSelect=k=>{selecionadas.push(k);w.eval('_avCroquiKey='+JSON.stringify(k));};
 let persistidos=0;w._avPersistNow=()=>persistidos++;w._stxToast=()=>{};w._avWriteBruto=(t,v,b,val)=>val;w._avRefreshDer=()=>{};
-['_avCellHtml','_avFichaHtml','avFichaIr','_avEspelhar','avValidateCell'].forEach(n=>w.eval(fn(n)));
+['_avCellHtml','_avFichaHtml','avFichaIr','_avEspelhar','_avLerDigitado','avValidateCell'].forEach(n=>w.eval(fn(n)));
 const wrap=d.getElementById('avGridWrap');
 const pinta=()=>{wrap.innerHTML=w._avFichaHtml(rows,w._avGrid.variaveis)+'<table class="av-table"><tr><td>'+w._avCellHtml(rows[1],'Severidade')+'</td></tr></table>';};
 
@@ -33,7 +33,8 @@ const [ant,,prox]=ficha.querySelectorAll('.av-ficha-nav button:not(.av-foto-n)')
 const naFicha=ficha.querySelector('[data-v="Severidade"]'),naTabela=d.querySelector('.av-table [data-v="Severidade"]');
 naFicha.value='35';naFicha.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(naTabela.value,'35');
 naFicha.value='';naFicha.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(naTabela.value,'');
-naFicha.value='150';w.avValidateCell(naFicha);assert.equal(naFicha.value,'100');assert.equal(naTabela.value,'100','o valor ajustado também é espelhado');assert.equal(persistidos,1);
+naFicha.value='150';w.avValidateCell(naFicha);assert.equal(naFicha.value,'');assert.equal(naTabela.value,'','o valor recusado some também da tabela');assert.equal(persistidos,0,'valor recusado não é gravado');
+naFicha.value='45';w.avValidateCell(naFicha);assert.equal(naTabela.value,'45','valor válido espelha');assert.equal(persistidos,1);
 
 /* Enter: próximo campo; no último, próxima parcela. */
 naFicha.focus();naFicha.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
