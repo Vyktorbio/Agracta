@@ -1313,8 +1313,8 @@ function novoQuadraId(nome){ var b=String(nome||'').normalize('NFD').replace(/[�
 function _homeCentro(){ try{ if(_geo&&_geo.corners){ var c=_geo.corners; return [ (c[0][0]+c[2][0])/2, (c[0][1]+c[2][1])/2 ]; } }catch(e){} return ESTACAO_CENTER.slice(); }
 
 /* ===== TIPO DA QUADRA: 'campo' (padrão) ou 'lab' =====
-   Mora em data[qid].tipo. Não precisou de schema novo: _rowQuadra joga toda
-   chave desconhecida de data[qid] em `extras` e a leitura devolve inteira —
+   Mora em data[qid].tipo. Não precisou de schema novo: o documento da quadra
+   na nuvem leva o objeto data[qid] inteiro (splitState, firebase-sync.js) —
    sincroniza e faz merge de graça. Ausente = 'campo', então quadra antiga
    continua exatamente como está. Uma quadra de LAB não tem polígono; guarda
    um ponto (data[qid].ponto) só para poder ser tocada no mapa. */
@@ -6973,156 +6973,6 @@ function saveE(){
   if(curV)showD(curV);
 }
 
-/* ============ STUDY EDIT ============ */
-function openStudyEdit(qid,sid){
-  curS=qid;curSid=sid;
-  closeDetail();
-  var study = null;
-  if(sid){
-    var arr = (data[qid]||{}).estudos||[];
-    study = arr.find(function(s){return s.id===sid});
-  }
-  if(!study){
-    study={
-      id:uid(),
-      nome:'',
-      dataInicio:fDIso(today0()),
-      intervaloDias:14,
-      numAplicacoes:1,
-      avaliacoes:[]
-    };
-  }
-
-  var avalHtml = '<div class="eval-dates" id="evalList">';
-  (study.avaliacoes||[]).forEach(function(iso,i){
-    avalHtml+='<div class="eval-chip"><span>'+fD(pD(isoToBR(iso)))+'</span><button class="eval-chip-rm" onclick="removeAval('+i+')">×</button></div>';
-  });
-  avalHtml+='</div>';
-
-  var isNew = !sid;
-  var h='<div class="edit-title">'+(isNew?'Novo estudo':'Editar estudo')+'</div>';
-  h+='<div class="edit-id">'+esc(quadraNome(qid))+'</div>';
-  h+='<div class="edit-subtitle" style="color:#8a8">'+esc((data[qid]||{}).cultura||'')+' • '+esc((data[qid]||{}).cultivar||'')+'</div>';
-
-  h+='<label class="e-lbl">NOME DO ESTUDO</label>';
-  h+='<input id="s_nome" class="e-inp" value="'+esc(study.nome||'')+'" placeholder="Ex: Fungicida X vs. ferrugem asiática">';
-
-  h+='<label class="e-lbl">DATA DA 1ª APLICAÇÃO</label>';
-  h+='<input id="s_dataInicio" class="e-inp" type="date" value="'+esc(study.dataInicio||'')+'">';
-
-  h+='<div class="e-row">';
-  h+='<div><label class="e-lbl">Nº DE APLICAÇÕES</label>';
-  h+='<input id="s_numApl" class="e-inp" type="number" min="1" value="'+(study.numAplicacoes||1)+'"></div>';
-  h+='<div><label class="e-lbl">INTERVALO (DIAS)</label>';
-  h+='<input id="s_intervalo" class="e-inp" type="number" min="0" value="'+(study.intervaloDias||0)+'" placeholder="Ex: 14"></div>';
-  h+='</div>';
-  h+='<div class="e-hint">Se houver mais de 1 aplicação, as próximas serão calculadas automaticamente.</div>';
-
-  h+='<label class="e-lbl">DATAS DE AVALIAÇÃO</label>';
-  h+=avalHtml;
-  h+='<div class="eval-add-row"><input id="s_newAval" class="e-inp" type="date"><button class="eval-add-btn" onclick="addAval()">+</button></div>';
-  h+='<div class="e-hint">Adicione uma ou mais datas de avaliação de campo.</div>';
-
-  h+='<div class="e-btns"><button class="e-btn e-save" onclick="saveStudy()">Salvar</button><button class="e-btn e-cancel" onclick="closeStudyEdit()">Cancelar</button></div>';
-  if(!isNew){
-    h+='<button class="e-btn-del" onclick="deleteStudy(\''+qid+'\',\''+sid+'\',true)">EXCLUIR ESTUDO</button>';
-  }
-
-  document.getElementById("sPnl").innerHTML=h;
-  document.getElementById("sOvl").classList.add("open");
-
-  // store working copy
-  document.getElementById("sPnl").dataset.study=JSON.stringify(study);
-}
-
-function closeStudyEdit(){
-  document.getElementById("sOvl").classList.remove("open");
-  var qid=curS;curS=null;curSid=null;
-  if(qid)showD(qid);
-}
-
-function getWorkingStudy(){
-  try{return JSON.parse(document.getElementById("sPnl").dataset.study||'{}')}catch(e){return{}}
-}
-function setWorkingStudy(s){
-  document.getElementById("sPnl").dataset.study=JSON.stringify(s);
-}
-
-function addAval(){
-  var v=document.getElementById("s_newAval").value;
-  if(!v)return;
-  var s=getWorkingStudy();
-  if(!Array.isArray(s.avaliacoes))s.avaliacoes=[];
-  if(s.avaliacoes.indexOf(v)===-1){
-    s.avaliacoes.push(v);
-    s.avaliacoes.sort();
-  }
-  setWorkingStudy(s);
-  // re-render the eval list
-  var ul=document.getElementById("evalList");
-  var hh='';
-  s.avaliacoes.forEach(function(iso,i){
-    hh+='<div class="eval-chip"><span>'+fD(pD(isoToBR(iso)))+'</span><button class="eval-chip-rm" onclick="removeAval('+i+')">×</button></div>';
-  });
-  ul.innerHTML=hh;
-  document.getElementById("s_newAval").value='';
-}
-function removeAval(i){
-  var s=getWorkingStudy();
-  if(!Array.isArray(s.avaliacoes))return;
-  s.avaliacoes.splice(i,1);
-  setWorkingStudy(s);
-  var ul=document.getElementById("evalList");
-  var hh='';
-  s.avaliacoes.forEach(function(iso,j){
-    hh+='<div class="eval-chip"><span>'+fD(pD(isoToBR(iso)))+'</span><button class="eval-chip-rm" onclick="removeAval('+j+')">×</button></div>';
-  });
-  ul.innerHTML=hh;
-}
-
-function saveStudy(){
-  if(!curS)return;
-  var s=getWorkingStudy();
-  s.nome=document.getElementById("s_nome").value.trim();
-  s.dataInicio=document.getElementById("s_dataInicio").value;
-  s.numAplicacoes=parseInt(document.getElementById("s_numApl").value)||1;
-  s.intervaloDias=parseInt(document.getElementById("s_intervalo").value)||0;
-  if(!s.nome){alert("Dê um nome ao estudo.");return}
-  if(!s.dataInicio){alert("Informe a data da 1ª aplicação.");return}
-  if(!s.id)s.id=uid();
-
-  var q = data[curS]||{};
-  if(!Array.isArray(q.estudos))q.estudos=[];
-  var idx = q.estudos.findIndex(function(x){return x.id===s.id});
-
-  var action = '';
-  var details = '';
-  if(idx>=0) {
-    action = 'Alteração do Estudo';
-    var old = q.estudos[idx];
-    var changes = [];
-    if(old.nome !== s.nome) changes.push('Nome: "' + old.nome + '" -> "' + s.nome + '"');
-    if(old.dataInicio !== s.dataInicio) changes.push('Início: ' + old.dataInicio + ' -> ' + s.dataInicio);
-    if(old.numAplicacoes !== s.numAplicacoes) changes.push('Nº Apls: ' + old.numAplicacoes + ' -> ' + s.numAplicacoes);
-    if(old.intervaloDias !== s.intervaloDias) changes.push('Intervalo: ' + old.intervaloDias + ' -> ' + s.intervaloDias);
-    details = changes.length ? changes.join(', ') : 'Alterado via V1 editor';
-  } else {
-    action = 'Criação do Estudo';
-    details = 'Nome: "' + s.nome + '" (V1)';
-  }
-  logStudyAuditInObject(s, action, details);
-  s._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
-
-  if(idx>=0)q.estudos[idx]=s; else q.estudos.push(s);
-  data[curS]=q;
-  save();
-  _stxToast('✓ Estudo salvo!');
-  var qid=curS;
-  closeStudyEdit();
-  render();updateAgendaBadge();
-  showD(qid);
-}
-
 function deleteStudy(qid,sid,skipConfirm){
   /* Estudo finalizado esta assinado e com a estatistica congelada: apagar sem
      passar por Reabrir deixaria a trilha sem o motivo da baixa. */
@@ -7133,9 +6983,6 @@ function deleteStudy(qid,sid,skipConfirm){
     _markDeleted(q,'_deletedStudies',sid);
     q.estudos=q.estudos.filter(function(s){return s.id!==sid});
     save();
-    if(document.getElementById("sOvl").classList.contains("open")){
-      closeStudyEdit();
-    }
     render();updateAgendaBadge();
     showD(qid);
   });
@@ -8859,8 +8706,8 @@ function closeCalc(){ var ov=document.getElementById('calcOvl'); if(ov) ov.style
 
    O status NÃO é um campo — é derivado das datas preenchidas. Assim é impossível
    uma amostra estar "entregue" sem data de entrega, que é o erro clássico de
-   planilha de fila. Mora em estudo.amostras e sincroniza de graça: _rowEstudo
-   joga toda chave desconhecida em `extras`. */
+   planilha de fila. Mora em estudo.amostras e sincroniza de graça: o documento
+   do estudo na nuvem leva o estudo inteiro (splitState, firebase-sync.js). */
 var NEM_ETAPAS=[
   {k:'entrada',  rot:'Entrada',  cor:'#8a948e'},
   {k:'extracao', rot:'Extração', cor:'#2f85c9'},
@@ -20658,130 +20505,12 @@ render=function(){
   });
 };
 
-/* ============ CENTRAL DE ENSAIOS ============================================
-   Mapa = onde estão as coisas. Central = o que precisa acontecer nos estudos.
-   Mantém cada ensaio ligado à sua quadra (modelo de dados atual), mas oferece
-   uma leitura transversal para a rotina de campo e para a gestão. */
-var _studiesPanelFilter='todos', _studiesPanelQuery='', _studiesNewOpen=false;
+/* Local (fazenda) de uma quadra, com nome legível. Nasceu na Central de ensaios,
+   que saiu na 20a publicação; a ficha de execução do estudo continua usando. */
 function _studyPanelLocal(qid){
   try{ ensureLocais(); }catch(e){}
   var lid=(typeof QLOCAL!=='undefined'&&QLOCAL&&QLOCAL[qid])||localAtivo||HOME_LOCAL;
   return {id:lid,nome:(typeof LOCAIS!=='undefined'&&LOCAIS&&LOCAIS[lid]&&LOCAIS[lid].nome)||'Sem local'};
-}
-function _studyPanelQuadraGroups(){
-  var grupos={};
-  Object.keys(data||{}).forEach(function(qid){
-    if(qid==='__config')return;
-    var loc=_studyPanelLocal(qid);
-    if(!grupos[loc.id])grupos[loc.id]={id:loc.id,nome:loc.nome,quadras:[]};
-    grupos[loc.id].quadras.push({id:qid,nome:quadraNome(qid),lab:(typeof isQuadraLab==='function'&&isQuadraLab(qid)),labTipo:(typeof quadraLabTipo==='function'?quadraLabTipo(qid):'')});
-  });
-  return Object.keys(grupos).map(function(k){
-    grupos[k].quadras.sort(function(a,b){return String(a.nome).localeCompare(String(b.nome),'pt-BR');});
-    return grupos[k];
-  }).sort(function(a,b){
-    if(a.id===localAtivo)return -1;if(b.id===localAtivo)return 1;
-    return String(a.nome).localeCompare(String(b.nome),'pt-BR');
-  });
-}
-function _studyPanelItems(){
-  var out=[];
-  Object.keys(data||{}).forEach(function(qid){
-    if(qid==='__config') return;
-    var q=data[qid]||{};
-    var loc=_studyPanelLocal(qid);
-    (q.estudos||[]).forEach(function(st){ if(st) out.push({qid:qid,q:q,localId:loc.id,localNome:loc.nome,study:normalizeStudy(st)}); });
-  });
-  return out;
-}
-function _studyPanelProgress(study){
-  return AvaliacaoCore.estudo(study);
-}
-function _studyPanelState(study, progress){
-  if(estudoFinalizado(study)) return {key:'final',label:'Finalizado'};
-  var ne=nextEventV2(study), iniciado=!!((study.aplicacoes||[]).length||(progress&&progress.started));
-  if(ne){
-    if(ne.diff<=0) return {key:'urgent',label:ne.diff<0?'Atrasado':'Hoje',next:ne};
-    if(ne.diff<=3) return {key:'soon',label:'Em '+ne.diff+'d',next:ne};
-    if(iniciado) return {key:'go',label:'Em andamento',next:ne};
-    return {key:'go',label:'Programado',next:ne};
-  }
-  if(progress.complete) return {key:'done',label:'Avaliado'};
-  if(progress.avaliacoes) return {key:'go',label:progress.started?'Em andamento':'Avaliações pendentes'};
-  return {key:'go',label:'Sem agenda'};
-}
-function _studyPanelNext(state){
-  if(!state.next) return state.key==='done'?'Todas as avaliações lançadas':'Sem próxima atividade programada';
-  var ev=state.next.ev, what=ev.type==='apl'?('Aplicação '+ev.idx+'/'+ev.total):('Avaliação'+(ev.tipo?' · '+ev.tipo:''));
-  var when=state.next.diff===0?'hoje':(state.next.diff<0?'atrasada '+Math.abs(state.next.diff)+'d':'em '+state.next.diff+'d');
-  return what+' · '+when;
-}
-function openStudiesPanel(){
-  _studiesPanelFilter='todos'; _studiesPanelQuery=''; _studiesNewOpen=false;
-  renderStudiesPanel();
-  var ov=document.getElementById('studiesOvl'); if(ov) ov.classList.add('open');
-}
-function closeStudiesPanel(){ _studiesNewOpen=false; var ov=document.getElementById('studiesOvl'); if(ov)ov.classList.remove('open'); }
-function setStudiesPanelFilter(f){ _studiesPanelFilter=f||'todos'; renderStudiesPanel(); }
-function setStudiesPanelQuery(v){ _studiesPanelQuery=String(v||''); renderStudiesPanel(); }
-function toggleStudiesNew(){ _studiesNewOpen=!_studiesNewOpen; renderStudiesPanel(); }
-function startNewStudyFromPanel(){
-  var sel=document.getElementById('studiesNewQuadra'), qid=sel&&sel.value;
-  if(!qid){ if(typeof _stxToast==='function')_stxToast('Selecione a área da primeira execução.'); return; }
-  closeStudiesPanel(); openNewStudy(qid);
-}
-function openStudyFromPanel(qid,sid){ closeStudiesPanel(); openStudyDetail(qid,sid); }
-function renderStudiesPanel(){
-  var box=document.getElementById('studiesPnl'); if(!box)return;
-  var all=_studyPanelItems().map(function(x){ x.progress=_studyPanelProgress(x.study); x.state=_studyPanelState(x.study,x.progress); return x; });
-  var now=all.filter(function(x){return x.state.key==='urgent';}).length;
-  var ongoing=all.filter(function(x){return !estudoFinalizado(x.study)&&x.progress.started&&!x.progress.complete;}).length;
-  var complete=all.filter(function(x){return x.state.key==='done'||x.state.key==='final';}).length;
-  var query=_studiesPanelQuery.trim().toLowerCase();
-  var visible=all.filter(function(x){
-    var f=_studiesPanelFilter;
-    if(f==='acao' && x.state.key!=='urgent')return false;
-    if(f==='pendentes' && !(x.state.key==='urgent'||x.state.key==='soon'||x.state.key==='go'))return false;
-    if(f==='andamento' && !(x.progress.started&&!x.progress.complete&&!estudoFinalizado(x.study)))return false;
-    if(f==='concluidos' && !(x.state.key==='done'||x.state.key==='final'))return false;
-    if(query){ var hay=[x.study.codigo,x.study.nome,x.localNome,x.qid,quadraNome(x.qid),studyCultura(x.study,x.q),studyVariedade(x.study,x.q)].join(' ').toLowerCase(); if(hay.indexOf(query)<0)return false; }
-    return true;
-  }).sort(function(a,b){
-    var pa={urgent:0,soon:1,go:2,done:3,final:4}[a.state.key], pb={urgent:0,soon:1,go:2,done:3,final:4}[b.state.key];
-    if(pa!==pb)return pa-pb;
-    return String(a.study.codigo||a.study.nome||'').localeCompare(String(b.study.codigo||b.study.nome||''),'pt-BR');
-  });
-  function chip(key,label){return '<button type="button" class="study-filter '+(_studiesPanelFilter===key?'active':'')+'" onclick="setStudiesPanelFilter(\''+key+'\')">'+label+'</button>';}
-  function summary(key,cls,value,label){return '<button type="button" class="study-summary-card '+(cls||'')+(_studiesPanelFilter===key?' active':'')+'" onclick="setStudiesPanelFilter(\''+key+'\')"><b>'+value+'</b><span>'+label+'</span></button>';}
-  var grupos=_studyPanelQuadraGroups(), opt='';
-  grupos.forEach(function(g){ opt+='<optgroup label="'+esc(g.nome)+'">'; g.quadras.forEach(function(q){ var tipo=q.lab?(' · Laboratório'+(q.labTipo?' de '+q.labTipo:'')):''; opt+='<option value="'+esc(q.id)+'">'+esc(q.nome+tipo)+'</option>'; }); opt+='</optgroup>'; });
-  var h='<div class="studies-dashboard-head"><div><div class="studies-dashboard-kicker">Gestão de estudos</div><div class="studies-dashboard-title">Ensaios</div><div class="studies-dashboard-sub">Protocolos, locais de execução e próximas atividades.</div></div><div class="studies-dashboard-actions"><button type="button" class="studies-dashboard-new" onclick="toggleStudiesNew()">+ Novo protocolo</button><button type="button" class="studies-dashboard-close" onclick="closeStudiesPanel()">Fechar ×</button></div></div>';
-  if(_studiesNewOpen){
-    h+='<div class="studies-new-study"><div class="studies-new-copy"><b>1 · Protocolo</b><span>Defina o ensaio no formulário. 2 · Primeira execução: escolha a área.</span></div>';
-    if(opt)h+='<select id="studiesNewQuadra" aria-label="Localidade e quadra da primeira execução">'+opt+'</select><button type="button" class="studies-new-continue" onclick="startNewStudyFromPanel()">Criar protocolo</button>';
-    else h+='<span class="studies-new-empty">Cadastre uma quadra ou laboratório antes de criar o estudo.</span>';
-    h+='<button type="button" class="studies-new-cancel" onclick="toggleStudiesNew()">Cancelar</button></div>';
-  }
-  h+='<div class="studies-dashboard-summary">'+summary('todos','',all.length,all.length===1?'estudo':'estudos')+summary('acao','urgent',now,'pedem ação')+summary('andamento','',ongoing,'em lançamento')+summary('concluidos','done',complete,'concluídos')+'</div>';
-  h+='<div class="studies-dashboard-tools">'+chip('todos','Todos')+chip('acao','Ação agora')+chip('pendentes','Pendentes')+chip('andamento','Em andamento')+chip('concluidos','Concluídos')+'<input id="studiesFilterSearch" class="study-filter-search" value="'+esc(_studiesPanelQuery)+'" oninput="setStudiesPanelQuery(this.value)" placeholder="Buscar código, estudo, localidade, cultura ou quadra"></div>';
-  h+='<div class="studies-dashboard-list">';
-  if(!visible.length){
-    h+=!all.length
-      ? '<div class="studies-dashboard-empty studies-dashboard-empty-start"><span class="empty-mark">01</span><b>Comece pelo protocolo</b><small>Defina o ensaio e vincule a primeira execução a uma quadra ou laboratório. O Agracta monta o delineamento, a calculadora, a agenda e a trilha operacional.</small><button type="button" onclick="toggleStudiesNew()">Criar primeiro protocolo</button></div>'
-      : '<div class="studies-dashboard-empty"><b>Nenhum estudo neste filtro</b><small>Tente outro status ou limpe a busca.</small></div>';
-  }
-  else visible.forEach(function(x){
-    var st=x.study,p=x.progress,state=x.state,code=st.codigo||st.nome||'(sem código)', name=(st.nome&&st.nome!==code)?st.nome:(st.descricao||'Sem descrição'), crop=studyCultura(st,x.q), variety=studyVariedade(st,x.q);
-    h+='<button type="button" class="study-dashboard-card" onclick="openStudyFromPanel(\''+_avCroquiEscJs(x.qid)+'\',\''+_avCroquiEscJs(st.id)+'\')">'+
-      '<div class="study-dashboard-top"><span class="study-dashboard-code">'+esc(code)+'</span><span class="study-dashboard-status '+state.key+'">'+esc(state.label)+'</span></div>'+
-      '<div class="study-dashboard-name">'+esc(name)+'</div>'+
-      '<div class="study-dashboard-where"><b>'+esc(x.localNome)+'</b> · '+esc(quadraNome(x.qid))+'</div>'+
-      '<div class="study-dashboard-crop">'+esc(crop||((typeof isQuadraLab==='function'&&isQuadraLab(x.qid))?(quadraLabTipo(x.qid)||'Laboratório'):'Sem cultura'))+(variety?' · '+esc(variety):'')+'</div>'+
-      '<div class="study-dashboard-progress"><i style="width:'+p.pct+'%"></i></div><div class="study-dashboard-meta"><span>'+p.filled+' / '+p.total+' lançamentos</span><span>'+p.pct+'%</span></div>'+
-      '<div class="study-dashboard-next"><b>Próximo:</b> '+esc(_studyPanelNext(state))+'</div></button>';
-  });
-  h+='</div>';
-  box.innerHTML=h;
 }
 
 /* ============ BOTÃO "HOJE" E BUSCA NO TOPO ============ */
@@ -21265,9 +20994,8 @@ var SOLO_CORES={Latossolo:'#b5502e',Argissolo:'#c8763c',Nitossolo:'#9c3b2a',
 function soloCor(ordem){ return SOLO_CORES[ordem]||SOLO_CORES._; }
 
 /* ----- Estado guardado em data[qid].solo — sem schema novo -----
-   _rowQuadra joga toda chave desconhecida de data[qid] em `extras`, e a leitura
-   devolve inteira: Supabase e Firebase sincronizam de graça, e o merge é
-   chave-a-chave. Mesmo caminho que data[qid].tipo usou. */
+   o documento da quadra na nuvem leva o objeto data[qid] inteiro (splitState,
+   firebase-sync.js): sincroniza de graça, e o merge é chave-a-chave. Mesmo caminho que data[qid].tipo usou. */
 function soloDaQuadra(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return (d.solo&&d.solo.cartografico)||null; }
 function soloObservado(id){ var d=(typeof data!=='undefined'&&data[id])||{}; return (d.solo&&d.solo.observado)||null; }
 

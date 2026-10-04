@@ -366,7 +366,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   transform:translateY(-1px);
 }
 
-.search-box input,.se-field input,.se-field select,.se-field textarea,.e-inp,.loc-box input,.gr-ctl select,.study-filter-search,.studies-new-study select{
+.search-box input,.se-field input,.se-field select,.se-field textarea,.e-inp,.loc-box input,.gr-ctl select{
   min-height:46px!important;
   padding:11px 13px!important;
   color:var(--gp-text)!important;
@@ -377,12 +377,12 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   outline:none!important;
 }
 .se-field textarea{min-height:94px!important}
-.search-box input:focus,.se-field input:focus,.se-field select:focus,.se-field textarea:focus,.e-inp:focus,.loc-box input:focus,.study-filter-search:focus,.studies-new-study select:focus{
+.search-box input:focus,.se-field input:focus,.se-field select:focus,.se-field textarea:focus,.e-inp:focus,.loc-box input:focus{
   border-color:var(--gp-green-deep)!important;
   box-shadow:var(--ag-focus)!important;
 }
 
-.studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit,.studies-dashboard-new,.studies-new-continue,.study-focus button,.study-plan-actions button,.study-dossier-actions button,.study-parcelas-actions button{
+.studies-add,.sd-add,.se-add-trat,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit,.study-focus button,.study-plan-actions button,.study-dossier-actions button,.study-parcelas-actions button{
   min-height:42px!important;
   padding:0 15px!important;
   color:#fff!important;
@@ -393,11 +393,11 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   font:750 12px/1 var(--ag-font)!important;
   letter-spacing:0!important;
 }
-.studies-add:hover,.sd-add:hover,.se-add-trat:hover,.eval-add-btn:hover,.btn-save:hover,.today-card-quick:hover,.gr-ok:hover,.e-save:hover,.p-btn-edit:hover,.studies-dashboard-new:hover{
+.studies-add:hover,.sd-add:hover,.se-add-trat:hover,.btn-save:hover,.today-card-quick:hover,.gr-ok:hover,.e-save:hover,.p-btn-edit:hover{
   background:var(--gp-green-hover)!important;
   transform:translateY(-1px);
 }
-.btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back,.ndvi-ix,.sd-actions .btn-sm,.search-close,.studies-dashboard-close,.studies-new-cancel{
+.btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back,.ndvi-ix,.sd-actions .btn-sm,.search-close{
   min-height:42px!important;
   padding:0 14px!important;
   color:var(--gp-text-2)!important;
@@ -407,14 +407,14 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   box-shadow:none!important;
   font:700 12px/1 var(--ag-font)!important;
 }
-.btn-cancel:hover,.e-cancel:hover,.gr-cancel:hover,.p-btn-close:hover,.today-back:hover,.sd-back:hover,.search-close:hover,.studies-dashboard-close:hover{
+.btn-cancel:hover,.e-cancel:hover,.gr-cancel:hover,.p-btn-close:hover,.today-back:hover,.sd-back:hover,.search-close:hover{
   color:var(--gp-text)!important;background:var(--gp-s3)!important;border-color:var(--gp-line-2)!important
 }
 
 /* -------------------------------------------------------------------------- */
 /* TELAS DE TRABALHO                                                          */
 /* -------------------------------------------------------------------------- */
-.today-overlay,.sd-overlay,.studies-overlay{
+.today-overlay,.sd-overlay{
   color:var(--gp-text-2)!important;
   background:
     radial-gradient(900px 460px at 10% -10%,rgba(35,132,82,.08),transparent 64%),
@@ -431,48 +431,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .today-date{font-family:var(--ag-font)!important;color:var(--gp-text-3)!important}
 .today-sum-item{padding:17px 12px!important;border-radius:18px!important}
 .today-sum-n{font:750 32px/1 var(--ag-display)!important;letter-spacing:-.04em!important}
-
-#studiesPnl{width:min(1180px,100%)!important;padding:28px 24px 48px!important}
-.studies-dashboard-head{
-  top:-28px!important;
-  padding:28px 0 20px!important;
-  background:var(--gp-bg)!important;
-  border-bottom:0!important;
-  backdrop-filter:blur(18px)!important;
-  -webkit-backdrop-filter:blur(18px)!important;
-}
-.studies-dashboard-kicker{color:var(--gp-green)!important;font:750 10px/1 var(--ag-font)!important;letter-spacing:.14em!important}
-.studies-dashboard-title{color:var(--gp-text)!important;font:800 clamp(29px,4vw,44px)/1 var(--ag-display)!important;letter-spacing:-.045em!important}
-.studies-dashboard-sub{margin-top:7px!important;color:var(--gp-text-3)!important;font-size:13px!important}
-.studies-dashboard-summary{gap:12px!important;margin:22px 0 17px!important}
-.study-summary-card{
-  min-height:94px!important;
-  padding:16px!important;
-  color:var(--gp-text)!important;
-  background:var(--gp-s2)!important;
-  border:1px solid var(--gp-line)!important;
-  border-radius:18px!important;
-  box-shadow:0 4px 14px rgba(20,50,30,.05)!important;
-}
-.study-summary-card:hover{box-shadow:var(--ag-card-shadow)!important}
-.study-summary-card.active{background:rgba(35,132,82,.10)!important;border-color:rgba(35,132,82,.40)!important}
-.study-summary-card b{font:750 30px/1 var(--ag-display)!important;letter-spacing:-.04em!important}
-.study-summary-card span{font:700 10px/1.2 var(--ag-font)!important;letter-spacing:.08em!important}
-.studies-dashboard-tools{gap:8px!important;margin-bottom:17px!important}
-.study-filter{min-height:38px!important;padding:0 13px!important;color:var(--gp-text-2)!important;background:var(--gp-s2)!important;border:1px solid var(--gp-line)!important;border-radius:999px!important;font:650 11px/1 var(--ag-font)!important}
-.study-filter:hover{border-color:var(--gp-line-2)!important}
-.study-filter.active{color:#fff!important;background:var(--gp-green-deep)!important;border-color:transparent!important}
-.studies-dashboard-list{gap:13px!important}
-.study-dashboard-card{
-  padding:17px!important;
-  color:var(--gp-text)!important;
-  background:var(--gp-s2)!important;
-  border:1px solid var(--gp-line)!important;
-  border-radius:19px!important;
-  box-shadow:0 4px 14px rgba(20,50,30,.05)!important;
-}
-.study-dashboard-card:hover{background:var(--gp-s2)!important;border-color:var(--gp-line-2)!important;box-shadow:var(--ag-card-shadow)!important;transform:translateY(-2px)!important}
-.studies-dashboard-empty{padding:68px 20px!important;color:var(--gp-text-3)!important;background:var(--gp-s2)!important;border:1px dashed var(--gp-line-2)!important;border-radius:20px!important;font-size:14px!important}
 
 .study-workflow-rail,.se-wizard{padding:6px!important;gap:6px!important;background:var(--gp-s2)!important;border-color:var(--gp-line)!important;border-radius:17px!important}
 .study-workflow-step,.se-wizard-step{border-radius:12px!important}
@@ -520,10 +478,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .study-close-check.ready{color:var(--gp-text-2)!important;background:rgba(35,132,82,.09)!important;border:1px solid rgba(35,132,82,.30)!important}
 .study-close-check.attention{color:var(--gp-text-2)!important;background:rgba(239,178,75,.09)!important;border:1px solid rgba(239,178,75,.32)!important}
 .study-close-check>b{color:var(--gp-text)!important;font-size:13px!important}.study-close-check ul{margin:2px 0 1px 18px!important;padding:0!important}.study-close-check li{margin:3px 0!important}.study-close-check small{color:var(--gp-text-3)!important}
-
-.studies-dashboard-empty-start{display:grid!important;grid-template-columns:auto minmax(0,520px)!important;justify-content:center!important;align-items:center!important;gap:7px 16px!important;text-align:left!important}
-.studies-dashboard-empty-start .empty-mark{grid-row:1/4!important;display:grid!important;place-items:center!important;width:58px!important;height:58px!important;color:var(--gp-green)!important;background:rgba(35,132,82,.10)!important;border:1px solid rgba(35,132,82,.25)!important;border-radius:18px!important;font:800 15px/1 var(--ag-mono)!important}
-.studies-dashboard-empty-start b{color:var(--gp-text)!important;font:780 17px/1.2 var(--ag-display)!important}.studies-dashboard-empty-start small{display:block!important;line-height:1.55!important}.studies-dashboard-empty-start button{justify-self:start!important;min-height:40px!important;padding:0 14px!important;color:#fff!important;background:var(--gp-green-deep)!important;border:0!important;border-radius:12px!important;font-weight:750!important}
 
 /* Formulários e lançamentos: alvos táteis consistentes e menos "janela de
    sistema". Os rótulos continuam claros sem gritar em caixa alta. */

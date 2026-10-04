@@ -70,12 +70,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 </div>
 <div class="overlay" id="dOvl" onclick="closeDetail()"><div class="panel" id="dPnl" onclick="event.stopPropagation()"></div></div>
 <div class="overlay" id="eOvl" onclick="closeEdit()"><div class="edit-panel" id="ePnl" onclick="event.stopPropagation()"></div></div>
-<div class="overlay" id="sOvl" onclick="closeStudyEdit()"><div class="edit-panel" id="sPnl" onclick="event.stopPropagation()"></div></div>
 <div class="overlay" id="noteOvl" onclick="closeNoteModal()"><div class="edit-panel" id="notePnl" onclick="event.stopPropagation()"></div></div>
-
-<!-- Central de ensaios: visão transversal às quadras, para a rotina não
-     depender de procurar cada estudo no mapa. O conteúdo é gerado em app.js. -->
-<div class="studies-overlay" id="studiesOvl" onclick="if(event.target.id==='studiesOvl')closeStudiesPanel()"><div id="studiesPnl"></div></div>
 
 <div id="scoutingBanner" style="position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--surface, rgba(20,30,20,0.96));border:1px solid var(--accent, #37d684);border-radius:999px;padding:7px 8px 7px 16px;box-shadow:var(--shadow, 0 6px 20px rgba(0,0,0,0.5));display:none;align-items:center;gap:10px;font:600 12px system-ui,sans-serif;color:var(--text, #fff);max-width:94vw;white-space:nowrap;">
   <span style="overflow:hidden;text-overflow:ellipsis;">Toque no mapa onde está a observação</span>

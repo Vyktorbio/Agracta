@@ -33,7 +33,7 @@ html.light,html.ag-depth-light{
   --ag-card-shadow:var(--depth-card);
 }
 /* Fundo abaixo das superfícies: o contraste de planos dá volume real à UI. */
-.sd-overlay,.today-overlay,.studies-overlay,.con-overlay{
+.sd-overlay,.today-overlay,.con-overlay{
   background-color:var(--depth-canvas)!important;
   background-image:radial-gradient(ellipse at 0 0,var(--depth-wash),transparent 65%)!important;
 }
@@ -51,8 +51,7 @@ html.light,html.ag-depth-light{
 .ag-dw-head,.panel-header,.calc-top,.se-head{border-bottom-color:var(--depth-edge)!important}
 /* Nível 2: cartões de trabalho. As cores de estado continuam vindo do módulo. */
 .study-card,.study-card-v2,.today-card,.today-sum-item,.clima-card,
-.study-plan-card,.study-dossier,.study-finalized-card,.studies-summary-card,
-.studies-dashboard-summary>div,.con-estudo,.con-btn.card,.con-painel,
+.study-plan-card,.study-dossier,.study-finalized-card,.studies-summary-card,.con-estudo,.con-btn.card,.con-painel,
 .ep-chart,.ep-stats>div,.calc-card,.calc-barrares,.calc-mem,.calclab-out,
 .bio-fast-card,.evento-item,.se-trat,.ag-item{
   box-shadow:var(--depth-card)!important;
@@ -70,13 +69,13 @@ html.light,html.ag-depth-light{
 }
 .ep-hero{box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 3px 0 #0b3128,0 20px 38px -17px rgba(9,50,41,.42)!important}
 /* Nível 1: controles com uma borda iluminada e uma pequena sombra de contato. */
-.btn-sm,.btn-save,.btn-cancel,.studies-dashboard-new,.studies-dashboard-close,
+.btn-sm,.btn-save,.btn-cancel,
 .study-filter-btn,.con-btn,.calc-copy,.calc-navb,.calc-edit,.auth-btn,
 .se-add-trat,.sd-add,.ag-dw-x,.ag-ndvi-date,.btn-tools{
   box-shadow:var(--depth-raised)!important;
   background-image:var(--depth-sheen)!important;
 }
-.btn-save,.auth-btn,.con-btn.ativo,.con-btn.primary,.studies-dashboard-new{
+.btn-save,.auth-btn,.con-btn.ativo,.con-btn.primary{
   box-shadow:var(--depth-green)!important;
   background-image:linear-gradient(180deg,rgba(255,255,255,.12),rgba(0,0,0,.06))!important;
 }
@@ -91,8 +90,7 @@ html.light,html.ag-depth-light{
    controles deslizantes, arquivos ou superfícies de desenho. */
 .auth-i,.calc-inp,.calc-sel,.calc-inpi,.calc-seli,
 .se-field :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea),
-.con-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea),
-.study-filter-search input{
+.con-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea){
   box-shadow:var(--depth-pressed)!important;
   border-color:var(--depth-edge)!important;
 }
@@ -142,6 +140,6 @@ html.ag-depth-light:not(.ag-depth-stat) body{background:var(--depth-canvas)}
 /* Relatórios impressos continuam limpos e sem sombras que gastam tinta. */
 @media print{
   *,*::before,*::after{box-shadow:none!important;text-shadow:none!important}
-  .sd-overlay,.today-overlay,.studies-overlay,.con-overlay,.ag-depth-stat body,.cli-report{background:#fff!important}
+  .sd-overlay,.today-overlay,.con-overlay,.ag-depth-stat body,.cli-report{background:#fff!important}
   .con-btn,.con-estudo,.ep-chart,.calc-card,.ag-depth-stat .card{background-image:none!important}
 }
