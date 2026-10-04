@@ -238,23 +238,26 @@ try {
       // 3. Range and input validation (avValidateCell)
       _avGrid = { tipos: { v1: 'pct', v2: 'contagem' } };
       
-      // Test percentage validation (max 100, min 0)
+      // Out-of-range input is REJECTED (never coerced into an invented value)
       var inpPctOver = { getAttribute: function() { return 'v1'; }, value: '150' };
       avValidateCell(inpPctOver);
-      if (inpPctOver.value !== '100') throw new Error("Percentage > 100 should be coerced to 100");
+      if (inpPctOver.value !== '') throw new Error("Percentage > 100 should be rejected");
 
       var inpPctUnder = { getAttribute: function() { return 'v1'; }, value: '-10' };
       avValidateCell(inpPctUnder);
-      if (inpPctUnder.value !== '0') throw new Error("Percentage < 0 should be coerced to 0");
+      if (inpPctUnder.value !== '') throw new Error("Percentage < 0 should be rejected");
 
-      // Test count validation (negative coerced to 0, decimals floored)
+      // Count validation (negative and decimals rejected; PT-BR thousands accepted)
       var inpCountNeg = { getAttribute: function() { return 'v2'; }, value: '-5' };
       avValidateCell(inpCountNeg);
-      if (inpCountNeg.value !== '0') throw new Error("Negative count should be coerced to 0");
+      if (inpCountNeg.value !== '') throw new Error("Negative count should be rejected");
 
       var inpCountDec = { getAttribute: function() { return 'v2'; }, value: '12.8' };
       avValidateCell(inpCountDec);
-      if (inpCountDec.value !== '12') throw new Error("Count decimal should be floored");
+      if (inpCountDec.value !== '') throw new Error("Count decimal should be rejected, not floored");
+      var inpCountMil = { getAttribute: function() { return 'v2'; }, value: '1.200' };
+      avValidateCell(inpCountMil);
+      if (inpCountMil.value !== '1200') throw new Error("Count 1.200 should read as 1200");
 
       var inpInvalid = { getAttribute: function() { return 'v2'; }, value: 'abc' };
       avValidateCell(inpInvalid);

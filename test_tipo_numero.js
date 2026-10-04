@@ -60,13 +60,18 @@ function valida(v,val){ return vm.runInContext("(function(){ var inp={getAttribu
 console.log('\n[1] número: sem teto de 100, com decimais');
 eq(valida('Altura','150'),'150','altura 150 não vira 100');
 eq(valida('Altura','12.5'),'12.5','altura 12,5 mantém o decimal');
-eq(valida('Severidade','150'),'100','% continua com teto de 100');
+eq(valida('Severidade','150'),'','% acima de 100 é recusado (teto continua valendo)');
 vm.runInContext("_avGrid.varcfg.Altura={sub:2}; _avWriteBruto('T1R1','Altura','s0','3500');",A);
 eq(vm.runInContext("_avGrid.bruto.T1R1.Altura.sub[0]",A),'3500','sub-amostra de número também sem teto');
 
 console.log('\n[2] contagem com unidade de medida não perde decimais');
 eq(valida('Diâmetro (mm)','12.5'),'12.5','diâmetro (mm) em coluna de contagem: 12,5 fica 12,5');
-eq(valida('v2','12.8'),'12','contagem comum continua inteira');
+eq(valida('v2','12.8'),'','contagem comum com decimal é recusada (não trunca)');
+eq(valida('v2','12'),'12','contagem inteira passa');
+eq(valida('v2','1.200'),'1200','contagem com ponto de milhar: 1.200 = 1200');
+eq(valida('Severidade','1.250'),'','% com ponto de milhar é ambíguo: recusado');
+eq(valida('Severidade','12a'),'','lixo no número é recusado');
+eq(valida('Severidade','12,5'),'12.5','vírgula decimal');
 
 console.log('\n[3] coluna nova com nome de medida');
 vm.runInContext("window._avColTipo='pct'; window._avColTipoEscolhido=false; window._avColOpts={sub:1,N:20,escalaMax:4,sentido:'menor'};",A);

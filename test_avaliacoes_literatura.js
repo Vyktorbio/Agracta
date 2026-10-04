@@ -125,7 +125,7 @@ ck(run(A,"_avDerivar("+JSON.stringify(ewrc)+",{sub:['5']})")==='50','nota 5, o m
 ck(run(A,"_avDerivar({tipo:'escala',sub:2,N:0,escalaMax:4,escalaMin:0},{sub:['2','4']})")==='75','escala de 0 a 4 continua igual: (2+4)/(2×4) = 75%');
 ck(run(A,"_avCfg({varcfg:{v:{escalaMin:5,escalaMax:4}},tipos:{v:'escala'}},'v').escalaMin")===0,'mínimo ≥ máximo é descartado (volta a 0)');
 run(A,"_avGrid={variaveis:['Nota EWRC'],tipos:{'Nota EWRC':'escala'},varcfg:{'Nota EWRC':{escalaMin:1,escalaMax:9,sub:1}},notas:{},meta:{},bruto:{}}; _avWriteBruto('T1R1','Nota EWRC','s0','0');");
-ck(run(A,"_avGrid.bruto.T1R1['Nota EWRC'].sub[0]")==='1','nota 0 numa escala que começa em 1 é ajustada para 1');
+ck(run(A,"_avGrid.bruto.T1R1['Nota EWRC'].sub[0]")==='','nota 0 numa escala que começa em 1 é recusada (não vira 1)');
 var cat=JSON.parse(run(A,"JSON.stringify(CATALOGO_AVAL['Seletividade/Fitotoxicidade'].filter(function(x){ return x.nome==='Nota EWRC'; })[0])"));
 ck(cat.escalaMin===1 && cat.escalaMax===9 && /EWRC \(1964\)/.test(cat.escalaNome),'o catálogo traz a EWRC 1–9 com a descrição e a referência');
 /* o document do sandbox é um Proxy que ignora atribuição: troca-se o objeto inteiro */

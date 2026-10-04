@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v353';
+var CACHE = 'agracta-app-v354';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=3', './protocolo-menu.js?v=3', './protocolo-avaliacoes.css?v=1',
@@ -24,7 +24,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=38', './theme-2026.css?v=9', './ui-campo.css?v=11', './app.js?v=211',
+  './styles.css?v=38', './theme-2026.css?v=9', './ui-campo.css?v=11', './app.js?v=212',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=3', './trilha-formal.js?v=2',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
   './vendor/leaflet.js', './vendor/leaflet.css',
