@@ -127,6 +127,11 @@ ck(aMort === '', 'mortalidade: a seção de AACPD não é exibida');
 ck(/>\d+(\.\d+)?%</.test(aSev), 'doença: a AACPD continua trazendo o % de controle');
 ck(aSev.indexOf('progresso no tempo')>=0 || aSev.indexOf('AUDPC')>=0, 'a seção de AACPD continua saindo em doença');
 
+console.log('Escala: índice de McKinney tem AACPD; nota ordinal não');
+function comoEscala(st, modo){ st=JSON.parse(JSON.stringify(st)); st.avaliacoes.forEach(function(a){ var v=a.variaveis[0]; a.tipos[v]='escala'; a.varcfg[v].escalaMin=0; a.varcfg[v].escalaMax=4; if(modo) a.varcfg[v].escalaModo=modo; }); return st; }
+ck(context.studyAudpcHtml(comoEscala(sev)).indexOf('AUDPC')>=0, 'escala em índice (padrão): a AACPD aparece');
+ck(context.studyAudpcHtml(comoEscala(sev,'nota'))==='', 'escala em notas: sem AACPD');
+
 console.log('Título do gráfico de progresso segue a variável');
 var gMort = context.studyChartsHtml(mort);
 var gSev  = context.studyChartsHtml(sev);

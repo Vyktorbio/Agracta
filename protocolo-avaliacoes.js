@@ -2,7 +2,7 @@
 (function(w){
 'use strict';
 var ctx=null,copy=function(x){return JSON.parse(JSON.stringify(x));};
-var papeis={experimental:'Tratamento experimental',sem_intervencao:'Testemunha sem intervenção',sem_alvo:'Referência sem alvo / inoculação',positivo:'Controle positivo / padrão'};
+var papeis={experimental:'Tratamento experimental',sem_intervencao:'Testemunha (controle negativo)',sem_alvo:'Testemunha não infestada (sem alvo)',positivo:'Padrão (controle positivo)'};
 function option(value,label,current){return '<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(label)+'</option>';}
 function campo(label,html){return '<label class="pa-campo">'+label+html+'</label>';}
 function input(k,v,type){return '<input data-pa="'+k+'" type="'+(type||'text')+'" value="'+esc(v==null?'':String(v))+'">';}
@@ -11,7 +11,11 @@ w.openProtocoloAvaliacoes=function(qid,sid){
  var s=(data[qid].estudos||[]).find(function(s){return s.id===sid;});if(!s||estudoFinalizado(s))return;
  var p=copy(s.avaliacaoProtocolo||{variaveis:[]}),seen={};p.variaveis.forEach(function(r){seen[r.nome]=true;});
  if(!s.avaliacaoProtocolo)(s.avaliacoes||[]).forEach(function(a){(a.variaveis||[]).forEach(function(v){if(seen[v])return;seen[v]=true;
-  p.variaveis.push({nome:v,tipo:(a.tipos||{})[v]||'pct',cfg:Object.assign({calculoControle:'nenhum',referencia:studyTestemunha(s)},copy((a.varcfg||{})[v]||{}))});
+  /* variável que já existe abre com o cálculo que ela já tinha: sem calculoControle
+     gravado, a tela calculava o % de controle — abrir em 'nenhum' fazia o simples
+     salvar do protocolo apagar o % das avaliações seguintes. Escala em notas não tem. */
+  var _vc=(a.varcfg||{})[v]||{},_tp=(a.tipos||{})[v]||'pct',_calc=(_tp==='escala'&&_vc.escalaModo==='nota')?'nenhum':'auto';
+  p.variaveis.push({nome:v,tipo:_tp,cfg:Object.assign({calculoControle:_calc,referencia:studyTestemunha(s)},copy(_vc))});
  });});
  ctx={qid:qid,sid:sid,p:p,base:s._ts||0,roles:{},ids:[],motivo:""};var d=document.getElementById('paModal');if(!d){d=document.createElement('dialog');d.id='paModal';document.body.appendChild(d);}
  render();d.showModal();

@@ -21,14 +21,18 @@
 (function (w) {
   'use strict';
   var d = w.document;
-  var FIX_VALIDO_MS = 60000, ESPERA_MS = 90000, OCIOSO_MS = 180000;
+  /* GPS de até 60 s ANTES (parado, o aparelho não manda leitura nova) ou até 30 s
+     DEPOIS da nota (andando, 30 s já são outra árvore). A diferença fica gravada. */
+  var FIX_VALIDO_MS = 60000, ESPERA_MS = 30000, OCIOSO_MS = 180000, DENTRO_ACC_MAX = 5;
   var gps = { watch: null, ultimo: null, pendentes: [], ocioso: null };
 
   /* ------------------------------------------------------------ captura --- */
   function fixRecente(agora) { return gps.ultimo && (agora - gps.ultimo.t) <= FIX_VALIDO_MS ? gps.ultimo : null; }
-  function carimbar(meta, fix) {
+  function carimbar(meta, fix, em) {
     if (!meta || !fix || meta.loc) return;
     meta.loc = { lat: +fix.lat.toFixed(7), lng: +fix.lng.toFixed(7), acc: Math.round(fix.acc * 10) / 10, t: fix.t };
+    /* segundos entre a nota e a leitura do GPS (+ depois, − antes) */
+    if (em) meta.loc.dt = Math.round((fix.t - em) / 1000);
   }
   function aoFix(pos) {
     var c = pos && pos.coords; if (!c || !isFinite(c.latitude) || !isFinite(c.longitude)) return;
@@ -39,7 +43,7 @@
     var agora = Date.now();
     gps.pendentes = gps.pendentes.filter(function (p) {
       if (agora - p.em > ESPERA_MS) return false;
-      carimbar(p.meta, fix); return false;
+      carimbar(p.meta, fix, p.em); return false;
     });
   }
   function ligarGps() {
@@ -58,7 +62,7 @@
     if (!meta || typeof meta !== 'object') return;
     if (!ligado()) return;
     var agora = Date.now(), fix = fixRecente(agora);
-    if (fix) carimbar(meta, fix); else gps.pendentes.push({ meta: meta, em: agora });
+    if (fix) carimbar(meta, fix, agora); else gps.pendentes.push({ meta: meta, em: agora });
     ligarGps();
     clearTimeout(gps.ocioso);
     /* sem nota nova por 3 min, o GPS dorme: bateria de quem está no campo */
@@ -99,7 +103,9 @@
       dist = Math.sqrt(dx * dx + dy * dy);
     }
     var acc = +loc.acc || 0;
-    if (dist <= 0) return { nivel: 'dentro', dist: 0 };
+    /* "dentro" é afirmação: só com GPS bom. Com GPS largo o ponto cair dentro é
+       sorte, e a nota fica como compatível (dentro da margem), não confirmada. */
+    if (dist <= 0) return acc <= DENTRO_ACC_MAX ? { nivel: 'dentro', dist: 0 } : { nivel: 'perto', dist: 0 };
     if (dist <= Math.max(acc, 3)) return { nivel: 'perto', dist: dist };
     return { nivel: 'longe', dist: dist };
   }
@@ -158,10 +164,11 @@
   function m1(v) { var n = v < 10 ? Math.round(v * 10) / 10 : Math.round(v); return String(n).replace('.', ','); }
   function quando(ts) { var t = new Date(ts); return isFinite(t) ? t.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''; }
   function texto(n) {
-    var v = n.veredito, ver = v.nivel === 'dentro' ? '✓ dentro da parcela' : v.nivel === 'perto' ? 'perto da parcela (' + m1(v.dist) + ' m, dentro da margem do GPS)'
+    var v = n.veredito, ver = v.nivel === 'dentro' ? '✓ dentro da parcela' : v.nivel === 'perto' ? (v.dist > 0 ? 'perto da parcela (' + m1(v.dist) + ' m, dentro da margem do GPS)' : 'compatível com a parcela (GPS largo demais para confirmar)')
       : v.nivel === 'longe' ? '✗ a ' + m1(v.dist) + ' m da parcela avaliada' : 'croqui não posicionado: sem conferência de parcela';
     return '<b>' + esc(n.codigo) + ' · ' + esc(n.tratId) + ' R' + n.rep + '</b><br>' + esc(n.variavel) + ' · ' + esc(n.data || '') +
-      '<br>' + esc(n.quem || 'sem autor') + ' · ' + esc(quando(n.ts)) + ' · GPS ±' + m1(n.loc.acc || 0) + ' m<br>' + ver;
+      '<br>' + esc(n.quem || 'sem autor') + ' · ' + esc(quando(n.ts)) + ' · GPS ±' + m1(n.loc.acc || 0) + ' m' +
+      (n.loc.dt ? ' · GPS ' + Math.abs(n.loc.dt) + ' s ' + (n.loc.dt > 0 ? 'depois' : 'antes') + ' da nota' : '') + '<br>' + ver;
   }
   function todasAsNotas() {
     var out = [], dados = w.data || {};
