@@ -28,9 +28,11 @@
     (st.tratamentos || []).forEach(function (t) {
       if (!t || !t.id) return;
       var papel = t.papelControle || '', marcada = !!t.testemunha;
-      if (papel === 'sem_intervencao' && !marcada) out.push(t.id + ' tem papel "Testemunha", mas não está marcado como Testemunha nos tratamentos');
-      if (marcada && papel && papel !== 'sem_intervencao' && papel !== 'sem_alvo')
-        out.push(t.id + ' está marcado como Testemunha, mas o papel diz "' + (PAPEIS[papel] || papel) + '"');
+      /* regra única, a mesma do app.js (_tratAlinharPapel) e do protocolo-avaliacoes.js:
+         marcado como testemunha ⇔ papel diferente de experimental */
+      if (!papel) return;
+      if (papel !== 'experimental' && !marcada) out.push(t.id + ' tem papel "' + (PAPEIS[papel] || papel) + '", mas não está marcado como Testemunha nos tratamentos');
+      if (papel === 'experimental' && marcada) out.push(t.id + ' está marcado como Testemunha, mas o papel diz "Experimental"');
     });
     return out;
   }
@@ -47,6 +49,9 @@
     if (!txt(st.dataInicio, '')) aviso.push({ txt: 'data da 1ª aplicação (DAA e agenda dependem dela)', etapa: 2 });
     if (!(parseInt(st.numRepeticoes, 10) > 0)) falta.push({ txt: 'repetições', etapa: 3 });
     testemunhaConflitos(st).forEach(function (c) { aviso.push({ txt: c, papel: true }); });
+    var base = tr.filter(function (t) { return t && t.id === test; })[0];
+    if (base && base.testemunha && (base.papelControle === 'positivo' || base.papelControle === 'sem_alvo'))
+      aviso.push({ txt: 'o % de controle está usando ' + base.id + ' (' + PAPEIS[base.papelControle] + ') como base, porque não há testemunha sem intervenção marcada', papel: true });
     return { falta: falta, aviso: aviso };
   }
   function resumo(qid, st) {

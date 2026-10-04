@@ -152,7 +152,7 @@
   }
 
   /* -------------------------------------------------------------- camada --- */
-  var CORES = { dentro: '#16a34a', perto: '#d97706', longe: '#dc2626', 'sem-croqui': '#2563eb' };
+  var CORES = { dentro: '#00ff00', perto: '#ffff00', longe: '#ff0000', 'sem-croqui': '#2563eb' };
   var cam = null;
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function m1(v) { var n = v < 10 ? Math.round(v * 10) / 10 : Math.round(v); return String(n).replace('.', ','); }
@@ -193,8 +193,8 @@
     var r = resumo(lista), info = cam.painel.querySelector('.croqui-info');
     info.className = 'croqui-info' + (r.longe ? ' falta' : '');
     info.innerHTML = r.total ? ('<b>' + r.total + ' nota(s) com local</b><br>' +
-      '<span style="color:#22c55e">● ' + r.dentro + ' dentro</span> · <span style="color:#f59e0b">● ' + r.perto + ' perto</span> · ' +
-      '<span style="color:#f87171">● ' + r.longe + ' longe</span>' + (r.semCroqui ? ' · <span style="color:#60a5fa">● ' + r.semCroqui + ' sem croqui</span>' : ''))
+      '<span style="color:#00ff00">● ' + r.dentro + ' dentro</span> · <span style="color:#ffff00">● ' + r.perto + ' perto</span> · ' +
+      '<span style="color:#ff0000">● ' + r.longe + ' longe</span>' + (r.semCroqui ? ' · <span style="color:#60a5fa">● ' + r.semCroqui + ' sem croqui</span>' : ''))
       : 'Nenhuma nota com local ainda. O local passa a ser gravado nas notas lançadas a partir de agora, com o GPS ligado.';
     return lista;
   }
