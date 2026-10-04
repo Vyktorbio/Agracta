@@ -1,3 +1,95 @@
+AGRACTA — 20a publicacao                    04/10/2026
+=====================================================
+
+Leva: limpeza (frente 1 da lapidacao). Nada muda na tela, com uma excecao.
+  CODIGO:  app.js  firebase-sync.js  integracoes.js  index.html  sw.js
+           styles.css  theme-2026.css  profundidade.css  interface-neutra.css
+  SAEM:    vendor/supabase.js  supabase-*.sql  supabase/functions/
+  TESTE:   test_sync_leitura_falha.js  test_admin_apagar_conta.js (reescritos)
+           test_offline_local.js (+ sair desautoriza o aparelho)
+           test_acesso_offline.js (sai: testava codigo que nao rodava)
+           e ajustes pequenos em outros 11
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+(As levas que subiram entre 23/09 e esta nao ganharam entrada aqui; a
+numeracao segue a deste arquivo.)
+
+
+O QUE MUDOU
+-----------
+
+O app vinha crescendo em camadas: cada melhoria entrava por cima da
+anterior, e a anterior ficava, carregando sem rodar. Esta leva tira o que
+ja tinha sido substituido.
+
+1) SAI A CAMADA DO SUPABASE
+
+O firebase-sync.js substituia na carga as funcoes de nuvem e login do
+app.js. As versoes do Supabase continuavam la: login, leitura, envio, tempo
+real, painel admin, a escrita dupla (fila agracta-outbox, ja desligada) e a
+leitura por linhas. Saem todas. O vendor/supabase.js (200 KB) deixa de ser
+baixado a cada abertura. Os .sql e as funcoes do Supabase saem do
+repositorio e ficam no historico do git.
+
+2) APAGAR CADASTRO VOLTA A FUNCIONAR (a excecao)
+
+No Painel Admin, o "apagar conta" chamava o Supabase e terminava sempre em
+"Sem conexao." depois das duas perguntas. Agora apaga o CADASTRO da pessoa
+(members/<e-mail>) no Firestore. E o cadastro que da acesso, e so o
+administrador consegue apaga-lo, pelas regras. O botao passa a se chamar
+"apagar cadastro": a conta de login continua existindo, sem abrir nada. O
+e-mail sai do roster com lapide, como antes, para nao voltar de outro
+aparelho.
+
+3) SAEM DOIS PAINEIS SEM PORTA
+
+  - a "Central de ensaios": desde que o botao da barra passou a abrir o
+    Conhecimento na aba Estudos, nada mais a abria;
+  - o editor de estudo antigo: um segundo openStudyEdit, no mesmo arquivo,
+    mandava tudo para o editor novo.
+Junto saem as regras de CSS que so existiam para eles.
+
+4) TESTES QUE GUARDAVAM O QUE NAO RODAVA
+
+Alguns testes conferiam as versoes do Supabase, codigo que nunca rodava.
+Passam a conferir o que roda: a leitura que falha (cloudPull do Firebase),
+o apagar cadastro e "sair desautoriza o aparelho". Os que conferiam a fila
+desligada passam a conferir o save, que e o que leva a nuvem.
+
+app.js: de 25.801 para 24.692 linhas.
+
+
+O QUE FICOU DE FORA, DE PROPOSITO
+---------------------------------
+A barra flutuante de ferramentas, o menu antigo do canto do mapa e os
+paineis antigos de NDVI e da mascara continuam no codigo. A casca nova
+(ui-campo) os esconde, e eles foram mantidos como RESERVA para o caso de ela
+nao carregar (decisao registrada no test_mascara_menu.js). Tira-los ou nao e
+uma decisao separada.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o app (duas vezes, para a versao nova entrar) e entrar normalmente.
+2. Salvar algo num aparelho e ver no outro.
+3. Painel Admin: a lista mostra "apagar cadastro". Apagar um cadastro de
+   teste: duas perguntas, e a pessoa some da lista.
+4. Menu -> Copias e recuperacao -> "Historico da nuvem" abre normalmente.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  No navegador (Chromium, tamanho de celular, modo offline): 12 telas sem
+  erro de JavaScript; 11 identicas as do main, pixel a pixel. A 12a e a
+  lista do admin, com o rotulo novo.
+
+
+=====================================================
+PUBLICACAO ANTERIOR
+=====================================================
+
 AGRACTA — 19a publicacao                    23/09/2026
 =====================================================
 
