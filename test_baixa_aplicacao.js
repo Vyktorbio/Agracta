@@ -38,7 +38,7 @@ function ck(ok,n){ if(ok){p++;console.log('  ok    '+n);} else {f++;console.log(
 function eq(a,b,n){ ck(a===b,n+(a===b?'':' (obtido '+JSON.stringify(a)+', esperado '+JSON.stringify(b)+')')); }
 function perto(a,b,tol,n){ var ok=(a!=null&&Math.abs(a-b)<=tol); ck(ok,n+(ok?'':' (obtido '+JSON.stringify(a)+', esperado ~'+b+')')); }
 
-var salvou=0, upserts=[], auditoria=[];
+var salvou=0, auditoria=[];
 var ctx={
   console:console, Date:Date, String:String, Number:Number, Math:Math, JSON:JSON,
   isFinite:isFinite, Object:Object, Array:Array, parseInt:parseInt, parseFloat:parseFloat,
@@ -47,7 +47,6 @@ var ctx={
   isoToBR:function(d){ var x=String(d||'').split('-'); return x.length===3?(x[2]+'/'+x[1]+'/'+x[0]):d; },
   save:function(){ salvou++; },
   saveItens:function(){},
-  dbUpsertAplicacao:function(q,s,a){ upserts.push(a.id); },
   _currentUserName:function(){ return 'Técnico de teste'; },
   logStudyAuditInObject:function(st,acao,det,extra){ auditoria.push({acao:acao,det:det,extra:extra}); },
   _stxToast:function(){},

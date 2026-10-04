@@ -137,8 +137,9 @@ assert.ok(Math.abs(fazerCtx(1.6).mascaraOpac-1.6)<1e-9,
   'e um valor acima do padrão volta igual: quem subiu o controle não o encontra baixado no dia seguinte');
 assert.equal(fazerCtx(7).mascaraOpac,1,'valor guardado fora da faixa é ignorado, não vira tinta errada');
 assert.equal(fazerCtx('nada').mascaraOpac,1,'lixo no localStorage também cai no padrão');
-assert.ok(!/mascaraOpac/.test(fatia('function dbUpsertQuadra(')||''),
-  'e não viaja junto da quadra para a nuvem: é ajuste de tela, não do ensaio');
+assert.ok(!/mascaraOpac/.test(fatia('function cloudState(')) &&
+  !/mascaraOpac|agracta-mascara-opac/.test(fs.readFileSync('firebase-sync.js','utf8')),
+  'e não viaja para a nuvem: nem o retrato do estado nem o sincronizador o conhecem — é ajuste de tela, não do ensaio');
 
 /* ---------------------------------------------- 4. o mapa lê daqui, só daqui --- */
 const RENDER=fatia('function render(){');
