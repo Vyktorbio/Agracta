@@ -386,12 +386,16 @@ por tratamento, parcela fora do alinhamento.
   - Vale só daqui para a frente.
   - Sem GPS, a nota é salva igual, só sem local.
   - Leitura com precisão pior que 80 m é descartada.
+  - Vale a leitura de até 60 s antes da nota ou até 30 s depois. A diferença
+    em segundos fica gravada (`loc.dt`) e aparece para o supervisor.
 - **Camada "Notas no mapa":**
   - mostra uma marca do tamanho de uma pessoa onde cada nota foi lançada, com
     o círculo da precisão;
   - com o croqui posicionado, a cor diz se a nota caiu **dentro** da parcela
-    avaliada (verde), **perto**, dentro da margem do GPS (âmbar), ou **longe**
+    avaliada (verde), **perto**, dentro da margem do GPS (amarelo), ou **longe**
     (vermelho, com a distância).
+  - **Dentro** só é afirmado com GPS de ±5 m ou melhor. Com GPS mais largo, o
+    ponto que cai na parcela fica amarelo, "compatível": o GPS não confirma.
 - **Rota (opcional):** liga as notas na ordem em que foram lançadas, por
   avaliador. Não é rastreio contínuo do GPS.
 - O **valor** da nota não aparece (cegamento).

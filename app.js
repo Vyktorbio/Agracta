@@ -14106,10 +14106,15 @@ var MOTOR_VERSAO='agracta-18';
    e leva a placa numa série de concentrações para a curva de dose (CE50).
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
 var MOTOR_CALCULO='agracta-18';
-var _bioSolicitado={};
+/* O pedido de cálculo vale para ESTES dados (assinatura) e sobrevive a fechar o
+   app: sem isto, reabrir escondia a estatística já calculada e guardada até
+   alguém apertar o botão de novo. Mudou o dado, muda a assinatura e o pedido
+   deixa de valer sozinho. */
+var _bioSolicitado=(function(){ try{ return JSON.parse(localStorage.getItem('agracta-bio-solicitado')||'{}')||{}; }catch(e){ return {}; } })();
+function _bioSolicitadoGravar(){ try{ localStorage.setItem('agracta-bio-solicitado',JSON.stringify(_bioSolicitado)); }catch(e){} }
 function iniciarCalculosEstatisticos(qid,sid){
  var s=_estudoDe(qid,sid);if(!s||estudoFinalizado(s))return;
- _bioSolicitado[qid+'|'+sid]=_bioestatSignature(s);
+ _bioSolicitado[qid+'|'+sid]=_bioestatSignature(s);_bioSolicitadoGravar();
  _bioestatEnsureStudy(qid,sid);_bioestatRefreshOpen(_bioAutoCache[qid+'|'+sid]);
 }
 function _bioBotaoCalcular(qid,sid){return '<button type="button" class="btn-sm" onclick="iniciarCalculosEstatisticos('+esc(JSON.stringify(qid))+','+esc(JSON.stringify(sid))+')">Iniciar cálculos estatísticos</button>';}
@@ -19452,7 +19457,9 @@ function studyAudpcHtml(study){
   Object.keys(byVar).forEach(function(v){
     var pts=byVar[v]; if(pts.length<2) return;
     var _ac=_avCfgDoEstudo(study,v),_ar=(_ac&&_ac.varcfg||{})[v]||{};
-    if(_ar.calculoControle==='nenhum'||_avTipo(_ac,v)==='escala')return;
+    /* Nota de escala é ordinal: sem área sob a curva. O índice de McKinney (%)
+       é contínuo e tem AACPD — sumir com ela em toda escala era regressão. */
+    if(_ar.calculoControle==='nenhum'||(_avTipo(_ac,v)==='escala'&&_ar.escalaModo==='nota'))return;
     test=_ar.referencia||studyTestemunha(study);
     /* Bioensaio não tem AACPD. A área sob a curva de knockdown não é resultado
        de nada — mortalidade a 24 h é a leitura daquela hora, não um acumulado.
