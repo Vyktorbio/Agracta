@@ -1,0 +1,291 @@
+{
+  "name": "Agracta → Agenda Google",
+  "active": false,
+  "nodes": [
+    {
+      "id": "b969c742-f323-49a8-a4ad-31a1aae2e4c4",
+      "name": "Como configurar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -340
+      ],
+      "parameters": {
+        "height": 260,
+        "width": 760,
+        "content": "## Agracta → Agenda Google\n1. Configure o ID da agenda no nó **Agenda de destino**.\n2. No webhook, selecione uma credencial **Header Auth**: nome `Authorization`, valor `Bearer SUA_CHAVE`.\n3. Selecione sua credencial Google Calendar OAuth2 nos dois nós HTTP.\n4. Publique o fluxo e copie a URL de produção para o Agracta → Agenda → Agenda Google.\n5. Configure os lembretes padrão da agenda Google. Sem participantes ou convites; apenas compromissos desta integração são alterados."
+      }
+    },
+    {
+      "id": "cc6cbe1b-679b-4a72-ae6f-7c1ab44b0282",
+      "name": "Receber agenda",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "2ae838ac-7a35-44b2-be09-f0b74f85a7a5",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agracta-google-agenda",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {
+          "allowedOrigins": "https://agracta.com.br,https://www.agracta.com.br,https://vyktorbio.github.io"
+        }
+      }
+    },
+    {
+      "id": "bf655f9d-178d-45b8-ae01-2ab1383729d7",
+      "name": "Agenda de destino",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "591caf96-d4e3-40d2-8320-013cac1ae447",
+              "name": "calendarId",
+              "value": "CONFIGURE_O_ID_DA_AGENDA",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "c00d049c-d3e4-4d0a-94f6-01a0d26ab119",
+      "name": "Preparar evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const C = (() => { const module = {exports:{}}; const window = undefined;\n/* Agenda Google: contrato e diferenças da agenda, sem rede nem armazenamento. */\n(function(root){\n  'use strict';\n  var PROTOCOL='agracta.calendar.v1';\n  function validDate(s){\n    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(s||'')) return false;\n    var d=new Date(s+'T12:00:00Z');\n    return !isNaN(d.getTime()) && d.toISOString().slice(0,10)===s;\n  }\n  function nextDate(s){\n    if(!validDate(s)) throw Error('Data inválida na agenda.');\n    var d=new Date(s+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1);\n    return d.toISOString().slice(0,10);\n  }\n  function eventId(key){\n    /* Hexadecimal é subconjunto do base32hex exigido pelo Google. A codificação\n       é reversível, sem colisão de hash; não inclui data ou posição da avaliação. */\n    var encoded=encodeURIComponent(key), bytes=[];\n    for(var i=0;i<encoded.length;i++){\n      if(encoded[i]==='%'){ bytes.push(encoded.slice(i+1,i+3).toLowerCase()); i+=2; }\n      else bytes.push(encoded.charCodeAt(i).toString(16).padStart(2,'0'));\n    }\n    var id='ag'+bytes.join('');\n    if(id.length>1024) throw Error('Identificador do compromisso muito longo.');\n    return id;\n  }\n  function config(value){\n    var c=value||{}, u;\n    try{ u=new URL(String(c.url||'').trim()); }catch(e){ throw Error('Informe a URL de produção do n8n.'); }\n    var loopback=['localhost','127.0.0.1','[::1]'].indexOf(u.hostname)>=0;\n    if(u.protocol!=='https:' && !(u.protocol==='http:' && loopback)) throw Error('A conexão precisa de HTTPS.');\n    if(u.username || u.password || u.hash || u.search) throw Error('Use uma URL sem senha, parâmetros ou fragmento.');\n    if(/\\/webhook-test\\//.test(u.pathname)) throw Error('Use a URL de produção, que contém /webhook/, em vez da URL de teste.');\n    var token=String(c.token||'').trim();\n    if(token.length<24 || /\\s/.test(token)) throw Error('A chave precisa de pelo menos 24 caracteres, sem espaços.');\n    return {url:u.href,token:token,localId:String(c.localId||''),auto:c.auto===true};\n  }\n  function fromAgenda(items, options){\n    var o=options||{}, out={}, base=new URL(o.baseUrl||'https://agracta.com.br/');\n    (items||[]).forEach(function(it){\n      if(!it || it.feito || it.dispensado) return;\n      if(o.localId && it.localId!==o.localId) return;\n      var ev=it.ev||{}, st=it.study||{};\n      if(!validDate(it.iso)) throw Error('Há um compromisso com data inválida. Corrija a agenda antes de enviar.');\n      if(!it.qid || !st.id || !['apl','av'].includes(it.tipo)) throw Error('Compromisso sem identidade válida.');\n      var ek=it.tipo==='apl'?'apl:'+ev.idx:(ev.id!=null && ev.id!==''?'eval#'+ev.id:'eval:'+ev.idx);\n      var key=JSON.stringify(['agracta-v1',String(it.qid),String(st.id),ek]);\n      var title=it.tipo==='apl'?'Aplicação '+ev.idx+'/'+ev.total:'Avaliação '+ev.idx+(ev.tipo?' · '+ev.tipo:'');\n      var quadra=String(it.quadra||it.qid), study=String(st.codigo||st.nome||st.id);\n      var link=new URL(base.href); link.searchParams.set('agendaQuadra',it.qid); link.searchParams.set('agendaEstudo',st.id);\n      if(ev.type==='eval' && ev.id) link.searchParams.set('agendaAvaliacao',ev.id);\n      var event={date:it.iso,summary:'Agracta · '+title+' · '+quadra+' · '+study,\n        description:'Estudo: '+study+'\\nQuadra: '+quadra+(it.localNome?'\\nLocal: '+it.localNome:'')+\n          '\\nAtividade: '+title+'\\nAbrir no Agracta: '+link.href,\n        location:String(it.localNome||'')+(it.localNome?' · ':'')+quadra,link:link.href};\n      if(event.summary.length>1000 || event.description.length>5000) throw Error('Nome do compromisso muito longo.');\n      if(out[key]) throw Error('Há compromissos com a mesma identidade na agenda.');\n      out[key]={key:key,eventId:eventId(key),event:event,signature:JSON.stringify(event)};\n    });\n    return out;\n  }\n  function operations(current, managed, force){\n    var out=[]; managed=managed||{};\n    Object.keys(current).sort().forEach(function(key){\n      var c=current[key];\n      if(force || !managed[key] || managed[key].signature!==c.signature)\n        out.push({action:'upsert',key:key,eventId:c.eventId,event:c.event,signature:c.signature});\n    });\n    Object.keys(managed).sort().forEach(function(key){\n      if(!current[key]) out.push({action:'retire',key:key,eventId:eventId(key)});\n    });\n    return out;\n  }\n  function acknowledge(managed, op, response, requestId){\n    if(!response || response.ok!==true || response.protocol!==PROTOCOL ||\n      response.requestId!==requestId || response.eventId!==op.eventId || response.action!==op.action)\n      throw Error('O n8n não confirmou este compromisso. Ele continua pendente de envio.');\n    var copy=Object.assign({},managed);\n    if(op.action==='retire') delete copy[op.key];\n    else copy[op.key]={signature:op.signature,eventId:op.eventId};\n    return copy;\n  }\n  var api={PROTOCOL:PROTOCOL,validDate:validDate,nextDate:nextDate,eventId:eventId,\n    config:config,fromAgenda:fromAgenda,operations:operations,acknowledge:acknowledge};\n  if(typeof module==='object' && module.exports) module.exports=api;\n  else root.AgendaGoogleCore=api;\n})(typeof window!=='undefined'?window:this);\n\nreturn module.exports; })();\nconst run = function prepare(input,calendarId){\n  if(!calendarId || calendarId==='CONFIGURE_O_ID_DA_AGENDA') throw Error('Configure o ID da agenda no nó Agenda de destino.');\n  if(!input || input.protocol!==C.PROTOCOL || !/^agr-[a-z0-9-]{5,100}$/.test(input.requestId||'')) throw Error('Pedido de agenda inválido.');\n  if(!['upsert','retire'].includes(input.action)) throw Error('Operação inválida.');\n  let parts;\n  try{parts=JSON.parse(input.key);}catch(e){throw Error('Identidade inválida.');}\n  if(!Array.isArray(parts) || parts.length!==4 || parts[0]!=='agracta-v1' ||\n    parts.some(p=>typeof p!=='string' || !p || p.length>160) ||\n    !/^(apl:\\d+|eval#.+|eval:\\d+)$/.test(parts[3]) || JSON.stringify(parts)!==input.key) throw Error('Identidade inválida.');\n  const id=C.eventId(input.key), base='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events';\n  const result={requestId:input.requestId,action:input.action,key:input.key,eventId:id,base:base,url:base+'/'+id};\n  if(input.action==='upsert'){\n    const e=input.event;\n    if(!e || !C.validDate(e.date) || typeof e.summary!=='string' || !e.summary.startsWith('Agracta · ') || e.summary.length>1000 ||\n      typeof e.description!=='string' || e.description.length>5000 || typeof e.location!=='string' || e.location.length>500 ||\n      typeof e.link!=='string' || !/^https?:\\/\\/[^\\s]+$/.test(e.link) || e.link.length>2000) throw Error('Conteúdo do compromisso inválido.');\n    result.googleBody={id:id,summary:e.summary,description:e.description,location:e.location,\n      start:{date:e.date},end:{date:C.nextDate(e.date)},status:'confirmed',transparency:'transparent',\n      reminders:{useDefault:true},extendedProperties:{private:{agractaSource:'agracta-v1',agractaKey:input.key,agractaState:'pendente'}}};\n  }\n  return result;\n};\nreturn [{json: run($json.body, $json.calendarId)}];"
+      }
+    },
+    {
+      "id": "c4aed5be-6854-417c-8aa0-c83f5ed366c1",
+      "name": "Consultar compromisso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "333f985f-7b7e-410c-8bdd-268599fd9486",
+      "name": "Planejar gravação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const C = (() => { const module = {exports:{}}; const window = undefined;\n/* Agenda Google: contrato e diferenças da agenda, sem rede nem armazenamento. */\n(function(root){\n  'use strict';\n  var PROTOCOL='agracta.calendar.v1';\n  function validDate(s){\n    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(s||'')) return false;\n    var d=new Date(s+'T12:00:00Z');\n    return !isNaN(d.getTime()) && d.toISOString().slice(0,10)===s;\n  }\n  function nextDate(s){\n    if(!validDate(s)) throw Error('Data inválida na agenda.');\n    var d=new Date(s+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1);\n    return d.toISOString().slice(0,10);\n  }\n  function eventId(key){\n    /* Hexadecimal é subconjunto do base32hex exigido pelo Google. A codificação\n       é reversível, sem colisão de hash; não inclui data ou posição da avaliação. */\n    var encoded=encodeURIComponent(key), bytes=[];\n    for(var i=0;i<encoded.length;i++){\n      if(encoded[i]==='%'){ bytes.push(encoded.slice(i+1,i+3).toLowerCase()); i+=2; }\n      else bytes.push(encoded.charCodeAt(i).toString(16).padStart(2,'0'));\n    }\n    var id='ag'+bytes.join('');\n    if(id.length>1024) throw Error('Identificador do compromisso muito longo.');\n    return id;\n  }\n  function config(value){\n    var c=value||{}, u;\n    try{ u=new URL(String(c.url||'').trim()); }catch(e){ throw Error('Informe a URL de produção do n8n.'); }\n    var loopback=['localhost','127.0.0.1','[::1]'].indexOf(u.hostname)>=0;\n    if(u.protocol!=='https:' && !(u.protocol==='http:' && loopback)) throw Error('A conexão precisa de HTTPS.');\n    if(u.username || u.password || u.hash || u.search) throw Error('Use uma URL sem senha, parâmetros ou fragmento.');\n    if(/\\/webhook-test\\//.test(u.pathname)) throw Error('Use a URL de produção, que contém /webhook/, em vez da URL de teste.');\n    var token=String(c.token||'').trim();\n    if(token.length<24 || /\\s/.test(token)) throw Error('A chave precisa de pelo menos 24 caracteres, sem espaços.');\n    return {url:u.href,token:token,localId:String(c.localId||''),auto:c.auto===true};\n  }\n  function fromAgenda(items, options){\n    var o=options||{}, out={}, base=new URL(o.baseUrl||'https://agracta.com.br/');\n    (items||[]).forEach(function(it){\n      if(!it || it.feito || it.dispensado) return;\n      if(o.localId && it.localId!==o.localId) return;\n      var ev=it.ev||{}, st=it.study||{};\n      if(!validDate(it.iso)) throw Error('Há um compromisso com data inválida. Corrija a agenda antes de enviar.');\n      if(!it.qid || !st.id || !['apl','av'].includes(it.tipo)) throw Error('Compromisso sem identidade válida.');\n      var ek=it.tipo==='apl'?'apl:'+ev.idx:(ev.id!=null && ev.id!==''?'eval#'+ev.id:'eval:'+ev.idx);\n      var key=JSON.stringify(['agracta-v1',String(it.qid),String(st.id),ek]);\n      var title=it.tipo==='apl'?'Aplicação '+ev.idx+'/'+ev.total:'Avaliação '+ev.idx+(ev.tipo?' · '+ev.tipo:'');\n      var quadra=String(it.quadra||it.qid), study=String(st.codigo||st.nome||st.id);\n      var link=new URL(base.href); link.searchParams.set('agendaQuadra',it.qid); link.searchParams.set('agendaEstudo',st.id);\n      if(ev.type==='eval' && ev.id) link.searchParams.set('agendaAvaliacao',ev.id);\n      var event={date:it.iso,summary:'Agracta · '+title+' · '+quadra+' · '+study,\n        description:'Estudo: '+study+'\\nQuadra: '+quadra+(it.localNome?'\\nLocal: '+it.localNome:'')+\n          '\\nAtividade: '+title+'\\nAbrir no Agracta: '+link.href,\n        location:String(it.localNome||'')+(it.localNome?' · ':'')+quadra,link:link.href};\n      if(event.summary.length>1000 || event.description.length>5000) throw Error('Nome do compromisso muito longo.');\n      if(out[key]) throw Error('Há compromissos com a mesma identidade na agenda.');\n      out[key]={key:key,eventId:eventId(key),event:event,signature:JSON.stringify(event)};\n    });\n    return out;\n  }\n  function operations(current, managed, force){\n    var out=[]; managed=managed||{};\n    Object.keys(current).sort().forEach(function(key){\n      var c=current[key];\n      if(force || !managed[key] || managed[key].signature!==c.signature)\n        out.push({action:'upsert',key:key,eventId:c.eventId,event:c.event,signature:c.signature});\n    });\n    Object.keys(managed).sort().forEach(function(key){\n      if(!current[key]) out.push({action:'retire',key:key,eventId:eventId(key)});\n    });\n    return out;\n  }\n  function acknowledge(managed, op, response, requestId){\n    if(!response || response.ok!==true || response.protocol!==PROTOCOL ||\n      response.requestId!==requestId || response.eventId!==op.eventId || response.action!==op.action)\n      throw Error('O n8n não confirmou este compromisso. Ele continua pendente de envio.');\n    var copy=Object.assign({},managed);\n    if(op.action==='retire') delete copy[op.key];\n    else copy[op.key]={signature:op.signature,eventId:op.eventId};\n    return copy;\n  }\n  var api={PROTOCOL:PROTOCOL,validDate:validDate,nextDate:nextDate,eventId:eventId,\n    config:config,fromAgenda:fromAgenda,operations:operations,acknowledge:acknowledge};\n  if(typeof module==='object' && module.exports) module.exports=api;\n  else root.AgendaGoogleCore=api;\n})(typeof window!=='undefined'?window:this);\n\nreturn module.exports; })();\nconst run = function plan(prepared,response){\n  const code=response.statusCode, body=response.body||{};\n  if(code===404){\n    if(prepared.action==='retire') return {skip:true};\n    return {skip:false,method:'POST',url:prepared.base,googleBody:prepared.googleBody,headers:{}};\n  }\n  if(code!==200) throw Error('A leitura da Agenda Google falhou (HTTP '+code+').');\n  const meta=(body.extendedProperties||{}).private||{};\n  if(body.id!==prepared.eventId || meta.agractaSource!=='agracta-v1' || meta.agractaKey!==prepared.key)\n    throw Error('O compromisso não pertence a esta integração. Nenhuma alteração foi feita.');\n  if(!body.etag) throw Error('A Agenda Google não informou a versão do compromisso.');\n  let patch;\n  if(prepared.action==='retire'){\n    if(meta.agractaState==='encerrado') return {skip:true};\n    patch={summary:'Encerrado · '+String(body.summary||'Agracta'),transparency:'transparent',\n      reminders:{useDefault:false,overrides:[]},\n      extendedProperties:{private:Object.assign({},meta,{agractaState:'encerrado'})}};\n  }else{\n    patch=Object.assign({},prepared.googleBody);delete patch.id;\n  }\n  return {skip:false,method:'PATCH',url:prepared.url,googleBody:patch,headers:{'If-Match':body.etag}};\n};\nreturn [{json: run($('Preparar evento').first().json, $input.first().json)}];"
+      }
+    },
+    {
+      "id": "57921caa-ab8f-4496-ba21-89e2bb2a1620",
+      "name": "Precisa gravar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dda3962a-c774-475a-bb36-2467f172722d",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c3833295-f8cb-4c08-af10-9aea07be3235",
+      "name": "Gravar compromisso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -80
+      ],
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ $json.headers }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.googleBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "1560c3de-8bfc-4b47-ad47-122a6754b603",
+      "name": "Confirmar envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const C = (() => { const module = {exports:{}}; const window = undefined;\n/* Agenda Google: contrato e diferenças da agenda, sem rede nem armazenamento. */\n(function(root){\n  'use strict';\n  var PROTOCOL='agracta.calendar.v1';\n  function validDate(s){\n    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(s||'')) return false;\n    var d=new Date(s+'T12:00:00Z');\n    return !isNaN(d.getTime()) && d.toISOString().slice(0,10)===s;\n  }\n  function nextDate(s){\n    if(!validDate(s)) throw Error('Data inválida na agenda.');\n    var d=new Date(s+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1);\n    return d.toISOString().slice(0,10);\n  }\n  function eventId(key){\n    /* Hexadecimal é subconjunto do base32hex exigido pelo Google. A codificação\n       é reversível, sem colisão de hash; não inclui data ou posição da avaliação. */\n    var encoded=encodeURIComponent(key), bytes=[];\n    for(var i=0;i<encoded.length;i++){\n      if(encoded[i]==='%'){ bytes.push(encoded.slice(i+1,i+3).toLowerCase()); i+=2; }\n      else bytes.push(encoded.charCodeAt(i).toString(16).padStart(2,'0'));\n    }\n    var id='ag'+bytes.join('');\n    if(id.length>1024) throw Error('Identificador do compromisso muito longo.');\n    return id;\n  }\n  function config(value){\n    var c=value||{}, u;\n    try{ u=new URL(String(c.url||'').trim()); }catch(e){ throw Error('Informe a URL de produção do n8n.'); }\n    var loopback=['localhost','127.0.0.1','[::1]'].indexOf(u.hostname)>=0;\n    if(u.protocol!=='https:' && !(u.protocol==='http:' && loopback)) throw Error('A conexão precisa de HTTPS.');\n    if(u.username || u.password || u.hash || u.search) throw Error('Use uma URL sem senha, parâmetros ou fragmento.');\n    if(/\\/webhook-test\\//.test(u.pathname)) throw Error('Use a URL de produção, que contém /webhook/, em vez da URL de teste.');\n    var token=String(c.token||'').trim();\n    if(token.length<24 || /\\s/.test(token)) throw Error('A chave precisa de pelo menos 24 caracteres, sem espaços.');\n    return {url:u.href,token:token,localId:String(c.localId||''),auto:c.auto===true};\n  }\n  function fromAgenda(items, options){\n    var o=options||{}, out={}, base=new URL(o.baseUrl||'https://agracta.com.br/');\n    (items||[]).forEach(function(it){\n      if(!it || it.feito || it.dispensado) return;\n      if(o.localId && it.localId!==o.localId) return;\n      var ev=it.ev||{}, st=it.study||{};\n      if(!validDate(it.iso)) throw Error('Há um compromisso com data inválida. Corrija a agenda antes de enviar.');\n      if(!it.qid || !st.id || !['apl','av'].includes(it.tipo)) throw Error('Compromisso sem identidade válida.');\n      var ek=it.tipo==='apl'?'apl:'+ev.idx:(ev.id!=null && ev.id!==''?'eval#'+ev.id:'eval:'+ev.idx);\n      var key=JSON.stringify(['agracta-v1',String(it.qid),String(st.id),ek]);\n      var title=it.tipo==='apl'?'Aplicação '+ev.idx+'/'+ev.total:'Avaliação '+ev.idx+(ev.tipo?' · '+ev.tipo:'');\n      var quadra=String(it.quadra||it.qid), study=String(st.codigo||st.nome||st.id);\n      var link=new URL(base.href); link.searchParams.set('agendaQuadra',it.qid); link.searchParams.set('agendaEstudo',st.id);\n      if(ev.type==='eval' && ev.id) link.searchParams.set('agendaAvaliacao',ev.id);\n      var event={date:it.iso,summary:'Agracta · '+title+' · '+quadra+' · '+study,\n        description:'Estudo: '+study+'\\nQuadra: '+quadra+(it.localNome?'\\nLocal: '+it.localNome:'')+\n          '\\nAtividade: '+title+'\\nAbrir no Agracta: '+link.href,\n        location:String(it.localNome||'')+(it.localNome?' · ':'')+quadra,link:link.href};\n      if(event.summary.length>1000 || event.description.length>5000) throw Error('Nome do compromisso muito longo.');\n      if(out[key]) throw Error('Há compromissos com a mesma identidade na agenda.');\n      out[key]={key:key,eventId:eventId(key),event:event,signature:JSON.stringify(event)};\n    });\n    return out;\n  }\n  function operations(current, managed, force){\n    var out=[]; managed=managed||{};\n    Object.keys(current).sort().forEach(function(key){\n      var c=current[key];\n      if(force || !managed[key] || managed[key].signature!==c.signature)\n        out.push({action:'upsert',key:key,eventId:c.eventId,event:c.event,signature:c.signature});\n    });\n    Object.keys(managed).sort().forEach(function(key){\n      if(!current[key]) out.push({action:'retire',key:key,eventId:eventId(key)});\n    });\n    return out;\n  }\n  function acknowledge(managed, op, response, requestId){\n    if(!response || response.ok!==true || response.protocol!==PROTOCOL ||\n      response.requestId!==requestId || response.eventId!==op.eventId || response.action!==op.action)\n      throw Error('O n8n não confirmou este compromisso. Ele continua pendente de envio.');\n    var copy=Object.assign({},managed);\n    if(op.action==='retire') delete copy[op.key];\n    else copy[op.key]={signature:op.signature,eventId:op.eventId};\n    return copy;\n  }\n  var api={PROTOCOL:PROTOCOL,validDate:validDate,nextDate:nextDate,eventId:eventId,\n    config:config,fromAgenda:fromAgenda,operations:operations,acknowledge:acknowledge};\n  if(typeof module==='object' && module.exports) module.exports=api;\n  else root.AgendaGoogleCore=api;\n})(typeof window!=='undefined'?window:this);\n\nreturn module.exports; })();\nconst run = function confirm(prepared,planned,response){\n  if(!planned.skip){\n    if(!response || response.statusCode<200 || response.statusCode>=300 || !response.body || response.body.id!==prepared.eventId)\n      throw Error('A Agenda Google não confirmou a gravação (HTTP '+(response&&response.statusCode)+'). Reenvie para reconciliar.');\n  }\n  return {ok:true,protocol:C.PROTOCOL,requestId:prepared.requestId,action:prepared.action,eventId:prepared.eventId};\n};\nreturn [{json: run($('Preparar evento').first().json, $('Planejar gravação').first().json, $input.first().json)}];"
+      }
+    }
+  ],
+  "connections": {
+    "Receber agenda": {
+      "main": [
+        [
+          {
+            "node": "Agenda de destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda de destino": {
+      "main": [
+        [
+          {
+            "node": "Preparar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar evento": {
+      "main": [
+        [
+          {
+            "node": "Consultar compromisso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar compromisso": {
+      "main": [
+        [
+          {
+            "node": "Planejar gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planejar gravação": {
+      "main": [
+        [
+          {
+            "node": "Precisa gravar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa gravar?": {
+      "main": [
+        [
+          {
+            "node": "Gravar compromisso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirmar envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gravar compromisso": {
+      "main": [
+        [
+          {
+            "node": "Confirmar envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}

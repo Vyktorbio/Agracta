@@ -454,6 +454,9 @@ function save(){
      chama render() no momento certo. */
   if(ok && !window._agractaBootLoad && typeof _rrRenderSoon==='function') _rrRenderSoon();
   if(typeof cloudSaveSoon==='function') cloudSaveSoon();
+  if(ok && !window._agractaBootLoad){
+    try{ window.dispatchEvent(new CustomEvent('agracta:agenda-alterada')); }catch(e){}
+  }
   return ok;
 }
 
@@ -4163,6 +4166,7 @@ function renderAgenda(){
        '<button type="button" class="'+(modo==='mes'?'on':'')+'" aria-pressed="'+(modo==='mes')+'" onclick="agSetModo(\'mes\')">Calendário</button>'+
        '<button type="button" class="'+(modo==='lista'?'on':'')+'" aria-pressed="'+(modo==='lista')+'" onclick="agSetModo(\'lista\')">Lista</button></div>';
   }
+  if(typeof window.agGoogleAcoesHtml==='function') h+=window.agGoogleAcoesHtml();
   h+=(modo==='mes')?_agMesHtml():_agListaHtml();
   pnl.innerHTML=h;
 }

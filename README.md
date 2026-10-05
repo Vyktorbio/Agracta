@@ -102,3 +102,11 @@ O selo mostra `salvo neste aparelho` até a sincronização voltar.
 As fotos ficam no aparelho; a nuvem recebe os metadados das observações.
 Fragmentos antigos no Firestore continuam disponíveis para migração local,
 mas a sincronização não grava novas imagens nem apaga esses fragmentos.
+
+## Agenda Google via n8n (opcional)
+
+Agenda → Agenda Google configura o envio de aplicações e avaliações pendentes,
+com atualização de datas e encerramento de lembretes. A integração começa
+desligada e precisa de uma instância n8n e uma credencial Google autorizada nela.
+O workflow importável, a configuração e os limites de operação estão em
+[docs/AGENDA-GOOGLE-N8N.md](docs/AGENDA-GOOGLE-N8N.md).
