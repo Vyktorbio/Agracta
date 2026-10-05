@@ -27,7 +27,7 @@ nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 | Área | Arquivos |
 |---|---|
 | Entrada, acesso e nuvem | `acesso-horario.js` (nada aparece antes do login; janela de horário por técnico) · `firebase-config.js` · `firebase-sync.js` (login, sincronização local-first, histórico de versões; a parte de nuvem do Painel Admin) |
-| Coordenação da interface | `app.js` — quadras, estudos, aplicações, avaliações, Hoje e Agenda, cópias e recuperação, Painel Admin. É o arquivo grande (~24 mil linhas); dividi-lo por área é a frente 3 da lapidação |
+| Coordenação da interface | `app.js` — quadras, estudos, aplicações, avaliações, Hoje e Agenda, cópias e recuperação, Painel Admin. É o arquivo grande (~25 mil linhas); dividi-lo por área é a frente 3 da lapidação |
 | Mapa | `ui-campo.js` / `ui-campo.css` (gaveta de ferramentas, NDVI com faixa de datas, botões Mapa e Menu) · `mapa-medir.js` (grupos de parcelas provisórios) · `mapa-inicio.js` ("abrir o app em") · `notas-local.js` (onde cada nota foi lançada) · `croqui-livre.js` e `croqui-parcelas.js` (parcelas no mapa) |
 | Estudo e protocolo | `protocolo-menu.js` (o protocolo num lugar só) · `protocolo-avaliacoes.js` · `aplicacoes-recolhiveis.js` · `calculadora-drone.js` · `campo-inteligente.js` (clima e nota estranha na hora) · `colonia-medida.js` (colônia medida na foto) |
 | Fotos e relatório | `fotos-estudo.js` · `galeria-fotos.js` · `relatorio-estudo.js` (abrem as páginas isoladas `galeria-local.html` e `relatorio-local.html`) |
