@@ -52,7 +52,8 @@
       onlyDayMode: 'A exportação mostra o modo "Estado no dia".',
       style: 'Estilo', styleRealistic: 'Realista', styleSchematic: 'Esquemático',
       realFallback: 'Este aparelho não tem WebGL: saiu no estilo esquemático.',
-      foliageReal: 'Folhagem ilustrativa: o dado é a cor (faixa). A altura dos blocos é igual para todos.'
+      heightRow: 'Altura: {a} a {b}{u}', heightTitle: 'Altura',
+      heightScaled: 'Altura ampliada até logo acima do maior valor lançado. A cor segue a escala inteira ({c} a {d}{u}).'
     },
     en: {
       exportTitle: 'Export Field View', format: 'Format', exportImage: 'PNG image', exportVideo: 'MP4 video',
@@ -76,7 +77,8 @@
       onlyDayMode: 'The export shows the "State on the day" mode.',
       style: 'Style', styleRealistic: 'Realistic', styleSchematic: 'Schematic',
       realFallback: 'This device has no WebGL: exported in the schematic style.',
-      foliageReal: 'Foliage is illustrative: the data are the colour (band). All blocks have the same height.'
+      heightRow: 'Height: {a} to {b}{u}', heightTitle: 'Height',
+      heightScaled: 'Height zoomed to just above the highest recorded value. Colour follows the full scale ({c} to {d}{u}).'
     }
   };
   function tr(lang, k, vars) {
@@ -184,7 +186,9 @@
   function preparar(base, op) {
     var C = w.AgCampo3D;
     if (!C || !base || !base.st) throw new Error('sem-campo');
-    var m = C.modelo(base.st, base.variavel);
+    /* A régua da altura é a que a pessoa deixou na tela (ampliada ou inteira):
+       o vídeo mostra o que ela estava vendo. */
+    var m = C.modelo(base.st, base.variavel, { altura: base.altura });
     var s = base.s || {}, st = base.st;
     var lang = op && op.lang === 'en' ? 'en' : 'pt';
     var g = C.geometria();
@@ -193,16 +197,20 @@
       codigo: s.codigo || st.codigo || '', cultura: s.cultura || st.cultura || '', alvo: s.alvo || st.alvo || '',
       variavel: base.variavel, rot0: typeof base.rot === 'number' ? base.rot : 34 * Math.PI / 180,
       daas: m.avs.map(function (x) { return x.daa; }),
-      legenda: legendaItens(m, lang)
+      legenda: legendaItens(m, lang),
+      /* As marcas da régua da altura: as MESMAS da tela (AgCampo3D.eixo). */
+      eixo: C.eixo(m, 'dia')
     };
   }
 
   /* Valor, altura e cor de uma parcela no instante — as regras da tela
-     (campo-3d.js, desenhar(), modo dia), lidas do AgCampo3D. */
+     (campo-3d.js, desenhar(), modo dia), lidas do AgCampo3D.
+     `f` é a fração da altura máxima (alturaDe, a régua da tela); `h` é ela
+     na altura do esquemático. O realista multiplica `f` pela altura dele. */
   function colunaEm(cena, p, t) {
     var C = w.AgCampo3D, m = cena.m, v = C.valorEm(m, p, t);
-    if (v === null) return { v: null, h: 0, cor: null };
-    var fr = C.fracao(m, v);
+    if (v === null) return { v: null, f: 0, h: 0, cor: null };
+    var f = C.alturaDe(m, v);
     var cor = C.corDe(C.fracaoRuim(m, v));
     /* ENTRE duas avaliações a cor não pula de faixa: passa da cor da avaliação
        anterior para a da seguinte. Só no vídeo, só na transição — que o rodapé
@@ -219,7 +227,7 @@
         break;
       }
     }
-    return { v: v, h: (fr === null ? 0.45 : Math.max(0.12, fr)) * cena.g.HMAX, cor: cor };
+    return { v: v, f: f, h: f * cena.g.HMAX, cor: cor };
   }
   function misturaCor(a, b, f) {
     var x = rgb(a), y = rgb(b); f = Math.max(0, Math.min(1, f));
@@ -282,6 +290,14 @@
     }
   }
 
+  /* Até onde vão as parcelas, em coordenada da GRADE (origem no canto do T1,
+     repetição 1), sem o carreador depois da última. A régua fica RMG fora. */
+  var RMG = 1.2;
+  function extensaoGrade(cena) {
+    var g = cena.g, m = cena.m;
+    return { larg: (m.trats.length - 1) * g.SX + g.PW, alt: (m.reps - 1) * g.SY + g.PL };
+  }
+
   /* Câmera: a mesma projeção da tela (prjCru), com escala FIXA para o vídeo
      todo — o giro discreto não pode virar zoom. */
   function camera(cena, area, rots) {
@@ -295,6 +311,12 @@
       });
       [[ox, oy], [ox + larg, oy], [ox + larg, oy + alt], [ox, oy + alt]].forEach(function (c) {
         var p = C.prjCru(rot, c[0], c[1], g.HMAX + 1); xs.push(p[0]); ys.push(p[1]);
+      });
+      /* a régua da altura mora num desses cantos, um pouco para fora, e o
+         título dela fica acima do topo: entra inteira no quadro */
+      var e = extensaoGrade(cena);
+      [[-RMG, -RMG], [e.larg + RMG, -RMG], [e.larg + RMG, e.alt + RMG], [-RMG, e.alt + RMG]].forEach(function (c) {
+        var p = C.prjCru(rot, ox + c[0], oy + c[1], g.HMAX + 2.5); xs.push(p[0]); ys.push(p[1]);
       });
       return { x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs), y0: Math.min.apply(null, ys), y1: Math.max.apply(null, ys) };
     }
@@ -412,6 +434,51 @@
     ctx.restore();
   }
 
+  /* A RÉGUA DA ALTURA no quadro. Nos dois estilos a altura agora carrega o
+     valor (pedido de quem usa: "o retângulo da parcela não cresce para
+     cima"), e altura sem régua mostra que uma coluna é maior que a outra, não
+     QUANTO. São as marcas da tela (AgCampo3D.eixo, ampliada ou inteira), com
+     os números de verdade, no canto do fundo à esquerda — o mesmo da tela, o
+     que nenhuma coluna tapa. Pg recebe coordenada da GRADE; hmax é a altura
+     de uma coluna cheia no estilo que está sendo desenhado. */
+  function regua(ctx, cena, lang, Pg, hmax) {
+    var eix = cena.eixo;
+    if (!eix || !(hmax > 0)) return;
+    var e = extensaoGrade(cena);
+    var cantos = [[-RMG, -RMG], [e.larg + RMG, -RMG], [e.larg + RMG, e.alt + RMG], [-RMG, e.alt + RMG]];
+    /* os dois mais à esquerda na tela e, desses, o mais fundo */
+    var c = cantos.map(function (q) { var p = Pg(q[0], q[1], 0); return { q: q, x: p[0], prof: p[2] }; })
+      .sort(function (a, b) { return a.x - b.x; }).slice(0, 2)
+      .sort(function (a, b) { return b.prof - a.prof; })[0].q;
+    var base = Pg(c[0], c[1], 0), topo = Pg(c[0], c[1], hmax);
+    function traco(a, b, cor, lw) { ctx.strokeStyle = cor; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+    ctx.save(); ctx.lineCap = 'round';
+    traco(base, topo, 'rgba(255,255,255,0.85)', 8);
+    traco(base, topo, 'rgba(22,35,26,0.9)', 3);
+    ctx.font = '600 21px ' + FONTE; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    /* Marca apertada (régua curta na perspectiva, muitos passos): todo traço
+       fica, mas o número vai de dois em dois — o piso e o topo sempre —, para
+       as etiquetas não se empilharem. */
+    var n = eix.marcas.length - 1, vao = Math.abs(base[1] - topo[1]) / Math.max(1, n), pula = vao < 34;
+    eix.marcas.forEach(function (mk, i) {
+      var p = Pg(c[0], c[1], mk.f * hmax), s = num(mk.v, eix.casas || 0, lang);
+      traco([p[0] - 16, p[1]], [p[0], p[1]], 'rgba(255,255,255,0.85)', 7);
+      traco([p[0] - 16, p[1]], [p[0], p[1]], 'rgba(22,35,26,0.9)', 3);
+      if (pula && i !== n && (i % 2 || n - i < 2)) return;
+      var lw = ctx.measureText(s).width + 18;
+      caixaArred(ctx, p[0] - 22 - lw, p[1] - 15, lw, 30, 9, 'rgba(255,255,255,0.9)', 'rgba(60,70,50,0.25)');
+      ctx.fillStyle = '#16231a'; ctx.fillText(s, p[0] - 31, p[1] + 1);
+    });
+    /* o título diz a unidade: % ou índice — "altura" sozinha não diz em quê */
+    var un = cena.m.tipo === 'pct' ? '%' : (cena.m.tipo === 'escala' ? tr(lang, 'index') : '');
+    var tit = tr(lang, 'heightTitle') + (un ? ' (' + un + ')' : '');
+    ctx.font = '700 21px ' + FONTE; ctx.textAlign = 'center';
+    var tw = ctx.measureText(tit).width + 22;
+    caixaArred(ctx, topo[0] - tw / 2, topo[1] - 52, tw, 32, 10, 'rgba(255,255,255,0.92)', 'rgba(60,70,50,0.25)');
+    ctx.fillStyle = '#16231a'; ctx.fillText(tit, topo[0], topo[1] - 35);
+    ctx.restore();
+  }
+
   function cabecalho(ctx, cena, lang) {
     caixaArred(ctx, 48, 36, 1100, 150, 22, 'rgba(255,255,255,0.80)', 'rgba(70,80,60,0.15)');
     texto(ctx, tr(lang, 'fieldView'), 80, 76, 20, 700, '#3c7a3a');
@@ -422,9 +489,37 @@
     if (sub) texto(ctx, cabe(ctx, sub, 1040), 80, 166, 28, 500, '#33463a');
   }
 
+  /* "%" encosta no número em inglês e leva espaço em português. */
+  function unidadeCurta(m, lang) {
+    return m.tipo === 'pct' ? (lang === 'en' ? '%' : ' %') : (m.tipo === 'escala' ? ' (' + tr(lang, 'index') + ')' : '');
+  }
+  /* Três barras crescendo: o ícone da linha da altura, ao lado dos quadrados de cor. */
+  function iconeAltura(ctx, x, y, larg, alt) {
+    var b = larg / 4;
+    [0.38, 0.68, 1].forEach(function (k, i) {
+      caixaArred(ctx, x + i * b * 1.5, y + alt * (1 - k), b, alt * k, 2, '#5a6a5e', null);
+    });
+  }
   function painelLegenda(ctx, cena, lang, area) {
-    var m = cena.m, itens = cena.legenda, x = area.x, y = area.y, larg = area.w;
-    var alt = 96 + itens.length * 52 + 120;
+    var m = cena.m, itens = cena.legenda, x = area.x, y = area.y, larg = area.w, eix = cena.eixo;
+    /* A ALTURA tem linha própria, depois das cores: o quadro carrega dois
+       dados, e a legenda diz os dois em número. Sem escala não há régua, e a
+       linha não aparece — altura fixa não é medida. */
+    var u = unidadeCurta(m, lang), altura = null, notas = [tr(lang, 'foliage')];
+    if (eix) {
+      var ult = eix.marcas[eix.marcas.length - 1];
+      altura = tr(lang, 'heightRow', { a: num(eix.marcas[0].v, eix.casas, lang), b: num(ult.v, eix.casas, lang), u: u });
+      if (eix.ampliada) {
+        var ce = Math.max(w.AgCampo3D.casasDe(m.escala.min), w.AgCampo3D.casasDe(m.escala.max));
+        notas.push(tr(lang, 'heightScaled', { c: num(m.escala.min, ce, lang), d: num(m.escala.max, ce, lang), u: u }));
+      }
+    }
+    ctx.font = '400 17px ' + FONTE;
+    var linhas = [];
+    notas.forEach(function (n, i) { if (i) linhas.push(''); linhas = linhas.concat(quebra(ctx, n, larg - 56)); });
+    linhas = linhas.slice(0, 7);
+    var nLin = itens.length + (altura ? 1 : 0), y0 = y + 124 + nLin * 52;
+    var alt = y0 - y + (linhas.length - 1) * 24 + 28;
     caixaArred(ctx, x, y, larg, alt, 22, 'rgba(255,255,255,0.86)', 'rgba(70,80,60,0.15)');
     ctx.font = '700 28px ' + FONTE;
     texto(ctx, cabe(ctx, cena.variavel + unidade(m, lang), larg - 56), x + 28, y + 54, 28, 700, '#16231a');
@@ -438,9 +533,14 @@
       } else caixaArred(ctx, x + 28, yy, 40, 34, 6, it.cor, 'rgba(0,0,0,0.18)');
       texto(ctx, it.texto, x + 84, yy + 26, 25, 600, '#1d2a22');
     });
+    if (altura) {
+      var ya = y + 118 + itens.length * 52;
+      iconeAltura(ctx, x + 28, ya, 40, 34);
+      ctx.font = '600 25px ' + FONTE;
+      texto(ctx, cabe(ctx, altura, larg - 112), x + 84, ya + 26, 25, 600, '#1d2a22');
+    }
     ctx.font = '400 17px ' + FONTE;
-    var nota = tr(lang, cena.real ? 'foliageReal' : 'foliage'), linhas = quebra(ctx, nota, larg - 56);
-    linhas.slice(0, 3).forEach(function (l, i) { texto(ctx, l, x + 28, y + alt - 92 + i * 24, 17, 400, '#5a6a5e'); });
+    linhas.forEach(function (l, i) { if (l) texto(ctx, l, x + 28, y0 + i * 24, 17, 400, '#5a6a5e'); });
   }
   function quebra(ctx, s, larg) {
     var out = [], atual = '';
@@ -514,11 +614,14 @@
       ceu(ctx);
       ctx.drawImage(gl, 0, 0);
       rotulosGrade(ctx, cena, lang, cena.real.projetar, 2.2, 3.2);
+      /* a régua vai com a legenda: quem tira a legenda pediu o quadro limpo */
+      if (temLegenda) regua(ctx, cena, lang, cena.real.projetar, cena.real.hmax);
     } else {
-      var P = projetor(cena._cam, cena._rot);
+      var P = projetor(cena._cam, cena._rot), cam = cena._cam;
       ceu(ctx);
-      solo(ctx, cena, P, cena._cam);
+      solo(ctx, cena, P, cam);
       parcelas(ctx, cena, P, q.t, lang);
+      if (temLegenda) regua(ctx, cena, lang, function (x, y, z) { return P(cam.ox + x, cam.oy + y, z); }, cena.g.HMAX);
     }
     if (temTitulo) cabecalho(ctx, cena, lang);
     if (temLegenda) painelLegenda(ctx, cena, lang, { x: 1440, y: temTitulo ? 210 : 60, w: 430 });
@@ -613,7 +716,7 @@
   function prepararReal(cena) {
     if (cena.op.estilo !== 'realista') return Promise.resolve(cena);
     return script('vendor/three-agracta.min.js?v=1', 'AgTHREE').then(function () {
-      return script('campo-3d-realista.js?v=4', 'AgCampoRealista');
+      return script('campo-3d-realista.js?v=5', 'AgCampoRealista');
     }).then(function (R) {
       cena.real = R.suportado() ? R.criar(cena, W, H) : null;
       if (!cena.real) cena.semReal = true;

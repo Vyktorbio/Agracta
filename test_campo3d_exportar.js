@@ -116,6 +116,24 @@ function estudo(variavel) {
     ok(seg.find(x => x.tipo === 'transicao').dur > seg.find(x => x.tipo === 'avaliacao').dur, 'transição mais longa que a parada: sem solavanco');
   }
 
+  /* ALTURA: o bloco cresce para cima (pedido de quem usa: "só muda a cor, o
+     retângulo da parcela não cresce"). A fração é a da régua da TELA
+     (alturaDe), ampliada por padrão: o maior lançado aqui é 40, então a régua
+     vai de 0 a 40 e a parcela de 40 enche a coluna. */
+  {
+    const pT1 = cena.m.grade.find(g => g.chave === 'T1R1'), pT3 = cena.m.grade.find(g => g.chave === 'T3R1');
+    const a30 = X.colunaEm(cena, pT1, 30), a7 = X.colunaEm(cena, pT1, 7), b30 = X.colunaEm(cena, pT3, 30);
+    ok(a30.f === C.alturaDe(cena.m, 40) && a30.h === a30.f * C.geometria().HMAX, 'altura = a mesma conta da tela (alturaDe), em fração e no esquemático');
+    ok(cena.m.altura.ampliada && cena.m.altura.max === 40 && a30.f === 1, 'régua ampliada até o maior lançado: 40 enche a coluna');
+    ok(Math.abs(a7.f - 0.5) < 1e-9 && Math.abs(b30.f - 0.125) < 1e-9, '20 é metade de 40 e 5 é um oitavo: a altura segue proporcional ao valor');
+    ok(X.colunaEm(cena, pT1, 18.5).f > a7.f && X.colunaEm(cena, pT1, 18.5).f < a30.f, 'na transição a coluna sobe aos poucos, entre as duas avaliações');
+    const inteira = X.preparar({ s: st, st, variavel: 'Severidade', rot: 0.6, altura: 'inteira' }, { lang: 'pt' });
+    ok(inteira.m.altura.max === 100 && Math.abs(X.colunaEm(inteira, pT1, 30).f - 0.4) < 1e-9, 'a escolha "escala inteira" da tela vale no vídeo');
+    ok(X.colunaEm(inteira, pT1, 30).cor === a30.cor, 'e a cor não depende da régua da altura');
+    ok(X.colunaEm(cena, p, 7).f === 0, 'ausente não tem altura');
+    ok(JSON.stringify(cena.eixo.marcas.map(mk => mk.v)) === '[0,10,20,30,40]', 'a régua do quadro é a da tela: ' + JSON.stringify(cena.eixo.marcas.map(mk => mk.v)));
+  }
+
   /* legenda: mesmos cortes, pior primeiro, + sem avaliação; PT/EN */
   const legPt = X.legendaItens(cena.m, 'pt'), legEn = X.legendaItens(cena.m, 'en');
   ok(legPt.length === 6 && legPt[5].vazio && legPt[5].texto === 'sem avaliação', 'cinco faixas + sem avaliação');
@@ -135,6 +153,10 @@ function estudo(variavel) {
   ok(txt.includes('LB 2749/077:26 S') && txt.includes('Soja · Ferrugem asiática'), 'título, cultura e alvo');
   ok(txt.includes('Avaliação 2 de 3 · 7 DAA') && txt.includes('08/03/2026'), 'avaliação real com DAA e data');
   ok(txt.includes('Bloco A') && txt.includes('T3') && txt.includes('Gerado pelo Agracta'), 'rótulos da grade e marca');
+  /* a altura tem régua no quadro e linha na legenda, com os números */
+  ok(reg.textos.includes('Altura (%)') && ['0', '10', '20', '30', '40'].every(s => reg.textos.includes(s)), 'régua da altura desenhada, com título e marcas');
+  ok(txt.includes('Altura: 0 a 40 %') && /Altura ampliada/.test(txt), 'legenda diz a régua da altura e que ela foi ampliada');
+  ok(!/igual para todos/.test(txt), 'nenhum texto diz mais que a altura é igual para todos');
   reg.textos = [];
   X.compor(ctx2d(reg), cena, { t: 15, real: false, de: 1, para: 2, rot: 0.6 });
   txt = reg.textos.join('|');
@@ -144,6 +166,12 @@ function estudo(variavel) {
   X.compor(ctx2d(reg), cenaEn, { t: 30, real: true, i: 2 });
   txt = reg.textos.join('|');
   ok(txt.includes('Assessment 3 of 3 · 30 DAA') && txt.includes('Block A') && !txt.includes('Agracta') && !txt.includes('not assessed'), 'EN e caixas de conteúdo respeitadas');
+  ok(!/Height/.test(txt) && !reg.textos.includes('40'), 'sem legenda, sem régua: o quadro limpo é limpo');
+  const cenaEn2 = X.preparar({ s: st, st, variavel: 'Severidade', rot: 0.6 }, { lang: 'en' });
+  reg.textos = [];
+  X.compor(ctx2d(reg), cenaEn2, { t: 30, real: true, i: 2 });
+  txt = reg.textos.join('|');
+  ok(txt.includes('Height: 0 to 40%') && reg.textos.includes('Height (%)') && /zoomed/.test(txt), 'régua e legenda da altura em inglês');
 
   /* PNG: instante da tela; entre avaliações vira transição */
   ok(X.instantePNG(cena, 7).real && X.instantePNG(cena, 12).real === false, 'PNG distingue real de transição');
@@ -158,6 +186,22 @@ function estudo(variavel) {
   ok(X.tr('pt', 'realFallback').includes('esquemático') && X.tr('en', 'styleRealistic') === 'Realistic', 'textos do estilo nos dois idiomas');
   const semEstilo = await X.gerarPNG({ s: st, st, variavel: 'Severidade', t: 30, rot: 0.6 }, { lang: 'pt' });
   ok(semEstilo.semReal === false, 'sem pedir realista, nada de WebGL é carregado');
+
+  /* REALISTA: o bloco de folhagem tem a altura do valor, pela fração da tela.
+     (O WebGL não roda aqui; o que se confere é a conta e a fiação dela.) */
+  {
+    vm.runInContext(fs.readFileSync('campo-3d-realista.js', 'utf8'), c);
+    const R = c.AgCampoRealista, g = C.geometria(), HR = R.alturaCheia(g);
+    ok(HR > Math.max(g.PW, g.PL), 'bloco cheio mais alto que a parcela é comprida: a diferença aparece');
+    ok(R.alturaDoBloco(1, HR) === HR && Math.abs(R.alturaDoBloco(0.5, HR) - HR / 2) < 1e-9, 'fração da régua vezes a altura cheia');
+    ok(R.alturaDoBloco(0, HR) > 0 && R.alturaDoBloco(7, HR) === HR && R.alturaDoBloco(NaN, HR) > 0, 'nunca negativo, nunca acima do cheio, nunca NaN');
+    const src = fs.readFileSync('campo-3d-realista.js', 'utf8');
+    ok(/colunaEm\(cena, pi\.p, t\)/.test(src) && /alturaDoBloco\(col\.f, HR\)/.test(src), 'a altura do bloco sai da mesma coluna da tela (colunaEm → alturaDe)');
+    ok(/folhas\.receiveShadow = false/.test(src), 'folhagem não recebe sombra: bloco alto não escurece a cor (o dado) do vizinho');
+    ok(/function maisAlta\(p\)/.test(src) && /ORCAMENTO/.test(src) && /pi\.ks\[fi\]/.test(src),
+      'folhas semeadas só até a altura mais alta de cada parcela, com orçamento: o vídeo não fica pesado');
+    ok(!/altura não é dado/.test(src), 'o comentário antigo ("a altura não é dado") não sobrevive para enganar');
+  }
 
   /* MP4 sem WebCodecs: erro claro, não arquivo inválido */
   await X.gerarMP4({ s: st, st, variavel: 'Severidade', rot: 0.6 }, { lang: 'pt' }).then(() => ok(false, 'devia falhar'),

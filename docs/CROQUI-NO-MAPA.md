@@ -328,7 +328,7 @@ camada de notas usam a mesma conta. Mover ou girar o croqui recalcula tudo.
 | Voltar ao início (⌂) | **Mapa** (barra de baixo) → Início → Voltar ao início | botão ⌂ no grupo da ⚙, canto superior esquerdo |
 | Abrir o app em | **Mapa** → Início → Abrir o app em | chip do local no topo → "⌂ Abrir o app em" |
 | Croqui / Onde estou / Notas no mapa | **Mapa** → Ensaios no mapa (chaves) | botões no grupo da ⚙ |
-| Medição, Grade de estudos, Parcelas de um estudo | **Mapa** → Campo → Medir área → "Planejar parcelas" | o mesmo, pelo leque de ferramentas |
+| Medição, Grupos de estudos, Parcelas de um estudo | **Mapa** → Campo → Medir área → "Planejar parcelas" | o mesmo, pelo leque de ferramentas |
 
 No celular a tela de campo esconde a ⚙ e o chip do local. Por isso tudo isso
 fica na gaveta que o botão **Mapa** abre (`mapa-inicio.js` põe as seções
@@ -348,14 +348,26 @@ fica na gaveta que o botão **Mapa** abre (`mapa-inicio.js` põe as seções
 - A escolha fica neste aparelho. Ela é sobre como a tela abre, não sobre o
   ensaio.
 
-### Medir: grade provisória (`mapa-medir.js`)
+### Medir: grupos provisórios (`mapa-medir.js`)
 
-- **Onde:** Medição → **Grade de estudos**.
-- **Grade:** comprimento, largura, quantos, quantos lado a lado e espaço entre
-  eles. O conjunto arrasta (✛) e gira (↻).
+- **Onde:** Medição → **Grupos de estudos**.
+- **Grupo:** comprimento, largura, quantos, quantos lado a lado e espaço entre
+  eles — o desenho de um estudo. Cada grupo arrasta (✛) e gira (↻) sozinho.
+- **Vários grupos ao mesmo tempo** (pedido de quem usa: "medir quantos estudos
+  caberiam na quadra"):
+  - **+ Grupo** põe uma cópia do grupo escolhido na próxima vaga ao lado,
+    inteira na quadra e sem encostar em outro;
+  - **Encher quadra** põe cópias em todas as vagas que cabem inteiras, no mesmo
+    giro, em fileiras a partir dele (conta de régua: girar pode caber mais);
+  - **Remover** e **↶** (desfaz o último +, Encher ou Remover);
+  - um botão por grupo (✓/✗) escolhe qual as medidas e os pegadores mexem;
+    tocar no grupo no mapa também.
+- Parcela que passa da quadra ou que se sobrepõe a outro grupo fica
+  **vermelha** (encostar, com espaço zero, não é sobrepor). O painel diz o
+  grupo escolhido em detalhe e, por quadra, **quantos grupos cabem inteiros** e
+  quanto da área eles ocupam. Teto de 40 grupos no mapa.
 - **Tocar no mapa:** cada toque marca um ponto (árvore, com o raio da copa) ou
   um retângulo C × L. Tem Desfazer.
-- O painel diz **quantos ficam inteiros dentro da quadra**.
 - **Nada é gravado.** "Limpar" apaga tudo; só as medidas digitadas ficam
   lembradas.
 

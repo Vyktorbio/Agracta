@@ -50,6 +50,11 @@
 .c3-chip{display:inline-flex;align-items:center;gap:6px}
 .c3-chip i{width:11px;height:11px;border-radius:2px;display:inline-block}
 .c3-chip i.c3-vazio{border:1px dashed #8c9095}
+/* A linha da régua da altura: o que a régua é, em número, e o botão que a
+   troca. O texto encolhe primeiro; o botão fica inteiro. */
+.c3-regua{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:-6px 0 16px}
+.c3-regua .c3-nota{flex:1 1 280px;margin:0}
+.c3-regua .c3-btn{flex:0 0 auto}
 .c3-painel{border:1px solid var(--border,#dfe1e3);border-radius:10px;padding:14px 16px}
 .c3-onde{font-size:.8125rem;color:var(--text-2,#4a4f55);margin:0 0 4px}
 .c3-valor{font-size:1.625rem;font-weight:700;margin:0 0 3px;letter-spacing:-.02em}

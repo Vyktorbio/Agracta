@@ -24,6 +24,10 @@
  * 6. O valor vem como texto do banco. Vírgula decimal é aceita, não-numérico é
  *    ausente, e NaN não chega à tela.
  * 7. Todo número exibido passa por arredondamento explícito.
+ * 8. A ALTURA pode ser AMPLIADA, a COR não. A régua da altura vai até um número
+ *    redondo logo acima do maior valor lançado (ver reguaAltura), a régua
+ *    desenhada na cena é a mesma conta e mostra os números de verdade, e a cor
+ *    continua na escala inteira — ampliar não muda a faixa de ninguém.
  */
 (function(w){
 'use strict';
@@ -65,7 +69,7 @@ function diasEntre(iso1,iso2){
    Monta, do estudo cru, tudo que a tela precisa: a grade, as avaliações com DAA
    real e a escala/sentido da variável. Separado do desenho de propósito — é
    isto que os testes exercitam, sem canvas. */
-function modelo(st,variavel){
+function modelo(st,variavel,op){
   var trats=(st&&Array.isArray(st.tratamentos)?st.tratamentos:[]).filter(Boolean);
   var reps=Math.max(1,parseInt(st&&st.numRepeticoes,10)||1);
   /* A grade sai do estudo e varia: 5×4, 6×3, o que estiver cadastrado. */
@@ -88,9 +92,22 @@ function modelo(st,variavel){
   var sentido=typeof w._avSentido==='function'?w._avSentido(fonte,variavel):'menor';
   var cfg=typeof w._avCfg==='function'?w._avCfg(fonte,variavel):{tipo:'pct',escalaMax:4};
 
+  /* O maior valor LANÇADO da variável, em toda avaliação com data e toda
+     parcela da grade. Nada na tela passa dele: entre duas avaliações o valor
+     só caminha entre os dois lançados. É dele que sai o teto da régua da
+     altura — do ESTUDO inteiro, não do instante (ver reguaAltura). */
+  var maior=null;
+  avs.forEach(function(x){
+    grade.forEach(function(p){
+      var v=leValor(x.av,p.tratId,p.rep,variavel);
+      if(v!==null&&(maior===null||v>maior))maior=v;
+    });
+  });
+
   return {
     trats:trats, reps:reps, grade:grade, avs:avs, variavel:variavel,
     escala:escala, sentido:sentido, tipo:cfg.tipo, escalaMax:cfg.escalaMax,
+    altura:reguaAltura(escala,maior,op&&op.altura==='inteira'),
     daaMax:avs.length?avs[avs.length-1].daa:0,
     ordinal:cfg.tipo==='escala',
     semData:(st&&st.avaliacoes||[]).filter(function(a){
@@ -213,29 +230,125 @@ function fracaoRuim(m,v){
   return m.sentido==='maior'?1-f:f;
 }
 
+/* --------------------------------------------------- a régua da altura ---
+   PEDIDO DE QUEM USA: "cresce um espaço curto e visualmente não fica tão
+   diferente, fica muito sutil". E ficava mesmo. A altura ia de 0 a 100 % da
+   escala, e num ensaio de severidade em que a testemunha chega a 18 % todas
+   as colunas moravam no quinto de baixo da régua: o tratamento que saía de
+   2 % para 8 % nem saía do piso.
+
+   Agora a régua da ALTURA vai do piso da escala até um número redondo logo
+   acima do maior valor lançado da variável (0 a 20 %, no exemplo). O que
+   segura a honestidade disso:
+   - a coluna continua começando no PISO da escala, então a altura segue
+     proporcional ao valor: 10 % é a metade de 20 %, na tela também;
+   - a régua desenhada na cena é a MESMA conta, com os números de verdade;
+   - a COR não amplia: ela continua na escala inteira (_avEscala). Os 18 %
+     seguem na mesma faixa, e dois estudos seguem comparáveis pela cor;
+   - o teto vem do ESTUDO inteiro, não do instante. Uma régua que encolhesse
+     enquanto o tempo anda faria a coluna "crescer" sem o valor mudar.
+   O botão "Ver na escala inteira" desliga, para quem compara alturas entre
+   estudos. Sem escala definida não há régua nenhuma (ver eixo()). */
+/* O menor teto REDONDO que cobre `vao` (o maior lançado menos o piso), em 3 a
+   6 passos de 1, 2, 2,5 ou 5 × 10ⁿ. Menor teto primeiro — 26,9 % vira 0 a 30,
+   não 0 a 40, senão a coluna mais alta para em dois terços e a ampliação some
+   pela metade —; empatado, o passo sem vírgula (2 antes de 2,5) e o número de
+   marcas mais perto de cinco. */
+function tetoRedondo(vao){
+  if(!(vao>0)||!isFinite(vao))return null;
+  var e=Math.floor(Math.log(vao)/Math.LN10), melhor=null;
+  for(var k=e-2;k<=e+1;k++){
+    [1,2,2.5,5].forEach(function(b){
+      var passo=b*Math.pow(10,k), n=Math.ceil(vao/passo-1e-9);
+      if(n<3||n>6)return;
+      var c={passo:passo,n:n,teto:n*passo,redondo:b!==2.5}, igual=melhor&&Math.abs(c.teto-melhor.teto)<=melhor.teto*1e-9;
+      if(!melhor||(!igual&&c.teto<melhor.teto)||
+         (igual&&((c.redondo&&!melhor.redondo)||(c.redondo===melhor.redondo&&Math.abs(c.n-4)<Math.abs(melhor.n-4)))))melhor=c;
+    });
+  }
+  return melhor;
+}
+/* Casas decimais que um número da régua precisa para sair exato (até 3):
+   passo de 2,5 pede uma, passo de 25 nenhuma. */
+function casasDe(v){
+  for(var c=0;c<3;c++){var k=Math.abs(v)*Math.pow(10,c);if(Math.abs(k-Math.round(k))<1e-6)return c;}
+  return 3;
+}
+function reguaAltura(escala,maior,inteira){
+  var r={min:escala.min,max:escala.max,ampliada:false,podeAmpliar:false,maior:maior,passo:null,n:4};
+  if(!escala.definida||escala.max===null)return r;
+  var vao=escala.max-escala.min;
+  if(!(vao>0))return r;
+  /* Na escala inteira, os quartos de sempre (0, 25, 50, 75, 100). */
+  r.passo=vao/4;
+  /* Tudo no piso (ou nada lançado): não há o que ampliar. */
+  if(maior===null||!(maior>escala.min))return r;
+  /* Teto e passo redondos: as marcas saem em número limpo (0, 10, 20, 30), e
+     não em 0, 6,7, 13,4… */
+  var t=tetoRedondo(maior-escala.min);
+  /* Já ocupa a escala inteira: ampliar não mudaria nada. */
+  if(!t||!(escala.min+t.teto<escala.max-1e-9))return r;
+  r.podeAmpliar=true;
+  if(inteira)return r;
+  r.max=escala.min+t.teto;r.passo=t.passo;r.n=t.n;r.ampliada=true;
+  return r;
+}
+/* Fração 0..1 da ALTURA. A cor usa fracao() (escala inteira); a altura usa
+   esta (a régua da altura). Sem escala definida, nenhuma das duas existe. */
+function fracaoAltura(m,v){
+  var a=m.altura;
+  if(!m.escala.definida||!a||a.max===null)return null;
+  var vao=a.max-a.min;
+  if(!(vao>0))return null;
+  return Math.max(0,Math.min(1,(v-a.min)/vao));
+}
+/* Quanto da coluna mais alta possível a parcela ocupa (0 a 1). A tela e a
+   exportação (esquemática e realista) chamam ESTA função: a coluna, o bloco
+   de folhagem e a régua não podem divergir.
+   O piso é baixo de propósito. Ele existe para o zero MEDIDO continuar sendo
+   uma coluna (rasa, colorida) e não se confundir com a ausência (contorno
+   tracejado no chão). Alto como era (12 %), ele engolia a diferença entre os
+   valores pequenos. Sem escala, altura fixa: a altura mentiria tanto quanto
+   a cor. */
+var PISO_ALTURA=.04;
+function alturaDe(m,v){
+  if(v===null||v===undefined)return 0;
+  var f=fracaoAltura(m,v);
+  return f===null?.45:Math.max(PISO_ALTURA,f);
+}
+
 /* ----------------------------------------------------------------- eixo ---
    A altura sempre significou alguma coisa e nunca dizia quanto: dava para ver
    que uma coluna é maior que a outra, não QUE VALOR ela tem. Estas marcas são a
    régua da altura — e ela muda de assunto com o modo, porque a altura muda:
 
-     Estado no dia   altura = VALOR      → marcas na escala da variável
+     Estado no dia   altura = VALOR      → marcas na régua da altura
      Histórico 3D    altura = TEMPO      → marcas em DAA
 
+   No modo dia a régua é a da ALTURA (reguaAltura): a escala inteira ou a
+   ampliada, a mesma conta que levanta a coluna (fracaoAltura).
+
    Sem escala definida não há régua no modo dia: ali a altura já é fixa por
-   decisão (ver desenhar()), e uma régua sugeriria uma medida que não existe. */
+   decisão (ver alturaDe()), e uma régua sugeriria uma medida que não existe. */
 function eixo(m,modo){
   if(modo==='historico'){
     if(!(m.daaMax>0))return null;
-    return {titulo:'DAA',marcas:[0,.25,.5,.75,1].map(function(f){
+    return {titulo:'DAA',casas:0,marcas:[0,.25,.5,.75,1].map(function(f){
       return {f:f,v:m.daaMax*f,texto:mostra(m.daaMax*f,0)};})};
   }
-  if(!m.escala.definida||m.escala.max===null)return null;
-  var vao=m.escala.max-m.escala.min;
+  var a=m.altura;
+  if(!m.escala.definida||!a||a.max===null)return null;
+  var vao=a.max-a.min, n=a.n||4;
   if(!(vao>0))return null;
+  var casas=Math.max(casasDe(a.min),casasDe(a.passo)), marcas=[];
+  /* Uma marca por passo, do piso ao teto: na inteira são os quartos; na
+     ampliada, de 3 a 6 passos redondos. */
+  for(var k=0;k<=n;k++){
+    var v=k===n?a.max:a.min+a.passo*k;
+    marcas.push({f:k/n,v:v,texto:mostra(v,casas)});
+  }
   return {titulo:m.tipo==='pct'?'%':(m.tipo==='escala'?'índice':''),
-    marcas:[0,.25,.5,.75,1].map(function(f){
-      var v=m.escala.min+vao*f;
-      return {f:f,v:v,texto:mostra(v,vao<5?1:0)};})};
+    ampliada:a.ampliada, casas:casas, marcas:marcas};
 }
 
 /* ------------------------------------------------------------------ cor ---
@@ -317,6 +430,8 @@ function esc(v){
 
 w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fracao:fracao,fracaoRuim:fracaoRuim,eixo:eixo,faixas:faixas,faixaDe:faixaDe,
              numero:numero,leValor:leValor,diasEntre:diasEntre,corDe:corDe,mostra:mostra,
+             /* A régua da altura: a mesma conta para a tela e para a exportação. */
+             reguaAltura:reguaAltura,fracaoAltura:fracaoAltura,alturaDe:alturaDe,tetoRedondo:tetoRedondo,casasDe:casasDe,
              /* O cenário também sai por aqui: luz e rumo da sombra são conta, e
                 conta se confere sem canvas. */
              brilho:brilho,rumoDaLuz:rumoDaLuz,casco:casco,
@@ -330,7 +445,8 @@ w.AgCampo3D={modelo:modelo,valorEm:valorEm,aacpd:aacpd,trajetoria:trajetoria,fra
              /* Cópia do que está na tela agora — só leitura; exportar não mexe na vista. */
              estadoAtual:function(){
                if(!estado||!estado.st)return null;
-               return {s:estado.s,st:estado.st,variavel:estado.variavel,t:estado.t,rot:estado.rot,modo:estado.modo};
+               return {s:estado.s,st:estado.st,variavel:estado.variavel,t:estado.t,rot:estado.rot,modo:estado.modo,
+                       altura:estado.altura};
              }};
 
 /* =========================================================== a tela ===== */
@@ -347,6 +463,9 @@ var raiz=null;
    decoração desligou porque atrapalha a leitura dele — reacender a cada estudo
    seria fazer a escolha de novo no lugar dele. */
 var cenaPref=true;
+/* A régua da altura também: quem pediu a escala inteira continua nela no
+   próximo estudo. Nasce ampliada, que é o que faz a diferença aparecer. */
+var alturaPref='ajustada';
 function caixa(){ return (raiz&&raiz.isConnected)?raiz:null; }
 
 function fechar(){
@@ -420,10 +539,10 @@ function abrir(s,st,op){
   var ov=prepararCaixa(embutido,op);
   estado={s:s,st:st,vars:vars,variavel:variavel,t:0,rot:34*Math.PI/180,rodando:false,
           modo:op.modo==='historico'?'historico':'dia',embutido:embutido,
-          cena:cenaPref,sel:null,vivo:true,foco:d.activeElement,ultimo:0,alvos:[]};
+          cena:cenaPref,altura:alturaPref,sel:null,vivo:true,foco:d.activeElement,ultimo:0,alvos:[]};
   /* A avaliação herdada do painel vira o instante inicial: quem já escolheu uma
      avaliação lá não escolhe de novo aqui. */
-  var m=modelo(st,variavel);
+  var m=modelo(st,variavel,{altura:estado.altura});
   if(op.avaliacao){
     var achou=m.avs.find(function(x){return x.id===op.avaliacao;});
     if(achou)estado.t=achou.daa;
@@ -436,7 +555,7 @@ function abrir(s,st,op){
 
 function pintar(){
   var ov=caixa();if(!ov||!estado)return;
-  var m=modelo(estado.st,estado.variavel);
+  var m=modelo(estado.st,estado.variavel,{altura:estado.altura});
   estado.m=m;
   var s=estado.s;
   var avisos=[];
@@ -479,6 +598,7 @@ function pintar(){
       '<button type="button" class="c3-btn c3-cena'+(estado.cena?' ativo':'')+'" data-c3="cena" aria-pressed="'+(!!estado.cena)+'">Cenário</button>'+
       '<button type="button" class="c3-btn" data-c3="exportar">Exportar</button></div>'+
     legenda(m)+
+    linhaDaRegua(m)+
     '<div class="c3-painel" id="c3painel">'+painel(m)+'</div>'+
     avisos.map(function(a){return '<p class="c3-nota">'+esc(a)+'</p>';}).join('')+
     (estado.cena?'<p class="c3-nota">A rosa no canto mostra para onde a GRADE cresce — T para os tratamentos, '+
@@ -518,6 +638,27 @@ function legenda(m){
     itens.map(function(x){return x.html;}).join('')+
     '<span class="c3-chip"><i class="c3-vazio"></i>sem avaliação</span>'+
     '<span class="c3-chip">'+(m.sentido==='maior'?'mais é melhor':'menos é melhor')+'</span></div>';
+}
+
+/* A linha da régua da altura: diz em que régua a altura está, com os números,
+   e troca de régua. Só no modo dia (no histórico a altura é tempo) e só quando
+   ampliar muda alguma coisa — botão que não faz nada é ruído. */
+function linhaDaRegua(m){
+  var a=m.altura;
+  if(estado.modo!=='dia'||!a||!a.podeAmpliar)return '';
+  /* espaço que não quebra: "26,9" numa linha e "%" na outra não se lê */
+  var u=m.tipo==='pct'?'\u00a0%':'', ce=Math.max(casasDe(m.escala.min),casasDe(m.escala.max));
+  var cr=Math.max(casasDe(a.min),casasDe(a.passo));
+  var inteira=mostra(m.escala.min,ce)+' a '+mostra(m.escala.max,ce)+u;
+  var txt=a.ampliada
+    ? 'Altura ampliada: a régua vai de '+mostra(a.min,cr)+' a '+mostra(a.max,cr)+u+
+      ', logo acima do maior valor lançado ('+mostra(a.maior,m.ordinal?0:1)+u+'). '+
+      'A cor continua na escala inteira ('+inteira+'): ampliar não muda a faixa de ninguém.'
+    : 'Altura na escala inteira ('+inteira+'). Ampliada, a régua para logo acima do maior valor lançado ('+
+      mostra(a.maior,m.ordinal?0:1)+u+') e a diferença entre as parcelas aparece mais.';
+  return '<div class="c3-regua"><p class="c3-nota">'+esc(txt)+'</p>'+
+    '<button type="button" class="c3-btn" data-c3="altura" aria-pressed="'+a.ampliada+'">'+
+    (a.ampliada?'Ver na escala inteira':'Ampliar altura')+'</button></div>';
 }
 
 function painel(m){
@@ -1316,8 +1457,9 @@ function desenhar(){
     var x0=ox+p.ti*SX, y0=oy+(p.rep-1)*SY;
     var v=valorEm(m,p,estado.t), h;
     if(estado.modo==='historico')h=temLancamento(m,p)?HMAX:0;
-    else if(v===null)h=0;
-    else{var fr=fracao(m,v);h=(fr===null?.45:Math.max(.12,fr))*HMAX;}
+    /* Na régua da altura (ampliada ou inteira): a mesma conta da régua
+       desenhada e da exportação. Ausente dá 0: a coluna some. */
+    else h=alturaDe(m,v)*HMAX;
     return {p:p,v:v,h:h,x0:x0,x1:x0+PW,y0:y0,y1:y0+PL,
             prof:prj(m,x0+PW/2,y0+PL/2,0)[2]};
   }).sort(function(a,b){return b.prof-a.prof;});
@@ -1337,8 +1479,8 @@ function desenhar(){
       estado.alvos.push({o:o,p:base});
       return;
     }
-    /* Sem escala, altura fixa (ver o cálculo de o.h): a altura mentiria tanto
-       quanto a cor. */
+    /* Sem escala, altura fixa (ver alturaDe): a altura mentiria tanto quanto
+       a cor. */
     var h=o.h, c=corDe(fracaoRuim(m,o.v));
     var arestas=[[[o.x0,o.y0],[o.x1,o.y0]],[[o.x1,o.y0],[o.x1,o.y1]],
                  [[o.x1,o.y1],[o.x0,o.y1]],[[o.x0,o.y1],[o.x0,o.y0]]];
@@ -1388,7 +1530,7 @@ function desenhar(){
    com borrão de sombra e grão de solo no meio, gasta mais ainda. */
 function assinatura(){
   return [estado.rot,estado.t,estado.hover,estado.sel&&estado.sel.chave,
-          estado.modo,estado.cena,estado.variavel,LW,LH].join('|');
+          estado.modo,estado.cena,estado.altura,estado.variavel,LW,LH].join('|');
 }
 function laco(ts){
   if(!estado||!estado.vivo){if(estado)estado.laco=false;return;}
@@ -1482,6 +1624,13 @@ d.addEventListener('click',function(ev){
     if(estado.rodando&&estado.t>=estado.m.daaMax)estado.t=0;
     b.textContent=estado.rodando?'Parar':'Rodar';sincronizarTempo();
   }
+  if(b.dataset.c3==='altura'){
+    /* Repinta: a régua desenhada, a linha que a explica e o botão trocam
+       juntos. O instante, o giro e a seleção não se perdem. */
+    estado.altura=estado.altura==='inteira'?'ajustada':'inteira';alturaPref=estado.altura;
+    pintar();
+    return;
+  }
   if(b.dataset.c3==='cena'){
     estado.cena=!estado.cena;cenaPref=estado.cena;
     /* Repinta porque a nota que explica a rosa entra e sai com ela — aviso sobre
@@ -1494,7 +1643,7 @@ d.addEventListener('click',function(ev){
     if(w.AgCampoExportar)return w.AgCampoExportar.abrir();
     if(b.dataset.carregando)return;
     b.dataset.carregando='1';
-    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=5';
+    var sc=d.createElement('script');sc.src='campo-3d-exportar.js?v=6';
     sc.onload=function(){delete b.dataset.carregando;if(w.AgCampoExportar)w.AgCampoExportar.abrir();};
     sc.onerror=function(){delete b.dataset.carregando;b.textContent='Exportar indisponível offline';};
     d.head.appendChild(sc);

@@ -24,7 +24,7 @@ No ensaio com soja, lesmas e pellets, marcar manualmente T1 como referência sem
 - Avaliações recolhíveis; comparação com a referência fica em uma seção separada.
 - Tabelas largas têm botões de rolagem, além da rolagem nativa.
 - Estatística inferencial inicia pelo botão. Mudar os dados invalida a autorização anterior para recalcular; é necessário clicar novamente.
-- Triagem local exibe alertas durante a digitação. A triagem forense completa continua assíncrona, pelo motor existente; o primeiro carregamento não é instantâneo. Alertas não constituem prova de erro ou fraude.
+- Triagem local exibe alertas durante a digitação. A triagem forense completa (o motor existente, `forense.py` num worker) também roda **durante o lançamento**: alguns segundos depois que a pessoa para de digitar, a grade pede o cálculo e mostra, por variável, o veredito e os achados. O primeiro carregamento do motor não é instantâneo. Na leitura dupla ela não aparece na grade (revelaria a leitura do outro avaliador) e fica para a página do estudo. Alertas não constituem prova de erro ou fraude.
 - “Ver no campo” abre parado. Rodar/Pausar usa a mesma raiz para animação, barra temporal e painel, na vista embutida e na janela.
 
 ## Verificação
@@ -56,3 +56,16 @@ Durante a digitação (subamostras, modo automático) a leitura é silenciosa: "
 - **Lembrete dispensado** de avaliação fica preso ao id da avaliação, não à posição dela na lista. Antes, excluir uma avaliação anterior fazia a dispensa passar para a avaliação seguinte.
 
 Testes: `test_tipo_numero.js`, `test_avaliacao_tipos.js`, `test_ficha_parcela.js`, `test_runtime.js`, `test_agenda_aplicacao_janela.js`.
+
+## Lançamento: leitura menor que a anterior (outubro/2026)
+
+Pedido de uso: "dei 30% de severidade e no dia seguinte coloco 29%", "morreram 30 insetos hoje e amanhã coloco 25". **Avisa, não bloqueia.**
+
+- Numa variável que **não diminui** (mortos, severidade, incidência, lesões, desfolha, dano, germinação, emergência, doença), a leitura menor que a da avaliação anterior na **mesma parcela** fica em **vermelho** na tabela, na ficha da parcela e no modo automático. A célula diz qual era a leitura anterior e a data; a triagem lista as quedas.
+- "Anterior" é a avaliação mais recente antes desta (pela data; no mesmo dia, pela ordem de lançamento) que tem número para a parcela. A que pulou a parcela não conta.
+- O botão **↗** no cabeçalho da coluna liga ou desliga o aviso. Ele nasce pelo nome da variável (insetos **vivos**, fitotoxicidade, eficácia e paralisia ficam desligados, porque podem cair de verdade); a escolha fica gravada na avaliação e segue para as próximas.
+- A leitura anterior **só aparece quando há queda**. Mostrá-la antes de a pessoa estimar ancoraria a estimativa.
+- O mesmo achado entra na folha forense do estudo (`leitura-menor-que-a-anterior`), contado por variável.
+- A conta mora em `vendor/avaliacao-core.js` (`acumula`, `anterior`, `queda`, `quedas`): consulta pura, nada é alterado.
+
+Testes: `test_avaliacao_queda.js` (núcleo), `test_avaliacao_queda_tela.js` (grade, ficha, modo automático e triagem ao vivo), `test_forense_dominio.js` (achado na folha).

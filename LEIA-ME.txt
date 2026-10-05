@@ -1,3 +1,138 @@
+AGRACTA — 22a publicacao                    05/10/2026
+=====================================================
+
+Leva: medir varios grupos de parcelas de uma vez; a altura do Campo Vivo
+que cresce de verdade (na tela, no video e no PNG); o aviso de leitura
+menor que a da avaliacao anterior; e a triagem forense completa rodando
+durante o lancamento.
+  CODIGO:  mapa-medir.js  campo-3d.js  campo-3d.css  campo-3d-exportar.js
+           campo-3d-realista.js  estudo-pagina.js  app.js  index.html  sw.js
+  MOTOR:   vendor/avaliacao-core.js (acumula, anterior, queda, quedas)
+  TESTE:   test_mapa_medir.js (as contas dos grupos)
+           test_mapa_medir_grupos.js (a tela, tocando nos botoes; novo)
+           test_campo3d.js (a regua da altura)
+           test_campo3d_exportar.js (altura e regua no video e no PNG)
+           test_avaliacao_queda.js (a queda entre avaliacoes; novo)
+           test_avaliacao_queda_tela.js (a grade e a triagem ao vivo; novo)
+           test_forense_dominio.js (+ a queda na folha forense)
+  DOCS:    docs/CAMPO-VIVO-EXPORTAR.md  docs/VER-NO-CAMPO.md
+           docs/CROQUI-NO-MAPA.md  docs/AVALIACOES-PROTOCOLO.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "se eu pudesse adicionar mais grupos de parcelas ao mesmo
+tempo para medir quantos estudos caberiam na quadra"; no video dos
+graficos, "so muda a cor, o retangulo da parcela nao cresce para cima"; e
+na tela, onde cresce, "cresce um espaco curto ... fica muito sutil".
+Depois: "nas avaliacoes, um aviso se o valor fosse menor que do dia
+anterior, nao bloquear mas avisar, ficando o numero em vermelho" e "o
+motor de triagem forense funcionar tambem na avaliacao em tempo real".
+
+1) MEDIR: VARIOS GRUPOS AO MESMO TEMPO
+
+Mapa > Medicao > Planejar parcelas > "Grupos de estudos" (era "Grade de
+estudos"). Cada GRUPO e o desenho de um estudo: comprimento, largura,
+quantos, quantos lado a lado e o espaco entre eles, com posicao e giro
+proprios. Os botoes:
+  - "+ Grupo": uma copia do grupo escolhido na proxima vaga ao lado dele,
+    inteira na quadra e sem encostar em outro grupo;
+  - "Encher quadra": copias em TODAS as vagas que cabem inteiras na
+    quadra, no mesmo giro, em fileiras a partir dele, e o painel diz
+    quantas couberam. E conta de regua, nao arranjo otimo: girar ou mudar
+    a disposicao pode caber mais, e o painel avisa;
+  - "Remover" tira o grupo escolhido; a seta desfaz o ultimo "+ Grupo",
+    "Encher" ou "Remover".
+Com mais de um grupo aparece um botao por grupo (com ✓ ou ✗): ele escolhe
+o grupo que as medidas e os pegadores ✛ e ↻ mexem. Tocar num grupo no mapa
+tambem escolhe. As medidas sao de cada grupo: da para por estudos de
+tamanhos diferentes lado a lado.
+Parcela que passa da quadra ou que sobrepoe outro grupo fica VERMELHA, e o
+painel resume por quadra: "5 de 5 grupo(s) cabem inteiros, sem encostar
+um no outro · ocupam 0,41 de 0,76 ha (54 %)". Encostar (espaco zero) nao
+conta como sobrepor.
+Continua NAO gravando nada: so as medidas digitadas ficam lembradas no
+aparelho. Os numeros das parcelas so aparecem quando cabem na tela (de
+longe viravam um colar de bolinhas por cima do desenho). Teto de 40 grupos
+no mapa.
+
+2) CAMPO VIVO: A ALTURA CRESCE DE VERDADE
+
+Na tela (Ver no campo): a regua da altura deixou de ir sempre ate 100 %.
+Ela vai ate o menor numero redondo acima do maior valor lancado no estudo
+(testemunha em 26,9 % -> regua de 0 a 30 %). A coluna mais alta chega
+perto do topo e a diferenca entre os tratamentos aparece. O que nao mudou,
+de proposito:
+  - a COR continua na escala inteira (as faixas de 0 a 100 %): ampliar nao
+    muda a faixa de ninguem, e estudos seguem comparaveis pela cor;
+  - a coluna continua comecando no zero: 10 % e metade de 20 %;
+  - a regua desenhada mostra os numeros da regua nova, e a linha abaixo da
+    legenda diz que ela foi ampliada e ate onde;
+  - o teto sai do estudo inteiro, nao do dia: a regua nao anda com o tempo.
+"Ver na escala inteira" volta para 0 a 100 % (a escolha vale enquanto o
+app estiver aberto). O piso da coluna baixou de 12 % para 4 % da altura:
+o zero medido continua sendo uma coluna rasa, diferente do vazio.
+
+No video e no PNG (Exportar): o bloco de folhagem do estilo Realista agora
+CRESCE PARA CIMA com o valor, na mesma regua da tela, e cresce liso nas
+transicoes entre avaliacoes (antes a altura era igual para todos). O quadro
+ganhou a regua da altura (no canto do fundo, a esquerda) e a legenda, a
+linha "Altura: 0 a 30 %". A folhagem nao recebe sombra de bloco vizinho:
+sombra escureceria a cor, e a cor e dado. Desmarcar "Legenda" tira a regua
+junto. O estilo Esquematico segue a mesma regua.
+
+
+3) AVALIACAO: LEITURA MENOR QUE A ANTERIOR FICA VERMELHA
+
+Numa variavel que NAO DIMINUI (mortos, severidade, incidencia, lesoes,
+desfolha, dano, germinacao, emergencia, doenca), a leitura menor que a da
+avaliacao anterior na MESMA parcela fica VERMELHA - na tabela, na ficha da
+parcela e no modo automatico - e a triagem lista: "Severidade · T1A: 29
+(30 em 01/10/2026)". NAO BLOQUEIA: o valor fica gravado. Ha explicacao
+legitima (folha com lesao que caiu, inseto morto levado por formiga), e
+quem esta no campo e quem sabe.
+  - "Anterior" e a avaliacao mais recente antes desta que leu a parcela
+    (a que pulou a parcela nao conta).
+  - O botao ↗ no cabecalho da coluna liga/desliga o aviso. Ele nasce pelo
+    nome: insetos VIVOS, fitotoxicidade, eficacia e paralisia ficam
+    desligados, porque podem cair de verdade. A escolha segue para as
+    proximas avaliacoes.
+  - A leitura anterior so aparece quando ha queda: mostra-la antes de a
+    pessoa estimar ancoraria a estimativa.
+  - O mesmo achado entra na folha forense do estudo, contado por variavel.
+
+4) TRIAGEM FORENSE COMPLETA DURANTE O LANCAMENTO
+
+O motor forense (o mesmo da pagina do estudo, que nao trava a tela) roda
+tambem com a avaliacao aberta: alguns segundos depois que a pessoa para de
+digitar, a caixa amarela da grade mostra, por variavel, "sem anomalias" ou
+os sinais (duplicatas, subdispersao...), com todas as avaliacoes juntas.
+Enquanto recalcula, o ultimo resultado fica a vista, marcado. Se o motor
+nao sobe (primeiro uso sem internet), diz o motivo e oferece "Tentar de
+novo". Na LEITURA DUPLA ela nao aparece na grade: revelaria algo da
+leitura do outro avaliador; fica para a pagina do estudo.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o app (duas vezes, para a versao nova entrar).
+2. Mapa > Medicao > "Grupos de estudos": "+ Grupo" poe um ao lado;
+   "Encher quadra" enche e diz quantos couberam; arrastar um grupo em cima
+   de outro deixa as parcelas que se sobrepoem vermelhas.
+3. Um estudo com avaliacoes > Ver no campo: a regua vai ate pouco acima do
+   maior valor, e "Ver na escala inteira" volta ao 0 a 100.
+4. Exportar > Video MP4 > Realista: os blocos sobem de uma avaliacao para
+   a outra, com a regua no canto.
+5. Numa segunda avaliacao de severidade, digitar um valor menor que o da
+   anterior na mesma parcela: o numero fica vermelho e a triagem diz qual
+   era o anterior; o valor continua gravado.
+6. Parar de digitar uns segundos: a caixa amarela mostra a "Triagem
+   forense completa" por variavel.
+
+
 AGRACTA — 21a publicacao                    05/10/2026
 =====================================================
 

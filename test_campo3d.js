@@ -349,18 +349,29 @@ function todas(valor,excecoes){
    mapeamento próprio seria pior que régua nenhuma: daria autoridade de medida a
    um desencontro. */
 {
-  const m=M.modelo(estudo([
-    av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))
-  ]),'sev');
+  const avs=[av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))];
+  const m=M.modelo(estudo(avs),'sev');
+  /* Na escala inteira (o botão "Ver na escala inteira") a régua é a da variável. */
+  const mi=M.modelo(estudo(avs),'sev',{altura:'inteira'});
 
-  const dia=M.eixo(m,'dia');
+  const dia=M.eixo(mi,'dia');
   assert.equal(dia.marcas.length,5,'cinco marcas: 0, 25, 50, 75 e 100 % da altura');
-  assert.equal(dia.marcas[0].v,m.escala.min);
-  assert.equal(dia.marcas[4].v,m.escala.max,'o topo da régua é o topo da escala da variável');
+  assert.equal(dia.marcas[0].v,mi.escala.min);
+  assert.equal(dia.marcas[4].v,mi.escala.max,'na escala inteira, o topo da régua é o topo da escala da variável');
   /* O laço que importa: a marca em f vale v, e a coluna de valor v sobe até f. */
-  dia.marcas.forEach(mk=>assert.ok(Math.abs(M.fracao(m,mk.v)-mk.f)<1e-9,
+  dia.marcas.forEach(mk=>assert.ok(Math.abs(M.fracaoAltura(mi,mk.v)-mk.f)<1e-9,
     'a régua e a altura da coluna precisam ser a mesma conta (marca '+mk.texto+')'));
   assert.equal(dia.titulo,'%','a régua diz a unidade da variável');
+
+  /* AMPLIADA (o padrão): o maior lançado é 40, então a régua vai de 0 a 40 —
+     e continua sendo a mesma conta que levanta a coluna. */
+  const amp=M.eixo(m,'dia');
+  assert.equal(amp.ampliada,true);
+  assert.equal(amp.marcas[0].v,m.escala.min,'ampliar não tira a coluna do chão: a régua começa no piso da escala');
+  assert.equal(amp.marcas[4].v,40,'o topo para logo acima do maior valor lançado');
+  amp.marcas.forEach(mk=>assert.ok(Math.abs(M.fracaoAltura(m,mk.v)-mk.f)<1e-9,
+    'régua ampliada e coluna, a mesma conta (marca '+mk.texto+')'));
+  assert.equal(JSON.stringify(amp.marcas.map(mk=>mk.texto)),'["0","10","20","30","40"]','marcas em número redondo');
 
   /* No histórico a altura é TEMPO, então a régua muda de assunto junto. */
   const hist=M.eixo(m,'historico');
@@ -632,5 +643,103 @@ function todas(valor,excecoes){
   }
 }
 
+/* ===================== 14. a altura AMPLIADA: a diferença aparece, a cor não muda
+   Pedido de quem usa: "cresce um espaço curto e visualmente não fica tão
+   diferente, fica muito sutil". Na escala de 0 a 100 %, um ensaio em que a
+   testemunha chega a 18 % tinha todas as colunas no quinto de baixo, e o
+   tratamento que ia de 2 para 8 % nem saía do piso. A régua da altura agora
+   para logo acima do maior valor lançado. O que NÃO pode acontecer: a cor
+   ampliar junto (a faixa é da escala da variável), a coluna sair do chão (a
+   proporção entre valores tem de continuar) ou a régua andar com o tempo. */
+{
+  const avs=[av('A1','2026-01-12',todas('2',{T1R1:'5'})),
+             av('A2','2026-01-26',todas('8',{T1R1:'18',T1R2:'0'}))];
+  const m=M.modelo(estudo(avs),'sev'), mi=M.modelo(estudo(avs),'sev',{altura:'inteira'});
+
+  assert.equal(m.altura.maior,18,'o maior lançado do ESTUDO inteiro, de qualquer avaliação');
+  assert.equal(m.altura.max,20,'teto redondo logo acima: 0 a 20 %');
+  assert.equal(m.altura.ampliada,true);
+  assert.equal(mi.altura.max,100,'na escala inteira, o teto é o da variável');
+  assert.equal(mi.altura.podeAmpliar,true,'e o botão continua oferecendo ampliar');
+
+  /* A DIFERENÇA APARECE: de 2 para 8 % a coluna sobe 30 % da altura, e não 4 %. */
+  const sobe=(mm)=>M.alturaDe(mm,8)-M.alturaDe(mm,2);
+  assert.ok(sobe(m)>=0.29,'ampliada, de 2 para 8 % a coluna sobe quase um terço da altura: '+sobe(m));
+  assert.ok(sobe(m)>5*sobe(mi),'ao menos cinco vezes o que subia na escala inteira');
+
+  /* A COLUNA NÃO SAI DO CHÃO: o dobro do valor continua sendo o dobro da altura. */
+  assert.ok(Math.abs(M.alturaDe(m,10)/M.alturaDe(m,20)-0.5)<1e-9,'10 % é metade de 20 %, ampliada');
+  assert.ok(Math.abs(M.alturaDe(mi,10)/M.alturaDe(mi,20)-0.5)<1e-9,'e na escala inteira');
+
+  /* A COR NÃO AMPLIA: mesma faixa, mesmos cortes, nas duas réguas. */
+  [0,2,8,18].forEach(v=>assert.equal(M.corDe(M.fracaoRuim(m,v)),M.corDe(M.fracaoRuim(mi,v)),
+    'a cor de '+v+' % não depende da régua da altura'));
+  assert.equal(JSON.stringify(M.faixas(m)),JSON.stringify(M.faixas(mi)),'os cortes da legenda são os mesmos');
+  assert.equal(M.faixaDe(m,18),0,'18 % segue na primeira faixa da escala de 0 a 100');
+
+  /* Ausência continua não sendo zero: o zero medido é uma coluna rasa, o vazio
+     não tem altura nenhuma. */
+  assert.ok(M.alturaDe(m,0)>0,'zero medido tem coluna');
+  assert.equal(M.alturaDe(m,null),0,'ausente não tem');
+  assert.ok(M.alturaDe(m,1)>M.alturaDe(m,0),'e o piso é baixo o bastante para 1 % já subir dele');
+
+  /* Nada a ampliar: tudo no zero, ou o maior lançado já perto do topo. */
+  const zeros=M.modelo(estudo([av('A1','2026-01-12',todas('0'))]),'sev');
+  assert.equal(zeros.altura.podeAmpliar,false,'tudo no piso: não há o que ampliar');
+  assert.equal(M.eixo(zeros,'dia').marcas[4].v,100);
+  const alto=M.modelo(estudo([av('A1','2026-01-12',todas('90'))]),'sev');
+  assert.equal(alto.altura.podeAmpliar,false,'90 % já ocupa a escala: o teto redondo seria o próprio 100');
+  /* Sem escala definida, nem régua nem ampliação: a altura segue fixa. */
+  const cont=M.modelo(estudo([av('A1','2026-01-12',todas('7'),'contagem')]),'sev');
+  assert.equal(cont.altura.podeAmpliar,false);
+  assert.equal(M.alturaDe(cont,7),0.45);
+  assert.equal(M.eixo(cont,'dia'),null);
+  /* Valor acima do teto declarado não amplia nem estoura: fica no topo. */
+  const acima=M.modelo(estudo([av('A1','2026-01-12',todas('70'),'contagem',{escalaMaxValor:50})]),'sev');
+  assert.equal(acima.altura.ampliada,false);
+  assert.equal(M.alturaDe(acima,70),1);
+
+  /* Teto redondo: o MENOR que cobre o maior lançado, em 3 a 6 passos limpos.
+     26,9 % vai a 30 (e não a 40: a coluna mais alta pararia em dois terços). */
+  [[26.9,30,10],[18,20,5],[17,20,5],[40,40,10],[8,8,2],[3.2,4,1],[70,75,25],[12,12,2],[0.3,0.3,0.1],[1,1,0.2]].forEach(([v,teto,passo])=>{
+    const t=M.tetoRedondo(v);
+    assert.ok(Math.abs(t.teto-teto)<1e-9&&Math.abs(t.passo-passo)<1e-9,
+      'teto para '+v+': esperado '+teto+' em passos de '+passo+', veio '+t.teto+' em passos de '+t.passo);
+    assert.ok(t.n>=3&&t.n<=6,'de 3 a 6 passos');
+  });
+  const m27=M.modelo(estudo([av('A1','2026-01-12',todas('5',{T1R1:'26,9'}))]),'sev');
+  assert.equal(JSON.stringify(M.eixo(m27,'dia').marcas.map(mk=>mk.texto)),'["0","10","20","30"]','marcas de 10 em 10 até 30');
+  assert.ok(M.alturaDe(m27,26.9)>0.89,'e a coluna mais alta chega perto do topo da régua');
+
+  /* A TELA: a linha diz a régua em número e o botão troca; a exportação leva a escolha. */
+  const trs=[{id:'T1',produto:'A'},{id:'T2',produto:'B'}];
+  const notas=(a,b)=>({T1R1:{sev:a},T1R2:{sev:a},T2R1:{sev:b},T2R2:{sev:b}});
+  const st={dataInicio:'2026-01-01',numRepeticoes:2,tratamentos:trs,avaliacoes:[
+    {id:'A1',data:'2026-01-10',variaveis:['sev'],tipos:{sev:'pct'},notas:notas('2','1')},
+    {id:'A2',data:'2026-01-20',variaveis:['sev'],tipos:{sev:'pct'},notas:notas('17','3')}]};
+  const host=w.document.createElement('div');
+  w.document.body.appendChild(host);
+  w.abrirCampo3D({codigo:'AMP',cultura:'Soja',alvo:'Alvo',tratamentos:trs},st,{hospedeiro:host});
+  const txt=()=>host.textContent.replace(/\s+/g,' ');
+  let bt=host.querySelector('[data-c3="altura"]');
+  assert.ok(bt,'a vista tem o botão da régua da altura');
+  assert.equal(bt.getAttribute('aria-pressed'),'true','e ela já abre ampliada');
+  assert.match(txt(),/régua vai de 0 a 20 %/,'a linha diz a régua em número');
+  assert.match(txt(),/escala inteira \(0 a 100 %\)/,'e que a cor segue a escala inteira');
+  assert.equal(M.estadoAtual().altura,'ajustada','a exportação leva a régua da tela');
+  bt.click();
+  bt=host.querySelector('[data-c3="altura"]');
+  assert.equal(bt.getAttribute('aria-pressed'),'false','o botão volta para a escala inteira');
+  assert.match(bt.textContent,/Ampliar altura/);
+  assert.match(txt(),/Altura na escala inteira \(0 a 100 %\)/);
+  assert.equal(M.estadoAtual().altura,'inteira');
+  /* No histórico a altura é tempo: não há régua de valor para trocar. */
+  host.querySelector('[data-modo="historico"]').click();
+  assert.equal(host.querySelector('[data-c3="altura"]'),null,'no histórico o botão some');
+  host.querySelector('[data-modo="dia"]').click();
+  host.querySelector('[data-c3="altura"]').click();
+  assert.equal(M.estadoAtual().altura,'ajustada','e a escolha volta ao padrão para os próximos testes');
+}
+
 w.close();
-console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias, carga sob demanda e cenário que não vira dado OK.');
+console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias, carga sob demanda, cenário que não vira dado e altura ampliada sem mexer na cor OK.');
