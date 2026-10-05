@@ -1,3 +1,82 @@
+AGRACTA — 23a publicacao                    05/10/2026
+=====================================================
+
+Leva: organizacao (frente 3 da lapidacao, primeiro passo). Na tela, so
+uma coisa muda: o selo da entrada sem conexao para de repetir a frase.
+  CODIGO:  firebase-sync.js  index.html  sw.js  conferir.sh
+  TESTE:   os 222 testes saem da raiz e vao para tests/
+           tests/test_offline_local.js (+ o selo da entrada sem conexao)
+  DOCS:    README.md (o mapa de onde mora cada coisa)
+           docs/README.md (indice da documentacao; novo)
+           docs/PASSAGEM-AGRACTA.md  docs/CROQUI-NO-MAPA.md
+           docs/CAMPO-VIVO-EXPORTAR.md (o caminho novo dos testes)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Pedido: "O Agracta esta com muitas funcionalidades. Mas ainda esta
+desorganizado. Vamos organizar?"
+
+1) OS TESTES SAEM DA RAIZ
+
+Os 222 testes (215 test_*.js e 7 test_*.py) moravam soltos na raiz, junto
+com os arquivos do app: quase tres de cada quatro itens da pasta. Agora
+moram em tests/, ao lado dos testes das regras do banco e do motor
+estatistico que ja estavam la. A raiz caiu de 308 para 86 itens, e o que
+sobrou nela e o app.
+  - Nenhum teste mudou o que confere, so os caminhos: o teste sobe um
+    nivel para achar app.js, vendor/ e o resto.
+  - Rodam como antes, a partir da raiz:
+        node tests/test_agenda_calendario.js
+  - O portao roda tests/test_*.js e tests/test_*.py. Um test_*.js
+    esquecido na raiz NAO rodaria, entao o portao reprova a publicacao e
+    diz o comando para move-lo.
+  - Teste novo de motor nasce em tests/test_<nome>.js (a regra da casa,
+    na PASSAGEM, foi atualizada).
+
+2) O MAPA DO PROJETO
+
+O README dizia que o index.html era "o app inteiro". Ganhou a secao "Onde
+mora cada coisa": que arquivo cuida de cada area (entrada e nuvem, mapa,
+estudo e protocolo, fotos, trilha BPL, Conhecimento, Ver no campo, clima,
+estatistica), as paginas separadas, os motores puros, as folhas de estilo
+na ordem em que se sobrepoem, o que fica fora da tela, como rodar os
+testes e o passo a passo de cada publicacao.
+
+A pasta docs/ ganhou um indice (docs/README.md), com os 29 documentos
+separados pelo uso: comece por aqui, como funciona cada area, revisoes com
+data, conformidade e os textos dos PRs automaticos. O indice registra um
+achado: a conformidade tem DOIS conjuntos de documentos (a pasta
+docs/conformidade/ e tres arquivos soltos em docs/), de epocas diferentes
+e os dois ainda falando do Supabase. Junta-los e reescreve-los e o item B3
+da PASSAGEM.
+
+3) O SELO DA ENTRADA SEM CONEXAO REPETIA A FRASE
+
+Entrando pelo botao "Entrar sem conexao neste aparelho", o selo dizia
+"⌁ sessão local · sem sincronização — sessão local · sem sincronização".
+O botao mandava a frase inteira, e o selo emenda o que recebe no texto
+que ele ja tem. Agora diz uma vez so. O teste pinta o selo com a funcao
+de verdade do app.js e reprova a versao anterior.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o app (duas vezes, para a versao nova entrar).
+2. Num aparelho que ja entrou online antes, sem internet: tocar em
+   "Entrar sem conexao neste aparelho". O selo de baixo diz
+   "⌁ sessão local · sem sincronização", uma vez so.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR, com os 222 testes rodando
+  de tests/ (os mesmos de antes, mais as 2 verificacoes do selo).
+
+
 AGRACTA — 22a publicacao                    05/10/2026
 =====================================================
 
