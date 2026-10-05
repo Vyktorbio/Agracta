@@ -21,8 +21,8 @@ abaixo é baixado pelo aparelho como está.
 ### A tela principal (`index.html`)
 
 O `index.html` carrega as bibliotecas e a maior parte dos motores puros antes do
-`app.js`; os módulos que se penduram nele vêm depois. Os botões da barra de
-baixo levam a Mapa, Hoje, Buscar, Agenda, Conhecimento e Menu.
+`app.js`; os módulos que se penduram nele vêm depois. A barra de baixo tem,
+nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 
 | Área | Arquivos |
 |---|---|
