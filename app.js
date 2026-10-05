@@ -12950,6 +12950,26 @@ function _forenseAchadosEstudo(study, qid){
         texto:'BBCH retrocede de '+ant+' ('+br(dia(comBbch[i-1]))+') para '+at+' ('+br(dia(comBbch[i]))+').'});
   }
 
+  /* Leitura que DIMINUI numa variável que não diminui (mortos, severidade…): o
+     mesmo aviso que a grade dá em vermelho na hora do lançamento, agora na folha.
+     Pela mesma conta (AvaliacaoCore.quedas), contado por variável, com um exemplo
+     para quem for conferir — vinte quedas são um achado com vinte ocorrências. */
+  if(typeof AvaliacaoCore!=='undefined' && AvaliacaoCore.quedas){
+    var porVar={}, ordemV=[];
+    avs.forEach(function(a){
+      AvaliacaoCore.quedas(study, a).forEach(function(qd){
+        if(!porVar[qd.v]){ porVar[qd.v]={n:0, ex:qd}; ordemV.push(qd.v); }
+        porVar[qd.v].n++;
+      });
+    });
+    ordemV.forEach(function(v){
+      var o=porVar[v], ex=o.ex, nf=function(x){ return String(Math.round(x*100)/100).replace('.',','); };
+      out.push({codigo:'leitura-menor-que-a-anterior', severidade:'conferir',
+        texto:o.n+' leitura(s) de "'+v+'" menor(es) que a da avaliação anterior na mesma parcela, numa variável que não diminui'+
+          ' (ex.: '+ex.row+', '+nf(ex.antes)+' em '+br(ex.data)+' e '+nf(ex.agora)+' em '+br(ex.dataAgora)+').'});
+    });
+  }
+
   return out;
 }
 
@@ -14098,6 +14118,8 @@ function _bioestatStatusTexto(key){
   return {txt:(baixando?'Baixando o módulo estatístico':'Carregando o motor estatístico')+'…'+_bioDur(a.partida)+(etapa?(' ('+etapa+')'):''), sub:subCarga};
 }
 function _bioestatStatusNaTela(){
+  /* a linha de status da triagem na grade de avaliação, se ela estiver aberta */
+  try{ if(typeof avForenseCompletaStatus==='function') avForenseCompletaStatus(); }catch(e){}
   try{
     var el=document.getElementById('bioAutoStatus'); if(!el) return;
     var qid=el.getAttribute('data-qid'), sid=el.getAttribute('data-sid'); if(qid==null||sid==null) return;
@@ -14531,6 +14553,8 @@ function _estudoNaTela(qid,sid){
 }
 var _bioRefreshT=null;
 function _bioestatRefreshOpen(c){
+  /* A grade de avaliação aberta deste estudo mostra a triagem forense ao vivo. */
+  try{ if(c&&c.qid===curV&&c.sid===curSid&&typeof avForenseCompletaPintar==='function') avForenseCompletaPintar(); }catch(e){}
   /* re-renderiza o estudo aberto quando CHEGA um resultado (não só no ready), pra a análise
      aparecer assim que o job dela termina — sem esperar o forense. Debounce coalesce rajadas. */
   if(c&&window.AgEstudoPagina&&window.AgEstudoPagina.atualizarAnalises)window.AgEstudoPagina.atualizarAnalises(c);
@@ -17717,7 +17741,18 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.avcol-type.on{border-color:var(--accent,#37d684);background:rgba(55,214,132,.12);color:var(--accent,#37d684)}'+
   '.avcol-btns{display:flex;gap:8px;margin-top:14px}'+
   '.avcol-ok{flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:9px;padding:11px;font-weight:700;font-size:14px;cursor:pointer}'+
-  '.avcol-cancel{background:#222;color:#bbb;border:none;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer}';
+  '.avcol-cancel{background:#222;color:#bbb;border:none;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer}'+
+  /* NÃO DIMINUI: a leitura abaixo da avaliação anterior sai em vermelho, sem
+     travar nada. A cor é a de erro do padrão (cores-padrao.css), legível nos
+     dois temas. */
+  '.av-cell.av-queda,.av-auto-input.av-queda{color:var(--ag-err,#f87171);border-color:var(--ag-err,#f87171);font-weight:800;box-shadow:0 0 0 1px var(--ag-err,#f87171) inset}'+
+  '.av-der.av-queda,.av-subbtn.av-queda{color:var(--ag-err,#f87171)}'+
+  '.av-queda-msg{font-size:12px;font-weight:700;color:var(--ag-err,#f87171);margin-top:6px;line-height:1.35}.av-queda-msg:empty{display:none}'+
+  '.av-acum{opacity:.4;color:var(--text-2,#9ab39a)!important}.av-acum.on{opacity:1;color:var(--ag-warn,#f59e0b)!important}'+
+  /* a caixa de triagem tem duas partes: a imediata (a cada tecla) e a do motor */
+  '.av-tri-imed b,.av-tri-comp b{font-weight:800}.av-tri-comp{margin-top:7px;padding-top:7px;border-top:1px dashed rgba(101,77,23,.35)}.av-tri-comp:empty{display:none}'+
+  '.av-tri-comp ul{margin:4px 0 0;padding-left:18px}.av-tri-comp li{margin:2px 0}.av-tri-comp small{display:block;opacity:.8;margin-top:3px}'+
+  '.av-tri-q{color:#a33;font-weight:700}.av-tri-comp button{margin-top:6px;padding:5px 10px;border:1px solid #c9a95a;background:#fff;color:#654d17;border-radius:7px;font:700 11px system-ui,sans-serif;cursor:pointer}';
   document.head.appendChild(s);
 }
 function _avTrats(){ var q=data[curV]||{}, st=(q.estudos||[]).find(function(s){return s.id===curSid;}); return (st&&st.tratamentos)||[]; }
@@ -17978,7 +18013,9 @@ function _avFichaHtml(rows,vs){
       var cfg=_avCfg(_avGrid,v), suf=cfg.tipo==='pct'?' %':cfg.tipo==='razao'?' n/N':cfg.tipo==='escala'?' '+(cfg.escalaMin||0)+'–'+cfg.escalaMax:'';
       if(cfg.sub>1) suf+=' ×'+cfg.sub;
       return '<div class="av-ficha-var"><span class="av-ficha-nome">'+esc(v)+(suf?'<small style="opacity:.65">'+esc(suf)+'</small>':'')+'</span>'+_avCellHtml(rw,v)+'</div>';
-    }).join('')+'</div>';
+    }).join('')+'</div>'+
+    /* a queda desta parcela, dita na própria ficha (quem lança no campo olha aqui) */
+    '<div class="av-queda-msg" data-ficha-queda="'+esc(rw.key)+'" role="status" aria-live="polite"></div>';
   } else h+='<div class="av-hint" style="margin:10px 0">Adicione uma coluna na tabela abaixo para lançar valores nesta parcela.</div>';
   h+='<div class="av-ficha-nav"><button type="button" onclick="avFichaIr(-1)"'+(prev?' aria-label="Parcela anterior: '+nome(prev)+'"':' disabled')+'>‹ '+(prev?nome(prev):'')+'</button>'+
     '<span style="display:inline-flex;align-items:center;justify-content:center"><button type="button" class="av-photo-btn" data-av-photo="'+esc(rw.key)+'">Foto</button><button type="button" class="av-foto-n" data-av-fotos="'+esc(rw.key)+'" hidden></button></span>'+
@@ -18045,8 +18082,14 @@ function renderAvGrid(){
     else if(cfg.tipo==='escala') suf=' <small style="opacity:.6">'+(cfg.escalaMin||0)+'–'+cfg.escalaMax+'</small>';
     if(cfg.sub>1) suf+=' <small style="opacity:.6">×'+cfg.sub+'</small>';
     var _vjs=esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+    /* ↗ = "não diminui": avisa quando a leitura fica menor que a da avaliação
+       anterior na mesma parcela. Nasce ligado pelo nome (mortos, severidade…). */
+    var _ac=(typeof _avAcumula==='function')?_avAcumula(v):false;
     html+='<th>'+esc(v)+suf+
       '<button type="button" class="av-delcol" title="Corrigir o nome desta coluna" onclick="avRenameCol(\''+_vjs+'\')">✎</button>'+
+      '<button type="button" class="av-delcol av-acum'+(_ac?' on':'')+'" aria-pressed="'+_ac+'" title="'+(_ac
+        ?'Não diminui: avisa (sem impedir) quando a leitura fica menor que na avaliação anterior. Tocar para desligar.'
+        :'Pode diminuir: sem aviso de queda. Tocar para avisar quando a leitura ficar menor que na avaliação anterior.')+'" onclick="avAcumulaCol(\''+_vjs+'\')">↗</button>'+
       ((cfg.tipo==='pct'||cfg.tipo==='contagem'||cfg.tipo==='numero')?'<button type="button" class="av-delcol" title="'+(cfg.tipo==='numero'?'Tipo: número — tocar para voltar a %':'Transformar em número (medida sem teto de 100, com decimais)')+'" onclick="avTipoCol(\''+_vjs+'\')">'+(cfg.tipo==='numero'?'№':'#')+'</button>':'')+
       '<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+_vjs+'\')">×</button></th>';
   });
@@ -18060,6 +18103,10 @@ function renderAvGrid(){
   if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button>'+
     (((_avStudy()||{}).tipoEstudo==='Moluscicida em arena')?'<button type="button" class="av-addcol" onclick="avConjuntoArena()">+ variáveis do ensaio de arena</button>':'')+'</div>';
   w.innerHTML=html;
+  /* A grade nasce já dizendo o que vê: quedas em vermelho e a triagem (imediata
+     e a do motor) preenchida, sem esperar a primeira tecla. */
+  try{ avTriagemImediata(); }catch(e){}
+  try{ avForenseCompletaPintar(); avForenseCompletaAgendar(600); }catch(e){}
 }
 
 function _avSyncInputs(){
@@ -18304,6 +18351,8 @@ function _avPersistNow(){
     else av.notas=_avGrid.notas;
     av.varcfg=_avGrid.varcfg||{}; av.bruto=_avGrid.bruto||{}; /* config e dado bruto das sub-amostras/razão */
     if(typeof avTriagemImediata==='function')avTriagemImediata();
+    /* a triagem forense completa (motor) refaz quando a pessoa parar de digitar */
+    if(typeof avForenseCompletaAgendar==='function')avForenseCompletaAgendar();
     av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
     /* A GRAVAÇÃO NO APARELHO ESPERA A PESSOA PARAR DE DIGITAR. Antes era aqui,
        síncrona, a CADA TECLA do lançamento rápido (oninput) e a cada célula:
@@ -18385,6 +18434,8 @@ function renderAvAutoBox(){
     '<div class="av-auto-prog"><div class="av-auto-prog-fill" style="width:'+pctDone+'%"></div></div>'+
     '<div class="av-auto-progtxt">'+filled+' de '+a.total+' preenchidas'+(filled>=a.total?' ✓':'')+'</div>'+
     '<div class="av-auto-card"><div><div class="av-auto-main">'+passo+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div>'+_avLegendaHtml(_avGrid,a.v)+der+'</div>'+input+'</div>'+
+    /* leitura abaixo da anterior: dito aqui, embaixo do campo, por _avMarcarQuedas */
+    '<div id="avAutoQueda" class="av-queda-msg" role="status" aria-live="polite"></div>'+
     '<button type="button" class="av-photo-btn" data-av-photo-auto="1">Fotografar esta parcela</button>'+
     '<div class="av-auto-presets">'+presetHtml+'</div>'+
     '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">‹ Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo ›</button></div>'+
@@ -25008,6 +25059,81 @@ function _avLegendaHtml(src,v){
  var c=_avCfg(src,v);if(c.tipo!=='escala')return '';
  return '<div class="av-scale-legend"><b>'+esc(v)+' · notas '+c.escalaMin+'–'+c.escalaMax+'</b><br>'+esc(c.escalaLegenda||'Legenda não cadastrada: configure no protocolo.')+'<br>'+esc(c.escalaModo==='nota'?'Resultado em notas, sem conversão percentual.':'Resultado derivado: índice percentual de McKinney.')+'</div>';
 }
+/* ===== NÃO DIMINUI: a leitura abaixo da avaliação anterior ===================
+   Pedido de quem usa: "dei 30% de severidade e no dia seguinte coloco 29%",
+   "morreram 30 insetos hoje e amanhã coloco que tem 25". Não bloqueia: o número
+   fica vermelho, a célula diz qual era a leitura anterior e a triagem lista. A
+   conta é do AvaliacaoCore (queda/anterior/acumula), a mesma do dossiê.
+
+   O valor anterior SÓ aparece quando há queda. Mostrar a leitura passada antes
+   de a pessoa estimar a de hoje ancoraria a estimativa — e estimativa visual
+   ancorada na anterior é justamente o que a triagem forense procura. */
+function _avRefAtual(){
+ var st=_avStudy();if(!st)return null;
+ var av=(editingAvId==='__new__')?draftAv:(st.avaliacoes||[]).find(function(a){return a.id===editingAvId;});
+ var vd=document.getElementById('vData');
+ return {id:(av&&av.id)||null,data:(vd&&vd.value)||(av&&av.data)||''};
+}
+/* A grade aberta no formato de avaliação que o AvaliacaoCore entende. */
+function _avComoAvaliacao(){
+ var r=_avRefAtual()||{};
+ return {id:r.id,data:r.data,variaveis:_avGrid.variaveis||[],notas:_avGrid.notas||{},varcfg:_avGrid.varcfg||{},tipos:_avGrid.tipos||{}};
+}
+function _avAcumula(v){
+ if(typeof AvaliacaoCore==='undefined'||!AvaliacaoCore.acumula)return false;
+ return AvaliacaoCore.acumula(_avStudy(),_avComoAvaliacao(),v);
+}
+function _avFmtNum(n){ return (Math.round(n*100)/100).toLocaleString('pt-BR'); }
+/* Liga/desliga o aviso de queda da coluna. Fica gravado na avaliação, e as
+   próximas herdam a escolha (AvaliacaoCore.acumula). */
+function avAcumulaCol(v){
+ var atual=_avAcumula(v);
+ if(!_avGrid.varcfg||typeof _avGrid.varcfg!=='object')_avGrid.varcfg={};
+ _avGrid.varcfg[v]=Object.assign({},_avGrid.varcfg[v]||{},{acumula:!atual});
+ _avPersistNow();renderAvGrid();
+ _avAviso(!atual?v+': avisa quando a leitura ficar menor que na avaliação anterior.':v+': sem aviso de queda — a variável pode diminuir.');
+}
+/* Pinta de vermelho cada leitura abaixo da anterior e devolve a lista, sem
+   repetir a célula que aparece na tabela e na ficha. Campo simples compara o
+   que está DIGITADO (aviso na hora); razão, escala e sub-amostra comparam o
+   resultado já calculado (ao sair do campo; no modo automático, a cada tecla). */
+function _avMarcarQuedas(){
+ var w=document.getElementById('avGridWrap'),out={};
+ var st=_avStudy();if(!w||!st||typeof AvaliacaoCore==='undefined'||!AvaliacaoCore.queda)return [];
+ var ref=_avRefAtual(),av=_avComoAvaliacao(),porKey={};
+ _avRowsForStudy(st,false).forEach(function(r){porKey[r.key]=r;});
+ function calculado(t,v){ return (_avGrid.notas[t]&&_avGrid.notas[t][v]!=null)?_avGrid.notas[t][v]:''; }
+ function confere(el,t,v,agora){
+  var row=porKey[t],q=row?AvaliacaoCore.queda(st,ref,av,row,v,agora):null;
+  el.classList.toggle('av-queda',!!q);
+  if(q){ el.setAttribute('title','Menor que na avaliação de '+(isoToBR(q.data)||q.data)+' ('+_avFmtNum(q.antes)+'). Confira — o valor fica gravado.'); out[t+'|'+v]={row:row,v:v,q:q}; }
+  else if(el.hasAttribute('data-queda'))el.removeAttribute('title');
+  if(q)el.setAttribute('data-queda','1');else el.removeAttribute('data-queda');
+  return q;
+ }
+ Array.prototype.forEach.call(w.querySelectorAll('.av-cell[data-t][data-v]'),function(inp){
+  var t=inp.getAttribute('data-t'),v=inp.getAttribute('data-v'),b=inp.getAttribute('data-b');
+  if(b==='N')return;                                   /* N é o tamanho da amostra, não leitura */
+  confere(inp,t,v,b?calculado(t,v):inp.value);
+ });
+ Array.prototype.forEach.call(w.querySelectorAll('.av-der[data-dt][data-dv],.av-subbtn[data-dt][data-dv]'),function(el){
+  confere(el,el.getAttribute('data-dt'),el.getAttribute('data-dv'),calculado(el.getAttribute('data-dt'),el.getAttribute('data-dv')));
+ });
+ /* a ficha da parcela: a linha embaixo dos campos */
+ var fq=w.querySelector('[data-ficha-queda]');
+ if(fq){
+  var fk=fq.getAttribute('data-ficha-queda'),fl=Object.keys(out).filter(function(k){return out[k].row.key===fk;}).map(function(k){return out[k];});
+  fq.textContent=fl.length?fl.map(function(x){return x.v+': '+_avFmtNum(x.q.agora)+' — menor que '+_avFmtNum(x.q.antes)+' em '+(isoToBR(x.q.data)||x.q.data);}).join(' · ')+'. Confira; o valor fica gravado.':'';
+ }
+ /* o modo automático: o campo grande e a linha que explica, embaixo dele */
+ var auto=document.getElementById('avAutoInput'),msg=document.getElementById('avAutoQueda');
+ if(auto){
+  var a=null;try{a=_avAutoState();}catch(e){}
+  var qa=a?confere(auto,a.row.key,a.v,a.campo?calculado(a.row.key,a.v):auto.value):null;
+  if(msg)msg.textContent=qa?('Menor que na avaliação de '+(isoToBR(qa.data)||qa.data)+' ('+_avFmtNum(qa.antes)+' → '+_avFmtNum(qa.agora)+'). Confira a parcela; o valor fica gravado.'):'';
+ }
+ return Object.keys(out).map(function(k){return out[k];});
+}
 /* Triagem local imediata: alertas para revisão, nunca correção automática. */
 function avTriagemImediata(inp){
  var box=document.getElementById('avForenseLive');if(!box)return;
@@ -25025,7 +25151,16 @@ function avTriagemImediata(inp){
   var sorted=xs.map(function(x){return x.n;}).sort(function(a,b){return a-b;}),med=sorted[Math.floor(sorted.length/2)],dev=sorted.map(function(n){return Math.abs(n-med);}).sort(function(a,b){return a-b;}),mad=dev[Math.floor(dev.length/2)];
   if(mad>0)xs.forEach(function(x){if(Math.abs(x.n-med)>6*mad)alerts.push(v+' · '+x.row.key+': '+x.n+' destoa do conjunto; confira (pode ser efeito real do tratamento).');});
  });
- box.textContent=alerts.length?'Triagem imediata: '+alerts.join(' '):'Triagem imediata: sem alerta de dispersão com os dados disponíveis. Isso não valida o ensaio; a triagem forense completa verifica outros padrões.';
+ /* As quedas vão primeiro: são o erro mais provável de digitação no campo. */
+ var qs=[];try{qs=_avMarcarQuedas();}catch(e){}
+ var imed=box.querySelector('[data-tri="imediata"]'),comp=box.querySelector('[data-tri="completa"]');
+ if(!imed){box.innerHTML='<div class="av-tri-imed" data-tri="imediata"></div><div class="av-tri-comp" data-tri="completa"></div>';imed=box.querySelector('[data-tri="imediata"]');}
+ var qh='';
+ if(qs.length){
+  var ex=qs.slice(0,6).map(function(x){return esc(x.v)+' · '+esc(x.row.label||x.row.key)+': '+_avFmtNum(x.q.agora)+' ('+_avFmtNum(x.q.antes)+' em '+esc(isoToBR(x.q.data)||x.q.data)+')';});
+  qh='<div class="av-tri-q">Menor que na avaliação anterior ('+qs.length+'): '+ex.join('; ')+(qs.length>6?'; e mais '+(qs.length-6):'')+'. Variável que não diminui (↗ na coluna): confira a parcela — o valor fica gravado.</div>';
+ }
+ imed.innerHTML=qh+esc(alerts.length?'Triagem imediata: '+alerts.join(' '):'Triagem imediata: sem alerta de dispersão com os dados disponíveis. Isso não valida o ensaio; a triagem forense completa, logo abaixo, verifica outros padrões.');
 }
 
 if(typeof document!=='undefined')document.addEventListener('input',function(ev){
@@ -25033,6 +25168,93 @@ if(typeof document!=='undefined')document.addEventListener('input',function(ev){
    avTriagemImediata(ev.target);
  }
 });
+/* Trocar a DATA da avaliação troca qual é a "anterior": a revisão refaz. */
+if(typeof document!=='undefined')['input','change'].forEach(function(tipo){
+ document.addEventListener(tipo,function(ev){ if(ev.target&&ev.target.id==='vData'){ try{avTriagemImediata();}catch(e){} } });
+});
+
+/* ===== A TRIAGEM FORENSE COMPLETA, DURANTE O LANÇAMENTO ======================
+   Pedido de quem usa: "o motor de triagem forense funcionar também na avaliação
+   em tempo real". É o MESMO motor da página do estudo — forense.py no Pyodide, num
+   worker, que não trava a tela —, uma triagem por variável com todas as avaliações
+   juntas, sobre o que já está lançado. Não há conta nova aqui: a grade só pede o
+   cálculo (_bioestatEnsureStudy) e mostra o que volta.
+
+   Roda alguns segundos depois que a pessoa para de digitar. Dado novo muda a
+   assinatura: o cálculo velho que esperava na fila é descartado, e o último
+   resultado fica à vista, marcado, até o novo chegar — nada pisca a cada tecla.
+
+   LEITURA DUPLA NÃO MOSTRA. A triagem lê a avaliação consolidada, e com dois
+   avaliadores isso inclui a leitura do outro: "duplicata na parcela 3A" contaria
+   a quem está com a prancheta algo do que o outro anotou. Ali ela aparece depois,
+   na página do estudo, com as duas leituras fechadas. */
+var _avFcT=null, _avFcUltimo={}, _avFcJobs={sig:null,jobs:[]};
+function _avGradeAberta(){
+ var ov=document.getElementById('eeOvl');
+ return !!(ov&&ov.classList.contains('open')&&editingAvId&&document.getElementById('avGridWrap')&&curV&&curSid);
+}
+function _avDuplaAberta(){
+ var st=_avStudy();if(!st)return false;
+ var av=(editingAvId==='__new__')?draftAv:(st.avaliacoes||[]).find(function(a){return a.id===editingAvId;});
+ return typeof avDupla==='function'&&avDupla(av);
+}
+function avForenseCompletaAgendar(atraso){
+ clearTimeout(_avFcT);
+ _avFcT=setTimeout(function(){
+  if(!_avGradeAberta()||_avDuplaAberta())return;
+  try{_bioestatEnsureStudy(curV,curSid);}catch(e){}
+  avForenseCompletaPintar();
+ },atraso==null?3500:atraso);
+}
+/* Uma linha por variável desta avaliação: o veredito do motor e os achados que
+   pedem conferência. Inconclusivo por falta de dado não entra na lista — aparece
+   como "parcial". */
+function _avFcResumo(v,j,rel){
+ var ve=rel.veredito||{},flags=ve.flags||0,watches=ve.watches||0;
+ var achados=(rel.achados||[]).filter(function(a){return a.severidade&&a.severidade!=='clear'&&a.severidade!=='ok'&&a.severidade!=='na';});
+ var rot=flags?(flags+' sinal(is) forte(s)'):(watches?(watches+' ponto(s) de atenção'):'sem anomalias');
+ if(ve.cobertura_suficiente===false)rot+=' · triagem parcial (poucos dados ainda)';
+ var lis=achados.slice(0,4).map(function(a){return esc(a.nome)+(a.leitura?' — '+esc(a.leitura):'');}).join('; ');
+ return '<b>'+esc(v)+'</b>'+(j.datas>1?' ('+j.datas+' avaliações)':'')+': '+(flags?'<span class="av-tri-q">'+esc(rot)+'</span>':esc(rot))+(lis?' — '+lis:'');
+}
+function avForenseCompletaPintar(){
+ var box=document.getElementById('avForenseLive');if(!box)return;
+ var el=box.querySelector('[data-tri="completa"]');if(!el)return;
+ if(!_avGradeAberta()){el.innerHTML='';return;}
+ if(_avDuplaAberta()){el.innerHTML='<b>Triagem forense completa</b><small>Leitura dupla: ela aparece na página do estudo, depois das duas leituras. Aqui revelaria algo da leitura do outro avaliador.</small>';return;}
+ var st=_avStudy();if(!st){el.innerHTML='';return;}
+ var key=curV+'|'+curSid,c=_bioAutoCache[key],sig=_bioestatSignature(st),jobs=[];
+ /* a lista de trabalhos só muda quando o dado muda: guardada pela assinatura
+    (o modo automático repinta a cada "Salvar e próximo") */
+ if(_avFcJobs.sig===key+'|'+sig)jobs=_avFcJobs.jobs;
+ else{try{jobs=_bioestatJobsForense(curV,st);}catch(e){}_avFcJobs={sig:key+'|'+sig,jobs:jobs};}
+ var porVar={};jobs.forEach(function(j){porVar[j.variavel]=j;});
+ var itens=[],pendente=false,falha=false;
+ (_avGrid.variaveis||[]).forEach(function(v){
+  var j=porVar[v];
+  if(!j){itens.push('<li><b>'+esc(v)+'</b>: começa quando houver ao menos 2 tratamentos com 2 repetições lançados.</li>');return;}
+  var r=(c&&c.sig===sig&&c.results)?c.results[j.jobKey]:null,velho=false;
+  if(r&&r.ok)_avFcUltimo[key+'|'+v]=r;
+  if(!r){pendente=true;r=_avFcUltimo[key+'|'+v]||null;velho=!!r;}
+  if(!r){itens.push('<li><b>'+esc(v)+'</b>: calculando…</li>');return;}
+  if(!r.ok){falha=true;itens.push('<li><b>'+esc(v)+'</b>: não rodou — '+esc(r.erro||'motor indisponível')+'</li>');return;}
+  itens.push('<li>'+_avFcResumo(v,j,r)+(velho?' <i>(antes da última alteração; recalculando)</i>':'')+'</li>');
+ });
+ el.innerHTML='<b>Triagem forense completa</b> <span style="opacity:.8">· o motor da página do estudo, sobre o que já está lançado</span>'+
+  '<ul>'+itens.join('')+'</ul><small data-fc-status></small>'+
+  (falha?'<button type="button" onclick="_bioestatRepetir('+esc(JSON.stringify(curV))+','+esc(JSON.stringify(curSid))+')">Tentar de novo</button>':'');
+ avForenseCompletaStatus(pendente);
+}
+/* Só a linha de status — o motor avisa a cada poucos segundos enquanto sobe e
+   calcula, e remontar a lista inteira a cada aviso seria trabalho à toa. */
+function avForenseCompletaStatus(pendente){
+ var box=document.getElementById('avForenseLive'),s=box&&box.querySelector('[data-fc-status]');if(!s)return;
+ var key=curV+'|'+curSid,c=_bioAutoCache[key],t=null;
+ try{if(c&&c.status==='loading')t=_bioestatStatusTexto(key);}catch(e){}
+ s.textContent=t?(t.txt+(t.sub?' '+t.sub:'')):(pendente
+  ?'Recalcula alguns segundos depois que você para de digitar.'
+  :'Atualiza sozinha alguns segundos depois que você para de digitar. Sinal é indício para conferir, não prova de erro.');
+}
 
 var _avDetailsOpen={};
 if(typeof document!=='undefined')document.addEventListener('toggle',function(ev){

@@ -78,7 +78,79 @@ function estudo(st){
   if(!out.complete&&out.pct===100)out.pct=99;
   return out;
 }
-var api={naoAplicavel:naoAplicavel,numero:numero,valor:valor,linhas:linhas,esquema:esquema,parcela:parcela,avaliacao:avaliacao,estudo:estudo};
+/* ===== NÃO DIMINUI: a leitura de hoje abaixo da avaliação anterior =========
+   Pedido de quem usa: "dei 30% de severidade e no dia seguinte coloco 29%", "morreram
+   30 insetos hoje e amanhã coloco que tem 25". Numa variável que ACUMULA — morto não
+   volta a viver, lesão não some da folha —, leitura menor que a anterior na mesma
+   parcela é, quase sempre, digitação na parcela errada ou no campo errado.
+   APONTA E DEIXA GRAVAR: há explicação legítima (folha com lesão que caiu, inseto
+   morto levado por formiga, estimativa visual que oscila um ponto), e quem está no
+   campo é quem sabe. Nada aqui altera a nota. */
+/* Pelo NOME, quando ninguém disse nada: morte, doença, dano, germinação. Fica de
+   fora o que pode cair de verdade — população viva, fitotoxicidade que regride,
+   paralisia que passa, eficácia que perde residual. */
+var ACUMULA_RE=/mort|[óo]bit|sever|incid|doen[çc]|desfolh|necros|les[ãaõo]|dano|acumul|germin|emerg|infec|ferrug|manch|o[íi]dio|m[íi]ldio|podrid/i;
+function acumulaPorNome(v){return ACUMULA_RE.test(String(v==null?'':v));}
+/* A escolha explícita da avaliação vence; senão vale a da avaliação anterior mais
+   recente que tenha uma — quem ligou ou desligou o aviso não precisa repetir a cada
+   data, nem quando o protocolo refaz a configuração —; senão, o nome. */
+function acumula(st,av,v){
+  var c=((av&&av.varcfg)||{})[v]||{};
+  if(c.acumula===true||c.acumula===false)return c.acumula;
+  var d=String((av&&av.data)||''),achou=null;
+  lista(st&&st.avaliacoes).forEach(function(a,i){
+    if(!a||a===av||(av&&av.id&&a.id===av.id))return;
+    var ca=(a.varcfg||{})[v]||{};
+    if(ca.acumula!==true&&ca.acumula!==false)return;
+    var da=String(a.data||'');
+    if(d&&da>d)return;
+    if(!achou||da>achou.d||(da===achou.d&&i>achou.i))achou={d:da,i:i,x:ca.acumula};
+  });
+  return achou?achou.x:acumulaPorNome(v);
+}
+/* A leitura ANTERIOR da mesma parcela e variável: a avaliação mais recente antes
+   desta que tem número para ela (a que pulou a parcela não conta; a de antes dela,
+   sim). "Antes" é pela data; no mesmo dia, pela ordem em que foram lançadas.
+   `ref` = {id, data} da avaliação aberta, que pode ainda nem estar na lista. */
+function anterior(st,ref,row,v){
+  var avs=lista(st&&st.avaliacoes),d=String((ref&&ref.data)||''),id=ref&&ref.id,idx=-1,melhor=null;
+  if(!d||!row)return null;
+  avs.forEach(function(a,i){if(a&&id&&a.id===id)idx=i;});
+  avs.forEach(function(a,i){
+    if(!a||!a.data||(id&&a.id===id))return;
+    var da=String(a.data);
+    if(da>d||(da===d&&idx>=0&&i>idx))return;
+    if(lista(a.variaveis).indexOf(v)<0||naoAplicavel(a,row,v))return;
+    var n=numero(valor(a.notas,row,v));
+    if(n===null)return;
+    if(!melhor||da>melhor.data||(da===melhor.data&&i>melhor.i))melhor={data:da,n:n,avId:a.id,i:i};
+  });
+  return melhor?{data:melhor.data,n:melhor.n,avId:melhor.avId}:null;
+}
+/* Uma célula: o valor de agora é MENOR que a leitura anterior, numa variável que não
+   diminui? null quando não há o que comparar (sem número, sem anterior, ou variável
+   que pode cair). */
+function queda(st,ref,av,row,v,agora){
+  if(!acumula(st,av,v))return null;
+  var n=numero(agora);if(n===null)return null;
+  var a=anterior(st,ref,row,v);if(!a)return null;
+  return n<a.n-1e-9?{antes:a.n,agora:n,data:a.data,avId:a.avId}:null;
+}
+/* Todas as quedas de uma avaliação — a caixa de triagem e o dossiê contam por aqui. */
+function quedas(st,av,ref){
+  var out=[];av=av||{};ref=ref||{id:av.id,data:av.data};
+  linhas(st||{}).forEach(function(row){
+    lista(av.variaveis).forEach(function(v){
+      if(naoAplicavel(av,row,v))return;
+      var q=queda(st,ref,av,row,v,valor(av.notas,row,v));
+      if(q)out.push({row:row.key,tratId:row.tratId,rep:row.rep,v:v,antes:q.antes,agora:q.agora,
+        data:q.data,avId:q.avId,dataAgora:String(ref.data||'')});
+    });
+  });
+  return out;
+}
+var api={naoAplicavel:naoAplicavel,numero:numero,valor:valor,linhas:linhas,esquema:esquema,parcela:parcela,avaliacao:avaliacao,estudo:estudo,
+  acumula:acumula,acumulaPorNome:acumulaPorNome,anterior:anterior,queda:queda,quedas:quedas};
 if(typeof module==='object'&&module.exports)module.exports=api;
 root.AvaliacaoCore=api;
 })(typeof self!=='undefined'?self:this);

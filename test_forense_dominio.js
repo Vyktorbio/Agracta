@@ -125,6 +125,25 @@ eq(ctx._forenseDominio({variaveis:['X'], notas:{'T1R1':{X:'abc'}}}).length, 0, '
 eq(ctx._forenseDominio(null).length, 0, 'sem avaliação, lista vazia');
 eq(ctx._forenseAchadosEstudo(null).length, 0, 'sem estudo, lista vazia');
 
+console.log('\n--- Leitura que DIMINUI numa variável que não diminui (a mesma conta da grade) ---');
+/* Sem o AvaliacaoCore carregado (página antiga, módulo que não subiu), a folha
+   segue sem o achado — e sem quebrar. */
+var dim={avaliacoes:[
+  {id:'v1', data:'2026-07-08', variaveis:['Severidade','Insetos vivos'], notas:{T1R1:{Severidade:'30','Insetos vivos':'40'}}},
+  {id:'v2', data:'2026-07-15', variaveis:['Severidade','Insetos vivos'], notas:{T1R1:{Severidade:'29','Insetos vivos':'10'}}}],
+  tratamentos:[{id:'T1'}], numRepeticoes:1};
+eq(ctx._forenseAchadosEstudo(dim).length, 0, 'sem o núcleo de avaliação, a folha não inventa nem quebra');
+vm.runInContext(fs.readFileSync('vendor/avaliacao-core.js','utf8'), ctx);
+var rq=ctx._forenseAchadosEstudo(dim);
+eq(cods(rq), 'leitura-menor-que-a-anterior', 'severidade 30 → 29 na mesma parcela é apontada');
+ck(rq.length===1 && /"Severidade"/.test(rq[0].texto) && /30 em 08\/07\/2026 e 29 em 15\/07\/2026/.test(rq[0].texto),
+   'com o exemplo para conferir: '+(rq[0]&&rq[0].texto));
+ck(!/Insetos vivos/.test(rq[0].texto), 'insetos vivos caindo é o produto funcionando: fora');
+dim.avaliacoes[1].notas.T1R2={Severidade:'1'}; dim.numRepeticoes=2; dim.avaliacoes[0].notas.T1R2={Severidade:'4'};
+ck(/^2 leitura/.test(ctx._forenseAchadosEstudo(dim)[0].texto), 'duas quedas na mesma variável são UM achado com duas ocorrências');
+dim.avaliacoes[1].varcfg={Severidade:{acumula:false}};
+eq(ctx._forenseAchadosEstudo(dim).length, 0, 'desligado na coluna (↗), a folha respeita');
+
 console.log('');
 if(f){ console.log('FALHA: '+f+' de '+(f+p)+' checagens'); process.exit(1); }
 console.log('todas as '+p+' checagens passaram');

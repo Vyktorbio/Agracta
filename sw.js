@@ -20,11 +20,11 @@ var ASSETS = [
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=3',
   './', './index.html',
   './integracoes.css?v=4', './integracoes.js?v=16', './integracoes-fontes.js?v=1', './integracoes-clientes.js?v=1',
-  './vendor/avaliacao-core.js?v=2', './vendor/pendencias-core.js?v=1', './vendor/agenda-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=4', './vendor/croqui-campo-core.js?v=4', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
+  './vendor/avaliacao-core.js?v=3', './vendor/pendencias-core.js?v=1', './vendor/agenda-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=4', './vendor/croqui-campo-core.js?v=4', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=1',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=39', './theme-2026.css?v=10', './ui-campo.css?v=12', './app.js?v=214',
+  './styles.css?v=39', './theme-2026.css?v=10', './ui-campo.css?v=12', './app.js?v=215',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=3', './trilha-formal.js?v=2',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
   './vendor/leaflet.js', './vendor/leaflet.css',
