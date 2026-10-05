@@ -593,7 +593,14 @@ function agLimparHoje(){
   _agSalvar();
   if(typeof _stxToast==='function') _stxToast(lista.length+' lembrete'+(lista.length>1?'s dispensados':' dispensado'));
 }
-function agToggleDispensados(){ agVerDispensados=!agVerDispensados; try{ renderAgenda(); }catch(e){} }
+/* O botão mora nas duas telas, e cada uma tem de se redesenhar: tocado no HOJE,
+   ele só refazia a agenda fechada — e o HOJE ficava igual, como se o toque não
+   tivesse pegado. */
+function agToggleDispensados(){
+  agVerDispensados=!agVerDispensados;
+  try{ renderAgenda(); }catch(e){}
+  try{ var o=document.getElementById('todayOvl'); if(o && o.classList.contains('open')) renderToday(); }catch(e){}
+}
 /* Dispensa de uma vez tudo que está na lista agora (sem tocar no que já foi dispensado). */
 function agLimparTudo(){
   var lista=allUpcomingEvents(30).filter(function(e){ return !e.dispensado; });
@@ -4016,12 +4023,152 @@ function renderLeg(){
 function toggleAgenda(){
   agO=!agO;
   document.getElementById("agendaPanel").classList.toggle("open",agO);
-  if(agO)renderAgenda();
+  /* Abrir pelo botão é abrir no hoje: o mês e o dia que ficaram escolhidos da
+     última vez eram a pergunta de antes. */
+  if(agO){ agMesVisto=null; agDiaSel=null; renderAgenda(); }
+}
+/* A AGENDA EM CALENDÁRIO.
+   Pedido de uso: "seria legal a agenda mostrar um calendário e uma bolinha nos
+   dias, parece mais fácil de ver". A lista respondia "o que vem aí", em fila; a
+   folhinha responde "como está o meu mês" — três avaliações na mesma semana,
+   uma aplicação esquecida no dia 2, um fim de semana livre.
+   O calendário abre primeiro. A lista de sempre continua a um toque, para quem
+   prefere ler em fila, e a escolha fica guardada no aparelho.
+   As contas — a grade, as bolinhas de cada dia, os atrasados — moram no
+   AgendaCore, que é a mesma régua do painel HOJE: o número de lá e a bolinha
+   daqui não podem discordar. */
+var agModo=null, agMesVisto=null, agDiaSel=null;
+function _agModo(){
+  if(!agModo){
+    var m=null; try{ m=localStorage.getItem('agracta-agenda-modo'); }catch(e){}
+    agModo=(m==='lista')?'lista':'mes';
+  }
+  return agModo;
+}
+function agSetModo(m){
+  agModo=(m==='lista')?'lista':'mes';
+  try{ localStorage.setItem('agracta-agenda-modo',agModo); }catch(e){}
+  renderAgenda();
+}
+/* O QUE ENTRA NO CALENDÁRIO.
+   O que falta vem do collectTodayEvents, sem limite de janela — a mesma fonte do
+   painel HOJE e do selo do botão, então os três contam igual. O que já foi feito
+   entra no dia em que FOI FEITO: aplicação pela data em que foi registrada, não
+   pela planejada (a chuva que atrasou três dias aparece no dia em que se
+   aplicou), e avaliação concluída pela data dela. Só estudos ativos: o
+   finalizado saiu da agenda inteira, e não volta pelo calendário. */
+function agCalItens(incluirDispensados){
+  var out=[];
+  collectTodayEvents(Infinity, incluirDispensados).forEach(function(e){
+    out.push({iso:fDIso(e.ev.date), tipo:(e.ev.type==='apl'?'apl':'av'), feito:false,
+              qid:e.qid, study:e.study, ev:e.ev, diff:e.diff, dispensado:e.dispensado});
+  });
+  Object.keys(data).forEach(function(qid){
+    estudosAtivos(qid).forEach(function(st){
+      st=normalizeStudy(st);
+      (st.aplicacoes||[]).map(function(ap){ return {ap:ap, d:String((ap&&ap.data)||'').slice(0,10)}; })
+        .filter(function(x){ return /^\d{4}-\d{2}-\d{2}$/.test(x.d); })
+        .sort(function(a,b){ return a.d<b.d?-1:(a.d>b.d?1:0); })
+        .forEach(function(x,i){ out.push({iso:x.d, tipo:'apl', feito:true, qid:qid, study:st, ap:x.ap, idx:i+1}); });
+      studyEventsV2(st).forEach(function(ev){
+        if(ev.type==='eval' && ev.realizada)
+          out.push({iso:fDIso(ev.date), tipo:'av', feito:true, qid:qid, study:st, ev:ev});
+      });
+    });
+  });
+  return out;
+}
+/* Como um item se diz numa linha: "Aplicação 2/3", "Avaliação 1 — Severidade",
+   "Aplicação 1 registrada às 08:10". */
+function _agCalRotulo(it, comQuadra){
+  var t;
+  if(it.tipo==='apl'){
+    t=it.feito?('Aplicação '+(it.idx||'')+' registrada'+((it.ap&&it.ap.hora)?(' às '+it.ap.hora):''))
+              :('Aplicação '+it.ev.idx+'/'+it.ev.total);
+  }else{
+    t='Avaliação '+((it.ev&&it.ev.idx)||'')+(it.feito?' concluída':'')+((it.ev&&it.ev.tipo)?(' — '+it.ev.tipo):'');
+  }
+  t=t.replace(/\s+/g,' ');   /* sem número conhecido, não sobra espaço duplo */
+  return comQuadra?(t+' em '+quadraNome(it.qid)):t;
+}
+function _agRelativo(iso,hoje){
+  var A=window.AgendaCore, n=A?A.diasEntre(hoje,iso):null;
+  if(n===null) return '';
+  if(n===0) return 'hoje';
+  if(n===1) return 'amanhã';
+  if(n===-1) return 'ontem';
+  return n>0?('em '+n+' dias'):('há '+(-n)+' dias');
+}
+/* Os dois botões de faxina. Botão que não tem o que limpar é botão que só
+   ensina a desconfiar do app — por isso cada um só aparece quando tem número. */
+function _agAcoesHtml(){
+  var _nDisp=_agTotalDispensados();
+  /* `allUpcomingEvents` sem o segundo argumento JÁ exclui os dispensados. */
+  var _pend30=allUpcomingEvents(30).length;
+  if(!_pend30 && !_nDisp) return '';
+  var h='<div class="ag-acoes">';
+  if(_pend30) h+='<button class="ag-acao" onclick="agLimparTudo()">Limpar lembretes ('+_pend30+')</button>';
+  if(_nDisp) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nDisp+')</button>';
+  return h+'</div>';
+}
+/* Um compromisso pendente, do jeito que a agenda sempre mostrou: quadra, prazo,
+   estudo, tipo — e o × de dispensar o lembrete. */
+function _agItemHtml(e,cls){
+  var typeLabel = e.event.type==='apl' ? ('APLICAÇÃO '+e.event.idx+'/'+e.event.total) : ('AVALIAÇÃO '+e.event.idx);
+  var dateLabel = fD(e.event.date);
+  if(e.diff===0)dateLabel='HOJE';
+  else if(e.diff===1)dateLabel='Amanhã';
+  else if(e.diff===-1)dateLabel='Ontem';
+  else if(e.diff<0)dateLabel='há '+Math.abs(e.diff)+'d';
+  else dateLabel='em '+e.diff+'d';
+  var color = e.diff<=0?'#ff5252':(e.diff<=3?'#ffb74d':'#64b5f6');
+  /* id com aspas ("A'2") quebrava o onclick: escapa para JS e depois para o atributo */
+  var _k=esc(_avCroquiEscJs(_agEvKey(e.event))), _sid=esc(_avCroquiEscJs(e.study.id)), _q=esc(_avCroquiEscJs(e.qid));
+  var _btn = e.dispensado
+    ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+_q+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
+    : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+_q+'\',\''+_sid+'\',\''+_k+'\',\''+typeLabel+'\')">&times;</button>';
+  var gh='<div class="ag-item '+cls+(e.dispensado?' ag-dispensado':'')+'" onclick="closeAgendaAndOpen(\''+_q+'\',\''+_sid+'\',\''+esc(_avCroquiEscJs(e.event.type==='eval'?e.event.id||'':''))+'\')">';
+  gh+='<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(e.qid))+'</span><span class="ag-item-date" style="color:'+color+'">'+dateLabel+'</span>'+_btn+'</div>';
+  gh+='<div class="ag-item-name">'+esc(e.study.nome)+'</div>';
+  gh+='<div class="ag-item-type" style="color:'+color+'">'+typeLabel+' • '+fD(e.event.date)+'</div>';
+  gh+='</div>';
+  return gh;
+}
+/* O que já foi feito: sem prazo e sem ×, porque não há lembrete a dispensar.
+   Toque abre o estudo — é lá que o registro mora. */
+function _agFeitoHtml(it){
+  var _q=esc(_avCroquiEscJs(it.qid)), _sid=esc(_avCroquiEscJs(it.study.id));
+  return '<div class="ag-item ag-feito" onclick="closeAgendaAndOpen(\''+_q+'\',\''+_sid+'\',\'\')">'+
+    '<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(it.qid))+'</span><span class="ag-item-date ag-feito-sel">✓ feito</span></div>'+
+    '<div class="ag-item-name">'+esc(it.study.nome||it.study.codigo||'')+'</div>'+
+    '<div class="ag-item-type">'+esc(_agCalRotulo(it))+'</div></div>';
+}
+function _agCalItemHtml(it){
+  if(it.feito) return _agFeitoHtml(it);
+  var cls=it.diff<0?'overdue':(it.diff===0?'today':(it.diff<=3?'soon':''));
+  return _agItemHtml({qid:it.qid, study:it.study, event:it.ev, diff:it.diff, dispensado:it.dispensado}, cls);
 }
 function renderAgenda(){
+  var pnl=document.getElementById("agendaPanel");
+  /* Fechada, não há o que desenhar: dispensar no HOJE, finalizar um estudo e
+     cada gravação pedem renderAgenda(), e o calendário varre todos os estudos.
+     Quem abre (toggleAgenda, abrirAgendaNoDia) desenha na hora de abrir. */
+  if(!pnl || !pnl.classList.contains('open')) return;
+  /* Sem o motor do calendário (arquivo que não carregou), a agenda volta a ser
+     a lista — que sempre funcionou sem ele. Nunca uma tela em branco. */
+  var modo=window.AgendaCore?_agModo():'lista';
+  var h='<div class="ag-title">AGENDA<button class="ag-close" onclick="toggleAgenda()" aria-label="Fechar a agenda">×</button></div>';
+  if(window.AgendaCore){
+    h+='<div class="ag-modo" role="group" aria-label="Como ver a agenda">'+
+       '<button type="button" class="'+(modo==='mes'?'on':'')+'" aria-pressed="'+(modo==='mes')+'" onclick="agSetModo(\'mes\')">Calendário</button>'+
+       '<button type="button" class="'+(modo==='lista'?'on':'')+'" aria-pressed="'+(modo==='lista')+'" onclick="agSetModo(\'lista\')">Lista</button></div>';
+  }
+  h+=(modo==='mes')?_agMesHtml():_agListaHtml();
+  pnl.innerHTML=h;
+}
+/* A lista de sempre: 30 dias, agrupados por urgência. */
+function _agListaHtml(){
   var events=allUpcomingEvents(30, agVerDispensados);
-  var today=today0();
-
   var groups={overdue:[],today:[],soon:[],week:[],month:[]};
   events.forEach(function(e){
     if(e.diff<0)groups.overdue.push(e);
@@ -4030,55 +4177,142 @@ function renderAgenda(){
     else if(e.diff<=7)groups.week.push(e);
     else groups.month.push(e);
   });
-
   var _nDisp=_agTotalDispensados();
-  var h='<div class="ag-title">AGENDA (30 DIAS)<button class="ag-close" onclick="toggleAgenda()">×</button></div>';
-  h+='<div class="ag-acoes">';
-  /* Botão que não tem o que limpar é botão que só ensina a desconfiar do app. */
-  /* `allUpcomingEvents` sem o segundo argumento JÁ exclui os dispensados, então
-     o filtro que estava aqui não filtrava nada — e a chamada gêmea logo acima
-     varria todos os estudos de novo só para ser descartada. */
-  var _pend30=allUpcomingEvents(30).length;
-  if(_pend30) h+='<button class="ag-acao" onclick="agLimparTudo()">Limpar lembretes ('+_pend30+')</button>';
-  if(_nDisp) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nDisp+')</button>';
-  h+='</div>';
-
+  var h=_agAcoesHtml();
   function renderGroup(title,arr,cls){
     if(!arr.length)return "";
     var gh='<div class="ag-group"><div class="ag-group-title">'+title+' ('+arr.length+')</div>';
-    arr.forEach(function(e){
-      var typeLabel = e.event.type==='apl' ? ('APLICAÇÃO '+e.event.idx+'/'+e.event.total) : ('AVALIAÇÃO '+e.event.idx);
-      var dateLabel = fD(e.event.date);
-      if(e.diff===0)dateLabel='HOJE';
-      else if(e.diff===1)dateLabel='Amanhã';
-      else if(e.diff===-1)dateLabel='Ontem';
-      else if(e.diff<0)dateLabel='há '+Math.abs(e.diff)+'d';
-      else dateLabel='em '+e.diff+'d';
-      var color = e.diff<=0?'#ff5252':(e.diff<=3?'#ffb74d':'#64b5f6');
-      /* id com aspas ("A'2") quebrava o onclick: escapa para JS e depois para o atributo */
-      var _k=esc(_avCroquiEscJs(_agEvKey(e.event))), _sid=esc(_avCroquiEscJs(e.study.id)), _q=esc(_avCroquiEscJs(e.qid));
-      var _btn = e.dispensado
-        ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+_q+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
-        : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+_q+'\',\''+_sid+'\',\''+_k+'\',\''+typeLabel+'\')">&times;</button>';
-      gh+='<div class="ag-item '+cls+(e.dispensado?' ag-dispensado':'')+'" onclick="closeAgendaAndOpen(\''+esc(_avCroquiEscJs(e.qid))+'\',\''+esc(_avCroquiEscJs(e.study.id))+'\',\''+esc(_avCroquiEscJs(e.event.type==='eval'?e.event.id||'':''))+'\')">';
-      gh+='<div class="ag-item-top"><span class="ag-item-qid">'+esc(quadraNome(e.qid))+'</span><span class="ag-item-date" style="color:'+color+'">'+dateLabel+'</span>'+_btn+'</div>';
-      gh+='<div class="ag-item-name">'+esc(e.study.nome)+'</div>';
-      gh+='<div class="ag-item-type" style="color:'+color+'">'+typeLabel+' • '+fD(e.event.date)+'</div>';
-      gh+='</div>';
-    });
-    gh+='</div>';
-    return gh;
+    arr.forEach(function(e){ gh+=_agItemHtml(e,cls); });
+    return gh+'</div>';
   }
-
   h+=renderGroup('⚠️ ATRASADOS',groups.overdue,'overdue');
   h+=renderGroup('🔴 HOJE',groups.today,'today');
   h+=renderGroup('🟠 PRÓXIMOS 3 DIAS',groups.soon,'soon');
   h+=renderGroup('📅 ESTA SEMANA',groups.week,'');
   h+=renderGroup('📆 PRÓXIMOS 30 DIAS',groups.month,'');
-
   if(!events.length)h+='<div class="ag-empty">'+(_nDisp&&!agVerDispensados?'Nenhum lembrete ativo.<br>Há '+_nDisp+' dispensado'+(_nDisp>1?'s':'')+' — use o botão acima para ver.':'Nenhum evento programado.<br>Adicione estudos nas quadras para visualizar aqui.')+'</div>';
-
-  document.getElementById("agendaPanel").innerHTML=h;
+  return h;
+}
+/* O mês na folhinha. Embaixo da grade, o que cai no dia escolhido — ou, sem dia
+   escolhido, o mês inteiro, dia a dia. */
+function _agMesHtml(){
+  var A=window.AgendaCore, hoje=todayISO();
+  var itens=agCalItens(agVerDispensados);
+  var dias=A.porDia(itens,hoje), atr=A.atrasados(itens,hoje), mh=A.mesDe(hoje);
+  if(!agMesVisto){ agMesVisto=mh; agDiaSel=hoje; }
+  var g=A.grade(agMesVisto.ano,agMesVisto.mes,hoje);
+  var noMesDeHoje=!!(mh && agMesVisto.ano===mh.ano && agMesVisto.mes===mh.mes);
+  var h='<div class="agc">';
+  h+='<div class="agc-nav">'+
+     '<button type="button" class="agc-seta" onclick="agMes(-1)" aria-label="Mês anterior">‹</button>'+
+     '<div class="agc-mes" aria-live="polite">'+esc(g.rotulo)+'</div>'+
+     '<button type="button" class="agc-seta" onclick="agMes(1)" aria-label="Próximo mês">›</button>'+
+     ((!noMesDeHoje||agDiaSel!==hoje)?'<button type="button" class="agc-hoje" onclick="agMesHoje()">Hoje</button>':'')+
+     '</div>';
+  /* Atrasado de mês passado não aparece na grade deste mês — e é justamente o
+     que mais pede ação. Fica sempre a um toque, em qualquer mês. */
+  if(atr.length) h+='<button type="button" class="agc-atr'+(agDiaSel==='atrasados'?' on':'')+'" onclick="agDia(\'atrasados\')">'+
+     '<i class="agc-pt atrasado"></i>'+atr.length+' atrasado'+(atr.length>1?'s':'')+(agDiaSel==='atrasados'?'':' — ver')+'</button>';
+  h+='<div class="agc-grade" role="grid" aria-label="'+esc(g.rotulo)+'">';
+  h+='<div class="agc-sem agc-cab" role="row">'+A.INICIAIS.map(function(l){ return '<span role="columnheader">'+l+'</span>'; }).join('')+'</div>';
+  g.semanas.forEach(function(sem){
+    h+='<div class="agc-sem" role="row">';
+    sem.forEach(function(c){
+      var info=dias[c.iso], pts=info?info.pontos:[], sel=(c.iso===agDiaSel);
+      var cls='agc-dia'+(c.doMes?'':' fora')+(c.hoje?' hoje':'')+(c.passado?' passado':'')+(sel?' sel':'');
+      var falar=A.rotuloDia(c.iso)+(c.hoje?' (hoje)':'')+': '+(info?_agDiaConta(info):'nada marcado');
+      h+='<button type="button" role="gridcell" class="'+cls+'" onclick="agDia(\''+c.iso+'\')" aria-label="'+esc(falar)+'"'+
+         (sel?' aria-selected="true"':'')+'><span class="agc-n">'+c.dia+'</span><span class="agc-pts">'+
+         pts.map(function(p){ return '<i class="agc-pt '+p+'"></i>'; }).join('')+'</span></button>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<div class="agc-leg" aria-hidden="true"><span><i class="agc-pt apl"></i>aplicação</span><span><i class="agc-pt av"></i>avaliação</span>'+
+     '<span><i class="agc-pt atrasado"></i>atrasado</span><span><i class="agc-pt feito"></i>feito</span></div>';
+  h+=_agDetalheHtml(itens,dias,atr,hoje);
+  h+='</div>';
+  /* A faxina vem por último no calendário: é a ação mais rara, e apagar
+     lembrete não deveria ser a primeira coisa debaixo do polegar. */
+  h+=_agAcoesHtml();
+  return h;
+}
+/* "2 pendentes, 1 atrasado, 1 feito" — o que o leitor de tela diz de cada dia. */
+function _agDiaConta(info){
+  var p=[];
+  if(info.pendentes) p.push(info.pendentes+' pendente'+(info.pendentes>1?'s':''));
+  if(info.atrasados) p.push(info.atrasados+' atrasado'+(info.atrasados>1?'s':''));
+  if(info.feitos) p.push(info.feitos+' feito'+(info.feitos>1?'s':''));
+  return p.join(', ')||'nada marcado';
+}
+function _agDetalheHtml(itens,dias,atr,hoje){
+  var A=window.AgendaCore, h='<div class="agc-det">';
+  if(agDiaSel==='atrasados'){
+    h+='<div class="agc-det-t">Atrasados <span>· do mais antigo ao mais novo</span></div>';
+    if(!atr.length) h+='<div class="ag-empty">Nenhum atrasado.</div>';
+    atr.forEach(function(it){ h+=_agCalItemHtml(it); });
+    return h+'</div>';
+  }
+  if(agDiaSel && A.valida(agDiaSel)){
+    var info=dias[agDiaSel], rel=_agRelativo(agDiaSel,hoje);
+    h+='<div class="agc-det-t">'+esc(A.rotuloDia(agDiaSel))+(rel?(' <span>· '+esc(rel)+'</span>'):'')+'</div>';
+    if(info && info.itens.length){
+      info.itens.forEach(function(it){ h+=_agCalItemHtml(it); });
+    }else if(!itens.length){
+      h+='<div class="ag-empty">Nenhum compromisso nos estudos ativos.<br>As aplicações e avaliações dos estudos aparecem aqui.</div>';
+    }else{
+      h+='<div class="ag-empty">Nada marcado '+(agDiaSel===hoje?'para hoje':'neste dia')+'.</div>';
+      var prox=null;
+      itens.forEach(function(it){ if(!it.feito && it.iso>agDiaSel && (!prox || it.iso<prox.iso)) prox=it; });
+      if(prox) h+='<button type="button" class="agc-prox" onclick="agDia(\''+prox.iso+'\')">Próximo: '+
+        esc(_agCalRotulo(prox,true))+' · '+esc(A.rotuloDia(prox.iso))+' ›</button>';
+    }
+    return h+'</div>';
+  }
+  var chave=agMesVisto.ano+'-'+String(agMesVisto.mes).padStart(2,'0');
+  var doMes=Object.keys(dias).filter(function(k){ return k.slice(0,7)===chave; }).sort();
+  var n=doMes.reduce(function(s,k){ return s+dias[k].itens.length; },0);
+  h+='<div class="agc-det-t">Neste mês'+(n?(' <span>· '+n+' '+(n>1?'compromissos':'compromisso')+'</span>'):'')+'</div>';
+  if(!doMes.length) h+='<div class="ag-empty">Nada marcado neste mês.</div>';
+  doMes.forEach(function(k){
+    h+='<div class="agc-det-dia">'+esc(A.rotuloDia(k))+'</div>';
+    dias[k].itens.forEach(function(it){ h+=_agCalItemHtml(it); });
+  });
+  return h+'</div>';
+}
+function agMes(delta){
+  var A=window.AgendaCore; if(!A) return;
+  var base=agMesVisto||A.mesDe(todayISO());
+  agMesVisto=A.mesVizinho(base.ano,base.mes,delta);
+  /* Mês novo, nenhum dia escolhido: embaixo aparece o mês inteiro. */
+  agDiaSel=null;
+  renderAgenda();
+}
+function agMesHoje(){
+  var A=window.AgendaCore; if(!A) return;
+  var hoje=todayISO();
+  agMesVisto=A.mesDe(hoje); agDiaSel=hoje;
+  renderAgenda();
+}
+function agDia(iso){
+  var A=window.AgendaCore; if(!A) return;
+  if(iso==='atrasados'){ agDiaSel=(agDiaSel==='atrasados')?null:'atrasados'; renderAgenda(); return; }
+  if(!A.valida(iso)) return;
+  /* Tocar de novo no dia escolhido devolve o mês inteiro. Dia de outro mês
+     (as pontas cinzas da grade) leva a grade para aquele mês. */
+  if(agDiaSel===iso){ agDiaSel=null; renderAgenda(); return; }
+  agDiaSel=iso; agMesVisto=A.mesDe(iso);
+  renderAgenda();
+}
+/* Abre a agenda já no dia pedido — é por aqui que o painel HOJE (a faixa da
+   semana, o "próximo") leva para o calendário. */
+function abrirAgendaNoDia(iso){
+  var A=window.AgendaCore;
+  if(A && A.valida(iso)){ agMesVisto=A.mesDe(iso); agDiaSel=iso; agModo='mes'; }
+  agO=true;
+  var p=document.getElementById("agendaPanel");
+  if(p) p.classList.add("open");
+  renderAgenda();
 }
 function closeAgendaAndOpen(qid,sid,avid){
   agO=false;
@@ -5292,11 +5526,16 @@ function climaSay(msg,cls){ var b=document.getElementById('climaBody'); if(b) b.
    mapa e mostra “mapa”, para não confundir medição com previsão.
    Toque abre o painel completo, que continua sendo o mesmo de antes. */
 var _climaChipTimer=null, _climaChipMac=null, _climaChipSeq=0, _climaChipLocalMostrado=null;
+/* A última leitura que o chip MOSTROU — o painel HOJE repete ela, em vez de
+   buscar o clima de novo. Sem leitura (buscando, indisponível) fica nulo, e o
+   HOJE simplesmente não mostra a linha. */
+var _climaChipUltimo=null;
 function _climaChipEl(){ return document.getElementById('climaChip'); }
 function climaChipPinta(o){
   var el=_climaChipEl(); if(!el) return;
   if(!o){ el.style.display='none'; return; }
   if(o.estado){
+    _climaChipUltimo=null;
     el.innerHTML='<span class="cc-t">—</span><span class="cc-v">'+esc(o.estado)+'</span>';
     el.title=(o.title||o.estado)+(o.lugar?(' · '+o.lugar):'')+' — toque para abrir o painel';
     el.setAttribute('aria-label',el.title);
@@ -5326,6 +5565,7 @@ function climaChipPinta(o){
       try{ hora=_agFormatDateTime(o.atualizado*1000,{hour:'2-digit',minute:'2-digit'}); }catch(e){}
     }else if(String(o.atualizado).indexOf('T')>=0){ hora=String(o.atualizado).split('T')[1].slice(0,5); }
   }
+  _climaChipUltimo={temp:t, umidade:ur, vento:vt, estacao:!!o.estacao, lugar:(o.estacao&&o.lugar)?String(o.lugar):'', hora:hora, em:Date.now()};
   el.title=(o.estacao?'Estação Ecowitt · ':'Previsão para o centro do mapa · ')+(o.lugar||'este ponto')+
            (hora?(' · atualizado '+hora):'')+' — toque para abrir o painel completo';
   el.setAttribute('aria-label',el.title);
@@ -20210,7 +20450,10 @@ function collectTodayEvents(windowDays, incluirDispensados){
   /* Retorna todos os eventos que estão hoje, atrasados ou dentro da janela */
   var out=[];
   var now=today0();
-  var limit=windowDays||1;
+  /* ZERO É ZERO. Era `windowDays||1`, e o 0 virava 1: o selo do botão HOJE
+     ("só hoje + atrasados") contava também o que é de amanhã. Só a falta do
+     argumento vale 1, que é o que os chamadores antigos esperam. */
+  var limit=(typeof windowDays==='number' && !isNaN(windowDays))?windowDays:1;
   Object.keys(data).forEach(function(qid){
     /* Mesma regra do mapa e da agenda: ensaio encerrado nao gera mais evento.
        Sem isto o "HOJE" contava avaliacao de estudo terminado e o botao ficava
@@ -20235,55 +20478,148 @@ function collectTodayEvents(windowDays, incluirDispensados){
   return out;
 }
 
+/* O PAINEL DO DIA.
+   Pedido de uso: "um dashboard no hoje, de hoje mesmo — o que tem pra hoje de
+   verdade". O painel antigo era uma lista de cartões dos próximos três dias com
+   três números em cima; o "hoje" se perdia no meio do "depois".
+   Agora a tela responde, de cima para baixo, o que se pergunta de manhã:
+     · como está a semana         — a faixa de sete dias, com as bolinhas da agenda
+     · quanto tem                 — atrasados, hoje e os próximos sete dias
+     · o que fazer agora          — o atrasado e o de hoje, com o atalho de cada um
+     · o que separar para amanhã  — inclusive o aviso de estoque da aplicação
+     · o que já saiu hoje         — o que foi registrado ao longo do dia
+   O que é de depois mora na agenda, a um toque: a faixa e o "próximo" levam até
+   ela já no dia certo. */
 function renderToday(){
-  var events=collectTodayEvents(1, agVerDispensados);
-  var tomorrowEvs=collectTodayEvents(3, agVerDispensados).filter(function(e){return e.diff>1});
+  var pnl=document.getElementById("todayPnl");
+  if(!pnl) return;
+  var A=window.AgendaCore, hoje=todayISO();
+  /* "Para fazer hoje" é o de hoje E o atrasado: aplicação que devia ter
+     acontecido e não aconteceu não deixa de ser trabalho do dia por envelhecer. */
+  var paraHoje=collectTodayEvents(0, agVerDispensados);
+  var amanha=collectTodayEvents(1, agVerDispensados).filter(function(e){ return e.diff===1; });
+  var itens=A?agCalItens(agVerDispensados):[];
+  var R=A?A.resumo(itens,hoje):null;
+  var atrasados=paraHoje.filter(function(e){ return e.diff<0; }).length;
+  var deHoje=paraHoje.length-atrasados;
 
   var h='<div class="today-head" style="position:relative">';
   h+='<button class="panel-x-tr" onclick="closeToday()" aria-label="Fechar" title="Fechar">✕</button>';
   h+='<div class="today-title">HOJE</div>';
   h+='<div class="today-date">'+_agFormatDateTime(Date.now(),{weekday:'long',day:'numeric',month:'long'})+'</div>';
+  h+=_hojeClimaHtml();
   h+='</div>';
 
-  /* Resumo numérico */
-  var atrasados=events.filter(function(e){return e.diff<0}).length;
-  var hoje=events.filter(function(e){return e.diff===0}).length;
-  var amanha=events.filter(function(e){return e.diff===1}).length;
+  /* A semana em faixa, com as MESMAS bolinhas da agenda. Tocar num dia abre a
+     agenda naquele dia. */
+  if(A){
+    h+='<div class="hj-faixa" role="list" aria-label="Hoje e os próximos seis dias">';
+    A.faixa(hoje,itens,7).forEach(function(d){
+      var falar=A.rotuloDia(d.iso)+(d.hoje?' (hoje)':'')+': '+
+        (d.pendentes?(d.pendentes+' pendente'+(d.pendentes>1?'s':'')):'nada pendente')+
+        (d.feitos?(', '+d.feitos+' feito'+(d.feitos>1?'s':'')):'');
+      h+='<button type="button" role="listitem" class="hj-dia'+(d.hoje?' hoje':'')+'" onclick="hojeAbrirDia(\''+d.iso+'\')" aria-label="'+esc(falar)+'">'+
+         '<span class="hj-sigla">'+d.sigla+'</span><span class="hj-n">'+d.dia+'</span>'+
+         '<span class="agc-pts">'+d.pontos.map(function(p){ return '<i class="agc-pt '+p+'"></i>'; }).join('')+'</span></button>';
+    });
+    h+='</div>';
+  }
 
+  /* Os números do dia. O terceiro é a semana que vem pela frente — "amanhã"
+     sozinho escondia a quinta-feira com três avaliações. */
+  var adiante=R?R.semana:amanha.length;
   h+='<div class="today-summary">';
   h+='<div class="today-sum-item '+(atrasados>0?"urgent":"")+'"><div class="today-sum-n">'+atrasados+'</div><div class="today-sum-l">atrasado'+(atrasados!==1?'s':'')+'</div></div>';
-  h+='<div class="today-sum-item '+(hoje>0?"today":"")+'"><div class="today-sum-n">'+hoje+'</div><div class="today-sum-l">hoje</div></div>';
-  h+='<div class="today-sum-item '+(amanha>0?"soon":"")+'"><div class="today-sum-n">'+amanha+'</div><div class="today-sum-l">amanhã</div></div>';
+  h+='<div class="today-sum-item '+(deHoje>0?"today":"")+'"><div class="today-sum-n">'+deHoje+'</div><div class="today-sum-l">hoje</div></div>';
+  h+='<div class="today-sum-item '+(adiante>0?"soon":"")+'"><div class="today-sum-n">'+adiante+'</div><div class="today-sum-l">'+(R?'próx. 7 dias':'amanhã')+'</div></div>';
   h+='</div>';
 
-  var _nD=_agTotalDispensados();
-  h+='<div class="ag-acoes" style="margin:2px 0 12px">';
-  var _pendHoje=collectTodayEvents(3).length;
-  if(_pendHoje) h+='<button class="ag-acao" onclick="agLimparHoje()">Limpar lembretes ('+_pendHoje+')</button>';
-  if(_nD) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nD+')</button>';
-  h+='</div>';
-
-  if(events.length===0){
-    h+='<div class="today-empty"><div style="font-size:48px;margin-bottom:10px">✓</div><div>'+(_nD&&!agVerDispensados?'Nenhum lembrete ativo.':'Nada para hoje.')+'</div><div class="today-empty-sub">'+(_nD&&!agVerDispensados?'Há '+_nD+' dispensado'+(_nD>1?'s':'')+' — use o botão acima para ver.':'Bom dia de trabalho.')+'</div></div>';
+  var _nD=_agTotalDispensados(), _escondidos=(_nD && !agVerDispensados);
+  h+='<div class="today-section-title">Para fazer hoje'+(paraHoje.length?(' ('+paraHoje.length+')'):'')+'</div>';
+  if(!paraHoje.length){
+    h+='<div class="hj-livre"><div class="hj-livre-t">✓ '+(_escondidos?'Nenhum lembrete ativo para hoje.':'Nada pendente para hoje.')+'</div>';
+    if(R && R.proximo){
+      h+='<button type="button" class="hj-prox" onclick="hojeAbrirDia(\''+R.proximo.iso+'\')">Próximo: '+
+         esc(_agCalRotulo(R.proximo,true))+' · '+esc(A.rotuloDia(R.proximo.iso))+' ›</button>';
+    }else if(!_escondidos){
+      h+='<div class="hj-livre-s">Nenhum compromisso marcado nos estudos ativos.</div>';
+    }
+    if(_escondidos) h+='<div class="hj-livre-s">Há '+_nD+' lembrete'+(_nD>1?'s dispensados':' dispensado')+' — o botão no fim da tela mostra.</div>';
+    h+='</div>';
   }else{
-    h+='<div class="today-list">';
-    events.forEach(function(e){
-      h+=renderTodayCard(e);
+    h+='<div class="today-list">'+paraHoje.map(function(e){ return renderTodayCard(e); }).join('')+'</div>';
+  }
+
+  /* AMANHÃ: o que se separa hoje para não faltar amanhã. */
+  if(amanha.length){
+    h+='<div class="today-section-title">Amanhã ('+amanha.length+')</div>';
+    h+='<div class="today-list">'+amanha.map(function(e){ return renderTodayCard(e); }).join('')+'</div>';
+  }
+
+  /* FEITO HOJE: o que saiu da lista de cima ao longo do dia. Aplicação pela data
+     em que foi registrada; avaliação quando a grade fechou. */
+  var feitos=itens.filter(function(it){ return it.feito && it.iso===hoje; });
+  if(feitos.length){
+    h+='<div class="today-section-title">Feito hoje ('+feitos.length+')</div><div class="hj-feitos">';
+    feitos.forEach(function(it){
+      h+='<button type="button" class="hj-feito" onclick="goToStudy(\''+esc(_avCroquiEscJs(it.qid))+'\',\''+esc(_avCroquiEscJs(it.study.id))+'\')">'+
+         '<span class="hj-ok" aria-hidden="true">✓</span><span class="hj-feito-t"><b>'+esc(_agCalRotulo(it))+'</b>'+
+         '<small>'+esc(quadraNome(it.qid))+' · '+esc(it.study.codigo||it.study.nome||'')+'</small></span></button>';
     });
     h+='</div>';
   }
 
-  /* Próximos dias */
-  if(tomorrowEvs.length>0){
-    h+='<div class="today-section-title">Próximos 3 dias</div>';
-    h+='<div class="today-list">';
-    tomorrowEvs.forEach(function(e){
-      h+=renderTodayCard(e);
-    });
+  /* Rodapé: o mês inteiro e a faxina dos lembretes — a ação mais rara, por último. */
+  h+='<div class="hj-rodape">';
+  if(A) h+='<button type="button" class="hj-agenda" onclick="hojeAbrirDia(\''+hoje+'\')">Ver o mês na agenda ›</button>';
+  var _pend3=collectTodayEvents(3).length;
+  if(_pend3 || _nD){
+    h+='<div class="ag-acoes">';
+    if(_pend3) h+='<button class="ag-acao" onclick="agLimparHoje()">Limpar lembretes ('+_pend3+')</button>';
+    if(_nD) h+='<button class="ag-acao ag-acao-alt" onclick="agToggleDispensados()">'+(agVerDispensados?'Ocultar':'Ver')+' dispensados ('+_nD+')</button>';
     h+='</div>';
   }
+  h+='</div>';
 
-  document.getElementById("todayPnl").innerHTML=h;
+  pnl.innerHTML=h;
+}
+/* Da faixa da semana (ou do "próximo") para a agenda, já no dia tocado. */
+function hojeAbrirDia(iso){
+  closeToday();
+  abrirAgendaNoDia(iso);
+}
+/* O tempo de agora: a mesma leitura do mostrador do mapa, que o HOJE, em tela
+   cheia, cobre. Não busca nada — sem leitura recente, a linha não aparece, e a
+   fonte vai escrita ao lado, para medição de estação não se passar por previsão. */
+function _hojeClimaHtml(){
+  var c=(typeof _climaChipUltimo!=='undefined')?_climaChipUltimo:null;
+  if(!c || !(Date.now()-c.em<2*3600e3)) return '';
+  var p=[];
+  if(c.temp!=null) p.push(String(c.temp).replace('.',',')+' °C');
+  if(c.umidade!=null) p.push('UR '+c.umidade+'%');
+  if(c.vento!=null) p.push('vento '+c.vento+' km/h');
+  if(!p.length) return '';
+  var fonte=c.estacao?('estação'+(c.lugar?(' '+c.lugar):'')):'previsão para o centro do mapa';
+  return '<div class="hj-clima">'+(typeof ic==='function'?ic('weather',14):'')+
+         '<span>'+esc(p.join(' · '))+'</span><small>'+esc(fonte+(c.hora?(' · '+c.hora):''))+'</small></div>';
+}
+/* Onde começar ou continuar uma avaliação: a primeira parcela que ainda deve
+   leitura, na ordem de caminhada — o número da estaca, quando há randomização.
+   É a mesma conta do "continuar de onde parou" da página do estudo. */
+function _hojeGuiaParcela(e){
+  var P=window.PendenciasCore;
+  if(!P || !e || !e.ev || e.ev.type!=='eval') return null;
+  var st=e.study, av=((st&&st.avaliacoes)||[]).find(function(a){ return a && a.id===e.ev.id; });
+  if(!av) return null;
+  try{
+    var pend=P.parcelasPendentes(st,av,P.mapaParcelas(st));
+    if(!pend.length) return null;
+    var nome=String(P.nomeParcela(pend[0].info)||'').replace(/^parcela /,'');
+    var comecou=!!(e.ev.progresso && e.ev.progresso.started), n=pend.length;
+    return {parcela:pend[0].key, faltam:n,
+            texto:(comecou?('Faltam '+n+' parcela'+(n>1?'s':'')):(n+' parcela'+(n>1?'s':'')+' para avaliar'))+
+                  (nome?((comecou?' — a próxima é a ':' — começa pela ')+nome):'')+'.'};
+  }catch(err){ return null; }
 }
 
 function renderTodayCard(e){
@@ -20304,23 +20640,33 @@ function renderTodayCard(e){
   var _btn = e.dispensado
     ? '<button class="ag-x ag-x-volta" title="Trazer o lembrete de volta" onclick="event.stopPropagation();agRestaurar(\''+_q+'\',\''+_sid+'\',\''+_k+'\')">&#8630;</button>'
     : '<button class="ag-x" title="Dispensar o lembrete (o evento segue pendente)" onclick="event.stopPropagation();agDispensar(\''+_q+'\',\''+_sid+'\',\''+_k+'\',\''+esc(_avCroquiEscJs(typeName))+'\')">&times;</button>';
+  /* As duas coisas que o cartão sabia e não dizia: por qual parcela começar a
+     avaliação, e se o estoque cobre a aplicação. Em funções à parte, e só se
+     existirem — o cartão continua de pé sem elas. */
+  var guia=(e.ev.type==='eval' && typeof _hojeGuiaParcela==='function')?_hojeGuiaParcela(e):null;
+  var avisos=[];
+  if(e.ev.type==='apl' && typeof estudoAvisosEstoque==='function'){ try{ avisos=estudoAvisosEstoque(e.study,e.qid)||[]; }catch(err){} }
   var h='<div class="today-card '+cls+(e.dispensado?' ag-dispensado':'')+'">';
   h+='<div class="today-card-head">';
   h+='<span class="today-card-badge '+iconCls+'">'+(e.ev.type==='apl'?'APL':'AV')+'</span>';
   h+='<span class="today-card-lbl">'+esc(lbl)+'</span>';
   h+=_btn;
   h+='</div>';
-  h+='<div class="today-card-body" onclick="goToStudy(\''+e.qid+'\',\''+e.study.id+'\')">';
+  h+='<div class="today-card-body" onclick="goToStudy(\''+_q+'\',\''+_sid+'\')">';
   h+='<div class="today-card-quadra">'+esc(quadraNome(e.qid))+' · '+esc(studyCultura(e.study,q)||"—")+'</div>';
   h+='<div class="today-card-estudo">'+esc(e.study.codigo||"(sem código)")+'</div>';
   h+='<div class="today-card-evt">'+esc(typeName)+'</div>';
   if(e.ev.progresso){var pr=e.ev.progresso;h+='<div class="today-card-evt">'+(pr.total?pr.filled+' de '+pr.total+' valores completos':'Definir as variáveis da avaliação')+'</div>';}
+  if(guia) h+='<div class="today-card-guia">'+esc(guia.texto)+'</div>';
+  avisos.slice(0,2).forEach(function(a){ h+='<div class="today-card-aviso">⚠ '+esc(a.texto)+'</div>'; });
+  if(avisos.length>2) h+='<div class="today-card-aviso">⚠ e mais '+(avisos.length-2)+' aviso'+(avisos.length-2>1?'s':'')+' de estoque no estudo.</div>';
   h+='</div>';
   h+='<div class="today-card-actions">';
   if(e.ev.type==='apl'){
-    h+='<button class="today-card-quick" onclick="quickRegisterAplicacao(\''+e.qid+'\',\''+e.study.id+'\')">Registrar aplicação</button>';
+    h+='<button class="today-card-quick" onclick="quickRegisterAplicacao(\''+_q+'\',\''+_sid+'\')">Registrar aplicação</button>';
   }else{
-    h+='<button class="today-card-quick" onclick="quickRegisterAvaliacao(\''+esc(_avCroquiEscJs(e.qid))+'\',\''+esc(_avCroquiEscJs(e.study.id))+'\',\''+esc(_avCroquiEscJs(e.ev.tipo||""))+'\',\''+esc(_avCroquiEscJs(e.ev.id||""))+'\')">'+(e.ev.progresso&&e.ev.progresso.started?'Continuar avaliação':'Abrir avaliação')+'</button>';
+    h+='<button class="today-card-quick" onclick="quickRegisterAvaliacao(\''+esc(_avCroquiEscJs(e.qid))+'\',\''+esc(_avCroquiEscJs(e.study.id))+'\',\''+esc(_avCroquiEscJs(e.ev.tipo||""))+'\',\''+esc(_avCroquiEscJs(e.ev.id||""))+'\''+
+       (guia?(',\''+esc(_avCroquiEscJs(guia.parcela))+'\''):'')+')">'+(e.ev.progresso&&e.ev.progresso.started?'Continuar avaliação':'Abrir avaliação')+'</button>';
   }
   h+='</div>';
   h+='</div>';
@@ -20344,7 +20690,9 @@ function quickRegisterAplicacao(qid,sid){
   openStudyEditAplicacao("__new__");
 }
 
-function quickRegisterAvaliacao(qid,sid,tipoSugerido,avid){
+/* `parcela` (opcional): a grade abre JÁ nela — é o "continuar de onde parou"
+   do cartão do HOJE. Sem ela, abre como sempre abriu. */
+function quickRegisterAvaliacao(qid,sid,tipoSugerido,avid,parcela){
   curV=qid;curSid=sid;
   var q=data[qid],study=((q||{}).estudos||[]).find(function(s){return s.id===sid});
   if(!study)return;
@@ -20354,7 +20702,7 @@ function quickRegisterAvaliacao(qid,sid,tipoSugerido,avid){
   }
   normalizeStudy(study);
   closeToday();
-  openStudyEditAvaliacao(avid||"__new__",tipoSugerido);
+  openStudyEditAvaliacao(avid||"__new__",tipoSugerido,false,(avid&&parcela)?parcela:'');
 }
 
 /* ============ BUSCA ============ */

@@ -213,7 +213,16 @@ elevação". Existe uma:
 
 ### B2. Agenda que avisa + "próxima janela boa"
 
-Hoje a agenda (`renderAgenda`, app.js ~4518; eventos de
+> **Estado (05/10/2026, 21ª publicação):** a agenda abre num calendário do mês
+> e o HOJE virou o painel do dia. As contas moram em `vendor/agenda-core.js`
+> (grade, bolinhas, resumo, faixa da semana); os itens vêm de `agCalItens()`
+> no app.js — `{iso, tipo:'apl'|'av', feito, qid, study, ev|ap, diff}`, com o
+> pendente de `collectTodayEvents` e o feito no dia em que foi registrado. Os
+> três itens abaixo continuam abertos e podem partir desses itens. O lugar
+> natural da "próxima janela boa" é o cartão de aplicação do HOJE
+> (`renderTodayCard`), que já mostra o aviso de estoque.
+
+Hoje a agenda (`renderAgenda`; eventos de
 `allUpcomingEvents(dias)` → `{qid, study, diff, event:{type:'apl'|'eval', date,
 idx, total}}`) só existe se o app for aberto. Não há `Notification` em lugar
 nenhum.

@@ -484,3 +484,156 @@ html:not(.light) .top-bar{
   background:none!important;border:0!important;box-shadow:none!important;
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
 }
+
+/* ==========================================================================
+   AGENDA EM CALENDÁRIO E PAINEL DO DIA (21a publicação)
+   A folhinha do mês com uma bolinha por TIPO de compromisso em cada dia, e o
+   HOJE como painel: faixa da semana, números do dia, o que fazer, o que já saiu.
+   As cores são as de ESTADO do app (cores-padrao.css): vermelho é atrasado,
+   verde é feito; aplicação e avaliação ganham âmbar e azul, e a legenda diz.
+   ========================================================================== */
+.ag-modo{display:flex;gap:4px;padding:3px;margin:0 0 12px;border-radius:12px;background:var(--gp-s3,#eeeef0)}
+.ag-modo button{
+  flex:1;cursor:pointer;border:0;border-radius:9px;padding:8px 0;background:transparent;
+  font:650 12.5px var(--ag-font,system-ui);color:var(--gp-text-2,#555860)
+}
+.ag-modo button.on{background:var(--gp-s1,#fff);color:var(--gp-text,#202124);box-shadow:0 1px 3px rgba(16,17,20,.14)}
+
+.agc-nav{display:flex;align-items:center;gap:6px;margin:0 0 8px}
+.agc-mes{flex:1;text-align:center;font:700 15px/1.2 var(--ag-font,system-ui);color:var(--gp-text,#202124)}
+.agc-mes::first-letter{text-transform:uppercase}
+.agc-seta{
+  flex:none;width:36px;height:36px;cursor:pointer;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;padding:0;
+  background:transparent;border:1px solid var(--gp-line,#dedee2);
+  font:500 20px/1 var(--ag-font,system-ui);color:var(--gp-text,#202124)
+}
+.agc-seta:hover{background:var(--gp-s3,#eeeef0)}
+.agc-hoje{
+  flex:none;cursor:pointer;border-radius:999px;padding:7px 12px;
+  background:var(--gp-s3,#eeeef0);border:1px solid var(--gp-line,#dedee2);
+  font:650 11.5px var(--ag-font,system-ui);color:var(--gp-text,#202124)
+}
+.agc-atr{
+  display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;cursor:pointer;
+  padding:8px 12px;border-radius:12px;text-align:left;
+  background:var(--ag-err-bg,rgba(220,38,38,.07));border:1px solid var(--ag-err-line,rgba(220,38,38,.28));
+  font:650 12.5px var(--ag-font,system-ui);color:var(--ag-err,#dc2626)
+}
+.agc-atr.on{background:var(--ag-err,#dc2626);color:#fff;border-color:transparent}
+.agc-atr.on .agc-pt.atrasado{background:#fff}
+
+.agc-grade{display:flex;flex-direction:column;gap:2px}
+.agc-sem{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+.agc-cab span{
+  text-align:center;padding:2px 0 4px;
+  font:700 10.5px var(--ag-font,system-ui);letter-spacing:.06em;color:var(--gp-text-3,#666a73)
+}
+.agc-dia{
+  position:relative;min-width:0;height:46px;padding:5px 0 0;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;
+  background:transparent;border:1px solid transparent;border-radius:12px;color:var(--gp-text,#202124)
+}
+.agc-dia:hover{background:var(--gp-s2,#f7f7f8)}
+.agc-n{
+  width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font:600 13.5px/1 var(--ag-font,system-ui);font-variant-numeric:tabular-nums
+}
+.agc-dia.passado .agc-n{color:var(--gp-text-3,#666a73)}
+.agc-dia.fora{opacity:.38}
+.agc-dia.hoje .agc-n{background:var(--gp-text,#202124);color:var(--gp-s1,#fff);font-weight:800}
+.agc-dia.sel{background:var(--gp-s3,#eeeef0);border-color:var(--gp-line-2,#c3c5ca)}
+
+.agc-pts{display:flex;align-items:center;justify-content:center;gap:3px;min-height:6px}
+.agc-pt{display:inline-block;flex:none;width:6px;height:6px;border-radius:50%;background:var(--gp-text-3,#666a73)}
+.agc-pt.apl{background:var(--ag-warn,#d97706)}
+.agc-pt.av{background:var(--ag-info,#2563eb)}
+.agc-pt.atrasado{background:var(--ag-err,#dc2626)}
+.agc-pt.feito{background:transparent;box-shadow:inset 0 0 0 1.6px var(--ag-ok,#16a34a)}
+
+.agc-leg{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:4px 12px;margin:10px 0 2px;
+  font:550 10.5px var(--ag-font,system-ui);color:var(--gp-text-3,#666a73)
+}
+.agc-leg span{display:inline-flex;align-items:center;gap:5px}
+
+.agc-det{margin-top:12px;padding-top:12px;border-top:1px solid var(--gp-line,#dedee2)}
+.agc-det-t{margin:0 0 9px;font:700 13.5px/1.3 var(--ag-font,system-ui);color:var(--gp-text,#202124)}
+.agc-det-t::first-letter{text-transform:uppercase}
+.agc-det-t span{font-weight:500;color:var(--gp-text-3,#666a73)}
+.agc-det-dia{margin:12px 0 6px;font:700 10.5px var(--ag-font,system-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--gp-text-3,#666a73)}
+.agc-prox,.hj-prox{
+  display:block;width:100%;margin-top:8px;cursor:pointer;text-align:left;
+  padding:10px 12px;border-radius:12px;background:var(--gp-s2,#f7f7f8);border:1px solid var(--gp-line,#dedee2);
+  font:600 12.5px/1.4 var(--ag-font,system-ui);color:var(--gp-text,#202124)
+}
+.agc-prox:hover,.hj-prox:hover{border-color:var(--gp-line-2,#c3c5ca)}
+/* O nome da quadra no item da agenda vinha de uma regra do tema claro sem
+   escopo (styles.css: cor fixa #1d2723) e sumia no tema escuro — escuro sobre
+   escuro. A cor passa a seguir o tema. */
+.ag-item-qid{color:var(--gp-text,#202124)}
+.ag-item.ag-feito{opacity:.8}
+.ag-item .ag-feito-sel{color:var(--ag-ok,#16a34a)!important}
+.agc~.ag-acoes{margin:14px 0 0}
+
+/* ---- HOJE ---- */
+.hj-clima{
+  display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin-top:7px;
+  font:600 12.5px var(--ag-font,system-ui);color:var(--gp-text-2,#555860)
+}
+.hj-clima svg{width:14px;height:14px;flex:none}
+.hj-clima small{font:500 11px var(--ag-font,system-ui);color:var(--gp-text-3,#666a73)}
+.hj-faixa{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:0 0 14px}
+.hj-dia{
+  min-width:0;min-height:66px;padding:8px 0 7px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border-radius:14px;background:var(--gp-s2,#f7f7f8);border:1px solid var(--gp-line,#dedee2);
+  color:var(--gp-text,#202124)
+}
+.hj-dia:hover{border-color:var(--gp-line-2,#c3c5ca)}
+.hj-dia.hoje{background:var(--gp-text,#202124);border-color:var(--gp-text,#202124);color:var(--gp-s1,#fff)}
+.hj-sigla{font:700 9.5px var(--ag-font,system-ui);letter-spacing:.06em;opacity:.72}
+.hj-n{font:750 17px/1.1 var(--ag-font,system-ui);font-variant-numeric:tabular-nums}
+.hj-dia .agc-pts{margin-top:2px}
+
+.hj-livre{
+  padding:14px;border-radius:14px;
+  background:var(--ag-ok-bg,rgba(22,163,74,.08));border:1px solid var(--ag-ok-line,rgba(22,163,74,.28))
+}
+.hj-livre-t{font:700 14px var(--ag-font,system-ui);color:var(--ag-ok,#16a34a)}
+.hj-livre-s{margin-top:6px;font:500 12.5px/1.45 var(--ag-font,system-ui);color:var(--gp-text-2,#555860)}
+.hj-livre .hj-prox{background:var(--gp-s1,#fff)}
+
+.today-card-guia{margin-top:5px;font:600 12.5px/1.4 var(--ag-font,system-ui);color:var(--ag-info,#2563eb)}
+.today-card-aviso{margin-top:5px;font:600 12px/1.4 var(--ag-font,system-ui);color:var(--ag-warn,#d97706)}
+
+.hj-feitos{display:flex;flex-direction:column;gap:6px}
+.hj-feito{
+  display:flex;align-items:center;gap:10px;width:100%;cursor:pointer;text-align:left;
+  padding:10px 12px;border-radius:12px;background:var(--gp-s1,#fff);border:1px solid var(--gp-line,#dedee2);
+  color:var(--gp-text,#202124)
+}
+.hj-feito:hover{border-color:var(--gp-line-2,#c3c5ca)}
+.hj-ok{
+  flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--ag-ok-bg,rgba(22,163,74,.08));color:var(--ag-ok,#16a34a);font:800 12px var(--ag-font,system-ui)
+}
+.hj-feito-t{min-width:0}
+.hj-feito-t b{display:block;font:650 13px/1.35 var(--ag-font,system-ui)}
+.hj-feito-t small{display:block;margin-top:1px;font:500 11.5px var(--ag-font,system-ui);color:var(--gp-text-3,#666a73)}
+
+.hj-rodape{display:flex;flex-direction:column;gap:10px;margin-top:22px;padding-top:14px;border-top:1px solid var(--gp-line,#dedee2)}
+.hj-rodape .ag-acoes{margin:0}
+.hj-agenda{
+  width:100%;cursor:pointer;padding:12px;border-radius:12px;background:transparent;
+  border:1px solid var(--gp-line-2,#c3c5ca);font:650 13px var(--ag-font,system-ui);color:var(--gp-text,#202124)
+}
+.hj-agenda:hover{background:var(--gp-s2,#f7f7f8)}
+@media(prefers-reduced-motion:reduce){.agc-dia,.hj-dia{transition:none!important}}
+/* O selo de "sessão local" fica por cima do pé da agenda no celular, e com o
+   calendário a agenda passou a ocupar a tela inteira: o último botão morava
+   atrás dele. Enquanto o selo aparece, a agenda ganha um pé do tamanho dele. */
+@media(max-width:720px){
+  body:has(#cloudBadge[style*="display: block"]) .agenda-panel{padding-bottom:66px!important}
+}
