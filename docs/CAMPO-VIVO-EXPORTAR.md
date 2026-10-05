@@ -98,7 +98,7 @@ alguém exporta.
 
 ## Testes
 
-`node test_campo3d_exportar.js` cobre:
+`node tests/test_campo3d_exportar.js` cobre:
 - nome do arquivo sanitizado;
 - ordem temporal e transição nunca marcada como real;
 - duração do vídeo;

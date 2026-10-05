@@ -34,8 +34,8 @@ Tiradas do próprio código e do `docs/ROADMAP.md`. O Claude Code deve seguir:
 
 - **Motor puro + interface.** Toda conta nova nasce em `vendor/<nome>-core.js`,
   sem DOM, exportando por `module.exports` e `window.<Nome>Core`, com teste
-  `test_<nome>.js` na raiz (o `conferir.sh` roda todo `test_*.js`). O `app.js`
-  só pinta e grava.
+  `tests/test_<nome>.js` (o `conferir.sh` roda todo `tests/test_*.js`, a partir
+  da raiz). O `app.js` só pinta e grava.
 - **Aponta, não bloqueia.** Achado vira aviso com severidade (`conferir` /
   `nota`); não impede o trabalho de campo.
 - **Configuração se herda; medida se faz.** Nada que é leitura de campo aparece

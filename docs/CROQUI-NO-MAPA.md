@@ -255,7 +255,7 @@ permissão negada encerra, porque aí não há leitura seguinte.
 - `vendor/croqui-campo-core.js` — geometria pura, sem DOM e sem Leaflet
   (inclusive `ondeEstou`, que é quem se recusa a escolher parcela no empate)
 - `app.js` — camada, pegadores, painel, botões e a leitura contínua do GPS
-- `test_croqui_campo.js` — `node test_croqui_campo.js`
+- `tests/test_croqui_campo.js` — `node tests/test_croqui_campo.js`
 
 ## Ancorar o canto no GPS
 

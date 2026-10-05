@@ -1,0 +1,745 @@
+/* "Ver no campo" — as regras em que a tela poderia mentir sem ninguém notar.
+ *
+ * Uma vista 3D erra bonito: as colunas continuam saindo, coloridas e plausíveis,
+ * enquanto o eixo do tempo está falsificado ou a ausência virou zero. Nenhum
+ * desses quatro erros produz tela quebrada, e é por isso que cada um tem teste.
+ *
+ * Rodar: node tests/test_campo3d.js
+ */
+'use strict';
+const assert=require('node:assert/strict'),fs=require('fs'),fs2=fs;
+/* Biblioteca ausente não é app quebrado — o portão só sabe pular quem se declara. */
+let JSDOM,VirtualConsole; try{ ({JSDOM,VirtualConsole}=require('jsdom')); }
+catch(e){ console.log('PULADO: jsdom não está instalado (npm install jsdom para rodar este teste).'); process.exit(0); }
+
+/* jsdom não tem canvas, e a vista do campo tem. Abrir um estudo de verdade aqui
+   faz o jsdom gritar "HTMLCanvasElement.getContext não implementado" uma vez por
+   pintura — barulho que não é falha (o módulo trata contexto ausente e segue
+   desenhando o HTML) e que, solto na saída do portão, passa por erro. Só esse
+   recado é engolido; qualquer outro continua aparecendo. */
+const vc=new VirtualConsole();
+vc.on('jsdomError',e=>{ if(!/getContext/.test(String(e&&e.message)))console.error(e); });
+['log','warn','error','info'].forEach(k=>vc.on(k,(...a)=>console[k](...a)));
+const dom=new JSDOM('<!doctype html><html><body></body></html>',
+  {url:'https://agracta.test',runScripts:'outside-only',virtualConsole:vc}),w=dom.window;
+w.requestAnimationFrame=()=>0;
+
+/* As funções reais do app que o módulo consome, extraídas do app.js publicado —
+   assim o teste exercita a MESMA leitura de nota e a MESMA escala da variável
+   que o aparelho usa, e não uma cópia que pode divergir depois. */
+const src=fs.readFileSync('app.js','utf8');
+function pega(nome){
+  const i=src.indexOf('function '+nome+'(');
+  assert.ok(i>=0,'falta a função '+nome+' no app.js');
+  let prof=0,abriu=false,j=i;
+  for(;j<src.length;j++){
+    if(src[j]==='{'){prof++;abriu=true;}
+    else if(src[j]==='}'&&--prof===0&&abriu){j++;break;}
+  }
+  return src.slice(i,j);
+}
+w.eval('var AV_TIPOS={pct:1,contagem:1,razao:1,escala:1};var REP_LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZ";');
+w.eval(pega('_numBR'));
+['_avTipo','_avCfg','_avEscala','_avSentido','_avNota','_avRowKey','_repLetter'].forEach(f=>w.eval(pega(f)));
+/* O módulo lê window._avNota etc.; em navegador elas são globais do app.js. */
+w.eval('window._avNota=_avNota;window._avRowKey=_avRowKey;window._repLetter=_repLetter;'+
+       'window._avCfg=_avCfg;window._avEscala=_avEscala;window._avSentido=_avSentido;');
+w.eval(fs.readFileSync('campo-3d.js','utf8'));
+const M=w.AgCampo3D;
+assert.ok(M,'campo-3d.js precisa exportar AgCampo3D');
+
+const trats=[{id:'T1',produto:'Testemunha',testemunha:true},{id:'T2',produto:'Padrão'},{id:'T3',produto:'Candidato'}];
+const parcela=(t,r)=>({tratId:t,rep:r,chave:t+'R'+r});
+
+function estudo(avs,extra){
+  return Object.assign({dataInicio:'2026-01-12',numRepeticoes:4,tratamentos:trats,avaliacoes:avs},extra||{});
+}
+function av(id,data,notas,tipo,cfg){
+  return {id:id,data:data,variaveis:['sev'],tipos:{sev:tipo||'pct'},
+          varcfg:cfg?{sev:cfg}:{},notas:notas};
+}
+/* Notas de todas as parcelas com o mesmo valor, salvo exceções. */
+function todas(valor,excecoes){
+  const n={};
+  trats.forEach(t=>{for(let r=1;r<=4;r++)n[t.id+'R'+r]={sev:valor};});
+  Object.keys(excecoes||{}).forEach(k=>{n[k]={sev:excecoes[k]};});
+  return n;
+}
+
+/* ============================================ 1. DAA desigual, nunca degraus iguais */
+{
+  // Avaliações aos 0, 7, 14 e 31 dias: o último intervalo é mais que o dobro.
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-01-19',todas('20')),
+    av('A3','2026-01-26',todas('30')), av('A4','2026-02-12',todas('40'))
+  ]),'sev');
+  assert.deepEqual(m.avs.map(x=>x.daa),[0,7,14,31],'o DAA sai da data, não da ordem');
+  assert.equal(m.daaMax,31);
+
+  const p=parcela('T2',1);
+  // No meio do trecho 14→31 (22,5 DAA) o valor tem de refletir o vão REAL.
+  const meio=M.valorEm(m,p,22.5);
+  assert.ok(Math.abs(meio-35)<1e-9,'interpolação usa o vão real de 17 dias, deu '+meio);
+  // Se os degraus fossem iguais (4 passos de 1), 22,5 DAA nem existiria no eixo.
+  // Prova direta: aos 17,5 DAA — o meio SE os passos fossem iguais — o valor
+  // ainda está bem abaixo de 35, porque o trecho longo mal começou.
+  assert.ok(M.valorEm(m,p,17.5)<33,'degraus iguais empurrariam o valor para o meio cedo demais');
+  // E a AACPD pesa cada trecho pelo seu número de dias.
+  const q=M.aacpd(m,p);
+  assert.equal(q.valor,(15*7)+(25*7)+(35*17),'AACPD por trapézios sobre os dias reais');
+  assert.equal(q.intervalos,3);
+}
+
+/* ================================= 2. Lançamento ausente NÃO é zero, e o buraco corta */
+{
+  // T3R2 sem lançamento aos 14 DAA (a chave existe, o valor é vazio).
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-01-19',todas('20')),
+    av('A3','2026-01-26',todas('30',{'T3R2':''})), av('A4','2026-02-12',todas('40'))
+  ]),'sev');
+  const buraco=parcela('T3',2), inteira=parcela('T2',2);
+
+  assert.equal(M.valorEm(m,buraco,14),null,'no instante sem lançamento não há valor');
+  assert.equal(M.valorEm(m,buraco,10),null,'o trecho 7→14 não existe: falta a ponta de cima');
+  assert.equal(M.valorEm(m,buraco,20),null,'o trecho 14→31 não existe: falta a ponta de baixo');
+  assert.notEqual(M.valorEm(m,buraco,10),0,'ausente NUNCA é zero');
+  assert.ok(Math.abs(M.valorEm(m,buraco,3.5)-15)<1e-9,'o trecho 0→7, com as duas pontas, continua valendo');
+  assert.ok(Math.abs(M.valorEm(m,inteira,10)-24.285714285714285)<1e-9,'a parcela completa não é afetada');
+
+  // A AACPD ignora os trechos incompletos e diz quantos ignorou.
+  const q=M.aacpd(m,buraco);
+  assert.equal(q.valor,15*7,'só o intervalo 0→7 entra');
+  assert.equal(q.intervalos,1);
+  assert.equal(q.pulados,2,'e os dois trechos sem ponta ficam contados');
+
+  // Sem nenhum intervalo completo, não há AACPD — e não é zero.
+  const so=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10',{'T1R1':''})), av('A2','2026-01-19',todas('20',{'T1R1':''}))
+  ]),'sev');
+  assert.equal(M.aacpd(so,parcela('T1',1)),null,'sem intervalo completo, AACPD não existe');
+}
+
+/* ======================================= 3. Sentido inverte a COR, não o valor */
+{
+  const base=[av('A1','2026-01-12',todas('80')),av('A2','2026-01-19',todas('80'))];
+  const menor=M.modelo(estudo(base),'sev');
+  const maiorAv=[av('A1','2026-01-12',todas('80'),'pct',{sentido:'maior'}),
+                 av('A2','2026-01-19',todas('80'),'pct',{sentido:'maior'})];
+  const maior=M.modelo(estudo(maiorAv),'sev');
+
+  assert.equal(menor.sentido,'menor');
+  assert.equal(maior.sentido,'maior');
+  const p=parcela('T2',1);
+  // O VALOR é o mesmo nos dois: o sentido não mexe no que foi medido.
+  assert.equal(M.valorEm(menor,p,3),M.valorEm(maior,p,3),'o sentido não altera o valor medido');
+  assert.equal(M.valorEm(maior,p,3),80);
+  // A fração dentro da escala também é a mesma...
+  assert.ok(Math.abs(M.fracao(menor,80)-0.8)<1e-9);
+  assert.ok(Math.abs(M.fracao(maior,80)-0.8)<1e-9);
+  // ...mas o quanto disso é RUIM inverte, e é isso que pinta.
+  assert.ok(Math.abs(M.fracaoRuim(menor,80)-0.8)<1e-9,'severidade 80 é ruim');
+  assert.ok(Math.abs(M.fracaoRuim(maior,80)-0.2)<1e-9,'mortalidade 80 é boa');
+  const vermelho=M.corDe(M.fracaoRuim(menor,80)), verde=M.corDe(M.fracaoRuim(maior,80));
+  assert.notEqual(vermelho,verde,'a cor tem de mudar com o sentido');
+  const rgb=c=>c.match(/\d+/g).map(Number);
+  assert.ok(rgb(vermelho)[0]>rgb(verde)[0],'severidade alta puxa para o vermelho');
+  assert.ok(rgb(verde)[1]>rgb(vermelho)[1],'mortalidade alta puxa para o verde');
+}
+
+/* ============================ 4. Variável sem escala cadastrada: diz que não sabe */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('12'),'contagem'), av('A2','2026-01-19',todas('40'),'contagem')
+  ]),'sev');
+  assert.equal(m.escala.definida,false,'contagem não tem teto: a escala não está definida');
+  assert.equal(m.escala.max,null);
+  assert.match(m.escala.porque,/teto/,'e o motivo é dito em palavras: '+m.escala.porque);
+  assert.equal(M.fracao(m,40),null,'sem escala não há fração');
+  assert.equal(M.fracaoRuim(m,40),null);
+  assert.equal(M.corDe(null),'rgb(150,154,158)','sem escala a coluna sai cinza, não verde nem vermelha');
+  // O valor continua legível: o que falta é a escala de cor, não o dado.
+  assert.equal(M.valorEm(m,parcela('T1',1),0),12);
+
+  // Declarar o teto na avaliação resolve, sem cadastro novo em outro lugar.
+  const comTeto=M.modelo(estudo([
+    av('A1','2026-01-12',todas('12'),'contagem',{escalaMaxValor:50}),
+    av('A2','2026-01-19',todas('40'),'contagem',{escalaMaxValor:50})
+  ]),'sev');
+  assert.equal(comTeto.escala.definida,true);
+  assert.equal(comTeto.escala.max,50);
+  assert.ok(Math.abs(M.fracao(comTeto,40)-0.8)<1e-9);
+}
+
+/* ================================ escala ordinal: degrau, e sem AACPD */
+{
+  const cfg={escalaMax:9};
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('0'),'escala',cfg), av('A2','2026-01-19',todas('33,3'),'escala',cfg),
+    av('A3','2026-02-12',todas('66,7'),'escala',cfg)
+  ]),'sev');
+  assert.equal(m.ordinal,true);
+  const p=parcela('T2',1);
+  assert.equal(M.valorEm(m,p,3.5),0,'entre avaliações a nota NÃO se move: é degrau');
+  assert.equal(M.valorEm(m,p,7),33.3,'no instante da avaliação, o valor daquela avaliação');
+  assert.equal(M.valorEm(m,p,20),33.3,'e segue valendo até a próxima');
+  assert.equal(M.aacpd(m,p),null,'AACPD não se aplica a escala ordinal');
+  // A escala é a do índice de McKinney (0 a 100), não a da nota crua de 0 a 9.
+  assert.equal(m.escala.max,100);
+  assert.match(m.escala.porque,/McKinney/);
+}
+
+/* ================================== valor como texto: vírgula, lixo, vazio */
+{
+  assert.equal(M.numero('12,5'),12.5,'vírgula decimal é aceita');
+  assert.equal(M.numero(' 7 '),7);
+  assert.equal(M.numero('0'),0,'zero é observação válida, não ausência');
+  assert.equal(M.numero(''),null);
+  assert.equal(M.numero(null),null);
+  assert.equal(M.numero(undefined),null);
+  assert.equal(M.numero('n/a'),null,'texto não-numérico é ausente');
+  assert.equal(M.numero('--'),null);
+  ['12,5','','n/a',null,undefined,'0'].forEach(v=>{
+    const n=M.numero(v);
+    assert.ok(n===null||Number.isFinite(n),'NaN não pode escapar daqui: '+v);
+  });
+  // E nada de NaN pela via do modelo.
+  const m=M.modelo(estudo([av('A1','2026-01-12',todas('n/a')),av('A2','2026-01-19',todas('12,5'))]),'sev');
+  const v=M.valorEm(m,parcela('T1',1),3);
+  assert.ok(v===null||Number.isFinite(v),'valorEm nunca devolve NaN');
+}
+
+/* ====================================== a grade varia com o estudo */
+{
+  const cinco=[1,2,3,4,5].map(i=>({id:'T'+i,produto:'P'+i}));
+  const seis=[1,2,3,4,5,6].map(i=>({id:'T'+i,produto:'P'+i}));
+  const a=M.modelo({dataInicio:'2026-01-12',numRepeticoes:4,tratamentos:cinco,
+                    avaliacoes:[av('A1','2026-01-12',{}),av('A2','2026-01-19',{})]},'sev');
+  const b=M.modelo({dataInicio:'2026-01-12',numRepeticoes:3,tratamentos:seis,
+                    avaliacoes:[av('A1','2026-01-12',{}),av('A2','2026-01-19',{})]},'sev');
+  assert.equal(a.grade.length,20,'5 × 4 dá 20 parcelas');
+  assert.equal(b.grade.length,18,'6 × 3 dá 18 parcelas');
+  assert.equal(a.grade[0].chave,'T1R1','a chave é a do app (_avRowKey), não "T1:A"');
+  assert.equal(b.grade[b.grade.length-1].chave,'T6R3');
+  // numRepeticoes ausente não quebra a grade: vira 1.
+  const c=M.modelo({dataInicio:'2026-01-12',tratamentos:cinco,avaliacoes:[av('A1','2026-01-12',{})]},'sev');
+  assert.equal(c.grade.length,5);
+}
+
+/* ============================ avaliação sem data fica de fora, e é dito */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','',todas('20')), av('A3','2026-01-26',todas('30'))
+  ]),'sev');
+  assert.deepEqual(m.avs.map(x=>x.daa),[0,14],'sem data não há DAA, e a avaliação sai do eixo');
+  assert.equal(m.semData,1,'e a tela sabe quantas ficaram de fora para avisar');
+}
+
+/* ============ MODO HISTÓRICO: o eixo vertical passa a ser o TEMPO ============
+   Mesma exigência do outro modo, vista de outro ângulo: a altura de cada trecho
+   é proporcional aos DIAS que ele cobre. Trechos de altura igual desenhariam um
+   ensaio que não existiu — e continuariam parecendo certos. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-01-19',todas('20')),
+    av('A3','2026-01-26',todas('30')), av('A4','2026-02-12',todas('40'))
+  ]),'sev');
+  const tr=M.trajetoria(m,parcela('T2',1));
+
+  assert.equal(tr.vao,31,'a torre cobre o vão inteiro do ensaio, em dias');
+  assert.equal(tr.trechos.length,3);
+  assert.deepEqual([...tr.trechos.map(t=>t.dias)],[7,7,17]);
+  // 7/31, 7/31 e 17/31 — nada de um terço para cada.
+  const alturas=tr.trechos.map(t=>t.z1-t.z0);
+  alturas.forEach((h,i)=>assert.ok(Math.abs(h-tr.trechos[i].dias/31)<1e-9,
+    'altura proporcional aos dias: trecho '+i+' deu '+h));
+  assert.ok(Math.abs(alturas[2]/alturas[0]-17/7)<1e-9,
+    'o trecho de 17 dias é 2,43× o de 7 — não igual aos outros');
+  assert.notEqual(Number(alturas[0].toFixed(6)),Number((1/3).toFixed(6)),
+    'e não é um terço, que é o que degraus iguais dariam');
+  // A soma das alturas fecha em 1: a torre vai do primeiro ao último DAA.
+  assert.ok(Math.abs(alturas.reduce((a,b)=>a+b,0)-1)<1e-9);
+  // Os pontos são as MEDIÇÕES, e a posição de cada um é o DAA dele.
+  assert.deepEqual([...tr.pontos.map(x=>x.daa)],[0,7,14,31]);
+  tr.pontos.forEach(x=>assert.ok(Math.abs(x.z-x.daa/31)<1e-9,'o anel fica no DAA real'));
+  assert.equal(tr.buracos,0);
+  assert.equal(tr.vazios.length,0);
+}
+
+/* O buraco vira vão na torre, e o vão continua existindo como espaço. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-01-19',todas('20')),
+    av('A3','2026-01-26',todas('30',{'T3R2':''})), av('A4','2026-02-12',todas('40'))
+  ]),'sev');
+  const tr=M.trajetoria(m,parcela('T3',2));
+  assert.equal(tr.trechos.length,1,'só o trecho 0→7 tem as duas pontas');
+  assert.equal(tr.buracos,2);
+  assert.equal(tr.pontos[2].valor,null,'e a medição que falta aparece como falta, não como zero');
+  // Os trechos vazios são devolvidos COM a altura que ocupariam: sem isso a
+  // parcela mal lançada vira um toco que as torres inteiras escondem, e some
+  // justo da vista de quem foi procurar problema.
+  assert.equal(tr.vazios.length,2);
+  assert.deepEqual([...tr.vazios.map(v=>v.dias)],[7,17]);
+  const total=tr.trechos.concat(tr.vazios).reduce((a,t)=>a+(t.z1-t.z0),0);
+  assert.ok(Math.abs(total-1)<1e-9,'cheios e vazios juntos cobrem a torre inteira');
+  // Nenhum trecho emenda por cima do buraco: não existe trecho de 0 a 31.
+  assert.ok(!tr.trechos.some(t=>t.daa0===0&&t.daa1===31),'a torre não emenda por cima da falta');
+}
+
+/* Ordinal: o trecho inteiro segura a nota de baixo, e o salto é na medição. */
+{
+  const cfg={escalaMax:9};
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('0'),'escala',cfg), av('A2','2026-01-19',todas('33,3'),'escala',cfg),
+    av('A3','2026-02-12',todas('66,7'),'escala',cfg)
+  ]),'sev');
+  const tr=M.trajetoria(m,parcela('T2',1));
+  tr.trechos.forEach(t=>assert.equal(t.v0,t.v1,'no ordinal o trecho não caminha: v0 === v1'));
+  assert.deepEqual([...tr.trechos.map(t=>t.v0)],[0,33.3]);
+  // Mas as alturas continuam sendo os dias reais: 7 e 24 de 31.
+  assert.deepEqual([...tr.trechos.map(t=>t.dias)],[7,24]);
+}
+
+/* Sem avaliação nenhuma, a trajetória é vazia em vez de explodir. */
+{
+  const m=M.modelo(estudo([]),'sev');
+  const tr=M.trajetoria(m,parcela('T1',1));
+  assert.equal(tr.trechos.length,0);
+  assert.equal(tr.pontos.length,0);
+  assert.equal(tr.vao,0);
+}
+
+/* Os dois modos existem na tela e dizem o que cada um mede. */
+{
+  const c3=fs.readFileSync('campo-3d.js','utf8');
+  assert.ok(/\['dia','Estado no dia'/.test(c3)&&/\['historico','Histórico 3D'/.test(c3),
+    'faltam os dois modos na lista que monta os botões');
+  assert.ok(/data-modo="/.test(c3),'os botões precisam carregar qual modo acionam');
+  assert.ok(/altura = valor/.test(c3)&&/altura = tempo/.test(c3),
+    'cada botão precisa dizer o que a altura significa naquele modo');
+  // No histórico o tempo é o eixo: não pode sobrar um controle de tempo
+  // competindo com ele e sugerindo que ainda há um instante escolhido.
+  assert.ok(/estado\.modo==='dia'\s*\n?\s*\?/.test(c3)||/estado\.modo==='dia'/.test(c3),
+    'os controles de tempo precisam ser condicionais ao modo');
+}
+
+/* ==================== o módulo NÃO é carregado no arranque do app ============ */
+{
+  const index=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
+  assert.ok(!/campo-3d\.(js|css)/.test(index),
+    'campo-3d não pode estar no index.html: o caminho de campo não paga esse download');
+  assert.ok(/\.\/campo-3d\.js\?v=\d+/.test(sw)&&/\.\/campo-3d\.css\?v=\d+/.test(sw),
+    'mas precisa estar no pré-cache do service worker, senão não abre offline');
+  const ep=fs.readFileSync('estudo-pagina.js','utf8');
+  assert.ok(/createElement\('script'\)/.test(ep)&&/campo-3d\.js/.test(ep),
+    'o estudo-pagina.js precisa injetar o módulo sob demanda');
+  assert.ok(/data-ep-action="campo"/.test(ep),'falta o botão Ver no campo');
+  assert.ok(/Ver no campo/.test(ep)&&!/>3D</.test(ep),
+    'o rótulo descreve o que mostra, não a técnica');
+  assert.ok(/data-ep-variavel=/.test(ep)&&/data-ep-avaliacao=/.test(ep),
+    'o botão precisa levar a variável e a avaliação já escolhidas no painel');
+  const c3=fs.readFileSync('campo-3d.js','utf8');
+  assert.ok(!/three|THREE|import\s|require\(/.test(c3),'nenhuma biblioteca nova: canvas 2D e pronto');
+  assert.ok(/getContext\('2d'\)/.test(c3),'o desenho é canvas 2D com projeção própria');
+}
+
+/* ====================================== 9. a régua da altura diz o que a altura é
+   A altura sempre significou alguma coisa e não dizia quanto. A régua resolve
+   isso — e só vale se usar a MESMA conta que levanta a coluna. Uma régua com
+   mapeamento próprio seria pior que régua nenhuma: daria autoridade de medida a
+   um desencontro. */
+{
+  const avs=[av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))];
+  const m=M.modelo(estudo(avs),'sev');
+  /* Na escala inteira (o botão "Ver na escala inteira") a régua é a da variável. */
+  const mi=M.modelo(estudo(avs),'sev',{altura:'inteira'});
+
+  const dia=M.eixo(mi,'dia');
+  assert.equal(dia.marcas.length,5,'cinco marcas: 0, 25, 50, 75 e 100 % da altura');
+  assert.equal(dia.marcas[0].v,mi.escala.min);
+  assert.equal(dia.marcas[4].v,mi.escala.max,'na escala inteira, o topo da régua é o topo da escala da variável');
+  /* O laço que importa: a marca em f vale v, e a coluna de valor v sobe até f. */
+  dia.marcas.forEach(mk=>assert.ok(Math.abs(M.fracaoAltura(mi,mk.v)-mk.f)<1e-9,
+    'a régua e a altura da coluna precisam ser a mesma conta (marca '+mk.texto+')'));
+  assert.equal(dia.titulo,'%','a régua diz a unidade da variável');
+
+  /* AMPLIADA (o padrão): o maior lançado é 40, então a régua vai de 0 a 40 —
+     e continua sendo a mesma conta que levanta a coluna. */
+  const amp=M.eixo(m,'dia');
+  assert.equal(amp.ampliada,true);
+  assert.equal(amp.marcas[0].v,m.escala.min,'ampliar não tira a coluna do chão: a régua começa no piso da escala');
+  assert.equal(amp.marcas[4].v,40,'o topo para logo acima do maior valor lançado');
+  amp.marcas.forEach(mk=>assert.ok(Math.abs(M.fracaoAltura(m,mk.v)-mk.f)<1e-9,
+    'régua ampliada e coluna, a mesma conta (marca '+mk.texto+')'));
+  assert.equal(JSON.stringify(amp.marcas.map(mk=>mk.texto)),'["0","10","20","30","40"]','marcas em número redondo');
+
+  /* No histórico a altura é TEMPO, então a régua muda de assunto junto. */
+  const hist=M.eixo(m,'historico');
+  assert.equal(hist.titulo,'DAA');
+  assert.equal(hist.marcas[4].v,m.daaMax,'o topo é o último DAA do ensaio');
+  assert.equal(hist.marcas[0].v,0);
+  assert.notEqual(dia.marcas[4].texto,hist.marcas[4].texto,
+    'as duas réguas não podem coincidir por acaso neste estudo');
+
+  /* Sem escala definida não há régua no modo dia: ali a altura já é fixa por
+     decisão, e uma régua sugeriria uma medida que não existe. */
+  const semEscala=M.modelo(estudo([av('A1','2026-01-12',todas('3'),'contagem')]),'sev');
+  assert.equal(semEscala.escala.definida,false);
+  assert.equal(M.eixo(semEscala,'dia'),null,'sem escala, sem régua');
+
+  /* Uma avaliação só, no dia zero: não há eixo de tempo para medir. */
+  const umDia=M.modelo(estudo([av('A1','2026-01-12',todas('10'))]),'sev');
+  assert.equal(umDia.daaMax,0);
+  assert.equal(M.eixo(umDia,'historico'),null,'sem tempo decorrido, sem régua de tempo');
+}
+
+/* ================================== 10. a cor anda em faixas, com corte visível
+   Degradê contínuo parecia mais fino e lia pior: entre 31 % e 36 % ninguém
+   enxerga a diferença de tom, e não dá para dizer em que altura da escala uma
+   coluna está. O que NÃO pode acontecer é a faixa virar classificação secreta —
+   por isso a legenda mostra os cortes em número — nem os cortes serem fixos em
+   5/20/40/60, que só fariam sentido para severidade em porcentagem. */
+{
+  const m=M.modelo(estudo([
+    av('A1','2026-01-12',todas('10')), av('A2','2026-02-02',todas('40'))
+  ]),'sev');
+  const fs=M.faixas(m);
+  assert.equal(fs.length,5,'cinco faixas');
+  assert.equal(fs[0].de,m.escala.min,'a primeira começa no piso da escala');
+  assert.equal(fs[4].ate,m.escala.max,'e a última termina no teto');
+  fs.forEach((f,i)=>{ if(i)assert.equal(f.de,fs[i-1].ate,'sem buraco nem sobreposição entre faixas'); });
+
+  /* Todo valor da escala cai em exatamente uma faixa, inclusive as pontas. */
+  assert.equal(M.faixaDe(m,m.escala.min),0,'o piso cai na primeira');
+  assert.equal(M.faixaDe(m,m.escala.max),4,'o teto pertence à última — não fica fora de todas');
+  assert.equal(M.faixaDe(m,m.escala.min+(m.escala.max-m.escala.min)*0.5),2,'o meio cai na do meio');
+
+  /* Dois valores da MESMA faixa recebem a mesma cor; de faixas vizinhas, não. */
+  const vao=m.escala.max-m.escala.min, cor=v=>fs[M.faixaDe(m,v)].cor;
+  assert.equal(cor(m.escala.min+vao*0.05),cor(m.escala.min+vao*0.15),'mesma faixa, mesma cor');
+  assert.notEqual(cor(m.escala.min+vao*0.15),cor(m.escala.min+vao*0.25),'faixa vizinha, cor diferente');
+
+  /* O sentido continua invertendo só a COR: com "maior é melhor", o topo da
+     escala fica verde e o piso vermelho. */
+  const maiorAv2=[av('A1','2026-01-12',todas('10'),'pct',{sentido:'maior'})];
+  const mm=M.modelo(estudo(maiorAv2),'sev');
+  assert.equal(mm.sentido,'maior');
+  assert.equal(M.faixas(mm)[4].cor,M.faixas(m)[0].cor,'invertido, o teto usa a cor que o piso usava');
+  assert.equal(M.faixas(mm)[0].cor,M.faixas(m)[4].cor);
+
+  /* A ALTURA continua contínua: quantizar a cor não pode quantizar a medida. */
+  const a=M.fracao(m,m.escala.min+vao*0.11), b=M.fracao(m,m.escala.min+vao*0.19);
+  assert.notEqual(a,b,'dois valores da mesma faixa mantêm alturas diferentes');
+
+  /* Sem escala, sem faixa — e a cor cai no cinza de "sem escala". */
+  const semEscala=M.modelo(estudo([av('A1','2026-01-12',todas('3'),'contagem')]),'sev');
+  assert.equal(M.faixas(semEscala),null);
+  assert.equal(M.faixaDe(semEscala,3),null);
+
+  /* A legenda mostra número, não adjetivo — conferido na função dela, não no
+     arquivo inteiro: "intermediário" aparece num comentário sobre escala
+     ordinal, que é outro assunto. */
+  const src=fs2.readFileSync('campo-3d.js','utf8');
+  const leg=src.slice(src.indexOf('function legenda('),src.indexOf('\n}',src.indexOf('function legenda(')));
+  assert.match(src,/function rotuloFaixa/,'a legenda tem rótulo por faixa');
+  assert.ok(/rotuloFaixa/.test(leg),'e a usa');
+  assert.ok(!/intermediário|melhor<|pior</.test(leg),
+    'adjetivo não deixa ninguém conferir em que faixa a coluna caiu; "20 – 40" deixa');
+  assert.ok(!/[^\w](5|20|40|60)\s*,\s*(20|40|60|80)[^\w]/.test(src),
+    'os cortes saem da escala da variável, não de números fixos de severidade');
+}
+
+/* =================== 11. nunca desistir calado: o estudo que não tem o que mostrar
+   Dois casos faziam a vista simplesmente RETORNAR: estudo sem avaliação e
+   avaliação sem variável declarada. No celular o botão não respondia; no
+   dossiê o topo ficava preso em "Montando a vista do campo…" para sempre. A
+   tela existia, o estudo existia, e nada acontecia — do lado de quem usa, isso
+   é o app quebrado. Um aviso é resposta; sumir não é. */
+{
+  const proj={codigo:'24-200',cultura:'Soja',alvo:'Ferrugem'};
+  const texto=el=>el.textContent.replace(/\s+/g,' ');
+
+  /* Avaliação cadastrada, nenhuma variável declarada — o caso que apareceu no uso. */
+  const semVariavel=[{id:'A1',data:'2026-01-20',variaveis:[],tipos:{},notas:{}}];
+  w.abrirCampo3D(proj,estudo(semVariavel),{});
+  let ov=w.document.getElementById('campo3dOvl');
+  assert.ok(ov&&!ov.hidden,'a janela abre mesmo sem ter o que desenhar');
+  assert.match(texto(ov),/não declaram nenhuma variável/,'e diz exatamente o que falta');
+  assert.equal(ov.querySelector('#c3cv'),null,'sem cena: não há o que pôr nela');
+  assert.ok(ov.querySelector('[data-c3="fechar"]'),'e dá saída — aviso sem fechar é beco');
+
+  /* Estudo sem avaliação nenhuma. */
+  w.abrirCampo3D(proj,estudo([]),{});
+  ov=w.document.getElementById('campo3dOvl');
+  assert.match(texto(ov),/ainda não tem avaliação cadastrada/);
+
+  /* Embutida no dossiê: o aviso vai para o hospedeiro, e sem botão de fechar,
+     que ali deixaria um buraco no topo da página. */
+  const host=w.document.createElement('div');
+  w.document.body.appendChild(host);
+  w.abrirCampo3D(proj,estudo(semVariavel),{hospedeiro:host});
+  assert.match(texto(host),/não declaram nenhuma variável/,'o dossiê recebe o motivo no lugar do "Montando a vista…"');
+  assert.equal(host.querySelector('[data-c3="fechar"]'),null);
+
+  /* E a função não pode voltar a sair calada. */
+  const src=fs2.readFileSync('campo-3d.js','utf8');
+  const ab=src.slice(src.indexOf('function abrir(s,st,op){'),src.indexOf('\n}',src.indexOf('function abrir(s,st,op){')));
+  assert.ok(!/^\s*if\([^)]*\)return;\s*$/m.test(ab),'nenhuma saída silenciosa em abrir()');
+  assert.equal((ab.match(/semVista\(/g)||[]).length,2,'os dois casos respondem com aviso');
+}
+
+/* ============================ 12. a caixa manda nas DUAS medidas do desenho */
+{
+  const c3=fs.readFileSync('campo-3d.js','utf8');
+  const lig=c3.slice(c3.indexOf('function ligarCanvas('),c3.indexOf('\n}',c3.indexOf('function ligarCanvas(')));
+  assert.match(lig,/clientWidth/,'a largura vem da caixa');
+  assert.match(lig,/clientHeight/,
+    'e a altura também: fixa em 380, uma caixa de 320 espremia o desenho 16 % na vertical — coluna mais baixa do que o valor que ela representa');
+}
+
+/* ======================= 13. o cenário: onde a decoração poderia virar dado
+   A cena chegou para dar volume — céu, bloco de solo, luz nas faces, sombra no
+   chão e a rosa do canto. Nada disso é medição, e é exatamente por isso que
+   tem teste: numa vista realista a decoração PASSA POR informação. O que cada
+   asserção aqui segura é uma maneira de a cena começar a mentir. */
+{
+  const rad=g=>g*Math.PI/180;
+
+  /* O TOPO É A FACE DE LEITURA. A cor dele é a faixa da variável, e faixa é
+     dado. Se a luz mexesse ali, a MESMA parcela mudaria de tom conforme o
+     ângulo em que o campo parou — e duas parcelas de valor igual sairiam de
+     cores diferentes na mesma tela, só porque uma está de um lado da grade. */
+  for(const g of [0,17,34,90,163,270,359])
+    assert.equal(M.brilho([0,0,1],rad(g)),1,'o topo recebe luz cheia em qualquer giro: a cor dele é o dado');
+
+  /* E nenhuma lateral chega à luz do topo. Quem enxerga um tom cheio sabe que
+     está olhando a face de leitura, e não uma lateral bem iluminada. */
+  const N=M.normais();
+  let menor=1, maior=0;
+  for(let g=0;g<360;g+=7) N.forEach(n=>{
+    const b=M.brilho(n,rad(g));
+    assert.ok(b<1,'lateral nunca alcança o topo');
+    menor=Math.min(menor,b);maior=Math.max(maior,b);
+  });
+  assert.ok(menor>0.5,'nem tão escura que a matiz da faixa morra: a lateral é a cor MULTIPLICADA, e verde e âmbar escuros demais viram o mesmo marrom');
+  /* E NÃO BASTA "menor que o topo" — precisa de FOLGA. Esta é a regressão que
+     chegou a ir ao ar: a faixa foi aberta até 0,97 e a lateral iluminada ficou
+     a três por cento do topo. Três por cento não se enxerga, a aresta do topo
+     some, e um cubo sem aresta de topo é um L chapado. A vista saiu MENOS
+     tridimensional do que a versão que a cena veio substituir, e sem nenhum
+     teste reclamando — todos só perguntavam se a lateral era menor que 1. */
+  assert.ok(maior<=0.88,
+    'a lateral mais clara precisa ficar visivelmente abaixo do topo: encostada nele, a aresta do topo some e a coluna vira desenho chapado');
+  assert.ok(maior-menor>0.2,
+    'e as duas laterais precisam de degraus distantes entre si, senão a coluna não tem lado claro e lado escuro');
+
+  /* RELEVO. De qualquer ângulo enxergam-se duas faces (ou uma, nos ângulos
+     retos). Quando são duas, elas não podem sair do mesmo tom: aí a coluna
+     vira silhueta chapada, que era o defeito de antes — a luz vinha do índice
+     da face, então girar o campo não mudava sombreado nenhum. */
+  /* "À vista" com folga: perto do ângulo reto uma das faces fica quase de
+     perfil e ocupa dois pixels — exigir contraste de uma lasca não diz nada
+     sobre volume. Só entram as faces que o olho realmente lê. */
+  const aVista=g=>{const r=rad(g),si=Math.sin(r),co=Math.cos(r);
+    return N.map(n=>({ry:n[0]*si+n[1]*co,b:M.brilho(n,r)})).filter(f=>f.ry<-0.18);};
+  for(let g=0;g<360;g+=13){
+    const v=aVista(g);
+    if(v.length<2)continue;
+    const dif=Math.max(...v.map(f=>f.b))-Math.min(...v.map(f=>f.b));
+    assert.ok(dif>0.08,'giro '+g+'°: as duas faces à vista precisam de tons diferentes, senão não há volume');
+  }
+
+  /* A LUZ NÃO GIRA COM O CAMPO. Ela fica presa na tela, e o rumo da sombra é
+     devolvido em coordenadas do mundo justamente para compensar o giro: na
+     tela, todas as sombras apontam sempre para o mesmo lado. Girassem junto,
+     metade das voltas deixaria tudo contra a luz. */
+  const naTela=g=>{const r=rad(g),u=M.rumoDaLuz(r),si=Math.sin(r),co=Math.cos(r);
+    const rx=u.x*co-u.y*si, ry=u.x*si+u.y*co, py=-(ry*0.55);
+    const n=Math.hypot(rx,py)||1;return [rx/n,py/n];};
+  const ref=naTela(0);
+  for(const g of [0,31,77,140,222,300]){
+    const t=naTela(g);
+    assert.ok(Math.abs(t[0]-ref[0])<1e-9&&Math.abs(t[1]-ref[1])<1e-9,
+      'giro '+g+'°: a sombra continua caindo para o mesmo lado da tela');
+    assert.ok(Math.abs(Math.hypot(M.rumoDaLuz(rad(g)).x,M.rumoDaLuz(rad(g)).y)-1)<1e-9,'o rumo é unitário');
+  }
+
+  /* A mancha de UMA coluna é a base mais a base deslocada, numa figura só. Em
+     duas figuras com transparência, a sobreposição dobraria o tom e nasceria
+     uma mancha mais escura onde só há uma coluna. */
+  const base=[[0,0],[10,0],[10,10],[0,10]], desl=base.map(p=>[p[0]+4,p[1]+4]);
+  const c=M.casco(base.concat(desl));
+  assert.equal(c.length,6,'a união de um quadrado com ele deslocado é um hexágono');
+  assert.ok(!c.some(p=>p[0]===4&&p[1]===4),'e os pontos de dentro ficam de fora do contorno');
+
+  /* NOME REPETIDO NO TOPO DO MÓDULO — o erro que custou a cena inteira.
+     A constante horizontal da luz nasceu chamada LH, que já era, vinte linhas
+     acima, a ALTURA DO CANVAS. As duas viraram a mesma variável: ligarCanvas()
+     gravava 420 por cima da luz, todo produto escalar virava zero, as quatro
+     laterais saíam do mesmo tom e as sombras encolhiam para nada. Não deu erro
+     nenhum — só deixou de ser cena. Num arquivo de um IIFE só, duas declarações
+     do mesmo nome no topo nunca são de propósito. */
+  {
+    const src=fs2.readFileSync('campo-3d.js','utf8');
+    const nomes=[];
+    src.split('\n').forEach((linha,i)=>{
+      if(!/^var /.test(linha))return;
+      let prof=0,atual='',partes=[],aspa=null;
+      for(const ch of linha.slice(4)){
+        if(aspa){atual+=ch;if(ch===aspa)aspa=null;continue;}
+        if(ch==="'"||ch==='"'){aspa=ch;atual+=ch;continue;}
+        if('(['.includes(ch)||ch==='{')prof++;
+        if(')]'.includes(ch)||ch==='}')prof--;
+        if(ch===','&&prof===0){partes.push(atual);atual='';continue;}
+        atual+=ch;
+      }
+      partes.push(atual);
+      partes.forEach(p=>{const m=p.trim().match(/^([A-Za-z_$][\w$]*)/);if(m)nomes.push([m[1],i+1]);});
+    });
+    assert.ok(nomes.length>20,'o varredor achou as declarações de topo');
+    const visto={};
+    nomes.forEach(([n,l])=>{
+      assert.ok(!visto[n],'"'+n+'" é declarado duas vezes no topo do módulo (linhas '+visto[n]+' e '+l+
+        '): num IIFE só, isso é uma variável sobrescrevendo a outra em silêncio');
+      visto[n]=l;
+    });
+  }
+
+  /* A ROSA NÃO É BÚSSOLA, e o bloco de solo não é terreno. O estudo não guarda
+     nem a orientação da área nem a topografia: seta de norte e morro no fundo
+     seriam desenho no lugar de medida. A tela precisa DIZER isso — cena
+     realista sem ressalva é convite a ler decoração como dado. */
+  {
+    const src=fs2.readFileSync('campo-3d.js','utf8');
+    const pin=src.slice(src.indexOf('function pintar('),src.indexOf('\n}',src.indexOf('function pintar(')));
+    assert.match(pin,/Não é bússola/,'a nota avisa que a rosa não aponta o norte');
+    assert.match(pin,/sem vegetação/,'e que o bloco de solo não tem nada plantado nele');
+    const ro=src.slice(src.indexOf('function desenharRosa('),src.indexOf('\n}',src.indexOf('function desenharRosa(')));
+    assert.ok(!/[^\w](N|norte|Norte)[^\w]/.test(ro.replace(/\/\*[\s\S]*?\*\//g,'')),
+      'e a rosa desenhada não estreia um "N" em lugar nenhum');
+  }
+
+  /* O CENÁRIO DESLIGA. Quem achar que a decoração atrapalha a leitura fica com
+     o chão chapado de antes — a cena é ajuda, não pedágio. */
+  {
+    const trats=[{id:'T1',produto:'A'},{id:'T2',produto:'B'}];
+    const notas={};trats.forEach((t,i)=>{for(let r=1;r<=2;r++)notas[t.id+'R'+r]={sev:String(20+i*20+r)};});
+    const st={dataInicio:'2026-01-01',numRepeticoes:2,tratamentos:trats,
+      avaliacoes:[{id:'A1',data:'2026-01-10',variaveis:['sev'],tipos:{sev:'pct'},notas:notas}]};
+    const host=w.document.createElement('div');
+    w.document.body.appendChild(host);
+    w.abrirCampo3D({codigo:'Z',cultura:'Soja',alvo:'Alvo',tratamentos:trats},st,{hospedeiro:host});
+    const bt=host.querySelector('[data-c3="cena"]');
+    assert.ok(bt,'a vista tem o botão do Cenário');
+    assert.equal(bt.getAttribute('aria-pressed'),'true','e ele já vem ligado');
+    assert.match(host.textContent.replace(/\s+/g,' '),/Não é bússola/,'com a ressalva da rosa junto');
+    bt.click();
+    const bt2=host.querySelector('[data-c3="cena"]');
+    assert.equal(bt2.getAttribute('aria-pressed'),'false','desligar desliga');
+    assert.ok(!/Não é bússola/.test(host.textContent),
+      'e a ressalva sai junto: aviso sobre o que não está mais na tela é ruído');
+    bt2.click();
+    assert.equal(host.querySelector('[data-c3="cena"]').getAttribute('aria-pressed'),'true');
+  }
+}
+
+/* ===================== 14. a altura AMPLIADA: a diferença aparece, a cor não muda
+   Pedido de quem usa: "cresce um espaço curto e visualmente não fica tão
+   diferente, fica muito sutil". Na escala de 0 a 100 %, um ensaio em que a
+   testemunha chega a 18 % tinha todas as colunas no quinto de baixo, e o
+   tratamento que ia de 2 para 8 % nem saía do piso. A régua da altura agora
+   para logo acima do maior valor lançado. O que NÃO pode acontecer: a cor
+   ampliar junto (a faixa é da escala da variável), a coluna sair do chão (a
+   proporção entre valores tem de continuar) ou a régua andar com o tempo. */
+{
+  const avs=[av('A1','2026-01-12',todas('2',{T1R1:'5'})),
+             av('A2','2026-01-26',todas('8',{T1R1:'18',T1R2:'0'}))];
+  const m=M.modelo(estudo(avs),'sev'), mi=M.modelo(estudo(avs),'sev',{altura:'inteira'});
+
+  assert.equal(m.altura.maior,18,'o maior lançado do ESTUDO inteiro, de qualquer avaliação');
+  assert.equal(m.altura.max,20,'teto redondo logo acima: 0 a 20 %');
+  assert.equal(m.altura.ampliada,true);
+  assert.equal(mi.altura.max,100,'na escala inteira, o teto é o da variável');
+  assert.equal(mi.altura.podeAmpliar,true,'e o botão continua oferecendo ampliar');
+
+  /* A DIFERENÇA APARECE: de 2 para 8 % a coluna sobe 30 % da altura, e não 4 %. */
+  const sobe=(mm)=>M.alturaDe(mm,8)-M.alturaDe(mm,2);
+  assert.ok(sobe(m)>=0.29,'ampliada, de 2 para 8 % a coluna sobe quase um terço da altura: '+sobe(m));
+  assert.ok(sobe(m)>5*sobe(mi),'ao menos cinco vezes o que subia na escala inteira');
+
+  /* A COLUNA NÃO SAI DO CHÃO: o dobro do valor continua sendo o dobro da altura. */
+  assert.ok(Math.abs(M.alturaDe(m,10)/M.alturaDe(m,20)-0.5)<1e-9,'10 % é metade de 20 %, ampliada');
+  assert.ok(Math.abs(M.alturaDe(mi,10)/M.alturaDe(mi,20)-0.5)<1e-9,'e na escala inteira');
+
+  /* A COR NÃO AMPLIA: mesma faixa, mesmos cortes, nas duas réguas. */
+  [0,2,8,18].forEach(v=>assert.equal(M.corDe(M.fracaoRuim(m,v)),M.corDe(M.fracaoRuim(mi,v)),
+    'a cor de '+v+' % não depende da régua da altura'));
+  assert.equal(JSON.stringify(M.faixas(m)),JSON.stringify(M.faixas(mi)),'os cortes da legenda são os mesmos');
+  assert.equal(M.faixaDe(m,18),0,'18 % segue na primeira faixa da escala de 0 a 100');
+
+  /* Ausência continua não sendo zero: o zero medido é uma coluna rasa, o vazio
+     não tem altura nenhuma. */
+  assert.ok(M.alturaDe(m,0)>0,'zero medido tem coluna');
+  assert.equal(M.alturaDe(m,null),0,'ausente não tem');
+  assert.ok(M.alturaDe(m,1)>M.alturaDe(m,0),'e o piso é baixo o bastante para 1 % já subir dele');
+
+  /* Nada a ampliar: tudo no zero, ou o maior lançado já perto do topo. */
+  const zeros=M.modelo(estudo([av('A1','2026-01-12',todas('0'))]),'sev');
+  assert.equal(zeros.altura.podeAmpliar,false,'tudo no piso: não há o que ampliar');
+  assert.equal(M.eixo(zeros,'dia').marcas[4].v,100);
+  const alto=M.modelo(estudo([av('A1','2026-01-12',todas('90'))]),'sev');
+  assert.equal(alto.altura.podeAmpliar,false,'90 % já ocupa a escala: o teto redondo seria o próprio 100');
+  /* Sem escala definida, nem régua nem ampliação: a altura segue fixa. */
+  const cont=M.modelo(estudo([av('A1','2026-01-12',todas('7'),'contagem')]),'sev');
+  assert.equal(cont.altura.podeAmpliar,false);
+  assert.equal(M.alturaDe(cont,7),0.45);
+  assert.equal(M.eixo(cont,'dia'),null);
+  /* Valor acima do teto declarado não amplia nem estoura: fica no topo. */
+  const acima=M.modelo(estudo([av('A1','2026-01-12',todas('70'),'contagem',{escalaMaxValor:50})]),'sev');
+  assert.equal(acima.altura.ampliada,false);
+  assert.equal(M.alturaDe(acima,70),1);
+
+  /* Teto redondo: o MENOR que cobre o maior lançado, em 3 a 6 passos limpos.
+     26,9 % vai a 30 (e não a 40: a coluna mais alta pararia em dois terços). */
+  [[26.9,30,10],[18,20,5],[17,20,5],[40,40,10],[8,8,2],[3.2,4,1],[70,75,25],[12,12,2],[0.3,0.3,0.1],[1,1,0.2]].forEach(([v,teto,passo])=>{
+    const t=M.tetoRedondo(v);
+    assert.ok(Math.abs(t.teto-teto)<1e-9&&Math.abs(t.passo-passo)<1e-9,
+      'teto para '+v+': esperado '+teto+' em passos de '+passo+', veio '+t.teto+' em passos de '+t.passo);
+    assert.ok(t.n>=3&&t.n<=6,'de 3 a 6 passos');
+  });
+  const m27=M.modelo(estudo([av('A1','2026-01-12',todas('5',{T1R1:'26,9'}))]),'sev');
+  assert.equal(JSON.stringify(M.eixo(m27,'dia').marcas.map(mk=>mk.texto)),'["0","10","20","30"]','marcas de 10 em 10 até 30');
+  assert.ok(M.alturaDe(m27,26.9)>0.89,'e a coluna mais alta chega perto do topo da régua');
+
+  /* A TELA: a linha diz a régua em número e o botão troca; a exportação leva a escolha. */
+  const trs=[{id:'T1',produto:'A'},{id:'T2',produto:'B'}];
+  const notas=(a,b)=>({T1R1:{sev:a},T1R2:{sev:a},T2R1:{sev:b},T2R2:{sev:b}});
+  const st={dataInicio:'2026-01-01',numRepeticoes:2,tratamentos:trs,avaliacoes:[
+    {id:'A1',data:'2026-01-10',variaveis:['sev'],tipos:{sev:'pct'},notas:notas('2','1')},
+    {id:'A2',data:'2026-01-20',variaveis:['sev'],tipos:{sev:'pct'},notas:notas('17','3')}]};
+  const host=w.document.createElement('div');
+  w.document.body.appendChild(host);
+  w.abrirCampo3D({codigo:'AMP',cultura:'Soja',alvo:'Alvo',tratamentos:trs},st,{hospedeiro:host});
+  const txt=()=>host.textContent.replace(/\s+/g,' ');
+  let bt=host.querySelector('[data-c3="altura"]');
+  assert.ok(bt,'a vista tem o botão da régua da altura');
+  assert.equal(bt.getAttribute('aria-pressed'),'true','e ela já abre ampliada');
+  assert.match(txt(),/régua vai de 0 a 20 %/,'a linha diz a régua em número');
+  assert.match(txt(),/escala inteira \(0 a 100 %\)/,'e que a cor segue a escala inteira');
+  assert.equal(M.estadoAtual().altura,'ajustada','a exportação leva a régua da tela');
+  bt.click();
+  bt=host.querySelector('[data-c3="altura"]');
+  assert.equal(bt.getAttribute('aria-pressed'),'false','o botão volta para a escala inteira');
+  assert.match(bt.textContent,/Ampliar altura/);
+  assert.match(txt(),/Altura na escala inteira \(0 a 100 %\)/);
+  assert.equal(M.estadoAtual().altura,'inteira');
+  /* No histórico a altura é tempo: não há régua de valor para trocar. */
+  host.querySelector('[data-modo="historico"]').click();
+  assert.equal(host.querySelector('[data-c3="altura"]'),null,'no histórico o botão some');
+  host.querySelector('[data-modo="dia"]').click();
+  host.querySelector('[data-c3="altura"]').click();
+  assert.equal(M.estadoAtual().altura,'ajustada','e a escolha volta ao padrão para os próximos testes');
+}
+
+w.close();
+console.log('Ver no campo: DAA real, ausência que não é zero, sentido só na cor, variável sem escala, ordinal em degraus, grade variável, trajetória do Histórico 3D proporcional aos dias, carga sob demanda, cenário que não vira dado e altura ampliada sem mexer na cor OK.');
