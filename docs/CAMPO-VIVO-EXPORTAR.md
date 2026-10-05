@@ -8,7 +8,7 @@ formato (PNG / MP4), idioma (Português / English) e quatro caixas de conteúdo
 
 | Arquivo | Papel |
 |---|---|
-| `campo-3d.js` | Só ganhou o botão, o carregamento sob demanda e três leituras no `AgCampo3D`: `geometria()`, `prjCru()` e `estadoAtual()` (cópia, só leitura). |
+| `campo-3d.js` | Só ganhou o botão, o carregamento sob demanda e três leituras no `AgCampo3D`: `geometria()`, `prjCru()` e `estadoAtual()` (cópia, só leitura). A régua da altura (`reguaAltura`, `alturaDe`, `eixo`) mora aqui e a exportação a lê daqui. |
 | `campo-3d-exportar.js` | Composição 1920×1080, PNG, MP4, modal e textos PT/EN. Carregado só no clique. |
 | `vendor/mp4-muxer.js` | mp4-muxer 5.2.2 (MIT, ~74 KB, sem rede). Carregado só ao exportar vídeo. |
 | `campo-3d-realista.js` | Estilo **Realista** (WebGL): blocos de folhagem, solo, gramado até o horizonte, mata ao fundo, luz de fim de tarde. Carregado só quando o estilo realista é escolhido. |
@@ -22,9 +22,13 @@ alguém exporta.
 ## Regras que a exportação segue
 
 - **Nenhuma regra de dado nova.** Valor no instante (`valorEm`), faixas
-  (`faixas`), cor (`corDe(fracaoRuim)`), altura e "sem avaliação" vêm do
-  `AgCampo3D`, a mesma conta da tela. A legenda usa os mesmos cortes, com a
-  pior faixa primeiro.
+  (`faixas`), cor (`corDe(fracaoRuim)`), altura (`alturaDe`, na régua da
+  tela) e "sem avaliação" vêm do `AgCampo3D`, a mesma conta da tela. A legenda
+  usa os mesmos cortes, com a pior faixa primeiro, e uma linha para a altura
+  ("Altura: 0 a 30 %").
+- **A altura tem régua.** Nos dois estilos a altura carrega o valor, então o
+  quadro desenha a régua da tela no canto do fundo à esquerda, com os números
+  e a unidade. Ela sai junto com a legenda (desmarcar "Legenda" limpa as duas).
 - **Ausência não é zero.** Parcela sem dado sai como contorno tracejado no
   chão, sem altura e sem cor, e a legenda mostra "sem avaliação".
 - **Transição não é avaliação.** O vídeo para em cada avaliação real, em ordem
@@ -39,13 +43,40 @@ alguém exporta.
 - **Nada sai do aparelho.** O quadro é desenhado no canvas e o vídeo é
   codificado pelo próprio navegador (WebCodecs).
 
+## Altura e régua
+
+- **Régua ampliada (padrão).** A altura vai do piso da escala até o menor
+  número redondo que cobre o maior valor lançado no estudo inteiro (26,9 %
+  vira 0 a 30 %, em 3 a 6 passos de 1, 2, 2,5 ou 5 × 10ⁿ). Antes ia sempre
+  até o topo da escala (100 %), e num ensaio em que a testemunha chega a
+  25 % todas as colunas ficavam no quinto de baixo: a diferença entre as
+  parcelas era sutil demais (pedido de quem usa).
+- **A cor não amplia.** As faixas continuam na escala inteira da variável;
+  ampliar só mexe na altura. O teto sai do estudo inteiro, não do instante:
+  a régua não anda com o tempo.
+- **Escala inteira** continua a um toque na tela ("Ver na escala inteira"),
+  para comparar alturas entre estudos. O vídeo e o PNG usam a régua que
+  estava na tela.
+- O piso da coluna baixou de 12 % para 4 % da altura: o zero medido segue
+  sendo uma coluna rasa (a ausência é o contorno tracejado), mas os valores
+  pequenos deixam de ficar todos no mesmo piso.
+
 ## Estilos
 
 - **Realista** (padrão): cada parcela é um bloco de folhagem na posição da
-  grade. **A cor da folhagem é a faixa do dado; a altura é igual para todos**,
-  porque num campo de verdade a doença muda a cor, não faz a planta crescer.
-  Parcela sem avaliação fica com solo nu e contorno tracejado claro. Fundo de
-  gramado, sem céu (o campo ocupa mais o quadro). Grama e luz são cenário.
+  grade. **A cor da folhagem é a faixa do dado e a altura do bloco é o
+  valor**, na mesma régua da tela; nas transições o bloco cresce liso (as
+  folhas sobem junto com ele, nenhuma nasce nem some). Bloco cheio = 1,6 × o
+  lado comprido da parcela. Até a 21ª publicação a altura era igual para
+  todos; mudou a pedido de quem usa ("só muda a cor, o retângulo não cresce
+  para cima"). A folhagem projeta sombra no chão mas não recebe: um bloco
+  alto não escurece a cor do vizinho. Cada parcela é semeada só até a altura
+  mais alta que ela atinge no estudo, com um orçamento de folhas para ensaios
+  grandes: o vídeo custa perto do que custava com a altura fixa (1,2× no
+  teste com WebGL por software, contra 2,5× semeando todas para o bloco
+  cheio). Parcela sem avaliação fica com solo nu
+  e contorno tracejado claro. Fundo de gramado, sem céu (o campo ocupa mais o
+  quadro). Grama e luz são cenário.
 - **Esquemático**: o desenho em canvas 2D, com altura = valor, como na tela.
 - Sem WebGL, ou se o three.js não carregar, a exportação sai no esquemático e
   o modal avisa. Ela não falha.
@@ -73,6 +104,8 @@ alguém exporta.
 - duração do vídeo;
 - PT/EN com as mesmas chaves;
 - legenda igual às faixas da tela;
+- altura pela mesma conta da tela (régua ampliada e inteira), régua e linha
+  "Altura" no quadro, nos dois idiomas; bloco realista na altura do valor;
 - ausência sem valor e sem cor;
 - outra variável;
 - textos do quadro, incluindo as caixas de conteúdo;

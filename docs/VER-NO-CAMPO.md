@@ -96,16 +96,39 @@ muda:
 
 | Modo | Altura | Régua |
 |---|---|---|
-| Estado no dia | valor da variável | marcas na escala da variável (com a unidade) |
+| Estado no dia | valor da variável | marcas na régua da altura (com a unidade) |
 | Histórico 3D | tempo | marcas em DAA |
 
 Duas condições, e as duas têm teste:
 
-- **a régua usa a mesma conta que levanta a coluna.** Uma régua com mapeamento
-  próprio seria pior que régua nenhuma: daria autoridade de medida a um
-  desencontro;
+- **a régua usa a mesma conta que levanta a coluna** (`fracaoAltura`,
+  `alturaDe`). Uma régua com mapeamento próprio seria pior que régua nenhuma:
+  daria autoridade de medida a um desencontro;
 - **sem escala definida não há régua** no modo dia. Ali a altura já é fixa por
   decisão, e uma régua sugeriria uma medida que não existe.
+
+### Régua ampliada (outubro/2026)
+
+Pedido de quem usa: "cresce um espaço curto e visualmente não fica tão
+diferente, fica muito sutil". A régua ia sempre até o topo da escala (100 %),
+e num ensaio em que a testemunha chega a 25 % todas as colunas moravam no
+quinto de baixo; o tratamento que ia de 2 para 8 % nem saía do piso de 12 %.
+
+Agora, no modo dia, a régua da **altura** vai do piso da escala até o menor
+número redondo que cobre o maior valor lançado no estudo (`tetoRedondo`: 3 a 6
+passos de 1, 2, 2,5 ou 5 × 10ⁿ; 26,9 % vira 0 a 30). O que segura isso:
+
+- a **cor não amplia**: as faixas continuam na escala inteira da variável;
+- a coluna continua **começando no piso**: a altura segue proporcional ao valor;
+- o teto vem do **estudo inteiro**, não do instante — a régua não anda com o
+  tempo, senão a coluna "cresceria" só porque a régua encolheu;
+- a linha abaixo da legenda diz a régua em número e que ela foi ampliada, e o
+  botão **Ver na escala inteira** volta para 0–100 (para comparar estudos);
+- o piso da coluna baixou para 4 %: o zero medido segue sendo coluna rasa,
+  distinta do vazio, sem engolir os valores pequenos.
+
+A exportação (PNG/MP4) usa a régua que estava na tela — ver
+`CAMPO-VIVO-EXPORTAR.md`.
 
 A geometria da régua é desenhada **antes** das colunas, para que elas a tapem
 quando estão na frente — é assim que a profundidade se lê. Os números vão

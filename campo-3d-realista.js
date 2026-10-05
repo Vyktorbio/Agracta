@@ -8,17 +8,32 @@
  *   - a POSIÇÃO de cada parcela é a da grade do estudo (mesmos SX/SY/PW/PL);
  *   - a COR da folhagem é a faixa da escala da variável (corDe(fracaoRuim)),
  *     no instante pedido, pelo mesmo valorEm() da tela;
+ *   - a ALTURA do bloco é o VALOR, na régua da tela (AgCampo3D.alturaDe:
+ *     ampliada ou inteira), e o quadro desenha essa régua ao lado;
  *   - parcela SEM AVALIAÇÃO fica sem planta nenhuma: solo nu e contorno
  *     tracejado. Não é zero, é vazio.
- * Todo o resto — formato das folhas, linhas de plantio, solo, gramado, árvores,
- * luz — é ilustração, e a legenda do quadro diz isso. A altura das plantas NÃO
- * carrega dado aqui: num campo de verdade a doença muda a cor da folha, não
- * faz a planta crescer, e uma altura que sobe com a severidade enganaria o olho.
+ * Todo o resto — formato das folhas, solo, gramado, luz — é ilustração, e a
+ * legenda do quadro diz isso.
+ *
+ * A ALTURA JÁ FOI IGUAL PARA TODOS, e de propósito: num campo de verdade a
+ * doença muda a cor da folha, não faz a planta crescer. Quem usa pediu o
+ * contrário ("só muda a cor, o retângulo da parcela não cresce para cima"):
+ * no vídeo a diferença entre tratamentos sumia, e a tela do Agracta, onde a
+ * coluna cresce, contava uma história que o vídeo não contava. O bloco agora
+ * é a coluna da tela vestida de folhagem — a mesma conta, a mesma régua.
  *
  * Tudo é determinístico: a mesma parcela tem as mesmas plantas em todo quadro.
  */
 (function (w) {
   'use strict';
+
+  /* Altura de um bloco CHEIO (o topo da régua), no tamanho da parcela: 1,2 ×
+     o lado comprido. Mais alto, um bloco cheio na frente esconde o topo da
+     fileira de trás nesta câmera (38°); mais baixo, a diferença volta a ser
+     sutil, que foi a queixa. */
+  function alturaCheia(g) { return Math.max(g.PW, g.PL) * 1.6; }
+  /* A fração da régua (AgCampo3D.alturaDe, já com o piso) vira altura. */
+  function alturaDoBloco(f, hr) { return Math.max(0.02, Math.max(0, Math.min(1, +f || 0)) * hr); }
 
   function semente(s) { var h = 2166136261; s = String(s); for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   function sorteio(seed) { var x = seed || 1; return function () { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x >>> 0) % 100000) / 100000; }; }
@@ -135,42 +150,87 @@
 
     /* ---- a parcela é um BLOCO DE FOLHAGEM: folhas cobrindo topo e laterais
        de um volume do tamanho da parcela, sobre um miolo escuro que fecha os
-       vãos. Mesmo formato em todas: a altura não é dado aqui. ---- */
-    var H0 = Math.min(g.PW, g.PL) * 0.5, ENC = 0.06, DENS = 70, TAM = 0.34;
+       vãos. A ALTURA do bloco é o valor: HR é a de um bloco cheio (o topo da
+       régua), e cada folha guarda só a FRAÇÃO da altura em que mora — o topo
+       em 1, as laterais de 0 a 1. Quando o valor muda, as folhas sobem ou
+       descem junto com o bloco, sem folha nascendo nem sumindo: no vídeo o
+       bloco cresce liso, sem pipocar. As laterais são semeadas para o bloco
+       cheio; mais baixo, elas só ficam mais juntas. ---- */
+    var HR = alturaCheia(g), ENC = 0.06, DENS = 70, DENS_LADO = 50, TAM = 0.34, INS = 0.12;
     var plotInfo = [], totalF = 0;
     var bw = g.PW - 2 * ENC, bd = g.PL - 2 * ENC;
-    var faces = [ /* [área, normal, gerador(u,v) -> ponto local] */
-      { a: bw * bd, n: [0, 1, 0], p: function (u, v) { return [u * bw, H0, v * bd]; } },
-      { a: bw * H0, n: [0, 0, -1], p: function (u, v) { return [u * bw, v * H0, 0]; } },
-      { a: bw * H0, n: [0, 0, 1], p: function (u, v) { return [u * bw, v * H0, bd]; } },
-      { a: bd * H0, n: [-1, 0, 0], p: function (u, v) { return [0, v * H0, u * bd]; } },
-      { a: bd * H0, n: [1, 0, 0], p: function (u, v) { return [bw, v * H0, u * bd]; } }
+    var faces = [ /* [área, densidade, normal, gerador(u,v) -> [x, fração da altura, z]] */
+      { a: bw * bd, d: DENS, n: [0, 1, 0], p: function (u, v) { return [u * bw, 1, v * bd]; } },
+      { a: bw * HR, d: DENS_LADO, n: [0, 0, -1], p: function (u, v) { return [u * bw, v, 0]; } },
+      { a: bw * HR, d: DENS_LADO, n: [0, 0, 1], p: function (u, v) { return [u * bw, v, bd]; } },
+      { a: bd * HR, d: DENS_LADO, n: [-1, 0, 0], p: function (u, v) { return [0, v, u * bd]; } },
+      { a: bd * HR, d: DENS_LADO, n: [1, 0, 0], p: function (u, v) { return [bw, v, u * bd]; } }
     ];
-    var porPlot = 0; faces.forEach(function (f) { f.k = Math.round(f.a * DENS); porPlot += f.k; });
-    m.grade.forEach(function (p) { plotInfo.push({ p: p }); totalF += porPlot; });
+    /* QUANTAS FOLHAS. Cada parcela é semeada só até a altura MAIS ALTA que
+       ela atinge no estudo (nas avaliações; entre duas delas o valor só anda
+       entre as pontas): a que nunca passa de um quarto da régua não precisa de
+       folha para o bloco cheio. A lateral fica igualmente densa no ponto mais
+       alto de cada parcela, e o quadro custa perto do que custava com a altura
+       fixa — semeando todas para o bloco cheio, o vídeo saía duas vezes e meia
+       mais lento.
+       E há um ORÇAMENTO: um ensaio grande (12 × 6 = 72 parcelas) ainda passaria
+       das centenas de milhares de folhas, memória que o celular não tem para
+       dar. Acima dele, cada face recebe proporcionalmente menos folhas; num
+       ensaio grande cada parcela também sai menor no quadro, e a cobertura que
+       o olho vê fica parecida. */
+    var ORCAMENTO = 160000, daas = cena.daas || [];
+    function maisAlta(p) {
+      var f = 0;
+      daas.forEach(function (t) { f = Math.max(f, w.AgCampoExportar.colunaEm(cena, p, t).f || 0); });
+      return Math.max(0.12, Math.min(1, f));
+    }
+    var bruto = 0;
+    m.grade.forEach(function (p) {
+      var fa = maisAlta(p), ks = faces.map(function (f, i) { return f.a * f.d * (i ? fa : 1); });
+      plotInfo.push({ p: p, ks: ks }); ks.forEach(function (k) { bruto += k; });
+    });
+    var corte = Math.min(1, ORCAMENTO / Math.max(1, bruto));
+    plotInfo.forEach(function (pi) {
+      pi.ks = pi.ks.map(function (k) { return Math.max(8, Math.round(k * corte)); });
+      pi.ks.forEach(function (k) { totalF += k; });
+    });
     var folhaGeo = new T.PlaneGeometry(1, 1); folhaGeo.rotateX(-Math.PI / 2); folhaGeo.translate(0.5, 0, 0);
     var folhaMat = new T.MeshStandardMaterial({ map: texFolha(T), alphaTest: 0.45, side: T.DoubleSide, roughness: 0.68, metalness: 0 });
     var hasteGeo = new T.BoxGeometry(1, 1, 1); hasteGeo.translate(0.5, 0.5, 0.5);
     var hasteMat = new T.MeshLambertMaterial({ color: 0xffffff });
     var folhas = new T.InstancedMesh(folhaGeo, folhaMat, totalF);
     var hastes = new T.InstancedMesh(hasteGeo, hasteMat, plotInfo.length);
-    folhas.castShadow = true; folhas.receiveShadow = true; hastes.castShadow = true; hastes.receiveShadow = true;
+    /* A folhagem PROJETA sombra (no solo e no gramado) mas não RECEBE. Com
+       altura igual para todos isso não importava; com o bloco crescendo, um
+       bloco alto deitava sombra no topo do vizinho baixo e escurecia a cor
+       dele — e a cor é o dado: um verde à sombra vira oliva. O volume de cada
+       bloco continua vindo da luz nas faces (a lateral contra o sol é mais
+       escura). */
+    folhas.castShadow = true; folhas.receiveShadow = false; hastes.castShadow = true; hastes.receiveShadow = false;
+    /* O campo inteiro está sempre no quadro, e as alturas mudam a cada quadro:
+       sem recorte por esfera envolvente (que teria de ser refeita toda vez). */
+    folhas.frustumCulled = false; hastes.frustumCulled = false;
     var mFolhas = new Float32Array(totalF * 16), mHastes = new Float32Array(plotInfo.length * 16);
     var jitter = new Float32Array(totalF * 3);
+    /* fração da altura de cada folha e o quanto ela afunda no topo */
+    var yFrac = new Float32Array(totalF), yRec = new Float32Array(totalF);
     var iF = 0, iH = 0, q = new T.Quaternion(), q2 = new T.Quaternion(), e = new T.Euler(), v = new T.Vector3(), sv = new T.Vector3(), mx = new T.Matrix4();
     var cima = new T.Vector3(0, 1, 0), nv = new T.Vector3(), eixo = new T.Vector3();
     plotInfo.forEach(function (pi) {
       var r = sorteio(semente(pi.p.chave)), x0 = pi.p.ti * g.SX + ENC, y0 = (pi.p.rep - 1) * g.SY + ENC;
       pi.f0 = iF; pi.h0 = iH;
-      /* miolo: um pouco menor que o bloco, para as folhas o cobrirem */
-      var ins = 0.12;
-      v.set(X(x0 + ins), 0, Z(y0 + bd - ins)); q.identity(); sv.set(bw - 2 * ins, H0 - ins, bd - 2 * ins);
+      /* miolo: um pouco menor que o bloco, para as folhas o cobrirem; a
+         altura dele acompanha a do bloco (ver pousar) */
+      pi.miolo = { x: X(x0 + INS), z: Z(y0 + bd - INS), w: bw - 2 * INS, d: bd - 2 * INS };
+      v.set(pi.miolo.x, 0, pi.miolo.z); q.identity(); sv.set(pi.miolo.w, HR - INS, pi.miolo.d);
       mx.compose(v, q, sv); mx.toArray(mHastes, iH * 16); iH++;
-      faces.forEach(function (f) {
+      faces.forEach(function (f, fi) {
         nv.set(f.n[0], f.n[1], -f.n[2]);
-        for (var k = 0; k < f.k; k++) {
+        for (var k = 0; k < pi.ks[fi]; k++) {
           var lp = f.p(r(), r()), fundo = r() * 0.16;
-          v.set(X(x0 + lp[0] - f.n[0] * fundo), Math.max(0.02, lp[1] - f.n[1] * fundo), Z(y0 + lp[2] - f.n[2] * fundo));
+          /* a altura (y) fica de fora da matriz-base: pousar() a escreve */
+          v.set(X(x0 + lp[0] - f.n[0] * fundo), 0, Z(y0 + lp[2] - f.n[2] * fundo));
+          yFrac[iF] = lp[1]; yRec[iF] = f.n[1] * fundo;
           /* folha voltada para fora (normal da face), girada e inclinada ao acaso */
           q.setFromUnitVectors(cima, nv);
           eixo.set(r() - 0.5, r() - 0.5, r() - 0.5).normalize();
@@ -234,10 +294,11 @@
       sol.position.set(sx * 120, 95, -sz * 120); sol.target.position.set(0, 0, 0);
       sol.target.updateMatrixWorld();
     }
-    /* cantos do ensaio (com margem e altura de planta) para o enquadramento */
+    /* cantos do ensaio (com margem e a altura de um bloco cheio, mais a folga
+       do título da régua) para o enquadramento */
     var cantos = [];
     [[-mg - 1.8, -mg - 1.8], [larg + mg, -mg - 1.8], [larg + mg, alt + mg], [-mg - 1.8, alt + mg]].forEach(function (c) {
-      [0, H0 * 1.2].forEach(function (z) { cantos.push(new T.Vector3(X(c[0]), z, Z(c[1]))); });
+      [0, HR * 1.3].forEach(function (z) { cantos.push(new T.Vector3(X(c[0]), z, Z(c[1]))); });
     });
     var tmp = new T.Vector3();
     function caixa() {
@@ -274,46 +335,56 @@
       cam.updateProjectionMatrix();
     }
 
-    var ultimo = {};
     var corT = new T.Color(), corJ = new T.Color();
+    var arrF = folhas.instanceMatrix.array, arrH = hastes.instanceMatrix.array;
+    /* Vazio: escala zero nas instâncias (some sem refazer a malha). */
+    function esconder(pi) {
+      for (var j = pi.f0 * 16; j < pi.f1 * 16; j++) arrF[j] = 0;
+      for (j = pi.h0 * 16; j < pi.h1 * 16; j++) arrH[j] = 0;
+    }
+    function mostrar(pi) {
+      arrF.set(mFolhas.subarray(pi.f0 * 16, pi.f1 * 16), pi.f0 * 16);
+      arrH.set(mHastes.subarray(pi.h0 * 16, pi.h1 * 16), pi.h0 * 16);
+    }
+    /* O bloco na altura h: cada folha no seu andar (fração × h; o topo afunda
+       um pouco, para ter volume) e o miolo do mesmo tamanho. Só a altura
+       muda — posição, giro e tamanho da folha ficam onde nasceram. */
+    function pousar(pi, h) {
+      for (var j = pi.f0; j < pi.f1; j++) arrF[j * 16 + 13] = Math.max(0.02, yFrac[j] * h - yRec[j]);
+      v.set(pi.miolo.x, 0, pi.miolo.z); q.identity(); sv.set(pi.miolo.w, Math.max(0.01, h - INS), pi.miolo.d);
+      mx.compose(v, q, sv); mx.toArray(arrH, pi.h0 * 16);
+    }
     function atualizar(t) {
-      var C = cena;
       var mudouCor = false, mudouMat = false;
       plotInfo.forEach(function (pi) {
-        var col = w.AgCampoExportar.colunaEm(C, pi.p, t), chave = col.cor || 'vazio';
-        if (ultimo[pi.p.chave] === chave) return;
-        var eraVazio = ultimo[pi.p.chave] === 'vazio' || ultimo[pi.p.chave] === undefined;
-        ultimo[pi.p.chave] = chave;
-        var vazio = !col.cor;
-        pi.linha.visible = vazio;
-        if (vazio || eraVazio) {
-          /* vazio: escala zero nas instâncias (some sem refazer a malha) */
-          for (var j = pi.f0; j < pi.f1; j++) {
-            if (vazio) { mx.makeScale(0, 0, 0); folhas.setMatrixAt(j, mx); }
-            else { mx.fromArray(mFolhas, j * 16); folhas.setMatrixAt(j, mx); }
-          }
-          for (j = pi.h0; j < pi.h1; j++) {
-            if (vazio) { mx.makeScale(0, 0, 0); hastes.setMatrixAt(j, mx); }
-            else { mx.fromArray(mHastes, j * 16); hastes.setMatrixAt(j, mx); }
-          }
+        var col = w.AgCampoExportar.colunaEm(cena, pi.p, t), vazio = !col.cor;
+        if (vazio !== pi.vazio) {
+          pi.vazio = vazio; pi.linha.visible = vazio; pi.h = null; pi.cor = null;
+          if (vazio) esconder(pi); else mostrar(pi);
           mudouMat = true;
         }
-        if (!vazio) {
+        if (vazio) return;
+        /* a fração é a da régua da tela (alturaDe), aqui na altura do bloco cheio */
+        var h = alturaDoBloco(col.f, HR);
+        if (pi.h === null || Math.abs(pi.h - h) > 1e-4) { pousar(pi, h); pi.h = h; mudouMat = true; }
+        if (pi.cor !== col.cor) {
           corT.setStyle(col.cor);
           corJ.setRGB(corT.r * 0.45, corT.g * 0.45, corT.b * 0.45); hastes.setColorAt(pi.h0, corJ);
           for (var k = pi.f0; k < pi.f1; k++) {
             corJ.setRGB(Math.min(1, corT.r * jitter[k * 3]), Math.min(1, corT.g * jitter[k * 3 + 1]), Math.min(1, corT.b * jitter[k * 3 + 2]));
             folhas.setColorAt(k, corJ);
           }
-          mudouCor = true;
+          pi.cor = col.cor; mudouCor = true;
         }
       });
-      if (mudouMat) { folhas.instanceMatrix.needsUpdate = true; hastes.instanceMatrix.needsUpdate = true; folhas.computeBoundingSphere && (folhas.boundingSphere = null); }
+      if (mudouMat) { folhas.instanceMatrix.needsUpdate = true; hastes.instanceMatrix.needsUpdate = true; }
       if (mudouCor) { folhas.instanceColor.needsUpdate = true; hastes.instanceColor.needsUpdate = true; }
     }
 
     return {
       canvas: cv,
+      /* altura de um bloco cheio: o topo da régua desenhada no quadro */
+      hmax: HR,
       enquadrar: function (ar, rots) { enquadrar(ar, rots); },
       /* desenha o instante t no giro rot e devolve o canvas WebGL */
       desenhar: function (t, rot) {
@@ -352,5 +423,5 @@
     } catch (e) { return false; }
   }
 
-  w.AgCampoRealista = { criar: criar, suportado: suportado };
+  w.AgCampoRealista = { criar: criar, suportado: suportado, alturaCheia: alturaCheia, alturaDoBloco: alturaDoBloco };
 })(typeof window !== 'undefined' ? window : this);
