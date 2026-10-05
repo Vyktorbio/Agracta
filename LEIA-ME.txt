@@ -1,3 +1,76 @@
+AGRACTA — 21a publicacao                    05/10/2026
+=====================================================
+
+Leva: a agenda vira calendario e o HOJE vira o painel do dia.
+  CODIGO:  app.js  ui-campo.css  index.html  sw.js  conferir.sh
+  MOTOR:   vendor/agenda-core.js (novo)
+  TESTE:   test_agenda_calendario.js (o motor)
+           test_agenda_tela.js (a tela, tocando nos botoes)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "um dashboard no Hoje, de hoje mesmo, o que tem pra hoje de
+verdade" e "a agenda mostrar um calendario e uma bolinha nos dias".
+
+1) A AGENDA ABRE NUM CALENDARIO
+
+O mes inteiro, de domingo a sabado, com uma bolinha por TIPO de compromisso
+em cada dia (a lista do dia diz quantos):
+  - laranja: aplicacao     - azul: avaliacao
+  - vermelha: atrasado (pendente com data passada; vence a cor do tipo)
+  - anel verde: feito. Aplicacao feita aparece no dia em que foi
+    REGISTRADA, nao no planejado; avaliacao, quando a grade fechou.
+Tocar num dia mostra o que tem nele; tocar de novo, ou trocar de mes,
+mostra o mes inteiro, dia a dia. O atrasado de mes passado fica num botao
+vermelho no alto, em qualquer mes. Dia livre diz qual e o proximo
+compromisso e leva ate ele.
+A LISTA DE SEMPRE continua a um toque ("Lista"), e a escolha fica guardada
+no aparelho. Se o motor do calendario nao carregar, a agenda e a lista.
+
+2) O HOJE VIRA O PAINEL DO DIA
+
+De cima para baixo:
+  - a semana em faixa (hoje e os seis dias seguintes), com as mesmas
+    bolinhas da agenda; tocar num dia abre a agenda nele;
+  - os numeros: atrasados, hoje e proximos 7 dias;
+  - PARA FAZER HOJE: o atrasado e o de hoje, cada um com o seu atalho;
+  - AMANHA: o que se separa hoje para nao faltar amanha;
+  - FEITO HOJE: o que foi registrado com a data de hoje;
+  - no fim, "Ver o mes na agenda" e a faxina dos lembretes.
+O cartao passou a dizer o que sabia e nao dizia:
+  - avaliacao: por qual parcela comecar ou continuar ("Faltam 3 parcelas -
+    a proxima e a 102"), e o botao abre a grade JA nessa parcela;
+  - aplicacao: o aviso de estoque do estudo (lote que vence antes do uso,
+    saldo que nao cobre o que falta), o mesmo da pagina do estudo.
+Com leitura recente do mostrador de clima do mapa, o HOJE repete a leitura
+no alto, com a fonte escrita ao lado (estacao ou previsao). Sem leitura, ou
+com leitura de mais de 2 horas, a linha nao aparece.
+
+3) CONSERTOS QUE APARECERAM NO CAMINHO
+  - O selo do botao HOJE contava tambem o que e de AMANHA: o
+    collectTodayEvents(0) virava (1), porque 0||1 = 1.
+  - "Ver dispensados" tocado no HOJE nao redesenhava o HOJE (so a agenda,
+    fechada). Parecia que o toque nao pegava.
+  - No tema escuro, o nome da quadra nos itens da agenda sumia (cor fixa de
+    tema claro).
+  - Com o selo "sessao local" na tela, o pe da agenda ficava atras dele.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o app (duas vezes, para a versao nova entrar).
+2. Agenda: abre no calendario do mes, com hoje marcado. Tocar num dia com
+   bolinha mostra o que tem nele; "Lista" volta a lista de sempre.
+3. Hoje: a faixa da semana no alto; tocar em amanha abre a agenda em
+   amanha. Uma avaliacao comecada diz a proxima parcela, e "Continuar
+   avaliacao" abre nela.
+4. O numero no botao Hoje conta so hoje e atrasados.
+
+
 AGRACTA — 20a publicacao                    04/10/2026
 =====================================================
 
