@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),fs=require('fs');
 if(!process.env.FIRESTORE_EMULATOR_HOST)throw Error('Este teste exige emulador; nunca usa a nuvem real.');
 const {initializeTestEnvironment,assertFails}=require('@firebase/rules-unit-testing');
 const firebase=require('firebase/compat/app');require('firebase/compat/firestore');
-const {initial,client,av,edit}=require('../test_sync_envio_pendente.js');
+const {initial,client,av,edit}=require('./test_sync_envio_pendente.js');
 const ROOT='workspaces/agracta';
 // O app vive num realm VM; o SDK Node exige objetos simples do realm dele.
 function native(v){
