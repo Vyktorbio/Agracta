@@ -435,6 +435,8 @@
      tudo, com ou sem portão. Fechar isso exige cifrar o armazenamento local, que é
      outra decisão. */
   function offlineAccessAllowed(){return !!(trustedDevice()&&hasLocalRecords());}
+  /* txt é EMENDADO ao texto do selo offline, que já diz "sessão local · sem
+     sincronização" (cloudBadge, no app.js): passe só o que falta dizer, ou nada. */
   function startLocal(txt){
     if(!window._appStarted)window._appStarted=true;
     window._cloudInitDone=true;
@@ -473,7 +475,7 @@
         displayName:n,name:n,offline:true};
       try{if(typeof window._gravarNomeAssinatura==='function')window._gravarNomeAssinatura(n);}catch(e){}
       rememberTrustedUser({uid:trust.uid,email:trust.email,displayName:n},n);
-      startLocal('— sessão local · sem sincronização');
+      startLocal();
     };
     var foot=box.querySelector('.auth-foot');
     if(nomeWrap)box.insertBefore(nomeWrap,foot||null);

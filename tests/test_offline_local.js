@@ -1,10 +1,11 @@
 /* Cofre offline e autorização do aparelho.
  *
- * Protege três regressões importantes:
+ * Protege estas regressões:
  *   - dados padrão/locais não podem abrir sem um login online previamente validado;
  *   - a gravação só é confirmada depois que a transação IndexedDB conclui;
  *   - um checkpoint mais novo recupera inclusive os metadados de nomes/locais;
- *   - o Firestore não cria uma segunda fila IndexedDB concorrente.
+ *   - o Firestore não cria uma segunda fila IndexedDB concorrente;
+ *   - o selo da entrada sem conexão não repete "sessão local · sem sincronização".
  *
  * Rodar: node tests/test_offline_local.js
  */
@@ -184,5 +185,35 @@ var estado={
   assert(e2.store['iracema-local-ativo']==='L1',
     'lugar do checkpoint que nao existe mais NAO sobrescreve a preferencia atual');
 
-  console.log('\n20 verificações, nenhuma falha.');
+  console.log('\n--- O selo da entrada sem conexão diz a frase uma vez ---');
+  /* O botão passava '— sessão local · sem sincronização' ao startLocal, e o
+     cloudBadge emenda o texto recebido no do estado offline, que já é essa
+     frase: o selo saía "⌁ sessão local · sem sincronização — sessão local ·
+     sem sincronização". Aqui quem pinta é o cloudBadge de verdade, do app.js. */
+  var appSrc=fs.readFileSync('app.js','utf8');
+  var iniSelo=appSrc.indexOf('function cloudBadge(kind,txt){');
+  var fonteSelo=appSrc.slice(iniSelo,appSrc.indexOf('\n}\n',iniSelo)+2);
+  var s=makeContext({state:estado,store:{'agracta-trusted-device':JSON.stringify({
+    v:2,uid:'u1',email:'tecnico@example.com',name:'Técnico',authenticatedAt:100
+  })}});
+  var porId={};
+  function elemento(tag){return {tagName:tag,style:{},id:'',textContent:'',className:'',
+    appendChild:function(c){if(c.id)porId[c.id]=c;return c;},
+    insertBefore:function(c){if(c.id)porId[c.id]=c;return c;},
+    querySelector:function(){return null;},focus:function(){}};}
+  var caixa=elemento('div');
+  s.ctx.document={head:elemento('head'),body:elemento('body'),createElement:elemento,
+    getElementById:function(id){return porId[id]||null;},
+    querySelector:function(sel){return sel==='.auth-box'?caixa:null;},
+    addEventListener:function(){},visibilityState:'visible'};
+  vm.runInContext(fonteSelo,s.ctx);
+  await tick();await tick();
+  s.ctx.buildAuthGate();
+  assert(!!porId.authOfflineBtn,'o aparelho validado ganha o botão de entrar sem conexão');
+  porId.authOfflineBtn.onclick();
+  for(var i=0;i<6;i++)await tick();
+  assert(porId.cloudBadge.textContent==='⌁ sessão local · sem sincronização',
+    'o selo diz "sessão local · sem sincronização" uma vez só');
+
+  console.log('\n22 verificações, nenhuma falha.');
 })().catch(function(e){console.error(e&&e.stack||e);process.exit(1);});
