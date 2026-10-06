@@ -1,0 +1,22 @@
+/* Consultas Embrapa seguem as superfícies e controles do Agracta. */
+.agro-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:16px 0}
+.agro-form label{display:flex;flex:1 1 180px;min-width:0;flex-direction:column;gap:6px;font-size:12px;font-weight:600}
+.agro-form input,.agro-form select{box-sizing:border-box;width:100%;min-height:40px;border:1px solid var(--border,#cdd3d7);border-radius:8px;background:var(--surface,#fff);color:var(--text,#1e293b);padding:8px;font:inherit}
+.agro-form button{min-height:40px}
+.agro-note{font-size:12px;color:var(--text-2,#52606d);line-height:1.5}
+.agro-scroll{max-width:100%;overflow:auto;border:1px solid var(--border,#cdd3d7);border-radius:8px}
+.agro-scroll table{width:100%;border-collapse:collapse;font-size:12px}
+.agro-scroll caption{padding:10px;text-align:left;font-weight:700}
+.agro-scroll th,.agro-scroll td{padding:9px 12px;border-bottom:1px solid var(--border,#cdd3d7);text-align:left;vertical-align:top}
+.agro-scroll th{background:var(--surface-2,#f4f6f8);white-space:nowrap}
+.agro-scroll td{overflow-wrap:anywhere;min-width:70px}
+.agro-produto dl{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;font-size:13px}
+.agro-produto dt{color:var(--text-2,#52606d)}
+.agro-produto dd{margin:0;overflow-wrap:anywhere}
+.agro-actions{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.agro-raw{max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
+#climaPanel .agro-form{gap:8px;margin:10px 0}
+#climaPanel .agro-form label{flex-basis:100%}
+#climaPanel .agro-form button{flex:1 1 110px}
+#climaFonte{flex:1;min-width:0;border:1px solid var(--border,#cdd3d7);border-radius:7px;padding:7px;background:var(--surface,#fff);color:var(--text,#1e293b);font-size:12px}
+@media(max-width:500px){.agro-produto dl{grid-template-columns:1fr;gap:4px}.agro-produto dd{margin-bottom:8px}}

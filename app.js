@@ -5338,6 +5338,7 @@ var CLIMA_PROXY=NDVI_PROXY;
 var CLIMA_STATION_RADIUS_KM=10;
 var _climaStations=null, climaMac=null, _climaTimer=null, _climaWhere=null, _climaWhereGPS=false, _climaPanelSeq=0;
 var _climaMapLast=null, _climaMoveTimer=null;
+var climaFonte='auto'; /* seleção do painel: auto, modelo, climapi ou estacao:<MAC> */
 function _climaCss(){ if(document.getElementById('climaCss'))return; var s=document.createElement('style'); s.id='climaCss';
   s.textContent='.clima-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}'+
   '.clima-card{background:var(--surface-2,#11210f);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px 10px;min-width:0}'+
@@ -5405,7 +5406,10 @@ function buildClimaPanel(){
   if(!p){ p=document.createElement('div'); p.id='climaPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
   var ll=_climaMapCoord(),st=_climaStationForCoord(ll),fonte=!_climaStations?'Identificando a fonte…':(st?('Estação Ecowitt · '+st.name):'Previsão para o centro do mapa');
   var coord=ll?((+ll[0]).toFixed(4)+', '+(+ll[1]).toFixed(4)):'sem coordenada';
-  var ctrl='<div class="gr-ctl"><span>Fonte automática</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(fonte)+'</span></div>'+
+  function opt(value,label){return '<option value="'+esc(value)+'"'+(climaFonte===value?' selected':'')+'>'+esc(label)+'</option>';}
+  var escolhas=opt('auto','Automática · '+fonte)+opt('modelo','Previsão · Open-Meteo')+opt('climapi','Embrapa · ClimAPI (previsão)');
+  (_climaStations||[]).forEach(function(s){if(s&&s.mac)escolhas+=opt('estacao:'+s.mac,'Estação Ecowitt · '+(s.name||s.mac));});
+  var ctrl='<div class="gr-ctl"><label for="climaFonte">Fonte</label><select id="climaFonte" onchange="climaFonteSet(this.value)">'+escolhas+'</select></div>'+
     '<div style="font-size:10px;color:var(--text-3,#7a8a7a);margin:2px 3px 7px">'+ic('pin',11)+' Centro do mapa · '+esc(coord)+'</div>';
   /* O cartão é o relance: tempo de agora e os próximos dias, na altura do
      polegar. O que não cabe nele — 30 dias de histórico, as estações e a
@@ -5642,33 +5646,55 @@ function climaChipIniciar(){
   /* 5 min: é o passo de gravação da própria Ecowitt; puxar mais rápido só gasta bateria */
   _climaChipTimer=setInterval(function(){ if(!document.hidden) climaChipAtualiza(); }, 300000);
 }
+function climaFonteSet(fonte){
+  if(fonte!=='auto'&&fonte!=='modelo'&&fonte!=='climapi'&&!(fonte.indexOf('estacao:')===0&&_climaStationByMac(fonte.slice(8))))return;
+  climaFonte=fonte;_climaPanelSeq++;
+  if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;}
+  buildClimaPanel();climaInit();
+}
 function climaInit(){
-  if(_climaStations){ climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad(); return; }
+  if(climaFonte==='climapi'||climaFonte==='modelo'){buildClimaPanel();climaLoad();return;}
+  if(_climaStations){climaMac=climaMatch(_climaMapCoord());buildClimaPanel();climaLoad();return;}
+  var fonteDaBusca=climaFonte;
   climaSay('Identificando a melhor fonte para este ponto do mapa…');
   proxyFetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
-    if(!arr||arr.error){ climaSay((arr&&arr.error)||'Não consegui listar as estações.','err'); return; }
-    _climaStations=arr; climaMac=climaMatch(_climaMapCoord()); buildClimaPanel(); climaLoad();
-  }).catch(function(){ _climaStations=[];climaMac=null;buildClimaPanel();climaLocalLoad(_climaMapCoord(),false); });
+    var p=document.getElementById('climaPanel');
+    if(climaFonte!==fonteDaBusca||!p||p.style.display!=='block')return;
+    if(!Array.isArray(arr)){climaSay((arr&&arr.error)||'Não consegui listar as estações.','err');return;}
+    _climaStations=arr;climaMac=climaMatch(_climaMapCoord());buildClimaPanel();climaLoad();
+  }).catch(function(){
+    var p=document.getElementById('climaPanel');
+    if(climaFonte!==fonteDaBusca||!p||p.style.display!=='block')return;
+    _climaStations=[];climaMac=null;buildClimaPanel();climaLocalLoad(_climaMapCoord(),false);
+  });
 }
-function climaPick(mac){ climaMac=mac; climaLoad(); }
+function climaPick(mac){climaFonteSet(mac?'estacao:'+mac:'modelo');}
 function climaLoad(){
-  /* O mapa escolhe a fonte. Dentro do raio da estação usa a Ecowitt; fora dele,
-     usa Open-Meteo exatamente para o centro visível. */
   var ll=_climaMapCoord();
-  climaMac=climaMatch(ll);
-  if(!climaMac){
-    try{ climaLocalLoad(ll,false); }catch(e){}
+  if(climaFonte==='climapi'){
+    if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;}
+    _climaPanelSeq++;
+    if(window.agAgroAPI)window.agAgroAPI.climaLoad(ll);
+    else climaSay('A opção ClimAPI não carregou. Abra o Agracta novamente com conexão.','err');
     return;
   }
-  if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
+  if(climaFonte==='modelo'){climaLocalLoad(ll,false);return;}
+  climaMac=climaFonte.indexOf('estacao:')===0?climaFonte.slice(8):climaMatch(ll);
+  if(!climaMac){climaLocalLoad(ll,false);return;}
+  if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;}
   var seq=++_climaPanelSeq;
   climaSay('Carregando dados ao vivo…');
+  function falha(){
+    if(seq!==_climaPanelSeq)return;
+    if(climaFonte.indexOf('estacao:')===0){climaSay('Não foi possível consultar esta estação. Tente novamente ou selecione outra fonte.','err');return;}
+    climaMac=null;buildClimaPanel();climaLocalLoad(ll,false);
+  }
   proxyFetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
-    if(seq!==_climaPanelSeq) return;
-    if(!d||d.error){ climaMac=null;buildClimaPanel();climaLocalLoad(ll,false); return; }
+    if(seq!==_climaPanelSeq)return;
+    if(!d||d.error){falha();return;}
     climaRender(d);
-    _climaTimer=setInterval(function(){ var p=document.getElementById('climaPanel'); if(p&&p.style.display==='block') climaLoad(); else { clearInterval(_climaTimer); _climaTimer=null; } }, 300000);
-  }).catch(function(){ if(seq===_climaPanelSeq){climaMac=null;buildClimaPanel();climaLocalLoad(ll,false);} });
+    _climaTimer=setInterval(function(){var p=document.getElementById('climaPanel');if(p&&p.style.display==='block')climaLoad();else{clearInterval(_climaTimer);_climaTimer=null;}},300000);
+  }).catch(falha);
 }
 function _cval(n,dec){ if(!n||n.value==null||n.value==='') return '—'; var v=n.value; if(typeof v==='number'&&dec!=null) v=v.toFixed(dec); return v; }
 function _compass(deg){ if(deg==null) return ''; return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round(deg/22.5)%16]; }

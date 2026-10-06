@@ -39,6 +39,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)  # também funciona ao importar o proxy nos testes
 import satelites_backend
+import agroapi_backend
 
 # CORS: só o app pode usar o proxy pelo navegador (protege a cota Sentinel/Ecowitt).
 # Para liberar outra origem sem mexer no código: env ALLOWED_ORIGINS="https://a.com,https://b.com" (soma às padrão).
@@ -1741,7 +1742,16 @@ class H(BaseHTTPRequestHandler):
                 eapp, _ = load_ecowitt()
                 return self._json({"ok": True, "hasCreds": bool(cid), "hasEcowitt": bool(eapp),
                                    "satelites": {"version": satelites_backend.VERSION, "providers": ["landsat", "smap", "firms"]},
+                                   "agroapi": {"version": agroapi_backend.VERSION},
                                    "login": estado_login()})
+            if u.path.startswith("/agroapi/"):
+                try:
+                    result = agroapi_backend.handle(u.path, q)
+                except agroapi_backend.AgroAPIError as e:
+                    return self._json({"error": str(e), "code": e.code}, e.status)
+                except Exception:
+                    return self._json({"error": "Não foi possível concluir a consulta na Embrapa."}, 502)
+                return self._json(result)
             if u.path.startswith("/satelites/"):
                 try:
                     ctype, body = satelites_backend.handle(u.path, q)
