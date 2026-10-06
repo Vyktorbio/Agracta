@@ -1250,6 +1250,20 @@
       var b=document.getElementById('acessoBannerOk'); if(b) b.onclick=function(){ var x=document.getElementById('acessoBanner'); if(x) x.remove(); };
     }catch(e){}
   }
+  /* O banco só diz "permissão negada". O próprio cadastro pode ser lido mesmo
+     fora do horário (firestore.rules), então o app descobre o motivo — e-mail
+     não cadastrado, conta inativa ou fora do horário pela hora do servidor — e
+     escreve isso na tela de login, onde quem administra consegue ler. */
+  function _explicarRecusa(){
+    var email=String((FB.user&&FB.user.email)||'').trim().toLowerCase();
+    if(!email||!FB.db||typeof window.agAcessoMotivo!=='function')return;
+    FB.db.doc(ROOT).collection('members').doc(email).get().then(function(doc){
+      var motivo=window.agAcessoMotivo(email,(doc&&doc.exists)?(doc.data()||{}):null);
+      var g=document.getElementById('authGate');
+      if(motivo&&g&&g.classList.contains('on')&&FB.user&&String(FB.user.email||'').toLowerCase()===email)
+        authErr(motivo+' Fale com o administrador.');
+    }).catch(function(){});
+  }
   window.cloudPull=function(){
     if(!FB.user){showAuthGate();return Promise.resolve(false);}
     if(FB.pullPromise)return FB.pullPromise;
@@ -1260,6 +1274,11 @@
          em confiável apenas por existir no Firebase Auth. */
       rememberTrustedUser(FB.user,(window._authUser&&window._authUser.displayName)||'');
       window._cloudInitDone=true;
+      /* O banco aceitou: as regras conferem membro ativo E janela de horário pela
+         hora do servidor. O acesso-horario.js usa isto para abrir a tela sem
+         esperar o cadastro e para não deixar o relógio do celular derrubar a
+         sessão que o banco acabou de aceitar. */
+      window._agractaLeituraOk=Date.now();
       var current=stateForCommit();
       var merged=(typeof cloudMerge==='function')?cloudMerge(current,r.state):r.state;
       merged.rev=r.meta.rev||0;
@@ -1280,9 +1299,11 @@
       if(e && (e.code==='permission-denied' || /permission|insufficient/i.test(String((e&&e.message)||e)))){
         try{
           localStorage.removeItem(TRUST_KEY);
+          window._agractaLeituraOk=0;
           showAuthGate();authBusy(false);
           authErr('Este acesso não está liberado para os dados do Agracta. Fale com o administrador.');
           _agractaAcessoBanner((FB.user&&FB.user.email)||'');
+          _explicarRecusa();
         }catch(_e){}
       }else if(!trustedForUser(FB.user)){
         try{showAuthGate();authBusy(false);authErr('Não foi possível validar este aparelho. Conecte-se à internet e tente novamente.');}catch(_e){}

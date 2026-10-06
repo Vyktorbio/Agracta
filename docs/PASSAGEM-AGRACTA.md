@@ -268,7 +268,11 @@ função `criar-tecnico`, `app_state_history` como mitigação). Reescrever para
 estado real:
 
 - Autenticação Firebase; membros em `workspaces/agracta/members/{email}` com
-  `active` e janela de horário; administradores fixos nas regras.
+  `active` e janela de horário; administradores fixos nas regras. A janela é
+  decidida pela hora do **servidor** dos dois lados: as regras usam
+  `request.time` e o `acesso-horario.js` corrige o relógio do aparelho pelo
+  cabeçalho `Date` do próprio site (desde a 26ª publicação; antes, celular com
+  relógio errado entrava e era derrubado em seguida).
 - Histórico de versões = coleção `historico` append-only (A1), com hora do
   servidor e autor da sessão — atende ALCOA "original/contemporâneo" melhor
   que o `client_ts` antigo.
