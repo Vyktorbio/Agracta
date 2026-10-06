@@ -1,3 +1,82 @@
+AGRACTA — 27a publicacao                    06/10/2026
+=====================================================
+
+Leva: tamanho do efeito ao lado do p, e a interacao tratamento x local.
+  CODIGO:  estatistica/bioengine/efeito.py (novo)  anova.py  contrastes.py
+           decide.py  glmcount.py  mistos.py
+           estatistica/app.js  estatistica/index.html  estatistica/sw.js
+           app.js  index.html  sw.js
+  TESTE:   tests/motor_efeito_ambiente.py (novo, roda no Pyodide)
+           tests/test_estatistica_efeito.js (novo)
+           tests/test_estatistica_render.js  tests/test_motor_python.js
+  DOCS:    docs/MODELOS-MISTOS-E-CONTROLE.md  docs/README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+A estatistica guardada no aparelho e recalculada uma vez (MOTOR_CALCULO
+agracta-19): os resultados antigos nao tinham os campos novos.
+
+
+O QUE MUDOU
+-----------
+
+Pergunta de uso: "o Agracta poderia estimar interacao tratamento x ambiente e
+tamanho de efeito, nao somente p-valor?"
+
+1) TAMANHO DO EFEITO
+
+  - ANOVA: coluna omega2 parcial (fracao da variacao que o termo explica,
+    descontado o acaso; Olejnik e Algina, 2003) e o CV% do ensaio
+    classificado (Pimentel-Gomes, 2009).
+  - % CONTRA A TESTEMUNHA, com intervalo de Fieller: "-23% (-32 a -13)".
+    No cartao do estudo aparece a coluna "vs test." ao lado da letra. O
+    intervalo usa o mesmo criterio das letras (Tukey, Dunnett ou
+    Bonferroni): intervalo que exclui 0% = diferenca detectada.
+  - Contagem (GLM): razao de taxas contra a testemunha, no mesmo formato.
+  - Sem base para o %, o motivo vem escrito no lugar do numero (escala
+    transformada, x de n, testemunha sem diferenca de zero).
+  - Os cartoes automaticos mandam ao motor a testemunha marcada no cadastro
+    (so a de verdade: nunca o 1o tratamento por falta de marca, nem controle
+    positivo). O teste continua "todos entre si".
+
+2) INTERACAO TRATAMENTO x LOCAL (modelo misto de varios locais)
+
+  - Teste da interacao (razao de verossimilhanca REML, p pela mistura
+    50:50; Self e Liang, 1987) e o desvio-padrao dela na unidade da
+    variavel.
+  - "Num local novo": faixa em que se espera cada diferenca num local
+    parecido com os ensaiados (intervalo de predicao). Mais larga que o IC.
+  - Quadro por local: medias, o melhor de cada local, diferenca contra a
+    testemunha em cada local e os locais em que o sinal se inverteu.
+  - Interacao estimada em zero nao trava mais a analise: o modelo e
+    reajustado sem ela (decidido pela derivada da verossimilhanca), com aviso
+    de que poucos locais nao provam efeito igual em toda parte.
+
+O que NAO entrou: juntar estudos diferentes como locais de uma rede dentro do
+app. A aba "Entre estudos" continua nao combinando. A analise conjunta vale
+para um arquivo com a coluna de local (Estatistica > modelo misto).
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir um estudo com testemunha marcada: o cartao da estatistica deve
+   recalcular uma vez e mostrar a coluna "vs test." e o omega2 na ANOVA.
+2. Na Estatistica, carregar uma planilha com coluna de local, papel "local",
+   modelo misto: deve aparecer o quadro "Interacao tratamento x local".
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/motor_efeito_ambiente.py: contra contas independentes (formulas
+  fechadas da ANOVA, raizes de Fieller, ensaio em rede balanceado: REML =
+  quadrados medios esperados, LRT e derivada em forma fechada; Tukey e GLM
+  Poisson independentes).
+  tests/test_estatistica_efeito.js (38) e test_estatistica_render.js (46).
+  Telas conferidas no Chromium em largura de celular (390 px) com relatorios
+  reais do motor. De quebra: p muito pequeno aparecia como "0" nas tabelas da
+  estatistica; agora sai "< 0,0001".
+
+
 AGRACTA — 26a publicacao                    06/10/2026
 =====================================================
 
