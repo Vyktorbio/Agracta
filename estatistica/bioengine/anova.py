@@ -19,6 +19,7 @@ import statsmodels.formula.api as smf
 from scipy import stats
 
 from . import diagnostics as diag
+from . import efeito
 
 
 def _df(resp, fatores, bloco=None):
@@ -158,18 +159,32 @@ def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
     df_erro = int(modelo.df_resid)
 
     # tabela ANOVA -> dict
+    # Ao lado do p, o TAMANHO: ômega² parcial (fração da variação que o termo
+    # explica, sem o viés do eta²). Bloco é desenho, não efeito em estudo.
+    n_modelo = int(modelo.nobs)
+    sq_res = float(aov.loc["Residual", "sum_sq"]) if "Residual" in aov.index else None
     tabela = []
     for termo in aov.index:
         linha = aov.loc[termo]
+        F = float(linha.get("F", np.nan)) if not pd.isna(linha.get("F", np.nan)) else None
+        gl = float(linha.get("df", np.nan))
+        efeito_termo = termo != "Residual" and "bloco" not in termo
         tabela.append({
             "fonte": termo.replace("C(", "").replace(")", ""),
-            "gl": float(linha.get("df", np.nan)),
+            "gl": gl,
             "sq": float(linha.get("sum_sq", np.nan)),
             "qm": float(linha.get("sum_sq", np.nan) / linha.get("df", np.nan))
                   if linha.get("df", 0) else None,
-            "F": float(linha.get("F", np.nan)) if not pd.isna(linha.get("F", np.nan)) else None,
+            "F": F,
             "p": float(linha.get("PR(>F)", np.nan)) if not pd.isna(linha.get("PR(>F)", np.nan)) else None,
+            "omega2_parcial": efeito.omega2_parcial(F, gl, n_modelo) if efeito_termo else None,
+            "eta2_parcial": efeito.eta2_parcial(float(linha.get("sum_sq", np.nan)), sq_res) if efeito_termo else None,
         })
+    # CV% do ensaio: a precisão experimental que o agrônomo lê primeiro. Só na
+    # escala original — na transformada o número não teria a unidade da variável.
+    media_geral = float(df["y"].mean())
+    cv_percent = (100.0 * float(np.sqrt(modelo.mse_resid)) / media_geral
+                  if usada == "original" and media_geral > 0 else None)
 
     # significância de cada fator
     fatores_signif = {}
@@ -204,6 +219,8 @@ def anova(resp, fatores, bloco=None, alfa=0.05, transformar_auto=True,
         "fatores_significativos": fatores_signif,
         "mse": mse,
         "df_erro": df_erro,
+        "cv_percent": cv_percent,
+        "n_observacoes": n_modelo,
         "kruskal": kruskal,
         "_modelo": modelo,
         "_df": df,

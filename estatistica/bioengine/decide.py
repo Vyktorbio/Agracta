@@ -25,7 +25,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import detect, diagnostics as diag, doseresponse, anova as anova_mod, glmcount
-from . import posthoc, contrastes, mistos, equivalencia, dosecontinua
+from . import posthoc, contrastes, mistos, equivalencia, dosecontinua, efeito
 
 
 def _col(dados, nome):
@@ -431,6 +431,11 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
         else:
             cmp=contrastes.dunnett_modelo(res_anova,opcoes.get('controle'),alfa)
             cmp['escala_teste']=res_anova['escala_usada']
+            if res_anova['transformacao']:
+                # Razão de médias na escala transformada não é "% da testemunha" na variável.
+                for c in cmp['comparacoes']:
+                    c.update(efeito.relativo_ausente('O modelo está na escala ' + str(res_anova['escala_usada'])
+                                                     + '; o efeito relativo só é dado na escala original.'))
             cmp['medias_exibicao']={d['tratamento']:d['media'] for d in relatorio['descritiva']} if res_anova['transformacao'] else cmp['medias']
         relatorio['comparacao_medias']={'controle':cmp}
         return relatorio
@@ -455,6 +460,11 @@ def _rodar_anova(relatorio, dados, rinfo, fatores_cols, fatores_vals,
             # Sob transformação, distingue a descritiva original do modelo.
             tukey["medias_exibicao"] = medias if res_anova['transformacao'] else tukey['medias']
             tukey["escala_teste"] = res_anova["escala_usada"]
+            if str(opcoes.get('testemunha') or '').strip():
+                tukey['efeito_testemunha'] = (
+                    contrastes._sem_testemunha(opcoes['testemunha'], 'O modelo está na escala ' + str(res_anova['escala_usada'])
+                                               + '; o efeito relativo só é dado na escala original.')
+                    if res_anova['transformacao'] else contrastes.efeito_testemunha_anova(res_anova, tukey, opcoes['testemunha']))
             comparacoes['tukey' if tukey['balanceado'] else 'ajustadas'] = tukey
         except Exception as e:
             avisos.append(f"Tukey falhou: {e}")
@@ -497,6 +507,9 @@ def analisar(dados,papeis,opcoes=None):
         a=rel.get('analise',{})
         if opcoes.get('comparacao')=='controle' and (a.get('medias_estimadas') or a.get('proporcoes_estimadas')):
             rel['analise']=contrastes.restringir_controle(a,opcoes['controle'])
+        elif (str(opcoes.get('testemunha') or '').strip() and opcoes.get('comparacao') in (None,'','todos')
+              and (a.get('medias_estimadas') or a.get('proporcoes_estimadas'))):
+            a['efeito_testemunha']=contrastes.efeito_testemunha_glm(a,opcoes['testemunha'])
         if equiv and rel.get('ok'):
             cm = rel.get('comparacao_medias') or {}
             if a.get('medias_estimadas') or a.get('proporcoes_estimadas'):

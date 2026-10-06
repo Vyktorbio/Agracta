@@ -43,7 +43,8 @@ var ctx={ String:String, Number:Number, Math:Math, isFinite:isFinite, JSON:JSON,
           Date:Date, isoToBR:function(x){return x;} };
 ctx.window=ctx; ctx.self=ctx;
 vm.createContext(ctx);
-['esc','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatCurvaContinuaHtml','_bioestatDecisaoHtml','_cvClassePG','_bioestatResumoCard']
+['esc','_bioestatP','_bioestatRotuloDose','_bioestatDoseHtml','_bioestatCurvaContinuaHtml','_bioestatDecisaoHtml','_cvClassePG','_bioestatResumoCard',
+ 'studyTestemunha','_bioestatTestemunhaBase']
   .forEach(function(n){ vm.runInContext(pega(n),ctx); });
 
 var job={variavel:'Mortalidade',date:'2026-09-09',jobKey:'av1|Mortalidade'};
@@ -139,6 +140,41 @@ var c4=ctx._bioestatResumoCard(job,relTukey,'Q1','s1');
 ck(/Média ajustada/.test(c4)&&/±EP/.test(c4)&&/±0,5/.test(c4),'média ajustada e erro-padrão do modelo');
 var c5=ctx._bioestatResumoCard(job,{ok:false,erro:'grade furada'},'Q1','s1');
 ck(/grade furada/.test(c5),'relatório com erro continua dizendo o motivo');
+
+/* ------------------------------------- 5. quanto, e não só se ---- */
+console.log('\nTamanho do efeito no cartão');
+var relEf={ok:true,
+  descritiva:[{tratamento:'Test',media:41.8,dp:2,n:4},{tratamento:'T2',media:32.2,dp:2,n:4},{tratamento:'T4',media:39.5,dp:2,n:4}],
+  analise:{tipo_analise:'ANOVA em blocos',mse:4.3,cv_percent:5.9,
+    tabela_anova:[{fonte:'F1',gl:2,sq:200,qm:100,F:23,p:0.0004,omega2_parcial:0.7412},{fonte:'bloco',gl:3,sq:17,qm:5.7,F:1.3,p:0.33,omega2_parcial:null},{fonte:'Residual',gl:6,sq:26,qm:4.3}]},
+  comparacao_medias:{tukey:{metodo:'Tukey HSD — erro do modelo',ajustadas:true,medias:{Test:41.8,T2:32.2,T4:39.5},erros_padrao:{Test:1,T2:1,T4:1},
+    letras:{T2:'a',T4:'b',Test:'b'},ordem:['T2','T4','Test'],
+    efeito_testemunha:{testemunha:'Test',metodo:'IC de Fieller no valor crítico de Tukey',nivel:0.95,motivo:null,tratamentos:{
+      T2:{relativo_pct:-22.79,relativo_ic_inf:-32.1,relativo_ic_sup:-12.57,relativo_motivo:null},
+      T4:{relativo_pct:-5.55,relativo_ic_inf:-15.62,relativo_ic_sup:4.47,relativo_motivo:null}}}}}};
+var cE=ctx._bioestatResumoCard(job,relEf,'Q1','s1');
+ck(/<th>vs test\.<\/th>/.test(cE),'a tabela de médias ganha a coluna vs test.');
+ck(/−22,8%/.test(cE)&&/\(−32,1% a −12,6%\)/.test(cE),'com o % e o intervalo');
+ck(/\+4,5%/.test(cE),'o limite positivo vem com sinal');
+ck(/ref\./.test(cE),'a testemunha aparece como referência');
+ck(/exclui 0% = diferença detectada/.test(cE),'e a leitura do intervalo vem escrita');
+ck(/ω²p/.test(cE)&&/0,74/.test(cE)&&/Olejnik/.test(cE),'a ANOVA do cartão mostra o ω² parcial');
+var relDun=JSON.parse(JSON.stringify(relCtl));
+relDun.comparacao_medias.controle.contra_controle=true; relDun.comparacao_medias.controle.controle='Test.';
+relDun.comparacao_medias.controle.comparacoes=[{g1:'Test.',g2:'T2',diferenca:-28,relativo_pct:-70,relativo_ic_inf:-78.2,relativo_ic_sup:-60.1,relativo_motivo:null}];
+var cDun=ctx._bioestatResumoCard(job,relDun,'Q1','s1');
+ck(/−70%/.test(cDun)&&/\(−78,2% a −60,1%\)/.test(cDun),'contra a testemunha (Dunnett): o % do par chega ao cartão');
+ck(!/vs test\./.test(ctx._bioestatResumoCard(job,relTukey,'Q1','s1')),'sem testemunha, o cartão fica como era');
+var relGlm={ok:true,analise:{tipo_analise:'GLM Poisson (contagem)',medias_estimadas:{Test:30,T2:14},ordem:['T2','Test'],letras:{T2:'a',Test:'b'},
+  efeito_testemunha:{testemunha:'Test',metodo:'razão de taxas',nivel:0.95,motivo:null,tratamentos:{T2:{relativo_pct:-53.4,relativo_ic_inf:-67.9,relativo_ic_sup:-32.5,relativo_motivo:null}}}}};
+ck(/−53,4%/.test(ctx._bioestatResumoCard(job,relGlm,'Q1','s1')),'contagem: a razão de taxas contra a testemunha também');
+
+/* A testemunha que viaja ao motor: só a marcada de verdade */
+function est(trs,extra){ return Object.assign({tratamentos:trs},extra||{}); }
+ck(ctx._bioestatTestemunhaBase(est([{id:'T1'},{id:'T2',testemunha:true}]))==='T2','a testemunha marcada vai ao motor');
+ck(ctx._bioestatTestemunhaBase(est([{id:'T1'},{id:'T2'}]))==='','sem marcação, nada vai — o 1º tratamento não vira testemunha');
+ck(ctx._bioestatTestemunhaBase(est([{id:'T1',testemunha:true,papelControle:'positivo'},{id:'T2'}]))==='','controle positivo não é base do %');
+ck(ctx._bioestatTestemunhaBase(est([{id:'P',testemunha:true,papelControle:'positivo'},{id:'T0',testemunha:true}]))==='T0','com positivo e testemunha, vai a testemunha');
 
 console.log('\n'+passou+' conferência(s) ok, '+falhas+' falha(s).');
 process.exit(falhas?1:0);

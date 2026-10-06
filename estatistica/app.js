@@ -4,7 +4,7 @@
 const ARQ_ENGINE = ["__init__.py","detect.py","diagnostics.py","doseresponse.py",
                     "posthoc.py","anova.py","glmcount.py","contrastes.py","mistos.py","equivalencia.py",
                     "dosecontinua.py","poder.py","decide.py","tempo.py",
-                    "validacao.py","forense.py"];
+                    "validacao.py","forense.py","efeito.py"];
 const APP_VERSION = "bioensaio-auditoria-20";
 const ENGINE_VERSION = APP_VERSION;
 const SW_CACHE_VERSION = "bioensaio-v46-auditoria";
@@ -2715,6 +2715,9 @@ async function executarAnalise(){
   opcoes.comparacao=$('#opt-comparacao').value;
   const pedeReferencia=['controle','equivalencia','nao_inferioridade'].includes(opcoes.comparacao);
   if(pedeReferencia)opcoes.controle=$('#opt-testemunha').value;
+  /* Em "todos entre si", a testemunha marcada não muda o teste: só acrescenta,
+     ao lado da letra, quanto cada tratamento difere dela em %, com o intervalo. */
+  else if($('#opt-testemunha')?.value) opcoes.testemunha=$('#opt-testemunha').value;
   if(opcoes.comparacao==='equivalencia'||opcoes.comparacao==='nao_inferioridade'){
     const m=parseFloat($('#opt-margem').value);
     if($('#opt-margem-tipo').value==='percent')opcoes.margem_pct=m; else opcoes.margem=m;
@@ -2800,7 +2803,9 @@ async function analisarForense(){
 /* Render do relatório                                                     */
 /* ----------------------------------------------------------------------- */
 function fmt(x, d=3){ if(x==null||x===undefined) return "—"; if(typeof x!=="number") return String(x); if(!isFinite(x)) return "∞"; return x.toLocaleString("pt-BR",{maximumFractionDigits:d, minimumFractionDigits:0}); }
-function p_chip(p){ if(p==null) return ""; const sig=p<0.05; return `<span class="chip ${sig?'chip-ok':'chip-info'}">p=${fmt(p,4)}</span>`; }
+/* p com 4 casas virava "0" abaixo de 0,00005 — e p nunca é zero. */
+function fmtP(p){ return p==null?"—":(p<1e-4?"< 0,0001":fmt(p,4)); }
+function p_chip(p){ if(p==null) return ""; const sig=p<0.05; return `<span class="chip ${sig?'chip-ok':'chip-info'}">p ${p<1e-4?'':'= '}${fmtP(p)}</span>`; }
 
 function renderRelatorio(rel){
   const out=$("#resultados"); out.innerHTML="";
@@ -2959,6 +2964,35 @@ function renderComparacaoCurvas(out, comp, uni){
   out.appendChild(secao("Comparação de potência / resistência", h));
 }
 
+/* ---- Tamanho de efeito ao lado do p ---- */
+/* CV pela tabela de Pimentel-Gomes (2009), a de uso corrente na experimentação
+   agrícola no Brasil: < 10% baixo; 10–20% médio; 20–30% alto; > 30% muito alto. */
+function classeCV(cv){ return cv<10?'baixo':(cv<=20?'médio':(cv<=30?'alto':'muito alto')); }
+function fmtPct(v){
+  if(v==null||!isFinite(v)) return '—';
+  return (v>0?'+':v<0?'−':'')+fmt(Math.abs(v),1)+'%';
+}
+/* "−23% (−32 a −13)": o efeito relativo à testemunha e o intervalo, ou o motivo
+   de não haver número — nunca uma célula vazia que pareça zero. */
+function celulaRelativo(e){
+  if(!e||e.relativo_pct==null) return '—';
+  return fmtPct(e.relativo_pct)+(e.relativo_ic_inf!=null?` <span class="dica">(${fmtPct(e.relativo_ic_inf)} a ${fmtPct(e.relativo_ic_sup)})</span>`:' <span class="dica">(sem IC)</span>');
+}
+function motivosRelativo(lista){
+  const m=[...new Set((lista||[]).filter(e=>e&&e.relativo_motivo).map(e=>e.relativo_motivo))];
+  return m.map(x=>`<p class="dica">Efeito relativo: ${esc(x)}</p>`).join('');
+}
+/* Coluna "vs testemunha" da tabela de médias, em "todos entre si". */
+function colunaTestemunha(et){
+  if(!et) return null;
+  const tr=et.tratamentos||{};
+  if(!Object.keys(tr).length) return {vazia:true,dica:et.motivo?`<p class="dica">Efeito relativo à testemunha: ${esc(et.motivo)}</p>`:''};
+  const nivel=et.nivel!=null?fmt(et.nivel*100,0)+'%':'';
+  return {cab:`<th>vs ${esc(et.testemunha)}</th>`,
+    cel:t=>`<td>${t===et.testemunha?'<span class="dica">referência</span>':celulaRelativo(tr[t])}</td>`,
+    dica:`<p class="dica">vs ${esc(et.testemunha)}: (média ÷ média da testemunha − 1) × 100, com intervalo de ${nivel} — ${esc(et.metodo||'')}. Intervalo que exclui 0% coincide com letra diferente da testemunha.</p>`+motivosRelativo(Object.values(tr))};
+}
+
 /* ---- ANOVA ---- */
 function renderAnova(out, rel){
   const a = rel.analise;
@@ -2970,11 +3004,16 @@ function renderAnova(out, rel){
     `</div>`;
   out.appendChild(secao(a.tipo_analise, diag));
 
-  let h=`<div class="tab-rolavel"><table><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>`;
+  const comOmega=a.tabela_anova.some(l=>l.omega2_parcial!=null);
+  let h=`<div class="tab-rolavel"><table><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th>${comOmega?'<th>ω² parcial</th>':''}</tr></thead><tbody>`;
   a.tabela_anova.forEach(l=>{
-    h+=`<tr><td>${l.fonte}</td><td>${fmt(l.gl,0)}</td><td>${fmt(l.sq,2)}</td><td>${fmt(l.qm,2)}</td><td>${fmt(l.F,2)}</td><td>${l.p!=null?fmt(l.p,4):"—"} ${l.p!=null&&l.p<0.05?"significativo":""}</td></tr>`;
+    h+=`<tr><td>${l.fonte}</td><td>${fmt(l.gl,0)}</td><td>${fmt(l.sq,2)}</td><td>${fmt(l.qm,2)}</td><td>${fmt(l.F,2)}</td><td>${fmtP(l.p)} ${l.p!=null&&l.p<0.05?"significativo":""}</td>${comOmega?`<td>${l.omega2_parcial!=null?fmt(l.omega2_parcial,3):"—"}</td>`:''}</tr>`;
   });
   h+=`</tbody></table></div>`;
+  /* O p diz SE; o tamanho diz QUANTO. ω² parcial: fração da variação que o
+     termo explica, já descontado o acaso (Olejnik & Algina, 2003). */
+  if(comOmega) h+=`<p class="dica">ω² parcial: fração da variação explicada pelo termo, descontado o acaso (Olejnik &amp; Algina, 2003). Perto de 0, o efeito é pequeno mesmo quando o p é baixo; bloco é delineamento e fica de fora.</p>`;
+  if(a.cv_percent!=null) h+=`<p class="dica">CV do ensaio: <b>${fmt(a.cv_percent,1)}%</b> (${classeCV(a.cv_percent)} — Pimentel-Gomes, 2009) · ${fmt(a.n_observacoes,0)} parcelas.</p>`;
   if(a.kruskal) h+=`<p class="dica">Kruskal-Wallis (não-paramétrico): H=${fmt(a.kruskal.H,2)}, p=${fmt(a.kruskal.p,4)}.</p>`;
   out.appendChild(secao("Tabela da ANOVA", h));
 
@@ -2992,22 +3031,60 @@ function renderGlm(out, a){
   out.appendChild(secao(a.tipo_analise, head));
 
   const comLetras=!a.contra_controle && Object.keys(a.letras||{}).length>0;
-  let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${esc(rotulo)}</th>${comLetras?'<th>Grupo</th>':''}</tr></thead><tbody>`;
-  a.ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(medias[t],3)}</td>${comLetras?`<td><span class="letra">${esc(a.letras[t]||"")}</span></td>`:''}</tr>`);
+  const colT=colunaTestemunha(a.efeito_testemunha), comT=!!(colT&&!colT.vazia);
+  let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${esc(rotulo)}</th>${comLetras?'<th>Grupo</th>':''}${comT?colT.cab:''}</tr></thead><tbody>`;
+  a.ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(medias[t],3)}</td>${comLetras?`<td><span class="letra">${esc(a.letras[t]||"")}</span></td>`:''}${comT?colT.cel(t):''}</tr>`);
   h+='</tbody></table></div>';
   if(comLetras)h+=`<p class="dica">Compartilhar uma letra indica que não se detectou diferença (α=${a.alfa}); não comprova equivalência.</p>`;
-  if(a.contra_controle)h+=`<p class="dica">${esc(a.nota)}</p><div class="tab-rolavel"><table><thead><tr><th>Tratamento − controle</th><th>Diferença na escala de ligação</th><th>p ajustado</th></tr></thead><tbody>`+(a.comparacoes||[]).map(c=>`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td><td>${fmt(c.diferenca,3)}</td><td>${fmt(c.p,4)}</td></tr>`).join('')+'</tbody></table></div>';
+  if(colT)h+=colT.dica;
+  if(a.contra_controle){
+    const comRel=(a.comparacoes||[]).some(c=>c.relativo_pct!=null);
+    h+=`<p class="dica">${esc(a.nota)}</p><div class="tab-rolavel"><table><thead><tr><th>Tratamento − controle</th><th>Diferença na escala de ligação</th>${comRel?'<th>Em % da testemunha</th>':''}<th>p ajustado</th></tr></thead><tbody>`+(a.comparacoes||[]).map(c=>`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td><td>${fmt(c.diferenca,3)}</td>${comRel?`<td>${celulaRelativo(c)}</td>`:''}<td>${fmtP(c.p)}</td></tr>`).join('')+'</tbody></table></div>'+
+      (comRel?`<p class="dica">Em % da testemunha: razão de taxas do modelo (ligação log), exata nessa escala; intervalo de Bonferroni para a família contra o controle.</p>`:'')+motivosRelativo(a.comparacoes);
+  }
   const b=secao("Comparação de tratamentos", h);
   const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);
   out.appendChild(b);
   desenharBarras(cv, a.ordem, medias, a.letras, rotulo);
 }
 
+/* ---- Tratamento × local: o quanto a resposta muda de lugar para lugar ----
+   O teste diz se há interação; o desvio-padrão diz de quanto ela é; e as
+   tabelas por local dizem se ela muda a RECOMENDAÇÃO (sinal invertido contra a
+   testemunha, ou outro tratamento no topo) ou só o tamanho do efeito. */
+function renderInteracaoLocal(out,it){
+  const alfa=it.alfa??0.05, locs=it.locais||[], med=it.medias_por_local||{}, trats=Object.keys(med);
+  const pTxt=it.p!=null?(it.p<1e-4?'p < 0,0001':'p = '+fmt(it.p,4)):'';
+  let estado;
+  if(it.reajustado_sem) estado=chip('estimada em zero — modelo ajustado sem ela','chip-info');
+  else if(it.p!=null) estado=it.p<alfa?chip('interação detectada ('+pTxt+')','chip-alerta'):chip('não detectada ('+pTxt+')','chip-info');
+  else estado=chip('teste indisponível','chip-info');
+  let h=`<div>${estado}</div>`+
+    `<p>${fmt(it.n_locais,0)} locais · desvio-padrão da interação ≈ <b>${fmt(it.desvio_padrao,3)}</b> na unidade da variável (variância ${fmt(it.variancia,4)})${it.lrt!=null?' · razão de verossimilhança '+fmt(it.lrt,3):''}.</p>`+
+    `<p class="dica">${esc(it.metodo||'')}. A variância não pode ser negativa, por isso o p é metade do qui-quadrado usual (Self &amp; Liang, 1987).`+
+    (it.reajustado_sem?' Estimada em zero, ela saiu do modelo: as comparações valem para estes locais, e com poucos locais isso não prova que o efeito seja igual em toda parte.':'')+`</p>`;
+  if(trats.length&&locs.length){
+    h+='<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th>'+locs.map(l=>`<th>${esc(l)}</th>`).join('')+'</tr></thead><tbody>'+
+      trats.map(t=>'<tr><td>'+esc(t)+'</td>'+locs.map(l=>{const v=med[t][l];return `<td>${v==null?'—':(it.melhor_por_local?.[l]===t?'<b>'+fmt(v,2)+'</b>':fmt(v,2))}</td>`;}).join('')+'</tr>').join('')+
+      '</tbody></table></div><p class="dica">Médias das parcelas em cada local (com parcela faltando, não são as médias ajustadas do modelo). Em negrito, o melhor de cada local'+
+      (it.vencedores_distintos>1?` — <b>${it.vencedores_distintos} tratamentos diferentes</b> ficaram no topo.`:'.')+'</p>';
+  }
+  const por=it.contra_controle_por_local||[];
+  if(por.length){
+    const ctl=it.controle||'testemunha';
+    h+=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento − ${esc(ctl)}</th><th>Geral</th>`+locs.map(l=>`<th>${esc(l)}</th>`).join('')+'</tr></thead><tbody>'+
+      por.map(p=>`<tr><td>${esc(p.tratamento)}</td><td><b>${fmt(p.geral,2)}</b></td>`+locs.map(l=>{const v=p.por_local[l];return `<td>${v==null?'—':((p.inversoes||[]).includes(l)?chip(fmt(v,2),'chip-alerta'):fmt(v,2))}</td>`;}).join('')+'</tr>').join('')+
+      '</tbody></table></div><p class="dica">Diferença contra a testemunha em cada local. Em destaque, o local em que o sinal se inverteu em relação à média geral — ali a recomendação mudaria.</p>';
+  }
+  out.appendChild(secao('Interação tratamento × local',h));
+}
+
 function renderMisto(out,rel){
   const a=rel.analise;
   out.appendChild(secao(a.tipo_analise,`<p>${a.n_unidades} unidades independentes · ${a.n_observacoes} observações</p><p class="dica">${esc(a.inferencia)}</p>`));
-  const rows=(a.testes_efeitos||[]).map(e=>`<tr><td>${esc(e.efeito)}</td><td>${fmt(e.F,3)}</td><td>${fmt(e.gl_num,0)} / ${fmt(e.gl_den,2)}</td><td>${fmt(e.p,4)}</td></tr>`).join('');
+  const rows=(a.testes_efeitos||[]).map(e=>`<tr><td>${esc(e.efeito)}</td><td>${fmt(e.F,3)}</td><td>${fmt(e.gl_num,0)} / ${fmt(e.gl_den,2)}</td><td>${fmtP(e.p)}</td></tr>`).join('');
   if(rows)out.appendChild(secao('Efeitos do ensaio','<div class="tab-rolavel"><table><thead><tr><th>Efeito</th><th>F</th><th>GL numerador / denominador</th><th>p</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(a.testes_efeitos||[]).filter(e=>e.motivo).map(e=>`<p class="dica">${esc(e.efeito)}: ${esc(e.motivo)}</p>`).join('')));
+  if(a.interacao_local) renderInteracaoLocal(out,a.interacao_local);
   if(a.serie?.length){
     const trats=[...new Set(a.serie.map(s=>s.tratamento))],tempos=[...new Set(a.serie.map(s=>s.tempo))];
     const linhas=tempos.map((d,i)=>({tempo:i,rotulo:d,medias:Object.fromEntries(a.serie.filter(s=>s.tempo===d).map(s=>[s.tratamento,s.media]))}));
@@ -3034,20 +3111,25 @@ function renderComparacoes(out, cm, descritiva){
     const ep=ajustadaOriginal?r.erros_padrao||{}:erros;
     const rotuloValor = r.medianas ? "Mediana" : ajustadaOriginal ? "Média ajustada" : (r.escala_teste && r.escala_teste !== "original" ? "Média (escala original)" : "Média");
     const comLetras=!r.contra_controle && Object.keys(r.letras||{}).length>0;
-    let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotuloValor}</th>${r.medianas?"":"<th>± EP</th>"}${comLetras?'<th>Grupo</th>':''}</tr></thead><tbody>`;
-    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${ep[t]!=null?"± "+fmt(ep[t],2):"—"}</td>`}${comLetras?`<td><span class="letra">${esc(r.letras[t]||"")}</span></td>`:''}</tr>`);
+    const colT=colunaTestemunha(r.efeito_testemunha), comT=!!(colT&&!colT.vazia);
+    let h=`<div class="tab-rolavel"><table><thead><tr><th>Tratamento</th><th>${rotuloValor}</th>${r.medianas?"":"<th>± EP</th>"}${comLetras?'<th>Grupo</th>':''}${comT?colT.cab:''}</tr></thead><tbody>`;
+    ordem.forEach(t=> h+=`<tr><td>${esc(t)}</td><td>${fmt(valores[t],3)}</td>${r.medianas?"":`<td>${ep[t]!=null?"± "+fmt(ep[t],2):"—"}</td>`}${comLetras?`<td><span class="letra">${esc(r.letras[t]||"")}</span></td>`:''}${comT?colT.cel(t):''}</tr>`);
     h+=`</tbody></table></div><p class="dica">${r.contra_controle?'Comparações somente contra '+esc(r.controle)+'.':comLetras?`Compartilhar uma letra indica que não se detectou diferença (α=${r.alfa}); não comprova equivalência.`:'Estimativas sem agrupamento por letras.'}${r.medianas?"":" Barras = média ± erro-padrão."}`+
       (r.escala_teste && r.escala_teste !== "original" ? ` Comparações calculadas na escala ${esc(r.escala_teste)}; valores exibidos na escala original.` : "")+
-      `</p>`;
+      `</p>`+(colT?colT.dica:'');
     if(r.margem!=null&&r.comparacoes?.length){
       h+=tabelaEquivalencia(r);
       const b2=secao(r.metodo,h);out.appendChild(principal?b2:b2);principal=false;return;
     }
     if(r.comparacoes?.length){
       const comDiferenca=r.comparacoes.some(c=>c.diferenca!=null),comIntervalo=r.comparacoes.some(c=>c.ic_inf!=null);
-      h+='<details class="comparacoes-detalhe"'+(r.contra_controle?' open':'')+'><summary>Comparações entre tratamentos</summary><div class="tab-rolavel"><table><thead><tr><th>Comparação</th>'+(comDiferenca?'<th>Diferença (2 − 1)</th>':'')+(comIntervalo?'<th>IC simultâneo</th>':'')+'<th>p ajustado</th></tr></thead><tbody>';
-      r.comparacoes.forEach(c=>{h+=`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td>${comDiferenca?`<td>${fmt(c.diferenca,3)}</td>`:''}${comIntervalo?`<td>${c.ic_inf!=null?fmt(c.ic_inf,3)+' a '+fmt(c.ic_sup,3):'—'}</td>`:''}<td>${fmt(c.p_ajustado??c.p,4)}</td></tr>`;});
-      h+='</tbody></table></div><p class="dica">'+(comDiferenca?'Diferenças na escala do modelo. ':'')+esc(r.nota||'')+'</p></details>';
+      const comRelativo=r.comparacoes.some(c=>'relativo_pct' in c),comPredicao=r.comparacoes.some(c=>c.pred_inf!=null);
+      h+='<details class="comparacoes-detalhe"'+(r.contra_controle?' open':'')+'><summary>Comparações entre tratamentos</summary><div class="tab-rolavel"><table><thead><tr><th>Comparação</th>'+(comDiferenca?'<th>Diferença (2 − 1)</th>':'')+(comIntervalo?'<th>IC simultâneo</th>':'')+(comRelativo?'<th>Em % da testemunha</th>':'')+(comPredicao?'<th>Num local novo</th>':'')+'<th>p ajustado</th></tr></thead><tbody>';
+      r.comparacoes.forEach(c=>{h+=`<tr><td>${esc(c.g2)} − ${esc(c.g1)}</td>${comDiferenca?`<td>${fmt(c.diferenca,3)}</td>`:''}${comIntervalo?`<td>${c.ic_inf!=null?fmt(c.ic_inf,3)+' a '+fmt(c.ic_sup,3):'—'}</td>`:''}${comRelativo?`<td>${celulaRelativo(c)}</td>`:''}${comPredicao?`<td>${c.pred_inf!=null?fmt(c.pred_inf,3)+' a '+fmt(c.pred_sup,3):'—'}</td>`:''}<td>${fmtP(c.p_ajustado??c.p)}</td></tr>`;});
+      h+='</tbody></table></div><p class="dica">'+(comDiferenca?'Diferenças na escala do modelo. ':'')+esc(r.nota||'')+'</p>'+
+        (comRelativo?'<p class="dica">Em % da testemunha: (média do tratamento ÷ média da testemunha − 1) × 100, com intervalo de Fieller no mesmo nível simultâneo do IC da diferença.</p>'+motivosRelativo(r.comparacoes):'')+
+        (comPredicao?'<p class="dica">Num local novo: faixa em que se espera a diferença num local parecido com os do ensaio, no mesmo nível simultâneo do IC. Soma a variação tratamento × local à incerteza da média, por isso é mais larga que o IC — é ela que diz se a vantagem se repete fora daqui.</p>':'')+
+        '</details>';
     }
     const b=secao(r.metodo, h);
     const cv=el("canvas"); cv.width=600; cv.height=300; b.appendChild(cv);

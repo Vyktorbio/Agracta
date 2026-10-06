@@ -13589,7 +13589,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-18';
+var MOTOR_VERSAO='agracta-19';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -13610,8 +13610,10 @@ var MOTOR_VERSAO='agracta-18';
    A versão 17 segue Robertson et al. (2007) na dose-resposta — resposta natural
    estimada com a testemunha no modelo, heterogeneidade só quando significativa —
    e leva a placa numa série de concentrações para a curva de dose (CE50).
+   A versão 19 devolve o tamanho do efeito ao lado do p (ω² parcial, CV%, % contra
+   a testemunha com IC de Fieller) e a interação tratamento × local.
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-18';
+var MOTOR_CALCULO='agracta-19';
 /* O pedido de cálculo vale para ESTES dados (assinatura) e sobrevive a fechar o
    app: sem isto, reabrir escondia a estatística já calculada e guardada até
    alguém apertar o botão de novo. Mudou o dado, muda a assinatura e o pedido
@@ -13913,6 +13915,14 @@ function _bioestatForenseTipo(j){
   if(tipo==='pct' && (typeof _avEhPercentual==='function'?_avEhPercentual(nome):/sever|incid|%/.test(nome))) return 'pct';
   return 'cont';
 }
+/* A testemunha que vai ao motor para o "% contra a testemunha" ao lado das
+   letras. Só a marcada de verdade: nunca o 1º tratamento por falta de marca
+   (o fallback de studyTestemunha), nem controle positivo ou referência sem alvo.
+   O teste continua "todos entre si"; ela só dá a base do %. */
+function _bioestatTestemunhaBase(study){
+  var id=studyTestemunha(study), t=(study.tratamentos||[]).find(function(x){ return x&&x.id===id; });
+  return (t&&t.testemunha&&t.papelControle!=='positivo'&&t.papelControle!=='sem_alvo')?String(id):'';
+}
 /* Monta e enfileira os jobs. Separado de `_bioestatEnsureStudy` só porque a
    consulta ao cache em disco é assíncrona e precisa vir antes. */
 function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
@@ -13933,7 +13943,7 @@ function _bioestatEnfileirar(qid,sid,study,key,sig,jobs,c,jobsT,jobsF){
       }catch(e){}
       var item={requestId:req,key:key,sig:sig,job:fjob,payload:{requestId:req,aoa:(j.modelo==='curva'?_bioestatAoaCrescimento(j.aoa,j.desconto):j.aoa),modo:m[0],titulo:tit,
         responsavel:resp,tipo:j.tipo,doseUnit:doseUnit,forenseTipo:m[2],local:loc,quadra:qn,
-        maiorMelhor:_mm, modelo:(j.modelo||'')}};
+        maiorMelhor:_mm, modelo:(j.modelo||''), controle:_bioestatTestemunhaBase(study)}};
       _bioAutoQueue.push(item);_bioAutoPending[req]=item;
     });
   });
@@ -14341,11 +14351,28 @@ function _bioestatResumoCard(job,rel,qid,sid){
   var labelErro=ajustada?'±EP':'±DP';
   /* CV% do ensaio = raiz(QM resíduo) / média geral × 100 */
   var mg=null, cv=null, sm=0, nn=0; descArr.forEach(function(d){ if(d.media!=null){var n=d.n||1;sm+=d.media*n;nn+=n;} }); if(nn){ mg=sm/nn; if(!a.transformacao&&a.mse!=null&&mg) cv=Math.sqrt(a.mse)/Math.abs(mg)*100; }
+  /* QUANTO, e não só SE: o % de cada tratamento contra a testemunha, com o
+     intervalo no mesmo critério das letras (Fieller; Tukey, Dunnett ou
+     Bonferroni). Intervalo que exclui 0% = diferença detectada. */
+  var relT={}, refT=null, et=(cmp&&cmp.efeito_testemunha)||a.efeito_testemunha||null;
+  if(et&&et.tratamentos){ relT=et.tratamentos; refT=et.testemunha; }
+  else{ var cc=(cmp&&cmp.contra_controle)?cmp:(a.contra_controle?a:null);
+    if(cc){ refT=cc.controle; (cc.comparacoes||[]).forEach(function(c){ if(c&&c.relativo_pct!==undefined) relT[c.g2]=c; }); } }
+  var comRel=Object.keys(relT).some(function(k){ return relT[k]&&relT[k].relativo_pct!=null; });
+  var pctf=function(v){ return (v>0?'+':v<0?'−':'')+nf(Math.abs(v),1)+'%'; };
+  var relCel=function(t){
+    if(t===refT) return '<span style="color:#9aa69e">ref.</span>';
+    var e=relT[t]; if(!e||e.relativo_pct==null) return '—';
+    return pctf(e.relativo_pct)+(e.relativo_ic_inf!=null?' <span style="color:#9aa69e;white-space:nowrap">('+pctf(e.relativo_ic_inf)+' a '+pctf(e.relativo_ic_sup)+')</span>':'');
+  };
   var rows=''; order.forEach(function(t){ var d=desc[t]||{}, val=(valsObj&&valsObj[t]!=null)?valsObj[t]:d.media;
     var erro=glm?null:ajustada?(cmp.erros_padrao||{})[t]:d.dp;
-    rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+nf(val,1)+'</td><td style="color:#7a877f">'+(erro!=null?('±'+nf(erro,1)):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td></tr>'; });
+    rows+='<tr><td class="av-tname">'+esc(t)+'</td><td>'+nf(val,1)+'</td><td style="color:#7a877f">'+(erro!=null?('±'+nf(erro,1)):'—')+'</td><td><b style="color:#1f6f43">'+esc(letras[t]||'—')+'</b></td>'+(comRel?'<td>'+relCel(t)+'</td>':'')+'</tr>'; });
+  var relNota=comRel?'<div style="font-size:10px;color:#728078;margin-top:2px">vs test.: quanto cada tratamento difere da testemunha ('+esc(refT)+'), em %, com o intervalo — intervalo que exclui 0% = diferença detectada.</div>':'';
   var nr=a.normalidade||{}, hm=a.homogeneidade||{}, kr=a.kruskal||{};
-  var anova=(a.tabela_anova||[]).map(function(r){ return '<tr><td class="av-tname">'+esc(r.fonte)+'</td><td>'+(r.gl!=null?r.gl:'—')+'</td><td>'+nf(r.sq,2)+'</td><td>'+nf(r.qm,3)+'</td><td>'+(r.F!=null?nf(r.F,1):'—')+'</td><td>'+pf(r.p)+'</td></tr>'; }).join('');
+  /* ω² parcial: a fração da variação que o termo explica, descontado o acaso */
+  var comOmega=(a.tabela_anova||[]).some(function(r){ return r.omega2_parcial!=null; });
+  var anova=(a.tabela_anova||[]).map(function(r){ return '<tr><td class="av-tname">'+esc(r.fonte)+'</td><td>'+(r.gl!=null?r.gl:'—')+'</td><td>'+nf(r.sq,2)+'</td><td>'+nf(r.qm,3)+'</td><td>'+(r.F!=null?nf(r.F,1):'—')+'</td><td>'+pf(r.p)+'</td>'+(comOmega?'<td>'+(r.omega2_parcial!=null?nf(r.omega2_parcial,2):'—')+'</td>':'')+'</tr>'; }).join('');
   var statTxt=p==null?'modelo calculado':('p='+pf(p)+(p<.05?' · significativo':' · ns'));
   var transf=a.transformacao? (typeof a.transformacao==='string'?a.transformacao:(a.transformacao.nome||a.transformacao.tipo||'aplicada')) : null;
   /* Pressuposto NÃO TESTADO não é pressuposto REPROVADO. Antes o ✗ aparecia
@@ -14360,10 +14387,10 @@ function _bioestatResumoCard(job,rel,qid,sid){
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="color:#26352c">'+esc(job.variavel)+' · '+esc(isoToBR(job.date)||job.date)+'</b><span style="font-size:9px;padding:3px 6px;border-radius:999px;background:'+(p!=null&&p<.05?'#e1f3e8':'#edf0ee')+';color:#486053;white-space:nowrap">'+esc(statTxt)+'</span></div>'+
     '<div style="font-size:10px;color:#5f6f66;margin-top:5px;line-height:1.5"><b>'+esc(a.tipo_analise||'Análise')+'</b>'+(cv!=null?' · <span title="Pimentel-Gomes (2009): &lt; 10% baixo; 10–20% médio; 20–30% alto; &gt; 30% muito alto">CV residual '+nf(cv,1)+'%'+((typeof _cvClassePG==='function')?(' ('+_cvClassePG(cv)+')'):'')+'</span>':'')+(cmp?' · comparação <b>'+esc(metodoCmp)+'</b>':'')+(transf?' · transf. '+esc(transf):'')+'</div>'+
     pressHtml+
-    (rows?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')+
+    (rows?'<div class="av-scroll" style="margin-top:7px"><table class="av-table"><thead><tr><th>Trat.</th><th>'+labelMedia+'</th><th>'+labelErro+'</th><th>Grupo</th>'+(comRel?'<th>vs test.</th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+relNota:'')+
     _bioestatDoseHtml(a,nf,pf)+
     (typeof _bioestatCurvaContinuaHtml==='function'?_bioestatCurvaContinuaHtml(a,nf):'')+
-    (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th></tr></thead><tbody>'+anova+'</tbody></table></div></details>':'')+
+    (anova?'<details style="margin-top:6px"><summary style="font-size:10px;color:#486053;cursor:pointer;user-select:none">Tabela ANOVA'+(kr.H!=null?' · Kruskal-Wallis H='+nf(kr.H,1)+' (p'+pf(kr.p)+')':'')+'</summary><div class="av-scroll" style="margin-top:5px"><table class="av-table"><thead><tr><th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p</th>'+(comOmega?'<th title="ω² parcial (Olejnik &amp; Algina, 2003)">ω²p</th>':'')+'</tr></thead><tbody>'+anova+'</tbody></table></div>'+(comOmega?'<div style="font-size:10px;color:#728078;margin-top:2px">ω²p: fração da variação que o termo explica, descontado o acaso (Olejnik &amp; Algina, 2003) — o tamanho do efeito, ao lado do p.</div>':'')+'</details>':'')+
     _bioestatDecisaoHtml(rel)+
     jsonBtn+
   '</div>';
