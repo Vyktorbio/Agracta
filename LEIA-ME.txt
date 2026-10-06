@@ -1,3 +1,135 @@
+AGRACTA — 25a publicacao                    06/10/2026
+=====================================================
+
+Leva: revisao do que entrou nas duas publicacoes anteriores (satelites e
+Embrapa) e os consertos que a revisao achou.
+  CODIGO:  satelites_backend.py  satelites.js  satelites.css
+           vendor/satelites-core.js  ui-campo.js
+           agroapi_backend.py  agroapi.js  agroapi.css
+           index.html  sw.js
+  TESTE:   tests/test_satelites_quadras.js (novo)
+           tests/test_satelites_backend.py  tests/test_agroapi_backend.py
+           tests/test_agroapi_ui.js (ampliados)
+  DOCS:    docs/SATELITES.md  docs/AGROAPI.md  docs/README.md  README.md
+
+O PROXY PRECISA SUBIR JUNTO (satelites_backend.py e agroapi_backend.py
+mudaram; /health passa a dizer satelites.version: 2). Nenhuma variavel nova
+e obrigatoria. Para a Embrapa, a recomendada agora e a chave e o segredo da
+aplicacao: AGROAPI_CONSUMER_KEY e AGROAPI_CONSUMER_SECRET (veja abaixo).
+
+As duas publicacoes anteriores subiram sem entrada neste arquivo. Registro:
+  - Landsat (temperatura da superficie), SMAP (umidade do solo) e NASA FIRMS
+    (focos de calor) em Ferramentas do mapa > Satelite, pelo proxy, sem
+    conta nem chave (docs/SATELITES.md).
+  - Embrapa: Bioinsumos e ZARC/Agritec como abas do Conhecimento, ClimAPI no
+    seletor de fonte do clima. Dependem de credencial AgroAPI no servidor
+    (docs/AGROAPI.md).
+As duas funcionam: conferi Landsat, SMAP e FIRMS contra os servicos reais, e
+os caminhos da Embrapa contra a documentacao oficial da AgroAPI.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "olha o que eu e o Astra fizemos, ve se ficou bom ou precisa
+de melhorias".
+
+1) FOCOS DE CALOR: OS TRES SATELITES, NAO UM
+
+O FIRMS usava so o NOAA-20. S-NPP, NOAA-20 e NOAA-21 levam o mesmo sensor
+(VIIRS, pixel de 375 m) e passam com ~50 min de diferenca: cada um ve o que
+queimou na sua passagem e o que nao estava sob nuvem. Medido hoje:
+  - oeste da Bahia, ultimas 24 h: 102 posicoes com foco so no NOAA-20,
+    162 juntando os tres;
+  - caixa de Iracemapolis, ultimos 7 dias: o NOAA-20 tinha 0 deteccoes;
+    os outros dois tinham 13 (29 e 30/09). A versao anterior dizia
+    "nenhuma deteccao".
+Se um satelite falhar, o painel diz qual e os outros seguem. Se todos
+falharem, e erro, nunca "nenhum foco".
+
+2) O SERVIDOR NAO RELE A AMERICA DO SUL A CADA ARRASTO
+
+Cada pedido relia o arquivo inteiro do FIRMS (dezenas de milhares de
+linhas): meio segundo de CPU por arrasto do mapa nos 7 dias, num servidor
+gratuito com fracao de CPU, segurando NDVI e clima de todo mundo junto.
+Agora cada arquivo e lido uma vez por download (a cada 15 min) e cada pedido
+so filtra: ~1 ms. Linha com defeito fica de fora e e contada no painel; um
+defeito so nao derruba mais a camada inteira (acima de 1%, o arquivo e
+recusado).
+
+3) A PERGUNTA DAS QUADRAS, NA HORA LOCAL
+
+- O painel responde: "Foco mais perto das quadras: a 5,3 km de Quadra A,
+  ha 17 h". So afirma o que a consulta cobre: "nenhum foco a menos de X km"
+  vale ate a borda da area consultada (pelo menos 0,4 grau em volta do
+  centro, ~20 km com a quadra no meio).
+- O popup traz o satelite, a hora local com a idade ("01:40 · ha 6 h"), o
+  UTC para conferir no site da NASA, a distancia ate a quadra mais perto e a
+  potencia com virgula (era "1.25 MW").
+- Arrastar ou aproximar dentro da area ja consultada nao consulta de novo.
+  Em Temperatura, Umidade e Focos, a imagem/os pontos antigos ficam no mapa
+  ate os novos chegarem (antes sumiam a cada arrasto).
+
+4) A GAVETA ARRUMADA
+
+Na secao Satelite, cada linha diz o que mostra, com a fonte no subtitulo,
+como as outras ja faziam: Temperatura da superficie (Landsat), Umidade do
+solo (SMAP), Focos de calor (NASA FIRMS). Icones proprios (termometro,
+gota, chama; antes o SMAP repetia o icone do Mapa de solos e o FIRMS o do
+pino de observacao). "Colorir quadras por valor" voltou a ficar logo abaixo
+de "Indices de vegetacao", de que depende.
+
+5) EMBRAPA: A CREDENCIAL QUE NAO VENCE CALADA
+
+O token da AgroAPI vale 1 h por padrao. Colado a mao numa variavel, parava
+de funcionar sem aviso. Agora, com AGROAPI_CONSUMER_KEY e
+AGROAPI_CONSUMER_SECRET no Render, o servidor pede o token a Embrapa
+sozinho, pede outro antes de vencer e, se for recusado antes da hora, pede
+outro e tenta de novo uma vez. Os tokens fixos continuam aceitos.
+
+6) EMBRAPA: UMA CONSULTA LENTA NAO SEGURA AS OUTRAS
+
+O servidor segurava uma trava unica durante a ida a Embrapa: uma consulta
+lenta (ate 20 s) fazia todas as outras esperarem, ate as que ja estavam
+guardadas. Agora a trava so protege o cache; quem pede a mesma coisa ao
+mesmo tempo espera a primeira e recebe a mesma resposta (ou a mesma falha).
+
+7) EMBRAPA: AVISA ANTES DO FORMULARIO
+
+Enquanto o servidor nao tem a credencial de uma API, a aba Bioinsumos, a
+aba ZARC e a opcao ClimAPI dizem no topo que a consulta ainda nao foi
+ativada e apagam os botoes de consultar. Quem administra ve onde ativar.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o app (duas vezes, para a versao nova entrar).
+2. Ferramentas do mapa > Satelite: Indices de vegetacao, Colorir quadras
+   por valor, Temperatura da superficie, Umidade do solo, Focos de calor,
+   Mapa de solos, Recortar pelas quadras.
+3. Focos de calor: o subtitulo do painel diz "VIIRS S-NPP, NOAA-20,
+   NOAA-21"; com quadras no mapa, aparece a frase das quadras; tocar num
+   ponto mostra a hora local.
+4. /health do proxy: satelites.version 2.
+5. Embrapa: se a credencial ainda nao foi posta, Conhecimento > Bioinsumos
+   ja abre dizendo "Consulta ainda nao ativada".
+
+
+TESTES
+------
+  bash conferir.sh: PODE SUBIR.
+  tests/test_satelites_quadras.js (novo): distancia foco-quadra, raio
+  garantido, as frases do painel, hora local, nao reconsultar dentro da
+  area e nao piscar ao arrastar.
+  tests/test_satelites_backend.py: os tres satelites, satelite fora do ar
+  apontado, poucas linhas com defeito contadas, bordas da caixa.
+  tests/test_agroapi_backend.py: token pedido uma vez e renovado antes de
+  vencer, 401 renova uma vez so, segredo nunca aparece; consulta lenta nao
+  segura a guardada (a versao anterior esperava 2 s no teste), a mesma
+  consulta vai uma vez e a falha chega a todos.
+  tests/test_agroapi_ui.js: aviso de "nao ativada" antes do formulario.
+
+
 AGRACTA — 24a publicacao                    05/10/2026
 =====================================================
 
