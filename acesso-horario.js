@@ -31,14 +31,51 @@
 
   var estado = {
     email:'', janela:null, verificado:false, travado:false,
-    avisou:false, timer:null, unsub:null
+    avisou:false, timer:null, unsub:null, relogioOk:false
   };
 
   /* ---------- utilidades de horário ---------- */
 
+  /* A HORA É A DO SERVIDOR, NÃO A DO CELULAR.
+     O banco decide a janela pela hora dele (request.time, nas firestore.rules).
+     Decidir aqui pelo relógio do aparelho fazia um celular adiantado, atrasado
+     ou no fuso errado entrar e ser derrubado: o banco aceitava, o app achava
+     que estava fora do horário, travava e desconectava — "pisca o login, entra
+     sozinho e sai de novo". A hora certa vem do cabeçalho Date de um HEAD ao
+     próprio site (mesma origem; o service worker não intercepta HEAD; o
+     endereço único força a resposta a vir da origem, e Age desconta o tempo em
+     cache). Sem rede, vale o último desvio medido neste aparelho. */
+  var DESVIO_KEY = 'agracta-relogio-desvio';
+  var desvio = (function(){ try{ var v = Number(localStorage.getItem(DESVIO_KEY)); return isFinite(v) ? v : 0; }catch(e){ return 0; } })();
+  function agoraServidor(){ return Date.now() + desvio; }
   function agoraLocal(){
-    var d = new Date();
+    var d = new Date(agoraServidor());
     return new Date(d.getTime() + (d.getTimezoneOffset() + TZ_OFFSET_MIN) * 60000);
+  }
+  function medirRelogio(){
+    if(typeof fetch !== 'function' || !window.location || !/^https?:/.test(location.protocol)) return Promise.resolve(false);
+    /* Uma conferência a cada 10 min basta: relógio não anda sozinho tanto assim. */
+    if(estado.relogioOk && Date.now() - (estado.medidoEm || 0) < 600000) return Promise.resolve(true);
+    var t0 = Date.now();
+    return fetch(location.pathname + '?hora=' + t0, {method:'HEAD', cache:'no-store'}).then(function(r){
+      var t1 = Date.now(), data = Date.parse((r.headers && r.headers.get('Date')) || '');
+      var idade = Number((r.headers && r.headers.get('Age')) || 0) || 0;
+      if(!isFinite(data)) return false;
+      /* Date tem resolução de 1 s: +500 ms centra o erro; o meio da ida e volta é o instante da resposta. */
+      desvio = Math.round(data + idade * 1000 + 500 - (t0 + t1) / 2);
+      estado.relogioOk = true; estado.medidoEm = Date.now();
+      try{ localStorage.setItem(DESVIO_KEY, String(desvio)); }catch(e){}
+      return true;
+    }).catch(function(){ return false; });
+  }
+
+  /* O BANCO JÁ DISSE SIM. Uma leitura da nuvem que deu certo é o próprio banco
+     dizendo que a pessoa está ativa e dentro da janela — as regras conferem as
+     duas coisas, pela hora do servidor. Enquanto o relógio deste aparelho não
+     foi conferido, essa resposta vale mais que ele. */
+  function bancoAutorizouAgora(){
+    var t = window._agractaLeituraOk;
+    return !!(t && Date.now() - t < 120000);
   }
   function hhmm(min){
     min = Math.max(0, Math.min(1439, Math.round(min||0)));
@@ -95,6 +132,12 @@
   function dentro(j, quando){
     var r = minutosRestantes(j, quando);
     return r===null || r>0;
+  }
+  /* Fora da janela, para efeito de travar a tela agora. */
+  function foraAgora(j){
+    if(dentro(j)) return false;
+    if(!estado.relogioOk && bancoAutorizouAgora()) return false;
+    return true;
   }
   function descrever(j){
     j = normalizar(j);
@@ -205,6 +248,7 @@
     var rest = minutosRestantes(j);
     if(rest === null){ esconderAviso(); return; }
     if(rest <= 0){
+      if(!foraAgora(j)) return;   /* o banco acabou de aceitar e o relógio ainda não foi conferido */
       encerrar('Janela permitida: '+descrever(j));
       return;
     }
@@ -251,13 +295,15 @@
       estado.janela = normalizar(m.janela);
       gravarCache(email, estado.janela);
       estado.verificado = true;
-      if(ADMINS[email] || dentro(estado.janela)){ liberarTela(); checar(); }
-      else { liberarTela(); encerrar('Janela permitida: '+descrever(estado.janela)); }
+      /* Fora do horário, a tela NÃO é liberada antes da trava: liberar e travar
+         1,2 s depois era o app "entrando sozinho e saindo de novo". */
+      if(ADMINS[email] || !foraAgora(estado.janela)){ liberarTela(); checar(); }
+      else encerrar('Janela permitida: '+descrever(estado.janela));
     }, function(){
       /* sem leitura (offline ou regra recusou): usa o último horário conhecido */
       estado.janela = normalizar(lerCache(email));
       estado.verificado = true;
-      if(ADMINS[email] || dentro(estado.janela)) liberarTela();
+      if(ADMINS[email] || !foraAgora(estado.janela)) liberarTela();
       else encerrar('Janela permitida: '+descrever(estado.janela));
     });
     return true;
@@ -278,15 +324,19 @@
     if(ADMINS[email]){ liberarTela(); iniciarVigilancia(); return; }
 
     /* Decide já com o horário em cache para não piscar a interface, e confirma
-       com a nuvem em seguida. */
+       com a nuvem em seguida. Se o banco acabou de aceitar a leitura, a tela
+       abre na hora: esperar o cadastro chegar deixava a tela em branco e, com
+       rede lenta, a rede de segurança de 10 s devolvia a pessoa ao login. */
     var cache = lerCache(email);
     if(cache){
       estado.janela = normalizar(cache);
-      if(dentro(estado.janela)) liberarTela();
+      if(!foraAgora(estado.janela)) liberarTela();
       else { encerrar('Janela permitida: '+descrever(estado.janela)); return; }
-    }
+    }else if(bancoAutorizouAgora()) liberarTela();
     if(!vigiarMembro(email)) liberarTela();
     iniciarVigilancia();
+    /* Confere o relógio com o servidor e refaz a conta com a hora certa. */
+    medirRelogio().then(function(ok){ if(ok && estado.email === email && estado.janela) checar(); });
   }
 
   /* ---------- ganchos no fluxo de login existente ---------- */
@@ -315,15 +365,51 @@
   /* Rede de segurança: esconder o app é ótimo para proteger o dado e péssimo se
      alguma coisa quebrar antes de alguém mandar mostrar de novo — daria tela
      branca para a equipe inteira. Se em 10 segundos não houver nem login, nem
-     trava, nem app na tela, a tela de login aparece. Nunca o app. */
+     trava, nem app na tela, a tela de login aparece.
+     EXCETO para quem já está autorizado: com o banco tendo aceitado a leitura,
+     ou num aparelho onde esta mesma pessoa já entrou (o modo offline existe
+     para ela), a demora é só do cadastro chegando pela rede. Devolver essa
+     pessoa ao login era "entra sozinho e sai de novo" em rede lenta — e ela
+     ficava presa no login, já conectada. Aí a tela abre; a janela de horário
+     continua valendo quando o cadastro chegar (e o banco confere de novo a
+     cada leitura). */
+  function aparelhoDela(email){
+    try{
+      var t = JSON.parse(localStorage.getItem('agracta-trusted-device') || 'null');
+      return !!(t && email && String(t.email || '').toLowerCase() === email);
+    }catch(e){ return false; }
+  }
   setTimeout(function(){
     var pre  = document.documentElement.classList.contains('pre-auth');
     var gate = $('authGate'), lock = $('acessoLock');
     var vendo = (gate && gate.classList.contains('on')) || (lock && lock.classList.contains('on'));
-    if(pre && !vendo){
-      try{ showAuthGate(); }catch(e){}
+    if(!pre || vendo) return;
+    var u = window._authUser, email = String((u && u.email) || '').trim().toLowerCase();
+    var cache = email ? lerCache(email) : null;
+    if(u && (bancoAutorizouAgora() || aparelhoDela(email)) && !(cache && foraAgora(normalizar(cache)))){
+      liberarTela();
+      return;
     }
+    try{ showAuthGate(); }catch(e){}
   }, 10000);
+
+  /* Por que o banco recusou: o app lê o próprio cadastro (permitido mesmo fora
+     do horário) e diz o motivo com a hora do servidor, em vez do genérico
+     "não está liberado". É isso que o administrador precisa ler na tela. */
+  window.agAcessoMotivo = function(email, membro){
+    email = String(email || '').trim().toLowerCase();
+    if(ADMINS[email]) return null;
+    if(!membro) return 'O e-mail '+email+' não está cadastrado no Painel Admin.';
+    if(membro.active !== true) return 'A conta '+email+' está inativa no Painel Admin.';
+    var j = normalizar(membro.janela);
+    if(!dentro(j)){
+      var a = agoraLocal();
+      return 'Fora do horário de acesso: agora são '+hhmm(a.getHours()*60 + a.getMinutes())+' no horário do servidor. Janela permitida: '+descrever(j)+'.';
+    }
+    return null;
+  };
+  window.agAcessoRelogio = function(){ return {desvioMs: desvio, conferido: estado.relogioOk}; };
+  medirRelogio();
 
   /* ---------- Painel Admin: editor da janela por técnico ---------- */
 
