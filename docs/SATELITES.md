@@ -1,6 +1,10 @@
 # Landsat, SMAP e NASA FIRMS no mapa
 
-Em **Ferramentas do mapa → Satélite**, cada ferramenta tem uma entrada própria.
+Em **Ferramentas do mapa → Satélite**, cada ferramenta tem uma entrada própria,
+com o nome do que mostra e a fonte no subtítulo: **Temperatura da superfície**
+(Landsat), **Umidade do solo** (SMAP) e **Focos de calor** (NASA FIRMS). Cada
+ajuste que depende de uma camada fica logo abaixo dela (Colorir quadras por
+valor sob Índices de vegetação; Recortar pelas quadras sob Mapa de solos).
 Ao tocar, a camada liga e abre seus controles. **Desligar** remove a camada;
 fechar os controles mantém o mapa. **Enquadrar dados** mostra a área consultada.
 A consulta acompanha o centro e a extensão do mapa, com atualização após mover
@@ -9,9 +13,9 @@ permanece independente e pode aparecer sobre qualquer uma delas.
 
 | Entrada | Dados reais | Controles e escala |
 |---|---|---|
-| Landsat | USGS Collection 2 Level 2, cenas L2SP dos Landsat 8/9, via Microsoft Planetary Computer | Cena nos últimos 90 dias, opacidade e consulta de temperatura em um ponto. Térmico de 100 m distribuído em grade de 30 m |
-| SMAP | NASA GIBS, L4 Analyzed Soil Moisture, análise instantânea das 12h UTC, observações assimiladas em modelo | Data publicada pelo provedor, superfície 0–5 cm ou zona radicular 0–100 cm e opacidade. Grade regional de 9 km |
-| NASA FIRMS | Arquivo público VIIRS Collection 2 NRT do NOAA-20 | Últimas 24 h, 48 h ou 7 dias, com hora UTC, confiança e potência radiativa em MW no popup. Pixel nominal de 375 m |
+| Temperatura da superfície (Landsat) | USGS Collection 2 Level 2, cenas L2SP dos Landsat 8/9, via Microsoft Planetary Computer | Cena nos últimos 90 dias, opacidade e consulta de temperatura em um ponto. Térmico de 100 m distribuído em grade de 30 m |
+| Umidade do solo (SMAP) | NASA GIBS, L4 Analyzed Soil Moisture, análise instantânea das 12h UTC, observações assimiladas em modelo | Data publicada pelo provedor, superfície 0–5 cm ou zona radicular 0–100 cm e opacidade. Grade regional de 9 km |
+| Focos de calor (NASA FIRMS) | Arquivos públicos VIIRS Collection 2 NRT dos três satélites em órbita: S-NPP, NOAA-20 e NOAA-21 | Últimas 24 h, 48 h ou 7 dias. No popup: satélite, hora local com a idade (e o UTC, para conferir no site da NASA), distância até a quadra mais perto, confiança e potência radiativa em MW. Pixel nominal de 375 m |
 
 O Landsat converte o DN de ST_B10 usando `DN × 0,00341802 + 149 − 273,15`,
 em °C. Pixel zero ou QA_PIXEL com qualquer bit 0–5 ligado fica transparente e a
@@ -27,10 +31,31 @@ lacunas; o app não presume que o dia de hoje já tenha dados.
 
 FIRMS mostra detecções pontuais, não polígonos de área queimada. As cores
 indicam a confiança (baixa, nominal ou alta). Ausência de pontos no arquivo não
-confirma ausência de fogo. A tela mostra quando o arquivo foi consultado e a
-última detecção nele, inclusive quando existe atraso na cobertura. O período é
-filtrado por UTC. Nesta versão, a fonte é **VIIRS NOAA-20**, não a união de todos
-os sensores disponíveis no FIRMS.
+confirma ausência de fogo. A tela mostra quando os arquivos foram lidos e a
+última detecção neles, inclusive quando existe atraso na cobertura.
+
+**Três satélites, não um.** S-NPP, NOAA-20 e NOAA-21 levam o mesmo VIIRS e
+passam com cerca de 50 min de diferença; cada um vê o que queimou na sua
+passagem e o que não estava sob nuvem naquela hora. A primeira versão usava só o
+NOAA-20. Medido em 06/10/2026: no aglomerado de focos do oeste da Bahia, as
+últimas 24 h tinham 102 posições distintas (arredondadas a ~400 m) no NOAA-20 e 162 juntando os três; na
+caixa de Iracemápolis, os últimos 7 dias tinham 0 detecções no NOAA-20 e 13 nos
+outros dois (29 e 30/09). Se um satélite falhar na consulta, o painel diz qual
+e os outros seguem; se todos falharem, é erro — nunca "nenhum foco".
+
+**Perto das quadras.** O painel responde a pergunta de quem cuida do ensaio:
+"Foco mais perto das quadras: a 5,3 km de Quadra A, há 17 h". A distância vai
+do centro do pixel até a borda da quadra (zero se cair dentro). A frase só
+afirma o que a consulta cobre: a área consultada tem pelo menos 0,4° de lado em
+volta do centro do mapa, e "nenhum foco a menos de X km das quadras" vale até a
+borda dela (com a quadra no centro, ~20 km). Lista cortada nos 2.000 mais
+recentes diz "entre as detecções mostradas"; mapa olhando outra região, sem
+quadra na área, não ganha frase nenhuma.
+
+Arrastar ou aproximar dentro da área já consultada não consulta de novo; sair
+dela, deixar os dados envelhecerem 10 min ou trocar o local ativo, sim. Em
+todas as camadas a imagem ou os pontos antigos ficam no mapa até os novos
+chegarem, sem piscar.
 
 ## Publicação e acesso
 
@@ -39,7 +64,7 @@ Publicar o frontend **e atualizar o serviço Render** que executa
 pasta. O `render.yaml` e as dependências continuam iguais: só biblioteca padrão
 Python, sem nova chave de API, conta Earthdata ou MAP_KEY do FIRMS.
 
-`GET /health` passa a informar `satelites.version: 1` e os três provedores.
+`GET /health` informa `satelites.version: 2` (FIRMS com os três satélites) e os três provedores.
 Se a tela nova encontrar o proxy antigo, apresenta a necessidade de atualizar
 o servidor. As novas rotas usam o mesmo controle de membro ativo e token
 Firebase do proxy; localmente, valem as regras de login já existentes.
@@ -64,7 +89,7 @@ Os resultados não são gravados nos estudos como medições experimentais.
 As imagens usam EPSG:3857 para coincidir com o Leaflet. O servidor aceita
 caixas contínuas de até 6° por eixo, sem atravessar o antimeridiano. A interface
 limita Landsat a 1,2°, SMAP/FIRMS a 4°, e amplia a caixa SMAP para pelo menos
-0,6° por eixo. Portanto, ao afastar muito, os dados cobrem a **região central**,
+0,6° e a do FIRMS para pelo menos 0,4° por eixo. Portanto, ao afastar muito, os dados cobrem a **região central**,
 que pode ser enquadrada pelo botão, não o mapa mundial inteiro.
 
 O catálogo Landsat consulta até 100 cenas e informa se há mais; FIRMS mostra
@@ -72,8 +97,16 @@ até 2.000 detecções mais recentes e informa o total/truncamento. Usa arquivos
 South America nas regiões atendidas, e Global fora delas. Consultas são
 limitadas a 45 s por pedido ao provedor e respostas a 8 MiB (CSV: 32 MiB).
 O cache interno tem limite de 48 MiB/96 entradas, com uma consulta simultânea
-por chave: imagens e Landsat por 1 h, datas SMAP por 6 h, CSV FIRMS por 15 min.
+por chave: imagens e Landsat por 1 h, datas SMAP por 6 h, arquivos FIRMS por 15 min.
 Falha de provedor não vira lista vazia nem cache vencido.
+
+Cada arquivo FIRMS é lido **uma vez por download** e guardado em colunas
+compactas ordenadas pela latitude (o de 7 dias da América do Sul ocupa ~2 MB);
+cada pedido só filtra a caixa e a janela. Antes, o arquivo inteiro era relido a
+cada pedido — meio segundo de CPU por arrasto do mapa nos 7 dias, num servidor
+gratuito que tem uma fração de CPU. Agora o filtro custa ~1 ms. Linha com
+defeito fica de fora e é contada no painel; acima de 1% do arquivo, o arquivo é
+recusado como defeituoso.
 
 ## Verificar
 

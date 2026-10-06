@@ -11,23 +11,35 @@ automática; a escolha manual é a do painel.
 2. Solicite/subscreva Bioinsumos v2, Agritec v2 e ClimAPI v1. Confirme os planos,
    limites e condições de uso na conta antes de contratar. A documentação da
    ClimAPI informa teste limitado e plano pago; este PR não faz contratação.
-3. Gere a credencial de acesso da aplicação. No serviço Render já usado pelo
-   Agracta, configure **somente nas variáveis de ambiente**, nunca no GitHub ou
-   no frontend:
-   - `AGROAPI_BIOINSUMOS_TOKEN`
-   - `AGROAPI_AGRITEC_TOKEN`
-   - `AGROAPI_CLIMAPI_TOKEN`
+3. Na aplicação da AgroAPI, copie a **Consumer Key** e o **Consumer Secret**
+   (chave e segredo da aplicação). No serviço Render já usado pelo Agracta
+   (Environment), configure **somente nas variáveis de ambiente**, nunca no
+   GitHub ou no frontend:
+   - `AGROAPI_CONSUMER_KEY`
+   - `AGROAPI_CONSUMER_SECRET`
 
-   Se uma credencial tiver assinatura das três APIs, use `AGROAPI_TOKEN`.
-   A variável específica de cada API tem precedência. Atualize a variável
-   quando a credencial expirar; não há renovação automática nesta versão.
+   Com elas o servidor pede o token à Embrapa sozinho (fluxo
+   `client_credentials` em `https://api.cnptia.embrapa.br/token`), pede outro
+   um minuto antes de vencer e, se a Embrapa recusar um token antes da hora
+   (401), pede outro e tenta de novo uma vez. O token da AgroAPI vale 1 h por
+   padrão: um token colado à mão parava de funcionar sem aviso.
+
+   Ainda aceito, como alternativa: tokens fixos `AGROAPI_BIOINSUMOS_TOKEN`,
+   `AGROAPI_AGRITEC_TOKEN`, `AGROAPI_CLIMAPI_TOKEN` (ou `AGROAPI_TOKEN` para
+   os três). Com chave e segredo presentes, eles são ignorados. Token fixo não
+   renova: atualize a variável quando vencer.
 4. Publique frontend e servidor juntos. O servidor precisa de
    `ndvi-proxy.py`, `satelites_backend.py` e `agroapi_backend.py`.
    Não há nova dependência Python. Mantenha `EXIGIR_LOGIN=1` em produção.
 5. `/health` informa `agroapi.version: 1`. Depois do login Agracta,
-   `/agroapi/status` informa apenas quais APIs têm uma credencial configurada,
-   sem testá-la e sem expor valores. Confira cada consulta real antes de liberar
-   o recurso como ativo para a equipe.
+   `/agroapi/status` informa apenas quais APIs têm uma credencial configurada
+   e de que tipo (`auth: client_credentials` ou `token`), sem testá-la e sem
+   expor valores. Confira cada consulta real antes de liberar o recurso como
+   ativo para a equipe.
+
+   Enquanto uma API não tem credencial, a aba (Bioinsumos, ZARC) ou a opção
+   ClimAPI avisa no topo que a consulta ainda não foi ativada e apaga os botões
+   de consultar; quem administra vê onde ativar.
 
 Os usuários mantêm suas contas do Agracta. Cada pedido usa seu token Firebase
 e precisa passar pela verificação existente de membro ativo. A credencial
@@ -76,7 +88,10 @@ Fixtures de teste são simuladas; não demonstram resposta real autenticada.
 Somente URLs fixas da Embrapa; o cliente não envia uma URL nem um token externo.
 Redirecionamentos são recusados para evitar repasse de Authorization a outro
 host. Respostas limitadas a 2 MiB, espera de 20 s e cache em memória limitado
-a 64 entradas / 16 MiB. Catálogo: 20 min; municípios/culturas: 24 h;
+a 64 entradas / 16 MiB. Uma consulta por chave: quem pede a mesma coisa ao
+mesmo tempo espera a primeira e recebe a mesma resposta (ou a mesma falha). A
+trava só protege o cache — a ida à Embrapa corre fora dela; antes, uma
+consulta lenta (até 20 s) segurava todas as outras, até as já guardadas. Catálogo: 20 min; municípios/culturas: 24 h;
 ZARC e ClimAPI: 1 h. Mudança de credencial invalida a chave do cache.
 Erros e respostas inválidas não são apresentados como “nenhum dado”.
 

@@ -17,7 +17,7 @@ function extract(name){
  throw Error('Função incompleta '+name);
 }
 const tick=()=>new Promise(r=>setImmediate(r));
-function montar(){
+function montar(configurado){
  const dom=new JSDOM('<!doctype html><html class="light"><body><div id="climaPanel" style="display:block"></div><div id="conhecimentoOvl"></div></body></html>',{url:'https://agracta.test',runScripts:'outside-only'});
  const w=dom.window,d=w.document,pedidos=[];
  w.NDVI_PROXY=w.CLIMA_PROXY='https://proxy.test';w.climaFonte='auto';w._climaPanelSeq=0;w._climaTimer=null;
@@ -32,7 +32,10 @@ function montar(){
  w.climaRender=()=>{renders.station++;d.getElementById('climaBody').textContent='Estação';};
  w.agFontesHtml=()=>'<p>Fontes existentes</p>';
  w.abrirConhecimento=op=>tab(op.aba);
- w.proxyFetch=url=>new Promise((resolve,reject)=>pedidos.push({url,resolve:payload=>resolve({ok:true,json:()=>Promise.resolve(payload)}),reject}));
+ /* O estado do servidor responde na hora; as consultas ficam na fila do teste. */
+ const status={version:1,configured:Object.assign({bioinsumos:true,agritec:true,climapi:true},configurado||{})};
+ w.proxyFetch=url=>/\/agroapi\/status/.test(url)?Promise.resolve({ok:true,json:()=>Promise.resolve(status)}):
+  new Promise((resolve,reject)=>pedidos.push({url,resolve:payload=>resolve({ok:true,json:()=>Promise.resolve(payload)}),reject}));
  w.eval(['buildClimaPanel','climaFonteSet','climaInit','climaPick','climaLoad'].map(extract).join('\n'));
  w.eval(core);w.eval(ui);
  function tab(id){d.getElementById('conhecimentoOvl').innerHTML=w.agConhecimentoAbas.find(x=>x.id===id).html();}
@@ -115,7 +118,30 @@ function montar(){
   assert.equal(d.getElementById('agZarcResultado').textContent,'');
   w.close();
  }
- assert.match(fs.readFileSync('index.html','utf8'),/agroapi.js\?v=1/);
- assert.match(fs.readFileSync('sw.js','utf8'),/vendor\/agroapi-core.js\?v=1/);
+ {
+  /* Sem credencial no servidor: a aba avisa antes do formulário. */
+  const x=montar({bioinsumos:false,agritec:false,climapi:false}),{w,d,pedidos}=x;
+  x.tab('bioinsumos');await tick();await tick();
+  assert.match(d.getElementById('agBioAviso').textContent,/ainda não ativada/);
+  assert.match(d.getElementById('agBioAviso').textContent,/Quem administra o Agracta pode ativar/);
+  assert.ok(d.querySelector('[data-agro="bioBusca"]').disabled,'não convida a consultar o que não responde');
+  w.isAdmin=()=>true;x.tab('zarc');await tick();await tick();
+  assert.match(d.getElementById('agZarcAviso').textContent,/docs\/AGROAPI\.md/,'quem administra vê como ativar');
+  assert.ok(d.querySelector('[data-agro="zarcMunicipios"]').disabled);
+  w.climaFonteSet('climapi');await tick();await tick();
+  assert.match(d.getElementById('agClimAviso').textContent,/a ClimAPI/);
+  assert.equal(pedidos.filter(p=>/municipios|bioinsumos/.test(p.url)).length,0);
+  w.close();
+ }
+ {
+  /* Com credencial: nenhum aviso. */
+  const x=montar(),{w,d}=x;x.tab('bioinsumos');await tick();await tick();
+  assert.equal(d.getElementById('agBioAviso').textContent,'');
+  assert.equal(d.querySelector('[data-agro="bioBusca"]').disabled,false);
+  w.close();
+ }
+ const vIndex=/agroapi\.js\?v=(\d+)/.exec(fs.readFileSync('index.html','utf8')),vSw=/agroapi\.js\?v=(\d+)/.exec(fs.readFileSync('sw.js','utf8'));
+ assert.ok(vIndex&&vSw&&vIndex[1]===vSw[1],'index.html e sw.js pedem a mesma versão do agroapi.js');
+ assert.match(fs.readFileSync('sw.js','utf8'),/vendor\/agroapi-core.js\?v=\d+/);
  console.log('ok · seleção de clima, consultas, paginação, sigilo e respostas atrasadas');
 })().catch(e=>{console.error(e);process.exitCode=1;});

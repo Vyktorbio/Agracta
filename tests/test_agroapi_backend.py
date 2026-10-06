@@ -1,10 +1,12 @@
 """AgroAPI: URLs documentadas, cota/cache e sigilo sem chamar a Embrapa."""
+import base64
 import importlib.util
 import io
 import json
 import os
 import sys
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.parse
@@ -138,6 +140,116 @@ class Contracts(unittest.TestCase):
                 a.handle("/agroapi/bioinsumos", {})
         with self.assertRaises(a.AgroAPIError):
             a.NoRedirect().redirect_request(None, None, 302, "", {}, "https://outro.test/")
+
+class AppCredential(unittest.TestCase):
+    """Chave e segredo da aplicação: o token é pedido e renovado pelo servidor."""
+    def setUp(self):
+        a._cache.clear(); a._inflight.clear()
+        a._app_token.update(value=None, exp=0.0, key=None)
+        self.env = patch.dict(os.environ, {"AGROAPI_CONSUMER_KEY": "chave-app", "AGROAPI_CONSUMER_SECRET": "segredo-app"}, clear=True)
+        self.env.start()
+        self.calls, self.tokens, self.api_401 = [], [], 0
+    def tearDown(self):
+        self.env.stop(); a._cache.clear(); a._app_token.update(value=None, exp=0.0, key=None)
+    def open_(self, req):
+        self.calls.append(req)
+        if req.full_url == a.TOKEN_URL:
+            self.tokens.append(req)
+            return Response({"access_token": "tok-%d" % len(self.tokens), "expires_in": 3600, "token_type": "Bearer"})
+        if self.api_401:
+            self.api_401 -= 1
+            raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, io.BytesIO(b"expirado"))
+        return Response([])
+    def test_token_requested_once_reused_and_renewed_before_expiry(self):
+        with patch.object(a, "_open", self.open_), patch.object(a.time, "time", return_value=1000.0):
+            a.handle("/agroapi/bioinsumos", {"q": "Bacillus"})
+            a.handle("/agroapi/bioinsumos", {"q": "Trichoderma"})
+        self.assertEqual(len(self.tokens), 1, "um token para várias consultas")
+        pedido = self.tokens[0]
+        self.assertEqual(pedido.get_method(), "POST")
+        self.assertEqual(pedido.data, b"grant_type=client_credentials")
+        self.assertEqual(pedido.get_header("Authorization"), "Basic " + base64.b64encode(b"chave-app:segredo-app").decode())
+        self.assertEqual(self.calls[1].get_header("Authorization"), "Bearer tok-1")
+        with patch.object(a, "_open", self.open_), patch.object(a.time, "time", return_value=1000.0 + 3600 - 30):
+            a.handle("/agroapi/bioinsumos", {"q": "Beauveria"})
+        self.assertEqual(len(self.tokens), 2, "a um minuto de vencer, pede outro")
+        self.assertEqual(self.calls[-1].get_header("Authorization"), "Bearer tok-2")
+        self.assertEqual(a.status()["auth"], "client_credentials")
+        self.assertTrue(all(a.status()["configured"].values()))
+        self.assertNotIn("segredo-app", json.dumps(a.status()))
+    def test_revoked_token_is_renewed_once(self):
+        self.api_401 = 1
+        with patch.object(a, "_open", self.open_):
+            a.handle("/agroapi/bioinsumos", {})
+        self.assertEqual(len(self.tokens), 2)
+        self.assertEqual(self.calls[-1].get_header("Authorization"), "Bearer tok-2")
+        a._cache.clear(); self.api_401 = 5
+        with patch.object(a, "_open", self.open_):
+            with self.assertRaises(a.AgroAPIError) as caught:
+                a.handle("/agroapi/bioinsumos", {"q": "outro"})
+        self.assertEqual(caught.exception.code, "agroapi_access")
+        self.assertEqual(len(self.tokens), 3, "tenta de novo uma vez só, sem laço")
+    def test_rejected_key_does_not_leak_secret(self):
+        erro = urllib.error.HTTPError(a.TOKEN_URL, 401, "invalid_client", {}, io.BytesIO(b'{"error":"invalid_client"}'))
+        with patch.object(a, "_open", side_effect=erro):
+            with self.assertRaises(a.AgroAPIError) as caught:
+                a.handle("/agroapi/agritec/municipios", {"uf": "SP"})
+        self.assertEqual((caught.exception.status, caught.exception.code), (503, "agroapi_access"))
+        self.assertNotIn("segredo", str(caught.exception)); self.assertNotIn("chave-app", str(caught.exception))
+        self.assertEqual(len(a._cache), 0)
+        for corpo in [b"<html>", b'{"token_type":"Bearer"}', b'{"access_token":"com espaco","expires_in":3600}']:
+            a._app_token.update(value=None, exp=0.0)
+            with patch.object(a, "_open", return_value=Response(None, raw=corpo)):
+                with self.assertRaises(a.AgroAPIError):
+                    a.handle("/agroapi/agritec/municipios", {"uf": "SP"})
+
+
+class Concurrency(unittest.TestCase):
+    """Uma consulta lenta não segura as outras; a mesma consulta vai uma vez só."""
+    def setUp(self):
+        a._cache.clear(); a._inflight.clear()
+        self.env = patch.dict(os.environ, {"AGROAPI_TOKEN": "token-de-teste"}, clear=True)
+        self.env.start()
+    def tearDown(self):
+        self.env.stop(); a._cache.clear(); a._inflight.clear()
+    def test_slow_query_does_not_block_cached_ones_and_same_query_goes_once(self):
+        with patch.object(a, "_open", return_value=Response([{"numero_registro": "1"}])):
+            a.handle("/agroapi/bioinsumos", {"q": "rapida"})
+        entrou, solta, chamadas = threading.Event(), threading.Event(), []
+        def lento(req):
+            chamadas.append(req.full_url); entrou.set(); solta.wait(3)
+            return Response([])
+        resultados = []
+        with patch.object(a, "_open", lento):
+            fios = [threading.Thread(target=lambda: resultados.append(a.handle("/agroapi/bioinsumos", {"q": "lenta"}))) for _ in range(4)]
+            for f in fios: f.start()
+            self.assertTrue(entrou.wait(2))
+            inicio = time.monotonic()
+            r = a.handle("/agroapi/bioinsumos", {"q": "rapida"})
+            self.assertLess(time.monotonic() - inicio, 0.5, "a consulta já em cache não espera a lenta")
+            self.assertEqual(r["data"], [{"numero_registro": "1"}])
+            solta.set()
+            for f in fios: f.join(3)
+        self.assertEqual(len(chamadas), 1, "quatro pessoas, uma ida à Embrapa")
+        self.assertEqual(len(resultados), 4)
+    def test_failure_reaches_everyone_waiting_without_repeating_the_wait(self):
+        entrou, solta, chamadas, erros = threading.Event(), threading.Event(), [], []
+        def caiu(req):
+            chamadas.append(1); entrou.set(); solta.wait(3)
+            raise urllib.error.HTTPError(req.full_url, 500, "erro", {}, io.BytesIO(b""))
+        def consulta():
+            try: a.handle("/agroapi/bioinsumos", {"q": "x"})
+            except a.AgroAPIError as e: erros.append(e.code)
+        with patch.object(a, "_open", caiu):
+            fios = [threading.Thread(target=consulta) for _ in range(3)]
+            fios[0].start(); self.assertTrue(entrou.wait(2))
+            for f in fios[1:]: f.start()
+            time.sleep(0.05); solta.set()
+            for f in fios: f.join(3)
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(erros, ["agroapi_unavailable"] * 3)
+        self.assertEqual(len(a._cache), 0)
+
 
 class ProxyIntegration(unittest.TestCase):
     def test_login_before_provider_and_sanitized_errors(self):

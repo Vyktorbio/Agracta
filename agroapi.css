@@ -20,3 +20,4 @@
 #climaPanel .agro-form button{flex:1 1 110px}
 #climaFonte{flex:1;min-width:0;border:1px solid var(--border,#cdd3d7);border-radius:7px;padding:7px;background:var(--surface,#fff);color:var(--text,#1e293b);font-size:12px}
 @media(max-width:500px){.agro-produto dl{grid-template-columns:1fr;gap:4px}.agro-produto dd{margin-bottom:8px}}
+.agro-off{border-left:3px solid var(--warn,#d9a320);padding:8px 10px;background:var(--surface-2,rgba(217,163,32,.08));border-radius:6px}

@@ -31,3 +31,4 @@
 .ag-sat-fire-popup b{display:block;margin-bottom:3px}
 body.map-full .ag-sat-panel{display:none!important}
 @media(max-width:600px){.ag-sat-panel{right:8px;width:calc(100vw - 16px);bottom:calc(72px + env(safe-area-inset-bottom));max-height:46dvh}}
+.ag-sat-summary{margin:4px 0 8px;font-weight:700;color:var(--gp-text,#f2f7f3)}
