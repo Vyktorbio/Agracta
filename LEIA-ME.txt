@@ -1,3 +1,64 @@
+AGRACTA — 24a publicacao                    05/10/2026
+=====================================================
+
+Leva: a aba Clientes sai do Conhecimento e vira Patrocinadores, no Menu.
+  CODIGO:  integracoes.js  integracoes-clientes.js  integracoes-fontes.js
+           ui-campo.js  app.js  cliente.html  cliente.js  prancha.html
+           index.html  sw.js
+  TESTE:   tests/test_patrocinadores.js (novo)
+  DOCS:    docs/INTEGRACOES.md  README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram nesta leva.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "clientes pode sair do painel conhecimento... ou mudar para
+patrocinadores, como diz na BPL".
+
+1) PATROCINADORES TEM PORTA PROPRIA
+
+A consulta (quem de fora ve quais resultados) era uma aba do Conhecimento,
+que e a tela de LER resultados. Ela e administracao de acesso: agora mora em
+Menu > Administracao > Patrocinadores, ao lado do Painel Admin, que cuida do
+acesso da equipe. Abre a mesma tela de sempre, com o titulo Patrocinadores e
+sem as abas do Conhecimento. So o administrador ve a linha, como era so ele
+que via a aba. O menu antigo, que segue como reserva, ganhou a mesma porta.
+
+2) A PALAVRA DA BPL
+
+"Patrocinador" e o termo da BPL para quem encomenda o estudo. Trocado em
+todo texto que aparece na tela:
+  - a consulta: textos, campo do nome, "Abrir pagina do patrocinador";
+  - a pagina que o patrocinador abre: "Consulta do patrocinador";
+  - a ficha de contexto do estudo: "Patrocinador do estudo";
+  - o filtro da aba Estudos: "Patrocinador";
+  - o Banco de itens: "Patrocinador / titular" e a busca;
+  - a aba Fontes e a prancha de resultados.
+O que NAO muda: os nomes internos (clientPortals, cliente.html, o campo
+"cliente" do estudo). O link que um patrocinador ja recebeu continua
+valendo, e nenhum dado precisa ser migrado.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o app (duas vezes, para a versao nova entrar).
+2. Conhecimento: as abas sao Produtos e ativos, Alvos, Projetos, Estudos,
+   Fontes e Entre estudos. Nao ha mais Clientes.
+3. Menu > Administracao > Patrocinadores: abre a consulta, com "Carregar
+   consultas" e "Nova consulta". Fechar volta para o mapa.
+4. Um link de consulta ja enviado continua abrindo, agora com o titulo
+   "Consulta do patrocinador".
+
+
+TESTES
+------
+  bash conferir.sh: PODE SUBIR.
+  tests/test_patrocinadores.js (26 verificacoes, novo): reprova o codigo
+  anterior na aba que ainda aparecia para o administrador.
+
+
 AGRACTA — 23a publicacao                    05/10/2026
 =====================================================
 

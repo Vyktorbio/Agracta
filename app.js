@@ -1976,6 +1976,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificação de integridade</button>'+
     '<button onclick="closeMainMenu();openArmazenamento()">'+ic('archive')+' Armazenamento do aparelho</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
+    (adm?'<button onclick="closeMainMenu();if(typeof abrirPatrocinadores===\'function\')abrirPatrocinadores()">'+ic('archive')+' Patrocinadores</button>':'')+
     (adm?'<button onclick="closeMainMenu();openComplianceISMS()">'+ic('archive')+' Conformidade &amp; ISMS</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+(_menuNome?('<b>'+esc(_menuNome)+'</b><br>'):'')+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
@@ -23007,7 +23008,7 @@ function _itensPinta(){
   });
   var h='<div class="it-box"><div class="it-top"><div class="it-t">📦 Banco de itens</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
-  h+='<input class="it-busca" placeholder="Buscar por nome, código, cliente ou ingrediente ativo" value="'+esc(_itemBusca)+'" oninput="_itensBusca(this.value)">';
+  h+='<input class="it-busca" placeholder="Buscar por nome, código, patrocinador ou ingrediente ativo" value="'+esc(_itemBusca)+'" oninput="_itensBusca(this.value)">';
   h+='<button class="it-btn" onclick="itemAbrirNovo()">+ Cadastrar item</button>';
   /* So aparece quando ha o que migrar. Um botao permanente para uma fila vazia e
      exatamente o tipo de ruido que a tela nao deve ter. */
@@ -23242,9 +23243,9 @@ function _itemNovoHtml(){
         'value="'+esc(_agrofitTermo||'')+'" oninput="agrofitBusca()" autocomplete="off"></div>'+
         '<div id="itAgrofitRes" class="it-agf-res">'+_agrofitListaHtml()+'</div>'+
         _agrofitSelHtml()+
-        '<div class="it-f"><label>Nome *</label><input id="itNome" placeholder="como o cliente chama"></div>'+
+        '<div class="it-f"><label>Nome *</label><input id="itNome" placeholder="como o patrocinador chama"></div>'+
         '<div class="it-row"><div class="it-f"><label>Código experimental</label><input id="itNovoCodigo" placeholder="ex.: XYZ-2026-01"></div>'+
-        '<div class="it-f"><label>Cliente / titular</label><input id="itNovoTitular"></div></div>'+
+        '<div class="it-f"><label>Patrocinador / titular</label><input id="itNovoTitular"></div></div>'+
         /* O ingrediente ativo passa a existir no CADASTRO, não só depois de
            salvar e reabrir. É o campo que mais custa numa leva de produtos. */
         '<div class="it-f"><label>Ingrediente(s) ativo(s) e concentração</label>'+
@@ -23681,10 +23682,10 @@ function _itemFichaHtml(id){
        '. Um mesmo produto cadastrado duas vezes deixa de ser identidade — confira antes de continuar.</div>';
   }
 
-  h+='<div class="it-f"><label>Nome</label><input id="itNome" value="'+esc(it.nome||'')+'" placeholder="como o cliente chama" onchange="itemCampo(\''+esc(it.id)+'\',\'nome\',this.value)"></div>';
+  h+='<div class="it-f"><label>Nome</label><input id="itNome" value="'+esc(it.nome||'')+'" placeholder="como o patrocinador chama" onchange="itemCampo(\''+esc(it.id)+'\',\'nome\',this.value)"></div>';
   h+='<div class="it-row">'+
      '<div class="it-f"><label>Código experimental</label><input value="'+esc(it.codigo||'')+'" placeholder="ex.: XYZ-2026-01" onchange="itemCampo(\''+esc(it.id)+'\',\'codigo\',this.value)"></div>'+
-     '<div class="it-f"><label>Cliente / titular</label><input value="'+esc(it.titular||'')+'" onchange="itemCampo(\''+esc(it.id)+'\',\'titular\',this.value)"></div>'+
+     '<div class="it-f"><label>Patrocinador / titular</label><input value="'+esc(it.titular||'')+'" onchange="itemCampo(\''+esc(it.id)+'\',\'titular\',this.value)"></div>'+
      '</div>';
   h+='<div class="it-row">'+
      '<div class="it-f"><label>Tipo</label><select onchange="itemCampo(\''+esc(it.id)+'\',\'tipo\',this.value)">'+
@@ -23725,7 +23726,7 @@ function _itemFichaHtml(id){
   h+='<div class="it-row">'+
      '<div class="it-f"><label>Origem</label><select id="dsOrigem">'+
        DOSE_ORIGENS.map(function(o){ return '<option value="'+o[0]+'">'+esc(o[1])+'</option>'; }).join('')+'</select></div>'+
-     '<div class="it-f"><label>Documento</label><input id="dsDoc" placeholder="bula, ficha técnica, e-mail do cliente"></div>'+
+     '<div class="it-f"><label>Documento</label><input id="dsDoc" placeholder="bula, ficha técnica, e-mail do patrocinador"></div>'+
      '</div>';
   h+='<button class="it-btn" onclick="itemDoseNova(\''+esc(it.id)+'\')">+ Adicionar dose</button>';
 

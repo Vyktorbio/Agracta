@@ -7,7 +7,7 @@
   function e(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function n(x){return typeof x==='number'&&Number.isFinite(x)?x.toLocaleString('pt-BR',{maximumFractionDigits:3}):'—';}
   function limparReports(){reportGeracao++;reportStops.forEach(function(f){f();});reportStops=[];reports.clear();el('clienteConteudo').replaceChildren();}
-  function limpar(){geracao++;stops.forEach(function(f){f();});stops=[];limparReports();el('clienteTitulo').textContent='Consulta do cliente';}
+  function limpar(){geracao++;stops.forEach(function(f){f();});stops=[];limparReports();el('clienteTitulo').textContent='Consulta do patrocinador';}
   function erro(err){status(err&&err.code==='permission-denied'?'Este e-mail não tem acesso a esta consulta, ou o acesso foi revogado.':err&&/^auth\//.test(err.code||'')?'Não foi possível entrar. Confira o e-mail, a senha e a conexão.':'Não foi possível carregar a consulta. Confira sua conexão e tente novamente.');}
   function seguro(fn){return function(ev){if(ev)ev.preventDefault();Promise.resolve().then(fn).catch(erro);};}
   function clima(c){
