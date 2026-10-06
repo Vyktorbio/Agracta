@@ -1,3 +1,66 @@
+AGRACTA — 26a publicacao                    06/10/2026
+=====================================================
+
+Leva: o login que "entra sozinho e sai de novo".
+  CODIGO:  acesso-horario.js  firebase-sync.js  index.html  sw.js
+  TESTE:   tests/test_login_laco.js (novo)
+  DOCS:    docs/PASSAGEM-AGRACTA.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: no celular de um assistente "pisca a tela de login, ai entra
+sozinho e depois sai de novo" — nao dava nem para mexer. Reproduzido no
+navegador com um Firebase simulado (sessao restaurada, aparelho conhecido ou
+nao, conta ativa/inativa, horario de acesso, rede lenta). Duas causas:
+
+1) O RELOGIO DO CELULAR CONTRA A HORA DO SERVIDOR
+
+O banco decide o horario de acesso pela hora dele; o app decidia pelo relogio
+do celular. Celular adiantado, atrasado ou no fuso errado: o banco aceitava a
+leitura, o app abria a tela e 1,2 s depois travava e desconectava. Agora:
+  - o app acerta o relogio pela hora do servidor (cabecalho Date de um pedido
+    ao proprio site) e guarda o desvio para quando nao houver rede;
+  - se o banco acabou de aceitar a leitura, o relogio do celular ainda nao
+    conferido nao derruba a sessao;
+  - fora do horario de verdade, trava SEM abrir a tela antes.
+
+2) REDE LENTA DEVOLVIA AO LOGIN QUEM JA ESTAVA AUTORIZADO
+
+Com o cadastro do membro demorando a chegar, a tela ficava em branco e, aos
+10 s, a rede de seguranca mandava para o login quem ja estava conectado — e a
+pessoa ficava presa la. Agora a tela abre assim que o banco aceita a leitura;
+e aos 10 s, quem ja entrou neste aparelho (ou foi aceito pelo banco) ve o app,
+nao o login. Sem ninguem conectado, continua indo para o login.
+
+3) A TELA DIZ POR QUE BARROU
+
+Quando o banco recusa, o login dizia so "Este acesso nao esta liberado". Agora
+o app le o proprio cadastro (a regra deixa, mesmo fora do horario) e escreve o
+motivo: "O e-mail ... nao esta cadastrado no Painel Admin", "A conta ... esta
+inativa no Painel Admin" ou "Fora do horario de acesso: agora sao 18:05 no
+horario do servidor. Janela permitida: seg, ter, qua, qui, sex · 07:00 as
+18:00".
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. No celular do assistente: fechar o app de vez e abrir de novo, duas vezes
+   (a primeira baixa a versao nova). Deve entrar e ficar.
+2. Se ainda for barrado, ler a frase da tela de login: ela diz se e cadastro,
+   conta inativa ou horario — e o que acertar no Painel Admin.
+
+
+TESTES
+------
+  bash conferir.sh: PODE SUBIR.
+  tests/test_login_laco.js (26 verificacoes, novo): reprova o codigo anterior
+  logo no primeiro caso (a sessao aceita pelo banco era desconectada).
+
+
 AGRACTA — 25a publicacao                    06/10/2026
 =====================================================
 
