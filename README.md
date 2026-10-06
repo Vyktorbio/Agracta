@@ -13,6 +13,11 @@ Funciona offline e sincroniza pelo Firebase.
 2. NDVI (opcional): rode o proxy do Sentinel‑2 —
    `python3 ndvi-proxy.py` (na 1ª vez ele pede o Client ID/Secret do Copernicus e salva em `ndvi-credenciais.json`).
 
+As camadas públicas **Landsat, SMAP e NASA FIRMS** ficam em
+**Mapa → Ferramentas do mapa → Satélite** e usam esse mesmo proxy.
+Não precisam de conta individual nem das credenciais do Sentinel.
+Consulte [SATELITES.md](docs/SATELITES.md) para dados, limites e publicação.
+
 ## Onde mora cada coisa
 
 Não há build: o site é servido do jeito que está no repositório, e cada arquivo
@@ -29,6 +34,7 @@ nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 | Entrada, acesso e nuvem | `acesso-horario.js` (nada aparece antes do login; janela de horário por técnico) · `firebase-config.js` · `firebase-sync.js` (login, sincronização local-first, histórico de versões; a parte de nuvem do Painel Admin) |
 | Coordenação da interface | `app.js` — quadras, estudos, aplicações, avaliações, Hoje e Agenda, cópias e recuperação, Painel Admin. É o arquivo grande (~25 mil linhas); dividi-lo por área é a frente 3 da lapidação |
 | Mapa | `ui-campo.js` / `ui-campo.css` (gaveta de ferramentas, NDVI com faixa de datas, botões Mapa e Menu) · `mapa-medir.js` (grupos de parcelas provisórios) · `mapa-inicio.js` ("abrir o app em") · `notas-local.js` (onde cada nota foi lançada) · `croqui-livre.js` e `croqui-parcelas.js` (parcelas no mapa) |
+| Satélites públicos | `satelites.js` / `satelites.css` (controles e camadas) · `vendor/satelites-core.js` (área, datas e escolha de cena) · `satelites_backend.py` (provedores públicos, chamado pelo proxy) |
 | Estudo e protocolo | `protocolo-menu.js` (o protocolo num lugar só) · `protocolo-avaliacoes.js` · `aplicacoes-recolhiveis.js` · `calculadora-drone.js` · `campo-inteligente.js` (clima e nota estranha na hora) · `colonia-medida.js` (colônia medida na foto) |
 | Fotos e relatório | `fotos-estudo.js` · `galeria-fotos.js` · `relatorio-estudo.js` (abrem as páginas isoladas `galeria-local.html` e `relatorio-local.html`) |
 | Trilha BPL | `eventos-app.js` (eventos formais ao lado da trilha de sempre) · `trilha-formal.js` (a trilha na ficha do estudo) |

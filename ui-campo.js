@@ -116,6 +116,12 @@
           '<div class="ag-sec-t">Satélite</div>'+
           linha('agRowNdvi', IC.folha, 'Índices de vegetação',
                 'Sentinel-2 · abre na data mais recente', 'agLigarIndices()', true)+
+          linha('agRowLandsat', IC.clima, 'Landsat',
+                'Temperatura da superfície · °C', 'agSateliteAbrir(\'landsat\')', true)+
+          linha('agRowSmap', IC.solo, 'SMAP',
+                'Umidade do solo · mapa regional de 9 km', 'agSateliteAbrir(\'smap\')', true)+
+          linha('agRowFirms', IC.pino, 'NASA FIRMS',
+                'Focos de calor · VIIRS NOAA-20', 'agSateliteAbrir(\'firms\')', true)+
           linha('agRowZonas', IC.camadas, 'Colorir quadras por valor',
                 'Zonamento a partir do índice ativo', 'agZonas()', true)+
           linha('agRowSolo', IC.solo, 'Mapa de solos',
@@ -161,10 +167,17 @@
   window.agSincronizarGaveta = sincronizarGaveta;
 
   function sincronizarGaveta(){
+    var satAtivo = false;
+    ['landsat', 'smap', 'firms'].forEach(function(id){
+      var row = $('agRow' + ({landsat:'Landsat', smap:'Smap', firms:'Firms'})[id]);
+      var ativo = typeof window.agSateliteAtivo === 'function' && window.agSateliteAtivo(id);
+      if(row){ row.classList.toggle('on', ativo); row.setAttribute('aria-pressed', ativo ? 'true' : 'false'); }
+      satAtivo = satAtivo || ativo;
+    });
     var r = $('agRowNdvi');
     if(r) r.classList.toggle('on', ligado());
     var z = $('agRowZonas');
-    if(z) z.classList.toggle('on', !!window.ndviZonas);
+    if(z){ z.classList.toggle('on', !!window.ndviZonas); z.disabled = !ligado(); }
     var n = $('agRowNota');
     if(n) n.classList.toggle('on', !!window.scoutingModeActive);
     var g = $('agRowGps');
@@ -180,7 +193,7 @@
       sr.style.opacity = temSolo ? '' : '0.45';
     }
     var b = $('agToolsBtn');
-    if(b) b.classList.toggle('layer-on', ligado());
+    if(b) b.classList.toggle('layer-on', ligado() || satAtivo);
   }
 
   /* Alterna o recorte SEM fechar a gaveta: é ajuste fino de visualização, e
@@ -226,6 +239,7 @@
   };
 
   window.agZonas = function(){
+    if(!ligado()) return;
     try{ if(typeof ndviToggleZonas === 'function') ndviToggleZonas(); }catch(e){}
     sincronizarGaveta();
   };
@@ -474,6 +488,7 @@
     var p = shim();
     var quer = (forcar === undefined) ? !ligado() : !!forcar;
     if(!quer){ window.ndviClear(); return; }
+    if(typeof window.agSatelitesLimparRaster === 'function') window.agSatelitesLimparRaster();
 
     if(!window._map && typeof initMap === 'function') initMap();
     try{ ensureQGEO(); }catch(e){}
@@ -518,6 +533,8 @@
   };
 
   window.ndviClear = function(){
+    window._ndviDatesSeq++;
+    window._ndviImageSeq++;
     var p = shim();
     p.style.display = 'none';
     window.ndviMeans = null;

@@ -4358,7 +4358,7 @@ function proxyFetch(url,opts){
   });
 }
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null, ndviZonas=false;
-var _ndviAutoLatest=false,_ndviDatesSeq=0;
+var _ndviAutoLatest=false,_ndviDatesSeq=0,_ndviImageSeq=0;
 function _lerpColor(a,b,t){ function h(s,i){return parseInt(s.substr(i,2),16);} function c(x){x=Math.max(0,Math.min(255,Math.round(x)));return (x<16?'0':'')+x.toString(16);} return '#'+c(h(a,1)+(h(b,1)-h(a,1))*t)+c(h(a,3)+(h(b,3)-h(a,3))*t)+c(h(a,5)+(h(b,5)-h(a,5))*t); }
 function _ndviColor(v){ if(v==null||isNaN(v)) return '#9e9e9e'; var s=[[0.15,'#d73027'],[0.3,'#fc8d59'],[0.45,'#fee08b'],[0.6,'#d9ef8b'],[0.75,'#91cf60'],[0.85,'#1a9850']]; if(v<=s[0][0])return s[0][1]; if(v>=s[s.length-1][0])return s[s.length-1][1]; for(var i=1;i<s.length;i++){ if(v<=s[i][0]) return _lerpColor(s[i-1][1],s[i][1],(v-s[i-1][0])/(s[i][0]-s[i-1][0])); } return s[s.length-1][1]; }
 function ndviToggleZonas(){
@@ -4395,7 +4395,10 @@ function ndviPx(bb){
    e o ranking. TODO caminho de erro aqui era silencioso (catch vazio, blob nulo), então o
    botão de zonamento simplesmente não fazia nada e o usuário não tinha como saber por quê. */
 function computeQuadraMeans(cb){
-  function falhou(msg){ try{ ndviStatus(msg,'err'); }catch(e){} if(cb) cb(false,msg); }
+  var panel=document.getElementById('ndviPanel'), seq=_ndviImageSeq, ix=ndviIndex, dataCena=ndviDate;
+  function atual(){ return panel && panel.style.display==='block' && seq===_ndviImageSeq && ndviIndex===ix && ndviDate===dataCena; }
+  if(!atual()) return;
+  function falhou(msg){ if(!atual()) return; try{ ndviStatus(msg,'err'); }catch(e){} if(cb) cb(false,msg); }
   if(!ndviIndex||!ndviDate){ falhou('Carregue um índice (NDVI/NDRE…) antes de medir as quadras.'); return; }
   if(!quadrasAtivas().length){ falhou('Nenhuma quadra visível para medir.'); return; }
   var bb=ndviBBoxMedida();
@@ -4405,9 +4408,11 @@ function computeQuadraMeans(cb){
   proxyFetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
    .then(function(r){ if(!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error((j&&j.error)||('o servidor NDVI respondeu '+r.status)); }); return r.blob(); })
    .then(function(blob){ if(!blob) throw new Error('resposta vazia do servidor NDVI');
+     if(!atual()) return;
      var bu=URL.createObjectURL(blob), img=new Image();
      img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} falhou('Não consegui ler a imagem bruta do índice.'); };
      img.onload=function(){
+       if(!atual()){ URL.revokeObjectURL(bu); return; }
        try{
          var iw=img.naturalWidth, ih=img.naturalHeight;
          var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
@@ -5807,13 +5812,19 @@ function ndviClear(){ ndviIndex=null; ndviMeans=null; if(ndviOverlay){ _map.remo
 var _ndviObjURL=null;
 function ndviLoadImage(){
   if(!ndviIndex || !ndviDate) return;
+  var panel=document.getElementById('ndviPanel');
+  if(!panel || panel.style.display!=='block') return;
+  var seq=++_ndviImageSeq, ix=ndviIndex, dataCena=ndviDate;
+  function atual(){ return seq===_ndviImageSeq && panel.style.display==='block' && ndviIndex===ix && ndviDate===dataCena; }
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   ndviStatus('Carregando '+ndviIndex+' de '+ndviDate+'…');
   proxyFetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb))
    .then(function(r){ if(r.ok) return r.blob(); return r.json().then(function(j){ throw (j.error||'erro'); }); })
    .then(function(blob){
+     if(!atual()) return;
      var bu=URL.createObjectURL(blob), img=new Image();
      img.onload=function(){
+       if(!atual()){ URL.revokeObjectURL(bu); return; }
        var iw=img.naturalWidth||1024, ih=img.naturalHeight||1024, url=bu;
        var isTC=(ndviIndex==='TRUECOLOR');
        if(ndviClip && !isTC){
@@ -5836,9 +5847,9 @@ function ndviLoadImage(){
        if(isTC){ ndviStatus('Cor real (Sentinel-2) • '+ndviDate,'ok'); ndviMeans=null; renderNdviRank(); }
        else { ndviStatus(ndviIndex+' • '+ndviDate+(ndviClip?' (apenas quadras)':''),'ok'); computeQuadraMeans(); }
      };
-     img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} ndviStatus('Erro ao carregar a imagem.','err'); };
+     img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} if(atual()) ndviStatus('Erro ao carregar a imagem.','err'); };
      img.src=bu;
-   }).catch(function(e){ ndviStatus('Sem imagem nessa data: '+e,'err'); });
+   }).catch(function(e){ if(atual()) ndviStatus('Sem imagem nessa data: '+e,'err'); });
 }
 /* Série temporal por quadra (Statistical API) */
 function ndviSerie(id){

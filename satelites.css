@@ -1,0 +1,33 @@
+/* Controles das camadas públicas — mesma tipografia e cores da gaveta do mapa. */
+.ag-sat-panel{position:fixed;z-index:1250;right:14px;bottom:calc(82px + env(safe-area-inset-bottom));width:min(350px,calc(100vw - 28px));max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;border:1px solid var(--gp-line-2,#34463a);border-radius:16px;background:var(--gp-s1,#111c16);color:var(--gp-text,#f2f7f3);box-shadow:0 12px 40px rgba(0,0,0,.28);padding:14px;font:500 13px/1.45 var(--ag-font,system-ui)}
+.ag-sat-panel[hidden]{display:none}
+.ag-sat-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ag-sat-head h2{flex:1;margin:0;font-size:16px}
+.ag-sat-panel button,.ag-sat-panel select{font:600 13px var(--ag-font,system-ui);min-height:44px;border:1px solid var(--gp-line-2,#34463a);border-radius:9px;background:var(--gp-s2,#17231b);color:var(--gp-text,#f2f7f3);padding:8px 10px;cursor:pointer}
+.ag-sat-panel button:disabled,.ag-sat-panel select:disabled{opacity:.5;cursor:default}
+.ag-sat-panel button:focus-visible,.ag-sat-panel select:focus-visible,.ag-sat-panel input:focus-visible{outline:2px solid var(--gp-green,#3bd27f);outline-offset:2px}
+.ag-sat-close{width:44px;font-size:22px!important;padding:0!important}
+.ag-sat-tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.ag-sat-tabs button{flex:1;min-width:80px;font-size:12px}
+.ag-sat-tabs button[aria-pressed=true]{border-color:var(--gp-green,#3bd27f);background:var(--gp-s3,#203026)}
+.ag-sat-panel label{display:block;margin:9px 0 4px;color:var(--gp-text-2,#bdc9c0)}
+.ag-sat-panel select{display:block;width:100%;max-width:100%}
+.ag-sat-desc,.ag-sat-meta,.ag-sat-note{font-size:12px;color:var(--gp-text-2,#bdc9c0);margin:8px 0}
+.ag-sat-meta{border-top:1px solid var(--gp-line,#34463a);padding-top:9px}
+.ag-sat-status{min-height:20px;margin:8px 0;overflow-wrap:anywhere}
+.ag-sat-status.error{color:var(--gp-danger,#ee7c76)}
+.ag-sat-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.ag-sat-actions button{flex:1}
+.ag-sat-opacity{display:flex;align-items:center;gap:8px}
+.ag-sat-opacity input{width:100%;min-height:32px;accent-color:var(--gp-green,#3bd27f)}
+.ag-sat-opacity output{min-width:36px;text-align:right}
+.ag-sat-legend img{display:block;width:100%;height:auto;background:#fff;border-radius:5px;margin-top:5px}
+.ag-sat-colors{display:flex;height:12px;border-radius:4px;overflow:hidden;margin-top:6px}
+.ag-sat-colors span{flex:1}
+.ag-sat-scale{display:flex;justify-content:space-between;font-size:11px;margin-top:3px}
+.ag-sat-panel a{color:var(--gp-green,#3bd27f)}
+.ag-sat-smap{image-rendering:pixelated}
+.ag-sat-fire-popup{font:13px/1.5 system-ui;min-width:180px}
+.ag-sat-fire-popup b{display:block;margin-bottom:3px}
+body.map-full .ag-sat-panel{display:none!important}
+@media(max-width:600px){.ag-sat-panel{right:8px;width:calc(100vw - 16px);bottom:calc(72px + env(safe-area-inset-bottom));max-height:46dvh}}
