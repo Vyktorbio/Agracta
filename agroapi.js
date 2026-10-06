@@ -28,8 +28,31 @@ async function request(path,params){
  if(r.ok===false||j.error)throw Error(j.error||'A consulta da Embrapa está indisponível.');
  return j;
 }
+/* O servidor diz quais consultas têm credencial. Sem ela, a aba avisa antes do
+   formulário, em vez de deixar a pessoa preencher tudo para só então descobrir
+   que a consulta não está ativada. Lembrado por 10 min; falha aqui não avisa
+   nada (a própria consulta dirá o motivo). */
+var servidor={status:null,quando:0,pedido:null};
+function statusServidor(){
+ if(servidor.status&&Date.now()-servidor.quando<600000)return Promise.resolve(servidor.status);
+ if(!servidor.pedido)servidor.pedido=request('/agroapi/status',{}).then(function(st){servidor.status=st;servidor.quando=Date.now();servidor.pedido=null;return st;},function(){servidor.pedido=null;return null;});
+ return servidor.pedido;
+}
+function avisarSeDesligada(servico,alvo,botoes){
+ return statusServidor().then(function(st){
+  var el=d.getElementById(alvo);
+  if(!alive(el)||!st||!st.configured||st.configured[servico]!==false)return;
+  var adm=typeof w.isAdmin==='function'&&w.isAdmin();
+  el.innerHTML='<p class="agro-note agro-off" role="status"><b>Consulta ainda não ativada.</b> O servidor do Agracta ainda não tem a credencial da Embrapa para '+
+   e({bioinsumos:'o Bioinsumos',agritec:'o ZARC / Agritec',climapi:'a ClimAPI'}[servico])+'. '+
+   (adm?'Para ativar: chave e segredo da aplicação AgroAPI nas variáveis do Render (passo a passo em docs/AGROAPI.md).':'Quem administra o Agracta pode ativar.')+'</p>';
+  (botoes||[]).forEach(function(a){var b=d.querySelector('[data-agro="'+a+'"]');if(b)b.disabled=true;});
+ });
+}
+function depois(fn){setTimeout(fn,0);}
 function bioHtml(){
- return '<h2>Bioinsumos · Embrapa</h2><p>Consultar produtos biológicos e inoculantes registrados no MAPA.</p>'+
+ depois(function(){avisarSeDesligada('bioinsumos','agBioAviso',['bioBusca']);});
+ return '<h2>Bioinsumos · Embrapa</h2><p>Consultar produtos biológicos e inoculantes registrados no MAPA.</p><div id="agBioAviso"></div>'+
   '<form id="agBioForm" class="agro-form">'+
   '<label>Categoria<select id="agBioTipo">'+option('produtos-biologicos','Produtos para controle de pragas',bio.tipo)+option('inoculantes','Inoculantes',bio.tipo)+'</select></label>'+
   '<label>Buscar<input id="agBioQ" maxlength="160" value="'+e(bio.q)+'" placeholder="Produto, organismo, praga ou fabricante"></label>'+
@@ -76,7 +99,8 @@ async function bioSearch(page){
  }catch(err){if(seq===bio.seq)status(el,err.message);}
 }
 function zarcHtml(){
- return '<h2>ZARC / Agritec · Embrapa</h2><p>Janelas de plantio do Zoneamento Agrícola de Risco Climático.</p>'+
+ depois(function(){avisarSeDesligada('agritec','agZarcAviso',['zarcMunicipios','zarcBusca']);});
+ return '<h2>ZARC / Agritec · Embrapa</h2><p>Janelas de plantio do Zoneamento Agrícola de Risco Climático.</p><div id="agZarcAviso"></div>'+
  '<form id="agZarcForm" class="agro-form">'+
  '<label>Estado<select id="agZarcUF">'+UFS.map(function(uf){return option(uf,uf,z.uf);}).join('')+'</select></label>'+
  bot('zarcMunicipios','Carregar municípios')+
@@ -151,7 +175,7 @@ async function zarcSearch(){
  }catch(err){if(seq===z.seq)status(el,err.message);}
 }
 function climateHeader(){
- return '<p class="agro-note"><b>PREVISÃO · Embrapa / GFS</b><br>Modelo regional de aproximadamente 25 km. Atualização da fonte a cada seis horas.</p>'+
+ return '<p class="agro-note"><b>PREVISÃO · Embrapa / GFS</b><br>Modelo regional de aproximadamente 25 km. Atualização da fonte a cada seis horas.</p><div id="agClimAviso"></div>'+
  '<div class="agro-form"><label>Variável<select id="agClimVariavel">'+C.variables.map(function(x){return option(x[0],x[1]+' ('+x[2]+')',clim.variable);}).join('')+'</select></label>'+
  '<label>Execução do modelo<input id="agClimData" type="date" value="'+e(clim.date)+'" list="agClimDatas"></label>'+
  '<datalist id="agClimDatas">'+clim.dates.map(function(x){return '<option value="'+e(x)+'"></option>';}).join('')+'</datalist>'+
@@ -213,7 +237,7 @@ function climateLoad(ll){
  var b=d.getElementById('climaBody');
  if(!b)return;
  if(!ll){b.innerHTML='<p>Posicione o mapa ou use o GPS para consultar a previsão.</p>';return;}
- b.innerHTML=climateHeader();climateDates(true);
+ b.innerHTML=climateHeader();avisarSeDesligada('climapi','agClimAviso',['climDatas','climSerie']);climateDates(true);
 }
 w.agConhecimentoAbas=w.agConhecimentoAbas||[];
 w.agConhecimentoAbas.push({id:'bioinsumos',rotulo:'Bioinsumos',html:bioHtml},{id:'zarc',rotulo:'ZARC / Agritec',html:zarcHtml});

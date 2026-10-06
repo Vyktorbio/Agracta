@@ -3,6 +3,8 @@
 Somente biblioteca padrão. Não requer conta individual, MAP_KEY ou credenciais
 Sentinel Hub. Os endereços dos provedores são fixos; o cliente escolhe parâmetros.
 """
+import bisect
+import calendar
 import csv
 import io
 import json
@@ -14,10 +16,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from array import array
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
-VERSION = 1
+VERSION = 2
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 RASTER = "https://planetarycomputer.microsoft.com/api/data/v1/item"
 GIBS = "https://gibs.earthdata.nasa.gov"
@@ -83,7 +87,9 @@ class Cache:
             self.busy.add(key)
         try:
             value = loader()
-            size = len(value) if isinstance(value, bytes) else len(json.dumps(value).encode())
+            size = getattr(value, "nbytes", None)
+            if size is None:
+                size = len(value) if isinstance(value, bytes) else len(json.dumps(value).encode())
             with self.condition:
                 if size <= self.max_bytes:
                     while self.entries and (self.size + size > self.max_bytes or
@@ -366,53 +372,138 @@ def smap_image(q):
     return _cache.get(url, 3600, lambda: png(download(url)))
 
 
-def firms_rows(data):
+# Os três VIIRS em órbita olham o mesmo lugar com ~50 min de diferença; um só
+# deixava de fora o que queimou entre as passagens ou estava sob nuvem naquela.
+# Mesmo instrumento e pixel (375 m), então a leitura é a mesma para os três.
+FIRMS_SENSORES = (
+    # pasta no FIRMS, prefixo do arquivo, satélite
+    ("suomi-npp-viirs-c2", "SUOMI_VIIRS_C2", "S-NPP"),
+    ("noaa-20-viirs-c2", "J1_VIIRS_C2", "NOAA-20"),
+    ("noaa-21-viirs-c2", "J2_VIIRS_C2", "NOAA-21"),
+)
+FIRMS_TTL = 15 * 60
+FIRMS_MAX_BYTES = 40 * 1024 * 1024
+# Linha com defeito é ignorada e contada; acima disto o arquivo inteiro é suspeito.
+FIRMS_DEFEITO_MAX = 0.01
+FIRMS_CAMPOS = ("latitude", "longitude", "acq_date", "acq_time", "confidence", "satellite", "frp")
+_CONFIANCA = {"l": 0, "low": 0, "n": 1, "nominal": 1, "h": 2, "high": 2}
+_CONFIANCA_NOME = ("low", "nominal", "high")
+
+
+class FirmsFeed:
+    """Um arquivo FIRMS já lido, em colunas compactas ordenadas pela latitude.
+
+    Lido uma vez por download (não a cada pedido): o arquivo da América do Sul
+    tem dezenas de milhares de linhas, e relê-lo a cada arrasto do mapa custava
+    meio segundo de CPU por pedido, segurando o servidor para todo mundo.
+    """
+    __slots__ = ("satellite", "lat", "lng", "ts", "conf", "frp", "dn",
+                 "latest", "invalid", "rows", "fetched_at")
+
+    def __init__(self, satellite, rows, latest, invalid, fetched_at):
+        rows.sort()   # pela latitude: o pedido acha a faixa com busca binária
+        self.satellite = satellite
+        self.lat = array("d", (r[0] for r in rows))
+        self.lng = array("d", (r[1] for r in rows))
+        self.ts = array("q", (r[2] for r in rows))
+        self.conf = array("b", (r[3] for r in rows))
+        self.frp = array("d", (r[4] for r in rows))
+        self.dn = array("b", (r[5] for r in rows))
+        self.latest = latest
+        self.invalid = invalid
+        self.rows = len(rows)
+        self.fetched_at = fetched_at
+
+    @property
+    def nbytes(self):
+        return 512 + sum(a.itemsize * len(a) for a in (self.lat, self.lng, self.ts,
+                                                        self.conf, self.frp, self.dn))
+
+
+def firms_parse(data, satellite="NOAA-20", now=None):
+    """CSV do FIRMS -> FirmsFeed. Cabeçalho errado (página de erro, outro
+    arquivo) recusa tudo; linha com defeito é contada e fica de fora, desde que
+    sejam poucas — o número vai junto na resposta, nada some calado."""
+    erro = SatelliteError("O FIRMS enviou um arquivo de focos inválido.", 502)
     try:
-        reader = csv.DictReader(io.StringIO(data.decode("utf-8-sig")))
-        required = {"latitude", "longitude", "acq_date", "acq_time", "confidence", "satellite", "frp"}
-        if not required.issubset(set(reader.fieldnames or [])):
-            raise ValueError()
-        yield from reader
-    except (ValueError, UnicodeError, csv.Error):
-        raise SatelliteError("O FIRMS enviou um arquivo de focos inválido.", 502) from None
+        reader = csv.reader(io.StringIO(data.decode("utf-8-sig")))
+        header = [h.strip() for h in next(reader, [])]
+    except (UnicodeError, csv.Error):
+        raise erro from None
+    col = {nome: i for i, nome in enumerate(header)}
+    if not all(c in col for c in FIRMS_CAMPOS):
+        raise erro
+    i_lat, i_lng, i_dia, i_hora = col["latitude"], col["longitude"], col["acq_date"], col["acq_time"]
+    i_conf, i_sat, i_frp, i_dn = col["confidence"], col["satellite"], col["frp"], col.get("daynight")
+    agora = (now or utc_now()).timestamp()
+    dias, rows, invalid, total, latest = {}, [], 0, 0, None
+    try:
+        for row in reader:
+            if not row:
+                continue
+            total += 1
+            try:
+                lat, lng = float(row[i_lat]), float(row[i_lng])
+                if not (-90 <= lat <= 90 and -180 <= lng <= 180):   # também barra nan/inf
+                    raise ValueError()
+                hhmm = row[i_hora].strip().zfill(4)
+                if len(hhmm) != 4 or not hhmm.isdigit() or int(hhmm[:2]) > 23 or int(hhmm[2:]) > 59:
+                    raise ValueError()
+                dia = row[i_dia].strip()
+                base = dias.get(dia)
+                if base is None:
+                    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", dia):
+                        raise ValueError()
+                    base = dias[dia] = calendar.timegm(date.fromisoformat(dia).timetuple())
+                ts = base + int(hhmm[:2]) * 3600 + int(hhmm[2:]) * 60
+                if not row[i_sat].strip():
+                    raise ValueError()
+                conf = _CONFIANCA[row[i_conf].strip().lower()]
+                frp = float(row[i_frp])
+                if not 0 <= frp <= 1000000:
+                    raise ValueError()
+                dn = {"D": 1, "N": 0}.get(row[i_dn].strip().upper(), -1) if i_dn is not None and i_dn < len(row) else -1
+            except (ValueError, KeyError, IndexError):
+                invalid += 1
+                continue
+            if ts <= agora and (latest is None or ts > latest):
+                latest = ts
+            rows.append((lat, lng, ts, conf, frp, dn))
+    except csv.Error:
+        raise erro from None
+    if invalid and invalid > total * FIRMS_DEFEITO_MAX:
+        # Defeito demais: melhor dizer que o arquivo veio quebrado do que
+        # desenhar um mapa com buracos que parecem "sem fogo".
+        raise SatelliteError("O arquivo FIRMS contém leituras inválidas. Tente novamente.", 502)
+    return FirmsFeed(satellite, rows, latest, invalid, iso(utc_now()))
+
+
+def firms_select(feeds, bb, now, hours, limit=2000):
+    """Focos dentro da caixa e da janela, dos mais recentes para os mais antigos."""
+    w, s, e, n = bb
+    fim = now.timestamp()
+    ini = fim - hours * 3600
+    achados = []
+    for feed in feeds:
+        lat, lng, ts = feed.lat, feed.lng, feed.ts
+        for i in range(bisect.bisect_left(lat, s), bisect.bisect_right(lat, n)):
+            if w <= lng[i] <= e and ini <= ts[i] <= fim:
+                achados.append((ts[i], feed, i))
+    achados.sort(key=lambda a: a[0], reverse=True)
+    features = []
+    for t, feed, i in achados[:limit]:
+        features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [feed.lng[i], feed.lat[i]]},
+                         "properties": {"datetime": iso(datetime.fromtimestamp(t, timezone.utc)),
+                                        "confidence": _CONFIANCA_NOME[feed.conf[i]], "frpMW": round(feed.frp[i], 2),
+                                        "satellite": feed.satellite, "instrument": "VIIRS", "resolutionM": 375,
+                                        "daynight": {1: "D", 0: "N"}.get(feed.dn[i], "")}})
+    latest = max((f.latest for f in feeds if f.latest is not None), default=None)
+    return features, len(achados), (datetime.fromtimestamp(latest, timezone.utc) if latest is not None else None)
 
 
 def firms_features(data, bb, now, hours, limit=2000):
-    cutoff = now - timedelta(hours=hours)
-    points, count, rejected, latest = [], 0, 0, None
-    confidence = {"l": "low", "n": "nominal", "h": "high",
-                  "low": "low", "nominal": "nominal", "high": "high"}
-    for row in firms_rows(data):
-        try:
-            lat = number(row["latitude"], "Latitude", -90, 90)
-            lng = number(row["longitude"], "Longitude", -180, 180)
-            hhmm = row["acq_time"].zfill(4)
-            if not re.fullmatch(r"\d{4}", hhmm):
-                raise ValueError()
-            dt = datetime.strptime(row["acq_date"] + hhmm, "%Y-%m-%d%H%M").replace(tzinfo=timezone.utc)
-            if row["satellite"].upper() not in ("N20", "NOAA-20", "NOAA20"):
-                raise ValueError()
-            cf = confidence[row["confidence"].lower()]
-            frp = number(row["frp"], "Potência", 0, 1000000)
-            if dt <= now and (latest is None or dt > latest):
-                latest = dt
-            if not (cutoff <= dt <= now and bb[0] <= lng <= bb[2] and bb[1] <= lat <= bb[3]):
-                continue
-            count += 1
-            points.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lng, lat]},
-                           "properties": {"datetime": iso(dt), "confidence": cf, "frpMW": frp,
-                                          "satellite": "NOAA-20", "instrument": "VIIRS", "resolutionM": 375,
-                                          "daynight": row.get("daynight", "")}})
-            if len(points) >= limit * 2:
-                points.sort(key=lambda f: f["properties"]["datetime"], reverse=True)
-                del points[limit:]
-        except (KeyError, TypeError, ValueError, SatelliteError):
-            rejected += 1
-    if rejected:
-        # Dados malformados não viram silenciosamente "nenhum foco".
-        raise SatelliteError("O arquivo FIRMS contém leituras inválidas. Tente novamente.", 502)
-    points.sort(key=lambda f: f["properties"]["datetime"], reverse=True)
-    return points[:limit], count, latest
+    """Atalho para um arquivo só (testes e verificação manual)."""
+    return firms_select([firms_parse(data, now=now)], bb, now, hours, limit)
 
 
 def firms(q):
@@ -424,21 +515,39 @@ def firms(q):
     # Arquivos regionais reduzem tráfego/memória; fora desta região usa o global.
     region = "South_America" if (-82 <= bb[0] < bb[2] <= -34 and -57 <= bb[1] < bb[3] <= 14) else "Global"
     suffix = "7d" if hours == 168 else period + "h"
-    url = FIRMS + "/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_%s_%s.csv" % (region, suffix)
-    def load():
-        body = download(url, max_bytes=32 * 1024 * 1024)
-        # Valida cabeçalho antes de armazenar; não guarda página HTML como CSV.
-        next(firms_rows(body), None)
-        return {"csv": body.decode("utf-8-sig"), "fetchedAt": iso(utc_now())}
-    feed = _cache.get(url, 15 * 60, load)
     now = utc_now()
-    points, count, latest = firms_features(feed["csv"].encode(), bb, now, hours)
+
+    def carregar(sensor):
+        pasta, prefixo, satelite = sensor
+        url = FIRMS + "/data/active_fire/%s/csv/%s_%s_%s.csv" % (pasta, prefixo, region, suffix)
+        try:
+            feed = _cache.get(url, FIRMS_TTL, lambda: firms_parse(download(url, max_bytes=FIRMS_MAX_BYTES), satelite))
+            return satelite, feed, None
+        except SatelliteError as error:
+            return satelite, None, str(error)
+
+    with ThreadPoolExecutor(max_workers=len(FIRMS_SENSORES)) as pool:
+        lidos = list(pool.map(carregar, FIRMS_SENSORES))
+    feeds = [feed for _, feed, _ in lidos if feed is not None]
+    if not feeds:
+        # Nenhum satélite respondeu: erro, nunca "nenhum foco".
+        raise SatelliteError(lidos[0][2] or "O FIRMS está indisponível. Tente novamente.", 502)
+    points, count, latest = firms_select(feeds, bb, now, hours)
+    usados = [sat for sat, feed, _ in lidos if feed is not None]
     return {"type": "FeatureCollection", "features": points,
-            "meta": {"source": "NASA FIRMS · VIIRS NOAA-20 · NRT", "resolutionM": 375,
+            "meta": {"source": "NASA FIRMS · VIIRS " + ", ".join(usados) + " · NRT", "resolutionM": 375,
                      "bbox": bb, "hours": hours, "from": iso(now - timedelta(hours=hours)), "to": iso(now),
-                     "fetchedAt": feed["fetchedAt"], "latestSourceDetection": iso(latest) if latest else None,
+                     "fetchedAt": min(feed.fetched_at for feed in feeds),
+                     "latestSourceDetection": iso(latest) if latest else None,
                      "count": count, "truncated": count > len(points), "region": region,
-                     "sourceLagHours": round((now - latest).total_seconds() / 3600, 1) if latest else None}}
+                     "sourceLagHours": round((now - latest).total_seconds() / 3600, 1) if latest else None,
+                     "invalidRows": sum(feed.invalid for feed in feeds),
+                     "sources": [{"satellite": sat, "ok": feed is not None,
+                                  "fetchedAt": feed.fetched_at if feed else None,
+                                  "latestDetection": (iso(datetime.fromtimestamp(feed.latest, timezone.utc))
+                                                      if feed and feed.latest is not None else None),
+                                  "invalidRows": feed.invalid if feed else None, "error": erro}
+                                 for sat, feed, erro in lidos]}}
 
 
 def handle(path, q):

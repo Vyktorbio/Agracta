@@ -45,7 +45,10 @@
     ajustes:'<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
     solo:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M3 14h18"/><path d="M8 4v5"/><path d="M15 9v5"/><path d="M11 14v6"/>',
     x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-    contraste:'<circle cx="12" cy="12" r="9"/><path d="M12 21a9 9 0 0 0 0-18v18Z"/>'
+    contraste:'<circle cx="12" cy="12" r="9"/><path d="M12 21a9 9 0 0 0 0-18v18Z"/>',
+    termometro:'<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+    gota:'<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7Z"/>',
+    chama:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5Z"/>'
   };
 
   /* ====================================================================== */
@@ -114,16 +117,18 @@
         '</div>'+
         '<div class="ag-sec">'+
           '<div class="ag-sec-t">Satélite</div>'+
+          /* Cada camada pelo que ela mostra (a fonte vai no subtítulo), e o
+             ajuste que depende de uma camada logo abaixo dela. */
           linha('agRowNdvi', IC.folha, 'Índices de vegetação',
                 'Sentinel-2 · abre na data mais recente', 'agLigarIndices()', true)+
-          linha('agRowLandsat', IC.clima, 'Landsat',
-                'Temperatura da superfície · °C', 'agSateliteAbrir(\'landsat\')', true)+
-          linha('agRowSmap', IC.solo, 'SMAP',
-                'Umidade do solo · mapa regional de 9 km', 'agSateliteAbrir(\'smap\')', true)+
-          linha('agRowFirms', IC.pino, 'NASA FIRMS',
-                'Focos de calor · VIIRS NOAA-20', 'agSateliteAbrir(\'firms\')', true)+
           linha('agRowZonas', IC.camadas, 'Colorir quadras por valor',
                 'Zonamento a partir do índice ativo', 'agZonas()', true)+
+          linha('agRowLandsat', IC.termometro, 'Temperatura da superfície',
+                'Landsat 8 e 9 · °C, grade de 30 m', 'agSateliteAbrir(\'landsat\')', true)+
+          linha('agRowSmap', IC.gota, 'Umidade do solo',
+                'SMAP · mapa regional de 9 km', 'agSateliteAbrir(\'smap\')', true)+
+          linha('agRowFirms', IC.chama, 'Focos de calor',
+                'NASA FIRMS · três satélites VIIRS · distância às quadras', 'agSateliteAbrir(\'firms\')', true)+
           linha('agRowSolo', IC.solo, 'Mapa de solos',
                 'Levantamento pedológico da Embrapa', 'agAcao(\'toggleSoloLayer\')', true)+
           linha('agRowSoloRec', IC.quadrado, 'Recortar pelas quadras',

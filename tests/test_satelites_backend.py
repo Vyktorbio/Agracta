@@ -135,16 +135,64 @@ class Providers(unittest.TestCase):
         self.assertEqual(features[0]['properties']['confidence'],'low')
         self.assertEqual(features[1]['properties']['frpMW'],5)
         self.assertEqual(s.iso(latest),'2026-10-06T11:45:00Z')
-        with patch.object(s,'download',return_value=rows.encode()) as remote:
+        # Os três VIIRS: cada arquivo tem a sua passagem, e a resposta junta todas.
+        arquivos = {'SUOMI_VIIRS_C2': '-22.6,-47.5,2026-10-06,0420,nominal,N,4,N',
+                    'J1_VIIRS_C2': rows[len(HEADER):],
+                    'J2_VIIRS_C2': '-22.61,-47.51,2026-10-06,0510,high,N21,7,N'}
+        def baixar(url, max_bytes=None):
+            return (HEADER + next(v for k, v in arquivos.items() if '/' + k + '_' in url)).encode()
+        with patch.object(s,'download',side_effect=baixar) as remote:
             result = s.firms({'bbox':BB,'horas':'24'})
-            self.assertIn('J1_VIIRS_C2_South_America_24h.csv',remote.call_args.args[0])
-            self.assertEqual(result['meta']['count'],3)
+            urls = sorted(c.args[0].rsplit('/',1)[1] for c in remote.call_args_list)
+            self.assertEqual(urls,['J1_VIIRS_C2_South_America_24h.csv','J2_VIIRS_C2_South_America_24h.csv',
+                                   'SUOMI_VIIRS_C2_South_America_24h.csv'])
+            self.assertEqual(result['meta']['count'],5)
+            self.assertEqual(sorted({f['properties']['satellite'] for f in result['features']}),['NOAA-20','NOAA-21','S-NPP'])
             self.assertEqual(result['meta']['fetchedAt'],'2026-10-06T12:00:00Z')
+            self.assertEqual([x['ok'] for x in result['meta']['sources']],[True,True,True])
+            # O arquivo é lido uma vez por download: o segundo pedido não baixa de novo.
+            s.firms({'bbox':BB,'horas':'24'})
+            self.assertEqual(remote.call_count,3)
         for bad in [b'<html>Error</html>',(HEADER+'nan,-47,2026-10-06,1000,high,N20,1,D').encode(),
                     (HEADER+'-22.6,-47.5,2026-10-06,2560,high,N20,1,D').encode()]:
             with self.assertRaises(s.SatelliteError): s.firms_features(bad,s.bbox_param({'bbox':BB}),NOW,24)
         features,count,latest = s.firms_features(HEADER.encode(),s.bbox_param({'bbox':BB}),NOW,24)
         self.assertEqual(features,[]); self.assertEqual(count,0); self.assertIsNone(latest)
+
+    def test_firms_one_satellite_down_is_reported_not_hidden(self):
+        linha = '-22.6,-47.5,2026-10-06,1030,high,N20,5,D'
+        def baixar(url, max_bytes=None):
+            if 'SUOMI' in url:
+                raise s.SatelliteError('O provedor de satélite está indisponível. Tente novamente.', 502)
+            return (HEADER + linha).encode()
+        with patch.object(s,'download',side_effect=baixar):
+            result = s.firms({'bbox':BB,'horas':'24'})
+        fontes = {x['satellite']: x for x in result['meta']['sources']}
+        self.assertFalse(fontes['S-NPP']['ok']); self.assertIn('indisponível', fontes['S-NPP']['error'])
+        self.assertTrue(fontes['NOAA-20']['ok']); self.assertEqual(result['meta']['count'], 2)
+        self.assertNotIn('S-NPP', result['meta']['source'])
+        s._cache = s.Cache()
+        with patch.object(s,'download',side_effect=s.SatelliteError('fora do ar',502)):
+            with self.assertRaises(s.SatelliteError): s.firms({'bbox':BB,'horas':'24'})
+
+    def test_firms_few_defective_rows_are_counted_not_fatal(self):
+        boas = ['-22.6,-47.5,2026-10-06,%04d,nominal,N20,2,D' % (h * 100) for h in range(10)] * 20
+        corpo = HEADER + '\n'.join(boas + ['-22.6,-47.5,2026-10-06,2560,high,N20,1,D'])
+        feed = s.firms_parse(corpo.encode(), 'NOAA-20', NOW)
+        self.assertEqual((feed.rows, feed.invalid), (200, 1))
+        features, count, _ = s.firms_select([feed], s.bbox_param({'bbox':BB}), NOW, 24)
+        self.assertEqual(count, 200)
+        ruim = HEADER + '\n'.join(boas[:50] + ['x,y,2026-10-06,1000,high,N20,1,D'] * 2)
+        with self.assertRaises(s.SatelliteError): s.firms_parse(ruim.encode(), 'NOAA-20', NOW)
+
+    def test_firms_box_edges_and_latitude_search(self):
+        linhas = ['-22.7,-47.65,2026-10-06,1000,low,N20,1,D', '-22.45,-47.4,2026-10-06,1000,low,N20,1,D',
+                  '-22.7001,-47.5,2026-10-06,1000,low,N20,1,D', '-22.5,-47.3999,2026-10-06,1000,low,N20,1,D',
+                  '10,-47.5,2026-10-06,1000,low,N20,1,D', '-30,-47.5,2026-10-06,1000,low,N20,1,D']
+        feed = s.firms_parse((HEADER + '\n'.join(linhas)).encode(), 'NOAA-20', NOW)
+        features, count, _ = s.firms_select([feed], s.bbox_param({'bbox':BB}), NOW, 24)
+        self.assertEqual(count, 2, 'as bordas da caixa contam; um passo fora, não')
+        self.assertEqual(sorted(f['geometry']['coordinates'][1] for f in features), [-22.7, -22.45])
 
     def test_cache_limits_expiration_failures_and_single_flight(self):
         cache = s.Cache(max_bytes=6,max_entries=2)
