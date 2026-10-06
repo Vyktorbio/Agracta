@@ -32,7 +32,8 @@ nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 | Estudo e protocolo | `protocolo-menu.js` (o protocolo num lugar só) · `protocolo-avaliacoes.js` · `aplicacoes-recolhiveis.js` · `calculadora-drone.js` · `campo-inteligente.js` (clima e nota estranha na hora) · `colonia-medida.js` (colônia medida na foto) |
 | Fotos e relatório | `fotos-estudo.js` · `galeria-fotos.js` · `relatorio-estudo.js` (abrem as páginas isoladas `galeria-local.html` e `relatorio-local.html`) |
 | Trilha BPL | `eventos-app.js` (eventos formais ao lado da trilha de sempre) · `trilha-formal.js` (a trilha na ficha do estudo) |
-| Conhecimento | `integracoes.js` (+ `integracoes-fontes.js`, `integracoes-clientes.js`) · `conhecimento-canonico.js` (aba "Entre estudos") · `estudo-pagina.js` (página do estudo) · `alvos-catalogo.js` |
+| Conhecimento | `integracoes.js` (+ `integracoes-fontes.js`) · `conhecimento-canonico.js` (aba "Entre estudos") · `estudo-pagina.js` (página do estudo) · `alvos-catalogo.js` |
+| Patrocinadores (Menu › Administração) | `integracoes-clientes.js` — que resultados cada patrocinador consulta; abre na mesma moldura do Conhecimento, sem as abas |
 | Ver no campo (sob demanda) | `campo-3d.js` / `campo-3d.css` · `campo-3d-exportar.js` e `campo-3d-realista.js` (PNG e MP4). Não estão no `index.html`: entram no primeiro uso |
 | Clima | `clima-pagina.js` / `clima-pagina.css` |
 | Estatística | `estatistica.js` (núcleo em JS) · `estatistica/` (motor em Python rodando no navegador pelo Pyodide, com service worker próprio; o código Python fica em `estatistica/bioengine/`) |
@@ -40,7 +41,7 @@ nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 ### Páginas separadas
 
 `croqui.html` (croqui das quadras para o relatório), `prancha.html` (prancha de
-resultados), `cliente.html` + `cliente.js` (consulta do cliente, sem acesso ao
+resultados), `cliente.html` + `cliente.js` (consulta do patrocinador, sem acesso ao
 workspace), `galeria-local.html` + `galeria-local.js` (fotos das parcelas, só no
 aparelho) e `relatorio-local.html` + `relatorio-local.js` (relatório do estudo).
 

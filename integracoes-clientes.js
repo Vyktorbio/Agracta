@@ -1,18 +1,21 @@
-/* Compartilhamento explícito. Clientes nunca entram como membros do workspace. */
+/* Compartilhamento explícito com o PATROCINADOR, o termo da BPL para quem encomenda o
+   estudo. Patrocinadores nunca entram como membros do workspace. A tela abre pelo
+   Menu › Administração (abrirPatrocinadores, em integracoes.js); as chaves internas
+   (clientPortals, cliente.html, data-con="cliente…") continuam como eram. */
 (function(w){
   'use strict';
   var C=w.ConhecimentoCore,P=w.PortalCore,portais=[],edicao=null,rascunho=null,confirmado=null,autoFila=Promise.resolve();
   function ui(){return w.agConhecimento;}function e(x){return ui().esc(x);}
   function admin(){if(!w.isAdmin||!w.isAdmin())throw Error('Somente o administrador pode alterar acessos.');}
-  function db(){if(!w.firebase||!w.firebase.apps.length||!w.firebase.auth().currentUser)throw Error('Entre online para gerenciar a consulta do cliente.');return w.firebase.firestore();}
+  function db(){if(!w.firebase||!w.firebase.apps.length||!w.firebase.auth().currentUser)throw Error('Entre online para gerenciar a consulta dos patrocinadores.');return w.firebase.firestore();}
   function url(id){var u=new URL('cliente.html',location.href);u.searchParams.set('portal',id);return u.href;}
   function b(a,t,attrs){return ui().bot(a,t,attrs);}
   w.agClientesHtml=function(acervo){
     if(!w.isAdmin||!w.isAdmin())return '';
     var x=edicao||{nome:'',emails:[],studies:[],auto:true};
-    return '<h2>Consulta do cliente</h2><p>Escolha os estudos e os e-mails autorizados. A página apresenta resultados, tratamentos e ambiente; cada cliente recebe apenas a seleção aprovada.</p>'+b('clienteCarregar','Carregar consultas')+' '+b('clienteNova','Nova consulta')+
+    return '<p>Escolha os estudos e os e-mails autorizados. A página do patrocinador apresenta resultados, tratamentos e ambiente; cada patrocinador recebe apenas a seleção aprovada.</p>'+b('clienteCarregar','Carregar consultas')+' '+b('clienteNova','Nova consulta')+
       '<div class="con-estudos">'+portais.map(function(p){return b('clienteEditar','<b>'+e(p.nome)+'</b><span>'+p.studies.length+' estudos · '+(p.active?'ativa':'revogada')+'</span>','data-portal="'+e(p.id)+'"');}).join('')+'</div>'+
-      '<section class="con-painel"><h3>'+e(edicao?'Editar consulta':'Preparar consulta')+'</h3><form id="clienteForm"><div class="con-form"><label>Nome da consulta<input name="nome" maxlength="120" value="'+e(x.nome)+'" required placeholder="Projeto / cliente"></label><label>E-mails autorizados<textarea name="emails" placeholder="Um por linha">'+e((x.emails||[]).join('\n'))+'</textarea></label></div><label class="con-check"><input type="checkbox" name="auto"'+(x.auto?' checked':'')+'>Atualizar os resultados após a equipe sincronizar os estudos.</label><div class="con-catalogo">'+acervo.estudos.map(function(s){return '<label class="con-check"><input type="checkbox" name="estudo" value="'+e(s.key)+'"'+(x.studies.indexOf(P.id(s.key))>=0?' checked':'')+'><span><b>'+e(s.codigo)+'</b><small>'+e(s.cultura)+' · '+e(s.alvo)+' · '+e(s.local)+'</small></span></label>';}).join('')+'</div></form>'+b('clienteRevisar','Revisar seleção')+(edicao?' '+b('clienteRevogar','Revogar acesso','data-portal="'+e(edicao.id)+'"')+' <a target="_blank" rel="noopener noreferrer" href="'+e(url(edicao.id))+'">Abrir página do cliente</a>':'')+'<div id="clienteRevisao"></div></section>';
+      '<section class="con-painel"><h3>'+e(edicao?'Editar consulta':'Preparar consulta')+'</h3><form id="clienteForm"><div class="con-form"><label>Nome da consulta<input name="nome" maxlength="120" value="'+e(x.nome)+'" required placeholder="Projeto / patrocinador"></label><label>E-mails autorizados<textarea name="emails" placeholder="Um por linha">'+e((x.emails||[]).join('\n'))+'</textarea></label></div><label class="con-check"><input type="checkbox" name="auto"'+(x.auto?' checked':'')+'>Atualizar os resultados após a equipe sincronizar os estudos.</label><div class="con-catalogo">'+acervo.estudos.map(function(s){return '<label class="con-check"><input type="checkbox" name="estudo" value="'+e(s.key)+'"'+(x.studies.indexOf(P.id(s.key))>=0?' checked':'')+'><span><b>'+e(s.codigo)+'</b><small>'+e(s.cultura)+' · '+e(s.alvo)+' · '+e(s.local)+'</small></span></label>';}).join('')+'</div></form>'+b('clienteRevisar','Revisar seleção')+(edicao?' '+b('clienteRevogar','Revogar acesso','data-portal="'+e(edicao.id)+'"')+' <a target="_blank" rel="noopener noreferrer" href="'+e(url(edicao.id))+'">Abrir página do patrocinador</a>':'')+'<div id="clienteRevisao"></div></section>';
   };
   async function carregar(){
     admin();var snap=await db().collection('clientPortals').get({source:'server'});portais=[];
@@ -46,7 +49,7 @@
     if(a==='clienteRevisar'){
       var form=document.getElementById('clienteForm'),fd=new FormData(form);
       rascunho=P.validar({nome:fd.get('nome'),emails:fd.get('emails'),estudos:fd.getAll('estudo'),auto:fd.has('auto')});
-      document.getElementById('clienteRevisao').innerHTML='<h4>O cliente terá acesso a</h4><p>'+e(rascunho.nome)+' · '+e(rascunho.emails.join(', '))+'</p><ul>'+rascunho.estudos.map(function(key){var s=acervo.estudos.find(function(x){return x.key===key;});return '<li>'+e(s.codigo)+' · '+s.resultados.length+' resultados'+(s.finalizado?' · finalizado':' · em execução')+'</li>';}).join('')+'</ul><p>'+ (rascunho.auto?'Novos resultados desses estudos serão incluídos após a sincronização da equipe.':'Os resultados serão atualizados quando você salvar esta seleção novamente.')+'</p><p class="con-note">Revise a seleção completa: tratamentos de comparação e nomes de produtos também serão visíveis. O cliente precisa entrar com um dos e-mails autorizados e verificá-lo.</p>'+b('clientePublicar','Confirmar seleção e liberar consulta');return;
+      document.getElementById('clienteRevisao').innerHTML='<h4>O patrocinador terá acesso a</h4><p>'+e(rascunho.nome)+' · '+e(rascunho.emails.join(', '))+'</p><ul>'+rascunho.estudos.map(function(key){var s=acervo.estudos.find(function(x){return x.key===key;});return '<li>'+e(s.codigo)+' · '+s.resultados.length+' resultados'+(s.finalizado?' · finalizado':' · em execução')+'</li>';}).join('')+'</ul><p>'+ (rascunho.auto?'Novos resultados desses estudos serão incluídos após a sincronização da equipe.':'Os resultados serão atualizados quando você salvar esta seleção novamente.')+'</p><p class="con-note">Revise a seleção completa: tratamentos de comparação e nomes de produtos também serão visíveis. O patrocinador precisa entrar com um dos e-mails autorizados e verificá-lo.</p>'+b('clientePublicar','Confirmar seleção e liberar consulta');return;
     }
     if(a==='clientePublicar'){
       if(!rascunho)throw Error('Revise a seleção primeiro.');
@@ -95,7 +98,7 @@
     confirmado=ev.detail;var s=ev.detail;
     autoFila=autoFila.then(function(){return atualizarAutomaticamente(s);}).catch(function(err){
       // Falhar no portal não reverte uma gravação de pesquisa já confirmada.
-      ui().msg('Estudos salvos. A consulta do cliente não foi atualizada: '+(err.code==='permission-denied'?'confira a publicação das regras de acesso.':err.message));
+      ui().msg('Estudos salvos. A consulta dos patrocinadores não foi atualizada: '+(err.code==='permission-denied'?'confira a publicação das regras de acesso.':err.message));
     });
   });
 })(window);

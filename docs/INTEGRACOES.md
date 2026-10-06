@@ -47,11 +47,13 @@ completos por avaliação no instante da exportação.
 
 Contexto e custos são eventos com ID, responsável e timestamp. A sincronização une eventos por ID para preservar lançamentos concorrentes. Estudos finalizados permanecem em leitura; é preciso usar o fluxo existente de reabertura para editar ou excluir.
 
-## Consulta do cliente
+## Consulta do patrocinador
 
-O administrador abre a aba **Clientes**, seleciona estudos e e-mails, revisa a seleção e confirma a liberação. A tela cria um link `cliente.html?portal=...`. A criação não envia convite por e-mail automaticamente.
+"Patrocinador" é o termo da BPL para quem encomenda o estudo; até a 23ª publicação a tela se chamava Clientes e era uma aba do Conhecimento. Ela saiu de lá porque é administração de acesso (quem de fora vê quais resultados), não leitura de resultado. As chaves internas continuam com o nome antigo (`clientPortals`, `cliente.html`, a aba `clientes`), para que os links já enviados sigam valendo.
 
-O cliente entra nessa página com o endereço autorizado. No primeiro acesso, cria sua conta e confirma o endereço pelo Firebase Auth. O aplicativo principal não é carregado: não há leitura de `workspaces/agracta`, mapa, backup ou biblioteca interna. Criar uma conta não concede acesso à pesquisa.
+O administrador abre **Menu › Administração › Patrocinadores**, seleciona estudos e e-mails, revisa a seleção e confirma a liberação. A tela cria um link `cliente.html?portal=...`. A criação não envia convite por e-mail automaticamente.
+
+O patrocinador entra nessa página com o endereço autorizado. No primeiro acesso, cria sua conta e confirma o endereço pelo Firebase Auth. O aplicativo principal não é carregado: não há leitura de `workspaces/agracta`, mapa, backup ou biblioteca interna. Criar uma conta não concede acesso à pesquisa.
 
 As regras exigem e-mail verificado, vínculo ativo na consulta, versão vigente do acesso, consulta ativa e estudo selecionado. A configuração só pode ser alterada pelos administradores definidos nas regras existentes. Retirar um estudo ou revogar a consulta bloqueia novas leituras quando as regras/alterações se propagam. Informações já vistas ou copiadas por alguém não podem ser recolhidas.
 

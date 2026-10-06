@@ -378,7 +378,7 @@
       sel('cultura','Cultura',todos.map(function(s){return s.cultura;}))+
       sel('alvo','Alvo',todos.map(function(s){return s.alvo;}))+
       sel('local','Local',todos.map(function(s){return s.local;}))+
-      sel('cliente','Cliente',todos.map(clienteDe))+
+      sel('cliente','Patrocinador',todos.map(clienteDe))+
       '<label>Ordenar por<select data-con-festudo="ordem">'+
         [['recente','Última atualização'],['codigo','Código'],['inicio','Início do estudo']]
         .map(function(o){return '<option value="'+o[0]+'"'+(view.fEstudo.ordem===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+
@@ -451,7 +451,7 @@
     }
     return h;
   }
-  var campos=[['projeto','Projeto / linha de pesquisa'],['cliente','Cliente do estudo'],['materialBiologico','População, espécie ou isolado'],['origemBiologica','Origem do material biológico'],['loteBiologico','Lote / geração / passagem'],['metodoLaboratorio','Método de laboratório']];
+  var campos=[['projeto','Projeto / linha de pesquisa'],['cliente','Patrocinador do estudo'],['materialBiologico','População, espécie ou isolado'],['origemBiologica','Origem do material biológico'],['loteBiologico','Lote / geração / passagem'],['metodoLaboratorio','Método de laboratório']];
   function integracoesHtml(s){
     var es=C.estado(s.integracoes),h='<h3>Ligação entre laboratório e campo</h3><p>Use o mesmo projeto nos estudos que pertencem à mesma investigação. Produto e alvo já ligam o histórico automaticamente.</p><form id="conCampos" class="con-form">';
     campos.forEach(function(p){h+='<label>'+p[1]+'<input name="'+p[0]+'" value="'+e(es.campos[p[0]]||'')+'"'+(s.finalizado?' disabled':'')+'></label>';});
@@ -489,14 +489,26 @@
   }
   function pintar(){
     var ov=document.getElementById('conhecimentoOvl');if(!ov||ov.hidden)return;
+    /* PATROCINADORES TÊM TELA PRÓPRIA. A consulta do patrocinador (quem de fora
+       vê quais resultados) é administração de acesso, não leitura de resultado:
+       a porta mora no Menu › Administração, ao lado do Painel Admin, e a tela
+       abre aqui sem as abas do Conhecimento. "Patrocinador" é o termo da BPL
+       para quem encomenda o estudo; a chave interna continua 'clientes'. */
+    if(view.aba==='clientes'){
+      var corpo=w.agClientesHtml?w.agClientesHtml(acervo):null;
+      ov.setAttribute('aria-label','Patrocinadores');
+      ov.innerHTML='<section class="con-shell"><header class="con-head"><div><p>AGRACTA · ADMINISTRAÇÃO</p><h1>Patrocinadores</h1></div>'+bot('fechar','Fechar ×')+'</header><p id="conhecimentoAviso" role="status" aria-live="polite"></p><main>'+
+        (corpo===null?vazio('A tela dos patrocinadores não carregou neste aparelho. Abra o Agracta de novo com conexão.'):corpo||vazio('Só o administrador gerencia o que os patrocinadores consultam.'))+'</main></section>';
+      return;
+    }
+    ov.setAttribute('aria-label','Conhecimento experimental');
     var abas=[['produtos','Produtos e ativos'],['alvos','Alvos'],['projetos','Projetos'],['estudos','Estudos'],['fontes','Fontes']];
-    if(typeof w.isAdmin==='function'&&w.isAdmin())abas.push(['clientes','Clientes']);
     /* Abas de outros módulos (ex.: conhecimento-canonico.js) entram aqui sem que
        este arquivo precise conhecê-las: {id, rotulo, html(acervo), acao(a,b)}. */
     var extras=lista(w.agConhecimentoAbas);extras.forEach(function(x){if(x&&x.id)abas.push([x.id,x.rotulo]);});
     var extra=extras.find(function(x){return x&&x.id===view.aba;});
     ov.innerHTML='<section class="con-shell"><header class="con-head"><div><p>AGRACTA</p><h1>Conhecimento experimental</h1></div>'+bot('fechar','Fechar ×')+'</header><nav aria-label="Conhecimento">'+abas.map(function(a){return bot('aba',a[1],'data-aba="'+a[0]+'" aria-current="'+(view.aba===a[0]?'page':'false')+'"',view.aba===a[0]?'ativo':'');}).join('')+'</nav><p id="conhecimentoAviso" role="status" aria-live="polite"></p><main>'+
-      (view.estudo?ficha():extra?extra.html(acervo):view.aba==='estudos'?abaEstudos():view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):view.aba==='clientes'?(w.agClientesHtml?w.agClientesHtml(acervo):vazio('Gestão de clientes indisponível.')):selecao())+'</main></section>';
+      (view.estudo?ficha():extra?extra.html(acervo):view.aba==='estudos'?abaEstudos():view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):selecao())+'</main></section>';
   }
   function adicionar(key,eventos){
     var s=achar(key);if(!s)throw Error('Estudo não encontrado.');
@@ -575,5 +587,6 @@
       if(!xs.length)return;var first=xs[0],last=xs[xs.length-1];if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}}
   });
   w.abrirConhecimento=abrir;
+  w.abrirPatrocinadores=function(){abrir({aba:'clientes'});};
   w.agConhecimento={construir:construir,projetar:projetar,pintar:pintar,adicionar:adicionar,esc:e,numero:n,dinheiro:dinheiro,msg:msg,bot:bot};
 })(window);
