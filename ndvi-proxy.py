@@ -29,13 +29,16 @@ Endpoints (uso interno do app):
 Login: fora /health e /solo/legenda, todo pedido leva  Authorization: Bearer <ID token do
 Firebase>  de um membro ativo do Agracta (veja a seção "login"). Local, sem $PORT, é livre.
 """
-import base64, hashlib, hmac, json, math, os, re, threading, time, urllib.request, urllib.parse, urllib.error
+import base64, hashlib, hmac, json, math, os, re, sys, threading, time, urllib.request, urllib.parse, urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("PORT", "8799"))
 HOST = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"  # nuvem (Render) usa $PORT e 0.0.0.0; local fica em 127.0.0.1
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)  # também funciona ao importar o proxy nos testes
+import satelites_backend
 
 # CORS: só o app pode usar o proxy pelo navegador (protege a cota Sentinel/Ecowitt).
 # Para liberar outra origem sem mexer no código: env ALLOWED_ORIGINS="https://a.com,https://b.com" (soma às padrão).
@@ -1737,7 +1740,20 @@ class H(BaseHTTPRequestHandler):
                 cid, _ = load_creds()
                 eapp, _ = load_ecowitt()
                 return self._json({"ok": True, "hasCreds": bool(cid), "hasEcowitt": bool(eapp),
+                                   "satelites": {"version": satelites_backend.VERSION, "providers": ["landsat", "smap", "firms"]},
                                    "login": estado_login()})
+            if u.path.startswith("/satelites/"):
+                try:
+                    ctype, body = satelites_backend.handle(u.path, q)
+                except satelites_backend.SatelliteError as e:
+                    return self._json({"error": str(e)}, e.status)
+                except Exception:
+                    return self._json({"error": "Não foi possível consultar esta camada de satélite."}, 502)
+                self.send_response(200); self._cors()
+                self.send_header("Content-Type", ctype)
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return self.wfile.write(body)
             if u.path == "/clima/estacoes":
                 return self._json(do_estacoes())
             if u.path == "/clima":

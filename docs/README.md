@@ -18,6 +18,7 @@ app está no `README.md` da raiz.
 |---|---|
 | [AVALIACOES-PROTOCOLO.md](AVALIACOES-PROTOCOLO.md) | Avaliações e controles no protocolo; o que a grade recusa e a leitura menor que a anterior |
 | [CROQUI-NO-MAPA.md](CROQUI-NO-MAPA.md) | O croqui do ensaio no mapa, as parcelas livres e as ferramentas do mapa |
+| [SATELITES.md](SATELITES.md) | Landsat, SMAP e NASA FIRMS na seção Satélite; fontes, resolução e atualização do proxy |
 | [VER-NO-CAMPO.md](VER-NO-CAMPO.md) | A vista "Ver no campo": parcelas na grade e o tempo em DAA |
 | [CAMPO-VIVO-EXPORTAR.md](CAMPO-VIVO-EXPORTAR.md) | Exportar o Campo Vivo em PNG e MP4 |
 | [GALERIA-PARCELAS.md](GALERIA-PARCELAS.md) | A galeria de fotos das parcelas, guardada só no aparelho |
