@@ -28,7 +28,7 @@ app está no `README.md` da raiz.
 | [OBSERVACAO-E-EVENTOS.md](OBSERVACAO-E-EVENTOS.md) | Observação canônica, eventos formais, tabela EPPO e a trilha formal na ficha do estudo |
 | [RELEVO.md](RELEVO.md) | Como baixar o relevo do terreno (`tools/relevo-baixa.py`) |
 | [PLANEJAMENTO-EQUIVALENCIA-DOSE.md](PLANEJAMENTO-EQUIVALENCIA-DOSE.md) | Estatística: quantas repetições, equivalência e curva de dose |
-| [MODELOS-MISTOS-E-CONTROLE.md](MODELOS-MISTOS-E-CONTROLE.md) | Estatística: comparações contra a testemunha e modelos mistos |
+| [MODELOS-MISTOS-E-CONTROLE.md](MODELOS-MISTOS-E-CONTROLE.md) | Estatística: comparações contra a testemunha, tamanho do efeito, modelos mistos e interação tratamento × local |
 
 ## Revisões com data
 
