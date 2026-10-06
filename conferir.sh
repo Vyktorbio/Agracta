@@ -104,8 +104,15 @@ fi
 
 # ------------------------------------------------------------------ 2. testes
 titulo "2. Os testes passam?"
+# Os testes moram em tests/ e rodam DA RAIZ: e dela que leem app.js, vendor/ e o
+# resto pelo caminho relativo. Se aparecer um test_*.js solto na raiz, ele nao
+# roda calado: o portao reclama (ver logo abaixo).
+for t in test_*.js test_*.py; do
+  [ -f "$t" ] || continue
+  avisar "$t está na raiz — os testes moram em tests/. Mova com: git mv $t tests/"
+done
 if command -v node >/dev/null 2>&1; then
-  for t in test_*.js; do
+  for t in tests/test_*.js; do
     [ -f "$t" ] || continue
     if node "$t" >/tmp/agracta_teste.log 2>&1; then
       if grep -q "^PULADO" /tmp/agracta_teste.log; then pulado "$t"; else ok "$t"; fi
@@ -116,7 +123,7 @@ if command -v node >/dev/null 2>&1; then
   done
 fi
 if command -v python3 >/dev/null 2>&1; then
-  for t in test_*.py; do
+  for t in tests/test_*.py; do
     [ -f "$t" ] || continue
     if python3 "$t" >/tmp/agracta_teste.log 2>&1; then
       if grep -q "^PULADO" /tmp/agracta_teste.log; then pulado "$t"; else ok "$t"; fi
