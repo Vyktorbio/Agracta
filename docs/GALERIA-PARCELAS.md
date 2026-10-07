@@ -4,9 +4,19 @@ Disponível em Conhecimento → Estudos → abrir estudo → Fotos locais.
 
 ## Uso
 
-Escolha tratamento, repetição e data antes de fotografar ou importar. A identificação da parcela é opcional. Selecione e ordene as fotos, confira a prévia e baixe o PowerPoint de 4, 6 ou 8 imagens por slide. O último slide pode ter menos imagens. O ZIP conserva os originais e inclui as legendas em JSON.
+Escolha tratamento, repetição e data antes de fotografar ou importar. A identificação da parcela é opcional. Selecione as fotos, confira a prévia e baixe o PowerPoint de 4, 6 ou 8 imagens por slide. O último slide pode ter menos imagens. O ZIP conserva os originais e inclui as legendas em JSON.
 
 As fotos permanecem neste navegador, neste aparelho e nesta conta. Limpar os dados do navegador, usar uma janela temporária ou perder o aparelho pode apagar a galeria. O download não remove os registros; a exclusão exige uma ação explícita.
+
+## Ordem dos slides
+
+As fotos são tiradas andando pelo campo, na ordem sorteada das parcelas (101 = T3 R1, 102 = T1 R1…). Os slides não seguem essa ordem: seguem a do protocolo, que é como quem lê o relatório compara.
+
+1. Uma avaliação depois da outra (data; no mesmo dia, a ordem das avaliações do estudo: 1, 2, 4 e 24 HAT).
+2. Dentro de cada avaliação, T1 com todas as repetições, depois T2, T3… na ordem do cadastro de tratamentos (T10 depois de T9).
+3. Várias fotos da mesma parcela e data ficam juntas, na ordem em que foram guardadas. As setas trocam a ordem só entre elas (a vista geral antes do detalhe).
+
+Tratamento apagado do cadastro vai para o fim da avaliação, sem sumir. A grade da galeria, a prévia, o PowerPoint, o ZIP de originais (001_, 002_…) e as fotos do relatório Word/PDF usam a mesma ordem (FotosCore.ordemDosSlides, testada em tests/test_fotos_ordem_slides.js).
 
 ## Isolamento
 

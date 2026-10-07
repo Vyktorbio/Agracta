@@ -1,3 +1,77 @@
+AGRACTA — 28a publicacao                    07/10/2026
+=====================================================
+
+Leva: os slides das fotos na ordem T1, T2, T3...
+  CODIGO:  vendor/fotos-core.js  galeria-local.js  galeria-local.html
+           galeria-fotos.js  relatorio-local.js  relatorio-local.html
+           relatorio-estudo.js  index.html  sw.js
+  TESTE:   tests/test_fotos_ordem_slides.js (novo)
+           tests/test_fotos_locais.js (versao da galeria)
+  DOCS:    docs/GALERIA-PARCELAS.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "Agora os slides nao estao saindo certo. Era pra sair na
+ordem, t1, t2, t3... todas as repeticoes de t1, todas de t2...".
+
+O PowerPoint saia na ordem em que as fotos foram guardadas. As fotos em
+sequencia sao tiradas andando pelo campo, na ordem sorteada das parcelas
+(101 = T3 R1, 102 = T1 R1...), e os slides saiam nessa ordem. Nunca
+houve ordenacao por tratamento: a galeria dizia "a sequencia abaixo e a
+ordem dos slides", mas a sequencia era a da captura.
+
+1) A ORDEM DOS SLIDES E A DO PROTOCOLO
+
+  - uma avaliacao depois da outra (pela data; no mesmo dia, na ordem
+    das avaliacoes do estudo: 1, 2, 4 e 24 HAT);
+  - dentro de cada avaliacao: T1 com todas as repeticoes (R1, R2, R3,
+    R4), depois T2, T3... na ordem do cadastro de tratamentos (T10 vem
+    depois de T9, nao depois de T1);
+  - varias fotos da mesma parcela e data ficam juntas, na ordem em que
+    foram guardadas;
+  - tratamento apagado do cadastro vai para o fim da avaliacao: a foto
+    nao some.
+A grade da galeria, a previa, o PowerPoint e o ZIP de originais (001_,
+002_...) seguem a mesma ordem. Foto nova entra no lugar dela, nao no
+fim. Fica no motor puro (FotosCore.ordemDosSlides), com teste.
+
+2) AS SETAS
+
+As setas de mover so aparecem entre fotos da mesma parcela e data (a
+vista geral antes do detalhe, por exemplo). Entre tratamentos a ordem e
+a do protocolo: uma seta que pusesse T3 antes de T1 desfaria o pedido.
+A troca continua guardada no aparelho.
+
+3) O RELATORIO (WORD/PDF) TAMBEM
+
+"Incluir fotos locais deste estudo" no Relatorio completo punha as fotos
+na mesma ordem da captura. Agora usa a mesma ordem dos slides.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo com fotos tiradas em sequencia > Fotos > Slides e originais:
+   a grade mostra T1 (R1, R2...), depois T2, T3.
+3. Ver previa e Baixar PowerPoint: os slides na mesma ordem.
+4. Uma parcela com duas fotos na mesma data: as setas trocam as duas;
+   foto sozinha na parcela nao tem seta.
+5. As fotos ja guardadas nao mudam: so a ordem em que aparecem.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_fotos_ordem_slides.js (28 verificacoes, novo): fotos
+  tiradas na ordem do campo saem T1R1 T1R2 T2R1 T2R2 T3R1 T3R2 no motor,
+  na grade, na previa, no PowerPoint, no ZIP e no relatorio. Reprova o
+  codigo anterior: no motor (a ordem nao existia), na galeria (mesmo com
+  o motor novo) e no relatorio.
+
 AGRACTA — 27a publicacao                    07/10/2026
 =====================================================
 
