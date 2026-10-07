@@ -14,7 +14,7 @@
    ============================================================================ */
 (function(root){
   'use strict';
-  var VERSAO='1.1.0';
+  var VERSAO='1.2.0';
 
   function br(d){ return /^\d{4}-\d{2}-\d{2}$/.test(d||'')?(d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4)):''; }
   function chaveParcela(tratamento, rep){ return String(tratamento)+'R'+String(rep); }
@@ -119,6 +119,49 @@
     return partes.join(' · ');
   }
 
+  /* A ORDEM DOS SLIDES É A DO PROTOCOLO, NÃO A DO CAMPO.
+     Relato de uso: "era pra sair na ordem t1, t2, t3… todas as repetições de
+     t1, todas de t2". As fotos em sequência são tiradas andando pelo campo, na
+     ordem sorteada das parcelas (101 = T3 R1, 102 = T1 R1…), e os slides saíam
+     nessa ordem. Quem lê o relatório compara tratamentos. A ordem:
+       1. data da foto — uma avaliação depois da outra;
+       2. avaliação do mesmo dia, na ordem do estudo (1, 2, 4 e 24 HAT);
+       3. tratamento na ordem do protocolo (T10 depois de T9, não depois de T1);
+       4. repetição;
+       5. ordem em que a foto foi guardada — várias fotos da mesma parcela.
+     Tratamento ou avaliação que não existe mais no cadastro vai para o fim do
+     seu grupo, em ordem natural: a foto não some. Devolve uma cópia. */
+  function ordemDosSlides(fotos, ctx){
+    ctx=ctx||{};
+    var posT=Object.create(null), posA=Object.create(null);
+    (ctx.tratamentos||[]).forEach(function(t,i){ if(t&&t.id!=null&&!(String(t.id) in posT)) posT[String(t.id)]=i; });
+    (ctx.avaliacoes||[]).forEach(function(a,i){ if(a&&a.id!=null&&!(String(a.id) in posA)) posA[String(a.id)]=i; });
+    function natural(a,b){ return String(a).localeCompare(String(b),'pt-BR',{numeric:true,sensitivity:'base'}); }
+    function num(v){ var n=Number(v); return isFinite(n)?n:Infinity; }
+    function pos(tabela,chave){ return (chave in tabela)?tabela[chave]:Infinity; }
+    return (fotos||[]).filter(Boolean).slice().sort(function(a,b){
+      var da=a.date||'9999-99-99', db=b.date||'9999-99-99';
+      if(da!==db) return da<db?-1:1;
+      var aa=String(a.assessment||''), ab=String(b.assessment||''), pa=pos(posA,aa), pb=pos(posA,ab);
+      if(pa!==pb) return pa<pb?-1:1;
+      if(aa!==ab) return natural(aa,ab);
+      var ta=String(a.treatment), tb=String(b.treatment), qa=pos(posT,ta), qb=pos(posT,tb);
+      if(qa!==qb) return qa<qb?-1:1;
+      if(ta!==tb) return natural(ta,tb);
+      var ra=num(a.rep), rb=num(b.rep);
+      if(ra!==rb) return ra<rb?-1:1;
+      var oa=num(a.order), ob=num(b.order);
+      if(oa!==ob) return oa<ob?-1:1;
+      return String(a.id||'').localeCompare(String(b.id||''));
+    });
+  }
+  /* Mesma parcela e mesma leitura: entre essas fotos a pessoa ainda escolhe a
+     ordem (a vista geral antes do detalhe). Fora disso a ordem é a de cima. */
+  function mesmoGrupoDoSlide(a,b){
+    return !!(a&&b) && String(a.date||'')===String(b.date||'') && String(a.assessment||'')===String(b.assessment||'')
+      && String(a.treatment)===String(b.treatment) && Number(a.rep)===Number(b.rep);
+  }
+
   /* Nome de arquivo estável e legível para o ZIP de originais. */
   function nomeArquivo(f, i){
     var ext=f.type==='image/png'?'png':(f.type==='image/webp'?'webp':'jpg');
@@ -126,7 +169,8 @@
   }
 
   var API={VERSAO:VERSAO, chaveParcela:chaveParcela, novaFoto:novaFoto, contagem:contagem, daParcela:daParcela,
-    colunas:colunas, matriz:matriz, legenda:legenda, nomeArquivo:nomeArquivo, br:br};
+    colunas:colunas, matriz:matriz, legenda:legenda, nomeArquivo:nomeArquivo, br:br,
+    ordemDosSlides:ordemDosSlides, mesmoGrupoDoSlide:mesmoGrupoDoSlide};
   root.FotosCore=API;
   if(typeof module!=='undefined' && module.exports) module.exports=API;
 })(typeof window!=='undefined'?window:globalThis);
