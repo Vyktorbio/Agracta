@@ -1,3 +1,154 @@
+AGRACTA — 27a publicacao                    07/10/2026
+=====================================================
+
+Leva: o Agracta no iPhone.
+  CODIGO:  index.html  iphone.js (novo)  apple-touch-icon.png (novo)
+           app.js  mapa-medir.js  croqui-livre.js  protocolo-menu.js
+           estudo-pagina.js  styles.css  theme-2026.css  ui-campo.css
+           satelites.css  integracoes.css  estudo-pagina.css
+           croqui-parcelas.css  fotos-estudo.css  protocolo-avaliacoes.css
+           campo-3d.css  sw.js  conferir.sh
+  TESTE:   tests/test_iphone.js (novo)
+  DOCS:    README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "Estou no iPhone 18 Pro. Agora precisamos melhorar o
+agracta no iPhone tambem". Conferido num iPhone simulado no Chromium
+(402 x 874 pt, toque, as areas seguras do iOS, em pe e deitado) e contra
+o que o Safari do iOS 26/27 faz diferente, em relatos de quem testou em
+aparelho com iOS 27.
+
+1) A TELA INTEIRA, COM AS AREAS SEGURAS VALENDO
+
+Faltava viewport-fit=cover no index.html. Sem ele o iPhone encolhe a
+pagina para a area segura e devolve 0 nas medidas da ilha e do
+indicador: as dezenas de regras que o app ja tinha para afastar a barra
+de baixo do indicador nao valiam nada. Agora:
+  - a barra de baixo vai ate a borda e os botoes ficam acima do
+    indicador;
+  - em pe, a pagina continua comecando abaixo da barra de status (estilo
+    "default", o certo no iOS 26+: o "black-translucent" faz o vidro do
+    sistema borrar o topo do app);
+  - deitado, a ilha fica num dos lados: o clima, as gavetas, a ficha do
+    estudo, Hoje, Conhecimento, Ver no campo, fotos, relatorio, croqui
+    das parcelas, menu do protocolo, Medicao e os cantos do mapa saem de
+    baixo dela;
+  - paineis que flutuam acima da barra de baixo (Medicao, croqui,
+    Planejar parcelas, notas no mapa, legenda do mapa de solos, clima)
+    somam o indicador: com a barra maior eles cobririam os botoes dela.
+    O teste reprova regra nova com distancia fixa do chao sem a area
+    segura;
+  - o clima do topo somava a area segura de cima duas vezes.
+
+2) TOCAR NUM CAMPO NAO AMPLIA MAIS A TELA
+
+O Safari amplia a tela sozinho quando o campo tem letra menor que 16px
+-- e quase todos tem: login (15px), busca, estudo, avaliacao,
+observacao, clima, calculadora (12,5 a 15px). A tela ficava ampliada
+depois. Agora, so no iPhone/iPad, um limite de escala tira esse zoom
+automatico; ampliar com dois dedos continua funcionando (o iOS ignora o
+limite para o gesto da pessoa). No Android nada muda: la o mesmo limite
+tiraria a pinca, por isso ele nao esta escrito no HTML.
+
+3) NUMERO COM VIRGULA
+
+No iPhone em portugues o teclado decimal tem virgula, e o campo
+type="number" do Safari a trata diferente conforme a versao: a virgula
+nao entra (relatado no iOS 26.1) ou vira ponto (26.2 em diante). Os
+campos decimais passam a ser texto com teclado decimal, como os mais
+novos do app ja eram:
+  - croqui (carreador, entre parcelas), area da quadra, calculadora
+    (comprimento, largura, volume de calda, volume morto, capacidade do
+    frasco), calibracao (barra e bicos), janela de aplicacao, parcela e
+    volumes do estudo, laudo de solo, produtividade, Medir no mapa e
+    parcelas livres;
+  - tres leitores nao entendiam a virgula e passam a entender: area da
+    quadra (parseFloat("0,35") dava 0 e a area sumia), laudo de solo e
+    produtividade (Number("5,2") dava NaN). Os outros ja liam "2,5";
+  - campos de numero inteiro (repeticoes, aplicacoes, dias, frascos,
+    parcelas, N avaliados, escala) abrem o teclado de algarismos.
+
+4) O ICONE DA TELA DE INICIO
+
+O iPhone nao aceita transparencia no icone: pinta de preto. O icon-192 e
+transparente e virava traco cinza num quadrado preto. Agora o iPhone usa
+o apple-touch-icon.png: 180 x 180, opaco, no fundo do app.
+
+5) A BARRA "SALVAR AVALIACAO" FICA NA TELA
+
+Na avaliacao, no estudo e na aplicacao, a barra de Salvar/Cancelar
+grudava com distancia negativa e ficava pendurada abaixo da tela
+enquanto se rolava: o botao aparecia cortado embaixo, em qualquer
+celular. Com a tela inteira ela cairia em cima do indicador. Agora gruda
+rente na borda, com os botoes acima do indicador, rolando ou no fim.
+
+6) A PAGINA QUE O iOS ESQUECE DESLOCADA (iphone.js, novo)
+
+Depois do teclado -- e no iOS 27, depois de girar o aparelho com o app
+instalado -- o iOS as vezes deixa a pagina rolada (pela altura da barra
+de status, no caso do giro). Nada parece errado, mas o toque cai
+deslocado e os botoes perto do topo e da barra de baixo "nao pegam". O
+html e o body do Agracta nao rolam, entao a pagina volta para o lugar --
+nunca enquanto alguem digita, com o teclado aberto ou com a tela
+ampliada a dois dedos. So liga no iPhone/iPad.
+
+7) INSTALAR NO IPHONE
+
+O passo a passo (Menu > Preferencias > Instalar o app) era do Safari
+antigo. No iOS 26 o Compartilhar fica atras do ••• ao lado do endereco,
+e aparece "Abrir como App Web". E o motivo de instalar e de DADOS: no
+Safari, o iPhone pode apagar o que um site guardou no aparelho depois de
+7 dias sem uso; o app da Tela de Inicio fica fora dessa limpeza. O texto
+avisa que o app instalado guarda os dados separado do Safari: entra-se
+de novo, e as fotos guardadas so no aparelho ficam no Safari.
+
+8) OUTROS ACERTOS QUE APARECERAM NO CAMINHO
+  - a sombra das gavetas fechadas (Mapa e Menu) aparecia como uma faixa
+    cinza na borda direita de todas as telas. Fechadas, agora nao
+    pintam nada;
+  - o croqui das parcelas e as avaliacoes do protocolo abriam grudados no
+    canto de cima, a esquerda (o reset de margem do styles.css anulava a
+    centralizacao do navegador). Abrem no centro;
+  - a agenda da tela larga (iPhone deitado, iPad em pe) descia por tras
+    da faixa de navegacao. Termina acima dela;
+  - deitar o aparelho nao aumenta mais o texto sozinho; data e hora
+    alinham como os outros campos; rolar ate o fim de uma tela cheia nao
+    arrasta o app.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. No iPhone: abrir o Agracta (duas vezes, para a versao nova entrar).
+2. A barra de baixo vai ate a borda, com os botoes acima da linha do
+   indicador. Ferramentas do mapa > Medir: o painel nao cobre a barra.
+3. Tocar num campo (busca, avaliacao): a tela nao amplia.
+4. Calculadora ou Medir: digitar 2,5 no comprimento -- a virgula entra.
+5. Abrir uma avaliacao e rolar: "Salvar avaliacao" inteiro, acima do
+   indicador.
+6. Deitar o iPhone: nada fica embaixo da ilha. Girar de volta e tocar
+   perto do topo e da barra de baixo.
+7. O ICONE NOVO E PARA QUEM INSTALAR DAQUI EM DIANTE: o iPhone le o
+   icone quando o app e adicionado a Tela de Inicio. Quem ja tem o
+   Agracta instalado continua com o icone antigo. NAO apague o app so
+   por causa do icone: apagar o app da Tela de Inicio apaga os dados
+   guardados nele, inclusive as fotos que so existem no aparelho.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_iphone.js (109 verificacoes, novo): reprova o codigo
+  anterior logo na primeira (o viewport sem viewport-fit=cover).
+  No navegador (Chromium, 402 x 874, toque, areas seguras do iOS, em pe
+  e deitado): 24 telas rolando ate o fim, nenhum botao embaixo do
+  indicador ou da ilha, nenhum painel por cima da barra de baixo.
+
+
 AGRACTA — 26a publicacao                    06/10/2026
 =====================================================
 

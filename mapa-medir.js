@@ -499,7 +499,7 @@
 
     var p = d.createElement('div');
     p.id = 'medirPanel'; p.className = 'croqui-panel';
-    function campo(k, rot, passo) { return '<div><label>' + rot + '</label><input type="number" inputmode="decimal" min="0" step="' + passo + '" data-medir="' + k + '" value="' + esc(cfg[k]) + '"></div>'; }
+    function campo(k, rot, passo) { return '<div><label>' + rot + '</label><input type="text" inputmode="decimal" data-medir="' + k + '" value="' + esc(cfg[k]) + '"></div>'; }
     p.innerHTML = '<div class="croqui-head"><div class="croqui-title">Medir área</div><button type="button" class="croqui-toggle" data-medir-acao="recolher">Recolher</button><button class="croqui-x" data-medir-acao="fechar" aria-label="Fechar">×</button></div>' +
       '<div class="croqui-sub">Só para planejar: <b>nada é salvo</b>.</div>' +
       '<div class="croqui-seg"><button type="button" data-medir-modo="grade" class="on">Grade</button><button type="button" data-medir-modo="livre">Tocar no mapa</button></div>' +

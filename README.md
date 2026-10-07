@@ -44,6 +44,7 @@ nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 | Ver no campo (sob demanda) | `campo-3d.js` / `campo-3d.css` · `campo-3d-exportar.js` e `campo-3d-realista.js` (PNG e MP4). Não estão no `index.html`: entram no primeiro uso |
 | Clima | `clima-pagina.js` / `clima-pagina.css` |
 | Estatística | `estatistica.js` (núcleo em JS) · `estatistica/` (motor em Python rodando no navegador pelo Pyodide, com service worker próprio; o código Python fica em `estatistica/bioengine/`) |
+| iPhone | `iphone.js` (devolve a página ao lugar quando o iOS a deixa deslocada: teclado, girar no iOS 27) · o ajuste anti-zoom só do iOS fica no `<head>` do `index.html`, logo depois do viewport |
 
 ### Páginas separadas
 
@@ -75,11 +76,20 @@ do `index.html`: `theme-2026.css` (camada visual de campo), `ui-campo.css`,
 são de uma tela só (`integracoes.css`, `estudo-pagina.css`, `clima-pagina.css`,
 `fotos-estudo.css`, `croqui-parcelas.css`, `protocolo-*.css`, `campo-3d.css`).
 
+**Áreas seguras do iPhone.** O `index.html` pede `viewport-fit=cover`: a página vai
+até as bordas e `env(safe-area-inset-*)` diz quanto a ilha e o indicador ocupam.
+Tudo que encosta numa borda soma essa medida — inclusive painel que flutua acima
+da barra de baixo (`bottom: calc(80px + env(safe-area-inset-bottom, 0px))`), porque
+a barra cresce com o indicador. O `tests/test_iphone.js` reprova regra fixa com
+distância do chão em px sem a área segura. Campo decimal é `type="text"` com
+`inputmode="decimal"` (o `type="number"` do Safari trata a vírgula diferente a
+cada versão do iOS); campo inteiro é `type="number"` com `inputmode="numeric"`.
+
 ### Fora da tela
 
 | O quê | Onde |
 |---|---|
-| PWA (instalável e offline) | `manifest.webmanifest`, `sw.js`, `icon-*.png` |
+| PWA (instalável e offline) | `manifest.webmanifest`, `sw.js`, `icon-*.png`, `apple-touch-icon.png` (o do iPhone: opaco, 180 × 180 — transparência ele pinta de preto) |
 | Proxy de satélite, clima e solo (Python, roda no Render) | `ndvi-proxy.py`, `render.yaml`, `requirements.txt` |
 | Regras e configuração do banco | `firestore.rules`, `firestore.indexes.json`, `firebase.json`, `.firebaserc` |
 | Dados embarcados (Agrofit, EPPO) | `data/` |

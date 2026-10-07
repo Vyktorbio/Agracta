@@ -2,31 +2,31 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v363';
+var CACHE = 'agracta-app-v364';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './agroapi.css?v=2', './vendor/agroapi-core.js?v=1', './agroapi.js?v=2',
-  './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=3', './protocolo-menu.js?v=3', './protocolo-avaliacoes.css?v=1',
+  './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=3', './protocolo-menu.js?v=4', './protocolo-avaliacoes.css?v=2',
   './interface-neutra.css?v=4', './clima-pagina.css?v=4', './clima-pagina.js?v=4',
   './relatorio-estudo.js?v=1', './relatorio-local.html', './relatorio-local.js?v=2', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=3', './vendor/relatorio-docx.js?v=1',
-  './galeria-fotos.js?v=8', './fotos-estudo.js?v=3', './fotos-estudo.css?v=3', './vendor/fotos-core.js?v=2', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=8', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
-  './croqui-parcelas.js?v=7', './mapa-medir.js?v=4', './notas-local.js?v=4', './croqui-livre.js?v=2', './mapa-inicio.js?v=2', './cores-padrao.css?v=1', './croqui-parcelas.css?v=3',
+  './galeria-fotos.js?v=8', './fotos-estudo.js?v=3', './fotos-estudo.css?v=4', './vendor/fotos-core.js?v=2', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=8', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
+  './croqui-parcelas.js?v=7', './mapa-medir.js?v=5', './notas-local.js?v=4', './croqui-livre.js?v=3', './mapa-inicio.js?v=2', './cores-padrao.css?v=1', './croqui-parcelas.css?v=4',
   './profundidade.css?v=2',
-  './estudo-pagina.js?v=25', './estudo-pagina.css?v=9',
+  './estudo-pagina.js?v=26', './estudo-pagina.css?v=10',
   /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem
      arquivos da lista. */
-  './campo-3d.js?v=16', './campo-3d.css?v=9', './campo-3d-exportar.js?v=6', './vendor/mp4-muxer.js?v=1', './campo-3d-realista.js?v=5', './vendor/three-agracta.min.js?v=1',
+  './campo-3d.js?v=16', './campo-3d.css?v=10', './campo-3d-exportar.js?v=6', './vendor/mp4-muxer.js?v=1', './campo-3d-realista.js?v=5', './vendor/three-agracta.min.js?v=1',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=3',
   './', './index.html',
-  './integracoes.css?v=4', './integracoes.js?v=17', './integracoes-fontes.js?v=2', './integracoes-clientes.js?v=2',
+  './integracoes.css?v=5', './integracoes.js?v=17', './integracoes-fontes.js?v=2', './integracoes-clientes.js?v=2',
   './vendor/avaliacao-core.js?v=3', './vendor/pendencias-core.js?v=1', './vendor/agenda-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=4', './vendor/croqui-campo-core.js?v=4', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=2',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=39', './theme-2026.css?v=10', './ui-campo.css?v=12', './app.js?v=218',
-  './satelites.css?v=2', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
+  './styles.css?v=40', './theme-2026.css?v=11', './ui-campo.css?v=13', './app.js?v=219',
+  './satelites.css?v=3', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=3', './trilha-formal.js?v=2',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
   './vendor/leaflet.js', './vendor/leaflet.css',
@@ -36,7 +36,7 @@ var ASSETS = [
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=28',
   './acesso-horario.js?v=4', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
-  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
+  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js', './croqui.html', './prancha.html',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
