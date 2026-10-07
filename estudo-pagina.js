@@ -374,7 +374,7 @@ function render(s,parts){
   if(campoCarregando)return campoCarregando;
   campoCarregando=new Promise(function(ok,falha){
    if(!document.querySelector('link[data-ag="campo-3d"]')){
-    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=9';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='campo-3d.css?v=10';
     css.dataset.ag='campo-3d';document.head.appendChild(css);
    }
    var js=document.createElement('script');js.src='campo-3d.js?v=16';
