@@ -84,11 +84,11 @@
   function estilo() {
     if (d.getElementById('protoMenuCss')) return;
     var s = d.createElement('style'); s.id = 'protoMenuCss';
-    s.textContent = '#protoMenu{position:fixed;inset:0;margin:auto;height:fit-content;border:0;padding:0;max-width:min(760px,100vw);width:100%;max-height:100dvh;background:var(--surface,#fff);color:var(--text,#1d2723);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.45)}' +
+    s.textContent = '#protoMenu{position:fixed;inset:0;margin:auto;height:fit-content;border:0;padding:0;max-width:min(760px,calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));width:100%;max-height:100dvh;background:var(--surface,#fff);color:var(--text,#1d2723);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.45)}' +
       '#protoMenu::backdrop{background:rgba(10,14,12,.55)}' +
       '.pm-head{position:sticky;top:0;z-index:2;display:flex;align-items:flex-start;gap:10px;padding:16px 18px 12px;background:var(--surface,#fff);border-bottom:1px solid var(--border,#dce2de)}' +
       '.pm-head h2{margin:0;font-size:19px}.pm-head p{margin:3px 0 0;font-size:12px;color:var(--text-2,#55615b)}.pm-x{margin-left:auto;border:0;background:transparent;font-size:24px;line-height:1;cursor:pointer;color:inherit;padding:2px 6px}' +
-      '.pm-body{padding:12px 18px 20px;display:grid;gap:12px}' +
+      '.pm-body{padding:12px 18px calc(20px + env(safe-area-inset-bottom,0px));display:grid;gap:12px}' +
       '.pm-chip{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:middle}' +
       '.pm-ok{background:var(--ag-ok-bg,rgba(22,163,74,.1));color:var(--ag-ok,#16a34a)}.pm-warn{background:var(--ag-warn-bg,rgba(217,119,6,.1));color:var(--ag-warn,#d97706)}.pm-err{background:var(--ag-err-bg,rgba(220,38,38,.08));color:var(--ag-err,#dc2626)}' +
       '.pm-falta{border:1px solid var(--ag-warn-line,rgba(217,119,6,.3));background:var(--ag-warn-bg,rgba(217,119,6,.06));border-radius:12px;padding:10px 12px;font-size:13px}' +

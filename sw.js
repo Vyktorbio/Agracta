@@ -36,7 +36,7 @@ var ASSETS = [
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=28',
   './acesso-horario.js?v=4', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
-  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3',
+  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js', './croqui.html', './prancha.html',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */

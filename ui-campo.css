@@ -45,6 +45,24 @@
 }
 .ag-drawer.on{transform:none}
 
+/* FECHADA, A GAVETA SAI DE CENA DE VERDADE.
+   Fechada ela só andava 102% para a direita, e a sombra larga que a
+   profundidade.css lhe dá (até 65px para a esquerda) continuava sendo pintada
+   dentro da tela: uma faixa cinza na borda direita de todas as telas, dobrada
+   porque são duas gavetas (Mapa e Menu). Escondida por visibilidade ela também
+   para de ser lida pelo VoiceOver e de entrar no Tab, e o Safari do iPhone deixa
+   de pintar o desfoque dela por cima do mapa a cada quadro. A visibilidade só
+   troca no fim do deslize, para a gaveta não sumir no meio do caminho. */
+.ag-drawer{visibility:hidden;transition:transform .26s cubic-bezier(.22,.9,.28,1),visibility 0s linear .26s}
+.ag-drawer.on{visibility:visible;transition:transform .26s cubic-bezier(.22,.9,.28,1),visibility 0s}
+.ag-drawer-bg{visibility:hidden;transition:opacity .2s ease,visibility 0s linear .2s}
+.ag-drawer-bg.on{visibility:visible;transition:opacity .2s ease,visibility 0s}
+
+/* iPhone deitado: a ilha fica num dos lados e o iOS reserva 62 pt dos dois.
+   A gaveta encosta na borda direita; o conteúdo dela não pode ficar embaixo da
+   ilha. Em pé (e fora do iPhone) env() vale 0 e nada muda. */
+.ag-drawer{padding-right:env(safe-area-inset-right,0px);box-sizing:border-box}
+
 .ag-dw-head{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:calc(16px + env(safe-area-inset-top)) 18px 12px;
@@ -121,10 +139,14 @@
   box-shadow:0 18px 50px rgba(12,35,20,.22),0 4px 13px rgba(12,35,20,.10);
   font-family:var(--ag-font,system-ui);
   transform:translateY(14px) scale(.97);opacity:0;
-  transition:transform .24s cubic-bezier(.22,.9,.28,1),opacity .18s ease;
+  /* invisível também por visibilidade: transparente, o Safari 26 ainda a lia
+     para tingir a barra dele e pintava o desfoque por cima do mapa */
+  visibility:hidden;
+  transition:transform .24s cubic-bezier(.22,.9,.28,1),opacity .18s ease,visibility 0s linear .24s;
   pointer-events:none
 }
-.ag-ndvibar.on{transform:none;opacity:1;pointer-events:auto}
+.ag-ndvibar.on{transform:none;opacity:1;pointer-events:auto;visibility:visible;
+  transition:transform .24s cubic-bezier(.22,.9,.28,1),opacity .18s ease,visibility 0s}
 @media(min-width:721px){
   .ag-ndvibar{left:50%;right:auto;transform:translateX(-50%) translateY(14px) scale(.97);width:min(620px,calc(100vw - 24px))}
   .ag-ndvibar.on{transform:translateX(-50%)}
@@ -262,7 +284,10 @@ body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{d
 .top-bar{
   position:absolute!important;top:0;left:0;right:0;z-index:60;
   background:none!important;border:none!important;box-shadow:none!important;
-  padding:calc(8px + env(safe-area-inset-top)) 12px 0!important;min-height:0!important;
+  /* As áreas seguras entram AQUI, uma vez: em cima (barra de status quando a
+     página corre por baixo dela) e dos lados (a ilha do iPhone deitado). O
+     mostrador do clima mora dentro desta moldura e não soma outra vez. */
+  padding:calc(8px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) 0 calc(12px + env(safe-area-inset-left,0px))!important;min-height:0!important;
   pointer-events:none!important;
 }
 .tb-brand{
@@ -281,7 +306,10 @@ body.map-full .ag-ndvibar,body.map-full .ag-drawer,body.map-full .ag-drawer-bg{d
 html body .clima-chip{
   pointer-events:auto!important;
   position:absolute!important;
-  top:calc(5px + env(safe-area-inset-top,0px))!important;left:11px!important;right:auto!important;
+  /* 5px abaixo da moldura (.top-bar), que já desceu a área segura de cima.
+     Somar env() de novo aqui empurrava o clima para 137px num aparelho com
+     62px de área segura: o dobro. */
+  top:5px!important;left:11px!important;right:auto!important;
   display:inline-flex!important;align-items:baseline!important;gap:5px!important;
   margin:0!important;padding:0!important;border:0!important;border-radius:0!important;
   background:none!important;box-shadow:none!important;
@@ -637,3 +665,18 @@ html:not(.light) .top-bar{
 @media(max-width:720px){
   body:has(#cloudBadge[style*="display: block"]) .agenda-panel{padding-bottom:66px!important}
 }
+
+/* ==========================================================================
+   iPhone: o que só o Safari do iOS faz (o @supports abaixo só vale lá)
+   ========================================================================== */
+@supports (-webkit-touch-callout:none){
+  /* Data e hora: o iOS centraliza o valor e não deixa o campo encolher numa
+     grade estreita (ele vaza para o lado). Alinhado como os outros campos, com
+     altura de toque mesmo vazio (campo de data vazio no iOS não tem altura). */
+  input[type=date],input[type=time],input[type=datetime-local],input[type=month]{min-width:0;min-height:44px}
+  input::-webkit-date-and-time-value{text-align:left}
+}
+/* Rolar até o fim de uma tela cheia não arrasta o app nem o mapa de trás
+   (o "elástico" do iPhone). O formulário do estudo (.se-overlay) já fazia isso. */
+.sd-overlay,.today-overlay,.con-overlay,.c3-overlay,.ag-dw-body{overscroll-behavior:contain}
+

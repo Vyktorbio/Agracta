@@ -2,7 +2,17 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- viewport-fit=cover: sem ele o iPhone encolhe a página para a área segura e
+     devolve 0 em env(safe-area-inset-*) — as dezenas de regras que afastam a
+     barra de baixo do indicador e o conteúdo da ilha não valiam nada. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- iPhone/iPad: o Safari amplia a tela sozinho ao tocar num campo com letra
+     menor que 16px, e ela fica ampliada depois. maximum-scale=1 tira esse zoom
+     automático; o iOS continua deixando ampliar com dois dedos (ele ignora o
+     limite para o gesto da pessoa). Só no iOS: no Android o mesmo limite
+     bloquearia a pinça, por isso não está escrito no meta acima. A classe ios
+     no <html> fica para a regra de CSS que só deva valer no iPhone/iPad. -->
+<script>(function(){try{var n=navigator,ios=/iP(hone|od|ad)/.test(n.userAgent||'')||(n.platform==='MacIntel'&&n.maxTouchPoints>1);if(!ios)return;document.documentElement.classList.add('ios');var m=document.querySelector('meta[name="viewport"]');if(m&&!/maximum-scale/.test(m.content))m.content+=', maximum-scale=1';}catch(e){}})();</script>
 <title>Agracta</title>
 <link rel="stylesheet" href="styles.css?v=39">
 <link rel="stylesheet" href="integracoes.css?v=4">
@@ -37,7 +47,10 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=3">
-<link rel="apple-touch-icon" href="icon-192.png?v=3">
+<!-- O iPhone não aceita transparência no ícone da Tela de Início: pinta de preto.
+     O icon-192 é transparente e virava traço cinza num quadrado preto. Este é
+     opaco, no fundo do app, no tamanho que o iPhone usa (180). -->
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=363').catch(function(){});});}</script>
 <link rel="stylesheet" href="interface-neutra.css?v=4">
 <link rel="stylesheet" href="clima-pagina.css?v=4">
@@ -208,5 +221,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="clima-pagina.js?v=4"></script>
 <script src="vendor/agroapi-core.js?v=1"></script>
 <script src="agroapi.js?v=2"></script>
+<!-- iPhone: devolve a página ao lugar quando o iOS a deixa deslocada (teclado, girar). -->
+<script src="iphone.js?v=1"></script>
 </body>
 </html>
