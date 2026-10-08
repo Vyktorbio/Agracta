@@ -18,6 +18,9 @@
  *  4. O relatório (Word/PDF) com fotos usa a mesma ordem.
  *  5. As páginas carregam o motor antes de usá-lo, com as versões que o sw.js
  *     guarda para abrir sem rede.
+ *  6. A tela dos slides tem a escolha "Ordem dos slides": T1, T2, T3… (o
+ *     padrão, para qualquer foto, tirada em sequência ou não) ou na ordem em
+ *     que tirei, com as setas livres. A escolha fica lembrada no aparelho.
  *
  * Rodar: node tests/test_fotos_ordem_slides.js
  */
@@ -180,6 +183,61 @@ ok(rel.indexOf('vendor/fotos-core.js?v='+vCore+'"')>=0&&rel.indexOf('vendor/foto
 ok(sw.indexOf("'./relatorio-local.js?v="+vRel+"'")>=0,'e o sw.js guarda a versão do relatório (v='+vRel+')');
 const pontes=[['galeria-fotos.js',/frame\.src='galeria-local\.html\?v=(\d+)'/],['relatorio-estudo.js',/frame\.src='relatorio-local\.html\?v=(\d+)'/]];
 ok(pontes.every(([f,re])=>re.test(fs.readFileSync(f,'utf8'))),'as pontes abrem as páginas com ?v= (o iPhone não reaproveita a página velha)');
+
+/* ------------------------------------------------------------------ 6 --- */
+console.log('\n--- 6. A escolha na tela dos slides: T1, T2, T3… ou na ordem em que tirei ---');
+/* Relato de uso, depois da correção: "se eu não tirar em sequência elas saem
+   na ordem que tirei. Poderia ter uma opção de colocar em sequência na tela de
+   fazer slides". A ordem por tratamento vale para qualquer foto; a tela dos
+   slides não dizia isso. Agora a escolha fica nela, ao lado de "Fotos por slide". */
+{
+async function abrir(dono,lembrado){
+  const g=new JSDOM(fs.readFileSync('galeria-local.html','utf8'),{url:'https://agracta.test/galeria-local.html',runScripts:'outside-only'}),gw=g.window,gd=gw.document,out={};let k=0;
+  gw.indexedDB=indexedDB;gw.FotosStore=Store;gw.FotosCore=Core;gw.Blob=Blob;gw.TextEncoder=TextEncoder;gw.Uint8Array=Uint8Array;
+  gw.FotosPptx=Object.assign({},Pptx,{build:(entries,per,meta)=>{out.slides=Array.from(entries,e=>e.label.split(' · ')[0]+'R'+e.detail.split(' · ')[1].slice(1));return Pptx.build(entries,per,meta);}});
+  gw.URL.createObjectURL=()=>'blob:o-'+(++k);gw.URL.revokeObjectURL=()=>{};gw.HTMLAnchorElement.prototype.click=function(){};gw.HTMLElement.prototype.scrollIntoView=function(){};
+  gw.HTMLCanvasElement.prototype.getContext=()=>({fillRect(){},drawImage(){}});gw.HTMLCanvasElement.prototype.toBlob=function(cb){cb(new Blob(['jpeg'],{type:'image/jpeg'}));};
+  gw.Image=class{constructor(){this.naturalWidth=1200;this.naturalHeight=900;}set src(v){setTimeout(()=>this.onload(),0);}};
+  if(lembrado)gw.localStorage.setItem('agracta-fotos-ordem-slides',lembrado);
+  gw.eval(fs.readFileSync('galeria-local.js','utf8'));
+  gw.dispatchEvent(new gw.MessageEvent('message',{origin:'https://agracta.test',source:gw,data:{type:'agracta:fotos-local-context',context:Object.assign({},context,{owner:dono,initial:{slides:true}})}}));
+  await tick();await tick();
+  return {g,gw,gd,out,grade:()=>Array.from(gd.querySelectorAll('.photo'),el=>el.dataset.id)};
+}
+/* tiradas uma a uma, sem a sequência, numa ordem qualquer */
+const avulsas=Store.create(indexedDB,JSON.stringify(['avulsa-user','Q','S']));
+await avulsas.put([linha('x1','T2',2,'201','2026-10-08','A1',0),linha('x2','T3',1,'101','2026-10-08','A1',1),linha('x3','T1',2,'203','2026-10-08','A1',2),linha('x4','T1',1,'102','2026-10-08','A1',3)]);
+let G=await abrir('avulsa-user');
+const sel=G.gd.querySelector('.export #slide-order');
+ok(sel&&sel.closest('label').textContent.startsWith('Ordem dos slides')&&G.gd.querySelector('.export #per-slide'),'a tela dos slides ("Montar apresentação") tem "Ordem dos slides", ao lado de "Fotos por slide"');
+ok(sel.value==='tratamento'&&/T1, T2, T3/.test(sel.selectedOptions[0].textContent),'começa em T1, T2, T3… (todas as repetições de cada)');
+assert.deepEqual(G.grade(),['x4','x3','x1','x2']);
+ok(true,'fotos tiradas sem a sequência, numa ordem qualquer, também saem T1R1 T1R2 T2R2 T3R1');
+ok(/T1 com todas as repetições/.test(G.gd.getElementById('order-hint').textContent),'o aviso da galeria diz a ordem escolhida');
+
+sel.value='captura';sel.dispatchEvent(new G.gw.Event('change'));await tick();
+assert.deepEqual(G.grade(),['x1','x2','x3','x4']);
+ok(true,'"Na ordem em que tirei": a grade volta à ordem em que foram tiradas');
+ok(/ordem em que as fotos foram tiradas/.test(G.gd.getElementById('order-hint').textContent),'e o aviso muda junto');
+const setas=id=>Array.from(G.gd.querySelectorAll('.photo[data-id="'+id+'"] [data-move]'),b=>b.dataset.move).join();
+ok(setas('x1')==='1'&&setas('x2')==='-1,1'&&setas('x4')==='-1','nesse modo as setas mudam qualquer foto de lugar, como antes');
+G.gd.querySelector('.photo[data-id="x3"] [data-move="1"]').click();await tick();await tick();
+assert.deepEqual(G.grade(),['x1','x2','x4','x3']);
+G.gd.getElementById('per-slide').value='1';G.gd.getElementById('pptx').click();for(let i=0;i<8;i++)await tick();
+assert.deepEqual(G.out.slides,['T2R2','T3R1','T1R1','T1R2']);
+ok(true,'o PowerPoint sai na ordem escolhida (a troca com a seta vale)');
+ok(G.gw.localStorage.getItem('agracta-fotos-ordem-slides')==='captura','a escolha fica lembrada neste aparelho');
+sel.value='tratamento';sel.dispatchEvent(new G.gw.Event('change'));await tick();
+ok(G.grade().join()==='x4,x3,x1,x2'&&!G.gd.querySelector('.photo [data-move]'),'voltar para T1, T2, T3… reordena de novo; sem fotos repetidas na parcela, sem setas');
+G.g.window.close();
+
+G=await abrir('avulsa-user','captura');
+ok(G.gd.getElementById('slide-order').value==='captura'&&G.grade().join()==='x1,x2,x4,x3','reabrir a galeria com "Na ordem em que tirei" lembrado abre nela');
+G.g.window.close();
+G=await abrir('avulsa-user','qualquer-coisa');
+ok(G.gd.getElementById('slide-order').value==='tratamento','valor estranho guardado não vale: fica T1, T2, T3…');
+G.g.window.close();
+}
 
 console.log('\n'+n+' verificações, todas certas.');
 })().catch(e=>{ console.error('FALHA '+e.message); process.exit(1); });

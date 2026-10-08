@@ -10,13 +10,15 @@ As fotos permanecem neste navegador, neste aparelho e nesta conta. Limpar os dad
 
 ## Ordem dos slides
 
-As fotos são tiradas andando pelo campo, na ordem sorteada das parcelas (101 = T3 R1, 102 = T1 R1…). Os slides não seguem essa ordem: seguem a do protocolo, que é como quem lê o relatório compara.
+A escolha fica na tela dos slides (Montar apresentação → Ordem dos slides) e começa em **T1, T2, T3… (todas as repetições de cada)**, para qualquer foto: tirada em sequência, uma a uma ou importada. As fotos em sequência são tiradas andando pelo campo, na ordem sorteada das parcelas (101 = T3 R1, 102 = T1 R1…); os slides não seguem essa ordem, seguem a do protocolo, que é como quem lê o relatório compara.
 
 1. Uma avaliação depois da outra (data; no mesmo dia, a ordem das avaliações do estudo: 1, 2, 4 e 24 HAT).
 2. Dentro de cada avaliação, T1 com todas as repetições, depois T2, T3… na ordem do cadastro de tratamentos (T10 depois de T9).
 3. Várias fotos da mesma parcela e data ficam juntas, na ordem em que foram guardadas. As setas trocam a ordem só entre elas (a vista geral antes do detalhe).
 
-Tratamento apagado do cadastro vai para o fim da avaliação, sem sumir. A grade da galeria, a prévia, o PowerPoint, o ZIP de originais (001_, 002_…) e as fotos do relatório Word/PDF usam a mesma ordem (FotosCore.ordemDosSlides, testada em tests/test_fotos_ordem_slides.js).
+**Na ordem em que tirei** volta à ordem guardada, e as setas mudam qualquer foto de lugar. A escolha fica lembrada neste aparelho; o relatório Word/PDF usa sempre T1, T2, T3…
+
+Tratamento apagado do cadastro vai para o fim da avaliação, sem sumir. A grade da galeria, a prévia, o PowerPoint e o ZIP de originais (001_, 002_…) seguem a ordem escolhida (FotosCore.ordemDosSlides, testada em tests/test_fotos_ordem_slides.js).
 
 ## Isolamento
 
