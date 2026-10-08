@@ -18,15 +18,18 @@ function url(blob){const u=URL.createObjectURL(blob);urls.push(u);return u;}
 function treatment(id){return context.tratamentos.find(t=>t.id===id);}
 function label(photo){const t=treatment(photo.treatment);return String(photo.treatment)+' · '+(t?t.produto:'Tratamento não disponível no cadastro atual')+(t&&t.dose?' · '+t.dose:'');}
 function detail(photo){return [photo.plot||photo.treatment+'R'+photo.rep,'R'+photo.rep,br(photo.date)].join(' · ');}
-/* A sequência da galeria é a ordem dos slides, e ela é a do protocolo: por
-   avaliação, T1 com todas as repetições, depois T2… (FotosCore.ordemDosSlides).
-   Era a ordem de captura — e as fotos em sequência são tiradas na ordem sorteada
-   do campo, então os slides saíam embaralhados. As setas só trocam fotos da
-   mesma parcela e leitura. Sem o motor (não carregou), volta a ordem de captura
-   e as setas trocam com a vizinha, como antes. */
+/* A sequência da galeria é a ordem dos slides. A escolha fica na tela dos
+   slides ("Ordem dos slides"), e começa na do protocolo: por avaliação, T1 com
+   todas as repetições, depois T2… (FotosCore.ordemDosSlides) — tirada em
+   sequência ou não. Aí as setas só trocam fotos da mesma parcela e leitura.
+   "Na ordem em que tirei" é a ordem guardada, e as setas mudam qualquer foto
+   de lugar. Sem o motor (não carregou), fica a ordem guardada. */
+const ORDEM_KEY='agracta-fotos-ordem-slides';
 const motor=()=>!!(window.FotosCore&&typeof FotosCore.ordemDosSlides==='function');
-function ordenar(list){return motor()?FotosCore.ordemDosSlides(list,context):list.slice().sort((a,b)=>a.order-b.order);}
-function podeTrocar(a,b){return !!(a&&b)&&(!motor()||FotosCore.mesmoGrupoDoSlide(a,b));}
+const porTratamento=()=>$('slide-order').value!=='captura'&&motor();
+function ordenar(list){return porTratamento()?FotosCore.ordemDosSlides(list,context):list.slice().sort((a,b)=>a.order-b.order);}
+function podeTrocar(a,b){return !!(a&&b)&&(!porTratamento()||FotosCore.mesmoGrupoDoSlide(a,b));}
+function dicaOrdem(){$('order-hint').textContent=(porTratamento()?'A sequência abaixo é a ordem dos slides: por avaliação, T1 com todas as repetições, depois T2, T3… As setas trocam a ordem só entre fotos da mesma parcela e data.':'A sequência abaixo é a ordem dos slides: a ordem em que as fotos foram tiradas. As setas mudam qualquer foto de lugar.')+' As novas fotos entram selecionadas.';}
 function visiblePhotos(){return filterPlot&&$('plot-filter').value==='plot'?photos.filter(p=>p.treatment===filterPlot.treatment&&Number(p.rep)===filterPlot.rep):photos;}
 function selection(){return visiblePhotos().filter(p=>selected.has(p.id));}
 function count(){const n=selection().length,per=Number($('per-slide').value);$('selection-count').textContent=n+' foto(s) selecionada(s) · '+Math.ceil(n/per)+' slide(s).';$('all').textContent=n===visiblePhotos().length&&n?'Desmarcar todas':'Selecionar todas';$('preview').replaceChildren();}
@@ -206,6 +209,9 @@ $('plot-filter').addEventListener('change',()=>{selected=new Set(visiblePhotos()
 const PER_KEY='agracta-fotos-por-slide';
 try{const v=localStorage.getItem(PER_KEY);if(v&&$('per-slide').querySelector('option[value="'+v+'"]'))$('per-slide').value=v;}catch(e){}
 $('per-slide').addEventListener('change',()=>{try{localStorage.setItem(PER_KEY,$('per-slide').value);}catch(e){}count();});
+try{const v=localStorage.getItem(ORDEM_KEY);if(v&&$('slide-order').querySelector('option[value="'+v+'"]'))$('slide-order').value=v;}catch(e){}
+dicaOrdem();
+$('slide-order').addEventListener('change',()=>{try{localStorage.setItem(ORDEM_KEY,$('slide-order').value);}catch(e){}photos=ordenar(photos);dicaOrdem();draw();});
 $('preview-button').addEventListener('click',preview);
 $('pptx').addEventListener('click',()=>exportFiles('pptx'));
 $('originals').addEventListener('click',()=>exportFiles('zip'));
