@@ -1,3 +1,58 @@
+AGRACTA — 29a publicacao                    08/10/2026
+=====================================================
+
+Leva: a escolha "Ordem dos slides" na tela dos slides.
+  CODIGO:  galeria-local.html  galeria-local.js  galeria-fotos.js
+           index.html  sw.js
+  TESTE:   tests/test_fotos_ordem_slides.js (secao 6, nova)
+           tests/test_fotos_locais.js (versao da galeria)
+  DOCS:    docs/GALERIA-PARCELAS.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso, depois da 28a: "se eu nao tirar em sequencia elas saem na
+ordem que tirei. Poderia ter uma opcao de colocar em sequencia na tela
+de fazer slides".
+
+A ordem T1, T2, T3... da 28a ja valia para qualquer foto -- tirada em
+sequencia, uma a uma ou importada. Mas a tela dos slides (Montar
+apresentacao, onde o botao "Slides e originais" abre) so tinha "Fotos
+por slide": o aviso da ordem ficava la em cima, na grade, e nao aparecia.
+
+1) "ORDEM DOS SLIDES", AO LADO DE "FOTOS POR SLIDE"
+
+  - T1, T2, T3... (todas as repeticoes de cada): o padrao. Igual a 28a;
+    as setas so trocam fotos da mesma parcela e data;
+  - Na ordem em que tirei: a ordem guardada, e as setas mudam qualquer
+    foto de lugar, como era antes da 28a.
+A grade, a previa, o PowerPoint e o ZIP seguem a escolha, e o aviso da
+grade muda junto. A escolha fica lembrada neste aparelho. O relatorio
+Word/PDF continua sempre em T1, T2, T3...
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo > Fotos > Slides e originais: abaixo de "Fotos por slide",
+   "Ordem dos slides" em "T1, T2, T3... (todas as repeticoes de cada)".
+3. Trocar para "Na ordem em que tirei": a grade muda; Previa e
+   PowerPoint saem nessa ordem. Voltar: T1, T2, T3 de novo.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_fotos_ordem_slides.js (40 verificacoes; 12 novas na secao
+  6): fotos tiradas uma a uma, sem a sequencia, saem T1, T2, T3; a troca
+  para "Na ordem em que tirei" muda grade, aviso, setas e PowerPoint, e
+  fica lembrada. Reprova o codigo da 28a (a escolha nao existia).
+  No navegador (Chromium, 402 x 874): a escolha cabe na tela dos slides
+  e troca a ordem nos dois sentidos, sem erro.
+
 AGRACTA — 28a publicacao                    07/10/2026
 =====================================================
 
