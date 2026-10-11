@@ -21082,19 +21082,20 @@ var _ISMS_FIELDS=[
   {k:'incidentes', l:'Incidentes e ações corretivas — CAPA (§10.1)', ph:'data · não-conformidade · causa · ação · responsável · status'},
   {k:'soa', l:'Declaração de Aplicabilidade (SoA) — observações (Anexo A)', ph:'controles aplicáveis/justificativas além dos já cobertos pelo app'}
 ];
+/* O quadro diz o estado de HOJE, conferido contra docs/VALIDACAO-SISTEMA.md
+   (v2.0, 11/10/2026). "parcial" aponta para uma lacuna da §10 de lá. */
 var _ISMS_MAPA=[
-  ['ALCOA+ · Atribuível','Login individual + autor por registro','ok'],
-  ['ALCOA+ · Contemporâneo','Carimbo no salvar (clima/GPS/NDVI)','parcial'],
-  ['ALCOA+ · Original','Dado ativo no Firestore + diário local; histórico imutável pendente','parcial'],
-  ['ALCOA+ · Exato','Edição assinada exige motivo + de→para + re-assinatura','ok'],
-  ['NIT-038 · Trilha de auditoria','Quem/quando/de→para/motivo; append-only servidor pendente','parcial'],
-  ['NIT-038 · Assinatura eletrônica','Rubrica interna: nome + e-mail + significado + data','parcial'],
-  ['ISO A.5.15/8.2 · Controle de acesso','Firebase Auth + membro ativo; regras granulares pendentes','parcial'],
-  ['ISO A.8.15 · Logs','Trilha no estudo; não imutável no servidor','parcial'],
-  ['ISO A.8.13 · Backup','Diário local + export; política/restauração pendentes','parcial'],
-  ['ISO A.8.24 · Criptografia','HTTPS + proteção do fornecedor (confirmar configuração)','parcial'],
-  ['NIT-038 · Validação IQ/OQ/PQ','docs/VALIDACAO-SISTEMA.md (manter)','doc'],
-  ['ALCOA+ · Trilha imutável server-side','Não implementada — criar eventos append-only + hora do servidor','parcial']
+  ['ALCOA+ · Atribuível','Login individual; o servidor confere o autor de cada gravação','ok'],
+  ['ALCOA+ · Contemporâneo','Hora do servidor no histórico e nos eventos; o carimbo por célula usa o relógio do aparelho (L5)','parcial'],
+  ['ALCOA+ · Original','Versão anterior de cada gravação guardada no servidor, só por acréscimo','ok'],
+  ['ALCOA+ · Exato','Dado assinado: motivo + de→para + evento; a assinatura antiga deixa de conferir','ok'],
+  ['NIT-038 · Trilha de auditoria','Histórico e eventos imutáveis no servidor, mas escritos pelo app (L2); 5 tipos de evento (L3)','parcial'],
+  ['NIT-038 · Assinatura eletrônica','SHA-256 do conteúdo + nome + significado + data; avaliação assina sem senha (L4)','parcial'],
+  ['ISO A.5.15/8.2 · Controle de acesso','Cadastro e janela de horário impostos pelo banco; sem papéis técnico/supervisor/diretor (L1)','parcial'],
+  ['ISO A.8.15 · Logs','Histórico e eventos só por acréscimo, com hora do servidor','ok'],
+  ['ISO A.8.13 · Backup','Histórico no servidor + cofre no aparelho + export; rotina fora do Firebase a definir (L6)','parcial'],
+  ['ISO A.8.24 · Criptografia','HTTPS em trânsito; criptografia em repouso do Google; SHA-256 em assinaturas e eventos','ok'],
+  ['NIT-038 · Validação IQ/OQ/PQ','docs/VALIDACAO-SISTEMA.md (v2.0) — pronta para executar (L10)','doc']
 ];
 function openComplianceISMS(){
   ensureISMS(); var m=data.__isms;
@@ -21110,7 +21111,7 @@ function openComplianceISMS(){
     '</label>'; }).join('');
   ovl.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:600px;width:100%;padding:18px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:10px auto;box-shadow:0 20px 60px rgba(0,0,0,.7)">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Conformidade BPL/GLP &amp; ISO/IEC 27001 — ISMS</b><button onclick="document.getElementById(\'ismsOvl\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:10px;color:#8aa88a;margin-top:3px;line-height:1.5">Alinhado a OECD Nº 17/22 (ALCOA+) e ISO 27001:2022. Detalhes em <b>docs/</b> (CONFORMIDADE, VALIDACAO, ISMS-modelo).</div>'+
+    '<div style="font-size:10px;color:#8aa88a;margin-top:3px;line-height:1.5">Alinhado a OECD Nº 17/22 (ALCOA+) e ISO 27001:2022. Detalhes em <b>docs/conformidade/</b> e <b>docs/VALIDACAO-SISTEMA.md</b>.</div>'+
     '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#090f0a"><div style="font-weight:800;color:#37d684;margin-bottom:4px;font-size:12px">Mapa de controles (técnicos — no app)</div>'+mapa+'</div>'+
     '<div style="margin-top:14px;font-weight:800;color:#37d684;font-size:12px">ISMS do laboratório — preencha (sincroniza + entra no backup)</div>'+
     campos+

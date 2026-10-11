@@ -1,67 +1,67 @@
 # Política de Integridade de Dados — ALCOA+ (Agracta)
 
-**Base:** OECD GLP *Data Integrity* (Advisory Document No. 22, 2021) e OECD No. 17 /
-NIT-Dicla-038 (sistemas computadorizados). Integridade de dados = *"extensão em que
-todos os registros originais e cópias verdadeiras são completos, consistentes, exatos,
-confiáveis, e em que todas as alterações são totalmente documentadas"* (OECD No. 22).
+Versão 2.0 — 11/10/2026.
 
-A No. 22 pede uma **abordagem baseada em risco** ao longo do **ciclo de vida do dado**
-(geração → processamento → revisão → relato → retenção → descarte). Abaixo, cada
-princípio **ALCOA+** com (a) o que a norma exige, (b) como o Agracta atende, (c) o que o
-**laboratório** precisa formalizar.
+**Base:** OECD GLP *Data Integrity* (Advisory Document Nº 22, 2021) e OECD Nº 17 /
+NIT-Dicla-038. A Nº 22 define integridade de dados como a medida em que os
+registros originais e as cópias verdadeiras são completos, consistentes, exatos
+e confiáveis, com toda alteração documentada, e pede **abordagem baseada em
+risco** ao longo do ciclo de vida do dado (geração → processamento → revisão →
+relato → retenção → descarte).
+
+Para cada princípio: o que o Agracta faz, e o que o **laboratório** precisa
+formalizar. O detalhe técnico e as lacunas estão na
+[validação do sistema](../VALIDACAO-SISTEMA.md).
 
 | | Princípio | Como o Agracta atende | Ação do laboratório |
 |---|---|---|---|
-| **A** | **Attributable** (atribuível — quem e quando) | Login individual (Supabase Auth); papéis admin/técnico (`perfis`+RLS); cada lançamento/edição registra autor (e-mail + nome) e timestamp; `lancamentos` guarda o avaliador | Manter cadastro 1:1 pessoa↔login; **proibir login compartilhado** (POP) |
-| **L** | **Legible** (legível e permanente) | Dados estruturados; trilha e exportações legíveis; nada é rasurado | Definir retenção e formato de leitura de longo prazo (ver §Retenção) |
-| **C** | **Contemporaneous** (no momento do ato) | Registro no campo na hora; carimbo de data/hora + GPS + clima no ato | **Carimbo confiável:** adotar o `updated_at` do servidor como hora oficial (lacuna: hoje exibe relógio do aparelho) |
-| **O** | **Original** (registro original / cópia verdadeira) | Dado original preservado; **versão anterior de cada gravação** em `app_state_history` (server-side, imutável p/ o usuário) + diário local (IndexedDB) | Tratar a nuvem como registro original; backups como cópias verdadeiras |
-| **A** | **Accurate** (exato; alterações documentadas) | Edição registra **valor anterior → novo + quem + quando + MOTIVO**; editar avaliação assinada **invalida a assinatura** e exige nova | Revisão da trilha pela GQ (ver §Revisão da trilha) |
-| **+C** | **Complete** | Tudo é salvo (campos, células, carimbos, rubrica); soft-delete (nada some de verdade — marca `deleted_at`) | Conferir que exclusões são justificadas |
-| **+C** | **Consistent** | Sequência cronológica na trilha; ids únicos; merge por carimbo | — |
-| **+E** | **Enduring** | Persistência em Postgres + cópia local; histórico de ~400 versões | Plano de retenção e migração de formato (obsolescência) |
-| **+A** | **Available** | Acessível a inspeção/GQ a qualquer momento; export Excel/JSON | Definir acesso da GQ/auditor |
+| **A** | **Atribuível** — quem fez | Login individual; cadastro só pelo administrador. Cada gravação deixa no servidor o e-mail da sessão (`historico/`, campo `por`), e a regra do banco recusa outro autor. Lançamentos e assinaturas guardam nome e e-mail | **Proibir login compartilhado** (POP); uma pessoa, um cadastro |
+| **L** | **Legível** e permanente | Dados estruturados; trilha, relatório e exportação legíveis; nada é rasurado | Definir formato de guarda de longo prazo (ver dossiê, Retenção) |
+| **C** | **Contemporâneo** | Registro no campo, na hora. A **hora oficial** é a do servidor, gravada no histórico e nos eventos (`em == request.time`). A data do ensaio é escolhida por quem registra e fica separada da data da digitação | Dizer no POP que a hora oficial é a do histórico. Aparelhos com data e hora automáticas |
+| **O** | **Original** | O documento vivo no Firestore é o registro original. A cada gravação, o servidor guarda a versão **anterior** de cada documento, só por acréscimo | Tratar a nuvem como registro original; exports como cópias verdadeiras |
+| **A** | **Exato** | Alteração de dado assinado exige motivo e vira evento com de → para; a assinatura antiga deixa de conferir. Protocolo aprovado só muda por emenda | GQ revisa a trilha (abaixo) |
+| **+C** | **Completo** | Exclusão deixa lápide e o conteúdo anterior no histórico; pendências aparecem antes da finalização | Conferir que exclusões são justificadas |
+| **+C** | **Consistente** | Revisão sequencial no servidor (sem "último aparelho vence"); eventos em grafo causal; ids estáveis | — |
+| **+E** | **Duradouro** | Firestore (Google) + cofre no aparelho + export | Plano de retenção e de cópia fora do Firebase |
+| **+A** | **Disponível** | Trilha e histórico visíveis no app para quem tem acesso; export JSON; relatório | Definir como a GQ e o inspetor acessam |
 
-## Trilha de auditoria (OECD No. 22 §6.13 e §7.2)
-**Exigência:** a trilha **não pode ser desligável** — ou, se for, isso tem de ser
-detectável na própria trilha; deve registrar quem/quando/o-quê e o **valor anterior**;
-e deve ser **revisada**.
+## Trilha de auditoria (OECD Nº 22)
 
-**No Agracta:**
-- A trilha por estudo (`study.audit`) registra ação, autor (nome + e-mail), data/hora,
-  **mudanças célula a célula (de→para)** e **motivo** (obrigatório ao reabrir avaliação
-  assinada). Visível no painel do estudo ("🛡️ Trilha de Auditoria BPL").
-- **Rede de imutabilidade:** toda gravação salva a **versão anterior completa** em
-  `app_state_history` no servidor (trigger `app_state_guard`), fora do alcance do
-  usuário — funciona como trilha imutável de respaldo e permite reconstrução histórica.
-- O diário local (IndexedDB, menu "Recuperação de avaliações") é uma caixa-preta
-  adicional por aparelho.
+**Exigência:** a trilha registra quem, quando, o quê e o valor anterior; não pode
+ser desligada sem que isso apareça; e é revisada.
 
-**Lacuna e recomendação (risco médio):** a trilha por estudo é gravada pelo cliente
-(poderia, em tese, ser reescrita por um cliente adulterado). A imutabilidade real hoje
-vem do `app_state_history` (server-side). **Recomendado:** criar tabela/trigger de
-trilha **append-only** no banco (sem UPDATE/DELETE via API), espelhando cada mudança de
-célula com autor/hora-do-servidor/motivo. *(Item de melhoria — ver
-[validacao-sistema.md](validacao-sistema.md).)*
+**No Agracta são três camadas:**
 
-## Revisão da trilha (responsabilidade da GQ)
-`[ PREENCHER: periodicidade da revisão da trilha pela GQ — ex.: a cada avaliação crítica / mensal ]`
-`[ PREENCHER: responsável pela revisão (nome/cargo) ]`
-A GQ deve verificar: alterações pós-assinatura têm **motivo**; sem padrões suspeitos;
-carimbos coerentes; exclusões justificadas.
+1. **Histórico de versões** (`workspaces/agracta/historico`) — a cada gravação, o
+   conteúdo anterior de cada documento alterado, com autor da sessão e hora do
+   servidor. Só acréscimo: as regras recusam editar e apagar, para qualquer
+   pessoa. Aberto pelo Menu → **Histórico da nuvem**, que também restaura.
+2. **Eventos formais** (`workspaces/agracta/eventos`) — finalização, reabertura,
+   aprovação e emenda de protocolo, correção de dado assinado. Cada evento tem
+   motivo, autor, hora e id igual ao SHA-256 do conteúdo, que o servidor
+   recalcula. A ficha do estudo mostra o **selo**: o registro confere ou não, e
+   os conflitos entre aparelhos.
+3. **Trilha do estudo** (`study.audit`) — o relato legível de cada ação, com
+   de → para. É escrita pelo aparelho; a prova está nas camadas 1 e 2.
 
-## Retenção e descarte
-`[ PREENCHER: período de retenção dos dados (ex.: conforme exigência do MAPA/Inmetro p/ resíduos/agrotóxicos) ]`
-`[ PREENCHER: responsável pelo arquivo (Arquivista) e local do backup de longo prazo ]`
-`[ PREENCHER: plano de migração de formato p/ evitar obsolescência (NIT-Dicla-072) ]`
+**O que fica de fora** (lacunas L2 e L3 da validação): o histórico é escrito pelo
+app, então um cliente fora do app com credencial válida poderia gravar sem ele; e
+só cinco tipos de ação viram evento formal.
 
-## Cópia de segurança (resumo; detalhe no SOP)
-- Nuvem (Supabase/Postgres) — registro original.
-- `app_state_history` — versões anteriores (server-side).
-- Export periódico (Excel/JSON) — `[ PREENCHER: frequência e responsável ]`.
+## Revisão da trilha (Garantia da Qualidade)
+
+- Periodicidade: `[ PREENCHER — ex.: a cada estudo finalizado e mensalmente ]`
+- Responsável: `[ PREENCHER ]`
+- A GQ confere: toda alteração pós-assinatura tem motivo; o selo da trilha formal
+  confere; não há conflito sem resolução; exclusões justificadas; horas coerentes.
 
 ---
 **Aprovação**
-RT/Diretor de Estudo: `[ PREENCHER nome/assinatura/data ]` · GQ: `[ PREENCHER ]`
+RT / Diretor de Estudo: `[ PREENCHER nome, assinatura, data ]` · GQ: `[ PREENCHER ]`
 
-Fonte: [OECD GLP Data Integrity (No. 22, 2021)](https://www.oecd.org/content/dam/oecd/en/publications/reports/2021/09/glp-data-integrity_c2f067ec/45779212-en.pdf).
+## Histórico
+
+| Versão | Data | Alteração |
+|---|---|---|
+| 1.0 | 14/06/2026 | Emissão inicial |
+| 2.0 | 11/10/2026 | Reescrita para a arquitetura atual: histórico de versões e eventos formais no servidor, hora oficial do servidor, assinatura por SHA-256 |

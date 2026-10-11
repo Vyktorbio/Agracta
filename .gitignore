@@ -52,3 +52,7 @@ propriedades-*.json
 # Logs e dados do emulador local.
 *-debug.log
 .firebase/
+
+# Registros de execução da validação (tools/registro-oq.sh). Vão para o
+# arquivo controlado do laboratório, não para o repositório público.
+registros-validacao/

@@ -261,6 +261,15 @@ nenhum.
 
 ### B3. Documentos de conformidade
 
+> **Feito em 11/10/2026.** Os dois conjuntos viraram um: o dossiê em
+> `docs/conformidade/README.md` e a validação em `docs/VALIDACAO-SISTEMA.md`
+> (v2.0, com matriz de rastreabilidade conferida por
+> `tests/test_validacao_rastreabilidade.js`). Saíram `docs/CONFORMIDADE-BPL-ISO-27001.md`,
+> `docs/conformidade/validacao-sistema.md` e `docs/ISMS-laboratorio-modelo.md`.
+> As lacunas abaixo estão na validação, §10 (L1–L10). Entraram também
+> `tests/acesso-rules.cjs` (membro ativo, desativado e janela, no emulador) e
+> `tools/registro-oq.sh` (registro de execução da OQ automática).
+
 `docs/conformidade/README.md`, `integridade-dados-ALCOA.md`,
 `SOP-acesso-assinatura-backup.md`, `validacao-sistema.md` e
 `ISMS-ISO27001.md` ainda descrevem o Supabase (Supabase Auth, `perfis` + RLS,

@@ -1,73 +1,79 @@
-# Conformidade do Agracta — GLP/BPL + ISO/IEC 27001
+# Conformidade do Agracta — BPL/GLP e ISO/IEC 27001
 
-> **Atenção (20ª publicação, 04/10/2026):** este documento ainda descreve a época do
-> Supabase (perfis + RLS, funções `criar-tecnico`/`remover-tecnico`, tabelas da Fase 4).
-> Esses artefatos saíram do app e do repositório nesta publicação. O controle de acesso
-> real hoje é o do Firebase: cadastro em `workspaces/agracta/members/{email}` (ativo +
-> janela de horário) e as `firestore.rules`; revogar é desativar ou apagar o cadastro no
-> Painel Admin. A reescrita para o estado atual é o item B3 do `docs/PASSAGEM-AGRACTA.md`.
-> Os arquivos antigos seguem no histórico do git (antes do commit `bb8b7da`).
+Dossiê de entrada: o que o Agracta faz pela integridade dos dados, o que ele
+**não** faz, e onde está cada documento. Versão 2.0 — 11/10/2026.
 
-Este pacote documenta como o **Agracta** (sistema computadorizado de registro de ensaios
-de campo) apoia a **integridade de dados** e a **rastreabilidade** exigidas pelas Boas
-Práticas de Laboratório (BPL/GLP) e os **controles de segurança da informação** da
-ISO/IEC 27001 — e dá ao laboratório os **modelos para preencher** (ISMS, validação).
+> **Escopo.** O Agracta é a *ferramenta*. A conformidade é da **Instalação de
+> Teste** (o laboratório): políticas, POPs, treinamento, validação executada e
+> revisão da Garantia da Qualidade (GQ). Estes documentos são **modelos e
+> mapeamentos** para o laboratório adaptar e formalizar — não substituem a
+> avaliação do RT/GQ nem a inspeção do Inmetro/Cgcre.
+>
+> **O repositório é público** e o site sai dele. Aqui ficam os modelos. As
+> cópias preenchidas, assinadas, e os registros de execução ficam no arquivo
+> controlado do laboratório.
 
-> **Aviso de escopo.** O Agracta é a *ferramenta*. A conformidade é da **Instalação de
-> Teste** (o laboratório): exige políticas, POPs, treinamento, validação executada e
-> revisão da Garantia da Qualidade (GQ). Estes documentos são **modelos e mapeamentos**
-> para você adaptar e formalizar — não substituem a avaliação do seu RT/GQ nem a
-> inspeção do Inmetro/Cgcre.
+## Os documentos
 
-## Fontes oficiais usadas
-- **OECD GLP — Princípios de BPL**, OECD Series on Principles of GLP and Compliance
-  Monitoring **No. 1** (no Brasil: **NIT-Dicla-035**).
-- **OECD GLP — Aplicação a Sistemas Computadorizados**, Advisory Document **No. 17**
-  (no Brasil: **NIT-Dicla-038**).
-- **OECD GLP — Data Integrity**, Advisory Document **No. 22 (2021)** — princípios
-  **ALCOA+** e abordagem baseada em risco no ciclo de vida do dado.
-- **ISO/IEC 27001:2022** — Sistema de Gestão de Segurança da Informação (ISMS) e
-  **Anexo A** (93 controles em 4 temas: Organizacional 37, Pessoas 8, Físico 14,
-  Tecnológico 34).
-
-Links das fontes na seção final.
-
-## Os documentos deste pacote
-| Arquivo | O quê | Quem preenche/mantém |
+| Documento | O quê | Quem preenche e mantém |
 |---|---|---|
-| [integridade-dados-ALCOA.md](integridade-dados-ALCOA.md) | Política de integridade de dados (ALCOA+) e mapeamento de cada princípio às funções do app | RT + GQ |
-| [validacao-sistema.md](validacao-sistema.md) | Validação formal do sistema (URS, IQ/OQ/PQ) — protocolo com campos a preencher | RT + TI + GQ |
-| [ISMS-ISO27001.md](ISMS-ISO27001.md) | Modelo de ISMS: escopo, política, riscos e **Declaração de Aplicabilidade (SoA)** dos controles do Anexo A | Responsável pela SI + Gerência |
-| [SOP-acesso-assinatura-backup.md](SOP-acesso-assinatura-backup.md) | POP de controle de acesso, assinatura eletrônica, backup e recuperação | RT + admin |
+| [../VALIDACAO-SISTEMA.md](../VALIDACAO-SISTEMA.md) | **Validação do sistema (CSV):** escopo, arquitetura, risco, requisitos, matriz de rastreabilidade, IQ/OQ/PQ, lacunas, controle de mudanças | Dono do sistema + GQ |
+| [integridade-dados-ALCOA.md](integridade-dados-ALCOA.md) | Política de integridade de dados: cada princípio ALCOA+ e como o app atende | RT + GQ |
+| [SOP-acesso-assinatura-backup.md](SOP-acesso-assinatura-backup.md) | POP de acesso, assinatura eletrônica, cópia de segurança e restauração | RT + administrador |
+| [ISMS-ISO27001.md](ISMS-ISO27001.md) | Modelo de SGSI (cláusulas 4–10), inventário, riscos e Declaração de Aplicabilidade (Anexo A) | Responsável pela SI + Gerência |
 
-Convenção: trechos a completar aparecem como **`[ PREENCHER: … ]`**.
+Ferramenta de apoio: `tools/registro-oq.sh` gera o registro de execução da OQ
+automática (ver a validação, §5).
 
-## Resumo do que o app JÁ apoia (evidência técnica)
-- **Atribuível / autoria:** login individual (Supabase Auth), papéis **admin/técnico**
-  (`perfis` + RLS), cadastro fechado (só o admin cria via função `criar-tecnico`).
-- **Trilha de auditoria:** ao editar uma avaliação, registra **valor anterior → novo**,
-  **quem**, **quando** e **motivo** (obrigatório ao alterar dado assinado).
-- **Assinatura eletrônica:** rubrica + **nome do assinante + significado
-  ("Conferido e assinado") + data/hora**; editar invalida e exige nova assinatura.
-- **Original/Backup:** versão anterior de cada gravação em `app_state_history`
-  (~400 versões, server-side, fora do alcance do usuário) + **diário local** (IndexedDB)
-  por avaliação + exportação (Excel/JSON).
-- **Disponível/Durável:** dados na nuvem (Supabase/Postgres) + cópia no aparelho (offline).
+## O que o app já faz (evidência técnica)
 
-## Lacunas conhecidas (a tratar — honestidade BPL)
-- **Trilha append-only no servidor:** hoje a trilha por avaliação é gravada pelo cliente
-  (mitigada pelo histórico server-side imutável `app_state_history`). Recomendado:
-  trilha imutável garantida por trigger/tabela própria no banco (ver
-  [validacao-sistema.md](validacao-sistema.md) §Riscos).
-- **Carimbo de tempo confiável:** o `client_ts`/`ts` de célula usa o relógio do
-  **aparelho**; o `updated_at` do servidor é a hora confiável. Adotar o `updated_at`
-  como autoridade na trilha.
-- **Validação executada:** o protocolo IQ/OQ/PQ está pronto para ser **executado e
-  assinado** (ainda não há registro de execução).
-- **Confirmação de e-mail / senha forte:** definir política no Supabase Auth (ver SOP).
+| Exigência | Como o Agracta atende | Onde se prova |
+|---|---|---|
+| Acesso individual e revogável | Login por pessoa (Firebase Authentication). Só o administrador cadastra em `workspaces/agracta/members/{email}`; desativar o cadastro corta leitura e escrita na operação seguinte | `firestore.rules` · `tests/acesso-rules.cjs` |
+| Acesso só em expediente | Janela de dias e horas por pessoa, imposta pelo **banco** com a hora do **servidor** | `firestore.rules` · `acesso-horario.js` |
+| Atribuível e contemporâneo | Cada gravação deixa no servidor um registro com o autor da sessão e a hora do servidor — o aparelho não consegue carimbar outra pessoa nem outra hora | `historico/` · `tests/historico-rules.cjs` |
+| Original preservado | O servidor guarda a versão **anterior** de cada documento a cada gravação; ninguém edita nem apaga esse histórico, nem o administrador pelo app | `vendor/versoes-core.js` · `tests/test_versoes.js` |
+| Ações críticas como eventos | Finalizar, reabrir, aprovar protocolo, emendar e corrigir dado assinado viram eventos imutáveis, cujo id é o SHA-256 do conteúdo, recalculado pelo servidor | `vendor/eventos-core.js` · `tests/eventos-rules.cjs` |
+| Alteração documentada | Editar avaliação assinada exige motivo; cada célula alterada vira um evento com de → para | `eventos-app.js` · `trilha-formal.js` |
+| Assinatura eletrônica | SHA-256 do conteúdo assinado + nome, e-mail, significado e data/hora. Mudou o conteúdo, a assinatura deixa de conferir | `vendor/assinatura-core.js` |
+| Protocolo controlado | Aprovação com senha e rubrica; mudança depois disso é emenda com motivo e nova versão; execução fora do protocolo é desvio | `vendor/protocolo-vivo-core.js` |
+| Estudo encerrado | Finalização com senha, rubrica e estatística congelada; somente leitura; reabrir pede senha e motivo | `tests/test_finalizacao.js` |
+| Sem "último aparelho vence" | Toda gravação é uma transação com revisão sequencial; dois aparelhos não se sobrescrevem | `firebase-sync.js` · `tests/sync-firestore.cjs` |
+| Disponível offline | Cofre local no aparelho; sobe ao reconectar | `tests/test_offline_local.js` |
 
----
-### Fontes
-- [OECD GLP Data Integrity (No. 22, 2021) — PDF oficial](https://www.oecd.org/content/dam/oecd/en/publications/reports/2021/09/glp-data-integrity_c2f067ec/45779212-en.pdf)
-- [OECD GLP Data Integrity — página OECD](https://www.oecd.org/en/publications/glp-data-integrity_45779212-en.html)
-- ISO/IEC 27001:2022 — norma (aquisição na ISO/ABNT); panorama do Anexo A (2022, 93 controles / 4 temas).
+## O que o app **não** garante
+
+A lista completa, com risco e ação proposta, está na validação, **§10
+(lacunas L1–L10)**. As que mais pesam numa inspeção:
+
+- **não há papéis** (técnico, supervisor, diretor): pelo banco, qualquer membro
+  ativo aprova, finaliza e reabre;
+- o registro de histórico é escrito pelo app, não por uma função do servidor;
+- a cópia de segurança fora do Firebase depende de rotina manual, se o plano
+  não tiver backup agendado;
+- fotos de parcela ficam só no aparelho que fotografou;
+- a validação ainda não foi executada.
+
+## Retenção e arquivo (NIT-Dicla-072)
+
+- **Período de guarda:** `[ PREENCHER — exigência aplicável aos estudos do laboratório ]`
+- **Arquivista responsável e local do arquivo:** `[ PREENCHER ]`
+- **Cópia de longo prazo:** export JSON (Menu → Backup) e relatório final em PDF
+  por estudo finalizado, guardados em mídia controlada `[ PREENCHER ]`.
+- **Migração de formato:** JSON e PDF são abertos; revisar a cada `[ PREENCHER ]` anos.
+
+## Fontes oficiais
+
+- **OECD GLP — Princípios de BPL**, Nº 1 (no Brasil: NIT-Dicla-035).
+- **OECD — Aplicação dos princípios de BPL a sistemas computadorizados**,
+  Advisory Document Nº 17 (2016) (no Brasil: NIT-Dicla-038).
+- **OECD — GLP Data Integrity**, Advisory Document Nº 22 (2021) — ALCOA+.
+  [PDF oficial](https://www.oecd.org/content/dam/oecd/en/publications/reports/2021/09/glp-data-integrity_c2f067ec/45779212-en.pdf)
+- **ISO/IEC 27001:2022** — SGSI e Anexo A (93 controles em 4 temas).
+
+## Histórico
+
+| Versão | Data | Alteração |
+|---|---|---|
+| 1.0 | 14/06/2026 | Emissão inicial |
+| 2.0 | 11/10/2026 | Reescrito para a arquitetura atual (Firebase). Absorve o antigo dossiê mestre (`docs/CONFORMIDADE-BPL-ISO-27001.md`); a validação passa a ser um documento só, `docs/VALIDACAO-SISTEMA.md` |
