@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v366';
+var CACHE = 'agracta-app-v367';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './agroapi.css?v=2', './vendor/agroapi-core.js?v=1', './agroapi.js?v=2',
@@ -25,7 +25,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=2',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=40', './theme-2026.css?v=11', './ui-campo.css?v=13', './app.js?v=219',
+  './styles.css?v=40', './theme-2026.css?v=11', './ui-campo.css?v=13', './app.js?v=220',
   './satelites.css?v=3', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=2', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=3', './trilha-formal.js?v=2',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
@@ -39,6 +39,8 @@ var ASSETS = [
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js', './croqui.html', './prancha.html',
+  /* Análise probit da bancada (botão Probit na ficha do laboratório) */
+  './probit.html', './probit.js?v=1', './probit.css?v=1', './vendor/probit-core.js?v=1',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
   './estatistica/index.html', './estatistica/app.js', './estatistica/styles.css',
   './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js',
@@ -94,7 +96,7 @@ self.addEventListener('fetch', function(e){
      que grava a resposta na chave './index.html' — ou seja, abrir a prancha
      sobrescrevia o app no cache. Rede primeiro, cache só como reserva offline,
      cada uma na sua própria chave. */
-  if(/\/(prancha|croqui|cliente|galeria-local|relatorio-local)\.html$/.test(u.pathname)){
+  if(/\/(prancha|croqui|cliente|galeria-local|relatorio-local|probit)\.html$/.test(u.pathname)){
     var chave = u.origin + u.pathname;
     e.respondWith(
       fetch(e.request).then(function(resp){
