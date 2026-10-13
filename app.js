@@ -15123,6 +15123,16 @@ function openStudyDetail(qid,sid){
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       var _prog=AvaliacaoCore.avaliacao(study,a);h+='<small>'+(_prog.complete?'Concluída':(_prog.started?'Parcial · '+_prog.pending+' campos pendentes':'Pendente'))+'</small></summary>';
+      /* Quais são os pendentes e por quê. Só na parcial: na avaliação vazia a
+         lista seria a grade inteira. Até 40 linhas; o resto vira contagem. */
+      if(_prog.started&&!_prog.complete&&typeof AvaliacaoCore.pendentes==='function'){
+        var _pend=AvaliacaoCore.pendentes(study,a), _reps=Math.max(1,parseInt(study.numRepeticoes,10)||1);
+        h+='<div class="av-pendentes"><div class="av-pendentes-t">Faltam '+_pend.length+':</div><ul>'+
+          _pend.slice(0,40).map(function(x){
+            var _rep=(typeof _repDisplay==='function')?_repDisplay(x.rep):String(x.rep);
+            return '<li><b>'+esc(x.tratId)+'</b>'+(_reps>1?' · rep. '+esc(_rep):'')+' · '+esc(x.variavel)+' — '+esc(x.motivo)+'</li>';
+          }).join('')+(_pend.length>40?'<li>… e mais '+(_pend.length-40)+'</li>':'')+'</ul></div>';
+      }
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
         h+='<div class="evento-bbch">'+esc(bbchRotulo(studyCrop,a.bbch))+'</div>';
