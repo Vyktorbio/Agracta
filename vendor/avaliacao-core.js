@@ -149,7 +149,44 @@ function quedas(st,av,ref){
   });
   return out;
 }
-var api={naoAplicavel:naoAplicavel,numero:numero,valor:valor,linhas:linhas,esquema:esquema,parcela:parcela,avaliacao:avaliacao,estudo:estudo,
+/* QUAIS CAMPOS FALTAM, E POR QUÊ. "Parcial · 8 campos pendentes" não dizia
+   quais eram: quem preenchia com zero a célula que via vazia continuava com
+   os mesmos 8, porque o que faltava estava em outra variável, no N da razão,
+   numa sub-amostra ou na leitura do 2º avaliador. Mesma regra de `celula` —
+   a lista e a contagem nunca discordam. */
+function motivo(av,row,v){
+  if(av.duplaLeitura){
+    var leitores=av.avaliadores||{},faltam=[];
+    ['A','B'].forEach(function(k){if(numero(valor((leitores[k]||{}).notas,row,v))===null)faltam.push(k);});
+    if(faltam.length)return 'falta a leitura do avaliador '+faltam.join(' e ')+' (dupla leitura)';
+  }
+  var cfg=(av.varcfg||{})[v]||{},tipo=(av.tipos||{})[v],bruto=valor(av.bruto,row,v);
+  var sub=Math.max(1,Math.round(numero(cfg.sub)||1));
+  if(bruto&&typeof bruto==='object'){
+    if(tipo==='razao'){
+      var n=numero(bruto.n),N=numero(bruto.N);
+      if(n===null&&N===null)return 'vazio (n e N)';
+      if(n===null)return 'falta o n (afetados)';
+      if(N===null||!(N>0))return 'falta o N (avaliados)';
+      if(n>N)return 'n maior que N';
+      return 'n/N inválido';
+    }
+    if(tipo==='escala'||sub>1){
+      var xs=lista(bruto.sub).slice(0,sub),cheias=xs.filter(function(x){return numero(x)!==null;}).length;
+      return sub>1?('sub-amostras: '+cheias+' de '+sub+' preenchidas'):'vazio';
+    }
+  }
+  if(tipo==='razao')return 'vazio (n e N)';
+  return 'vazio';
+}
+function pendentes(st,av){
+  var src=esquema(st,av||{}),out=[];
+  linhas(st).forEach(function(r){lista(src.variaveis).forEach(function(v){
+    if(!celula(src,r,v).completa)out.push({key:r.key,tratId:r.tratId,rep:r.rep,variavel:v,motivo:motivo(src,r,v)});
+  });});
+  return out;
+}
+var api={naoAplicavel:naoAplicavel,pendentes:pendentes,numero:numero,valor:valor,linhas:linhas,esquema:esquema,parcela:parcela,avaliacao:avaliacao,estudo:estudo,
   acumula:acumula,acumulaPorNome:acumulaPorNome,anterior:anterior,queda:queda,quedas:quedas};
 if(typeof module==='object'&&module.exports)module.exports=api;
 root.AvaliacaoCore=api;

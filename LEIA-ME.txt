@@ -1,3 +1,45 @@
+AGRACTA — 33a publicacao                    13/10/2026
+=====================================================
+
+Leva: o cartao da avaliacao diz QUAIS campos estao pendentes e por que.
+  CODIGO:  vendor/avaliacao-core.js  app.js  cores-padrao.css
+           index.html  sw.js
+  TESTE:   tests/test_avaliacao_pendentes.js (novo)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: "8 campos pendentes -- eu preencho com 0 e continua".
+O cartao dizia quantos faltavam, nunca quais. Zero sempre contou como
+preenchido; o que faltava estava em outro lugar (outra variavel, o N da
+razao, uma sub-amostra, o 2o avaliador da dupla leitura).
+
+Agora, na avaliacao PARCIAL, logo abaixo de "Parcial · N campos
+pendentes", sai a lista: tratamento, repeticao, variavel e o motivo --
+"vazio", "falta o N (avaliados)", "falta o n (afetados)", "n maior que
+N", "sub-amostras: 1 de 3 preenchidas", "falta a leitura do avaliador B
+(dupla leitura)". Ate 40 linhas. A lista usa a mesma regra da contagem:
+os dois nunca discordam. Tratamento marcado como "nao se aplica" no
+protocolo nao e cobrado.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo com avaliacao parcial > Avaliacoes: abaixo de "Parcial · ...
+   campos pendentes", a lista do que falta.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_avaliacao_pendentes.js (16): lista do tamanho da contagem;
+  zero nao e pendente; cada motivo; nao se aplica fora; o cartao mostra a
+  lista so na parcial.
+
 AGRACTA — 32a publicacao                    13/10/2026
 =====================================================
 
