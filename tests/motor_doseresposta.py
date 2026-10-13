@@ -146,6 +146,35 @@ cmp2 = dr.comparar_curvas([cA, cA2],
                            ('S2', np.log10(dA[0][1:]), dA[1][1:], dA[2][1:])], 'probit')
 ok(all(not z['significativo'] for z in cmp2['razoes']), 'mesma população: razão não significativa')
 
+# ------------------------------------------------------------------ 5b. a DL é a estimativa pontual
+# Dados do cap. 4 de Robertson et al. (2007) e a saída do PoloPlus impressa na
+# fig. 4.7. A dose letal é (theta - b0)/b1, não o centro do intervalo de
+# Fieller: os dois só coincidem com g = 0. Devolver o centro levava a DL10 do
+# Schaefer (g = 0,38) de 1,321 para 0,641 e a DL50 do Fairfax de 4,139 para 4,103.
+LIVRO = {
+    'Fairfax':  ([0, 2, 3, 5, 7, 10], [30, 48, 50, 50, 48, 59], [0, 12, 15, 31, 31, 52], [1.329, 4.139, 12.892]),
+    'Pixley':   ([0, 10, 20, 30, 50], [359, 70, 70, 50, 50], [7, 22, 38, 38, 48], [6.022, 16.559, 45.538]),
+    'Schaefer': ([0, 2, 3, 5, 10, 50], [60, 60, 120, 60, 120, 120], [0, 15, 41, 39, 110, 119], [1.321, 3.773, 10.777]),
+}
+for nome, (dl, nl, yl, polo) in LIVRO.items():
+    rl = dr.analisar_dose_resposta(np.array(dl, float), np.array(yl, float), np.array(nl, float),
+                                   link='probit', probs=[0.10, 0.50, 0.90])
+    for p, esperado in zip((0.10, 0.50, 0.90), polo):
+        d = cl(rl, p)
+        ok(abs(d['dose'] - esperado) < 0.0015,
+           '%s DL%d = %.3f, como o PoloPlus (%.3f)' % (nome, round(p * 100), d['dose'], esperado))
+        ok(d['ic_inf'] < d['dose'] < d['ic_sup'], '%s DL%d dentro do próprio intervalo' % (nome, round(p * 100)))
+        ok(abs(d['log_dose'] - (stats.norm.ppf(p) - rl['intercepto']) / rl['slope']) < 1e-12,
+           '%s DL%d é (theta - b0)/b1' % (nome, round(p * 100)))
+    ok(abs(rl['log_lc']['0.5'] - np.log10(cl(rl, 0.5)['dose'])) < 1e-12,
+       '%s: a razão de CL usa a mesma DL50 da tabela' % nome)
+# o intervalo continua o de Fieller: assimétrico em torno da estimativa quando g é grande
+rs = dr.analisar_dose_resposta(np.array(LIVRO['Schaefer'][0], float), np.array(LIVRO['Schaefer'][2], float),
+                               np.array(LIVRO['Schaefer'][1], float), link='probit', probs=[0.10])
+d10 = cl(rs, 0.10)
+ok(d10['g'] > 0.3 and abs(np.log10(d10['ic_sup']) - d10['log_dose']) < abs(d10['log_dose'] - np.log10(d10['ic_inf'])),
+   'Schaefer DL10 (g = %.2f): intervalo assimétrico, mais longo para baixo' % d10['g'])
+
 # ------------------------------------------------------------------ 6. pelo roteador
 dados = {'dose': [float(v) for v in doses for _ in range(1)],
          'mortos': [float(v) for v in yy], 'n': [float(v) for v in nn]}
