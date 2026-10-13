@@ -186,7 +186,13 @@ const gateOn = (d) => { const g = d.getElementById('authGate'); return !!(g && g
     a.c.authErr = (m) => { if (m) telas.push(m); };
     a.c.agAcessoMotivo = (email, m) => (m && m.active === false ? 'A conta ' + email + ' está inativa no Painel Admin.' : null);
     const r2 = await a.c.cloudPull(); await tick();
-    ok(r2 === false && a.c._agractaLeituraOk === 0, 'leitura recusada apaga a marca');
+    /* Aparelho que já leu o banco: a 1ª recusa pode ser passageira (crachá de
+       login sendo renovado) e só gera uma releitura — ver
+       test_login_recusa_passageira.js. A conta inativa recusa de novo, e aí
+       vale tudo o que vinha abaixo. */
+    ok(r2 === false && telas.length === 0, '1ª recusa num aparelho autorizado: relê antes de ir ao login');
+    for (let k = 0; k < 6; k++) { const ts = a.c.__timers.splice(0); for (const t of ts) if (!t.cancelled) { try { t.fn(); } catch (e) {} } await tick(); }
+    ok(a.c._agractaLeituraOk === 0, 'leitura recusada de novo apaga a marca');
     ok(telas.some((m) => /não está liberado/.test(m)), 'a tela de login avisa na hora, com o texto de sempre');
     ok(telas.some((m) => m === 'A conta tecnico@example.test está inativa no Painel Admin. Fale com o administrador.'),
       'e logo depois troca pelo motivo lido no cadastro');

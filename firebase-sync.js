@@ -404,6 +404,19 @@
       return null;
     }
   }
+  /* REGISTRO DAS IDAS AO LOGIN. A tela de login pisca por um segundo e a frase
+     dela não dá para ler; aqui fica, neste aparelho, a hora e o motivo das
+     últimas 30 vezes. Para conferir: agractaLoginRegistro() no console, ou
+     localStorage 'agracta-login-registro'. Não sai do aparelho. */
+  var LOGIN_LOG_KEY='agracta-login-registro';
+  function _registrarLogin(motivo){
+    try{
+      var l=JSON.parse(localStorage.getItem(LOGIN_LOG_KEY)||'[]');if(!Array.isArray(l))l=[];
+      l.push({em:new Date().toISOString(),motivo:String(motivo||''),email:String((FB.user&&FB.user.email)||'')});
+      localStorage.setItem(LOGIN_LOG_KEY,JSON.stringify(l.slice(-30)));
+    }catch(e){}
+  }
+  window.agractaLoginRegistro=function(){try{return JSON.parse(localStorage.getItem(LOGIN_LOG_KEY)||'[]');}catch(e){return [];}};
   function trustedDevice(){
     try{
       var t=JSON.parse(localStorage.getItem(TRUST_KEY)||'null');
@@ -502,6 +515,7 @@
       if(trustedForUser(user)){
         try{hideAuthGate();}catch(e){}
       }else{
+        _registrarLogin('entrada: aparelho sem a marca de autorizado, verificando');
         try{buildAuthGate();showAuthGate();authErr('Verificando permissão de acesso…');authBusy(true);}catch(e){}
       }
       if(!window._appStarted)window._appStarted=true;
@@ -545,6 +559,7 @@
     FB.auth.onAuthStateChanged(function(user){
       if(user)onFirebaseUser(user);
       else{
+        if(FB.user)_registrarLogin('sessão do Firebase encerrada no aparelho');
         FB.user=null;window._authUser=null;
         /* O modo local continua disponível no botão, mas a tela de login precisa
            aparecer para que o usuário consiga retomar a sincronização. */
@@ -1279,6 +1294,7 @@
          esperar o cadastro e para não deixar o relógio do celular derrubar a
          sessão que o banco acabou de aceitar. */
       window._agractaLeituraOk=Date.now();
+      FB.recusaTentada=0;
       var current=stateForCommit();
       var merged=(typeof cloudMerge==='function')?cloudMerge(current,r.state):r.state;
       merged.rev=r.meta.rev||0;
@@ -1297,6 +1313,27 @@
       cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');
       console.error('[Agracta Firebase] leitura:',e);
       if(e && (e.code==='permission-denied' || /permission|insufficient/i.test(String((e&&e.message)||e)))){
+        /* RECUSA PASSAGEIRA NÃO É RECUSA. Relato de uso (13/10/2026): "quando ele
+           entra no celular dele, o meu fica indo pra tela de login e voltando" —
+           também na conta do administrador, que as regras nunca recusam. Uma
+           única "permissão negada" (o crachá de login sendo renovado na hora da
+           leitura) apagava a marca do aparelho e mostrava o login; a leitura
+           seguinte dava certo e escondia de novo. Num aparelho que JÁ estava
+           autorizado, renova o crachá e lê outra vez antes de concluir. Se a
+           recusa se repetir, é de verdade: login, como sempre. */
+        if(trustedForUser(FB.user)&&!FB.recusaTentada){
+          FB.recusaTentada=Date.now();
+          _registrarLogin('recusa passageira: renovando o login e lendo de novo');
+          var _releia=function(){setTimeout(function(){window.cloudPull();},1500);};
+          try{
+            var _u=(FB.auth&&FB.auth.currentUser)||FB.user;
+            if(_u&&typeof _u.getIdToken==='function')Promise.resolve(_u.getIdToken(true)).then(_releia,_releia);
+            else _releia();
+          }catch(_e){_releia();}
+          return false;
+        }
+        FB.recusaTentada=0;
+        _registrarLogin('banco recusou a leitura'+(e&&e.code?' ('+e.code+')':''));
         try{
           localStorage.removeItem(TRUST_KEY);
           window._agractaLeituraOk=0;
@@ -1306,6 +1343,7 @@
           _explicarRecusa();
         }catch(_e){}
       }else if(!trustedForUser(FB.user)){
+        _registrarLogin('leitura falhou num aparelho ainda não autorizado'+(e&&e.code?' ('+e.code+')':''));
         try{showAuthGate();authBusy(false);authErr('Não foi possível validar este aparelho. Conecte-se à internet e tente novamente.');}catch(_e){}
       }
       return false;

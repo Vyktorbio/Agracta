@@ -1,3 +1,59 @@
+AGRACTA — 32a publicacao                    13/10/2026
+=====================================================
+
+Leva: a tela que ia para o login e voltava sozinha.
+  CODIGO:  firebase-sync.js  index.html  sw.js
+  TESTE:   tests/test_login_recusa_passageira.js (novo)
+           tests/test_login_laco.js (secao 7: a recusa vai ao login na 2a vez)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: "quando ele entra no celular dele, o meu fica indo pra tela
+de login e voltando" -- tambem na conta do administrador.
+
+1) RECUSA PASSAGEIRA NAO E RECUSA
+
+  Reproduzido com o adaptador real e o banco simulado. Das situacoes que a
+  entrada de um colega provoca (gravacao dele, corrida de gravacoes, rede
+  lenta, uma recusa do banco), so a RECUSA mandava ao login um aparelho ja
+  autorizado, e ainda apagava a marca de autorizado. Uma unica "permissao
+  negada" -- o login (token) sendo renovado na hora da leitura -- mostrava
+  o login; a leitura seguinte dava certo e escondia: "sai e volta".
+  Agora, num aparelho ja autorizado, a primeira recusa renova o login e le
+  de novo depois de 1,5 s. Recusa que se repete e de verdade: login e marca
+  apagada, como antes. Aparelho que nunca entrou vai ao login de primeira.
+
+2) REGISTRO DAS IDAS AO LOGIN
+
+  A frase do login pisca e nao da para ler. Cada ida ao login fica
+  registrada NESTE aparelho (ultimas 30), com hora e motivo:
+  agractaLoginRegistro() no console, ou localStorage
+  'agracta-login-registro'. Se o "sai e volta" continuar, o registro diz
+  qual caminho foi.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Com voce conectado, um assistente entra no celular dele: a sua tela
+   nao vai mais para o login.
+3. Se ainda for: no computador, F12 > Console > agractaLoginRegistro()
+   mostra o motivo.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_login_recusa_passageira.js (14): uma recusa nao derruba
+  aparelho autorizado e a releitura da certo; recusa repetida vai ao login
+  e apaga a marca; aparelho nunca autorizado vai de primeira; corrida de
+  gravacoes e rede lenta nao vao ao login; o registro guarda hora e motivo.
+  Reprova o codigo da 31a ("nao vai ao login").
+
 AGRACTA — 31a publicacao                    13/10/2026
 =====================================================
 
