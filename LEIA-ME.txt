@@ -1,3 +1,65 @@
+AGRACTA — 31a publicacao                    13/10/2026
+=====================================================
+
+Leva: a dose letal (CL/DL) do motor estatistico passa a ser a estimativa
+pontual, como no PoloPlus.
+  CODIGO:  estatistica/bioengine/doseresponse.py
+           estatistica/app.js  estatistica/index.html  estatistica/sw.js
+           app.js  index.html  sw.js
+  TESTE:   tests/motor_doseresposta.py (secao 5b, nova)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+O CALCULO MUDOU: MOTOR_CALCULO sobe para agracta-19 e a estatistica
+guardada nos aparelhos e recalculada. Estudos FINALIZADOS mantem o que
+foi preservado no fechamento (ver abaixo).
+
+
+O QUE MUDOU
+-----------
+
+Achado ao rodar o motor com os dados do cap. 4 de Robertson et al.
+(2007), comparando com a saida do PoloPlus impressa no livro.
+
+1) A DOSE LETAL ERA O CENTRO DO INTERVALO, NAO A ESTIMATIVA
+
+  A funcao de Fieller devolvia o centro do intervalo, (r - g.cND/vD)/(1-g),
+  no lugar da dose letal r = (theta - b0)/b1. Os dois so coincidem com
+  g = 0; quanto maior o g, maior o desvio. Com os dados do livro:
+    Fairfax  DL50  4,103 -> 4,139   (g = 0,07)
+    Pixley   DL50 16,333 -> 16,559
+    Schaefer DL10  0,641 -> 1,321   (g = 0,38)
+    Schaefer DL90 19,385 -> 10,777
+  Agora as nove DLs do livro batem com o PoloPlus. Os LIMITES nao mudam
+  (ja eram os de Fieller). A razao de CL50/CL90 entre curvas usava a
+  mesma dose e tambem fica corrigida.
+
+2) ESTUDOS JA FINALIZADOS
+
+  O fechamento preserva a estatistica calculada naquele momento: CL50 e
+  CL90 de estudo finalizado com serie de doses foram calculadas com o erro
+  e continuam como estavam. Para conferir um deles, reabra a analise no
+  modulo de estatistica (agora com a versao corrigida) e compare.
+  Estudos em andamento sao recalculados sozinhos.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Num estudo em andamento com serie de doses: a estatistica recalcula
+   (leva o tempo do Pyodide) e a CL50 fica dentro do intervalo, nao no
+   meio dele.
+3. Laudo do motor: arquivos_motor_sha256 com o hash novo do
+   doseresponse.py; engine_version bioensaio-auditoria-21.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/motor_doseresposta.py, secao 5b: as nove DLs do livro iguais ao
+  PoloPlus (3 casas), cada DL igual a (theta - b0)/b1 e a mesma usada na
+  razao de CL; com g grande o intervalo e assimetrico em volta dela.
+  Reprova o codigo da 30a (19 falhas).
+
 AGRACTA — 29a publicacao                    08/10/2026
 =====================================================
 

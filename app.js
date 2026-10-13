@@ -13603,7 +13603,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-18';
+var MOTOR_VERSAO='agracta-19';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -13624,8 +13624,11 @@ var MOTOR_VERSAO='agracta-18';
    A versão 17 segue Robertson et al. (2007) na dose-resposta — resposta natural
    estimada com a testemunha no modelo, heterogeneidade só quando significativa —
    e leva a placa numa série de concentrações para a curva de dose (CE50).
+   A versão 19 corrige a dose letal: ela é a estimativa pontual (theta - b0)/b1,
+   como no PoloPlus, e não o centro do intervalo de Fieller, que só coincide
+   com ela quando g = 0 (a DL90 do Schaefer, no livro, saía 19,4 em vez de 10,8).
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-18';
+var MOTOR_CALCULO='agracta-19';
 /* O pedido de cálculo vale para ESTES dados (assinatura) e sobrevive a fechar o
    app: sem isto, reabrir escondia a estatística já calculada e guardada até
    alguém apertar o botão de novo. Mudou o dado, muda a assinatura e o pedido

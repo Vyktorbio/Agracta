@@ -67,6 +67,14 @@ def _fieller(theta, b0, b1, cov, tcrit):
 
     N = theta - b0 ; D = b1
     Var(N)=Var(b0) ; Var(D)=Var(b1) ; Cov(N,D) = -Cov(b0,b1)
+
+    Devolve (estimativa, inferior, superior, g). A ESTIMATIVA é a pontual,
+    r = N/D — a dose letal de máxima verossimilhança, a que o PoloPlus imprime
+    (Robertson et al., 2007, fig. 4.7). O intervalo de Fieller é assimétrico
+    em torno dela, e o seu CENTRO, (r - g·cND/vD)/(1 - g), só coincide com r
+    quando g = 0. Devolver o centro no lugar de r deslocava a DL: com os dados
+    do livro, DL10 do Schaefer saía 0,641 em vez de 1,321 (g = 0,38) e a DL50
+    do Fairfax 4,103 em vez de 4,139 (g = 0,07). Os limites não mudam.
     """
     v_b0 = cov[0, 0]
     v_b1 = cov[1, 1]
@@ -87,7 +95,7 @@ def _fieller(theta, b0, b1, cov, tcrit):
     sob = vN - 2 * r * cND + (r ** 2) * vD - g * (vN - (cND ** 2) / vD)
     sob = max(sob, 0.0)
     meia = (tcrit / abs(D)) * np.sqrt(sob) / (1 - g)
-    return centro, centro - meia, centro + meia, g
+    return r, centro - meia, centro + meia, g
 
 
 def _mle_natural(x, y, n, link):
