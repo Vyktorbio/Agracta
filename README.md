@@ -51,7 +51,9 @@ nesta ordem: Mapa, Conhecimento, Hoje, Agenda, Buscar e Menu.
 `croqui.html` (croqui das quadras para o relatório), `prancha.html` (prancha de
 resultados), `cliente.html` + `cliente.js` (consulta do patrocinador, sem acesso ao
 workspace), `galeria-local.html` + `galeria-local.js` (fotos das parcelas, só no
-aparelho) e `relatorio-local.html` + `relatorio-local.js` (relatório do estudo).
+aparelho), `relatorio-local.html` + `relatorio-local.js` (relatório do estudo) e
+`probit.html` + `probit.js` (análise probit da bancada: o botão **Probit** na ficha
+do laboratório; motor em `vendor/probit-core.js`).
 
 ### Motores puros e bibliotecas (`vendor/`)
 
@@ -60,7 +62,8 @@ aparelho) e `relatorio-local.html` + `relatorio-local.js` (relatório do estudo)
   `biocalc-campo-core.js` (calda), `biocalc-lab-core.js` (bancada),
   `aplicacao-core.js`, `dose-core.js`, `avaliacao-core.js`, `agenda-core.js`,
   `protocolo-vivo-core.js`, `versoes-core.js`, `mascara-core.js` (cor das quadras
-  no mapa), `croqui-campo-core.js`, `eventos-core.js`, `observacao-core.js`.
+  no mapa), `croqui-campo-core.js`, `eventos-core.js`, `observacao-core.js`,
+  `probit-core.js` (probit/logit como no PoloPlus, com autoteste contra o livro).
 - **Bibliotecas de terceiros** — Leaflet e plugins, Three.js
   (`three-agracta.min.js`), Firebase (`*-compat.js`), SheetJS (`xlsx.full.min.js`),
   JSZip e `mp4-muxer.js`.

@@ -165,6 +165,7 @@ function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"
 function uid(){ try{ if(window.crypto&&crypto.randomUUID) return 's'+crypto.randomUUID(); }catch(e){} return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,6); }
 /* Ícones SVG (estilo Lucide, monocromáticos, herdam a cor do texto via currentColor) */
 function ic(n,sz){ var P={
+  curve:'<path d="M3 3v18h18"/><path d="M6 17c5 0 5-11 14-11"/>',
   pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
   sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
@@ -7081,7 +7082,10 @@ function showD(id){
 
   /* NDVI é satélite sobre polígono: laboratório não tem nem um nem outro. */
   h+='</div><div class="panel-btns">'+
-     (_lab?'':'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
+     /* No laboratório o lugar do NDVI fica com a análise probit: uma ferramenta
+        a mais, que não depende de estudo nenhum (cola os dados, sai a DL50). */
+     (_lab?'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="abrirProbit()" title="Curva dose-resposta, DL50 e comparação de populações, como no PoloPlus">'+ic('curve',14)+' Probit</button>'
+         :'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
      '<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="navStartQuadra(\''+id+'\')">'+ic('pin',14)+' Ir até</button>'+
      '<button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">'+(_lab?'EDITAR LABORAT&Oacute;RIO':'EDITAR QUADRA')+'</button></div>';
   document.getElementById("dPnl").innerHTML=h;
@@ -13498,6 +13502,9 @@ function _openPranchaFrame(src, titulo){
   '<iframe id="prFrame" title="'+esc(titulo)+'" src="'+src+'?t='+Date.now()+'" style="flex:1 1 auto;width:100%;border:0;background:#f2f3f1"></iframe>';
   ov.style.display='flex';
 }
+/* Análise probit da bancada (probit.html). Mesma moldura das pranchas; os
+   dados digitados lá ficam só neste aparelho, como rascunho da página. */
+function abrirProbit(){ _openPranchaFrame('probit.html', 'Análise probit · laboratório'); }
 function closePrancha(){ var ov=document.getElementById('prOvl'); if(ov){ var f=document.getElementById('prFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
 
 function _openBioestatFrame(modo){

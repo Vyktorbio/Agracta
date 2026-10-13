@@ -60,6 +60,86 @@ TESTES
   razao de CL; com g grande o intervalo e assimetrico em volta dela.
   Reprova o codigo da 30a (19 falhas).
 
+AGRACTA — 30a publicacao                    13/10/2026
+=====================================================
+
+Leva: a analise probit da bancada (botao Probit na ficha do laboratorio).
+  CODIGO:  probit.html  probit.js  probit.css  vendor/probit-core.js (novos)
+           app.js  index.html  sw.js
+  TESTE:   tests/test_probit_core.js (novo, 142 verificacoes)
+           tests/test_probit_lab_botao.js (novo)
+  DOCS:    README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+A estatistica dos estudos (motor Python) NAO mudou: nada em cache e
+recalculado.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "vamos incluir isso no Agracta na sessao de laboratorio.
+Coloque como opcao ou 'a mais'" -- a analise de dose-resposta do PoloPlus.
+
+1) BOTAO "PROBIT" NA FICHA DO LABORATORIO
+
+  No lugar do NDVI (que o laboratorio nao tem), a ficha ganha o botao
+  Probit. Ele abre a pagina da analise na mesma moldura das pranchas.
+  E uma ferramenta a mais: nao depende de estudo, nao grava nada na
+  nuvem. Os dados digitados ficam so neste aparelho, como rascunho.
+  Quadra de campo nao muda.
+
+2) A ANALISE
+
+  Entrada no formato do PoloPlus (= titulo, * preparacao, dose n r;
+  dose 0 e a testemunha); abre o .txt do PoloPlus. Faz o que o
+  PoloPlus faz no cap. 4 de Robertson et al. (2007):
+  - probit ou logit por maxima verossimilhanca, com a resposta natural
+    estimada junto quando a testemunha tem mortos;
+  - DLs pedidas (e o probit 9) com limites fiduciais de 90, 95 e 99%,
+    corrigidos pela heterogeneidade quando chi2/GL > 1; limite com
+    g > 0,5 nao sai;
+  - qui-quadrado com residuos padronizados;
+  - testes de igualdade e paralelismo (razao de verossimilhanca);
+  - razoes de DL com intervalo, contra a preparacao escolhida.
+  Graficos das curvas e dos residuos, saida completa em texto (copiar
+  ou baixar .txt) e a aba Validacao.
+
+3) VALIDACAO CONTRA O LIVRO
+
+  A aba Validacao roda, no aparelho, os dados do cap. 4 e compara 109
+  numeros com a saida do PoloPlus 1.0 impressa nas fig. 4.7 e 4.8: 106
+  identicos e 3 com 1 no ultimo digito (precisao simples do PoloPlus).
+  Dois detalhes que so aparecem batendo os numeros, e que o motor segue:
+  - a covariancia e a inversa da informacao OBSERVADA (com a esperada o
+    EP do Pixley sairia 0,524 e nao 0,529);
+  - os limites das razoes usam +-2 EP, nao 1,96 (fica como opcao).
+  Logit e dose linear, que o livro nao exemplifica, conferidos contra o
+  statsmodels.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Tocar num laboratorio no mapa: a ficha mostra "Probit", "Ir ate" e
+   "EDITAR LABORATORIO". Numa quadra de campo continua "NDVI".
+3. Probit: abre com o exemplo do livro. Aba Validacao: "Aprovado".
+4. Colar um ensaio ja analisado no PoloPlus e comparar DL50 e limites.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_probit_core.js (142): parametros, covariancia, qui-quadrado,
+  DLs e limites, testes e razoes contra o PoloPlus impresso; logit e dose
+  linear contra o statsmodels; dados que nao formam curva (sem resposta,
+  separacao completa, testemunha 100%) dao mensagem e nao derrubam as
+  outras preparacoes.
+  tests/test_probit_lab_botao.js: o botao so no laboratorio, a pagina com
+  a CSP estrita e o service worker guardando os quatro arquivos.
+  No navegador (Chromium, 1300 px e 402 x 874): sem erro de CSP no
+  console, sem rolagem lateral, autoteste aprovado.
+
 AGRACTA — 29a publicacao                    08/10/2026
 =====================================================
 

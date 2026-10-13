@@ -39,6 +39,8 @@ var ASSETS = [
   './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js', './croqui.html', './prancha.html',
+  /* Análise probit da bancada (botão Probit na ficha do laboratório) */
+  './probit.html', './probit.js?v=1', './probit.css?v=1', './vendor/probit-core.js?v=1',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
   './estatistica/index.html', './estatistica/app.js', './estatistica/styles.css',
   './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js',
@@ -94,7 +96,7 @@ self.addEventListener('fetch', function(e){
      que grava a resposta na chave './index.html' — ou seja, abrir a prancha
      sobrescrevia o app no cache. Rede primeiro, cache só como reserva offline,
      cada uma na sua própria chave. */
-  if(/\/(prancha|croqui|cliente|galeria-local|relatorio-local)\.html$/.test(u.pathname)){
+  if(/\/(prancha|croqui|cliente|galeria-local|relatorio-local|probit)\.html$/.test(u.pathname)){
     var chave = u.origin + u.pathname;
     e.respondWith(
       fetch(e.request).then(function(resp){
