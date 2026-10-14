@@ -2852,8 +2852,12 @@ function enforceAccess(){
 var _deletePwdCb=null;
 function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return; var s=document.createElement('style'); s.id='deletePwdCss';
   s.textContent='.delpwd-ovl{position:fixed;inset:0;z-index:3600;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}'+
-  '.delpwd-box{width:100%;max-width:380px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.58);padding:18px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}'+
-  '.delpwd-title{font-size:16px;font-weight:900;color:#ff9a8a;margin-bottom:5px}.delpwd-sub{font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:12px}.delpwd-user{font-weight:800;color:var(--text,#e8efe9)}'+
+  '.delpwd-box{width:100%;max-width:380px;max-height:calc(100vh - 36px);max-height:calc(100dvh - 36px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.58);padding:18px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}.delpwd-box>*{flex-shrink:0}'+
+  /* A CAIXA NUNCA PASSA DA TELA. O fechamento de um estudo grande lista dezenas
+     de pendências, e a caixa crescia até empurrar senha e botões para fora, sem
+     rolagem: não havia como finalizar. Agora só o texto rola; título, senha e
+     botões ficam sempre à vista. */
+  '.delpwd-title{font-size:16px;font-weight:900;color:#ff9a8a;margin-bottom:5px}.delpwd-sub{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;white-space:pre-line;font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:8px;padding-right:4px}.delpwd-quem{font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:10px}.delpwd-det{margin-top:10px;border-top:1px solid var(--border,#26322b);padding-top:8px}.delpwd-det>summary{cursor:pointer;font-weight:800;color:var(--text,#e8efe9);white-space:normal}.delpwd-det>div{margin-top:6px;font-size:11px}.delpwd-user{font-weight:800;color:var(--text,#e8efe9)}'+
   '.delpwd-lab{display:block;font-size:10px;letter-spacing:.8px;color:var(--text-3,#7c8a80);font-weight:800;text-transform:uppercase;margin-bottom:5px}.delpwd-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:var(--text,#e8efe9);padding:12px;font-size:15px;outline:none}.delpwd-inp:focus{border-color:var(--danger,#ff6b6b)}'+
   '.delpwd-err{min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px}.delpwd-actions{display:flex;gap:8px;margin-top:12px}.delpwd-ok{flex:1;background:#9b2c26;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:900;cursor:pointer}.delpwd-ok:disabled{opacity:.6;cursor:default}.delpwd-cancel{background:#222;color:#bbb;border:none;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer}';
   document.head.appendChild(s); }
@@ -2868,7 +2872,10 @@ function requireDeletePassword(label, cb, opts){
   m.style.display='flex';
   m.innerHTML='<div class="delpwd-box">'+
     '<div class="delpwd-title">'+esc(opts.title||'Confirmar exclusão')+'</div>'+
-    '<div class="delpwd-sub">'+esc(label||'Esta ação')+'<br>Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
+    '<div class="delpwd-sub">'+esc(label||'Esta ação')+
+      (opts.detalhes?('<details class="delpwd-det"><summary>'+esc(opts.detalhesTitulo||'Ver lista completa')+'</summary><div>'+esc(opts.detalhes)+'</div></details>'):'')+
+    '</div>'+
+    '<div class="delpwd-quem">Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
     '<label class="delpwd-lab">Senha</label><input id="deletePwdInput" class="delpwd-inp" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')deletePasswordConfirm()">'+
     '<div id="deletePwdErr" class="delpwd-err"></div>'+
     '<div class="delpwd-actions"><button id="deletePwdOk" class="delpwd-ok" onclick="deletePasswordConfirm()">'+esc(opts.ok||'Excluir')+'</button><button class="delpwd-cancel" onclick="deletePasswordClose()">Cancelar</button></div>'+
@@ -19379,6 +19386,46 @@ function _studyFinalizationReview(qid,s){
   var pend=[]; try{ pend=pendenciasDoEstudo(qid,s); }catch(e){}
   return {issues:issues,notes:notes,ok:issues.length===0,pendencias:pend};
 }
+/* O AVISO DE FECHAMENTO CABE NA TELA. O texto completo (uma linha por análise,
+   uma por avaliação) vai inteiro para "Ver lista completa"; em cima fica o
+   resumo agrupado: "44 parcelas sem avaliação (8 DAT, 9 DAT, 10 DAT)" e
+   "25 análises não calculadas — consumo foliar, consumo de isca…". Só muda o
+   que se LÊ antes da senha: revisão e estatística assinadas continuam iguais. */
+function _resumoFinalizacao(qid,s,prev,review){
+  var cab='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
+          (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+'.\n\n';
+  var pe='Depois disso o estudo fica somente-leitura e sai da agenda.';
+  var pendTxt=(review.pendencias||[]).map(function(p){ return p.texto+(p.detalhe?(' ('+p.detalhe+')'):''); });
+  if(!pendTxt.length) pendTxt=review.issues;
+  var completo=(pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+pendTxt.join('\n• ')+'\n\n'):'')+
+               (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')):'');
+  /* Pendências agrupadas pelo texto; do detalhe fica o rótulo (antes do " · "). */
+  var grupos=[], porTexto={};
+  (review.pendencias||[]).forEach(function(p){
+    var g=porTexto[p.texto]; if(!g){ g=porTexto[p.texto]={texto:p.texto,rot:[],detalhe:p.detalhe||''}; grupos.push(g); }
+    var r=String(p.detalhe||'').split(' · ')[0]; if(r && g.rot.indexOf(r)<0) g.rot.push(r);
+  });
+  var pendRes=grupos.length?grupos.map(function(g){
+    return g.rot.length>1 ? (g.texto+' ('+g.rot.join(', ')+')') : (g.texto+(g.detalhe?(' ('+g.detalhe+')'):''));
+  }):review.issues.slice();
+  /* Estatística: uma linha por estado, variáveis sem repetir. As notas de
+     estatística são as primeiras de review.notes, na ordem de avancado.pendencias. */
+  var av={pendencias:[]}; try{ av=_bioestatSnapshotAvancado(qid,s); }catch(e){}
+  var nEst=Math.min((av.pendencias||[]).length, review.notes.length);
+  var porEstado={pendente:{n:0,vars:[]},erro:{n:0,vars:[]}};
+  (av.pendencias||[]).slice(0,nEst).forEach(function(p){
+    var e=porEstado[p.estado==='erro'?'erro':'pendente'], k=String(p.jobKey||''), v=k.indexOf('|')>=0?k.slice(k.indexOf('|')+1):k;
+    e.n++; if(!e.vars.some(function(x){ return x.toLowerCase()===v.toLowerCase(); })) e.vars.push(v);
+  });
+  var atRes=[];
+  if(porEstado.pendente.n) atRes.push(porEstado.pendente.n+' análise(s) estatística(s) não calculada(s) — '+porEstado.pendente.vars.join(', ')+
+    '. Para calcular antes de fechar: Cancelar → Estatística → Iniciar cálculos estatísticos.');
+  if(porEstado.erro.n) atRes.push(porEstado.erro.n+' análise(s) com erro de cálculo — '+porEstado.erro.vars.join(', '));
+  atRes=atRes.concat(review.notes.slice(nEst));
+  var resumo=cab+(pendRes.length?('PENDÊNCIAS:\n• '+pendRes.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
+             (atRes.length?('ATENÇÃO:\n• '+atRes.join('\n• ')+'\n\n'):'')+pe;
+  return {resumo:resumo, detalhes:completo};
+}
 function finalizarEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s) return;
   s=normalizeStudy(s);
@@ -19388,17 +19435,10 @@ function finalizarEstudo(qid,sid){
   var prev=_statSnapshot(s);
   var review=_studyFinalizationReview(qid,s);
   /* No aviso da senha vale a lista CONCRETA quando ela existe: "2 parcelas sem
-     avaliação · 7 DAA" diz onde ir; "3 avaliação(ões) sem lançamento" só diz que
-     há o que procurar. As contagens continuam no registro assinado. */
-  var _pendTxt=(review.pendencias||[]).map(function(p){
-    return p.texto+(p.detalhe?(' ('+p.detalhe+')'):'');
-  });
-  if(!_pendTxt.length) _pendTxt=review.issues;
-  var resumo='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
-             (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+
-             '.\n\n'+(_pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+_pendTxt.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
-             (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
-             'Depois disso o estudo fica somente-leitura e sai da agenda.';
+     avaliação · 7 DAA" diz onde ir. Em cima vai o resumo agrupado; a lista
+     inteira fica em "Ver lista completa". As contagens continuam no registro
+     assinado. */
+  var _txt=_resumoFinalizacao(qid,s,prev,review), resumo=_txt.resumo;
   requireDeletePassword(resumo, function(){
     openRubrica(function(ok){
       if(!ok){ alert('Sem a assinatura o estudo não é finalizado.'); return; }
@@ -19429,7 +19469,7 @@ function finalizarEstudo(qid,sid){
       _refazTelasDoEstudo();
       openStudyDetail(qid,sid);
     }, 'Finalizar o estudo '+(s.codigo||s.id));
-  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
+  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar', detalhes:_txt.detalhes});
 }
 function reabrirEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s||!estudoFinalizado(s)) return;
