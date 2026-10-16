@@ -28,9 +28,11 @@
       (observacao-core.js) e diz o valor que ESPERAVA encontrar. Se o valor
       já não é aquele — outra correção chegou antes —, a correção vira
       CONFLITO visível, não sobrescrita silenciosa.
-   5. PAPEL AINDA É AVISO. Os papéis do roadmap (técnico, supervisor, diretor,
-      administrador) ainda não existem no app. Papel declarado abaixo do
-      exigido é erro; papel ausente é aviso, até o app passar a declarar.
+   5. O PAPEL EXIGIDO É O DA POLÍTICA. Desde a 36ª publicação o app declara o
+      papel do autor e o papel que a tabela do laboratório exigia no ato
+      (`papelExigido`, vendor/papeis-core.js), e os dois vão no evento. Sem
+      `papelExigido`, vale a tabela TIPOS. Papel abaixo do exigido é erro;
+      papel ausente é aviso (eventos antigos e aparelhos sem o módulo).
    6. O NAVEGADOR NÃO É A PALAVRA FINAL. Este motor garante que o evento é
       bem-formado e que o registro não foi adulterado depois de copiado. Quem
       impede o cliente de reescrever a coleção é o servidor (regras sem
@@ -41,7 +43,7 @@
    ============================================================================ */
 (function (root) {
   'use strict';
-  var VERSAO = '1.0.0';
+  var VERSAO = '1.1.0';
   var SCHEMA = 1;
 
   var PAPEIS = ['tecnico', 'supervisor', 'diretor', 'admin'];
@@ -178,11 +180,16 @@
       if (!('de' in ev) || !('para' in ev)) erros.push('de→para obrigatório');
       else if (estavel(ev.de) === estavel(ev.para)) erros.push('de e para são iguais: não há correção');
     }
-    if (r.papel && !ev.legado) {
-      var p = PAPEIS.indexOf(autor.papel), min = PAPEIS.indexOf(r.papel);
-      if (!txt(autor.papel)) avisos.push('papel do autor não declarado (exigido: ' + r.papel + ')');
+    /* O papel exigido é o da política do laboratório no momento do ato
+       (`papelExigido`, gravado no próprio evento — vendor/papeis-core.js);
+       sem ele, o padrão da tabela TIPOS. */
+    var exige = ev.papelExigido != null ? ev.papelExigido : r.papel;
+    if (ev.papelExigido != null && PAPEIS.indexOf(ev.papelExigido) < 0) erros.push('papel exigido desconhecido: ' + ev.papelExigido);
+    else if (exige && !ev.legado) {
+      var p = PAPEIS.indexOf(autor.papel), min = PAPEIS.indexOf(exige);
+      if (!txt(autor.papel)) avisos.push('papel do autor não declarado (exigido: ' + exige + ')');
       else if (p < 0) erros.push('papel desconhecido: ' + autor.papel);
-      else if (p < min) erros.push('papel ' + autor.papel + ' não pode registrar ' + ev.tipo + ' (exige ' + r.papel + ')');
+      else if (p < min) erros.push('papel ' + autor.papel + ' não pode registrar ' + ev.tipo + ' (exige ' + exige + ')');
     }
     if (!Array.isArray(ev.pais)) erros.push('pais ausentes');
     if (!('organizacao' in ev)) erros.push('campo organizacao ausente');
@@ -190,7 +197,7 @@
   }
 
   /* dados: { entidade:{tipo,id,estudo}, motivo, de, para, rubrica, detalhe }
-     ctx:   { autor:{email,nome,papel}, organizacao, dispositivo, em, fuso, pais } */
+     ctx:   { autor:{email,nome,papel}, organizacao, dispositivo, em, fuso, pais, papelExigido } */
   function criar(tipo, dados, ctx) {
     dados = dados || {}; ctx = ctx || {};
     var a = ctx.autor || {};
@@ -215,6 +222,7 @@
     if (dados.rubrica) ev.rubrica = typeof dados.rubrica === 'string' ? dados.rubrica : true;
     if (dados.detalhe != null) ev.detalhe = JSON.parse(JSON.stringify(dados.detalhe));
     if (ctx.legado) ev.legado = true;
+    if (ctx.papelExigido != null) ev.papelExigido = txt(ctx.papelExigido).toLowerCase();
     var v = validar(ev);
     if (v.erros.length) {
       var err = new Error('Evento ' + tipo + ' recusado: ' + v.erros.join('; '));

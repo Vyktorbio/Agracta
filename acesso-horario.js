@@ -426,7 +426,7 @@
       var arr = [];
       snap.forEach(function(d){
         var m = d.data()||{};
-        arr.push({email:(m.email||d.id), nome:m.nome||'', active:m.active!==false, janela:normalizar(m.janela)});
+        arr.push({email:(m.email||d.id), nome:m.nome||'', active:m.active!==false, janela:normalizar(m.janela), papelEquipe:m.papel||''});
       });
       Object.keys(ADMINS).forEach(function(a){
         var f = arr.find(function(x){ return String(x.email).toLowerCase()===a; });

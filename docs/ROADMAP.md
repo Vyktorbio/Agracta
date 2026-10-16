@@ -822,8 +822,14 @@ persistidos onde o cliente comum não reescreva.
 > (`historico/`) e os eventos formais (`eventos/`) são só-de-acréscimo no servidor,
 > com hora do servidor e autor da sessão conferidos pelas regras. A validação do
 > sistema foi reescrita para esse estado (`docs/VALIDACAO-SISTEMA.md` v2.0). O que
-> falta para a fase estar completa está lá, §10: papéis (L1), histórico escrito por
-> função do servidor (L2) e mais tipos de evento (L3).
+> falta para a fase estar completa está lá, §10: correção de dado assinado conferida
+> só pela tela (L1), histórico escrito por função do servidor (L2) e mais tipos de
+> evento (L3).
+>
+> **Estado (16/10/2026) — papéis.** Técnico, supervisor e diretor no cadastro;
+> tabela "quem pode o quê" no Painel Admin (`politica/papeis`), lida pelas regras.
+> O banco recusa finalizar, reabrir, aprovar, emendar e excluir de quem não tem o
+> papel. Motor: `vendor/papeis-core.js`; ligação: `papeis-app.js`.
 >
 > **Fundação (24/09/2026):** `vendor/eventos-core.js`, com
 > tipos fechados, exigências por tipo, id = SHA-256 do conteúdo e grafo de eventos que

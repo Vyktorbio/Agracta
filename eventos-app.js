@@ -142,7 +142,21 @@
     try { nome = typeof root._currentUserName === 'function' ? String(root._currentUserName() || '') : ''; } catch (e) {}
     /* Mesma regra da trilha: sem nome conhecido fica "Não identificado", que é
        a verdade — e o evento não se perde por isso. */
-    return { email: (u && u.email) || null, nome: nome.trim() || 'Não identificado' };
+    /* Papel: o do cadastro (papeis-app.js). Sem o módulo, fica sem papel — e o
+       evento nasce com aviso, como antes dos papéis existirem. */
+    var papel = null;
+    try { papel = root.AgractaPapeis ? root.AgractaPapeis.papel() : null; } catch (e) {}
+    return { email: (u && u.email) || null, nome: nome.trim() || 'Não identificado', papel: papel || null };
+  }
+  /* O papel que a tabela do laboratório exige para a ação, NO MOMENTO do ato.
+     Vai gravado no evento: a tabela pode mudar depois, e o evento continua
+     dizendo o que valia quando ele nasceu. */
+  var ACAO_DO_TIPO = { 'estudo.finalizado': 'finalizar', 'estudo.reaberto': 'reabrir',
+    'protocolo.aprovado': 'aprovar', 'protocolo.emendado': 'emendar', 'observacao.corrigida': 'corrigir' };
+  function papelExigido(tipo, ctxAcao) {
+    var acao = ACAO_DO_TIPO[tipo];
+    if (!acao || !root.AgractaPapeis) return null;
+    try { return root.AgractaPapeis.exigido(acao, ctxAcao) || null; } catch (e) { return null; }
   }
   function contexto() {
     return { autor: autor(), organizacao: null, dispositivo: dispositivo(),
@@ -204,7 +218,7 @@
     var reab = root._avReopen;
     if (extra.motivo && Array.isArray(extra.mudancas) && reab && reab.avid) {
       return extra.mudancas.map(function (c) {
-        return { tipo: 'observacao.corrigida', dados: {
+        return { tipo: 'observacao.corrigida', ctxAcao: { proprio: !!reab.proprio }, dados: {
           entidade: { tipo: 'observacao', id: O.idObservacao({ qid: qid, sid: study.id, avaliacao: reab.avid,
             parcela: parcelaCanonica(c.parcela), variavel: c.variavel }) },
           motivo: extra.motivo, de: valorCanonico(c.de), para: valorCanonico(c.para) } };
@@ -226,7 +240,9 @@
       return lerFicha(kEst).then(function (f) {
         var n = 0;
         ps.forEach(function (p) {
-          try { f.eventos = E.anexar(f.eventos, p.tipo, p.dados, ctx).registro; n++; }
+          var ctxP = ctx, ex = papelExigido(p.tipo, p.ctxAcao);
+          if (ex && ctx.autor && ctx.autor.papel) ctxP = Object.assign({}, ctx, { papelExigido: ex });
+          try { f.eventos = E.anexar(f.eventos, p.tipo, p.dados, ctxP).registro; n++; }
           catch (e) { aviso('evento ' + p.tipo + ' não registrado: ' + (e && e.message), e); }
         });
         return n ? gravarFicha(f).then(function () { return n; }) : 0;

@@ -1764,7 +1764,8 @@
         arr.push({
           email: mData.email || d.id,
           nome: mData.nome || '',
-          active: mData.active !== false
+          active: mData.active !== false,
+          papelEquipe: mData.papel || ''
         });
       });
       Object.keys(ADMIN_EMAILS).forEach(function(adminEmail){

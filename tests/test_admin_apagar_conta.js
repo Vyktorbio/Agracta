@@ -44,7 +44,9 @@ const fatia=m=>fatiaDe(src,m,'app.js');
 
 /* -------------------------------------------- 1. as regras são quem protege --- */
 const MEMBROS=fatiaDe(regras,'match /members/{email} {','firestore.rules');
-assert.match(MEMBROS,/allow write: if isAdmin\(\);/,'só administrador grava (e apaga) cadastro');
+assert.match(MEMBROS,/allow create, update: if isAdmin\(\) && papelDoCadastroValido\(\);/,'só administrador grava cadastro (e só com papel que existe)');
+assert.match(MEMBROS,/allow delete: if isAdmin\(\);/,'só administrador apaga cadastro');
+assert.ok(!/allow (write|create|update|delete): if (?!isAdmin\(\))/.test(MEMBROS),'nenhuma outra porta grava em members');
 assert.match(regras,/function isActiveMember\(\) \{\s*return memberExists\(\)/,
   'e sem cadastro não há acesso: é o cadastro que abre o Agracta');
 assert.ok(!/apagarContaTecnico/.test(src.replace(/apagarContaTecnico\('\+i\+'\)/g,'')),

@@ -54,7 +54,7 @@ respostas do laboratório e exporta.
 | R-02 | Ex-membro com acesso | `[ ]` | Médio | A.5.18 | Desativar no Painel Admin na saída; revisão trimestral de acessos | `[ PREENCHER ]` |
 | R-03 | Perda de dado (falha, erro, aparelho) | `[ ]` | Alto | A.8.13, A.8.14 | Histórico no servidor + cofre + export; rotina fora do Firebase | `[ PREENCHER ]` |
 | R-04 | Alteração não rastreada | `[ ]` | Alto | A.8.15 | Histórico e eventos só por acréscimo; motivo obrigatório | `[ PREENCHER ]` |
-| R-05 | Ação crítica por quem não deveria (sem papéis) | `[ ]` | Alto | A.5.15, A.8.2 | Senha na ação + evento com autor; papéis (lacuna L1) | `[ PREENCHER ]` |
+| R-05 | Ação crítica por quem não deveria | `[ ]` | Alto | A.5.15, A.8.2 | Papéis conferidos pelo banco; senha na ação; evento com autor e papel; correção só pela tela (L1) | `[ PREENCHER ]` |
 | R-06 | Aparelho desbloqueado e logado | `[ ]` | Médio | A.8.1, A.7.7 | Bloqueio de tela; janela de horário | `[ PREENCHER ]` |
 | R-07 | Regras publicadas diferentes do repositório | `[ ]` | Alto | A.8.32 | Conferência a cada validação (IQ-04); publicar pelo CI (L8) | `[ PREENCHER ]` |
 | R-08 | `[ PREENCHER ]` | | | | | |
@@ -89,7 +89,7 @@ Estado: ✅ implementado · 🟡 parcial · ⬜ a fazer · N/A.
 | Controle | Aplicável | Como atende | Estado |
 |---|---|---|---|
 | A.5.10 Uso aceitável | Sim | POP de uso | `[ PREENCHER ]` |
-| A.5.15 Controle de acesso | Sim | Cadastro fechado + regras do banco; **sem papéis** (L1) | 🟡 |
+| A.5.15 Controle de acesso | Sim | Cadastro fechado + regras do banco; papéis técnico/supervisor/diretor com tabela do administrador, conferida pelo banco nas ações de estado e exclusão | ✅ |
 | A.5.16 Gestão de identidade | Sim | Uma conta Firebase por pessoa; nome completo no cadastro | ✅ |
 | A.5.17 Informação de autenticação | Sim | Senha por pessoa; redefinição por e-mail; `[ PREENCHER: política e segundo fator ]` | 🟡 |
 | A.5.18 Direitos de acesso | Sim | Criar, desativar, reativar e apagar no Painel Admin; janela de horário | ✅ |
