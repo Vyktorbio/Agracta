@@ -818,7 +818,14 @@ reabertura exige usuário autorizado + motivo, eventos importantes pedem rubrica
 **A versão definitiva não pode depender só do navegador** — eventos precisam ser
 persistidos onde o cliente comum não reescreva.
 
-> **Fundação pronta (motor, ainda não ligado ao app):** `vendor/eventos-core.js`, com
+> **Estado (11/10/2026):** ligado ao app e à nuvem. O histórico de versões
+> (`historico/`) e os eventos formais (`eventos/`) são só-de-acréscimo no servidor,
+> com hora do servidor e autor da sessão conferidos pelas regras. A validação do
+> sistema foi reescrita para esse estado (`docs/VALIDACAO-SISTEMA.md` v2.0). O que
+> falta para a fase estar completa está lá, §10: papéis (L1), histórico escrito por
+> função do servidor (L2) e mais tipos de evento (L3).
+>
+> **Fundação (24/09/2026):** `vendor/eventos-core.js`, com
 > tipos fechados, exigências por tipo, id = SHA-256 do conteúdo e grafo de eventos que
 > junta aparelhos offline sem "último vence". A correção aponta para a identidade
 > estável da observação canônica. Desenho e caminho de adoção em

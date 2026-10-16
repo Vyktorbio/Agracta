@@ -45,22 +45,24 @@ desde então está no `LEIA-ME.txt` e no `ROADMAP.md`.
 
 ## Conformidade (BPL/GLP e ISO/IEC 27001)
 
-Existem **dois conjuntos** com o mesmo assunto, de épocas diferentes, e os dois
-ainda descrevem o Supabase. Reescrevê-los para o estado atual (Firebase) e
-juntá-los num só é o item B3 da [PASSAGEM](PASSAGEM-AGRACTA.md).
+Um conjunto só, reescrito para a arquitetura atual (Firebase) em 11/10/2026.
+Comece pelo dossiê.
 
-- A pasta [conformidade/](conformidade/README.md): o pacote com
-  [README](conformidade/README.md),
-  [integridade de dados (ALCOA+)](conformidade/integridade-dados-ALCOA.md),
-  [POP de acesso, assinatura e backup](conformidade/SOP-acesso-assinatura-backup.md),
-  [validação do sistema](conformidade/validacao-sistema.md) e
-  [ISMS](conformidade/ISMS-ISO27001.md).
-- Nesta pasta: o [dossiê mestre](CONFORMIDADE-BPL-ISO-27001.md), a
-  [validação do sistema (CSV)](VALIDACAO-SISTEMA.md) e o
-  [modelo de ISMS do laboratório](ISMS-laboratorio-modelo.md).
+- [conformidade/README.md](conformidade/README.md) — o **dossiê**: o que o app
+  faz pela integridade dos dados, o que não faz, retenção e fontes.
+- [VALIDACAO-SISTEMA.md](VALIDACAO-SISTEMA.md) — a **validação** (CSV): risco,
+  requisitos, matriz de rastreabilidade, IQ/OQ/PQ, lacunas e controle de mudanças.
+- [conformidade/integridade-dados-ALCOA.md](conformidade/integridade-dados-ALCOA.md)
+  — política de integridade (ALCOA+) e a trilha em três camadas.
+- [conformidade/SOP-acesso-assinatura-backup.md](conformidade/SOP-acesso-assinatura-backup.md)
+  — POP de acesso, assinatura, cópia de segurança e restauração.
+- [conformidade/ISMS-ISO27001.md](conformidade/ISMS-ISO27001.md) — modelo de
+  SGSI (cláusulas 4–10) e Declaração de Aplicabilidade.
 
-A tela "Conformidade & ISMS" do app cita `docs/VALIDACAO-SISTEMA.md` pelo nome:
-quem mover ou renomear esse arquivo precisa trocar a citação no `app.js`.
+A tela "Conformidade & ISMS" do app cita `docs/VALIDACAO-SISTEMA.md` pelo nome,
+e o teste `tests/test_validacao_rastreabilidade.js` confere essa citação, a
+matriz da validação contra os testes que existem e a lista de arquivos críticos.
+Quem mover ou renomear um desses precisa acompanhar no documento.
 
 ## Textos dos PRs automáticos
 

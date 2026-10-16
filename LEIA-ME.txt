@@ -1,3 +1,112 @@
+AGRACTA — 35a publicacao                    16/10/2026
+=====================================================
+
+Leva: a validacao do sistema (CSV) reescrita para o Firebase, e o
+pacote de conformidade num conjunto so.
+  CODIGO:  app.js (so o quadro da tela "Conformidade & ISMS")
+           index.html  sw.js
+  TESTE:   tests/test_validacao_rastreabilidade.js (novo)
+           tests/acesso-rules.cjs (novo; roda no emulador, no CI)
+           package.json (acesso-rules no test:regras)
+  FERRAMENTA: tools/registro-oq.sh (novo)
+  DOCS:    docs/VALIDACAO-SISTEMA.md (v2.0)
+           docs/conformidade/README.md  integridade-dados-ALCOA.md
+           SOP-acesso-assinatura-backup.md  ISMS-ISO27001.md (v2.0)
+           docs/README.md  docs/ROADMAP.md  docs/PASSAGEM-AGRACTA.md
+  SAIRAM:  docs/CONFORMIDADE-BPL-ISO-27001.md
+           docs/conformidade/validacao-sistema.md
+           docs/ISMS-laboratorio-modelo.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido: "continuar a profissionalizar o Agracta". O primeiro papel que
+um inspetor pede sobre um sistema computadorizado e a validacao -- e a
+nossa ainda descrevia o Supabase (perfis, RLS, app_state_history,
+criar-tecnico), que saiu do app na 20a. Havia ainda DOIS conjuntos de
+documentos de conformidade, de epocas diferentes (item B3 da PASSAGEM).
+
+1) A VALIDACAO (docs/VALIDACAO-SISTEMA.md, v2.0)
+
+  - escopo: o que e dado bruto BPL e o que e apoio (satelites, NDVI,
+    Conhecimento, 3D, drone ficam fora);
+  - a arquitetura de hoje: Firebase, historico/ e eventos/ so por
+    acrescimo, revisao atomica, janela pela hora do servidor;
+  - avaliacao de risco (R1-R10), 16 requisitos (URS);
+  - MATRIZ DE RASTREABILIDADE: cada requisito com os testes automaticos
+    que o cobrem e os testes manuais que completam;
+  - IQ (8), OQ manual (16), PQ (4), com passos e criterio;
+  - LACUNAS L1-L10, ditas com todas as letras. As maiores: nao ha papeis
+    (qualquer membro ativo aprova, finaliza e reabre pelo banco); o
+    historico e escrito pelo app, nao por funcao do servidor; a copia
+    fora do Firebase depende de rotina manual; fotos ficam so no
+    aparelho;
+  - controle de mudancas por classe (critica, normal, documentacao),
+    com a lista de arquivos criticos, e a etiqueta "validado-1.0" no
+    GitHub depois de aprovada.
+
+2) O DOCUMENTO NAO DESCOLA MAIS DO CODIGO
+
+tests/test_validacao_rastreabilidade.js le a validacao e reprova se:
+um requisito ficou sem teste; um teste citado nao existe ou nao roda no
+portao; um arquivo critico citado sumiu; o app.js deixou de apontar
+para a validacao; ou o pacote volta a descrever o Supabase como atual.
+Foi assim que a 1.0 passou quatro meses errada sem ninguem notar.
+
+3) O CONTROLE DE ACESSO GANHOU TESTE NO BANCO
+
+Nenhum teste de regras conferia membro DESATIVADO nem janela de
+horario. tests/acesso-rules.cjs confere, no emulador: desativado nao le
+nem grava; janela fechada recusa; janela aberta ou desligada deixa;
+fora da janela a pessoa le so o proprio cadastro; ninguem se reativa
+nem alarga a propria janela; cadastro so o administrador escreve.
+Roda no CI (npm run test:regras) em todo pull request.
+
+4) A EVIDENCIA DA OQ VIRA REGISTRO
+
+  bash tools/registro-oq.sh --com-regras
+
+roda o portao e as regras e grava registros-validacao/OQ-<data>-
+<commit>.txt (commit, data, quem rodou, ambiente, saida completa, e
+quantos testes NAO rodaram) e, ao lado, o .sha256 para conferir depois.
+A pasta esta no .gitignore: o registro vai para o arquivo da GQ, nao
+para o repositorio publico.
+
+5) UM CONJUNTO SO
+
+docs/conformidade/README.md virou o dossie de entrada (absorveu o
+antigo dossie mestre); a validacao e uma so, em docs/; o modelo de ISMS
+juntou as clausulas 4-10. Os tres arquivos repetidos sairam.
+
+6) O QUADRO DA TELA "CONFORMIDADE & ISMS"
+
+Dizia "historico imutavel pendente" e "trilha imutavel nao
+implementada" -- as duas coisas existem desde setembro. Agora diz o
+estado de hoje, e cada "parcial" aponta para a lacuna da validacao.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Menu > Conformidade & ISMS (so administrador): o quadro mostra
+   "Original" e "Logs" como ok, e "Controle de acesso" parcial (L1).
+3. No pull request, o CI roda o acesso-rules.cjs junto das regras.
+   Ele nao rodou aqui (o emulador nao baixa nesta maquina): se o CI
+   reprovar nele, e la que se ve.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_validacao_rastreabilidade.js: requisitos x matriz, testes
+  citados existem e rodam, arquivos criticos existem, app.js aponta
+  para a validacao, sem Supabase como estado atual.
+  tests/acesso-rules.cjs: so no emulador (CI).
+
+
 AGRACTA — 34a publicacao                    16/10/2026
 =====================================================
 

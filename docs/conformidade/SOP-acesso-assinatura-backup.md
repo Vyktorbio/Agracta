@@ -1,59 +1,103 @@
-# POP — Controle de Acesso, Assinatura Eletrônica e Backup (Agracta)
+# POP — Acesso, Assinatura Eletrônica, Cópia de Segurança e Restauração (Agracta)
 
-POP operacional alinhado a OECD No. 17/NIT-Dicla-038 (acesso, assinatura) e ISO/IEC
-27001:2022 (A.5.15–5.18, A.8.5, A.8.13). Preencher `[ PREENCHER ]`, aprovar e treinar.
+POP nº `[ PREENCHER ]` · Versão 2.0 (modelo de 11/10/2026) · Aprovado por `[ PREENCHER nome, data ]`
 
-POP nº `[ PREENCHER ]` · Versão `[ PREENCHER ]` · Aprovado por `[ PREENCHER nome/data ]`
+Alinhado a OECD Nº 17 / NIT-Dicla-038 (acesso, assinatura) e ISO/IEC 27001:2022
+(A.5.15–5.18, A.8.5, A.8.13). Detalhe técnico na
+[validação do sistema](../VALIDACAO-SISTEMA.md).
 
 ## 1. Controle de acesso
-**Princípio:** uma pessoa = um login. **Proibido compartilhar login** (quebra a
-atribuição ALCOA). Cadastro fechado — só o administrador cria contas.
 
-**Conceder acesso a um técnico (admin):**
-1. Menu ☰ → **Painel Admin** (senha do painel).
-2. **"Criar acesso do técnico"** → e-mail + **nome completo** (obrigatório p/ auditoria)
-   + senha (ou "Gerar"). Cria a conta no Supabase + perfil técnico.
-3. Repasse as credenciais ao técnico por canal seguro. Ele entra em www.agracta.com.br.
+**Princípio:** uma pessoa, um login. **Proibido compartilhar login** — quebra a
+atribuição (ALCOA+). Só o administrador cadastra quem pode usar.
 
-**Revogar acesso (saída/desligamento):** Painel Admin → técnico → **"desativar acesso"**
-(bane o login; **mantém o histórico** — recomendado p/ BPL). *(Requer a função
-`remover-tecnico` publicada.)* Reativar: **"reativar acesso"**.
+**Quem pode administrar:** os dois e-mails de administrador fixos nas
+`firestore.rules`. Trocá-los exige publicar as regras de novo (lacuna L7).
 
-**Papéis:** `admin` (gere estrutura, contas, config) · `técnico` (registra trabalho de
-campo). O servidor (RLS) impõe os papéis — técnico não altera estrutura nem apaga logs.
+**Conceder acesso (administrador):**
+1. Menu ☰ → **Painel Admin** (só aparece para administrador).
+2. **Criar acesso do técnico**: e-mail + **nome completo** (é o nome que sai na
+   trilha e nas assinaturas) + senha (ou gerar).
+3. Repassar a senha por canal seguro. A pessoa entra em https://agracta.com.br.
+4. Se o trabalho tem horário, definir a **janela** (dias e horas) da pessoa no
+   mesmo painel. Fora da janela o banco recusa leitura e gravação; o app avisa
+   10 minutos antes, sincroniza e trava.
 
-**Política de senha (definir no Supabase Auth):**
-`[ PREENCHER: comprimento mínimo, complexidade, confirmação de e-mail on/off, 2FA? ]`
+**Revogar acesso (saída, afastamento):** Painel Admin → pessoa → **desativar**.
+Vale na operação seguinte, em qualquer aparelho. O cadastro (nome, janela) fica,
+e pode ser reativado. **Apagar** o cadastro é só para cadastro de teste ou
+e-mail errado — para quem trabalhou em ensaio, desative. A trilha não depende do
+cadastro: nome e e-mail de quem registrou ficam no próprio registro.
+
+**Senha esquecida:** Painel Admin → pessoa → **redefinir senha** (o Firebase
+manda e-mail de redefinição).
+
+**Política de senha e segundo fator:** `[ PREENCHER: comprimento mínimo,
+troca periódica, uso de conta Google com verificação em duas etapas ]`
+
+**Revisão de acessos:** a cada `[ PREENCHER: 3 ]` meses, o administrador confere
+a lista de cadastros ativos contra a equipe atual e registra (IQ-06 da validação).
 
 ## 2. Assinatura eletrônica
-- Ao concluir uma avaliação, o app pede a **rubrica** (assinatura por toque).
-- O carimbo registra: **nome do assinante + significado ("Conferido e assinado") +
-  data/hora**. Equivale à assinatura manuscrita (OECD No. 17 §assinaturas).
-- **Avaliação assinada fica somente-leitura.** Para alterar: **"Reabrir para editar"** →
-  exige **MOTIVO** (vai pra trilha) → a alteração **invalida a assinatura** e exige
-  **nova rubrica**. Assim, todo dado assinado alterado é rastreável.
-- Significado da assinatura usado: `[ PREENCHER: confirmar texto — "Conferido e assinado" / outro ]`
 
-## 3. Backup e recuperação
-**Camadas (defesa em profundidade):**
-1. **Servidor (original):** Supabase/Postgres — registro de produção.
-2. **Histórico de versões:** `app_state_history` guarda a versão anterior a cada
-   gravação (~400 versões); trigger `app_state_guard`; **fora do alcance do usuário**.
-3. **Diário local (aparelho):** menu ☰ → **"Recuperação de avaliações"** (IndexedDB,
-   append-only) → **Exportar diário (JSON)**.
-4. **Export periódico:** menu ☰ → **Backup (arquivo)** / **Exportar planilha**.
+- **O que se assina:** a avaliação (ao concluir), a finalização do estudo e a
+  aprovação do protocolo.
+- **O que a assinatura é:** o SHA-256 do conteúdo assinado junto com nome,
+  e-mail, significado e data/hora. Se o conteúdo mudar depois, a assinatura
+  deixa de conferir e o app mostra isso.
+- **Quem assina** é a pessoa logada naquele aparelho. Assinar avaliação é um
+  toque; **finalizar, aprovar protocolo, reabrir, excluir e restaurar pedem a
+  senha** de novo. `[ PREENCHER: o laboratório aceita assinatura de avaliação
+  sem senha? — lacuna L4 ]`
+- **Significado** registrado: `[ PREENCHER: confirmar o texto — ex.: "Conferido e assinado" ]`
+- **Corrigir dado assinado:** **Reabrir para editar** → escrever o **motivo**
+  (sem motivo não reabre) → corrigir → assinar de novo. Cada célula alterada vira
+  um evento com de → para, autor, hora e motivo.
+- **Estudo finalizado** fica somente leitura. Reabrir pede senha e motivo e fica
+  registrado como evento.
+- **Não deixar o aparelho desbloqueado e logado** sem supervisão: quem estiver
+  com ele assina pela pessoa logada.
 
-**Rotina de backup (definir):**
-`[ PREENCHER: frequência do export (ex.: semanal), responsável, local de guarda (offline/segregado), retenção ]`
+## 3. Cópia de segurança
 
-**Recuperação:**
-- Item recém-excluído/alterado: **Histórico da nuvem** (menu) ou trilha do estudo.
-- Restaurar versão anterior do banco: via `app_state_history` (Table Editor) — registrar
-  a ação (quem/quando/por quê).
-- Aparelho perdido: o dado já sincronizado está na nuvem; o não-sincronizado, no diário
-  local daquele aparelho (se acessível).
+**Camadas:**
+1. **Banco (registro original):** Firestore, projeto `agracta-vyktorbio`.
+2. **Histórico de versões no servidor:** a versão anterior de cada documento a
+   cada gravação, só por acréscimo. Menu ☰ → **Histórico da nuvem**.
+3. **Cofre no aparelho:** cópia local para trabalhar offline; menu ☰ →
+   **Recuperação de avaliações** mostra o que está guardado ali.
+4. **Arquivo exportado:** Menu ☰ → **Backup (arquivo)** gera um JSON com tudo.
+5. **Backup agendado do Firestore:** `[ PREENCHER: existe? depende do plano — IQ-07 ]`
 
-**Teste de recuperação:** `[ PREENCHER: data do último teste de restauração e resultado ]`
+**Rotina:** `[ PREENCHER: frequência do export (ex.: semanal e a cada estudo
+finalizado), responsável, local segregado fora do Firebase, retenção ]`
 
-## 4. Registros deste POP
-Treinamento da equipe: `[ PREENCHER lista/datas ]` · Revisão: `[ PREENCHER periodicidade ]`
+**Fotos de parcela** ficam no aparelho que fotografou e não sobem para a nuvem.
+`[ PREENCHER: se foto é dado bruto, quando exportar ("Slides e originais") e
+onde arquivar — lacuna L9 ]`
+
+## 4. Restauração
+
+- **Voltar o banco a um estado anterior:** Menu ☰ → **Histórico da nuvem** →
+  escolher a gravação → confirmar com senha. O estado atual é guardado no
+  aparelho antes, e a própria restauração entra no histórico como gravação nova
+  (dá para desfazer). Registrar quem, quando e por quê `[ PREENCHER: onde ]`.
+- **Documento grande demais** para o histórico aparece como irrecuperável na
+  tela de restauração — o app diz isso em vez de fingir que voltou.
+- **Aparelho perdido:** o que já sincronizou está no banco; basta entrar em
+  outro aparelho. O que não sincronizou existe só no cofre do aparelho perdido.
+  Por isso: **sincronizar ao sair de área sem sinal** (o selo de sincronização
+  no app mostra pendências).
+- **Teste de restauração:** `[ PREENCHER: data do último teste e resultado ]`
+  (OQ-09 da validação).
+
+## 5. Registros deste POP
+
+Treinamento da equipe: `[ PREENCHER lista e datas ]` · Revisão do POP: `[ PREENCHER periodicidade ]`
+
+## Histórico
+
+| Versão | Data | Alteração |
+|---|---|---|
+| 1.0 | 14/06/2026 | Emissão inicial |
+| 2.0 | 11/10/2026 | Reescrito para a arquitetura atual: cadastro e janela no Firebase, desativar × apagar, assinatura por SHA-256, ações que pedem senha, histórico da nuvem e restauração, fotos no aparelho |
