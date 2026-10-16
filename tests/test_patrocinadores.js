@@ -45,8 +45,8 @@ const visivel=()=>ov().textContent.replace(/\s+/g,' ');
 (async()=>{
 console.log('\n--- 1. O Conhecimento não tem mais a aba ---');
 w.abrirConhecimento();
-ok(!ov().hidden && /Conhecimento experimental/.test(ov().querySelector('h1').textContent),'o Conhecimento abre como sempre');
-ok(ov().querySelector('nav[aria-label="Conhecimento"]'),'com a navegação das abas');
+ok(!ov().hidden && /Análise de resultados/.test(ov().querySelector('h1').textContent),'o Conhecimento abre como sempre');
+ok(ov().querySelector('nav[aria-label="Análise de resultados"]'),'com a navegação das abas');
 ok(!ov().querySelector('[data-aba="clientes"]'),'e sem a aba de clientes, mesmo para o administrador');
 ok(!/Patrocinador|Clientes/.test(Array.from(ov().querySelectorAll('nav button')).map(b=>b.textContent).join(' ')),'nenhuma aba de patrocinadores ou clientes');
 
@@ -54,13 +54,13 @@ console.log('\n--- 2. abrirPatrocinadores abre a tela própria ---');
 ok(typeof w.abrirPatrocinadores==='function','abrirPatrocinadores existe para o Menu chamar');
 w.abrirPatrocinadores();
 ok(!ov().hidden && ov().querySelector('h1').textContent==='Patrocinadores','título Patrocinadores');
-ok(!ov().querySelector('nav[aria-label="Conhecimento"]'),'sem a navegação do Conhecimento');
+ok(!ov().querySelector('nav[aria-label="Análise de resultados"]'),'sem a navegação do Conhecimento');
 ok(ov().getAttribute('aria-label')==='Patrocinadores','o leitor de tela também ouve Patrocinadores');
 ok(ov().querySelector('[data-con="clienteNova"]') && ov().querySelector('#clienteForm'),'a consulta de sempre: Nova consulta e o formulário');
 ok(/cada patrocinador recebe apenas a seleção aprovada/.test(visivel()),'o texto fala em patrocinador');
 ok(ov().querySelector('#clienteForm [name="nome"]').getAttribute('placeholder')==='Projeto / patrocinador','o campo do nome também');
 await tocar('[data-con="clienteNova"]');
-  ok(ov().querySelector('h1').textContent==='Patrocinadores' && !ov().querySelector('nav[aria-label="Conhecimento"]'),
+  ok(ov().querySelector('h1').textContent==='Patrocinadores' && !ov().querySelector('nav[aria-label="Análise de resultados"]'),
     'tocar em Nova consulta repinta a tela sem devolvê-la para dentro do Conhecimento');
   ok(!/\bclientes?\b/i.test(visivel()),'nenhum texto visível diz cliente');
   await tocar('[data-con="fechar"]');
@@ -72,7 +72,7 @@ await tocar('[data-con="clienteNova"]');
   ok(/Só o administrador/.test(visivel()),'e a tela diz por quê');
   admin=true;
   w.abrirConhecimento();
-  ok(ov().getAttribute('aria-label')==='Conhecimento experimental' && ov().querySelector('nav[aria-label="Conhecimento"]'),
+  ok(ov().getAttribute('aria-label')==='Análise de resultados' && ov().querySelector('nav[aria-label="Análise de resultados"]'),
     'depois dela, o Conhecimento volta inteiro, com o nome dele');
 
   console.log('\n--- 4. As portas ---');
