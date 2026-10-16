@@ -1,0 +1,50 @@
+/* Skin aprovada na prévia: somente apresentação, sem cores de estado do mapa. */
+:root,html.light,html.ag-depth-light,html:not(.light):has(#authGate){
+ --font:Arial,sans-serif;--font-title:Arial,sans-serif;
+ --ag-font:Arial,sans-serif;--ag-display:Arial,sans-serif;--ag-mono:Arial,sans-serif;
+ --skin-royal:#4169e1;--skin-selection:#60b9ee;--skin-selection-ink:#102d40;
+ --skin-glass:rgba(255,255,255,.88);--skin-card:rgba(255,255,255,.78);
+ --skin-edge:#d9dde1;--skin-ink:#191b1f;
+ --gp-glass:var(--skin-glass);--gp-glass-strong:var(--skin-glass);
+ --gp-blur:blur(20px);--ag-focus:0 0 0 3px #60b9ee50;
+}
+html:not(.light):has(#authGate){
+ --bg:#000;--gp-bg:#000;--skin-glass:rgba(15,17,20,.92);
+ --skin-card:rgba(36,39,43,.90);--skin-edge:#42464b;--skin-ink:#fff;
+ --surface:#111315;--surface-2:#202327;--gp-s1:#111315;--gp-s2:#202327;
+ --depth-canvas:#000;--depth-surface:#111315;
+}
+html body,html body :is(button,input,select,textarea,label,h1,h2,h3,h4,p,span,div,small,strong,b,td,th,a,text){font-family:Arial,sans-serif!important}
+html :is(.panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.loc-box,.main-menu,.loc-menu,.ag-drawer){
+ background:var(--skin-glass)!important;background-image:none!important;
+ color:var(--skin-ink)!important;border-color:var(--skin-edge)!important;
+ border-radius:20px!important;backdrop-filter:blur(20px)!important;-webkit-backdrop-filter:blur(20px)!important;
+ box-shadow:0 12px 36px #00000020,inset 0 1px 0 #ffffff25!important;
+}
+html :is(.study-card,.study-card-v2,.fen-item){background:var(--skin-card)!important;border-color:var(--skin-edge)!important}
+html :is(.con-btn.ativo,.con-btn.primary,.ag-row.on),html.light .ag-row.on{
+ background:var(--skin-selection)!important;color:var(--skin-selection-ink)!important;border-color:var(--skin-selection)!important;
+}
+html .ag-row.on .ag-chk,html.light .ag-row.on .ag-chk{background:var(--skin-selection-ink)!important}
+html .ag-row.on .ag-chk::after,html.light .ag-row.on .ag-chk::after{background:#fff!important}
+html .prog-bar{background:var(--skin-edge)!important}
+html .prog-fill{background:var(--skin-royal)!important}
+html .fen-item[style],html .fen-item.on,html .fen-item.atual{background:var(--skin-royal)!important;border-color:var(--skin-royal)!important}
+html .fen-item[style] :is(.fen-code,.fen-dap){color:#fff!important}
+html .ep-progress progress{accent-color:var(--skin-royal)}
+html .ep-progress progress::-webkit-progress-value{background:var(--skin-royal)}
+html .ep-progress progress::-moz-progress-bar{background:var(--skin-royal)}
+html :is(.btn-save,.btn-cancel,.con-btn,.studies-add,.sd-add,.p-btn-edit){border-radius:13px!important}
+html :is(.panel-qid,.panel-qlbl,.info-l,.prog-t,.fen-title){letter-spacing:normal!important}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+ :root{--skin-glass:#fff}html:not(.light):has(#authGate){--skin-glass:#111315}
+}
+@media print{html body{background:#fff!important;color:#111!important}html :is(.panel,.main-menu,.ag-drawer){box-shadow:none!important;backdrop-filter:none!important}}
+/* O símbolo original reaparece como assinatura, sem capturar toques no mapa. */
+html .tb-brand::before{
+ display:block!important;position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));
+ width:38px!important;height:38px!important;margin:0!important;
+ background-color:var(--skin-glass);background-size:24px 24px;
+ border:1px solid var(--skin-edge);border-radius:12px;pointer-events:none;
+}
+:root{--gp-font:Arial,sans-serif;--gp-display:Arial,sans-serif;--gp-mono:Arial,sans-serif}

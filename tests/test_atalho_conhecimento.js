@@ -35,7 +35,7 @@ assert.match(inject, /abrirConhecimento\(\{aba:'estudos'\}\)/,
   'o botão da barra tem de abrir o Conhecimento na aba Estudos');
 assert.ok(!/openStudiesPanel/.test(inject),
   'o botão NÃO pode mais abrir o painel paralelo de estudos: era ele que não tinha os gráficos');
-assert.match(inject, /Conhecimento<\/span>/, 'e o rótulo tem de dizer Conhecimento');
+assert.match(inject, /Resultados<\/span>/, 'e o rótulo tem de dizer Resultados');
 /* Sem o Conhecimento carregado o botão avisa, em vez de não fazer nada — um
    botão que não responde é indistinguível de um app travado. */
 assert.match(inject, /typeof abrirConhecimento==='function'/,
@@ -80,8 +80,8 @@ w.eval('injectTopbarButtons();');
 
 const b = w.document.querySelector('.btn-studies');
 assert.ok(b, 'o botão tem de existir na barra');
-assert.match(b.textContent, /Conhecimento/);
-assert.equal(b.getAttribute('aria-label'), 'Conhecimento experimental');
+assert.match(b.textContent, /Resultados/);
+assert.equal(b.getAttribute('aria-label'), 'Análise de resultados');
 b.onclick();
 assert.deepEqual(JSON.parse(JSON.stringify(w.eval('abriu'))), {aba: 'estudos'},
   'clicar tem de abrir o Conhecimento na aba Estudos');
