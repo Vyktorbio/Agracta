@@ -46,7 +46,7 @@ def _letras_por_contraste(res, niveis, design_info, alfa, dispersao=1.0, blocos=
             from scipy import stats as _st
             p = 2 * (1 - _st.norm.cdf(abs(z)))
             pares.append((a, b)); pvals.append(p)
-            detalhes.append({"g1": a, "g2": b, "dif_link": est, "z": z, "p": p})
+            detalhes.append({"g1": a, "g2": b, "dif_link": est, "ep_link": se, "z": z, "p": p})
 
     pajs = _ajuste_p(pvals, "holm")
     difere = set()

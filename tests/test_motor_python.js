@@ -18,5 +18,6 @@ const {loadPyodide}=require('../estatistica/pyodide/pyodide.js');
   await py.runPythonAsync(fs.readFileSync('tests/motor_forense.py','utf8'));
   await py.runPythonAsync(fs.readFileSync('tests/motor_doseresposta.py','utf8'));
   await py.runPythonAsync(fs.readFileSync('tests/motor_micelial.py','utf8'));
-  console.log('Motor Python: cálculos, blocos, faltantes, modelos, poder, equivalência, curva de dose, triagem forense e dose-resposta de Robertson et al. e CE50 micelial verificados.');
+  await py.runPythonAsync(fs.readFileSync('tests/motor_efeito_ambiente.py','utf8'));
+  console.log('Motor Python: cálculos, blocos, faltantes, modelos, poder, equivalência, curva de dose, triagem forense, dose-resposta de Robertson et al., CE50 micelial, tamanho de efeito e interação tratamento × local verificados.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
