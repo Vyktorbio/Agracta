@@ -87,6 +87,85 @@ service cloud.firestore {
         && next.get('writeId', '') != previous.get('writeId', '');
     }
 
+    /* ---- Papéis (vendor/papeis-core.js) ----------------------------------
+       Cada membro tem `papel` no cadastro: tecnico < supervisor < diretor. Sem o
+       campo, é técnico. Os administradores fixos acima podem tudo.
+
+       O papel mínimo de cada ação vem de workspaces/agracta/politica/papeis, que
+       só o administrador grava (Painel Admin). Sem o documento, ou sem a ação
+       nele, vale papelPadrao — que é o MESMO padrão do vendor/papeis-core.js
+       (tests/test_papeis.js confere os dois).
+
+       O banco confere as ações que mudam o estado do estudo ou apagam registro.
+       Por que só estas: elas nascem sempre no aparelho de quem as fez — a mescla
+       entre aparelhos decide finalização e reabertura pela trilha, e exclusão
+       pela lápide —, então quem grava a mudança é quem a fez. A correção de
+       avaliação assinada não entra: uma nota lançada offline por um colega pode
+       chegar depois da assinatura sem que ninguém esteja corrigindo nada, e
+       recusar a gravação dele travaria a sincronização daquele aparelho.
+       Essa a tela confere (docs/VALIDACAO-SISTEMA.md, L1). */
+    function politicaPath() {
+      return /databases/$(database)/documents/workspaces/agracta/politica/papeis;
+    }
+    function nivelDe(papel) {
+      return {'tecnico': 1, 'supervisor': 2, 'diretor': 3}.get(papel, 1);
+    }
+    /* Papel exigido desconhecido é o mais alto: na dúvida, recusa. */
+    function nivelExigido(papel) {
+      return {'tecnico': 1, 'supervisor': 2, 'diretor': 3}.get(papel, 3);
+    }
+    function papelPadrao(acao) {
+      return {'reabrir': 'supervisor', 'excluir': 'supervisor', 'aprovar': 'diretor', 'emendar': 'diretor', 'finalizar': 'diretor'}.get(acao, 'diretor');
+    }
+    function papelMinimo(acao) {
+      return exists(politicaPath())
+        ? get(politicaPath()).data.get('minimo', {}).get(acao, papelPadrao(acao))
+        : papelPadrao(acao);
+    }
+    function pode(acao) {
+      return isAdmin()
+        || nivelDe(memberData().get('papel', 'tecnico')) >= nivelExigido(papelMinimo(acao));
+    }
+
+    /* O estudo grava em estudos/{id}, com o conteúdo em `data`. */
+    function estudoAntes() {
+      return resource == null ? {} : resource.data.get('data', {});
+    }
+    function estudoDepois() {
+      return request.resource.data.get('data', {});
+    }
+    function finalizado(s) {
+      return s.get('finalizacao', null) != null;
+    }
+    function protocoloAprovado(s) {
+      return s.get('protocoloVivo', null) != null
+        && s.get('protocoloVivo', {}).get('status', '') == 'aprovado';
+    }
+    function versaoProtocolo(s) {
+      return s.get('protocoloVivo', {}).get('versao', 1);
+    }
+    /* Só a MUDANÇA de estado pede papel. Gravar um estudo que já estava
+       finalizado (ou aprovado) sem mexer nisso não é finalizar de novo. */
+    function transicaoDoEstudoPermitida() {
+      let antes = estudoAntes();
+      let depois = estudoDepois();
+      return (finalizado(antes) == finalizado(depois)
+               || (finalizado(depois) ? pode('finalizar') : pode('reabrir')))
+        && (protocoloAprovado(antes) == protocoloAprovado(depois)
+               || pode('aprovar'))
+        && (!protocoloAprovado(antes) || !protocoloAprovado(depois)
+               || versaoProtocolo(antes) == versaoProtocolo(depois)
+               || pode('emendar'));
+    }
+    function papelDoCadastroValido() {
+      return !('papel' in request.resource.data)
+        || request.resource.data.papel in ['tecnico', 'supervisor', 'diretor'];
+    }
+    /* Coleções que a regra genérica NÃO pode gravar: cada uma tem a sua. */
+    function gravavelPelaRegraGenerica(collection) {
+      return !(collection in ['members', 'historico', 'eventos', 'politica']);
+    }
+
     match /workspaces/agracta {
       allow read: if canUseAgracta();
       allow create, update: if canUseAgracta() && atomicWorkspaceCommit();
@@ -97,7 +176,24 @@ service cloud.firestore {
         allow read: if isAdmin()
                     || (signedIn() && email == request.auth.token.email)
                     || canUseAgracta();
-        allow write: if isAdmin();
+        allow create, update: if isAdmin() && papelDoCadastroValido();
+        allow delete: if isAdmin();
+      }
+
+      /* A tabela "quem pode o quê". Só o administrador grava, com forma fechada:
+         uma tabela malformada mudaria o que o banco deixa fazer. */
+      match /politica/{doc} {
+        allow read: if canUseAgracta();
+        allow create, update: if isAdmin() && doc == 'papeis'
+          && request.resource.data.keys().hasOnly(['schema', 'minimo', 'corrigirPropria', 'atualizadoEm', 'atualizadoPor'])
+          && request.resource.data.schema == 1
+          && request.resource.data.minimo is map
+          && request.resource.data.minimo.keys().hasOnly(['corrigir', 'reabrir', 'excluir', 'restaurar', 'aprovar', 'emendar', 'finalizar'])
+          && request.resource.data.minimo.values().hasOnly(['tecnico', 'supervisor', 'diretor'])
+          && request.resource.data.corrigirPropria is bool
+          && request.resource.data.atualizadoEm == request.time
+          && request.resource.data.atualizadoPor == request.auth.token.email;
+        allow delete: if isAdmin();
       }
 
       /* Histórico de versões (vendor/versoes-core.js). Cada gravação do app
@@ -140,12 +236,15 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      /* `historico` e `eventos` ficam de fora desta regra genérica de
-         propósito: no Firestore basta UMA regra permitir para o acesso valer,
+      /* `historico`, `eventos` e `politica` ficam de fora desta regra genérica
+         de propósito: no Firestore basta UMA regra permitir para o acesso valer,
          e esta aqui permitiria reescrevê-los. */
       match /{collection}/{document} {
         allow read: if collection != 'members' && canUseAgracta();
-        allow write: if collection != 'members' && collection != 'historico' && collection != 'eventos' && canUseAgracta() && atomicWorkspaceCommit();
+        allow create, update: if gravavelPelaRegraGenerica(collection) && canUseAgracta() && atomicWorkspaceCommit()
+          && (collection != 'estudos' || transicaoDoEstudoPermitida());
+        allow delete: if gravavelPelaRegraGenerica(collection) && canUseAgracta() && atomicWorkspaceCommit()
+          && (!(collection in ['estudos', 'aplicacoes', 'avaliacoes']) || pode('excluir'));
       }
     }
 

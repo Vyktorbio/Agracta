@@ -1799,6 +1799,7 @@ function excluirLocal(id){
   ensureLocais(); if(!LOCAIS[id]) return;
   if(Object.keys(LOCAIS).length<=1){ alert('Não dá pra excluir o último local — precisa existir pelo menos um.'); return; }
   var qs=quadrasDoLocal(id), nome=LOCAIS[id].nome;
+  if(qs.some(_quadraTemEstudo) && !_papelPermite('excluir')) return;
   requireDeletePassword('Excluir o local "'+nome+'"'+(qs.length?(' e suas '+qs.length+' quadra(s).'):'.'), function(){
     safetyBackup('antes de excluir local '+nome);
     qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; if(QNOME) delete QNOME[q]; _delQuadras[q]=Date.now(); });
@@ -2221,6 +2222,7 @@ function cancelDrawQuadra(){ endDraw(); if(_editLayer)_editLayer.clearLayers(); 
 function deleteQuadra(){
   if(!editId) return;
   var id=editId, nome=quadraNome(id);
+  if(_quadraTemEstudo(id) && !_papelPermite('excluir')) return;
   requireDeletePassword('Excluir a quadra "'+nome+'" e todos os dados dela.', function(){
     safetyBackup('antes de excluir quadra '+nome);
     delete QGEO[id]; if(data[id]) delete data[id];
@@ -2861,6 +2863,28 @@ function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return;
   '.delpwd-lab{display:block;font-size:10px;letter-spacing:.8px;color:var(--text-3,#7c8a80);font-weight:800;text-transform:uppercase;margin-bottom:5px}.delpwd-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:var(--text,#e8efe9);padding:12px;font-size:15px;outline:none}.delpwd-inp:focus{border-color:var(--danger,#ff6b6b)}'+
   '.delpwd-err{min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px}.delpwd-actions{display:flex;gap:8px;margin-top:12px}.delpwd-ok{flex:1;background:#9b2c26;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:900;cursor:pointer}.delpwd-ok:disabled{opacity:.6;cursor:default}.delpwd-cancel{background:#222;color:#bbb;border:none;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer}';
   document.head.appendChild(s); }
+/* PAPÉIS (papeis-app.js): avisa ANTES de tentar. O banco recusa a gravação de
+   quem não pode — e uma gravação recusada volta a ser tentada a cada
+   sincronização, prendendo o aparelho. Sem o módulo, segue: o banco confere. */
+function _papelPermite(acao,ctx){
+  try{ return !window.AgractaPapeis || window.AgractaPapeis.exigir(acao,ctx); }catch(e){ return true; }
+}
+/* Restaurar e importar trocam o estado inteiro: podem desfazer uma finalização,
+   reaprovar um protocolo, apagar uma avaliação. O banco confere cada uma pelo
+   papel dela, então a tela confere as mesmas antes (PapeisCore.acoesDaMudanca). */
+function _papelPermiteMudanca(novo){
+  try{
+    if(!window.PapeisCore||!window.AgractaPapeis) return true;
+    var falta=window.PapeisCore.acoesDaMudanca(data,novo).map(function(a){ return window.AgractaPapeis.permite(a); })
+      .filter(function(r){ return !r.ok; });
+    if(!falta.length) return true;
+    alert('Esta restauração muda coisas que o seu papel não pode mudar:\n\n• '+
+      falta.map(function(r){ return r.motivo; }).join('\n• ')+
+      '\n\nNada foi alterado. Peça a quem tem o papel, ou ao administrador no Painel Admin.');
+    return false;
+  }catch(e){ return true; }
+}
+function _quadraTemEstudo(qid){ return !!(((data||{})[qid]||{}).estudos||[]).length; }
 function requireDeletePassword(label, cb, opts){
   opts=opts||{}; window._delPwdOkText=opts.ok||'Excluir';
   /* O gate de confirmação depende só da identidade logada (_authUser); a senha é
@@ -4710,6 +4734,7 @@ function navStop(){
 function deleteQuadraFromEdit(){
   if(!curE) return;
   var id=curE, nome=quadraNome(id);
+  if(_quadraTemEstudo(id) && !_papelPermite('excluir')) return;
   requireDeletePassword('Excluir a quadra "'+nome+'" e todos os dados dela.', function(){
     safetyBackup('antes de excluir quadra '+nome);
     delete QGEO[id]; if(data[id]) delete data[id];
@@ -7280,6 +7305,7 @@ function deleteStudy(qid,sid,skipConfirm){
   /* Estudo finalizado esta assinado e com a estatistica congelada: apagar sem
      passar por Reabrir deixaria a trilha sem o motivo da baixa. */
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  if(!_papelPermite('excluir')) return;
   requireDeletePassword('Excluir este estudo e seus resultados.', function(){
     safetyBackup('antes de excluir estudo');
     var q=data[qid];if(!q||!q.estudos)return;
@@ -7886,9 +7912,17 @@ function _avDiffCells(oldN, newN){
 /* Reabrir avaliação ASSINADA p/ editar (BPL: exige motivo, fica na trilha) */
 var _avReopen=null;
 function reabrirAvaliacao(aid){
+  /* Corrigir a própria avaliação pode ser do técnico; a de outra pessoa pede o
+     papel da tabela. Quem assinou é o e-mail do carimbo. */
+  var _st=((data[curV]||{}).estudos||[]).find(function(s){return s.id===curSid;})||{};
+  var _av=(_st.avaliacoes||[]).find(function(a){return a.id===aid;})||{};
+  var _ass=window.PapeisCore?PapeisCore.assinanteDe(_av):null;
+  var _eu=String((typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'').trim().toLowerCase();
+  var _proprio=!!(_ass&&_eu&&_ass===_eu);
+  if(!_papelPermite('corrigir',{proprio:_proprio})) return;
   var motivo=(window.prompt('Esta avaliação está ASSINADA.\nPara editar (exigência BPL), descreva o MOTIVO da alteração:')||'').trim();
   if(!motivo){ if(typeof _stxToast==='function')_stxToast('Reabertura cancelada — o motivo é obrigatório.'); return; }
-  _avReopen={ avid:aid, motivo:motivo, by:((typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''), byNome:_currentUserName(), ts:Date.now() };
+  _avReopen={ avid:aid, motivo:motivo, by:((typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||''), byNome:_currentUserName(), ts:Date.now(), assinante:_ass, proprio:_proprio };
   openStudyEditAvaliacao(aid, null, true);
 }
 
@@ -15376,6 +15410,7 @@ function removeAplicacao(id){
   var _msgDel='Remover esta aplicação registrada.'+
     (_nCons?(' Atenção: '+_nCons+' baixa(s) em lote já registrada(s) NÃO são desfeitas — '+
              'o estorno é um ajuste com motivo, na tela do item.'):'');
+  if(!_papelPermite('excluir')) return;
   requireDeletePassword(_msgDel, function(){
     safetyBackup('antes de excluir aplicação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
@@ -15392,6 +15427,7 @@ function removeAplicacao(id){
 function removeAvaliacaoV2(id){
   var qid=curV, sid=curSid;
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  if(!_papelPermite('excluir')) return;
   requireDeletePassword('Remover esta avaliação e os resultados preenchidos nela.', function(){
     safetyBackup('antes de excluir avaliação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
@@ -15409,6 +15445,7 @@ function confirmDeleteStudy(qid,sid){
   /* Estudo finalizado esta assinado e com a estatistica congelada: apagar sem
      passar por Reabrir deixaria a trilha sem o motivo da baixa. */
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
+  if(!_papelPermite('excluir')) return;
   requireDeletePassword('Excluir este estudo e seus resultados.', function(){
     safetyBackup('antes de excluir estudo');
     var q=data[qid];
@@ -16978,6 +17015,8 @@ function saveStudyV2(){
     if(_PV && _PV.info(s).aprovado){
       var _dif=_PV.diferencas(_PV.retrato(old), _PV.retrato(s));
       if(_dif.length){
+        /* Sem papel para emendar, nada é salvo: o editor continua aberto. */
+        if(!_papelPermite('emendar')) return;
         var _vAt=_PV.info(s).versao;
         var _mot=prompt('O protocolo está APROVADO (versão '+_vAt+'). Estas mudanças viram a EMENDA '+((s.emendas||[]).length+1)+
           ' e o protocolo passa à versão '+(_vAt+1)+':\n\n• '+_dif.slice(0,10).map(_PV.textoDiferenca).join('\n• ')+
@@ -19457,6 +19496,7 @@ function finalizarEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s) return;
   s=normalizeStudy(s);
   if(estudoFinalizado(s)){ alert('Este estudo já está finalizado.'); return; }
+  if(!_papelPermite('finalizar')) return;
   var nAv=(s.avaliacoes||[]).length;
   if(!nAv && !confirm('Este estudo não tem nenhuma avaliação registrada.\n\nFinalizar assim mesmo?')) return;
   var prev=_statSnapshot(s);
@@ -19500,6 +19540,7 @@ function finalizarEstudo(qid,sid){
 }
 function reabrirEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s||!estudoFinalizado(s)) return;
+  if(!_papelPermite('reabrir')) return;
   var motivo=prompt('Por que este estudo está sendo reaberto?\n\nO motivo fica na trilha de auditoria.');
   if(motivo===null) return;
   motivo=String(motivo).trim();
@@ -19586,6 +19627,7 @@ function aprovarProtocolo(qid,sid){
   var PV=window.ProtocoloVivoCore; var s=_estudoDe(qid,sid); if(!PV||!s) return;
   if(_bloqueadoPorFinalizacao(qid,sid)) return;
   if(PV.info(s).aprovado){ alert('Este protocolo já está aprovado.'); return; }
+  if(!_papelPermite('aprovar')) return;
   var r=PV.retrato(s);
   var resumo='Aprovar o protocolo de '+(s.codigo||s.id)+' como versão 1.\n\n'+
     (r.tratamentos||[]).length+' tratamento(s) · '+r.numRepeticoes+' repetição(ões) · '+r.numAplicacoes+' aplicação(ões)'+
@@ -20046,6 +20088,7 @@ function safetyBackup(motivo,prepared,onArchived){
 
 function safetyApply(snap){
   if(!snap||!snap.data||typeof snap.data!=='object'||Array.isArray(snap.data))return false;
+  if(!_papelPermiteMudanca(snap.data)) return false;
   if(!safetyBackup('antes de restaurar')){
     alert('Não consegui guardar o estado atual neste aparelho — sem isso a restauração não teria volta.\n\n'+
           'Exporte os dados (o botão de exportar está nesta mesma tela) e libere espaço antes de restaurar.');
@@ -20133,6 +20176,7 @@ function openCloudHistory(){
   });
 }
 function cloudHistoryRestore(rev){
+  if(!_papelPermite('restaurar')) return;
   requireDeletePassword('Voltar todos os dados para como estavam logo antes da gravação '+rev+'. O estado atual é guardado antes neste aparelho, e a própria restauração vira uma nova gravação no histórico — nada se perde.', function(){
     var V=window.AgractaVersoes;
     if(!V || !V.disponivel()){ alert('Sem conexão com a nuvem.'); return; }
@@ -20323,6 +20367,7 @@ function armFotosAntigas(){
 var _safetyView=[];
 function safetyRestoreAt(i){
   var snap=_safetyView[i];if(!snap)return;
+  if(!_papelPermite('restaurar')) return;
   if(confirm('Restaurar este backup? O estado atual será guardado antes.')){
     if(!safetyApply(snap))return;
     document.getElementById('bkpModal').style.display='none';alert('✓ Restaurado.');
@@ -20472,6 +20517,7 @@ function _buildXlsx(soDoLocal){
 function importData(ev){
   var f=ev.target.files[0];
   if(!f)return;
+  if(!_papelPermite('restaurar')){ ev.target.value=''; return; }
   if(!confirm('Importar esse backup vai substituir os dados atuais (e o alinhamento/formato das quadras, se o backup tiver). Continuar?')){ev.target.value='';return}
   if(!safetyBackup('antes de importar backup')){
     alert('Não consegui guardar o estado atual neste aparelho. Exporte uma cópia e libere espaço antes de importar.');
@@ -20490,6 +20536,7 @@ function importData(ev){
       Object.keys(dd).forEach(function(k){
         if(!dd[k]||typeof dd[k]!=='object'||Array.isArray(dd[k]))throw new Error('Registro inválido no backup: '+k);
       });
+      if(!_papelPermiteMudanca(dd)){ ev.target.value=''; return; }
       window._cloudApplying=true;
       data={};
       Object.keys(dd).forEach(function(k){
@@ -21178,7 +21225,7 @@ var _ISMS_MAPA=[
   ['ALCOA+ · Exato','Dado assinado: motivo + de→para + evento; a assinatura antiga deixa de conferir','ok'],
   ['NIT-038 · Trilha de auditoria','Histórico e eventos imutáveis no servidor, mas escritos pelo app (L2); 5 tipos de evento (L3)','parcial'],
   ['NIT-038 · Assinatura eletrônica','SHA-256 do conteúdo + nome + significado + data; avaliação assina sem senha (L4)','parcial'],
-  ['ISO A.5.15/8.2 · Controle de acesso','Cadastro e janela de horário impostos pelo banco; sem papéis técnico/supervisor/diretor (L1)','parcial'],
+  ['ISO A.5.15/8.2 · Controle de acesso','Cadastro, janela e papéis impostos pelo banco; correção de dado assinado conferida só pela tela (L1)','ok'],
   ['ISO A.8.15 · Logs','Histórico e eventos só por acréscimo, com hora do servidor','ok'],
   ['ISO A.8.13 · Backup','Histórico no servidor + cofre no aparelho + export; rotina fora do Firebase a definir (L6)','parcial'],
   ['ISO A.8.24 · Criptografia','HTTPS em trânsito; criptografia em repouso do Google; SHA-256 em assinaturas e eventos','ok'],

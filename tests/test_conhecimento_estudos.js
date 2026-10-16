@@ -243,7 +243,7 @@ for(const alvo of ['deleteStudy','confirmDeleteStudy']){
   };
   const nomes=Object.keys(ctx);
   const fn=new Function(...nomes, [pega('estudoFinalizado'),pega('_estudoDe'),
-    pega('_bloqueadoPorFinalizacao'),pega(alvo),'return '+alvo+';'].join('\n'))(...nomes.map(k=>ctx[k]));
+    pega('_bloqueadoPorFinalizacao'),pega('_papelPermite'),pega(alvo),'return '+alvo+';'].join('\n'))(...nomes.map(k=>ctx[k]));
 
   fn('Q1','S2');
   assert.equal(pedidos.length,0,alvo+': estudo finalizado não pode cair direto na exclusão');

@@ -1,3 +1,133 @@
+AGRACTA — 36a publicacao                    16/10/2026
+=====================================================
+
+Leva: papeis -- tecnico, supervisor e diretor -- e a tabela "quem pode o
+que" no Painel Admin, conferida pelo banco.
+  CODIGO:  vendor/papeis-core.js (novo)  papeis-app.js (novo)
+           firestore.rules  app.js  eventos-app.js  vendor/eventos-core.js
+           acesso-horario.js  firebase-sync.js  index.html  sw.js
+           conferir.sh (os dois arquivos novos na conferencia de sintaxe)
+  TESTE:   tests/test_papeis.js (novo)  tests/test_papeis_app.js (novo)
+           tests/papeis-rules.cjs (novo; emulador, no CI)
+           tests/test_admin_apagar_conta.js  tests/test_versoes.js
+           tests/test_conhecimento_estudos.js (forma nova das regras)
+           package.json (papeis-rules no test:regras)
+  DOCS:    docs/VALIDACAO-SISTEMA.md (2.1)  docs/conformidade/README.md
+           SOP-acesso-assinatura-backup.md (2.1)  ISMS-ISO27001.md
+           docs/ROADMAP.md
+
+AS REGRAS DO BANCO MUDARAM. O PROXY NAO PRECISA SUBIR.
+A ORDEM DE PUBLICAR IMPORTA -- ver "O que conferir depois de subir".
+
+
+O QUE MUDOU
+-----------
+
+Pedido: fechar a lacuna L1 da validacao. Pelo banco, qualquer membro
+ativo aprovava protocolo, finalizava e reabria estudo; a senha na tela
+provava QUEM fez, nao que podia. Decisoes do Victor (16/10/2026):
+tecnico corrige a avaliacao que ele mesmo assinou; quem ja esta
+cadastrado entra como tecnico; e as duas escolhas ficam no Painel Admin.
+
+1) PAPEL DE CADA PESSOA
+
+  Painel Admin > lista de contas: cada pessoa ganhou "Papel" (tecnico,
+  supervisor, diretor). Grava em members/{email}.papel e vale na hora,
+  sem a pessoa sair do app. Cadastro sem papel e tecnico. Os dois
+  administradores das regras podem tudo, como antes.
+
+2) QUEM PODE O QUE
+
+  Abaixo da lista de contas, a tabela com o papel minimo de cada acao.
+  Comeca assim:
+    corrigir avaliacao assinada por outra pessoa .... supervisor (TELA)
+    tecnico corrige a que ele mesmo assinou ......... ligado      (TELA)
+    reabrir estudo finalizado ....................... supervisor (BANCO)
+    excluir estudo, aplicacao ou avaliacao .......... supervisor (BANCO)
+    voltar o banco a uma versao anterior ............ supervisor (TELA)
+    aprovar protocolo ............................... diretor    (BANCO)
+    emendar protocolo aprovado ...................... diretor    (BANCO)
+    finalizar estudo ................................ diretor    (BANCO)
+  "Salvar tabela" grava em politica/papeis (so o administrador; forma
+  fechada) e vale na hora em todos os aparelhos.
+
+3) O BANCO CONFERE
+
+  firestore.rules: gravar um estudo que NAO estava finalizado e agora
+  esta pede o papel de "finalizar"; o contrario, o de "reabrir"; o
+  protocolo que passa a aprovado, "aprovar"; a versao que muda,
+  "emendar"; apagar estudo, aplicacao ou avaliacao, "excluir". Vale
+  tambem para a gravacao parcial (um campo so). Gravar um estudo ja
+  finalizado sem mexer na finalizacao nao e finalizar de novo.
+
+  Por que corrigir e restaurar ficam so na tela: uma nota lancada offline
+  por um colega pode chegar depois da assinatura sem que ninguem esteja
+  corrigindo nada, e o banco nao distingue os dois casos. Recusar
+  travaria a sincronizacao daquele aparelho. Isso continua como lacuna
+  L1 na validacao, com o motivo escrito.
+
+4) A TELA AVISA ANTES DE TENTAR
+
+  Cada acao (finalizar, reabrir, aprovar, emendar, excluir estudo,
+  quadra com estudo, local com estudo, aplicacao e avaliacao, corrigir
+  avaliacao assinada, restaurar versao, restaurar backup local, importar
+  backup) para no comeco e diz o que pede: "Finalizar estudo pede diretor
+  ou acima. Seu papel: tecnico." Importa: uma gravacao recusada pelo
+  banco volta a ser tentada a cada sincronizacao e prende o aparelho.
+
+  Restaurar versao, restaurar backup local e importar backup conferem
+  tambem o que a troca implica: voltar para um estado finalizado e
+  finalizar, e o banco pede diretor. Um supervisor que tenta e barrado
+  antes, com a lista do que falta, e nada muda.
+
+  O que a tela nao pega: papel rebaixado enquanto o aparelho estava sem
+  rede. A tela usa o ultimo papel lido; o banco usa o atual e recusa.
+  Nesse caso a sincronizacao daquele aparelho para com o selo vermelho.
+  Saida: o administrador devolve o papel por um momento, a gravacao
+  pendente sobe, e quem tem o papel desfaz a acao se ela nao devia ter
+  acontecido. Rebaixar alguem: de preferencia com o aparelho dele online.
+
+5) EVENTOS COM PAPEL
+
+  O evento formal guarda o papel de quem fez e o papel que a tabela
+  exigia NO ATO (papelExigido). A tabela pode mudar depois; o evento
+  continua dizendo o que valia. Evento antigo nao muda de forma.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR  (nesta ordem)
+------------------------------
+1. Subir o app (estes arquivos) e abrir o Agracta duas vezes em cada
+   aparelho, para a versao nova entrar.
+2. Painel Admin: dar o papel de cada pessoa ANTES do passo 3. Quem ficar
+   sem papel vira tecnico no momento em que as regras forem publicadas.
+3. PUBLICAR AS REGRAS DO BANCO:
+     npx firebase-tools deploy --only firestore:rules
+   Se as regras subirem antes do app, um aparelho com o app velho deixa
+   o tecnico finalizar, o banco recusa, e aquele aparelho fica com a
+   sincronizacao travada ate atualizar.
+4. Como tecnico: tentar finalizar -- a tela recusa dizendo "diretor".
+5. Como diretor: finalizar um estudo de teste; o selo da nuvem volta a
+   verde.
+6. Painel Admin > Quem pode o que > Salvar tabela; mudar uma linha e ver
+   valer no outro aparelho sem reabrir.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_papeis.js: ordem dos papeis, tabela padrao, cadastro sem
+  papel, politica gravada, correcao da propria avaliacao, papel exigido
+  nos eventos, e o PADRAO DAS REGRAS IGUAL AO DO MOTOR (se um lado mudar
+  sozinho, reprova).
+  tests/test_papeis_app.js: papel e tabela vindos do banco, valem na
+  hora e offline; seletor e tabela no Painel Admin com a forma exata que
+  as regras aceitam; cada acao critica do app.js passa pela trava certa
+  antes de pedir a senha.
+  tests/papeis-rules.cjs: so no emulador (CI) -- cada transicao, com a
+  tabela padrao e com uma gravada, e a tabela so do administrador.
+  No navegador (Chromium, 390 px): a lista de contas com o papel e a
+  tabela cabem na tela, sem rolagem lateral.
+
 AGRACTA — 35a publicacao                    16/10/2026
 =====================================================
 

@@ -1,6 +1,6 @@
 # POP — Acesso, Assinatura Eletrônica, Cópia de Segurança e Restauração (Agracta)
 
-POP nº `[ PREENCHER ]` · Versão 2.0 (modelo de 11/10/2026) · Aprovado por `[ PREENCHER nome, data ]`
+POP nº `[ PREENCHER ]` · Versão 2.1 (modelo de 16/10/2026) · Aprovado por `[ PREENCHER nome, data ]`
 
 Alinhado a OECD Nº 17 / NIT-Dicla-038 (acesso, assinatura) e ISO/IEC 27001:2022
 (A.5.15–5.18, A.8.5, A.8.13). Detalhe técnico na
@@ -13,6 +13,29 @@ atribuição (ALCOA+). Só o administrador cadastra quem pode usar.
 
 **Quem pode administrar:** os dois e-mails de administrador fixos nas
 `firestore.rules`. Trocá-los exige publicar as regras de novo (lacuna L7).
+
+**Papéis:** cada pessoa é **técnico**, **supervisor** ou **diretor**
+(técnico < supervisor < diretor; o administrador pode tudo). Cadastro novo,
+ou antigo sem papel, é técnico. O papel se escolhe na linha da pessoa, no
+Painel Admin, e vale na hora.
+
+**Quem pode o quê:** no Painel Admin, abaixo da lista de contas, a tabela
+diz o papel mínimo de cada ação. Começa assim (escolha de 16/10/2026):
+
+| Ação | Papel mínimo | Quem confere |
+|---|---|---|
+| Corrigir avaliação assinada por outra pessoa | supervisor | tela |
+| Corrigir a avaliação que a própria pessoa assinou | técnico (opção ligada) | tela |
+| Reabrir estudo finalizado | supervisor | banco |
+| Excluir estudo, aplicação ou avaliação | supervisor | banco |
+| Voltar o banco a uma versão anterior | supervisor | tela |
+| Aprovar protocolo | diretor | banco |
+| Emendar protocolo aprovado | diretor | banco |
+| Finalizar estudo | diretor | banco |
+
+Mudar a tabela é decisão da Instalação de Teste: registrar quem decidiu e
+quando `[ PREENCHER: onde ]`. O botão "Salvar tabela" grava também quem
+salvou e a hora do servidor.
 
 **Conceder acesso (administrador):**
 1. Menu ☰ → **Painel Admin** (só aparece para administrador).
@@ -100,4 +123,5 @@ Treinamento da equipe: `[ PREENCHER lista e datas ]` · Revisão do POP: `[ PREE
 | Versão | Data | Alteração |
 |---|---|---|
 | 1.0 | 14/06/2026 | Emissão inicial |
+| 2.1 | 16/10/2026 | Papéis e a tabela "quem pode o quê" |
 | 2.0 | 11/10/2026 | Reescrito para a arquitetura atual: cadastro e janela no Firebase, desativar × apagar, assinatura por SHA-256, ações que pedem senha, histórico da nuvem e restauração, fotos no aparelho |

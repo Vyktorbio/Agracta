@@ -30,6 +30,7 @@ automática (ver a validação, §5).
 | Exigência | Como o Agracta atende | Onde se prova |
 |---|---|---|
 | Acesso individual e revogável | Login por pessoa (Firebase Authentication). Só o administrador cadastra em `workspaces/agracta/members/{email}`; desativar o cadastro corta leitura e escrita na operação seguinte | `firestore.rules` · `tests/acesso-rules.cjs` |
+| Papéis | Técnico, supervisor ou diretor no cadastro; a tabela "quem pode o quê" é do administrador, e o banco recusa finalizar, reabrir, aprovar, emendar ou excluir de quem não tem o papel | `vendor/papeis-core.js` · `tests/papeis-rules.cjs` |
 | Acesso só em expediente | Janela de dias e horas por pessoa, imposta pelo **banco** com a hora do **servidor** | `firestore.rules` · `acesso-horario.js` |
 | Atribuível e contemporâneo | Cada gravação deixa no servidor um registro com o autor da sessão e a hora do servidor — o aparelho não consegue carimbar outra pessoa nem outra hora | `historico/` · `tests/historico-rules.cjs` |
 | Original preservado | O servidor guarda a versão **anterior** de cada documento a cada gravação; ninguém edita nem apaga esse histórico, nem o administrador pelo app | `vendor/versoes-core.js` · `tests/test_versoes.js` |
@@ -46,8 +47,8 @@ automática (ver a validação, §5).
 A lista completa, com risco e ação proposta, está na validação, **§10
 (lacunas L1–L10)**. As que mais pesam numa inspeção:
 
-- **não há papéis** (técnico, supervisor, diretor): pelo banco, qualquer membro
-  ativo aprova, finaliza e reabre;
+- corrigir avaliação assinada e restaurar versão exigem papel, mas quem confere
+  é a tela (o banco confere finalizar, reabrir, aprovar, emendar e excluir);
 - o registro de histórico é escrito pelo app, não por uma função do servidor;
 - a cópia de segurança fora do Firebase depende de rotina manual, se o plano
   não tiver backup agendado;

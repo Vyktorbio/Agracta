@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Documento** | Plano e protocolo de validação do Agracta |
-| **Versão** | 2.0 — 11/10/2026 |
+| **Versão** | 2.1 — 16/10/2026 |
 | **Base** | OECD GLP Nº 1 (NIT-Dicla-035) · OECD Advisory Document Nº 17 (2016) — sistemas computadorizados (NIT-Dicla-038) · OECD Advisory Document Nº 22 (2021) — integridade de dados · GAMP 5 (abordagem baseada em risco) |
 | **Substitui** | versão 1.0 (14/06/2026, arquitetura anterior) e `docs/conformidade/validacao-sistema.md`, que deixa de existir |
 
@@ -108,6 +108,7 @@ uma falha apareceria antes de virar dado errado no relatório.
 | # | Função | Impacto no dado | Prob. de falha | Detectabilidade | Risco | Controle principal | Verificado por |
 |---|---|---|---|---|---|---|---|
 | R1 | Controle de acesso | A | B | baixa | **M** | regras do banco; cadastro só do administrador | URS-01, URS-02 |
+| R11 | Ação crítica por quem não tem papel para ela | A | M | média | **A** | papel no cadastro; tabela do administrador conferida pelo banco; a tela barra antes | URS-17 |
 | R2 | Gravação e sincronização entre aparelhos | A | M | média | **A** | transação com revisão atômica; histórico na mesma transação | URS-07, URS-11 |
 | R3 | Registro da avaliação | A | B | alta | M | grade por parcela; pendências antes de finalizar | URS-03 |
 | R4 | Correção de dado assinado | A | M | média | **A** | motivo obrigatório; evento `observacao.corrigida`; assinatura deixa de conferir | URS-05, URS-06, URS-08 |
@@ -142,7 +143,8 @@ O que os controles **não** fecham está na §10 (lacunas), com ação proposta.
 | URS-14 | Cálculos corretos: ANOVA/Tukey, eficácia, AACPD, dose, calda e preparo de bancada. | Sim |
 | URS-15 | Relatório do estudo e exportação montados a partir do dado gravado. | Sim |
 | URS-16 | A versão publicada é íntegra (todo arquivo existe) e identificável, e o aparelho instalado recebe a versão nova. | Sim |
-| URS-17 | `[ PREENCHER: requisitos próprios do laboratório ]` | |
+| URS-17 | Cada pessoa tem um papel (técnico, supervisor, diretor). Finalizar, reabrir, aprovar protocolo, emendar e excluir exigem o papel mínimo da tabela que o administrador define, e o **banco** recusa quem não tem. Corrigir avaliação assinada e restaurar versão também exigem papel, conferido pela tela e registrado no evento. | Sim |
+| URS-18 | `[ PREENCHER: requisitos próprios do laboratório ]` | |
 
 ---
 
@@ -193,6 +195,7 @@ completam.
 | URS-14 | `tests/test_estatistica.js` · `tests/test_motores_estatistica.js` · `tests/test_dose_core.js` · `tests/test_biocalc_mistura.js` · `tests/test_biocalc_lab.js` · `tests/test_aplicacao_core.js` | OQ-15 |
 | URS-15 | `tests/test_relatorio.js` · `tests/test_relatorio_fluxo.js` | OQ-16, PQ-03 |
 | URS-16 | `tests/check-assets.cjs` · `tests/test_cache_modulos.js` | IQ-02, IQ-03 |
+| URS-17 | `tests/papeis-rules.cjs` · `tests/test_papeis.js` · `tests/test_papeis_app.js` | OQ-17, IQ-09 |
 <!-- matriz:fim -->
 
 ---
@@ -211,6 +214,7 @@ O que está no ar é o que foi testado, no ambiente especificado.
 | IQ-06 | Pessoas com acesso | Cadastros ativos = equipe atual, uma pessoa por e-mail, sem conta compartilhada; os dois administradores das regras são os esperados | `[ ]` | lista assinada | `[ ]` |
 | IQ-07 | Fornecedores | Plano do Firebase `[ PREENCHER: Spark/Blaze ]` · região do banco `[ PREENCHER ]` · backup agendado do Firestore `[ PREENCHER: sim/não ]` · termos de serviço arquivados | `[ ]` | capturas | `[ ]` |
 | IQ-08 | Aparelhos de campo | Para cada aparelho: modelo, sistema, navegador e versão; **data e hora automáticas ligadas**; app instalado | `[ ]` | lista | `[ ]` |
+| IQ-09 | Papéis e tabela | Cada cadastro ativo tem o papel que a pessoa exerce no laboratório; a tabela "quem pode o quê" do Painel Admin é a aprovada pela GQ (anotar a data de "Salvar tabela") | `[ ]` | captura do Painel Admin | `[ ]` |
 
 ---
 
@@ -236,6 +240,7 @@ técnico B) cadastradas só para isso.
 | OQ-13 | Exclusão rastreável | Excluir uma avaliação do estudo de teste (pede senha) | Some da tela; o Histórico da nuvem mostra quem excluiu, quando e o conteúdo anterior; é restaurável | `[ ]` | `[ ]` |
 | OQ-14 | Cópia de segurança | Menu → Backup (arquivo) | Arquivo JSON gerado e legível, com estudos, avaliações e trilhas | `[ ]` | `[ ]` |
 | OQ-15 | Cálculos contra referência | Lançar um conjunto de dados com resultado conhecido (calculado no R ou em tabela publicada) e conferir ANOVA, Tukey e eficácia. Conferir uma calda contra cálculo à mão | Valores iguais dentro do arredondamento declarado | `[ ]` | `[ ]` |
+| OQ-17 | Papéis | Técnico A tenta finalizar, reabrir, aprovar e excluir; corrige uma avaliação que ele assinou e uma assinada pelo técnico B. Promover A a diretor no Painel Admin e repetir a finalização | A tela recusa cada ação dizendo o papel que ela pede; a correção da própria passa (com motivo) e a do colega não; promovido, A finaliza sem reabrir o app; a trilha formal mostra o papel de quem fez | `[ ]` | `[ ]` |
 | OQ-16 | Relatório | Gerar o relatório do estudo de teste (Word/PDF) | Tratamentos, doses, aplicações, avaliações e estatística batem com o dado gravado | `[ ]` | `[ ]` |
 
 ---
@@ -261,7 +266,7 @@ decisão: corrigir, mitigar por procedimento, ou aceitar com justificativa.
 
 | # | Lacuna | Risco | Mitigação atual | Ação proposta | Decisão / prazo |
 |---|---|---|---|---|---|
-| L1 | **Não há papéis.** Pelo banco, qualquer membro ativo pode aprovar protocolo, finalizar ou reabrir estudo. Técnico, supervisor e diretor existem só no roteiro | A | senha na ação; evento com autor; equipe pequena | Papéis no cadastro (`members`), conferidos nas regras | `[ PREENCHER ]` |
+| L1 | **Papéis: parte fica só na tela.** Desde a 36ª publicação o banco confere finalizar, reabrir, aprovar, emendar e excluir. Corrigir avaliação assinada e restaurar versão são conferidos só pela tela: uma nota lançada offline por um colega pode chegar ao servidor depois da assinatura sem que ninguém esteja corrigindo nada, e o banco não distingue os dois casos — recusar travaria a sincronização daquele aparelho. Um app antigo ou adulterado conseguiria corrigir sem o papel. E papel rebaixado com o aparelho sem rede: a tela usa o último papel lido, o banco recusa, e a sincronização daquele aparelho para até o papel voltar (ver LEIA-ME, 36ª) | M | a correção exige motivo e vira evento `observacao.corrigida` com o papel do autor e o exigido; a assinatura antiga deixa de conferir | Separar no banco a nota lançada da nota corrigida (exige a observação canônica gravada por célula) | `[ PREENCHER ]` |
 | L2 | O registro em `historico/` é escrito pelo app. Um cliente fora do app, com credencial válida, conseguiria gravar dado sem deixar o anterior | M | só membros ativos gravam; revisão atômica | Função no servidor copiando o anterior (exige plano Blaze), ou regra que exija o registro na mesma transação | `[ PREENCHER ]` |
 | L3 | Só cinco tipos de ação viram evento formal. As demais ficam na trilha do estudo (escrita pelo aparelho) e no histórico | M | o histórico guarda o anterior de tudo | Ampliar os tipos de evento conforme o uso | `[ PREENCHER ]` |
 | L4 | Assinar avaliação é um toque, sem senha (escolha do laboratório). Finalizar, aprovar, reabrir, excluir e restaurar pedem senha | M | login individual; janela de horário; sessão por pessoa | Decidir se a assinatura da avaliação também pede senha | `[ PREENCHER ]` |
@@ -299,7 +304,7 @@ Arquivos de classe crítica (conferidos pelo teste de rastreabilidade — se um 
 renomeado, esta lista acompanha):
 
 <!-- criticos:inicio -->
-- `firestore.rules` — URS-01, 02, 04, 07, 08
+- `firestore.rules` — URS-01, 02, 04, 07, 08, 17
 - `firebase-sync.js` — URS-04, 07, 11, 13
 - `acesso-horario.js` — URS-02
 - `eventos-app.js` · `trilha-formal.js` — URS-05, 08
@@ -307,6 +312,7 @@ renomeado, esta lista acompanha):
 - `vendor/versoes-core.js` — URS-07, 12, 13
 - `vendor/assinatura-core.js` — URS-06
 - `vendor/protocolo-vivo-core.js` — URS-09
+- `vendor/papeis-core.js` · `papeis-app.js` — URS-17
 - `vendor/avaliacao-core.js` · `vendor/pendencias-core.js` — URS-03, 10
 - `estatistica.js` — URS-14
 - `vendor/dose-core.js` · `vendor/biocalc-campo-core.js` · `vendor/biocalc-lab-core.js` · `vendor/aplicacao-core.js` — URS-14
@@ -347,6 +353,7 @@ revalidação aprovada ganha a seguinte (`validado-1.1`, `validado-2.0`).
 | Versão | Data | Alteração |
 |---|---|---|
 | 1.0 | 14/06/2026 | Emissão inicial (Supabase) |
+| 2.1 | 16/10/2026 | Papéis (URS-17, R11, OQ-17, IQ-09): papel no cadastro, tabela "quem pode o quê" no Painel Admin, conferida pelo banco para finalizar, reabrir, aprovar, emendar e excluir. L1 passa a cobrir só o que fica na tela |
 | 2.0 | 11/10/2026 | Reescrita para o Firebase: arquitetura atual, histórico e eventos no servidor, protocolo vivo, assinatura por SHA-256; matriz de rastreabilidade conferida por teste; OQ automática com registro; lacunas L1–L10; controle de mudanças por classe. Junta e substitui `docs/conformidade/validacao-sistema.md` |
 
 ### Fontes

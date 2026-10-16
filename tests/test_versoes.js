@@ -116,7 +116,9 @@ const rules=fs.readFileSync('firestore.rules','utf8');
 ok(/match \/historico\/\{registro\}[\s\S]*allow update, delete: if false;/.test(rules),'histórico append-only');
 ok(/request\.resource\.data\.em == request\.time/.test(rules),'hora do servidor exigida');
 ok(/request\.resource\.data\.por == request\.auth\.token\.email/.test(rules),'autor da sessão exigido');
-ok(/collection != 'historico'/.test(rules),'a regra genérica não reabre o histórico');
+ok(/function gravavelPelaRegraGenerica\(collection\) \{\s*return !\(collection in \[[^\]]*'historico'[^\]]*\]\)/.test(rules)
+   && /allow create, update: if gravavelPelaRegraGenerica\(collection\)/.test(rules)
+   && /allow delete: if gravavelPelaRegraGenerica\(collection\)/.test(rules),'a regra genérica não reabre o histórico');
 const app=fs.readFileSync('app.js','utf8');
 const tela=app.slice(app.indexOf('function openCloudHistory'),app.indexOf('/* ===================== VERIFICADOR DE INTEGRIDADE'));
 ok(!/SB\.rpc/.test(tela),'a tela não chama mais o Supabase');
