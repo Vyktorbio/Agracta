@@ -13521,7 +13521,7 @@ function _openBioestatFrame(modo){
     '<span>'+(modo==='forense'?'🔎 Triagem forense':'📊 Análise estatística')+'</span>'+
     '<button onclick="closeBioestat()" style="background:#222;color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer">Fechar</button>'+
   '</div>'+
-  '<iframe id="bioFrame" title="Estatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
+  '<iframe id="bioFrame" title="Análise bioestatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
   ov.style.display='flex';
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
@@ -14926,7 +14926,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(quadraNome(qid))+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
-  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Conhecimento e contexto</button>';
+  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Análise de resultados</button>';
   h+='<button class="btn-sm" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+sid+'\')" title="Escolher entre o modelo Agracta e o protocolo Sinergista">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
   /* Grânulos não têm calda: a quantidade por pote já está na ficha. */
@@ -21047,8 +21047,8 @@ function injectTopbarButtons(){
      aqui: continua no "+ ADICIONAR" de dentro da quadra. */
   var btnConhec=document.createElement("button");
   btnConhec.className="btn-sm btn-studies";
-  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Conhecimento</span>';
-  btnConhec.setAttribute("aria-label","Conhecimento experimental");
+  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Resultados</span>';
+  btnConhec.setAttribute("aria-label","Análise de resultados");
   btnConhec.onclick=function(){
     if(typeof abrirConhecimento==='function')abrirConhecimento({aba:'estudos'});
     else if(typeof _stxToast==='function')_stxToast('O Conhecimento não carregou neste aparelho. Abra de novo com conexão.');
