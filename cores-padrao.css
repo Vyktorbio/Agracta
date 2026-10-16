@@ -37,3 +37,9 @@ html.light{
 .study-workflow-step.ready{color:var(--ag-warn)!important}
 .study-workflow-step.ready .study-workflow-n{border-color:var(--ag-warn-line)!important;color:var(--ag-warn)!important}
 .study-workflow-step.attention{color:var(--ag-err)!important;background:var(--ag-err-bg)!important}
+
+/* Lista dos campos pendentes no cartão da avaliação (AvaliacaoCore.pendentes). */
+.av-pendentes{margin:6px 0 4px;padding:8px 10px;border-radius:8px;background:var(--ag-warn-bg);border:1px solid var(--ag-warn-line);font-size:12px;line-height:1.45}
+.av-pendentes-t{font-weight:700;color:var(--ag-warn);margin-bottom:2px}
+.av-pendentes ul{margin:0;padding-left:16px;max-height:220px;overflow:auto}
+.av-pendentes li{margin:1px 0}

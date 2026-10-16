@@ -165,6 +165,7 @@ function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"
 function uid(){ try{ if(window.crypto&&crypto.randomUUID) return 's'+crypto.randomUUID(); }catch(e){} return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,6); }
 /* Ícones SVG (estilo Lucide, monocromáticos, herdam a cor do texto via currentColor) */
 function ic(n,sz){ var P={
+  curve:'<path d="M3 3v18h18"/><path d="M6 17c5 0 5-11 14-11"/>',
   pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
   sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
@@ -823,12 +824,12 @@ function addHaControl(){
 /* ---- Medição de área: desenho manual ou contorno andando com GPS ---- */
 var _measure={open:false,mode:null,pts:[],layer:null,shapeLayer:null,handleLayer:null,gpsWatch:null,lastGps:null,lastTouchTs:0,touchBound:false,panelHot:false,touchStart:null,touchMoved:false,draggingPoint:false};
 function measureCss(){ if(document.getElementById('measureCss'))return; var s=document.createElement('style'); s.id='measureCss';
-  s.textContent='.measure-panel{position:fixed;left:12px;bottom:80px;z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid var(--border,#26322b);border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:var(--text,#e8efe9);font-family:var(--font,system-ui);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
+  s.textContent='.measure-panel{position:fixed;left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid var(--border,#26322b);border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:var(--text,#e8efe9);font-family:var(--font,system-ui);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
   '.measure-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.measure-title{font-size:12px;font-weight:900;letter-spacing:1px;color:var(--accent,#37d684);text-transform:uppercase}.measure-x{background:none;border:none;color:var(--text-3,#7c8a80);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
   '.measure-read{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}.measure-kpi{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px;min-width:0}.measure-kpi b{display:block;font-size:18px;line-height:1.05;color:var(--text,#e8efe9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.measure-kpi span{display:block;font-size:9px;color:var(--text-3,#7c8a80);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}.measure-kpi.main{grid-column:1/3}.measure-kpi.main b{font-size:27px;color:var(--accent,#37d684)}'+
   '.measure-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.measure-actions button{border:1px solid var(--border,#26322b);background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border-radius:9px;padding:9px 8px;font-weight:800;font-size:12px;cursor:pointer}.measure-actions button.on{background:var(--accent-deep,#103225);border-color:var(--accent-d,#1f8a52);color:var(--accent,#37d684)}.measure-actions button.danger{color:#ff9a8a;border-color:#5a2a2a;background:#2a1616}'+
   '.measure-note{font-size:11px;color:var(--text-3,#7c8a80);line-height:1.35;margin-top:8px}.measure-handle{cursor:grab}.measure-dot{width:18px;height:18px;border-radius:50%;background:#37d684;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);cursor:grab;touch-action:none;box-sizing:border-box}.measure-dot:after{content:"";display:block;width:6px;height:6px;margin:3px auto 0;border-radius:50%;background:rgba(15,21,18,.52)}.measure-handle.leaflet-drag-target .measure-dot,.measure-dot:active{background:#ffd166;transform:scale(1.12)}'+
-  '.measure-panel.drawing{width:268px;padding:9px;bottom:72px}.measure-panel.drawing .measure-head{margin-bottom:6px}.measure-panel.drawing .measure-read{grid-template-columns:1.28fr .88fr .55fr;gap:5px;margin-bottom:7px}.measure-panel.drawing .measure-kpi{padding:6px;border-radius:8px}.measure-panel.drawing .measure-kpi.main{grid-column:auto}.measure-panel.drawing .measure-kpi b{font-size:14px}.measure-panel.drawing .measure-kpi.main b{font-size:18px}.measure-panel.drawing .measure-actions{gap:6px}.measure-panel.drawing .measure-actions button{padding:8px 6px;font-size:11px}.measure-panel.drawing .measure-note{margin-top:6px;font-size:10px}'+
+  '.measure-panel.drawing{width:268px;padding:9px;bottom:calc(72px + env(safe-area-inset-bottom,0px))}.measure-panel.drawing .measure-head{margin-bottom:6px}.measure-panel.drawing .measure-read{grid-template-columns:1.28fr .88fr .55fr;gap:5px;margin-bottom:7px}.measure-panel.drawing .measure-kpi{padding:6px;border-radius:8px}.measure-panel.drawing .measure-kpi.main{grid-column:auto}.measure-panel.drawing .measure-kpi b{font-size:14px}.measure-panel.drawing .measure-kpi.main b{font-size:18px}.measure-panel.drawing .measure-actions{gap:6px}.measure-panel.drawing .measure-actions button{padding:8px 6px;font-size:11px}.measure-panel.drawing .measure-note{margin-top:6px;font-size:10px}'+
   '.leaflet-container.measure-drawing-map{cursor:crosshair;touch-action:none}';
   document.head.appendChild(s); }
 function measureEnsureLayer(){ if(!_map) initMap(); if(!_measure.layer) _measure.layer=LF.layerGroup().addTo(_map); return _measure.layer; }
@@ -1911,11 +1912,25 @@ var _deferredPrompt=null;
 window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); _deferredPrompt=e; });
 window.addEventListener('appinstalled', function(){ _deferredPrompt=null; });
 function isStandalone(){ try{ return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true; }catch(e){ return false; } }
-function isiOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent||''); }
+/* O iPad com iPadOS se apresenta como Mac: o que o entrega é a tela de toque. */
+function isiOS(){ var n=navigator||{}; return /iphone|ipad|ipod/i.test(n.userAgent||'') || (n.platform==='MacIntel' && n.maxTouchPoints>1); }
+/* No iOS 26 o Safari escondeu o Compartilhar atrás do ••• ao lado do endereço;
+   o passo antigo ("quadrado com a seta, na barra de baixo") não existe mais ali.
+   E o motivo de instalar é de DADOS, não de aparência: no Safari o iPhone pode
+   apagar o que o site guardou no aparelho depois de 7 dias sem uso, e o app da
+   Tela de Início fica fora dessa limpeza. Ele guarda os dados separado do
+   Safari, por isso a pessoa entra de novo depois de instalar. */
+var INSTALAR_IOS_TXT='📲 Instalar no iPhone:\n\n'+
+  '1) Abra o Agracta no SAFARI (não dentro do WhatsApp/Instagram).\n'+
+  '2) Toque em ••• (ao lado do endereço) e depois em Compartilhar. Em iOS mais antigo, o Compartilhar (quadrado com a seta ↑) fica direto na barra.\n'+
+  '3) Role e toque em "Adicionar à Tela de Início".\n'+
+  '4) Deixe ligado "Abrir como App Web" e toque em "Adicionar".\n\n'+
+  'Por que instalar: no Safari, o iPhone pode apagar os dados guardados no aparelho por um site que fica 7 dias sem uso. Instalado, o Agracta fica fora dessa limpeza.\n\n'+
+  'Antes, deixe a nuvem em dia. O app instalado guarda os dados separado do Safari: abra pelo ícone novo e entre de novo. Fotos guardadas só neste aparelho ficam no Safari.';
 function installApp(){
   if(typeof closeMainMenu==='function') closeMainMenu();
   if(_deferredPrompt){ _deferredPrompt.prompt(); try{ _deferredPrompt.userChoice.then(function(){ _deferredPrompt=null; }); }catch(e){} return; }
-  if(isiOS()){ alert('📲 Instalar no iPhone:\n\n1) Abra este site no SAFARI (não dentro do WhatsApp/Instagram)\n2) Toque em Compartilhar (o quadrado com a seta ↑, na barra de baixo)\n3) Role e toque em "Adicionar à Tela de Início"\n4) Toque em "Adicionar"\n\nPronto: vira um ícone na sua tela.'); return; }
+  if(isiOS()){ alert(INSTALAR_IOS_TXT); return; }
   alert('📲 Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
 }
 /* Atualização: limpa service worker + caches (preserva o Pyodide) e recarrega na versão nova.
@@ -2837,8 +2852,12 @@ function enforceAccess(){
 var _deletePwdCb=null;
 function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return; var s=document.createElement('style'); s.id='deletePwdCss';
   s.textContent='.delpwd-ovl{position:fixed;inset:0;z-index:3600;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}'+
-  '.delpwd-box{width:100%;max-width:380px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.58);padding:18px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}'+
-  '.delpwd-title{font-size:16px;font-weight:900;color:#ff9a8a;margin-bottom:5px}.delpwd-sub{font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:12px}.delpwd-user{font-weight:800;color:var(--text,#e8efe9)}'+
+  '.delpwd-box{width:100%;max-width:380px;max-height:calc(100vh - 36px);max-height:calc(100dvh - 36px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.58);padding:18px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}.delpwd-box>*{flex-shrink:0}'+
+  /* A CAIXA NUNCA PASSA DA TELA. O fechamento de um estudo grande lista dezenas
+     de pendências, e a caixa crescia até empurrar senha e botões para fora, sem
+     rolagem: não havia como finalizar. Agora só o texto rola; título, senha e
+     botões ficam sempre à vista. */
+  '.delpwd-title{font-size:16px;font-weight:900;color:#ff9a8a;margin-bottom:5px}.delpwd-sub{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;white-space:pre-line;font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:8px;padding-right:4px}.delpwd-quem{font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:10px}.delpwd-det{margin-top:10px;border-top:1px solid var(--border,#26322b);padding-top:8px}.delpwd-det>summary{cursor:pointer;font-weight:800;color:var(--text,#e8efe9);white-space:normal}.delpwd-det>div{margin-top:6px;font-size:11px}.delpwd-user{font-weight:800;color:var(--text,#e8efe9)}'+
   '.delpwd-lab{display:block;font-size:10px;letter-spacing:.8px;color:var(--text-3,#7c8a80);font-weight:800;text-transform:uppercase;margin-bottom:5px}.delpwd-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:var(--text,#e8efe9);padding:12px;font-size:15px;outline:none}.delpwd-inp:focus{border-color:var(--danger,#ff6b6b)}'+
   '.delpwd-err{min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px}.delpwd-actions{display:flex;gap:8px;margin-top:12px}.delpwd-ok{flex:1;background:#9b2c26;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:900;cursor:pointer}.delpwd-ok:disabled{opacity:.6;cursor:default}.delpwd-cancel{background:#222;color:#bbb;border:none;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer}';
   document.head.appendChild(s); }
@@ -2853,7 +2872,10 @@ function requireDeletePassword(label, cb, opts){
   m.style.display='flex';
   m.innerHTML='<div class="delpwd-box">'+
     '<div class="delpwd-title">'+esc(opts.title||'Confirmar exclusão')+'</div>'+
-    '<div class="delpwd-sub">'+esc(label||'Esta ação')+'<br>Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
+    '<div class="delpwd-sub">'+esc(label||'Esta ação')+
+      (opts.detalhes?('<details class="delpwd-det"><summary>'+esc(opts.detalhesTitulo||'Ver lista completa')+'</summary><div>'+esc(opts.detalhes)+'</div></details>'):'')+
+    '</div>'+
+    '<div class="delpwd-quem">Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
     '<label class="delpwd-lab">Senha</label><input id="deletePwdInput" class="delpwd-inp" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')deletePasswordConfirm()">'+
     '<div id="deletePwdErr" class="delpwd-err"></div>'+
     '<div class="delpwd-actions"><button id="deletePwdOk" class="delpwd-ok" onclick="deletePasswordConfirm()">'+esc(opts.ok||'Excluir')+'</button><button class="delpwd-cancel" onclick="deletePasswordClose()">Cancelar</button></div>'+
@@ -3590,7 +3612,7 @@ function croquiCss(){
      claro (o --accent do app é quase preto, #1f242a): o botão selecionado e o
      "Salvar" sumiam. Cor de painel sobre mapa não é cor de tema. */
   s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:var(--croqui-fonte,9px);padding:.22em .36em;line-height:1.1}'+
-  '.croqui-panel{position:fixed;left:12px;bottom:80px;z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
+  '.croqui-panel{position:fixed;left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
   '.croqui-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.croqui-title{font-size:12px;font-weight:900;letter-spacing:1px;color:#37d684;text-transform:uppercase}.croqui-x{background:none;border:none;color:#93a599;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
   '.croqui-sub{font-size:11px;color:#93a599;margin:-4px 0 9px;line-height:1.4}.croqui-sub b{color:#e8efe9}'+
   '.croqui-seg{display:flex;gap:6px;margin-bottom:9px}.croqui-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.croqui-seg button.on{background:#37d684;border-color:#37d684;color:#08130c}'+
@@ -3598,7 +3620,7 @@ function croquiCss(){
   '.croqui-info{font-size:11px;color:#b9c6bd;background:#0c1210;border:1px solid #2c3a32;border-radius:10px;padding:8px;margin-bottom:9px;line-height:1.45}.croqui-info b{color:#e8efe9}.croqui-info.falta{border-color:#7a3a3a;color:#f0c3c3}'+
   '.croqui-gps{width:100%;margin-bottom:8px;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-gps:disabled{opacity:.75;cursor:progress}'+
   '.croqui-acc{font-size:11px;line-height:1.45;border-radius:10px;padding:8px;margin-bottom:9px;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acc.boa{border-color:#2f6b45;color:#a9e6c0}.croqui-acc.limite{border-color:#6b5a2f;color:#e8d3a3}.croqui-acc.ruim{border-color:#7a3a3a;color:#f0c3c3}'+
-  '.croqui-eu{position:fixed;left:50%;transform:translateX(-50%);bottom:80px;z-index:1250;width:min(92vw,330px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:11px 12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
+  '.croqui-eu{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:1250;width:min(92vw,330px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:11px 12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
   '.croqui-eu-nome{font-size:24px;font-weight:900;line-height:1.05;letter-spacing:.5px;padding-right:56px}'+
   '.croqui-eu-txt{font-size:11px;color:#b9c6bd;line-height:1.45;margin-top:5px}'+
   '.croqui-eu-pe{font-size:10px;color:#93a599;margin-top:5px;text-transform:uppercase;letter-spacing:.4px}'+
@@ -3742,9 +3764,9 @@ function abrirCroquiEditor(qid,sid){
     +'<div id="croquiAjustes" class="croqui-ajustes"><div class="croqui-sub">A âncora salva é o canto da primeira parcela.</div>'
     +'<div class="croqui-seg"><button data-serp="1" onclick="croquiSetSerpentina(true)">Vai e volta</button>'
     +'<button data-serp="0" onclick="croquiSetSerpentina(false)">Sempre no mesmo sentido</button></div>'
-    +'<div class="croqui-nums"><div><label>Colunas</label><input type="number" min="1" step="1" value="'+(pos.colunas||2)+'" oninput="croquiSetColunas(this.value)"></div>'
-    +'<div><label>Carreador (m)</label><input type="number" min="0" step="0.5" value="'+pos.carreador+'" oninput="croquiSetVao(\'carreador\',this.value)"></div>'
-    +'<div><label>Entre parcelas (m)</label><input type="number" min="0" step="0.5" value="'+pos.espacamento+'" oninput="croquiSetVao(\'espacamento\',this.value)"></div>'
+    +'<div class="croqui-nums"><div><label>Colunas</label><input type="number" inputmode="numeric" min="1" step="1" value="'+(pos.colunas||2)+'" oninput="croquiSetColunas(this.value)"></div>'
+    +'<div><label>Carreador (m)</label><input type="text" inputmode="decimal" value="'+pos.carreador+'" oninput="croquiSetVao(\'carreador\',this.value)"></div>'
+    +'<div><label>Entre parcelas (m)</label><input type="text" inputmode="decimal" value="'+pos.espacamento+'" oninput="croquiSetVao(\'espacamento\',this.value)"></div>'
     +'<div><label>&nbsp;</label><div class="croqui-mini">âncora = 1ª parcela</div></div></div>'
     +'<div class="croqui-info"></div>'
     +'<button type="button" id="croquiGpsBtn" class="croqui-gps" onclick="croquiAncorarNoGps()">Marcar canto no GPS</button>'
@@ -7067,7 +7089,10 @@ function showD(id){
 
   /* NDVI é satélite sobre polígono: laboratório não tem nem um nem outro. */
   h+='</div><div class="panel-btns">'+
-     (_lab?'':'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
+     /* No laboratório o lugar do NDVI fica com a análise probit: uma ferramenta
+        a mais, que não depende de estudo nenhum (cola os dados, sai a DL50). */
+     (_lab?'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="abrirProbit()" title="Curva dose-resposta, DL50 e comparação de populações, como no PoloPlus">'+ic('curve',14)+' Probit</button>'
+         :'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
      '<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="navStartQuadra(\''+id+'\')">'+ic('pin',14)+' Ir até</button>'+
      '<button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">'+(_lab?'EDITAR LABORAT&Oacute;RIO':'EDITAR QUADRA')+'</button></div>';
   document.getElementById("dPnl").innerHTML=h;
@@ -7190,7 +7215,7 @@ function openE(id){
         '</select>'
       : '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
         '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
-        '<label class="e-lbl">\u00c1REA (HA)'+(_medHa!=null?' <span style="color:#8aa88a;font-weight:400">\u00b7 medida do mapa: '+_medHa.toFixed(2)+'</span>':'')+'</label><input id="ea" class="e-inp" value="'+(_medHa!=null?_medHa.toFixed(2):(d.area!=null?d.area:""))+'" placeholder="'+(_medHa!=null?_medHa.toFixed(2):"1.0")+'" type="number" step="0.01">'
+        '<label class="e-lbl">\u00c1REA (HA)'+(_medHa!=null?' <span style="color:#8aa88a;font-weight:400">\u00b7 medida do mapa: '+_medHa.toFixed(2)+'</span>':'')+'</label><input id="ea" class="e-inp" value="'+(_medHa!=null?_medHa.toFixed(2):(d.area!=null?d.area:""))+'" placeholder="'+(_medHa!=null?_medHa.toFixed(2):"1.0")+'" type="text" inputmode="decimal">'
     )+
     '<div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>'+
     '<button type="button" class="e-btn-del" onclick="deleteQuadraFromEdit()">'+(_lab?'EXCLUIR LABORAT\u00d3RIO':'EXCLUIR QUADRA')+'</button>';
@@ -7227,7 +7252,7 @@ function saveE(){
   data[curE]={
     cultura:prim.cultura, cultivar:prim.cultivar, plantio:prim.plantio,
     culturas:culturas,
-    area:(elArea?(parseFloat(elArea.value)||null):(ehLab?null:prev.area)),
+    area:(elArea?(_numBR(elArea.value,null)||null):(ehLab?null:prev.area)),   /* "0,35" do teclado do iPhone */
     estudos:estudos,
     _deletedStudies:prev._deletedStudies, /* preserva lápides de estudos (antes, editar a quadra as apagava) */
     _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
@@ -9574,18 +9599,18 @@ function _calcRenderShell(){
        valores pelo id do input; tirá-los do DOM zeraria parcela, volume e morto,
        e a conta sairia errada por causa de um detalhe de layout. */
     '<div class="calc-grid"'+(_calcCfgAberta?'':' style="display:none"')+'>'+selHtml+
-      '<div class="calc-f"><span class="calc-lab">Comprimento da parcela (m)</span><input id="calcLen" class="calc-inp" type="number" step="0.1" value="'+defLen+'" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Largura da parcela (m)</span><input id="calcWid" class="calc-inp" type="number" step="0.1" value="'+defWid+'" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Nº de parcelas / tratamento</span><input id="calcPlots" class="calc-inp" type="number" step="1" value="'+defReps+'" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Volume de calda (L/ha)</span><input id="calcVol" class="calc-inp" type="number" step="1" value="'+defVol+'" placeholder="se o trat. não tiver" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Volume morto (mL)</span><input id="calcDead" class="calc-inp" type="number" step="1" value="'+defDead+'" oninput="_calcCompute()"></div>'+
-      '<div class="calc-f"><span class="calc-lab">Nº de frascos / preparo</span><input id="calcBottles" class="calc-inp" type="number" step="1" value="'+defBottles+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Comprimento da parcela (m)</span><input id="calcLen" class="calc-inp" type="text" inputmode="decimal" value="'+defLen+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Largura da parcela (m)</span><input id="calcWid" class="calc-inp" type="text" inputmode="decimal" value="'+defWid+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Nº de parcelas / tratamento</span><input id="calcPlots" class="calc-inp" type="number" inputmode="numeric" step="1" value="'+defReps+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume de calda (L/ha)</span><input id="calcVol" class="calc-inp" type="text" inputmode="decimal" value="'+defVol+'" placeholder="se o trat. não tiver" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Volume morto (mL)</span><input id="calcDead" class="calc-inp" type="text" inputmode="decimal" value="'+defDead+'" oninput="_calcCompute()"></div>'+
+      '<div class="calc-f"><span class="calc-lab">Nº de frascos / preparo</span><input id="calcBottles" class="calc-inp" type="number" inputmode="numeric" step="1" value="'+defBottles+'" oninput="_calcCompute()"></div>'+
       /* O frasco ganha SELETOR de unidade. O campo pedia litros ao lado de um
          campo em mL, e "1900" virou 1.900 L num preparo de 318 mL. Com a unidade
          explícita ao lado do número, o engano não tem por onde entrar. */
       '<div class="calc-f"><span class="calc-lab">Capacidade do frasco</span>'+
         '<div style="display:flex;gap:5px">'+
-        '<input id="calcCap" class="calc-inp" type="number" step="0.1" style="flex:1;min-width:0" value="'+
+        '<input id="calcCap" class="calc-inp" type="text" inputmode="decimal" style="flex:1;min-width:0" value="'+
           esc(defCap>0?(defCap<1?String(Math.round(defCap*1000000)/1000):String(defCap)):'')+
           '" placeholder="0 = ignorar" oninput="_calcCompute()">'+
         '<select id="calcCapUn" class="calc-sel" style="flex:0 0 74px" onchange="_calcCompute()">'+
@@ -11536,7 +11561,7 @@ function calcBarraHtml(){
   function opt(v,rot,atual){ return '<option value="'+esc(v)+'"'+(String(atual)===String(v)?' selected':'')+'>'+esc(rot)+'</option>'; }
   function campo(rot,chave,step,extra,estr){
     return '<div class="calc-f"><span class="calc-lab">'+esc(rot)+'</span>'+
-      '<input class="calc-inp" type="number" step="'+step+'" value="'+esc(b[chave])+'" '+(extra||'')+
+      '<input class="calc-inp" type="text" inputmode="decimal" value="'+esc(b[chave])+'" '+(extra||'')+
       ' on'+(estr?'change':'input')+'="_calcBarraCampo(\''+chave+'\',this.value'+(estr?',1':'')+')"></div>';
   }
   h+='<div class="calc-grid">'+
@@ -11589,7 +11614,7 @@ function calcBarraHtml(){
        '<span>Barra inteira</span><span>1ª (mL)</span><span>2ª (mL)</span><span>3ª (mL)</span></div>'+
        '<div class="calc-mixr" style="grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,1fr))"><span>Coleta</span>'+
        [0,1,2].map(function(j){
-         return '<input class="calc-inp calc-barrainp" type="number" step="0.1" value="'+esc((b.leiturasBarra||[])[j]||'')+
+         return '<input class="calc-inp calc-barrainp" type="text" inputmode="decimal" value="'+esc((b.leiturasBarra||[])[j]||'')+
                 '" oninput="_calcBarraLeitura(0,'+j+',this.value)">';
        }).join('')+'</div></div>';
   }else{
@@ -11601,7 +11626,7 @@ function calcBarraHtml(){
       h+='<div class="calc-mixr" style="grid-template-columns:minmax(0,.7fr) repeat(3,minmax(0,1fr)) minmax(0,.8fr)">'+
          '<span>'+(i+1)+'</span>'+
          [0,1,2].map(function(j){
-           return '<input class="calc-inp calc-barrainp" type="number" step="0.1" value="'+esc(r[j])+
+           return '<input class="calc-inp calc-barrainp" type="text" inputmode="decimal" value="'+esc(r[j])+
                   '" oninput="_calcBarraLeitura('+i+','+j+',this.value)">';
          }).join('')+
          '<b>'+((med==null)?'—':f(med,1))+'</b></div>';
@@ -13484,6 +13509,9 @@ function _openPranchaFrame(src, titulo){
   '<iframe id="prFrame" title="'+esc(titulo)+'" src="'+src+'?t='+Date.now()+'" style="flex:1 1 auto;width:100%;border:0;background:#f2f3f1"></iframe>';
   ov.style.display='flex';
 }
+/* Análise probit da bancada (probit.html). Mesma moldura das pranchas; os
+   dados digitados lá ficam só neste aparelho, como rascunho da página. */
+function abrirProbit(){ _openPranchaFrame('probit.html', 'Análise probit · laboratório'); }
 function closePrancha(){ var ov=document.getElementById('prOvl'); if(ov){ var f=document.getElementById('prFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
 
 function _openBioestatFrame(modo){
@@ -13493,7 +13521,7 @@ function _openBioestatFrame(modo){
     '<span>'+(modo==='forense'?'🔎 Triagem forense':'📊 Análise estatística')+'</span>'+
     '<button onclick="closeBioestat()" style="background:#222;color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer">Fechar</button>'+
   '</div>'+
-  '<iframe id="bioFrame" title="Estatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
+  '<iframe id="bioFrame" title="Análise bioestatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
   ov.style.display='flex';
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
@@ -13589,7 +13617,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-19';
+var MOTOR_VERSAO='agracta-20';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -13610,10 +13638,13 @@ var MOTOR_VERSAO='agracta-19';
    A versão 17 segue Robertson et al. (2007) na dose-resposta — resposta natural
    estimada com a testemunha no modelo, heterogeneidade só quando significativa —
    e leva a placa numa série de concentrações para a curva de dose (CE50).
-   A versão 19 devolve o tamanho do efeito ao lado do p (ω² parcial, CV%, % contra
+   A versão 19 corrige a dose letal: ela é a estimativa pontual (theta - b0)/b1,
+   como no PoloPlus, e não o centro do intervalo de Fieller, que só coincide
+   com ela quando g = 0 (a DL90 do Schaefer, no livro, saía 19,4 em vez de 10,8).
+   A versão 20 devolve o tamanho do efeito ao lado do p (ω² parcial, CV%, % contra
    a testemunha com IC de Fieller) e a interação tratamento × local.
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-19';
+var MOTOR_CALCULO='agracta-20';
 /* O pedido de cálculo vale para ESTES dados (assinatura) e sobrevive a fechar o
    app: sem isto, reabrir escondia a estatística já calculada e guardada até
    alguém apertar o botão de novo. Mudou o dado, muda a assinatura e o pedido
@@ -14922,7 +14953,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(quadraNome(qid))+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
-  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Conhecimento e contexto</button>';
+  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Análise de resultados</button>';
   h+='<button class="btn-sm" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+sid+'\')" title="Escolher entre o modelo Agracta e o protocolo Sinergista">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
   /* Grânulos não têm calda: a quantidade por pote já está na ficha. */
@@ -15126,6 +15157,16 @@ function openStudyDetail(qid,sid){
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       var _prog=AvaliacaoCore.avaliacao(study,a);h+='<small>'+(_prog.complete?'Concluída':(_prog.started?'Parcial · '+_prog.pending+' campos pendentes':'Pendente'))+'</small></summary>';
+      /* Quais são os pendentes e por quê. Só na parcial: na avaliação vazia a
+         lista seria a grade inteira. Até 40 linhas; o resto vira contagem. */
+      if(_prog.started&&!_prog.complete&&typeof AvaliacaoCore.pendentes==='function'){
+        var _pend=AvaliacaoCore.pendentes(study,a), _reps=Math.max(1,parseInt(study.numRepeticoes,10)||1);
+        h+='<div class="av-pendentes"><div class="av-pendentes-t">Faltam '+_pend.length+':</div><ul>'+
+          _pend.slice(0,40).map(function(x){
+            var _rep=(typeof _repDisplay==='function')?_repDisplay(x.rep):String(x.rep);
+            return '<li><b>'+esc(x.tratId)+'</b>'+(_reps>1?' · rep. '+esc(_rep):'')+' · '+esc(x.variavel)+' — '+esc(x.motivo)+'</li>';
+          }).join('')+(_pend.length>40?'<li>… e mais '+(_pend.length-40)+'</li>':'')+'</ul></div>';
+      }
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
         h+='<div class="evento-bbch">'+esc(bbchRotulo(studyCrop,a.bbch))+'</div>';
@@ -15923,7 +15964,7 @@ function janelaCampoHtml(s){
      renomeação — o campo apareceria vazio sem ninguém entender por quê. */
   function um(rot,chave,un,ph){
     return '<div class="se-field"><label>'+esc(rot)+(un?(' ('+un+')'):'')+'</label>'+
-      '<input type="number" step="any" id="seJan_'+chave+'" value="'+
+      '<input type="text" inputmode="decimal" id="seJan_'+chave+'" value="'+
       esc(j[chave]!=null?j[chave]:'')+'" placeholder="'+esc(ph||'sem limite')+'"></div>';
   }
   function par(rot,cMin,cMax,un,ph1,ph2){
@@ -16017,9 +16058,9 @@ function renderStudyEditModal(){
   var _pDim=(typeof _parseParcelaDim==='function')?_parseParcelaDim((s.protocolo||{}).tamanhoParcela):null;
   h+='<div class="se-field"><label>Tamanho da parcela</label>'+
      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
-     '<input type="number" id="seParcelaComp" value="'+(_pDim?_pDim.comprimento:'')+'" min="0" step="0.1" placeholder="comprimento" style="width:110px">'+
+     '<input type="text" inputmode="decimal" id="seParcelaComp" value="'+(_pDim?_pDim.comprimento:'')+'" placeholder="comprimento" style="width:110px">'+
      '<span style="color:#8aa88a">×</span>'+
-     '<input type="number" id="seParcelaLarg" value="'+(_pDim?_pDim.largura:'')+'" min="0" step="0.1" placeholder="largura" style="width:110px">'+
+     '<input type="text" inputmode="decimal" id="seParcelaLarg" value="'+(_pDim?_pDim.largura:'')+'" placeholder="largura" style="width:110px">'+
      '<span style="color:#8aa88a">m</span></div>'+
      '<div class="e-hint">Usado pelo croqui no mapa, pela calculadora e pela planilha. O maior valor é tratado como o comprimento — o lado no sentido de quem planta e pulveriza.</div></div>';
   h+='</div><div class="se-step'+(studyEditStep===2?' is-active':'')+'" data-step="2">';
@@ -16056,8 +16097,8 @@ function renderStudyEditModal(){
   }else{
     h+='<div class="se-row">';
     h+='<div class="se-field"><label>1ª aplicação</label><input type="date" id="seDataInicio" value="'+esc(s.dataInicio)+'"></div>';
-    h+='<div class="se-field"><label>Nº aplicações</label><input type="number" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
-    h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
+    h+='<div class="se-field"><label>Nº aplicações</label><input type="number" inputmode="numeric" id="seNumAp" value="'+s.numAplicacoes+'" min="1" max="20"></div>';
+    h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" inputmode="numeric" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
     h+='</div>';
     h+=janelaCampoHtml(s);
   }
@@ -16070,7 +16111,7 @@ function renderStudyEditModal(){
     var _fo=s.labFonteTipo||'gL';
     h+='<div class="se-section-title">Preparo no laboratório</div>';
     h+='<div class="se-row">';
-    h+='<div class="se-field"><label>Volume do pote (mL)</label><input type="number" id="seLabVol" value="'+(s.labVolumeMl||50)+'" min="0" step="1"></div>';
+    h+='<div class="se-field"><label>Volume do pote (mL)</label><input type="text" inputmode="decimal" id="seLabVol" value="'+(s.labVolumeMl||50)+'"></div>';
     h+='<div class="se-field"><label>Fonte do produto</label><select id="seLabFonte">'+
       ['gL','gkg','mae','puro'].map(function(k){
         var rot={gL:'Rótulo (g/L)',gkg:'Rótulo (g/kg)',mae:'Solução-mãe (ppm)',puro:'Reagente puro (100%)'}[k];
@@ -16091,8 +16132,8 @@ function renderStudyEditModal(){
   }else{
     h+='<div class="se-section-title">Preparo de calda</div>';
     h+='<div class="se-row">';
-    h+='<div class="se-field"><label>Volume morto (mL)</label><input type="number" id="seVolMorto" value="'+(s.volumeMorto||0)+'" min="0" step="1"></div>';
-    h+='<div class="se-field"><label>Nº de frascos / preparo</label><input type="number" id="seNumFrascos" value="'+(s.numFrascos||1)+'" min="1" step="1"></div>';
+    h+='<div class="se-field"><label>Volume morto (mL)</label><input type="text" inputmode="decimal" id="seVolMorto" value="'+(s.volumeMorto||0)+'"></div>';
+    h+='<div class="se-field"><label>Nº de frascos / preparo</label><input type="number" inputmode="numeric" id="seNumFrascos" value="'+(s.numFrascos||1)+'" min="1" step="1"></div>';
     /* O campo aceita a UNIDADE, e não só o número. Ele fica ao lado de "Volume
        morto (mL)", e digitar 200 pensando na unidade do vizinho é o erro natural —
        aconteceu, e virou "frasco 200 L" num preparo de 62 mL. Número puro continua
@@ -16131,8 +16172,8 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Momentos ('+(_emH?'h':'dias')+')</label><input type="text" id="seAvalMom" value="'+esc(s.avalMomentos||'')+'" placeholder="'+(_momSug||(_emH?'2, 12, 24, 36, 72':'1, 3, 7'))+'" inputmode="decimal">'+
        ((_momSug&&!s.avalMomentos)?'<button type="button" class="btn-sm" style="margin-top:4px" onclick="var e=document.getElementById(\'seAvalMom\');if(e)e.value=\''+_momSug+'\'">usar '+_momSug+(_bioMA==='potter'?' h':' dias')+'</button>':'')+'</div>';
   }else{
-    h+='<div class="se-field"><label>A cada (dias)</label><input type="number" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
-    h+='<div class="se-field"><label>Nº avaliações</label><input type="number" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
+    h+='<div class="se-field"><label>A cada (dias)</label><input type="number" inputmode="numeric" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
+    h+='<div class="se-field"><label>Nº avaliações</label><input type="number" inputmode="numeric" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
   }
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">'+(_lab
@@ -16197,7 +16238,7 @@ function renderStudyEditModal(){
 
   h+='<div class="se-section-title">Tratamentos</div>';
   var _lblRep=(_des==='faixas')?'Treços por faixa (subamostras)':'Repetições por tratamento';
-  h+='<div class="se-field"><label id="seRepsLbl">'+_lblRep+'</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
+  h+='<div class="se-field"><label id="seRepsLbl">'+_lblRep+'</label><input type="number" inputmode="numeric" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
 
   /* §7.2 — MÉTODO DE APLICAÇÃO.
@@ -18617,10 +18658,10 @@ function _avColLerOpts(){
 function _avColOptsRender(){
   var box=document.getElementById('avColOpts'); if(!box) return;
   var t=window._avColTipo||'pct', o=window._avColOpts||{sub:1,N:20,escalaMax:4,sentido:'menor'}, h='<div class="avcol-opts">';
-  if(t==='razao') h+='<div><label class="avcol-lab">N avaliados (padrão)</label><input id="avColN" class="avcol-inp" type="number" min="0" step="1" value="'+o.N+'"></div>';
-  else h+='<div><label class="avcol-lab">Sub-amostras / parcela</label><input id="avColSub" class="avcol-inp" type="number" min="1" step="1" value="'+o.sub+'"></div>';
-  if(t==='escala') h+='<div><label class="avcol-lab">Nota mínima</label><input id="avColEscMin" class="avcol-inp" type="number" min="0" step="1" value="'+(o.escalaMin||0)+'"></div>'+
-    '<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" min="1" step="1" value="'+o.escalaMax+'"></div>';
+  if(t==='razao') h+='<div><label class="avcol-lab">N avaliados (padrão)</label><input id="avColN" class="avcol-inp" type="number" inputmode="numeric" min="0" step="1" value="'+o.N+'"></div>';
+  else h+='<div><label class="avcol-lab">Sub-amostras / parcela</label><input id="avColSub" class="avcol-inp" type="number" inputmode="numeric" min="1" step="1" value="'+o.sub+'"></div>';
+  if(t==='escala') h+='<div><label class="avcol-lab">Nota mínima</label><input id="avColEscMin" class="avcol-inp" type="number" inputmode="numeric" min="0" step="1" value="'+(o.escalaMin||0)+'"></div>'+
+    '<div><label class="avcol-lab">Nota máxima da escala</label><input id="avColEsc" class="avcol-inp" type="number" inputmode="numeric" min="1" step="1" value="'+o.escalaMax+'"></div>';
   h+='</div>';
   h+='<label class="avcol-lab">No % de controle, o melhor resultado é</label>'+
      '<select id="avColSentido" class="avcol-inp" onchange="_avColLerOpts();_avColOptsRender();">'+
@@ -19372,6 +19413,46 @@ function _studyFinalizationReview(qid,s){
   var pend=[]; try{ pend=pendenciasDoEstudo(qid,s); }catch(e){}
   return {issues:issues,notes:notes,ok:issues.length===0,pendencias:pend};
 }
+/* O AVISO DE FECHAMENTO CABE NA TELA. O texto completo (uma linha por análise,
+   uma por avaliação) vai inteiro para "Ver lista completa"; em cima fica o
+   resumo agrupado: "44 parcelas sem avaliação (8 DAT, 9 DAT, 10 DAT)" e
+   "25 análises não calculadas — consumo foliar, consumo de isca…". Só muda o
+   que se LÊ antes da senha: revisão e estatística assinadas continuam iguais. */
+function _resumoFinalizacao(qid,s,prev,review){
+  var cab='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
+          (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+'.\n\n';
+  var pe='Depois disso o estudo fica somente-leitura e sai da agenda.';
+  var pendTxt=(review.pendencias||[]).map(function(p){ return p.texto+(p.detalhe?(' ('+p.detalhe+')'):''); });
+  if(!pendTxt.length) pendTxt=review.issues;
+  var completo=(pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+pendTxt.join('\n• ')+'\n\n'):'')+
+               (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')):'');
+  /* Pendências agrupadas pelo texto; do detalhe fica o rótulo (antes do " · "). */
+  var grupos=[], porTexto={};
+  (review.pendencias||[]).forEach(function(p){
+    var g=porTexto[p.texto]; if(!g){ g=porTexto[p.texto]={texto:p.texto,rot:[],detalhe:p.detalhe||''}; grupos.push(g); }
+    var r=String(p.detalhe||'').split(' · ')[0]; if(r && g.rot.indexOf(r)<0) g.rot.push(r);
+  });
+  var pendRes=grupos.length?grupos.map(function(g){
+    return g.rot.length>1 ? (g.texto+' ('+g.rot.join(', ')+')') : (g.texto+(g.detalhe?(' ('+g.detalhe+')'):''));
+  }):review.issues.slice();
+  /* Estatística: uma linha por estado, variáveis sem repetir. As notas de
+     estatística são as primeiras de review.notes, na ordem de avancado.pendencias. */
+  var av={pendencias:[]}; try{ av=_bioestatSnapshotAvancado(qid,s); }catch(e){}
+  var nEst=Math.min((av.pendencias||[]).length, review.notes.length);
+  var porEstado={pendente:{n:0,vars:[]},erro:{n:0,vars:[]}};
+  (av.pendencias||[]).slice(0,nEst).forEach(function(p){
+    var e=porEstado[p.estado==='erro'?'erro':'pendente'], k=String(p.jobKey||''), v=k.indexOf('|')>=0?k.slice(k.indexOf('|')+1):k;
+    e.n++; if(!e.vars.some(function(x){ return x.toLowerCase()===v.toLowerCase(); })) e.vars.push(v);
+  });
+  var atRes=[];
+  if(porEstado.pendente.n) atRes.push(porEstado.pendente.n+' análise(s) estatística(s) não calculada(s) — '+porEstado.pendente.vars.join(', ')+
+    '. Para calcular antes de fechar: Cancelar → Estatística → Iniciar cálculos estatísticos.');
+  if(porEstado.erro.n) atRes.push(porEstado.erro.n+' análise(s) com erro de cálculo — '+porEstado.erro.vars.join(', '));
+  atRes=atRes.concat(review.notes.slice(nEst));
+  var resumo=cab+(pendRes.length?('PENDÊNCIAS:\n• '+pendRes.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
+             (atRes.length?('ATENÇÃO:\n• '+atRes.join('\n• ')+'\n\n'):'')+pe;
+  return {resumo:resumo, detalhes:completo};
+}
 function finalizarEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s) return;
   s=normalizeStudy(s);
@@ -19381,17 +19462,10 @@ function finalizarEstudo(qid,sid){
   var prev=_statSnapshot(s);
   var review=_studyFinalizationReview(qid,s);
   /* No aviso da senha vale a lista CONCRETA quando ela existe: "2 parcelas sem
-     avaliação · 7 DAA" diz onde ir; "3 avaliação(ões) sem lançamento" só diz que
-     há o que procurar. As contagens continuam no registro assinado. */
-  var _pendTxt=(review.pendencias||[]).map(function(p){
-    return p.texto+(p.detalhe?(' ('+p.detalhe+')'):'');
-  });
-  if(!_pendTxt.length) _pendTxt=review.issues;
-  var resumo='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
-             (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+
-             '.\n\n'+(_pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+_pendTxt.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
-             (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
-             'Depois disso o estudo fica somente-leitura e sai da agenda.';
+     avaliação · 7 DAA" diz onde ir. Em cima vai o resumo agrupado; a lista
+     inteira fica em "Ver lista completa". As contagens continuam no registro
+     assinado. */
+  var _txt=_resumoFinalizacao(qid,s,prev,review), resumo=_txt.resumo;
   requireDeletePassword(resumo, function(){
     openRubrica(function(ok){
       if(!ok){ alert('Sem a assinatura o estudo não é finalizado.'); return; }
@@ -19422,7 +19496,7 @@ function finalizarEstudo(qid,sid){
       _refazTelasDoEstudo();
       openStudyDetail(qid,sid);
     }, 'Finalizar o estudo '+(s.codigo||s.id));
-  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
+  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar', detalhes:_txt.detalhes});
 }
 function reabrirEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s||!estudoFinalizado(s)) return;
@@ -21000,8 +21074,8 @@ function injectTopbarButtons(){
      aqui: continua no "+ ADICIONAR" de dentro da quadra. */
   var btnConhec=document.createElement("button");
   btnConhec.className="btn-sm btn-studies";
-  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Conhecimento</span>';
-  btnConhec.setAttribute("aria-label","Conhecimento experimental");
+  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Resultados</span>';
+  btnConhec.setAttribute("aria-label","Análise de resultados");
   btnConhec.onclick=function(){
     if(typeof abrirConhecimento==='function')abrirConhecimento({aba:'estudos'});
     else if(typeof _stxToast==='function')_stxToast('O Conhecimento não carregou neste aparelho. Abra de novo com conexão.');
@@ -24497,11 +24571,11 @@ function _soloAnFormPinta(id, a){
   var r=a.resultados||{};
   var h='<div class="solo-f"><label>DATA DA COLETA</label><input id="soloAnData" type="date" value="'+esc(a.data||'')+'"></div>'+
         '<div class="solo-f"><label>LABORATÓRIO</label><input id="soloAnLab" type="text" value="'+esc(a.laboratorio||'')+'"></div>'+
-        '<div class="solo-f"><label>PROFUNDIDADE (CM)</label><input id="soloAnProf" type="number" step="1" placeholder="20" value="'+esc(a.profundidade||'')+'"></div>'+
+        '<div class="solo-f"><label>PROFUNDIDADE (CM)</label><input id="soloAnProf" type="number" inputmode="numeric" step="1" placeholder="20" value="'+esc(a.profundidade||'')+'"></div>'+
         '<div class="solo-grid">';
   SOLO_ANALISE_CAMPOS.forEach(function(c){
     h+='<div class="solo-f" style="margin:0"><label>'+esc(c.rot)+(c.un?' ('+esc(c.un)+')':'')+'</label>'+
-       '<input id="soloAn_'+esc(c.k)+'" type="number" step="'+esc(c.passo)+'" inputmode="decimal" value="'+esc(r[c.k]!=null?r[c.k]:'')+'"></div>';
+       '<input id="soloAn_'+esc(c.k)+'" type="text" inputmode="decimal" value="'+esc(r[c.k]!=null?r[c.k]:'')+'"></div>';
   });
   h+='</div><div class="solo-fb"><button class="solo-ok" onclick="soloSalvarAnalise(\''+esc(id)+'\')">Salvar</button>'+
      '<button class="solo-rf" onclick="soloCancelarAnalise()">Cancelar</button>';
@@ -24534,7 +24608,7 @@ function soloSalvarAnalise(id){
   var res={}, algum=false;
   SOLO_ANALISE_CAMPOS.forEach(function(c){
     var v=_soloVal('soloAn_'+c.k);
-    if(v!==''){ res[c.k]=Number(v); algum=true; }
+    if(v!==''){ res[c.k]=Number(v.replace(',','.')); algum=true; }   /* "5,2" do teclado decimal */
   });
   if(!algum){ alert('Preencha ao menos um resultado do laudo.'); return; }
   var _susp=soloUnidadeSuspeita(res);
@@ -24838,7 +24912,7 @@ function soloRecomendacaoHtml(id){
 
   h+='<div class="solo-grid">'+
      '<div class="solo-f" style="margin:0"><label>CULTURA</label><select id="soloRecCult" onchange="soloRecalcular(\''+esc(id)+'\')">'+opts+'</select></div>'+
-     '<div class="solo-f" style="margin:0"><label>PRODUTIVIDADE ESPERADA</label><input id="soloRecProd" type="number" step="0.5" inputmode="decimal" value="'+esc(cfg.produtividade!=null?cfg.produtividade:'')+'" oninput="soloRecalcular(\''+esc(id)+'\')"></div>'+
+     '<div class="solo-f" style="margin:0"><label>PRODUTIVIDADE ESPERADA</label><input id="soloRecProd" type="text" inputmode="decimal" value="'+esc(cfg.produtividade!=null?cfg.produtividade:'')+'" oninput="soloRecalcular(\''+esc(id)+'\')"></div>'+
      '</div>';
   h+='<div id="soloRecOut">'+soloRecSaidaHtml(id)+'</div>';
   h+='<div class="solo-meta" style="margin-top:6px"><span>Tabelas <b>'+esc(soloPacoteNome())+'</b></span></div>';
@@ -24882,7 +24956,7 @@ function soloRecalcular(id){
   if(!data[id]) return;
   var el=document.getElementById('soloRecCult');
   var prod=_soloVal('soloRecProd');
-  var cfg={chave:(el?el.value:''), produtividade:(prod!==''?Number(prod):null)};
+  var cfg={chave:(el?el.value:''), produtividade:(prod!==''?Number(prod.replace(',','.')):null)};
   _soloSet(id, {rec:cfg});
 
   /* O V2 da cultura vem do pacote: escolher a cultura já preenche a calagem. É o
@@ -25007,9 +25081,9 @@ function _soloMapaFalhou(msg,seq){
 function _soloMapaLegendaCss(){
   if(document.getElementById('soloMapaLegendaCss'))return;
   var s=document.createElement('style');s.id='soloMapaLegendaCss';
-  s.textContent='.solo-map-legend{position:fixed;right:12px;bottom:82px;z-index:880;width:min(270px,72vw);border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(15,21,18,.94);color:#e8efe9;box-shadow:0 10px 32px rgba(0,0,0,.42);font:600 11px/1.35 system-ui,sans-serif;overflow:hidden;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}'+
+  s.textContent='.solo-map-legend{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(82px + env(safe-area-inset-bottom,0px));z-index:880;width:min(270px,72vw);border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(15,21,18,.94);color:#e8efe9;box-shadow:0 10px 32px rgba(0,0,0,.42);font:600 11px/1.35 system-ui,sans-serif;overflow:hidden;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}'+
    '.solo-map-legend button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;color:inherit;padding:9px 11px;font:800 11px system-ui;cursor:pointer;text-align:left}.solo-map-legend button small{font-size:9px;color:#9eaaa2;font-weight:650}'+
-   '.solo-map-legend-body{max-height:38vh;overflow:auto;padding:0 8px 8px;background:#fff}.solo-map-legend-body img{display:block;width:100%;height:auto}.solo-map-legend.collapsed .solo-map-legend-body{display:none}@media(max-width:620px){.solo-map-legend{right:8px;bottom:76px;width:min(230px,68vw)}}';
+   '.solo-map-legend-body{max-height:38vh;overflow:auto;padding:0 8px 8px;background:#fff}.solo-map-legend-body img{display:block;width:100%;height:auto}.solo-map-legend.collapsed .solo-map-legend-body{display:none}@media(max-width:620px){.solo-map-legend{right:8px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:min(230px,68vw)}}';
   document.head.appendChild(s);
 }
 function soloMapaLegendaAlternar(){var el=document.getElementById('soloMapaLegenda');if(el)el.classList.toggle('collapsed');}

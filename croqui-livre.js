@@ -89,7 +89,7 @@
     ED.cfg.atual = proximaVazia(ED.guardado, 1);
     var bloco = d.createElement('div');
     bloco.setAttribute('data-livre', '1');
-    function campo(k, rot, passo) { return '<div><label>' + rot + '</label><input type="number" inputmode="decimal" min="0" step="' + passo + '" data-livre-cfg="' + k + '" value="' + esc(ED.cfg[k]) + '"></div>'; }
+    function campo(k, rot, passo) { return '<div><label>' + rot + '</label><input type="text" inputmode="decimal" data-livre-cfg="' + k + '" value="' + esc(ED.cfg[k]) + '"></div>'; }
     bloco.innerHTML = '<div class="livre-seg"><button type="button" data-livre-modo="grade">Grade</button><button type="button" data-livre-modo="livre">Parcelas livres</button></div>' +
       '<div class="livre-seg livre-so"><button type="button" data-livre-tipo="ponto">Plantas (toque = 1 planta)</button><button type="button" data-livre-tipo="ret">Retângulo C × L</button></div>' +
       '<div class="croqui-nums livre-so">' + campo('porParcela', 'Plantas por parcela', 1) + campo('raio', 'Raio da copa (m)', 0.5) +

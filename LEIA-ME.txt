@@ -1,4 +1,4 @@
-AGRACTA — 27a publicacao                    06/10/2026
+AGRACTA — 34a publicacao                    16/10/2026
 =====================================================
 
 Leva: tamanho do efeito ao lado do p, e a interacao tratamento x local.
@@ -13,7 +13,7 @@ Leva: tamanho do efeito ao lado do p, e a interacao tratamento x local.
 
 O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
 A estatistica guardada no aparelho e recalculada uma vez (MOTOR_CALCULO
-agracta-19): os resultados antigos nao tinham os campos novos.
+agracta-20): os resultados antigos nao tinham os campos novos.
 
 
 O QUE MUDOU
@@ -75,6 +75,526 @@ TESTES
   Telas conferidas no Chromium em largura de celular (390 px) com relatorios
   reais do motor. De quebra: p muito pequeno aparecia como "0" nas tabelas da
   estatistica; agora sai "< 0,0001".
+
+
+AGRACTA — 33a publicacao                    13/10/2026
+=====================================================
+
+Leva: o cartao da avaliacao diz QUAIS campos estao pendentes e por que.
+  CODIGO:  vendor/avaliacao-core.js  app.js  cores-padrao.css
+           index.html  sw.js
+  TESTE:   tests/test_avaliacao_pendentes.js (novo)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: "8 campos pendentes -- eu preencho com 0 e continua".
+O cartao dizia quantos faltavam, nunca quais. Zero sempre contou como
+preenchido; o que faltava estava em outro lugar (outra variavel, o N da
+razao, uma sub-amostra, o 2o avaliador da dupla leitura).
+
+Agora, na avaliacao PARCIAL, logo abaixo de "Parcial · N campos
+pendentes", sai a lista: tratamento, repeticao, variavel e o motivo --
+"vazio", "falta o N (avaliados)", "falta o n (afetados)", "n maior que
+N", "sub-amostras: 1 de 3 preenchidas", "falta a leitura do avaliador B
+(dupla leitura)". Ate 40 linhas. A lista usa a mesma regra da contagem:
+os dois nunca discordam. Tratamento marcado como "nao se aplica" no
+protocolo nao e cobrado.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo com avaliacao parcial > Avaliacoes: abaixo de "Parcial · ...
+   campos pendentes", a lista do que falta.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_avaliacao_pendentes.js (16): lista do tamanho da contagem;
+  zero nao e pendente; cada motivo; nao se aplica fora; o cartao mostra a
+  lista so na parcial.
+
+AGRACTA — 32a publicacao                    13/10/2026
+=====================================================
+
+Leva: a tela que ia para o login e voltava sozinha.
+  CODIGO:  firebase-sync.js  index.html  sw.js
+  TESTE:   tests/test_login_recusa_passageira.js (novo)
+           tests/test_login_laco.js (secao 7: a recusa vai ao login na 2a vez)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: "quando ele entra no celular dele, o meu fica indo pra tela
+de login e voltando" -- tambem na conta do administrador.
+
+1) RECUSA PASSAGEIRA NAO E RECUSA
+
+  Reproduzido com o adaptador real e o banco simulado. Das situacoes que a
+  entrada de um colega provoca (gravacao dele, corrida de gravacoes, rede
+  lenta, uma recusa do banco), so a RECUSA mandava ao login um aparelho ja
+  autorizado, e ainda apagava a marca de autorizado. Uma unica "permissao
+  negada" -- o login (token) sendo renovado na hora da leitura -- mostrava
+  o login; a leitura seguinte dava certo e escondia: "sai e volta".
+  Agora, num aparelho ja autorizado, a primeira recusa renova o login e le
+  de novo depois de 1,5 s. Recusa que se repete e de verdade: login e marca
+  apagada, como antes. Aparelho que nunca entrou vai ao login de primeira.
+
+2) REGISTRO DAS IDAS AO LOGIN
+
+  A frase do login pisca e nao da para ler. Cada ida ao login fica
+  registrada NESTE aparelho (ultimas 30), com hora e motivo:
+  agractaLoginRegistro() no console, ou localStorage
+  'agracta-login-registro'. Se o "sai e volta" continuar, o registro diz
+  qual caminho foi.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Com voce conectado, um assistente entra no celular dele: a sua tela
+   nao vai mais para o login.
+3. Se ainda for: no computador, F12 > Console > agractaLoginRegistro()
+   mostra o motivo.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_login_recusa_passageira.js (14): uma recusa nao derruba
+  aparelho autorizado e a releitura da certo; recusa repetida vai ao login
+  e apaga a marca; aparelho nunca autorizado vai de primeira; corrida de
+  gravacoes e rede lenta nao vao ao login; o registro guarda hora e motivo.
+  Reprova o codigo da 31a ("nao vai ao login").
+
+AGRACTA — 31a publicacao                    13/10/2026
+=====================================================
+
+Leva: a dose letal (CL/DL) do motor estatistico passa a ser a estimativa
+pontual, como no PoloPlus.
+  CODIGO:  estatistica/bioengine/doseresponse.py
+           estatistica/app.js  estatistica/index.html  estatistica/sw.js
+           app.js  index.html  sw.js
+  TESTE:   tests/motor_doseresposta.py (secao 5b, nova)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+O CALCULO MUDOU: MOTOR_CALCULO sobe para agracta-19 e a estatistica
+guardada nos aparelhos e recalculada. Estudos FINALIZADOS mantem o que
+foi preservado no fechamento (ver abaixo).
+
+
+O QUE MUDOU
+-----------
+
+Achado ao rodar o motor com os dados do cap. 4 de Robertson et al.
+(2007), comparando com a saida do PoloPlus impressa no livro.
+
+1) A DOSE LETAL ERA O CENTRO DO INTERVALO, NAO A ESTIMATIVA
+
+  A funcao de Fieller devolvia o centro do intervalo, (r - g.cND/vD)/(1-g),
+  no lugar da dose letal r = (theta - b0)/b1. Os dois so coincidem com
+  g = 0; quanto maior o g, maior o desvio. Com os dados do livro:
+    Fairfax  DL50  4,103 -> 4,139   (g = 0,07)
+    Pixley   DL50 16,333 -> 16,559
+    Schaefer DL10  0,641 -> 1,321   (g = 0,38)
+    Schaefer DL90 19,385 -> 10,777
+  Agora as nove DLs do livro batem com o PoloPlus. Os LIMITES nao mudam
+  (ja eram os de Fieller). A razao de CL50/CL90 entre curvas usava a
+  mesma dose e tambem fica corrigida.
+
+2) ESTUDOS JA FINALIZADOS
+
+  O fechamento preserva a estatistica calculada naquele momento: CL50 e
+  CL90 de estudo finalizado com serie de doses foram calculadas com o erro
+  e continuam como estavam. Para conferir um deles, reabra a analise no
+  modulo de estatistica (agora com a versao corrigida) e compare.
+  Estudos em andamento sao recalculados sozinhos.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Num estudo em andamento com serie de doses: a estatistica recalcula
+   (leva o tempo do Pyodide) e a CL50 fica dentro do intervalo, nao no
+   meio dele.
+3. Laudo do motor: arquivos_motor_sha256 com o hash novo do
+   doseresponse.py; engine_version bioensaio-auditoria-21.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/motor_doseresposta.py, secao 5b: as nove DLs do livro iguais ao
+  PoloPlus (3 casas), cada DL igual a (theta - b0)/b1 e a mesma usada na
+  razao de CL; com g grande o intervalo e assimetrico em volta dela.
+  Reprova o codigo da 30a (19 falhas).
+
+AGRACTA — 30a publicacao                    13/10/2026
+=====================================================
+
+Leva: a analise probit da bancada (botao Probit na ficha do laboratorio).
+  CODIGO:  probit.html  probit.js  probit.css  vendor/probit-core.js (novos)
+           app.js  index.html  sw.js
+  TESTE:   tests/test_probit_core.js (novo, 142 verificacoes)
+           tests/test_probit_lab_botao.js (novo)
+  DOCS:    README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+A estatistica dos estudos (motor Python) NAO mudou: nada em cache e
+recalculado.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "vamos incluir isso no Agracta na sessao de laboratorio.
+Coloque como opcao ou 'a mais'" -- a analise de dose-resposta do PoloPlus.
+
+1) BOTAO "PROBIT" NA FICHA DO LABORATORIO
+
+  No lugar do NDVI (que o laboratorio nao tem), a ficha ganha o botao
+  Probit. Ele abre a pagina da analise na mesma moldura das pranchas.
+  E uma ferramenta a mais: nao depende de estudo, nao grava nada na
+  nuvem. Os dados digitados ficam so neste aparelho, como rascunho.
+  Quadra de campo nao muda.
+
+2) A ANALISE
+
+  Entrada no formato do PoloPlus (= titulo, * preparacao, dose n r;
+  dose 0 e a testemunha); abre o .txt do PoloPlus. Faz o que o
+  PoloPlus faz no cap. 4 de Robertson et al. (2007):
+  - probit ou logit por maxima verossimilhanca, com a resposta natural
+    estimada junto quando a testemunha tem mortos;
+  - DLs pedidas (e o probit 9) com limites fiduciais de 90, 95 e 99%,
+    corrigidos pela heterogeneidade quando chi2/GL > 1; limite com
+    g > 0,5 nao sai;
+  - qui-quadrado com residuos padronizados;
+  - testes de igualdade e paralelismo (razao de verossimilhanca);
+  - razoes de DL com intervalo, contra a preparacao escolhida.
+  Graficos das curvas e dos residuos, saida completa em texto (copiar
+  ou baixar .txt) e a aba Validacao.
+
+3) VALIDACAO CONTRA O LIVRO
+
+  A aba Validacao roda, no aparelho, os dados do cap. 4 e compara 109
+  numeros com a saida do PoloPlus 1.0 impressa nas fig. 4.7 e 4.8: 106
+  identicos e 3 com 1 no ultimo digito (precisao simples do PoloPlus).
+  Dois detalhes que so aparecem batendo os numeros, e que o motor segue:
+  - a covariancia e a inversa da informacao OBSERVADA (com a esperada o
+    EP do Pixley sairia 0,524 e nao 0,529);
+  - os limites das razoes usam +-2 EP, nao 1,96 (fica como opcao).
+  Logit e dose linear, que o livro nao exemplifica, conferidos contra o
+  statsmodels.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Tocar num laboratorio no mapa: a ficha mostra "Probit", "Ir ate" e
+   "EDITAR LABORATORIO". Numa quadra de campo continua "NDVI".
+3. Probit: abre com o exemplo do livro. Aba Validacao: "Aprovado".
+4. Colar um ensaio ja analisado no PoloPlus e comparar DL50 e limites.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_probit_core.js (142): parametros, covariancia, qui-quadrado,
+  DLs e limites, testes e razoes contra o PoloPlus impresso; logit e dose
+  linear contra o statsmodels; dados que nao formam curva (sem resposta,
+  separacao completa, testemunha 100%) dao mensagem e nao derrubam as
+  outras preparacoes.
+  tests/test_probit_lab_botao.js: o botao so no laboratorio, a pagina com
+  a CSP estrita e o service worker guardando os quatro arquivos.
+  No navegador (Chromium, 1300 px e 402 x 874): sem erro de CSP no
+  console, sem rolagem lateral, autoteste aprovado.
+
+AGRACTA — 29a publicacao                    08/10/2026
+=====================================================
+
+Leva: a escolha "Ordem dos slides" na tela dos slides.
+  CODIGO:  galeria-local.html  galeria-local.js  galeria-fotos.js
+           index.html  sw.js
+  TESTE:   tests/test_fotos_ordem_slides.js (secao 6, nova)
+           tests/test_fotos_locais.js (versao da galeria)
+  DOCS:    docs/GALERIA-PARCELAS.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso, depois da 28a: "se eu nao tirar em sequencia elas saem na
+ordem que tirei. Poderia ter uma opcao de colocar em sequencia na tela
+de fazer slides".
+
+A ordem T1, T2, T3... da 28a ja valia para qualquer foto -- tirada em
+sequencia, uma a uma ou importada. Mas a tela dos slides (Montar
+apresentacao, onde o botao "Slides e originais" abre) so tinha "Fotos
+por slide": o aviso da ordem ficava la em cima, na grade, e nao aparecia.
+
+1) "ORDEM DOS SLIDES", AO LADO DE "FOTOS POR SLIDE"
+
+  - T1, T2, T3... (todas as repeticoes de cada): o padrao. Igual a 28a;
+    as setas so trocam fotos da mesma parcela e data;
+  - Na ordem em que tirei: a ordem guardada, e as setas mudam qualquer
+    foto de lugar, como era antes da 28a.
+A grade, a previa, o PowerPoint e o ZIP seguem a escolha, e o aviso da
+grade muda junto. A escolha fica lembrada neste aparelho. O relatorio
+Word/PDF continua sempre em T1, T2, T3...
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo > Fotos > Slides e originais: abaixo de "Fotos por slide",
+   "Ordem dos slides" em "T1, T2, T3... (todas as repeticoes de cada)".
+3. Trocar para "Na ordem em que tirei": a grade muda; Previa e
+   PowerPoint saem nessa ordem. Voltar: T1, T2, T3 de novo.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_fotos_ordem_slides.js (40 verificacoes; 12 novas na secao
+  6): fotos tiradas uma a uma, sem a sequencia, saem T1, T2, T3; a troca
+  para "Na ordem em que tirei" muda grade, aviso, setas e PowerPoint, e
+  fica lembrada. Reprova o codigo da 28a (a escolha nao existia).
+  No navegador (Chromium, 402 x 874): a escolha cabe na tela dos slides
+  e troca a ordem nos dois sentidos, sem erro.
+
+AGRACTA — 28a publicacao                    07/10/2026
+=====================================================
+
+Leva: os slides das fotos na ordem T1, T2, T3...
+  CODIGO:  vendor/fotos-core.js  galeria-local.js  galeria-local.html
+           galeria-fotos.js  relatorio-local.js  relatorio-local.html
+           relatorio-estudo.js  index.html  sw.js
+  TESTE:   tests/test_fotos_ordem_slides.js (novo)
+           tests/test_fotos_locais.js (versao da galeria)
+  DOCS:    docs/GALERIA-PARCELAS.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "Agora os slides nao estao saindo certo. Era pra sair na
+ordem, t1, t2, t3... todas as repeticoes de t1, todas de t2...".
+
+O PowerPoint saia na ordem em que as fotos foram guardadas. As fotos em
+sequencia sao tiradas andando pelo campo, na ordem sorteada das parcelas
+(101 = T3 R1, 102 = T1 R1...), e os slides saiam nessa ordem. Nunca
+houve ordenacao por tratamento: a galeria dizia "a sequencia abaixo e a
+ordem dos slides", mas a sequencia era a da captura.
+
+1) A ORDEM DOS SLIDES E A DO PROTOCOLO
+
+  - uma avaliacao depois da outra (pela data; no mesmo dia, na ordem
+    das avaliacoes do estudo: 1, 2, 4 e 24 HAT);
+  - dentro de cada avaliacao: T1 com todas as repeticoes (R1, R2, R3,
+    R4), depois T2, T3... na ordem do cadastro de tratamentos (T10 vem
+    depois de T9, nao depois de T1);
+  - varias fotos da mesma parcela e data ficam juntas, na ordem em que
+    foram guardadas;
+  - tratamento apagado do cadastro vai para o fim da avaliacao: a foto
+    nao some.
+A grade da galeria, a previa, o PowerPoint e o ZIP de originais (001_,
+002_...) seguem a mesma ordem. Foto nova entra no lugar dela, nao no
+fim. Fica no motor puro (FotosCore.ordemDosSlides), com teste.
+
+2) AS SETAS
+
+As setas de mover so aparecem entre fotos da mesma parcela e data (a
+vista geral antes do detalhe, por exemplo). Entre tratamentos a ordem e
+a do protocolo: uma seta que pusesse T3 antes de T1 desfaria o pedido.
+A troca continua guardada no aparelho.
+
+3) O RELATORIO (WORD/PDF) TAMBEM
+
+"Incluir fotos locais deste estudo" no Relatorio completo punha as fotos
+na mesma ordem da captura. Agora usa a mesma ordem dos slides.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo com fotos tiradas em sequencia > Fotos > Slides e originais:
+   a grade mostra T1 (R1, R2...), depois T2, T3.
+3. Ver previa e Baixar PowerPoint: os slides na mesma ordem.
+4. Uma parcela com duas fotos na mesma data: as setas trocam as duas;
+   foto sozinha na parcela nao tem seta.
+5. As fotos ja guardadas nao mudam: so a ordem em que aparecem.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_fotos_ordem_slides.js (28 verificacoes, novo): fotos
+  tiradas na ordem do campo saem T1R1 T1R2 T2R1 T2R2 T3R1 T3R2 no motor,
+  na grade, na previa, no PowerPoint, no ZIP e no relatorio. Reprova o
+  codigo anterior: no motor (a ordem nao existia), na galeria (mesmo com
+  o motor novo) e no relatorio.
+
+AGRACTA — 27a publicacao                    07/10/2026
+=====================================================
+
+Leva: o Agracta no iPhone.
+  CODIGO:  index.html  iphone.js (novo)  apple-touch-icon.png (novo)
+           app.js  mapa-medir.js  croqui-livre.js  protocolo-menu.js
+           estudo-pagina.js  styles.css  theme-2026.css  ui-campo.css
+           satelites.css  integracoes.css  estudo-pagina.css
+           croqui-parcelas.css  fotos-estudo.css  protocolo-avaliacoes.css
+           campo-3d.css  sw.js  conferir.sh
+  TESTE:   tests/test_iphone.js (novo)
+  DOCS:    README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "Estou no iPhone 18 Pro. Agora precisamos melhorar o
+agracta no iPhone tambem". Conferido num iPhone simulado no Chromium
+(402 x 874 pt, toque, as areas seguras do iOS, em pe e deitado) e contra
+o que o Safari do iOS 26/27 faz diferente, em relatos de quem testou em
+aparelho com iOS 27.
+
+1) A TELA INTEIRA, COM AS AREAS SEGURAS VALENDO
+
+Faltava viewport-fit=cover no index.html. Sem ele o iPhone encolhe a
+pagina para a area segura e devolve 0 nas medidas da ilha e do
+indicador: as dezenas de regras que o app ja tinha para afastar a barra
+de baixo do indicador nao valiam nada. Agora:
+  - a barra de baixo vai ate a borda e os botoes ficam acima do
+    indicador;
+  - em pe, a pagina continua comecando abaixo da barra de status (estilo
+    "default", o certo no iOS 26+: o "black-translucent" faz o vidro do
+    sistema borrar o topo do app);
+  - deitado, a ilha fica num dos lados: o clima, as gavetas, a ficha do
+    estudo, Hoje, Conhecimento, Ver no campo, fotos, relatorio, croqui
+    das parcelas, menu do protocolo, Medicao e os cantos do mapa saem de
+    baixo dela;
+  - paineis que flutuam acima da barra de baixo (Medicao, croqui,
+    Planejar parcelas, notas no mapa, legenda do mapa de solos, clima)
+    somam o indicador: com a barra maior eles cobririam os botoes dela.
+    O teste reprova regra nova com distancia fixa do chao sem a area
+    segura;
+  - o clima do topo somava a area segura de cima duas vezes.
+
+2) TOCAR NUM CAMPO NAO AMPLIA MAIS A TELA
+
+O Safari amplia a tela sozinho quando o campo tem letra menor que 16px
+-- e quase todos tem: login (15px), busca, estudo, avaliacao,
+observacao, clima, calculadora (12,5 a 15px). A tela ficava ampliada
+depois. Agora, so no iPhone/iPad, um limite de escala tira esse zoom
+automatico; ampliar com dois dedos continua funcionando (o iOS ignora o
+limite para o gesto da pessoa). No Android nada muda: la o mesmo limite
+tiraria a pinca, por isso ele nao esta escrito no HTML.
+
+3) NUMERO COM VIRGULA
+
+No iPhone em portugues o teclado decimal tem virgula, e o campo
+type="number" do Safari a trata diferente conforme a versao: a virgula
+nao entra (relatado no iOS 26.1) ou vira ponto (26.2 em diante). Os
+campos decimais passam a ser texto com teclado decimal, como os mais
+novos do app ja eram:
+  - croqui (carreador, entre parcelas), area da quadra, calculadora
+    (comprimento, largura, volume de calda, volume morto, capacidade do
+    frasco), calibracao (barra e bicos), janela de aplicacao, parcela e
+    volumes do estudo, laudo de solo, produtividade, Medir no mapa e
+    parcelas livres;
+  - tres leitores nao entendiam a virgula e passam a entender: area da
+    quadra (parseFloat("0,35") dava 0 e a area sumia), laudo de solo e
+    produtividade (Number("5,2") dava NaN). Os outros ja liam "2,5";
+  - campos de numero inteiro (repeticoes, aplicacoes, dias, frascos,
+    parcelas, N avaliados, escala) abrem o teclado de algarismos.
+
+4) O ICONE DA TELA DE INICIO
+
+O iPhone nao aceita transparencia no icone: pinta de preto. O icon-192 e
+transparente e virava traco cinza num quadrado preto. Agora o iPhone usa
+o apple-touch-icon.png: 180 x 180, opaco, no fundo do app.
+
+5) A BARRA "SALVAR AVALIACAO" FICA NA TELA
+
+Na avaliacao, no estudo e na aplicacao, a barra de Salvar/Cancelar
+grudava com distancia negativa e ficava pendurada abaixo da tela
+enquanto se rolava: o botao aparecia cortado embaixo, em qualquer
+celular. Com a tela inteira ela cairia em cima do indicador. Agora gruda
+rente na borda, com os botoes acima do indicador, rolando ou no fim.
+
+6) A PAGINA QUE O iOS ESQUECE DESLOCADA (iphone.js, novo)
+
+Depois do teclado -- e no iOS 27, depois de girar o aparelho com o app
+instalado -- o iOS as vezes deixa a pagina rolada (pela altura da barra
+de status, no caso do giro). Nada parece errado, mas o toque cai
+deslocado e os botoes perto do topo e da barra de baixo "nao pegam". O
+html e o body do Agracta nao rolam, entao a pagina volta para o lugar --
+nunca enquanto alguem digita, com o teclado aberto ou com a tela
+ampliada a dois dedos. So liga no iPhone/iPad.
+
+7) INSTALAR NO IPHONE
+
+O passo a passo (Menu > Preferencias > Instalar o app) era do Safari
+antigo. No iOS 26 o Compartilhar fica atras do ••• ao lado do endereco,
+e aparece "Abrir como App Web". E o motivo de instalar e de DADOS: no
+Safari, o iPhone pode apagar o que um site guardou no aparelho depois de
+7 dias sem uso; o app da Tela de Inicio fica fora dessa limpeza. O texto
+avisa que o app instalado guarda os dados separado do Safari: entra-se
+de novo, e as fotos guardadas so no aparelho ficam no Safari.
+
+8) OUTROS ACERTOS QUE APARECERAM NO CAMINHO
+  - a sombra das gavetas fechadas (Mapa e Menu) aparecia como uma faixa
+    cinza na borda direita de todas as telas. Fechadas, agora nao
+    pintam nada;
+  - o croqui das parcelas e as avaliacoes do protocolo abriam grudados no
+    canto de cima, a esquerda (o reset de margem do styles.css anulava a
+    centralizacao do navegador). Abrem no centro;
+  - a agenda da tela larga (iPhone deitado, iPad em pe) descia por tras
+    da faixa de navegacao. Termina acima dela;
+  - deitar o aparelho nao aumenta mais o texto sozinho; data e hora
+    alinham como os outros campos; rolar ate o fim de uma tela cheia nao
+    arrasta o app.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. No iPhone: abrir o Agracta (duas vezes, para a versao nova entrar).
+2. A barra de baixo vai ate a borda, com os botoes acima da linha do
+   indicador. Ferramentas do mapa > Medir: o painel nao cobre a barra.
+3. Tocar num campo (busca, avaliacao): a tela nao amplia.
+4. Calculadora ou Medir: digitar 2,5 no comprimento -- a virgula entra.
+5. Abrir uma avaliacao e rolar: "Salvar avaliacao" inteiro, acima do
+   indicador.
+6. Deitar o iPhone: nada fica embaixo da ilha. Girar de volta e tocar
+   perto do topo e da barra de baixo.
+7. O ICONE NOVO E PARA QUEM INSTALAR DAQUI EM DIANTE: o iPhone le o
+   icone quando o app e adicionado a Tela de Inicio. Quem ja tem o
+   Agracta instalado continua com o icone antigo. NAO apague o app so
+   por causa do icone: apagar o app da Tela de Inicio apaga os dados
+   guardados nele, inclusive as fotos que so existem no aparelho.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_iphone.js (109 verificacoes, novo): reprova o codigo
+  anterior logo na primeira (o viewport sem viewport-fit=cover).
+  No navegador (Chromium, 402 x 874, toque, areas seguras do iOS, em pe
+  e deitado): 24 telas rolando ate o fim, nenhum botao embaixo do
+  indicador ou da ilha, nenhum painel por cima da barra de baixo.
 
 
 AGRACTA — 26a publicacao                    06/10/2026

@@ -18,12 +18,24 @@ function url(blob){const u=URL.createObjectURL(blob);urls.push(u);return u;}
 function treatment(id){return context.tratamentos.find(t=>t.id===id);}
 function label(photo){const t=treatment(photo.treatment);return String(photo.treatment)+' · '+(t?t.produto:'Tratamento não disponível no cadastro atual')+(t&&t.dose?' · '+t.dose:'');}
 function detail(photo){return [photo.plot||photo.treatment+'R'+photo.rep,'R'+photo.rep,br(photo.date)].join(' · ');}
+/* A sequência da galeria é a ordem dos slides. A escolha fica na tela dos
+   slides ("Ordem dos slides"), e começa na do protocolo: por avaliação, T1 com
+   todas as repetições, depois T2… (FotosCore.ordemDosSlides) — tirada em
+   sequência ou não. Aí as setas só trocam fotos da mesma parcela e leitura.
+   "Na ordem em que tirei" é a ordem guardada, e as setas mudam qualquer foto
+   de lugar. Sem o motor (não carregou), fica a ordem guardada. */
+const ORDEM_KEY='agracta-fotos-ordem-slides';
+const motor=()=>!!(window.FotosCore&&typeof FotosCore.ordemDosSlides==='function');
+const porTratamento=()=>$('slide-order').value!=='captura'&&motor();
+function ordenar(list){return porTratamento()?FotosCore.ordemDosSlides(list,context):list.slice().sort((a,b)=>a.order-b.order);}
+function podeTrocar(a,b){return !!(a&&b)&&(!porTratamento()||FotosCore.mesmoGrupoDoSlide(a,b));}
+function dicaOrdem(){$('order-hint').textContent=(porTratamento()?'A sequência abaixo é a ordem dos slides: por avaliação, T1 com todas as repetições, depois T2, T3… As setas trocam a ordem só entre fotos da mesma parcela e data.':'A sequência abaixo é a ordem dos slides: a ordem em que as fotos foram tiradas. As setas mudam qualquer foto de lugar.')+' As novas fotos entram selecionadas.';}
 function visiblePhotos(){return filterPlot&&$('plot-filter').value==='plot'?photos.filter(p=>p.treatment===filterPlot.treatment&&Number(p.rep)===filterPlot.rep):photos;}
 function selection(){return visiblePhotos().filter(p=>selected.has(p.id));}
 function count(){const n=selection().length,per=Number($('per-slide').value);$('selection-count').textContent=n+' foto(s) selecionada(s) · '+Math.ceil(n/per)+' slide(s).';$('all').textContent=n===visiblePhotos().length&&n?'Desmarcar todas':'Selecionar todas';$('preview').replaceChildren();}
 function draw(){
  const visible=visiblePhotos();revoke();$('gallery-title').textContent=visible.length+' foto(s)'+(filterPlot&&$('plot-filter').value==='plot'?' desta parcela':'')+' salvas neste aparelho';
- $('gallery').innerHTML=visible.length?visible.map((p,i)=>'<article class="photo" data-id="'+esc(p.id)+'"><img loading="lazy" src="'+url(p.thumb)+'" alt="'+esc(label(p)+' · '+detail(p))+'"><label><input type="checkbox" data-select="'+esc(p.id)+'" '+(selected.has(p.id)?'checked':'')+'> '+esc(label(p))+'</label><p class="hint">'+esc(detail(p))+'</p><div class="actions"><button type="button" class="secondary" data-move="-1" '+(!i?'disabled':'')+' aria-label="Mover foto '+(i+1)+' para antes">← Antes</button><button type="button" class="secondary" data-move="1" '+(i===visible.length-1?'disabled':'')+' aria-label="Mover foto '+(i+1)+' para depois">Depois →</button><button type="button" class="danger" data-delete="1">Excluir</button></div></article>').join(''):'<p class="empty">Nenhuma foto nesta seleção. Confira a identificação acima para adicionar uma foto.</p>';
+ $('gallery').innerHTML=visible.length?visible.map((p,i)=>'<article class="photo" data-id="'+esc(p.id)+'"><img loading="lazy" src="'+url(p.thumb)+'" alt="'+esc(label(p)+' · '+detail(p))+'"><label><input type="checkbox" data-select="'+esc(p.id)+'" '+(selected.has(p.id)?'checked':'')+'> '+esc(label(p))+'</label><p class="hint">'+esc(detail(p))+'</p><div class="actions">'+(podeTrocar(visible[i-1],p)?'<button type="button" class="secondary" data-move="-1" aria-label="Mover foto '+(i+1)+' para antes">← Antes</button>':'')+(podeTrocar(p,visible[i+1])?'<button type="button" class="secondary" data-move="1" aria-label="Mover foto '+(i+1)+' para depois">Depois →</button>':'')+'<button type="button" class="danger" data-delete="1">Excluir</button></div></article>').join(''):'<p class="empty">Nenhuma foto nesta seleção. Confira a identificação acima para adicionar uma foto.</p>';
  count();
 }
 function imageOf(blob){
@@ -91,7 +103,7 @@ async function addFiles(files,fromCamera){
   }
  }catch(err){failure=err.name==='QuotaExceededError'?'Sem espaço no aparelho. Baixe as fotos já salvas e libere espaço.':err.message;}
  finally{
-  setBusy(false);draw();$('camera').value='';$('files').value='';
+  photos=ordenar(photos);setBusy(false);draw();$('camera').value='';$('files').value='';
   if(seqPlot&&saved&&!failure){
    const last=seqIndex>=plots.length-1;if(!last)seqGo(seqIndex+1);else seqShow();
    message('Foto da parcela '+seqPlot.plot+' salva.'+(last?' Sequência concluída: esta era a última parcela.':' Agora: parcela '+plots[seqIndex].plot+'.'));
@@ -158,7 +170,7 @@ window.addEventListener('message',async function(ev){
    else{try{ligar=localStorage.getItem(SEQ_KEY)==='1';}catch(e){}}
    if(ligar){$('seq-on').checked=true;seqStart();}
   }
-  photos=await storage.list();visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();
+  photos=ordenar(await storage.list());visiblePhotos().forEach(p=>selected.add(p.id));$('workspace').hidden=false;draw();
   message(seqOn()?'Sequência ligada. Toque em Tirar foto: depois de salvar, a próxima parcela já fica pronta.':'Galeria pronta. Armazenamento exclusivo deste aparelho.');
   /* Aberta por "Slides e originais": começa na montagem da apresentação. */
   if(initial&&initial.slides===true){const ex=document.querySelector('.export');if(ex&&ex.scrollIntoView)ex.scrollIntoView({block:'start'});}
@@ -187,7 +199,7 @@ $('gallery').addEventListener('click',async ev=>{
  setBusy(true);
  try{
   if(b.dataset.delete){await storage.remove(p.id);photos=photos.filter(x=>x.id!==p.id);selected.delete(p.id);}
-  else{const visible=visiblePhotos(),i=visible.indexOf(p),j=i+Number(b.dataset.move);if(j<0||j>=visible.length)return;const other=visible[j];const changed=[Object.assign({},p,{order:other.order}),Object.assign({},other,{order:p.order})];await storage.put(changed);photos[photos.indexOf(p)]=changed[0];photos[photos.indexOf(other)]=changed[1];photos.sort((a,b)=>a.order-b.order);}
+  else{const visible=visiblePhotos(),i=visible.indexOf(p),j=i+Number(b.dataset.move);if(j<0||j>=visible.length)return;const other=visible[j];if(!podeTrocar(p,other))return;const changed=[Object.assign({},p,{order:other.order}),Object.assign({},other,{order:p.order})];await storage.put(changed);photos[photos.indexOf(p)]=changed[0];photos[photos.indexOf(other)]=changed[1];photos=ordenar(photos);}
   message('Galeria atualizada neste aparelho.');
  }catch(err){message('Não foi possível alterar: '+err.message,true);}
  finally{setBusy(false);draw();}
@@ -197,6 +209,9 @@ $('plot-filter').addEventListener('change',()=>{selected=new Set(visiblePhotos()
 const PER_KEY='agracta-fotos-por-slide';
 try{const v=localStorage.getItem(PER_KEY);if(v&&$('per-slide').querySelector('option[value="'+v+'"]'))$('per-slide').value=v;}catch(e){}
 $('per-slide').addEventListener('change',()=>{try{localStorage.setItem(PER_KEY,$('per-slide').value);}catch(e){}count();});
+try{const v=localStorage.getItem(ORDEM_KEY);if(v&&$('slide-order').querySelector('option[value="'+v+'"]'))$('slide-order').value=v;}catch(e){}
+dicaOrdem();
+$('slide-order').addEventListener('change',()=>{try{localStorage.setItem(ORDEM_KEY,$('slide-order').value);}catch(e){}photos=ordenar(photos);dicaOrdem();draw();});
 $('preview-button').addEventListener('click',preview);
 $('pptx').addEventListener('click',()=>exportFiles('pptx'));
 $('originals').addEventListener('click',()=>exportFiles('zip'));

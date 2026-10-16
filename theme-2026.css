@@ -350,7 +350,12 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   letter-spacing:.06em!important;
 }
 .info-v{color:var(--gp-text)!important;font:650 14px/1.3 var(--ag-font)!important}
-.agenda-panel{top:76px!important;right:14px!important;width:370px!important;padding:17px!important;max-height:calc(100dvh - 94px)!important}
+.agenda-panel{top:76px!important;right:calc(14px + env(safe-area-inset-right,0px))!important;width:370px!important;padding:17px!important;max-height:calc(100dvh - 94px)!important}
+/* A agenda da tela larga desce até 18px do chão e a faixa de navegação mora no
+   meio, embaixo: em tela estreita (iPad em pé, iPhone deitado) o fim do
+   calendário ficava escondido atrás dela. Termina acima da faixa (14px + 58px de
+   faixa + 8px de folga + o indicador). Em tela larga elas nem se cruzam. */
+@media(min-width:721px) and (max-width:1209px){.agenda-panel{max-height:calc(100dvh - 156px - env(safe-area-inset-bottom,0px))!important}}
 
 .study-card,.study-card-v2,.sd-meta,.today-card,.today-sum-item,.trat-table,.evento-item,.se-trat,.ag-item,.search-item,.clima-card,.sd-descricao,.sd-empty,.today-empty,.se-empty,.q-noest,.study-plan-card,.study-dossier{
   color:var(--gp-text-2)!important;
@@ -484,8 +489,18 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .se-panel{max-width:650px!important;padding:20px!important}
 .se-head{margin-bottom:18px!important}.se-head h3{color:var(--gp-text)!important;font:800 21px/1.1 var(--ag-display)!important;letter-spacing:-.025em!important}.se-x{width:42px!important;height:42px!important;border-radius:13px!important}.se-x:hover{background:var(--gp-s3)!important}
 .se-field{margin-bottom:15px!important}.se-field label,.e-lbl{text-transform:none!important;letter-spacing:.01em!important;font-size:11px!important;font-weight:720!important;color:var(--gp-text-2)!important}.se-section-title{text-transform:none!important;letter-spacing:.01em!important;font-size:13px!important}
-.se-actions{position:sticky!important;bottom:-20px!important;z-index:5!important;margin:20px -20px -20px!important;padding:14px 20px calc(14px + env(safe-area-inset-bottom,0px))!important;background:var(--gp-glass-strong)!important;border-top:1px solid var(--gp-line)!important;backdrop-filter:blur(18px)!important}
+.se-actions{position:sticky!important;bottom:0!important;z-index:5!important;margin:20px -20px 0!important;padding:14px 20px calc(14px + env(safe-area-inset-bottom,0px))!important;background:var(--gp-glass-strong)!important;border-top:1px solid var(--gp-line)!important;backdrop-filter:blur(18px)!important}
 .se-actions .btn-save,.se-actions .btn-cancel{min-height:46px!important}
+/* A BARRA DE SALVAR FICA NA TELA. Quem rola é o fundo (.se-overlay), e a barra
+   gruda na borda de baixo dele. Com bottom negativo (-20px, e no celular -18px
+   menos a área segura) ela ficava pendurada ABAIXO da tela enquanto se rolava:
+   "Salvar avaliação" aparecia cortado e, com a página indo até a borda no
+   iPhone, caía em cima do indicador. Sem número negativo nenhum — que é onde o
+   Safari e o Chrome discordam no sticky —, ela encosta em bottom:0 e o painel
+   que termina nela deixa de ter folga embaixo, para ela fechar o painel rente.
+   O padding de baixo da barra (14px + área segura) segura os botões acima do
+   indicador. */
+.se-panel:has(>.se-actions:last-child){padding-bottom:0!important}
 .se-trat{padding:13px!important;border-radius:15px!important;gap:8px!important}
 .av-auto-box{border-radius:18px!important}.av-auto-input{min-height:56px!important;border-radius:14px!important;font-size:22px!important}.av-auto-nav button,.av-auto-count button{min-height:42px!important;border-radius:12px!important}
 
@@ -630,7 +645,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   .study-plan-actions,.study-dossier-actions{display:grid!important;grid-template-columns:1fr 1fr!important}.study-plan-actions button,.study-dossier-actions button{min-width:0!important;padding:0 9px!important}
   .study-finalized-card{grid-template-columns:1fr!important}.study-finalized-card>span{grid-column:1!important}
   .studies-dashboard-empty-start{grid-template-columns:1fr!important;text-align:center!important;padding:36px 20px!important}.studies-dashboard-empty-start .empty-mark{grid-row:auto!important;margin:0 auto 5px!important}.studies-dashboard-empty-start button{justify-self:center!important}
-  .se-panel{padding:18px!important}.se-actions{bottom:calc(-18px - env(safe-area-inset-bottom,0px))!important;margin:20px -18px -18px!important;padding-left:18px!important;padding-right:18px!important}
+  .se-panel{padding:18px!important}.se-panel:has(>.se-actions:last-child){padding-bottom:0!important}.se-actions{bottom:0!important;margin:20px -18px 0!important;padding-left:18px!important;padding-right:18px!important}
   .auth-gate{padding:14px!important;align-items:center!important}
   .auth-box{padding:30px 22px 25px!important;border-radius:25px!important}
   .auth-title{font-size:29px!important}
@@ -667,7 +682,9 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   position:fixed!important;
   top:auto!important;
   right:auto!important;
-  bottom:14px!important;
+  /* + o indicador do iPhone deitado (21pt), que fica bem no meio, embaixo:
+     exatamente onde esta faixa mora. Fora do iPhone env() vale 0. */
+  bottom:calc(14px + env(safe-area-inset-bottom,0px))!important;
   left:50%!important;
   z-index:1200!important;
   width:max-content!important;
@@ -829,8 +846,11 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   bottom:10px!important;
   margin:0!important;
 }
-.leaflet-bottom{bottom:74px!important}
-.cloud-badge{bottom:84px!important}
+.leaflet-bottom{bottom:calc(74px + env(safe-area-inset-bottom,0px))!important}
+/* iPhone deitado: os cantos do mapa ficam sob a ilha e a curva da tela */
+.leaflet-bottom.leaflet-right{right:env(safe-area-inset-right,0px)!important}
+.leaflet-bottom.leaflet-left{left:env(safe-area-inset-left,0px)!important}
+.cloud-badge{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
 
 @media(max-width:720px){
   .top-bar{padding:8px!important}

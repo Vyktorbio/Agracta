@@ -133,7 +133,7 @@
     if(typeof op==='string'){view.selecionado='item:'+op;}
     else if(op){view.busca=op.busca||'';if(op.qid&&op.sid)view.estudo=C.chave(op.qid,op.sid);if(op.aba)view.aba=op.aba;}
     var ov=document.getElementById('conhecimentoOvl');
-    if(!ov){ov=document.createElement('div');ov.id='conhecimentoOvl';ov.className='con-overlay';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Conhecimento experimental');document.body.appendChild(ov);}
+    if(!ov){ov=document.createElement('div');ov.id='conhecimentoOvl';ov.className='con-overlay';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Análise de resultados');document.body.appendChild(ov);}
     ov.hidden=false;pintar();var b=ov.querySelector('[data-con="fechar"]');if(b)b.focus();
   }
   function fechar(){var ov=document.getElementById('conhecimentoOvl');if(ov)ov.hidden=true;if(ultimoFoco&&ultimoFoco.isConnected)ultimoFoco.focus();}
@@ -480,7 +480,7 @@
        abria o estudo via uma tela pobre e concluía que os gráficos tinham
        sumido do aplicativo. Uma tela menor sem aviso é pior que um erro: some
        função e não deixa pista de por quê nem do que fazer. */
-    return bot('voltar','‹ Conhecimento')+
+    return bot('voltar','‹ Resultados')+
       '<p class="con-empty">O dossiê completo deste estudo não carregou, então esta é a ficha reduzida: '+
       'sem gráficos, sem a vista do campo e sem a estatística. Nada foi perdido — o arquivo do dossiê '+
       'não chegou a este aparelho. Feche o Agracta por inteiro e abra de novo <b>com conexão</b>; '+
@@ -501,13 +501,13 @@
         (corpo===null?vazio('A tela dos patrocinadores não carregou neste aparelho. Abra o Agracta de novo com conexão.'):corpo||vazio('Só o administrador gerencia o que os patrocinadores consultam.'))+'</main></section>';
       return;
     }
-    ov.setAttribute('aria-label','Conhecimento experimental');
+    ov.setAttribute('aria-label','Análise de resultados');
     var abas=[['produtos','Produtos e ativos'],['alvos','Alvos'],['projetos','Projetos'],['estudos','Estudos'],['fontes','Fontes']];
     /* Abas de outros módulos (ex.: conhecimento-canonico.js) entram aqui sem que
        este arquivo precise conhecê-las: {id, rotulo, html(acervo), acao(a,b)}. */
     var extras=lista(w.agConhecimentoAbas);extras.forEach(function(x){if(x&&x.id)abas.push([x.id,x.rotulo]);});
     var extra=extras.find(function(x){return x&&x.id===view.aba;});
-    ov.innerHTML='<section class="con-shell"><header class="con-head"><div><p>AGRACTA</p><h1>Conhecimento experimental</h1></div>'+bot('fechar','Fechar ×')+'</header><nav aria-label="Conhecimento">'+abas.map(function(a){return bot('aba',a[1],'data-aba="'+a[0]+'" aria-current="'+(view.aba===a[0]?'page':'false')+'"',view.aba===a[0]?'ativo':'');}).join('')+'</nav><p id="conhecimentoAviso" role="status" aria-live="polite"></p><main>'+
+    ov.innerHTML='<section class="con-shell"><header class="con-head"><div><p>AGRACTA</p><h1>Análise de resultados</h1></div>'+bot('fechar','Fechar ×')+'</header><nav aria-label="Análise de resultados">'+abas.map(function(a){return bot('aba',a[1],'data-aba="'+a[0]+'" aria-current="'+(view.aba===a[0]?'page':'false')+'"',view.aba===a[0]?'ativo':'');}).join('')+'</nav><p id="conhecimentoAviso" role="status" aria-live="polite"></p><main>'+
       (view.estudo?ficha():extra?extra.html(acervo):view.aba==='estudos'?abaEstudos():view.aba==='fontes'?(w.agFontesHtml?w.agFontesHtml():vazio('Fontes indisponíveis.')):selecao())+'</main></section>';
   }
   function adicionar(key,eventos){

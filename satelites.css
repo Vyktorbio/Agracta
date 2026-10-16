@@ -1,5 +1,5 @@
 /* Controles das camadas públicas — mesma tipografia e cores da gaveta do mapa. */
-.ag-sat-panel{position:fixed;z-index:1250;right:14px;bottom:calc(82px + env(safe-area-inset-bottom));width:min(350px,calc(100vw - 28px));max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;border:1px solid var(--gp-line-2,#34463a);border-radius:16px;background:var(--gp-s1,#111c16);color:var(--gp-text,#f2f7f3);box-shadow:0 12px 40px rgba(0,0,0,.28);padding:14px;font:500 13px/1.45 var(--ag-font,system-ui)}
+.ag-sat-panel{position:fixed;z-index:1250;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(82px + env(safe-area-inset-bottom));width:min(350px,calc(100vw - 28px));max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;border:1px solid var(--gp-line-2,#34463a);border-radius:16px;background:var(--gp-s1,#111c16);color:var(--gp-text,#f2f7f3);box-shadow:0 12px 40px rgba(0,0,0,.28);padding:14px;font:500 13px/1.45 var(--ag-font,system-ui)}
 .ag-sat-panel[hidden]{display:none}
 .ag-sat-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .ag-sat-head h2{flex:1;margin:0;font-size:16px}
