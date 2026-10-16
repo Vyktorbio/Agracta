@@ -1,0 +1,67 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src blob: data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'"><title>Análise probit</title><link rel="stylesheet" href="probit.css?v=1"><link rel="stylesheet" href="skin-royal.css?v=1">
+</head><body>
+<div class="wrap">
+  <header class="top">
+    <h1>Análise probit</h1>
+    <p>Curva dose-resposta de bioensaio de laboratório · metodologia de Robertson et al. (2007), a mesma do PoloPlus</p>
+  </header>
+  <div class="grid">
+    <aside class="side">
+      <section class="panel">
+        <label class="lbl" for="data">Dados</label>
+        <textarea id="data" spellcheck="false" aria-describedby="data-hint"></textarea>
+        <p class="hint" id="data-hint">Formato do PoloPlus: <code>=</code> título, <code>*</code> abre cada preparação (população, produto, lote), depois uma linha por dose com <code>dose n r</code> — dose, testados, mortos. Dose 0 é a testemunha. Aceita vírgula decimal e o arquivo .txt do PoloPlus.</p>
+        <div class="row">
+          <label class="file">Abrir .txt <input type="file" id="file" accept=".txt,.csv,.dat,text/plain"></label>
+          <button class="btn" id="sample" type="button">Exemplo do livro</button>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="opts">
+          <div class="full">
+            <span class="lbl">Modelo</span>
+            <div class="seg" role="group" aria-label="Modelo">
+              <button type="button" id="m-probit" aria-pressed="true">Probit</button>
+              <button type="button" id="m-logit" aria-pressed="false">Logit</button>
+            </div>
+          </div>
+          <div class="full">
+            <label class="lbl" for="lds">Doses letais a estimar (%)</label>
+            <input type="text" id="lds" value="10 50 90" inputmode="decimal" autocomplete="off">
+          </div>
+          <label class="chk full"><input type="checkbox" id="natural" checked><span>Resposta natural como parâmetro<small>Estimada junto com a curva quando a testemunha tem mortos</small></span></label>
+          <label class="chk full"><input type="checkbox" id="logdose" checked><span>Converter doses para log₁₀ (padrão)</span></label>
+          <label class="chk full"><input type="checkbox" id="p9"><span>Também estimar o probit 9 (99,9968%)</span></label>
+          <label class="chk full"><input type="checkbox" id="het" checked><span>Corrigir limites pela heterogeneidade quando χ²/GL &gt; 1</span></label>
+          <div>
+            <label class="lbl" for="ratioz">Limites das razões</label>
+            <select id="ratioz"><option value="2" selected>±2 EP (PoloPlus)</option><option value="1.96">±1,96 EP</option></select>
+          </div>
+          <div>
+            <label class="lbl" for="ref">Referência</label>
+            <select id="ref"></select>
+          </div>
+        </div>
+      </section>
+    </aside>
+    <main class="panel">
+      <div id="errors" class="errors" role="alert" hidden></div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" id="t-res" aria-selected="true" aria-controls="v-res">Resultados</button>
+        <button role="tab" id="t-plot" aria-selected="false" aria-controls="v-plot">Gráficos</button>
+        <button role="tab" id="t-out" aria-selected="false" aria-controls="v-out">Saída completa</button>
+        <button role="tab" id="t-val" aria-selected="false" aria-controls="v-val">Validação</button>
+      </nav>
+      <section id="v-res" role="tabpanel" class="stack"></section>
+      <section id="v-plot" role="tabpanel" class="stack" hidden></section>
+      <section id="v-out" role="tabpanel" class="stack" hidden>
+        <div class="row"><button class="btn" id="copy" type="button">Copiar</button><button class="btn" id="baixar" type="button">Baixar .txt</button><span class="status" id="copy-status" role="status"></span></div>
+        <pre class="report" id="report" tabindex="0"></pre>
+      </section>
+      <section id="v-val" role="tabpanel" class="stack" hidden></section>
+    </main>
+  </div>
+</div>
+<script src="vendor/probit-core.js?v=1"></script>
+<script src="probit.js?v=1"></script>
+</body></html>

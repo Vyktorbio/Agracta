@@ -1,4 +1,4 @@
-AGRACTA — 30a publicacao                    11/10/2026
+AGRACTA — 35a publicacao                    16/10/2026
 =====================================================
 
 Leva: a validacao do sistema (CSV) reescrita para o Firebase, e o
@@ -105,6 +105,247 @@ TESTES
   citados existem e rodam, arquivos criticos existem, app.js aponta
   para a validacao, sem Supabase como estado atual.
   tests/acesso-rules.cjs: so no emulador (CI).
+
+
+AGRACTA — 33a publicacao                    13/10/2026
+=====================================================
+
+Leva: o cartao da avaliacao diz QUAIS campos estao pendentes e por que.
+  CODIGO:  vendor/avaliacao-core.js  app.js  cores-padrao.css
+           index.html  sw.js
+  TESTE:   tests/test_avaliacao_pendentes.js (novo)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: "8 campos pendentes -- eu preencho com 0 e continua".
+O cartao dizia quantos faltavam, nunca quais. Zero sempre contou como
+preenchido; o que faltava estava em outro lugar (outra variavel, o N da
+razao, uma sub-amostra, o 2o avaliador da dupla leitura).
+
+Agora, na avaliacao PARCIAL, logo abaixo de "Parcial · N campos
+pendentes", sai a lista: tratamento, repeticao, variavel e o motivo --
+"vazio", "falta o N (avaliados)", "falta o n (afetados)", "n maior que
+N", "sub-amostras: 1 de 3 preenchidas", "falta a leitura do avaliador B
+(dupla leitura)". Ate 40 linhas. A lista usa a mesma regra da contagem:
+os dois nunca discordam. Tratamento marcado como "nao se aplica" no
+protocolo nao e cobrado.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo com avaliacao parcial > Avaliacoes: abaixo de "Parcial · ...
+   campos pendentes", a lista do que falta.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_avaliacao_pendentes.js (16): lista do tamanho da contagem;
+  zero nao e pendente; cada motivo; nao se aplica fora; o cartao mostra a
+  lista so na parcial.
+
+AGRACTA — 32a publicacao                    13/10/2026
+=====================================================
+
+Leva: a tela que ia para o login e voltava sozinha.
+  CODIGO:  firebase-sync.js  index.html  sw.js
+  TESTE:   tests/test_login_recusa_passageira.js (novo)
+           tests/test_login_laco.js (secao 7: a recusa vai ao login na 2a vez)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Relato de uso: "quando ele entra no celular dele, o meu fica indo pra tela
+de login e voltando" -- tambem na conta do administrador.
+
+1) RECUSA PASSAGEIRA NAO E RECUSA
+
+  Reproduzido com o adaptador real e o banco simulado. Das situacoes que a
+  entrada de um colega provoca (gravacao dele, corrida de gravacoes, rede
+  lenta, uma recusa do banco), so a RECUSA mandava ao login um aparelho ja
+  autorizado, e ainda apagava a marca de autorizado. Uma unica "permissao
+  negada" -- o login (token) sendo renovado na hora da leitura -- mostrava
+  o login; a leitura seguinte dava certo e escondia: "sai e volta".
+  Agora, num aparelho ja autorizado, a primeira recusa renova o login e le
+  de novo depois de 1,5 s. Recusa que se repete e de verdade: login e marca
+  apagada, como antes. Aparelho que nunca entrou vai ao login de primeira.
+
+2) REGISTRO DAS IDAS AO LOGIN
+
+  A frase do login pisca e nao da para ler. Cada ida ao login fica
+  registrada NESTE aparelho (ultimas 30), com hora e motivo:
+  agractaLoginRegistro() no console, ou localStorage
+  'agracta-login-registro'. Se o "sai e volta" continuar, o registro diz
+  qual caminho foi.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Com voce conectado, um assistente entra no celular dele: a sua tela
+   nao vai mais para o login.
+3. Se ainda for: no computador, F12 > Console > agractaLoginRegistro()
+   mostra o motivo.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_login_recusa_passageira.js (14): uma recusa nao derruba
+  aparelho autorizado e a releitura da certo; recusa repetida vai ao login
+  e apaga a marca; aparelho nunca autorizado vai de primeira; corrida de
+  gravacoes e rede lenta nao vao ao login; o registro guarda hora e motivo.
+  Reprova o codigo da 31a ("nao vai ao login").
+
+AGRACTA — 31a publicacao                    13/10/2026
+=====================================================
+
+Leva: a dose letal (CL/DL) do motor estatistico passa a ser a estimativa
+pontual, como no PoloPlus.
+  CODIGO:  estatistica/bioengine/doseresponse.py
+           estatistica/app.js  estatistica/index.html  estatistica/sw.js
+           app.js  index.html  sw.js
+  TESTE:   tests/motor_doseresposta.py (secao 5b, nova)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+O CALCULO MUDOU: MOTOR_CALCULO sobe para agracta-19 e a estatistica
+guardada nos aparelhos e recalculada. Estudos FINALIZADOS mantem o que
+foi preservado no fechamento (ver abaixo).
+
+
+O QUE MUDOU
+-----------
+
+Achado ao rodar o motor com os dados do cap. 4 de Robertson et al.
+(2007), comparando com a saida do PoloPlus impressa no livro.
+
+1) A DOSE LETAL ERA O CENTRO DO INTERVALO, NAO A ESTIMATIVA
+
+  A funcao de Fieller devolvia o centro do intervalo, (r - g.cND/vD)/(1-g),
+  no lugar da dose letal r = (theta - b0)/b1. Os dois so coincidem com
+  g = 0; quanto maior o g, maior o desvio. Com os dados do livro:
+    Fairfax  DL50  4,103 -> 4,139   (g = 0,07)
+    Pixley   DL50 16,333 -> 16,559
+    Schaefer DL10  0,641 -> 1,321   (g = 0,38)
+    Schaefer DL90 19,385 -> 10,777
+  Agora as nove DLs do livro batem com o PoloPlus. Os LIMITES nao mudam
+  (ja eram os de Fieller). A razao de CL50/CL90 entre curvas usava a
+  mesma dose e tambem fica corrigida.
+
+2) ESTUDOS JA FINALIZADOS
+
+  O fechamento preserva a estatistica calculada naquele momento: CL50 e
+  CL90 de estudo finalizado com serie de doses foram calculadas com o erro
+  e continuam como estavam. Para conferir um deles, reabra a analise no
+  modulo de estatistica (agora com a versao corrigida) e compare.
+  Estudos em andamento sao recalculados sozinhos.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Num estudo em andamento com serie de doses: a estatistica recalcula
+   (leva o tempo do Pyodide) e a CL50 fica dentro do intervalo, nao no
+   meio dele.
+3. Laudo do motor: arquivos_motor_sha256 com o hash novo do
+   doseresponse.py; engine_version bioensaio-auditoria-21.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/motor_doseresposta.py, secao 5b: as nove DLs do livro iguais ao
+  PoloPlus (3 casas), cada DL igual a (theta - b0)/b1 e a mesma usada na
+  razao de CL; com g grande o intervalo e assimetrico em volta dela.
+  Reprova o codigo da 30a (19 falhas).
+
+AGRACTA — 30a publicacao                    13/10/2026
+=====================================================
+
+Leva: a analise probit da bancada (botao Probit na ficha do laboratorio).
+  CODIGO:  probit.html  probit.js  probit.css  vendor/probit-core.js (novos)
+           app.js  index.html  sw.js
+  TESTE:   tests/test_probit_core.js (novo, 142 verificacoes)
+           tests/test_probit_lab_botao.js (novo)
+  DOCS:    README.md
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+A estatistica dos estudos (motor Python) NAO mudou: nada em cache e
+recalculado.
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "vamos incluir isso no Agracta na sessao de laboratorio.
+Coloque como opcao ou 'a mais'" -- a analise de dose-resposta do PoloPlus.
+
+1) BOTAO "PROBIT" NA FICHA DO LABORATORIO
+
+  No lugar do NDVI (que o laboratorio nao tem), a ficha ganha o botao
+  Probit. Ele abre a pagina da analise na mesma moldura das pranchas.
+  E uma ferramenta a mais: nao depende de estudo, nao grava nada na
+  nuvem. Os dados digitados ficam so neste aparelho, como rascunho.
+  Quadra de campo nao muda.
+
+2) A ANALISE
+
+  Entrada no formato do PoloPlus (= titulo, * preparacao, dose n r;
+  dose 0 e a testemunha); abre o .txt do PoloPlus. Faz o que o
+  PoloPlus faz no cap. 4 de Robertson et al. (2007):
+  - probit ou logit por maxima verossimilhanca, com a resposta natural
+    estimada junto quando a testemunha tem mortos;
+  - DLs pedidas (e o probit 9) com limites fiduciais de 90, 95 e 99%,
+    corrigidos pela heterogeneidade quando chi2/GL > 1; limite com
+    g > 0,5 nao sai;
+  - qui-quadrado com residuos padronizados;
+  - testes de igualdade e paralelismo (razao de verossimilhanca);
+  - razoes de DL com intervalo, contra a preparacao escolhida.
+  Graficos das curvas e dos residuos, saida completa em texto (copiar
+  ou baixar .txt) e a aba Validacao.
+
+3) VALIDACAO CONTRA O LIVRO
+
+  A aba Validacao roda, no aparelho, os dados do cap. 4 e compara 109
+  numeros com a saida do PoloPlus 1.0 impressa nas fig. 4.7 e 4.8: 106
+  identicos e 3 com 1 no ultimo digito (precisao simples do PoloPlus).
+  Dois detalhes que so aparecem batendo os numeros, e que o motor segue:
+  - a covariancia e a inversa da informacao OBSERVADA (com a esperada o
+    EP do Pixley sairia 0,524 e nao 0,529);
+  - os limites das razoes usam +-2 EP, nao 1,96 (fica como opcao).
+  Logit e dose linear, que o livro nao exemplifica, conferidos contra o
+  statsmodels.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Tocar num laboratorio no mapa: a ficha mostra "Probit", "Ir ate" e
+   "EDITAR LABORATORIO". Numa quadra de campo continua "NDVI".
+3. Probit: abre com o exemplo do livro. Aba Validacao: "Aprovado".
+4. Colar um ensaio ja analisado no PoloPlus e comparar DL50 e limites.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_probit_core.js (142): parametros, covariancia, qui-quadrado,
+  DLs e limites, testes e razoes contra o PoloPlus impresso; logit e dose
+  linear contra o statsmodels; dados que nao formam curva (sem resposta,
+  separacao completa, testemunha 100%) dao mensagem e nao derrubam as
+  outras preparacoes.
+  tests/test_probit_lab_botao.js: o botao so no laboratorio, a pagina com
+  a CSP estrita e o service worker guardando os quatro arquivos.
+  No navegador (Chromium, 1300 px e 402 x 874): sem erro de CSP no
+  console, sem rolagem lateral, autoteste aprovado.
 
 AGRACTA — 29a publicacao                    08/10/2026
 =====================================================

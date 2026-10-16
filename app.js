@@ -165,6 +165,7 @@ function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"
 function uid(){ try{ if(window.crypto&&crypto.randomUUID) return 's'+crypto.randomUUID(); }catch(e){} return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,6); }
 /* Ícones SVG (estilo Lucide, monocromáticos, herdam a cor do texto via currentColor) */
 function ic(n,sz){ var P={
+  curve:'<path d="M3 3v18h18"/><path d="M6 17c5 0 5-11 14-11"/>',
   pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
   sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
@@ -2851,8 +2852,12 @@ function enforceAccess(){
 var _deletePwdCb=null;
 function deletePasswordCss(){ if(document.getElementById('deletePwdCss'))return; var s=document.createElement('style'); s.id='deletePwdCss';
   s.textContent='.delpwd-ovl{position:fixed;inset:0;z-index:3600;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}'+
-  '.delpwd-box{width:100%;max-width:380px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.58);padding:18px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}'+
-  '.delpwd-title{font-size:16px;font-weight:900;color:#ff9a8a;margin-bottom:5px}.delpwd-sub{font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:12px}.delpwd-user{font-weight:800;color:var(--text,#e8efe9)}'+
+  '.delpwd-box{width:100%;max-width:380px;max-height:calc(100vh - 36px);max-height:calc(100dvh - 36px);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.58);padding:18px;color:var(--text,#e8efe9);font-family:var(--font,system-ui)}.delpwd-box>*{flex-shrink:0}'+
+  /* A CAIXA NUNCA PASSA DA TELA. O fechamento de um estudo grande lista dezenas
+     de pendências, e a caixa crescia até empurrar senha e botões para fora, sem
+     rolagem: não havia como finalizar. Agora só o texto rola; título, senha e
+     botões ficam sempre à vista. */
+  '.delpwd-title{font-size:16px;font-weight:900;color:#ff9a8a;margin-bottom:5px}.delpwd-sub{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;white-space:pre-line;font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:8px;padding-right:4px}.delpwd-quem{font-size:12px;color:var(--text-2,#9fb1a5);line-height:1.45;margin-bottom:10px}.delpwd-det{margin-top:10px;border-top:1px solid var(--border,#26322b);padding-top:8px}.delpwd-det>summary{cursor:pointer;font-weight:800;color:var(--text,#e8efe9);white-space:normal}.delpwd-det>div{margin-top:6px;font-size:11px}.delpwd-user{font-weight:800;color:var(--text,#e8efe9)}'+
   '.delpwd-lab{display:block;font-size:10px;letter-spacing:.8px;color:var(--text-3,#7c8a80);font-weight:800;text-transform:uppercase;margin-bottom:5px}.delpwd-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:var(--text,#e8efe9);padding:12px;font-size:15px;outline:none}.delpwd-inp:focus{border-color:var(--danger,#ff6b6b)}'+
   '.delpwd-err{min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px}.delpwd-actions{display:flex;gap:8px;margin-top:12px}.delpwd-ok{flex:1;background:#9b2c26;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:900;cursor:pointer}.delpwd-ok:disabled{opacity:.6;cursor:default}.delpwd-cancel{background:#222;color:#bbb;border:none;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer}';
   document.head.appendChild(s); }
@@ -2867,7 +2872,10 @@ function requireDeletePassword(label, cb, opts){
   m.style.display='flex';
   m.innerHTML='<div class="delpwd-box">'+
     '<div class="delpwd-title">'+esc(opts.title||'Confirmar exclusão')+'</div>'+
-    '<div class="delpwd-sub">'+esc(label||'Esta ação')+'<br>Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
+    '<div class="delpwd-sub">'+esc(label||'Esta ação')+
+      (opts.detalhes?('<details class="delpwd-det"><summary>'+esc(opts.detalhesTitulo||'Ver lista completa')+'</summary><div>'+esc(opts.detalhes)+'</div></details>'):'')+
+    '</div>'+
+    '<div class="delpwd-quem">Digite a senha de <span class="delpwd-user">'+esc(_authUser.email)+'</span>.</div>'+
     '<label class="delpwd-lab">Senha</label><input id="deletePwdInput" class="delpwd-inp" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')deletePasswordConfirm()">'+
     '<div id="deletePwdErr" class="delpwd-err"></div>'+
     '<div class="delpwd-actions"><button id="deletePwdOk" class="delpwd-ok" onclick="deletePasswordConfirm()">'+esc(opts.ok||'Excluir')+'</button><button class="delpwd-cancel" onclick="deletePasswordClose()">Cancelar</button></div>'+
@@ -7081,7 +7089,10 @@ function showD(id){
 
   /* NDVI é satélite sobre polígono: laboratório não tem nem um nem outro. */
   h+='</div><div class="panel-btns">'+
-     (_lab?'':'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
+     /* No laboratório o lugar do NDVI fica com a análise probit: uma ferramenta
+        a mais, que não depende de estudo nenhum (cola os dados, sai a DL50). */
+     (_lab?'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="abrirProbit()" title="Curva dose-resposta, DL50 e comparação de populações, como no PoloPlus">'+ic('curve',14)+' Probit</button>'
+         :'<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="ndviSerie(\''+id+'\')">'+ic('sat',14)+' NDVI</button>')+
      '<button class="p-btn" style="background:#f0f1f3;color:#2b3138;border:1px solid #d7dbe0" onclick="navStartQuadra(\''+id+'\')">'+ic('pin',14)+' Ir até</button>'+
      '<button class="p-btn p-btn-edit" onclick="openE(\''+id+'\')">'+(_lab?'EDITAR LABORAT&Oacute;RIO':'EDITAR QUADRA')+'</button></div>';
   document.getElementById("dPnl").innerHTML=h;
@@ -13498,6 +13509,9 @@ function _openPranchaFrame(src, titulo){
   '<iframe id="prFrame" title="'+esc(titulo)+'" src="'+src+'?t='+Date.now()+'" style="flex:1 1 auto;width:100%;border:0;background:#f2f3f1"></iframe>';
   ov.style.display='flex';
 }
+/* Análise probit da bancada (probit.html). Mesma moldura das pranchas; os
+   dados digitados lá ficam só neste aparelho, como rascunho da página. */
+function abrirProbit(){ _openPranchaFrame('probit.html', 'Análise probit · laboratório'); }
 function closePrancha(){ var ov=document.getElementById('prOvl'); if(ov){ var f=document.getElementById('prFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
 
 function _openBioestatFrame(modo){
@@ -13507,7 +13521,7 @@ function _openBioestatFrame(modo){
     '<span>'+(modo==='forense'?'🔎 Triagem forense':'📊 Análise estatística')+'</span>'+
     '<button onclick="closeBioestat()" style="background:#222;color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer">Fechar</button>'+
   '</div>'+
-  '<iframe id="bioFrame" title="Estatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
+  '<iframe id="bioFrame" title="Análise bioestatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
   ov.style.display='flex';
 }
 function closeBioestat(){ var ov=document.getElementById('bioOvl'); if(ov){ var f=document.getElementById('bioFrame'); if(f) f.src='about:blank'; ov.style.display='none'; } }
@@ -13603,7 +13617,7 @@ function _bioestatJobAoa(qid,study,av,v){
 }
 /* Versão da casca do motor estatístico. Subir aqui força o navegador a buscar
    o estatistica/index.html novo — e com ele o app.js e os .py novos. */
-var MOTOR_VERSAO='agracta-18';
+var MOTOR_VERSAO='agracta-19';
 /* MOTOR_VERSAO fazia DUAS coisas, e elas não andam juntas:
    (1) trocar a URL da engrenagem, para o navegador buscar a casca nova;
    (2) entrar na assinatura do cache, invalidando o que está guardado.
@@ -13624,8 +13638,11 @@ var MOTOR_VERSAO='agracta-18';
    A versão 17 segue Robertson et al. (2007) na dose-resposta — resposta natural
    estimada com a testemunha no modelo, heterogeneidade só quando significativa —
    e leva a placa numa série de concentrações para a curva de dose (CE50).
+   A versão 19 corrige a dose letal: ela é a estimativa pontual (theta - b0)/b1,
+   como no PoloPlus, e não o centro do intervalo de Fieller, que só coincide
+   com ela quando g = 0 (a DL90 do Schaefer, no livro, saía 19,4 em vez de 10,8).
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-18';
+var MOTOR_CALCULO='agracta-19';
 /* O pedido de cálculo vale para ESTES dados (assinatura) e sobrevive a fechar o
    app: sem isto, reabrir escondia a estatística já calculada e guardada até
    alguém apertar o botão de novo. Mudou o dado, muda a assinatura e o pedido
@@ -14909,7 +14926,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(quadraNome(qid))+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
-  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Conhecimento e contexto</button>';
+  h+='<button class="btn-sm" data-ag-conhecimento-qid="'+esc(qid)+'" data-ag-conhecimento-sid="'+esc(sid)+'">Análise de resultados</button>';
   h+='<button class="btn-sm" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+sid+'\')" title="Escolher entre o modelo Agracta e o protocolo Sinergista">'+ic('sheet',15)+' Planilha</button>';
   h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período">'+ic('copy',15)+' Copiar</button>';
   /* Grânulos não têm calda: a quantidade por pote já está na ficha. */
@@ -15113,6 +15130,16 @@ function openStudyDetail(qid,sid){
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       var _prog=AvaliacaoCore.avaliacao(study,a);h+='<small>'+(_prog.complete?'Concluída':(_prog.started?'Parcial · '+_prog.pending+' campos pendentes':'Pendente'))+'</small></summary>';
+      /* Quais são os pendentes e por quê. Só na parcial: na avaliação vazia a
+         lista seria a grade inteira. Até 40 linhas; o resto vira contagem. */
+      if(_prog.started&&!_prog.complete&&typeof AvaliacaoCore.pendentes==='function'){
+        var _pend=AvaliacaoCore.pendentes(study,a), _reps=Math.max(1,parseInt(study.numRepeticoes,10)||1);
+        h+='<div class="av-pendentes"><div class="av-pendentes-t">Faltam '+_pend.length+':</div><ul>'+
+          _pend.slice(0,40).map(function(x){
+            var _rep=(typeof _repDisplay==='function')?_repDisplay(x.rep):String(x.rep);
+            return '<li><b>'+esc(x.tratId)+'</b>'+(_reps>1?' · rep. '+esc(_rep):'')+' · '+esc(x.variavel)+' — '+esc(x.motivo)+'</li>';
+          }).join('')+(_pend.length>40?'<li>… e mais '+(_pend.length-40)+'</li>':'')+'</ul></div>';
+      }
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
         h+='<div class="evento-bbch">'+esc(bbchRotulo(studyCrop,a.bbch))+'</div>';
@@ -19359,6 +19386,46 @@ function _studyFinalizationReview(qid,s){
   var pend=[]; try{ pend=pendenciasDoEstudo(qid,s); }catch(e){}
   return {issues:issues,notes:notes,ok:issues.length===0,pendencias:pend};
 }
+/* O AVISO DE FECHAMENTO CABE NA TELA. O texto completo (uma linha por análise,
+   uma por avaliação) vai inteiro para "Ver lista completa"; em cima fica o
+   resumo agrupado: "44 parcelas sem avaliação (8 DAT, 9 DAT, 10 DAT)" e
+   "25 análises não calculadas — consumo foliar, consumo de isca…". Só muda o
+   que se LÊ antes da senha: revisão e estatística assinadas continuam iguais. */
+function _resumoFinalizacao(qid,s,prev,review){
+  var cab='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
+          (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+'.\n\n';
+  var pe='Depois disso o estudo fica somente-leitura e sai da agenda.';
+  var pendTxt=(review.pendencias||[]).map(function(p){ return p.texto+(p.detalhe?(' ('+p.detalhe+')'):''); });
+  if(!pendTxt.length) pendTxt=review.issues;
+  var completo=(pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+pendTxt.join('\n• ')+'\n\n'):'')+
+               (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')):'');
+  /* Pendências agrupadas pelo texto; do detalhe fica o rótulo (antes do " · "). */
+  var grupos=[], porTexto={};
+  (review.pendencias||[]).forEach(function(p){
+    var g=porTexto[p.texto]; if(!g){ g=porTexto[p.texto]={texto:p.texto,rot:[],detalhe:p.detalhe||''}; grupos.push(g); }
+    var r=String(p.detalhe||'').split(' · ')[0]; if(r && g.rot.indexOf(r)<0) g.rot.push(r);
+  });
+  var pendRes=grupos.length?grupos.map(function(g){
+    return g.rot.length>1 ? (g.texto+' ('+g.rot.join(', ')+')') : (g.texto+(g.detalhe?(' ('+g.detalhe+')'):''));
+  }):review.issues.slice();
+  /* Estatística: uma linha por estado, variáveis sem repetir. As notas de
+     estatística são as primeiras de review.notes, na ordem de avancado.pendencias. */
+  var av={pendencias:[]}; try{ av=_bioestatSnapshotAvancado(qid,s); }catch(e){}
+  var nEst=Math.min((av.pendencias||[]).length, review.notes.length);
+  var porEstado={pendente:{n:0,vars:[]},erro:{n:0,vars:[]}};
+  (av.pendencias||[]).slice(0,nEst).forEach(function(p){
+    var e=porEstado[p.estado==='erro'?'erro':'pendente'], k=String(p.jobKey||''), v=k.indexOf('|')>=0?k.slice(k.indexOf('|')+1):k;
+    e.n++; if(!e.vars.some(function(x){ return x.toLowerCase()===v.toLowerCase(); })) e.vars.push(v);
+  });
+  var atRes=[];
+  if(porEstado.pendente.n) atRes.push(porEstado.pendente.n+' análise(s) estatística(s) não calculada(s) — '+porEstado.pendente.vars.join(', ')+
+    '. Para calcular antes de fechar: Cancelar → Estatística → Iniciar cálculos estatísticos.');
+  if(porEstado.erro.n) atRes.push(porEstado.erro.n+' análise(s) com erro de cálculo — '+porEstado.erro.vars.join(', '));
+  atRes=atRes.concat(review.notes.slice(nEst));
+  var resumo=cab+(pendRes.length?('PENDÊNCIAS:\n• '+pendRes.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
+             (atRes.length?('ATENÇÃO:\n• '+atRes.join('\n• ')+'\n\n'):'')+pe;
+  return {resumo:resumo, detalhes:completo};
+}
 function finalizarEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s) return;
   s=normalizeStudy(s);
@@ -19368,17 +19435,10 @@ function finalizarEstudo(qid,sid){
   var prev=_statSnapshot(s);
   var review=_studyFinalizationReview(qid,s);
   /* No aviso da senha vale a lista CONCRETA quando ela existe: "2 parcelas sem
-     avaliação · 7 DAA" diz onde ir; "3 avaliação(ões) sem lançamento" só diz que
-     há o que procurar. As contagens continuam no registro assinado. */
-  var _pendTxt=(review.pendencias||[]).map(function(p){
-    return p.texto+(p.detalhe?(' ('+p.detalhe+')'):'');
-  });
-  if(!_pendTxt.length) _pendTxt=review.issues;
-  var resumo='Serão congelados '+prev.itens.length+' resultado(s) de estatística'+
-             (prev.semAnalise.length?(' — '+prev.semAnalise.length+' avaliação(ões) ficam sem análise por falta de dado'):'')+
-             '.\n\n'+(_pendTxt.length?('PENDÊNCIAS ENCONTRADAS:\n• '+_pendTxt.join('\n• ')+'\n\n'):'Checklist operacional completo.\n\n')+
-             (review.notes.length?('ATENÇÃO:\n• '+review.notes.join('\n• ')+'\n\n'):'')+
-             'Depois disso o estudo fica somente-leitura e sai da agenda.';
+     avaliação · 7 DAA" diz onde ir. Em cima vai o resumo agrupado; a lista
+     inteira fica em "Ver lista completa". As contagens continuam no registro
+     assinado. */
+  var _txt=_resumoFinalizacao(qid,s,prev,review), resumo=_txt.resumo;
   requireDeletePassword(resumo, function(){
     openRubrica(function(ok){
       if(!ok){ alert('Sem a assinatura o estudo não é finalizado.'); return; }
@@ -19409,7 +19469,7 @@ function finalizarEstudo(qid,sid){
       _refazTelasDoEstudo();
       openStudyDetail(qid,sid);
     }, 'Finalizar o estudo '+(s.codigo||s.id));
-  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar'});
+  }, {title:'Finalizar estudo '+(s.codigo||s.id), ok:'Finalizar', detalhes:_txt.detalhes});
 }
 function reabrirEstudo(qid,sid){
   var s=_estudoDe(qid,sid); if(!s||!estudoFinalizado(s)) return;
@@ -20987,8 +21047,8 @@ function injectTopbarButtons(){
      aqui: continua no "+ ADICIONAR" de dentro da quadra. */
   var btnConhec=document.createElement("button");
   btnConhec.className="btn-sm btn-studies";
-  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Conhecimento</span>';
-  btnConhec.setAttribute("aria-label","Conhecimento experimental");
+  btnConhec.innerHTML=ic('sheet',18)+'<span class="tb-nav-label">Resultados</span>';
+  btnConhec.setAttribute("aria-label","Análise de resultados");
   btnConhec.onclick=function(){
     if(typeof abrirConhecimento==='function')abrirConhecimento({aba:'estudos'});
     else if(typeof _stxToast==='function')_stxToast('O Conhecimento não carregou neste aparelho. Abra de novo com conexão.');
