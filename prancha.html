@@ -289,7 +289,7 @@ body{background:var(--papel);color:var(--tinta);font-family:var(--ui);font-size:
 
 <div class="aviso" id="aviso"></div>
 
-<script src="estatistica.js"></script>
+<script src="estatistica.js?v=2"></script>
 <script>
 /* =====================================================================
    1. DELINEAMENTO E DADOS
@@ -423,6 +423,15 @@ let BLOCOS = FATOR_BLOCO.map((_,i)=> i+1);
    desenhar (ver comSelecao), então quem precisa do ensaio inteiro — o painel de
    seleção, a contagem de índices — pergunta aqui. */
 const _TRAT0 = TRAT;
+
+/* ===== UMA REPETIÇÃO: A FOLHA SAI, DESCRITIVA ==============================
+   Ensaio com uma parcela por tratamento (demonstrativo, triagem de bancada)
+   também precisa de figura; o que ele não tem é TESTE. Sem repetição não há
+   resíduo, e sem resíduo não há ANOVA, CV, DMS, letras nem barra de erro. A
+   folha desenha o que foi lido — o valor de cada parcela, a curva, a AACPD e
+   a eficácia de Abbott sobre eles — e diz, na legenda, no subtítulo e no
+   rodapé, que é descrição: figura sem essa frase seria lida como replicada. */
+const SEM_REP = BLOCOS.length < 2;
 
 /* AACPD por parcela — trapézios sobre os DAA */
 const aacpd = serie => {
@@ -644,6 +653,14 @@ function baseEficacia(){ return SENT === 'maior' ? 'data' : baseAnalise(); }
 function porData(){ return baseAnalise() === 'data'; }
 function analiseNaData(j){
   const Y  = TRAT.map((_,i)=> BLOCOS.map((_,b)=> SEV[i][b][j]));
+  /* Um bloco só (SEM_REP): a leitura da data e a eficácia de Abbott sobre ela,
+     sem ANOVA — o anovaDBC recusa um bloco, e recusa certo. */
+  if(BLOCOS.length < 2){
+    const m1 = Y.map(_md);
+    return { aacpdParcela:Y, mediaAACPD:m1, mediaSeveridade:_mSEV0,
+             anova:null, dms:null, letras:TRAT.map(()=>""), q:null, semTeste:"sem-repeticao",
+             eficacia: m1.map((m,i)=> i===_iT0 ? null : _efic1(m, m1[_iT0])) };
+  }
   const A  = Est.anovaDBC(Y.map(l=>l.map(x=>Math.sqrt(x+0.5))));
   const dm = A.semResiduo ? null : Est.dmsTukey(A.QMerro, A.r, A.k, A.glErro);
   const mY = Y.map(_md);
@@ -656,7 +673,7 @@ function analiseNaData(j){
            eficacia: mY.map((m,i)=> i===_iT0 ? null : _efic1(m, mY[_iT0])) };
 }
 function analiseAACPD(){
-  return Est.analisar({
+  const cfg = {
     tratamentos: TRAT.map(t=>t.id),
     blocos: BLOCOS,
     tempos: DAA,
@@ -664,7 +681,9 @@ function analiseAACPD(){
     testemunha: (TRAT.find(t=>t.testemunha)||TRAT[0]).id,
     transformacao: "sqrt",
     menosEhMelhor: MENOS_MELHOR   /* segue o sentido da variável, não mais cravado */
-  });
+  };
+  /* um bloco só: a AACPD de cada parcela e Abbott, na mesma forma, sem o teste */
+  return BLOCOS.length < 2 ? Est.descrever(cfg) : Est.analisar(cfg);
 }
 /* `let` em tudo o que depende da análise: em POR_DATA ela é refeita quando o
    autor troca a avaliação em foco. E as séries por tratamento ainda são
@@ -691,12 +710,18 @@ function usarAnalise(j){
   }
   _jAnalise = jj; _baseAtual = base;
   AACPD  = R.aacpdParcela;
-  AN     = { k:R.anova.k, r:R.anova.r, N:R.anova.N, G:R.anova.G, mT:R.anova.mediasTrat,
-             SQtrat:R.anova.SQtrat, SQbloco:R.anova.SQbloco, SQerro:R.anova.SQerro, SQT:R.anova.SQtotal,
-             glT:R.anova.glTrat, glB:R.anova.glBloco, glE:R.anova.glErro,
-             QMtrat:R.anova.QMtrat, QMbloco:R.anova.QMbloco, QMerro:R.anova.QMerro,
-             F:R.anova.F, Fb:R.anova.Fbloco, CV:R.anova.CV };
-  P      = R.anova.p;
+  /* Sem ANOVA (uma repetição), AN guarda só o desenho: o resto é nulo, e quem
+     desenha pergunta semTeste() antes de escrever F, p, CV ou DMS. */
+  AN     = R.anova
+    ? { k:R.anova.k, r:R.anova.r, N:R.anova.N, G:R.anova.G, mT:R.anova.mediasTrat,
+        SQtrat:R.anova.SQtrat, SQbloco:R.anova.SQbloco, SQerro:R.anova.SQerro, SQT:R.anova.SQtotal,
+        glT:R.anova.glTrat, glB:R.anova.glBloco, glE:R.anova.glErro,
+        QMtrat:R.anova.QMtrat, QMbloco:R.anova.QMbloco, QMerro:R.anova.QMerro,
+        F:R.anova.F, Fb:R.anova.Fbloco, CV:R.anova.CV }
+    : { k:TRAT.length, r:BLOCOS.length, N:TRAT.length*BLOCOS.length, G:null, mT:R.mediaAACPD,
+        SQtrat:null, SQbloco:null, SQerro:null, SQT:null, glT:TRAT.length-1, glB:0, glE:0,
+        QMtrat:null, QMbloco:null, QMerro:null, F:null, Fb:null, CV:null };
+  P      = R.anova ? R.anova.p : null;
   Q      = R.q;
   DMS    = R.dms;
   LETRAS = R.letras;
@@ -818,33 +843,56 @@ const L = {
      rodapeStat:(cv,dms)=>`Tukey (α = 0,05) sobre √(AACPD); médias na escala original. CV = ${cv}% · DMS = ${dms} · ${NB} blocos ao acaso`,
      patamar:"patamar comercial", testemNota:m=>`Testemunha: AACPD ${m} · ${MEDl.pt} final ${fmt(mSEV[iTest][ULTAV],1)}%`,
      medias:"Médias seguidas da mesma letra não diferem entre si.",
+     anovaAusente:"Análise de variância — não calculada", semRep:"uma parcela por tratamento, sem repetição",
+     semGrupo:"Sem agrupamento de médias: não há teste estatístico (o motivo está abaixo).",
      tituloEfic:`Eficácia de controle ${SENT==='maior'?'(Abbott)':'sobre a AACPD'}`, tituloTab:"Resultados por tratamento",
      /* Bancada: a curva é da própria leitura ao longo do tempo — "curva de
         mortalidade no tempo". "Progresso da doença" é figura de campo. */
      tituloSev:(_EH_DOENCA ? `Curva de progresso da doença`
                            : `Curva de ${MEDl.pt} no tempo`),
      eixoSev:`${MED.pt} (%)`, eixoDAA:`Dias depois ${APLREF.pt}`,
-     notaSev:(LAB ? `Média de ${NB} repetições ± erro padrão.`
-                  : `Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.`),
+     /* Uma repetição: o ponto É a parcela — "média de 1 blocos ± erro padrão"
+        seria erro de revisão, e faria a figura parecer replicada. */
+     notaSev:(SEM_REP
+       ? (LAB ? `Uma repetição por tratamento: cada ponto é o valor registrado, sem barra de erro.`
+              : `Uma parcela por tratamento: cada ponto é o valor registrado, sem barra de erro. A área sombreada sob cada curva é a AACPD.`)
+       : LAB ? `Média de ${NB} repetições ± erro padrão.`
+             : `Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.`),
      notaSevSimples:`${MED.pt} média de ${NB} blocos por tratamento.`,
      tituloSevB:`${MED.pt} por tratamento`,
      tituloSevA:`${MED.pt} e eficácia de controle`,
      tituloSevAv:`${MED.pt} por avaliação`,
      eixoAval:"Avaliação",
-     legSevAval:()=>`${MED.pt} média${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`,
+     legSevAval:()=>(SEM_REP
+       ? `${MED.pt}${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é o valor da única parcela do tratamento naquela avaliação. ${motivoSemTeste()}${ESCALA.pt}`
+       : `${MED.pt} média${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`),
      colEficA:"Eficácia", severidadeL:MED.pt,
-     legSevAbbott:()=>`${MED.pt} média${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a ${MEDl.pt} média de ${NB} blocos, em relação à testemunha.${ESCALA.pt}`,
-     legSevSimples:()=>`${MED.pt} média${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`,
+     legSevAbbott:()=>(SEM_REP
+       ? `${MED.pt}${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a ${MEDl.pt} da única parcela de cada tratamento, em relação à testemunha. ${motivoSemTeste()}${ESCALA.pt}`
+       : `${MED.pt} média${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a ${MEDl.pt} média de ${NB} blocos, em relação à testemunha.${ESCALA.pt}`),
+     legSevSimples:()=>(SEM_REP
+       ? `${MED.pt}${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é o valor da única parcela do tratamento. ${motivoSemTeste()}${ESCALA.pt}`
+       : `${MED.pt} média${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`),
      aplic:`${NAPL>1?'última aplicação':'aplicação'}`,
-     legSev:()=>(_EH_DOENCA
+     legSev:()=>(SEM_REP
+       ? (_EH_DOENCA
+         ? `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são o valor da única parcela de cada tratamento, sem barra de erro, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`
+         : `${_cap1(MEDl.pt)} por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são o valor da única parcela de cada tratamento, sem barra de erro.${ESCALA.pt}`)
+       : _EH_DOENCA
        ? `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`
        : `${_cap1(MEDl.pt)} média por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} ${LAB?'repetições':'blocos'} e as barras indicam o erro padrão da média.${ESCALA.pt}`),
      figura:"Figura", tabela:"Tabela",
+     /* Sem teste (uma repetição, ou resíduo zero), o lugar das letras e do CV
+        diz por que eles não existem. */
      legEfic:()=>(SENT==='maior'
-       ? `Mortalidade corrigida de Abbott aos ${rotUlt()}, em relação à testemunha, estudo ${ESTUDO.codigo}. Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`
-       : `Eficácia de controle (Abbott) calculada sobre a área abaixo da curva de progresso da doença, estudo ${ESTUDO.codigo}. Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`),
-     legTab:()=>`${MED.pt} média, AACPD, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`,
-     legComp:()=>`Ficha de resultados do estudo ${ESTUDO.codigo}: delineamento, tratamentos e doses, condições de aplicação, avaliações de ${MEDl.pt}, AACPD, eficácia e análise de variância.`,
+       ? `Mortalidade corrigida de Abbott aos ${rotUlt()}, em relação à testemunha, estudo ${ESTUDO.codigo}. ` + (semTeste() ? motivoSemTeste() : `Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`)
+       : `Eficácia de controle (Abbott) calculada sobre a área abaixo da curva de progresso da doença, estudo ${ESTUDO.codigo}. ` + (semTeste() ? motivoSemTeste() : `Barras seguidas da mesma letra não diferem pelo teste de Tukey (α = 0,05) aplicado a √(AACPD). CV = ${fmt(AN.CV,1)}%.`)),
+     legTab:()=>(semTeste()
+       ? `${MED.pt}${SEM_REP?'':' média'}, AACPD e eficácia de controle por tratamento, estudo ${ESTUDO.codigo}. ${motivoSemTeste()}`
+       : `${MED.pt} média, AACPD, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`),
+     legComp:()=>(semTeste()
+       ? `Ficha de resultados do estudo ${ESTUDO.codigo}: delineamento, tratamentos e doses, condições de aplicação, avaliações de ${MEDl.pt}, AACPD e eficácia, descritivas. ${motivoSemTeste()}`
+       : `Ficha de resultados do estudo ${ESTUDO.codigo}: delineamento, tratamentos e doses, condições de aplicação, avaliações de ${MEDl.pt}, AACPD, eficácia e análise de variância.`),
      geradoPor:"Gerado por", em:"em", ref:"Delineamento", dbc:"blocos ao acaso", parc:"parcela"},
  en:{efic:"Control efficacy (%)", trat:"Treatment", produto:"Commercial product",
      dose:"Rate (L or kg/ha)", doseBase:"Rate", gia:"g a.i./ha", caldaP:"Spray mix/plot (mL)", prodP:"Product/plot (mL)",
@@ -856,30 +904,49 @@ const L = {
      rodapeStat:(cv,dms)=>`Tukey (α = 0.05) on √(AUDPC); means on the original scale. CV = ${cv}% · HSD = ${dms} · randomised complete block, ${NB} blocks`,
      patamar:"commercial threshold", testemNota:m=>`Untreated check: AUDPC ${m} · final ${MEDl.en} ${fmt(mSEV[iTest][ULTAV],1)}%`,
      medias:"Means followed by the same letter do not differ.",
+     anovaAusente:"Analysis of variance — not computed", semRep:"one plot per treatment, unreplicated",
+     semGrupo:"No mean grouping: there is no statistical test (the reason is below).",
      tituloEfic:`${SENT==='maior'?"Control efficacy (Abbott's corrected mortality)":'Control efficacy based on AUDPC'}`, tituloTab:"Results by treatment",
      tituloSev:(_EH_DOENCA ? `Disease progress curve` : `${_cap1(MEDl.en)} over time`),
      eixoSev:`${MED.en} (%)`, eixoDAA:`Days after ${APLREF.en}`,
-     notaSev:(LAB ? `Mean of ${NB} replicates ± standard error.`
-                  : `Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.`),
+     notaSev:(SEM_REP
+       ? (LAB ? `One replicate per treatment: each point is the recorded value, no error bars.`
+              : `One plot per treatment: each point is the recorded value, no error bars. The shaded area under each curve is the AUDPC.`)
+       : LAB ? `Mean of ${NB} replicates ± standard error.`
+             : `Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.`),
      notaSevSimples:`Mean ${MEDl.en} of ${NB} blocks per treatment.`,
      tituloSevB:`${MED.en} by treatment`,
      tituloSevA:`${MED.en} and control efficacy`,
      tituloSevAv:`${MED.en} by assessment`,
      eixoAval:"Assessment",
-     legSevAval:()=>`Mean${ALVO.en} ${MEDl.en} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`,
+     legSevAval:()=>(SEM_REP
+       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the value of the treatment's single plot at that assessment. ${motivoSemTeste()}${ESCALA.en}`
+       : `Mean${ALVO.en} ${MEDl.en} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`),
      colEficA:"Efficacy", severidadeL:MED.en,
-     legSevAbbott:()=>`Mean${ALVO.en} ${MEDl.en} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean ${MEDl.en} of ${NB} blocks, relative to the untreated check.${ESCALA.en}`,
-     legSevSimples:()=>`Mean${ALVO.en} ${MEDl.en} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`,
+     legSevAbbott:()=>(SEM_REP
+       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the ${MEDl.en} of each treatment's single plot, relative to the untreated check. ${motivoSemTeste()}${ESCALA.en}`
+       : `Mean${ALVO.en} ${MEDl.en} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean ${MEDl.en} of ${NB} blocks, relative to the untreated check.${ESCALA.en}`),
+     legSevSimples:()=>(SEM_REP
+       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the value of the treatment's single plot. ${motivoSemTeste()}${ESCALA.en}`
+       : `Mean${ALVO.en} ${MEDl.en} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`),
      aplic:`${NAPL>1?'last application':'application'}`,
-     legSev:()=>(_EH_DOENCA
+     legSev:()=>(SEM_REP
+       ? (_EH_DOENCA
+         ? `Disease progress curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are the value of each treatment's single plot, with no error bars, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`
+         : `${_cap1(MEDl.en)} by treatment over time, study ${ESTUDO.codigo}. Points are the value of each treatment's single plot, with no error bars.${ESCALA.en}`)
+       : _EH_DOENCA
        ? `Disease progress curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`
        : `Mean ${MEDl.en} by treatment over time, study ${ESTUDO.codigo}. Points are means of ${NB} ${LAB?'replicates':'blocks'} and bars indicate the standard error of the mean.${ESCALA.en}`),
      figura:"Figure", tabela:"Table",
      legEfic:()=>(SENT==='maior'
-       ? `Abbott's corrected mortality at ${rotUlt()}, relative to the untreated check, study ${ESTUDO.codigo}. Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`
-       : `Control efficacy (Abbott) calculated on the area under the disease progress curve, study ${ESTUDO.codigo}. Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`),
-     legTab:()=>`Mean ${MEDl.en}, AUDPC, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`,
-     legComp:()=>`Results sheet for study ${ESTUDO.codigo}: design, treatments and rates, application conditions, ${MEDl.en} assessments, AUDPC, efficacy and analysis of variance.`,
+       ? `Abbott's corrected mortality at ${rotUlt()}, relative to the untreated check, study ${ESTUDO.codigo}. ` + (semTeste() ? motivoSemTeste() : `Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`)
+       : `Control efficacy (Abbott) calculated on the area under the disease progress curve, study ${ESTUDO.codigo}. ` + (semTeste() ? motivoSemTeste() : `Bars followed by the same letter do not differ by Tukey's test (α = 0.05) applied to √(AUDPC). CV = ${fmt(AN.CV,1)}%.`)),
+     legTab:()=>(semTeste()
+       ? `${SEM_REP?_cap1(MEDl.en):'Mean '+MEDl.en}, AUDPC and control efficacy by treatment, study ${ESTUDO.codigo}. ${motivoSemTeste()}`
+       : `Mean ${MEDl.en}, AUDPC, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`),
+     legComp:()=>(semTeste()
+       ? `Results sheet for study ${ESTUDO.codigo}: design, treatments and rates, application conditions, ${MEDl.en} assessments, AUDPC and efficacy, descriptive. ${motivoSemTeste()}`
+       : `Results sheet for study ${ESTUDO.codigo}: design, treatments and rates, application conditions, ${MEDl.en} assessments, AUDPC, efficacy and analysis of variance.`),
      geradoPor:"Generated by", em:"on", ref:"Design", dbc:"randomised complete blocks", parc:"plot"}
 };
 
@@ -944,7 +1011,40 @@ function fmt(v,c=2){
   const s = Number(v).toFixed(c);
   return estado.idioma==="pt" ? s.replace(".", ",") : s;
 }
-const pTexto = () => P < 0.001 ? (estado.idioma==="pt"?"< 0,001":"< 0.001") : fmt(P,3);
+/* p nulo é "não há teste", e não "p < 0,001": `null < 0.001` é verdadeiro em
+   JS, e a folha imprimia significância onde ninguém tinha calculado nada. */
+const pTexto = () => !Number.isFinite(P) ? "—"
+  : P < 0.001 ? (estado.idioma==="pt"?"< 0,001":"< 0.001") : fmt(P,3);
+/* SEM TESTE, E POR QUÊ. null quando há teste. Uma repetição é do ensaio
+   inteiro; variação residual zero é da análise que está na tela — com
+   repetição, mas as parcelas de cada tratamento não variam além do bloco
+   (acontece na bancada, com 0% e 100% em todas). Nos dois casos não existe F,
+   e a folha diz isso no lugar de F, p, CV, DMS e letras. */
+function semTeste(){
+  if(SEM_REP) return "sem-repeticao";
+  if(!R || !R.anova || R.anova.semResiduo) return "sem-residuo";
+  return null;
+}
+function motivoSemTeste(){
+  const pt = estado.idioma === "pt", m = semTeste();
+  if(m === "sem-repeticao") return pt
+    ? "Uma repetição por tratamento: sem resíduo não há termo de erro — sem ANOVA, CV, DMS, letras nem barra de erro. Valores descritivos."
+    : "One replicate per treatment: with no residual there is no error term — no ANOVA, CV, HSD, letters or error bars. Descriptive values.";
+  if(m === "sem-residuo") return pt
+    ? "Sem variação residual: as repetições não variam além do efeito de tratamento e bloco, e sem termo de erro não há teste F, CV, DMS nem letras. Valores descritivos."
+    : "No residual variation: replicates do not vary beyond treatment and block effects, so there is no error term — no F test, CV, HSD or letters. Descriptive values.";
+  return "";
+}
+/* O subtítulo das folhas de barras, ranking, por data e do slide — um só, para
+   as quatro não dizerem coisas diferentes do mesmo ensaio. */
+function subtituloTexto(){
+  const pt = estado.idioma === "pt";
+  if(SEM_REP) return pt
+    ? `Uma repetição  ·  ${TRAT.length} tratamentos  ·  descritivo, sem teste estatístico`
+    : `One replicate  ·  ${TRAT.length} treatments  ·  descriptive, no statistical test`;
+  return pt ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
+            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`;
+}
 const nome = tr => tr[estado.idioma];
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
@@ -1044,9 +1144,12 @@ function geoBarras(n){
 
 function secEficacia(x, y, w){
   const d = t();
+  /* Eficácia que não se calcula (testemunha zerada) vai para o fim e sai "—":
+     uma barra de 2 px escrita "0,0" diria que o produto não controlou nada. */
+  const _ef = v => Number.isFinite(v) ? v : -Infinity;
   const dados = TRAT.map((tr,i)=>({tr, ef:EFIC[i], letra:LETRAS[i]}))
                     .filter(o=>!o.tr.testemunha)
-                    .sort((a,b)=>b.ef-a.ef);
+                    .sort((a,b)=>(_ef(b.ef)-_ef(a.ef)) || 0);
   const G = geoBarras(dados.length);
   const rotW = Math.min(300, w*0.30);
   const x0 = x + rotW, larg = w - rotW - 66;
@@ -1082,6 +1185,10 @@ function secEficacia(x, y, w){
     s += txt(x+G.fId*1.9, linhaBase, nm.length>corte ? nm.slice(0,corte-1)+"…" : nm, {t:G.fNome, c:GRAF});
     if(G.linhas > 2)
       s += txt(x+G.fId*1.9, linhaBase+G.fNome*1.3, `${fmt(o.tr.dose,2)} ${o.tr.doseUnid||"L/ha"} · ${o.tr.gia} ${d.gia}`, {t:G.fNome*0.85, c:GRAF});
+    if(!Number.isFinite(o.ef)){
+      s += txt(x0+9, by+hBarra*0.72, "—", {t:G.fVal, w:600, c:GRAF});
+      return;
+    }
     s += `<rect x="${x0}" y="${by}" width="${bw}" height="${hBarra}" fill="${o.tr.cor}" fill-opacity="0.88" stroke="${TINTA}" stroke-width="1"/>`;
     s += txt(x0+bw+9, by+hBarra*0.72, fmt(o.ef,1), {t:G.fVal, w:600});
     s += txt(x0+bw+9+fmt(o.ef,1).length*G.fVal*0.60+7, by+hBarra*0.72, o.letra, {t:G.fVal*0.9, w:600, c:GRAF});
@@ -1089,6 +1196,13 @@ function secEficacia(x, y, w){
 
   let cy2 = yFim + 6;
   s += rule(x, cy2, w, 1.1); cy2 += 18;
+  if(semTeste()){
+    /* sem teste, o rodapé diz por quê no lugar de F, p, CV e DMS */
+    s += txt(x, cy2, motivoSemTeste(), {t:11.5, c:GRAF});
+    cy2 += 16;
+    s += txt(x, cy2, d.testemNota(fmt(mAACPD[iTest],0)), {t:11.5, c:GRAF});
+    return {svg:s, h:cy2-y+8};
+  }
   s += txt(x, cy2, d.rodapeStat(fmt(AN.CV,1), fmt(DMS,2)), {t:11.5, c:GRAF});
   cy2 += 16;
   s += txt(x, cy2, `F(${AN.glT}, ${AN.glE}) = ${fmt(AN.F,1)}; p ${pTexto()} · ${d.testemNota(fmt(mAACPD[iTest],0))}`, {t:11.5, c:GRAF});
@@ -1098,6 +1212,8 @@ function secEficacia(x, y, w){
 /* --- erro padrão da média por tratamento e por avaliação --- */
 let SEM = TRAT.map((_,ti)=> DAA.map((_,di)=>{
   const v = SEV[ti].map(b=>b[di]);
+  /* uma parcela não tem dispersão: o erro padrão não existe (nulo, não zero) */
+  if(v.length < 2) return null;
   const m = media(v);
   const s2 = v.reduce((a,x)=>a+(x-m)**2, 0)/(v.length-1);
   return Math.sqrt(s2/v.length);
@@ -1155,7 +1271,7 @@ function secSeveridade(x, y, w, h){
       if(!fantasma){
         DAA.forEach((dd,di)=>{
           const cy = py(mSEV[ti][di]);
-          if(o.erro !== false){
+          if(o.erro !== false && Number.isFinite(SEM[ti][di])){
             const e = (SEM[ti][di]/yMax)*gh, cima = Math.max(gy, cy-e);
             s += `<line x1="${px(dd)}" y1="${cima.toFixed(1)}" x2="${px(dd)}" y2="${(cy+e).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
             if(cy-e >= gy) s += `<line x1="${px(dd)-4}" y1="${(cy-e).toFixed(1)}" x2="${px(dd)+4}" y2="${(cy-e).toFixed(1)}" stroke="${TINTA}" stroke-width="1"/>`;
@@ -1227,9 +1343,10 @@ function secSeveridade(x, y, w, h){
          era o último lugar onde a sigla sobrevivia numa folha de bioensaio. */
       const _rotResp = porData() ? `${MED[estado.idioma]} ${fmt(mAACPD[ti],1)}%`
                                  : `AACPD ${fmt(mAACPD[ti],0)}`;
+      /* sem letra (sem teste) a linha não termina num " · " solto */
       const info = tr.testemunha
         ? _rotResp
-        : `${_rotResp} · ${fmt(EFIC[ti],1)}% · ${LETRAS[ti]}`;
+        : [_rotResp, Number.isFinite(EFIC[ti]) ? `${fmt(EFIC[ti],1)}%` : "—", LETRAS[ti]].filter(Boolean).join(" · ");
       s += txt(gx, gy+gh+38, info, {t:11.5, w:600, c:TINTA});
     });
     const fim = y + linhas*(ph+64) + 6;
@@ -1318,28 +1435,33 @@ function secResultados(x,y,w){
      que dado as letras de Tukey e a eficácia se referem. */
   const semAacpd = porData() && DAA.length > 1;
   const jFoco = _jAnalise;
+  /* Sem teste não há agrupamento: a coluna "Tukey" sai, em vez de ficar vazia
+     — coluna em branco num relatório se lê como dado faltando. */
+  const comGrupo = !semTeste();
   const cols = [
     /* "Tratamento" não cabia em 6% da largura e transbordava por cima de
        "Produto comercial" — as duas saíam grudadas no cabeçalho. */
-    {t:d.trat, w:w*0.11}, {t:d.produto, w:w*0.21},
+    {t:d.trat, w:w*0.11}, {t:d.produto, w:w*(comGrupo ? 0.21 : 0.33)},
     /* rotMom, não "N DAA" cravado: com knockdown a 24 e 48 HAT a coluna saía
        "1 DAA" e "2 DAA", que é outra leitura e no mesmo dia sequer existe. */
-    ...AVALIACOES.map((a,i)=>({t:rotMom(i) + (semAacpd && i===jFoco ? " ●" : ""), w:wAv, a:"right"})),
+    ...AVALIACOES.map((a,i)=>({t:rotMom(i) + (semAacpd && i===jFoco && comGrupo ? " ●" : ""), w:wAv, a:"right"})),
     ...(semAacpd ? [] : [{t:d.aacpd, w:w*0.13, a:"right"}]),
     {t:d.eficC, w:w*0.13, a:"right"},
-    {t:d.grupo, w:w*0.12, a:"middle"}
+    ...(comGrupo ? [{t:d.grupo, w:w*0.12, a:"middle"}] : [])
   ];
   const linhas = TRAT.map((tr,i)=>[
     {v:tr.id, w:600, swatch:tr.cor},
     nome(tr),
     ...mSEV[i].map(v=>fmt(v,1)),
     ...(semAacpd ? [] : [fmt(mAACPD[i],1)]),
-    tr.testemunha ? "—" : fmt(EFIC[i],1),
-    {v:LETRAS[i], w:600}
+    (tr.testemunha || !Number.isFinite(EFIC[i])) ? "—" : fmt(EFIC[i],1),
+    ...(comGrupo ? [{v:LETRAS[i], w:600}] : [])
   ]);
   const tb = tabela(x,y,cols,linhas,{zebra:true});
   let s = tb.svg;
-  s += txt(x, y+tb.h+17, `${d.medias} ${d.rodapeStat(fmt(AN.CV,1), fmt(DMS,2))}`, {t:11, c:GRAF});
+  /* o porquê inteiro está no quadro de ANOVA logo abaixo (tabela e A4 sempre o
+     trazem); aqui basta não deixar o leitor procurando a coluna de letras */
+  s += txt(x, y+tb.h+17, comGrupo ? `${d.medias} ${d.rodapeStat(fmt(AN.CV,1), fmt(DMS,2))}` : d.semGrupo, {t:11, c:GRAF});
   s += txt(x, y+tb.h+32, `${E().escala} · ${AVALIACOES.map(a=>a.data[estado.idioma]).join(" · ")}`, {t:11, c:GRAF});
   return {svg:s, h:tb.h+42};
 }
@@ -1347,6 +1469,14 @@ function secResultados(x,y,w){
 /* --- quadro de ANOVA, em monoespaçada: é a saída do console --- */
 function secAnova(x,y,w){
   const d = t();
+  /* Sem termo de erro não existe quadro de variância: no lugar dele, o porquê.
+     Um quadro com GL do resíduo 0 e F em branco pareceria conta mal feita. */
+  if(semTeste()){
+    const linhas = quebrar(motivoSemTeste(), Math.max(40, Math.floor(w/6.6)));
+    let s = "";
+    linhas.forEach((l,k)=>{ s += txt(x, y+16+k*17, l, {t:12, c:GRAF}); });
+    return {svg:s, h:16 + linhas.length*17};
+  }
   const cols = [
     {t:d.fv, w:w*0.30}, {t:d.gl, w:w*0.10, a:"right"},
     {t:d.sq, w:w*0.16, a:"right"}, {t:d.qm, w:w*0.16, a:"right"},
@@ -1401,7 +1531,9 @@ function secRodape(x,y,w){
   const nInd = (NIND > 0)
     ? `${NB*NIND} ${pt?"indivíduos por tratamento":"individuals per treatment"} (${NB} × ${NIND})`
     : null;
-  s += txt(x, y+20, [`${d.ref}: ${dl.blocos} ${d.dbc}`,
+  /* "1 blocos ao acaso" não é delineamento: com uma parcela por tratamento o
+     rodapé diz o que o ensaio é */
+  s += txt(x, y+20, [SEM_REP ? `${d.ref}: ${d.semRep}` : `${d.ref}: ${dl.blocos} ${d.dbc}`,
                      dl.parcela ? `${d.parc} ${dl.parcela}` : null,
                      `n = ${AN.N} ${pt?"parcelas":"plots"}`,
                      nInd].filter(Boolean).join(" · "), {t:12, c:GRAF});
@@ -1799,7 +1931,8 @@ function secPlantec(x, y, w, alt){
   /* o momento analisado ganha ● — é a única avaliação a que a ANOVA, a DMS e as
      letras desta prancha se referem; sem a marca, as três séries parecem ter o
      mesmo respaldo estatístico */
-  const legs = rotulosDatas().map((r,i)=> i === avalIdx() ? `${r} ●` : r);
+  /* sem teste não há "momento analisado" a marcar */
+  const legs = rotulosDatas().map((r,i)=> (i === avalIdx() && !semTeste()) ? `${r} ●` : r);
   const rotulos = TRAT.map(rotuloTratamento);
   const maxLinhas = Math.max(...rotulos.map(r=>r.length));
   const fonteX = maxLinhas <= 3 ? 10 : (maxLinhas === 4 ? 9 : 8);
@@ -1890,19 +2023,58 @@ function secEstatistica(x, y, w){
     ? `${MED[estado.idioma]} — ${rotMom(_jAnalise)}`
     : (pt ? "AACPD (área abaixo da curva de progresso)" : "AUDPC (area under the disease progress curve)");
 
-  s += txt(x, cy, pt ? "O QUE FOI ANALISADO" : "WHAT WAS ANALYSED", {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
+  /* Sem teste, a folha do auditor diz o que mostra e por que não testa — e
+     não um quadro de zeros, nem a transformação de um teste que não rodou. */
+  const sem = semTeste();
+  s += txt(x, cy, sem ? (pt ? "O QUE A FOLHA MOSTRA" : "WHAT THE SHEET SHOWS")
+                      : (pt ? "O QUE FOI ANALISADO" : "WHAT WAS ANALYSED"), {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
   s += ruleL(x, cy-12, w);
   linha(pt ? "Resposta" : "Response", resposta);
-  linha(pt ? "Transformação" : "Transformation", pt ? "√(x + 0,5)" : "√(x + 0.5)");
+  linha(pt ? "Transformação" : "Transformation",
+        sem ? (pt ? "nenhuma — sem teste, não há escala de teste" : "none — no test, so no test scale")
+            : (pt ? "√(x + 0,5)" : "√(x + 0.5)"));
   linha(pt ? "Delineamento" : "Design",
-        pt ? `Blocos ao acaso · ${AN.k} tratamentos · ${AN.r} blocos · N = ${AN.N}`
-           : `Randomised complete blocks · ${AN.k} treatments · ${AN.r} blocks · N = ${AN.N}`);
+        SEM_REP
+          ? (pt ? `Uma parcela por tratamento · ${AN.k} tratamentos · N = ${AN.N}`
+                : `One plot per treatment · ${AN.k} treatments · N = ${AN.N}`)
+          : (pt ? `Blocos ao acaso · ${AN.k} tratamentos · ${AN.r} blocos · N = ${AN.N}`
+                : `Randomised complete blocks · ${AN.k} treatments · ${AN.r} blocks · N = ${AN.N}`));
   linha(pt ? "Testemunha (referência de Abbott)" : "Untreated check (Abbott reference)", TRAT[iTest] ? TRAT[iTest].id : "—");
   linha(pt ? "Fórmula da eficácia" : "Efficacy formula",
         SENT === 'maior'
           ? (pt ? "Mortalidade corrigida: (trat − test) / (100 − test)" : "Corrected mortality: (treat − check) / (100 − check)")
           : (pt ? "Redução de Abbott: (test − trat) / test" : "Abbott reduction: (check − treat) / check"));
   cy += 8;
+
+  if(sem){
+    s += txt(x, cy, pt ? "POR QUE NÃO HÁ TESTE" : "WHY THERE IS NO TEST", {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
+    s += ruleL(x, cy-12, w);
+    const porque = motivoSemTeste() + (SEM_REP
+      ? (pt ? " Para comparar tratamentos com teste, o ensaio precisa de ao menos 2 repetições (blocos) de cada um."
+            : " To compare treatments with a test, the trial needs at least 2 replicates (blocks) of each.")
+      : "");
+    quebrar(porque, Math.max(40, Math.floor(w/6.6))).forEach(l=>{ s += txt(x, cy, l, {t:12, c:TINTA}); cy += 17; });
+    cy += 12;
+    s += txt(x, cy, pt ? "VALORES POR TRATAMENTO" : "VALUES BY TREATMENT", {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
+    const colsD = [
+      {t:d.trat,   w:w*0.11},
+      {t:d.produto, w:w*0.49},
+      {t:(SEM_REP ? (pt?"Valor da parcela":"Plot value") : (pt?"Média (escala original)":"Mean (original scale)")), w:w*0.22, a:"right"},
+      {t:d.eficC, w:w*0.18, a:"right"}
+    ];
+    const linhasD = TRAT.map((tr,i)=>[
+      {v:tr.id, w:600, swatch:tr.cor},
+      (estado.idioma==="pt" ? tr.pt : tr.en) || tr.id,
+      Number.isFinite(mAACPD[i]) ? fmtD(mAACPD[i]) : "—",
+      (tr.testemunha || !Number.isFinite(EFIC[i])) ? "—" : fmtD(EFIC[i])
+    ]);
+    const tbD = tabela(x, cy, colsD, linhasD, {zebra:true});
+    s += tbD.svg; cy += tbD.h + 14;
+    s += txt(x, cy, pt ? "Valores descritivos, na escala original. A ordem entre eles não é diferença estatística."
+                       : "Descriptive values, on the original scale. Their order is not a statistical difference.", {t:11, c:GRAF});
+    cy += 16;
+    return {svg:s, h:cy-y};
+  }
 
   s += txt(x, cy, pt ? "QUADRO DE ANÁLISE DE VARIÂNCIA" : "ANALYSIS OF VARIANCE", {t:11, w:600, ls:1.2, c:GRAF}); cy += 6;
   const a = secAnova(x, cy, w); s += a.svg; cy += a.h + 14;
@@ -2143,9 +2315,7 @@ function prancha(){
       s += secTitulo(M, cy, w, tituloDaVista().toUpperCase()); cy += 26;
     }
     if(B.subtitulo){
-      s += txt(M, cy, (estado.idioma==="pt"
-            ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
-            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`), {t:13, w:600, c:"#C86A08"});
+      s += txt(M, cy, subtituloTexto(), {t:13, w:600, c:"#C86A08"});
       cy += 20;
     }
     const g = secBarras(M, cy, w, 430); s += g.svg; cy += g.h + 12;
@@ -2161,9 +2331,7 @@ function prancha(){
       s += secTitulo(M, cy, w, tituloDaVista().toUpperCase()); cy += 26;
     }
     if(B.subtitulo){
-      s += txt(M, cy, (estado.idioma==="pt"
-            ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
-            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`), {t:13, w:600, c:"#C86A08"});
+      s += txt(M, cy, subtituloTexto(), {t:13, w:600, c:"#C86A08"});
       cy += 20;
     }
     const g = secRanking(M, cy, w, Math.max(140, TRAT.length*30 + 30)); s += g.svg; cy += g.h + 12;
@@ -2190,9 +2358,7 @@ function prancha(){
       s += secTitulo(M, cy, w, tituloDaVista().toUpperCase()); cy += 26;
     }
     if(estado.pl.subtitulo){
-      s += txt(M, cy, (estado.idioma==="pt"
-            ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
-            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`), {t:13, w:600, c:"#C86A08"});
+      s += txt(M, cy, subtituloTexto(), {t:13, w:600, c:"#C86A08"});
       cy += 20;
     }
     const g = secPlantec(M, cy, w, 430); s += g.svg; cy += g.h + 10;
@@ -2221,7 +2387,7 @@ function prancha(){
     const cab = secCabecalho(M, cy, w); s += cab.svg; cy += cab.h + 14;
     s += secTitulo(M, cy, w, d.tituloTab.toUpperCase()); cy += 26;
     const r = secResultados(M, cy, w); s += r.svg; cy += r.h + 22;
-    s += secTitulo(M, cy, w, d.anova.toUpperCase()); cy += 26;
+    s += secTitulo(M, cy, w, (semTeste() ? d.anovaAusente : d.anova).toUpperCase()); cy += 26;
     const a = secAnova(M, cy, w); s += a.svg; cy += a.h + 16;
     H = cy + 70;
     const rod = secRodape(M, H-58, w); s += rod.svg;
@@ -2237,7 +2403,7 @@ function prancha(){
     const ap = secAplicacoes(M, cy, w); s += ap.svg; cy += ap.h + 24;
     s += secTitulo(M, cy, w, d.avaliacoes.toUpperCase()); cy += 26;
     const r = secResultados(M, cy, w); s += r.svg; cy += r.h + 22;
-    s += secTitulo(M, cy, w, d.anova.toUpperCase()); cy += 26;
+    s += secTitulo(M, cy, w, (semTeste() ? d.anovaAusente : d.anova).toUpperCase()); cy += 26;
     const an = secAnova(M, cy, w); s += an.svg; cy += an.h;
     H = Math.max(1754, cy + 120);              /* A4, ou mais alta se transbordar */
     const rod = secRodape(M, H-96, w); s += rod.svg;
@@ -2301,9 +2467,11 @@ function rotulaAnalise(){
     /* A substituição genérica transformava "AACPD" em "mortalidade a 48 HAT" e a
        legenda saía "Mortalidade média, mortalidade a 48 HAT, eficácia…" — a
        mesma coisa dita duas vezes. Aqui a frase é escrita, não remendada. */
-    L[id].legTab = () => pt
-      ? `${MED.pt} média a ${rotMom(_jAnalise)}, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`
-      : `Mean ${MEDl.en} at ${rotMom(_jAnalise)}, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`;
+    L[id].legTab = () => semTeste()
+      ? (pt ? `${MED.pt}${SEM_REP?'':' média'} a ${rotMom(_jAnalise)} e eficácia de controle por tratamento, estudo ${ESTUDO.codigo}. ${motivoSemTeste()}`
+            : `${SEM_REP?_cap1(MEDl.en):'Mean '+MEDl.en} at ${rotMom(_jAnalise)} and control efficacy by treatment, study ${ESTUDO.codigo}. ${motivoSemTeste()}`)
+      : (pt ? `${MED.pt} média a ${rotMom(_jAnalise)}, eficácia de controle e agrupamento de médias por tratamento, estudo ${ESTUDO.codigo}.`
+            : `Mean ${MEDl.en} at ${rotMom(_jAnalise)}, control efficacy and mean grouping by treatment, study ${ESTUDO.codigo}.`);
   });
 }
 if(UMA){
@@ -2331,6 +2499,9 @@ function legendaTexto(){
   if(estado.vista==="estatistica"){
     const pt = estado.idioma==="pt";
     const resp = porData() ? `${MEDl[estado.idioma]} a ${rotMom(_jAnalise)}` : (pt?"AACPD":"AUDPC");
+    if(semTeste()) return {rot:`${pt?"Tabela":"Table"} 1`, txt:(pt
+      ? `Folha estatística do estudo ${ESTUDO.codigo}: delineamento, resposta mostrada (${resp}), por que não há teste e os valores por tratamento. ${motivoSemTeste()}`
+      : `Statistics sheet for study ${ESTUDO.codigo}: design, response shown (${resp}), why there is no test and the values by treatment. ${motivoSemTeste()}`)};
     return {rot:`${pt?"Tabela":"Table"} 1`, txt:(pt
       ? `Análise estatística completa do estudo ${ESTUDO.codigo}: delineamento, resposta analisada (${resp}), transformação, quadro de análise de variância, parâmetros do teste de Tukey e médias por tratamento nas escalas original e transformada.`
       : `Full statistical analysis of study ${ESTUDO.codigo}: design, analysed response (${resp}), transformation, analysis of variance, Tukey test parameters and treatment means on the original and transformed scales.`)};
@@ -2356,6 +2527,11 @@ function legendaTexto(){
     const disp = estado.fig.erro==="ic95" ? (estado.idioma==="pt"?" As barras indicam o intervalo de confiança de 95%.":" Bars indicate the 95% confidence interval.")
                : estado.fig.erro==="ep"   ? (estado.idioma==="pt"?" As barras indicam o erro padrão da média.":" Bars indicate the standard error of the mean.")
                : "";
+    /* Sem teste: nem "média de 1 blocos", nem a frase das letras — o motivo
+       ocupa o lugar dela. A ORDEM do ranking continua; ela só não é teste. */
+    if(semTeste()) return {rot:`${d.figura} 1`, txt:(estado.idioma==="pt"
+      ? `${q} por tratamento a ${rotMom(avalIdx())}, do melhor para o pior, estudo ${ESTUDO.codigo}. ${SEM_REP ? 'Cada barra é o valor da única parcela do tratamento.' : `Cada barra é a média de ${NB} ${LAB?'repetições':'blocos'}.`}${disp} ${motivoSemTeste()}`
+      : `${q} by treatment at ${rotMom(avalIdx())}, ranked best to worst, study ${ESTUDO.codigo}. ${SEM_REP ? "Each bar is the value of the treatment's single plot." : `Each bar is the mean of ${NB} ${LAB?'replicates':'blocks'}.`}${disp} ${motivoSemTeste()}`)};
     return {rot:`${d.figura} 1`, txt:(estado.idioma==="pt"
       ? `${q} por tratamento a ${rotMom(avalIdx())}, do melhor para o pior, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} ${LAB?'repetições':'blocos'}.${disp}${estado.bv.letras?' Tratamentos seguidos da mesma letra não diferem pelo teste de Tukey (α = 0,05).':''}`
       : `${q} by treatment at ${rotMom(avalIdx())}, ranked best to worst, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} ${LAB?'replicates':'blocks'}.${disp}${estado.bv.letras?" Treatments followed by the same letter do not differ by Tukey's test (α = 0.05).":''}`)};
@@ -2373,6 +2549,11 @@ function legendaTexto(){
        isso, apontando onde a estatística está. O momento analisado sai marcado
        com ● na legenda do gráfico. */
     const pt = estado.idioma === "pt";
+    /* sem teste não há "a ANOVA é da data marcada com ●": a figura é descritiva
+       por inteiro, e a legenda diz por quê */
+    if(semTeste()) return {rot:`${d.figura} 1`, txt:(pt
+      ? `${MED.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. ${SEM_REP ? `Cada barra é o valor da única parcela do tratamento${NIND > 0 ? ` (${NIND} indivíduos)` : ""}.` : `Cada barra é a média de ${NB} ${LAB?"repetições":"blocos"}.`} Figura descritiva. ${motivoSemTeste()}`
+      : `${MED.en} by treatment at each assessment, study ${ESTUDO.codigo}. ${SEM_REP ? `Each bar is the value of the treatment's single plot${NIND > 0 ? ` (${NIND} individuals)` : ""}.` : `Each bar is the mean of ${NB} ${LAB?"replicates":"blocks"}.`} Descriptive figure. ${motivoSemTeste()}`)};
     const un = (NIND > 0)
       ? (pt ? `${NB} repetições de ${NIND} indivíduos` : `${NB} replicates of ${NIND} individuals`)
       : (pt ? `${NB} ${LAB?"repetições":"blocos"}` : `${NB} ${LAB?"replicates":"blocks"}`);
@@ -2745,7 +2926,8 @@ function _sincCascata(){
       + `Não existe AACPD aqui — a leitura de cada momento é o resultado daquele momento, não um acumulado. `
       + (SENT === 'maior'
           ? `A eficácia é a mortalidade corrigida de Abbott sobre ela.`
-          : `A eficácia é a redução de Abbott sobre ela.`);
+          : `A eficácia é a redução de Abbott sobre ela.`)
+      + (SEM_REP ? ` Com uma repetição não há teste: a folha é descritiva.` : ``);
     /* Contradição no cadastro: estudo de mortalidade cuja variável está marcada
        como "quanto menor, melhor". A conta sai pela fórmula de dano e o número
        fica negativo. O app conserta isso ao abrir o estudo — se ainda aparecer,
@@ -2774,7 +2956,9 @@ function _sincCascata(){
     const deAlvo = (base === 'data')
       ? `da avaliação em foco (${rotMom(avalIdx())})`
       : "da AACPD do ensaio inteiro";
-    let s = `ANOVA, DMS e letras de Tukey saem ${deAlvo}.`;
+    let s = SEM_REP
+      ? `Sem repetição não há ANOVA, DMS nem letras: a folha mostra ${alvoTxt}, descritiva.`
+      : `ANOVA, DMS e letras de Tukey saem ${deAlvo}.`;
     if(UMA) s += " Com uma avaliação só não existe curva, então a AACPD nem entra na conta.";
     if(SENT === 'maior' && base === 'aacpd')
       s += ` A eficácia, porém, continua saindo de ${rotMom(avalIdx())}: a mortalidade corrigida de Abbott divide por (100 − testemunha) e exige valor limitado a 100% — a AACPD é uma integral, não é.`;
@@ -2939,7 +3123,9 @@ function _rotulaPainel(){
     const d1 = document.querySelector("#grupo-sev .dica");
     if(d1) d1.textContent = `A área sombreada é só leitura visual do acumulado — nesta folha a análise é da avaliação em foco, não da AACPD.`;
     const d2 = document.querySelector("#grupo-bv .dica:last-of-type");
-    if(d2) d2.textContent = `A ANOVA, as letras de Tukey e a eficácia de Abbott saem da AVALIAÇÃO EM FOCO, escolhida em "Quais dados". Trocar a avaliação refaz a análise inteira.`;
+    if(d2) d2.textContent = SEM_REP
+      ? `Com uma repetição a folha é descritiva: o valor de cada parcela e a eficácia de Abbott saem da AVALIAÇÃO EM FOCO, escolhida em "Quais dados".`
+      : `A ANOVA, as letras de Tukey e a eficácia de Abbott saem da AVALIAÇÃO EM FOCO, escolhida em "Quais dados". Trocar a avaliação refaz a análise inteira.`;
     const d3 = document.querySelector("#grupo-vista .dica") || document.querySelectorAll(".dica")[0];
     if(d3) d3.textContent = d3.textContent.split("A curva e os painéis mostram a AACPD como área sombreada.").join("");
   }
@@ -3152,9 +3338,7 @@ document.getElementById("btn-pptx").addEventListener("click", ()=>{
              no da vista "por data", e um slide de eficácia saía chamado de
              porcentagem de severidade */
           titulo: tituloDaVista(),
-          subtitulo: estado.idioma==="pt"
-            ? `Média de ${NB} repetições  ·  ${TRAT.length} tratamentos`
-            : `Mean of ${NB} replicates  ·  ${TRAT.length} treatments`,
+          subtitulo: subtituloTexto(),
           rodape1: identRuns().map(r=>({t:r.s, it:!!r.it})),
           rodape2: [ apl.length ? (estado.idioma==="pt"?"Aplicações: ":"Applications: ")+apl.join(" · ") : null,
                      avl.length ? (estado.idioma==="pt"?"Avaliações: ":"Assessments: ")+avl.join(" · ") : null
@@ -3183,6 +3367,30 @@ document.getElementById("btn-legenda").addEventListener("click", async ()=>{
     i.checked = (i.value === estado.bv.serie);
     const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
   });
+})();
+/* UMA REPETIÇÃO: o painel não oferece o que a folha não tem. Letras e barra de
+   erro saem dos botões — não há teste nem dispersão —, e as dicas que falavam
+   de ANOVA dizem por que ela não existe aqui. Antes do primeiro desenho, para
+   a folha não abrir pedindo uma barra de erro que não pode desenhar. */
+(function _painelSemRep(){
+  if(!SEM_REP) return;
+  const esconde = sel => {
+    const i = document.querySelector(sel), o = i && i.closest(".opt");
+    if(i) i.checked = false;
+    if(o){ o.style.display = "none"; o.classList.remove("ativo"); }
+  };
+  estado.bv.letras = 0; esconde('#g-bv-el input[data-bv="letras"]');
+  estado.sv.erro = 0;   esconde('#g-sev-el input[data-sv="erro"]');
+  estado.fig.erro = "nenhum";
+  esconde('#g-fig-erro input[value="ep"]'); esconde('#g-fig-erro input[value="ic95"]');
+  document.querySelectorAll('#g-fig-erro input').forEach(i=>{
+    i.checked = (i.value === "nenhum");
+    const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
+  });
+  const dF = document.getElementById("dica-fig");
+  if(dF) dF.textContent = "Com uma repetição por tratamento não há dispersão a desenhar: sem erro padrão nem intervalo de confiança. Fixar o eixo em 0–100% é o que permite comparar duas figuras lado a lado no relatório.";
+  const dD = document.querySelector("#grupo-dados .dica");
+  if(dD) dD.textContent = "Tirar um tratamento muda só a figura. Com uma repetição não há ANOVA nem letras para refazer: os valores são os das parcelas. A testemunha fica sempre, porque é a referência de Abbott.";
 })();
 _rotulaPainel();
 _montaPainelDados();

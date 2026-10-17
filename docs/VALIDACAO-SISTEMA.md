@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Documento** | Plano e protocolo de validação do Agracta |
-| **Versão** | 2.1 — 16/10/2026 |
+| **Versão** | 2.2 — 17/10/2026 |
 | **Base** | OECD GLP Nº 1 (NIT-Dicla-035) · OECD Advisory Document Nº 17 (2016) — sistemas computadorizados (NIT-Dicla-038) · OECD Advisory Document Nº 22 (2021) — integridade de dados · GAMP 5 (abordagem baseada em risco) |
 | **Substitui** | versão 1.0 (14/06/2026, arquitetura anterior) e `docs/conformidade/validacao-sistema.md`, que deixa de existir |
 
@@ -192,7 +192,7 @@ completam.
 | URS-11 | `tests/test_offline_local.js` · `tests/test_sync_edicao_aberta.js` · `tests/test_sync_envio_pendente.js` · `tests/test_sync_falha_visivel.js` · `tests/test_envio_perdido.js` · `tests/test_sw_shell_offline.js` · `tests/sync-firestore.cjs` | OQ-12, PQ-01, PQ-02 |
 | URS-12 | `tests/test_lapides_merge.js` · `tests/test_versoes.js` | OQ-13 |
 | URS-13 | `tests/test_backup_local.js` · `tests/test_backup_restauracao.js` · `tests/test_cofre_falha.js` · `tests/test_versoes.js` | OQ-09, OQ-14, PQ-04 |
-| URS-14 | `tests/test_estatistica.js` · `tests/test_motores_estatistica.js` · `tests/test_dose_core.js` · `tests/test_biocalc_mistura.js` · `tests/test_biocalc_lab.js` · `tests/test_aplicacao_core.js` | OQ-15 |
+| URS-14 | `tests/test_estatistica.js` · `tests/test_prancha_uma_repeticao.js` · `tests/test_motores_estatistica.js` · `tests/test_dose_core.js` · `tests/test_biocalc_mistura.js` · `tests/test_biocalc_lab.js` · `tests/test_aplicacao_core.js` | OQ-15 |
 | URS-15 | `tests/test_relatorio.js` · `tests/test_relatorio_fluxo.js` | OQ-16, PQ-03 |
 | URS-16 | `tests/check-assets.cjs` · `tests/test_cache_modulos.js` | IQ-02, IQ-03 |
 | URS-17 | `tests/papeis-rules.cjs` · `tests/test_papeis.js` · `tests/test_papeis_app.js` | OQ-17, IQ-09 |
@@ -353,6 +353,7 @@ revalidação aprovada ganha a seguinte (`validado-1.1`, `validado-2.0`).
 | Versão | Data | Alteração |
 |---|---|---|
 | 1.0 | 14/06/2026 | Emissão inicial (Supabase) |
+| 2.2 | 17/10/2026 | URS-14: `tests/test_prancha_uma_repeticao.js` na matriz. A folha de gráficos com uma repetição sai descritiva (`Est.descrever`: médias, AACPD e Abbott, sem ANOVA, letras nem barra de erro) e não imprime p quando não há resíduo. Mudança crítica em `estatistica.js` (§11.2): registro novo da OQ automática e OQ-15 |
 | 2.1 | 16/10/2026 | Papéis (URS-17, R11, OQ-17, IQ-09): papel no cadastro, tabela "quem pode o quê" no Painel Admin, conferida pelo banco para finalizar, reabrir, aprovar, emendar e excluir. L1 passa a cobrir só o que fica na tela |
 | 2.0 | 11/10/2026 | Reescrita para o Firebase: arquitetura atual, histórico e eventos no servidor, protocolo vivo, assinatura por SHA-256; matriz de rastreabilidade conferida por teste; OQ automática com registro; lacunas L1–L10; controle de mudanças por classe. Junta e substitui `docs/conformidade/validacao-sistema.md` |
 

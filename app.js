@@ -12851,7 +12851,9 @@ function _pranchaDiag(qid, sid){
   return _pranchaVariaveis(s).map(function(v){
     var o={variavel:v, datas:0, parciais:0, ok:false, motivo:''};
     if(trats.length<2){ o.motivo='precisa de ao menos 2 tratamentos'; return o; }
-    if(reps<2){ o.motivo='precisa de ao menos 2 repetições'; return o; }
+    /* Uma repetição não impede a FIGURA, só o teste: a folha sai descritiva
+       (ver SEM_REP na prancha), e o botão diz isso antes de abrir. */
+    o.descritivo=(reps<2);
     var dd=_pranchaDatas(s, v, trats, reps, base.data);
     o.datas=dd.usadas.length; o.parciais=dd.parciais.length;
     if(!dd.usadas.length){
@@ -13217,7 +13219,9 @@ function _pranchaPayload(qid, sid, variavel){
   var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
   var reps=Math.max(1, parseInt(s.numRepeticoes)||1);
   if(trats.length<2) return { erro:'A prancha precisa de ao menos 2 tratamentos.' };
-  if(reps<2) return { erro:'A prancha precisa de ao menos 2 repetições.' };
+  /* Uma repetição: a folha SAI, descritiva — sem ANOVA, letras nem barra de
+     erro, porque sem repetição não há resíduo (ver SEM_REP na prancha). Antes
+     ela recusava, e um ensaio demonstrativo ficava sem figura nenhuma. */
 
   if(!variavel){ var vs=_pranchaVariaveis(s); if(!vs.length) return { erro:'Nenhuma variável com nota lançada neste estudo.' }; variavel=vs[0]; }
 
@@ -13246,6 +13250,9 @@ function _pranchaPayload(qid, sid, variavel){
   if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
     dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
   if(dts.descartadasPreAplicacao) avisos.push(dts.descartadasPreAplicacao+' avaliação(ões) anterior(es) à aplicação ficaram de fora (linha de base).');
+  /* dito ANTES de abrir, como os outros: a figura vai para o relatório, e quem
+     a leva precisa saber que ela não tem teste */
+  if(reps<2) avisos.push('Uma repetição por tratamento: a folha sai descritiva — valores das parcelas, curva, AACPD e eficácia de Abbott, sem ANOVA, letras nem barra de erro.');
   if(base.fonte==='avaliacao') avisos.push('Sem aplicação ou início registrados: os dias são contados a partir da 1ª avaliação.');
   else if(base.fonte==='inicio') avisos.push('Sem aplicação registrada: os dias são contados a partir do início programado do estudo.');
 
@@ -14651,7 +14658,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
   if(_diag.length){
     var _linhas=_diag.map(function(d){
       var det=d.ok
-        ? (d.datas+' data'+(d.datas>1?'s':'')+(d.datas>1?' · curva + AACPD':' · uma data')+(d.parciais?(' · '+d.parciais+' incompleta(s) de fora'):''))
+        ? (d.datas+' data'+(d.datas>1?'s':'')+(d.datas>1?' · curva + AACPD':' · uma data')+(d.parciais?(' · '+d.parciais+' incompleta(s) de fora'):'')+(d.descritivo?' · 1 repetição: descritivo, sem teste':''))
         : d.motivo;
       if(!d.ok) return '<div style="padding:8px 10px;border:1px dashed #d8dfd9;border-radius:8px;margin-top:5px;color:#8a948e;font-size:11px">'+
         '<b style="color:#6d7a72">'+esc(d.variavel)+'</b> — '+esc(det)+'</div>';

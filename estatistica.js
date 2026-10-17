@@ -263,6 +263,26 @@ function abbott(valorTratado, valorTestemunha) {
   return 100 * (valorTestemunha - valorTratado) / valorTestemunha;
 }
 
+/* pivota longo → cubo [trat][bloco][tempo], validando cobertura. `quem` só
+   nomeia, na mensagem de erro, a função que pediu. */
+function _cubo(cfg, quem) {
+  const { tratamentos, blocos, tempos, lancamentos } = cfg;
+  const cubo = tratamentos.map(() => blocos.map(() => Array(tempos.length).fill(null)));
+  lancamentos.forEach(l => {
+    const it = tratamentos.indexOf(l.trat), ib = blocos.indexOf(l.bloco), ie = tempos.indexOf(l.tempo);
+    if (it < 0 || ib < 0 || ie < 0) throw new Error(`${quem}: lançamento fora do delineamento (${l.trat}/${l.bloco}/${l.tempo})`);
+    if (cubo[it][ib][ie] !== null) throw new Error(`${quem}: lançamento duplicado (${l.trat}/${l.bloco}/${l.tempo})`);
+    if (!Number.isFinite(l.valor)) throw new Error(`${quem}: valor não numérico (${l.trat}/${l.bloco}/${l.tempo})`);
+    cubo[it][ib][ie] = l.valor;
+  });
+  const faltando = [];
+  cubo.forEach((bl, it) => bl.forEach((s, ib) => s.forEach((v, ie) => {
+    if (v === null) faltando.push(`${tratamentos[it]}/${blocos[ib]}/${tempos[ie]} DAA`);
+  })));
+  if (faltando.length) throw new Error(`${quem}: faltam lançamentos — ` + faltando.join(", "));
+  return cubo;
+}
+
 /* ================================================== análise completa ======
  * Entrada no formato longo — uma linha por lançamento, que é como o
  * Firestore já guarda e como o R espera:
@@ -278,7 +298,7 @@ function abbott(valorTratado, valorTestemunha) {
  *   })
  */
 function analisar(cfg) {
-  const { tratamentos, blocos, tempos, lancamentos, testemunha } = cfg;
+  const { tratamentos, blocos, tempos, testemunha } = cfg;
   const transf = cfg.transformacao || "sqrt";
   const menosEhMelhor = cfg.menosEhMelhor !== false;
   if (!TRANSFORMACOES[transf]) throw new Error("analisar: transformação desconhecida: " + transf);
@@ -286,20 +306,7 @@ function analisar(cfg) {
   const iTest = tratamentos.indexOf(testemunha);
   if (iTest < 0) throw new Error("analisar: testemunha não está na lista de tratamentos");
 
-  /* pivota longo → cubo [trat][bloco][tempo], validando cobertura */
-  const cubo = tratamentos.map(() => blocos.map(() => Array(tempos.length).fill(null)));
-  lancamentos.forEach(l => {
-    const it = tratamentos.indexOf(l.trat), ib = blocos.indexOf(l.bloco), ie = tempos.indexOf(l.tempo);
-    if (it < 0 || ib < 0 || ie < 0) throw new Error(`analisar: lançamento fora do delineamento (${l.trat}/${l.bloco}/${l.tempo})`);
-    if (cubo[it][ib][ie] !== null) throw new Error(`analisar: lançamento duplicado (${l.trat}/${l.bloco}/${l.tempo})`);
-    if (!Number.isFinite(l.valor)) throw new Error(`analisar: valor não numérico (${l.trat}/${l.bloco}/${l.tempo})`);
-    cubo[it][ib][ie] = l.valor;
-  });
-  const faltando = [];
-  cubo.forEach((bl, it) => bl.forEach((s, ib) => s.forEach((v, ie) => {
-    if (v === null) faltando.push(`${tratamentos[it]}/${blocos[ib]}/${tempos[ie]} DAA`);
-  })));
-  if (faltando.length) throw new Error("analisar: faltam lançamentos — " + faltando.join(", "));
+  const cubo = _cubo(cfg, "analisar");
 
   /* AACPD por parcela e médias por tratamento na escala original */
   const AACPD = cubo.map(bl => bl.map(s => aacpd(s, tempos)));
@@ -324,7 +331,52 @@ function analisar(cfg) {
   };
 }
 
+/* ===================================== sem repetição: descrição, não teste ===
+ * Com UM bloco não existe resíduo. O erro experimental se estima pela variação
+ * entre parcelas do mesmo tratamento, e com uma parcela por tratamento essa
+ * variação não existe: não há F, CV, DMS nem letras, e inventá-los seria pior
+ * que não ter figura. Por isso o `analisar` continua recusando (o anovaDBC
+ * exige dois blocos) — inferência sem replicação não se faz calada.
+ *
+ * O que existe, e é verdade, é a leitura de cada parcela. `descrever` devolve
+ * isso na MESMA forma do `analisar`: médias por tratamento (com um bloco, o
+ * próprio valor da parcela), AACPD de cada parcela e eficácia de Abbott sobre
+ * ela — com a parte inferencial nula. Quem desenha lê `anova` nulo como "sem
+ * teste" e diz por quê; `semTeste` dá o motivo em código, para a figura
+ * escrevê-lo no idioma dela.
+ *
+ * Mesma entrada do `analisar`, sem transformação: sem teste não há escala de
+ * teste. A AACPD pede duas avaliações; com uma só ela é nula, e o resultado é
+ * a leitura daquela data. Testemunha sem doença (AACPD zero) não é base de
+ * redução nenhuma: a eficácia fica nula, não infinita nem zero.
+ */
+function descrever(cfg) {
+  const { tratamentos, blocos, tempos, testemunha } = cfg;
+  if (!tratamentos || !tratamentos.length) throw new Error("descrever: sem tratamentos");
+  if (!blocos || !blocos.length) throw new Error("descrever: sem blocos");
+  if (!tempos || !tempos.length) throw new Error("descrever: sem avaliações");
+  const iTest = tratamentos.indexOf(testemunha);
+  if (iTest < 0) throw new Error("descrever: testemunha não está na lista de tratamentos");
+
+  const cubo = _cubo(cfg, "descrever");
+  const mSeveridade = cubo.map(bl => tempos.map((_, ie) => media(bl.map(s => s[ie]))));
+  const AACPD = tempos.length >= 2 ? cubo.map(bl => bl.map(s => aacpd(s, tempos))) : null;
+  const mAACPD = AACPD ? AACPD.map(media) : null;
+  const eficacia = mAACPD
+    ? mAACPD.map((m, i) => (i === iTest || !(mAACPD[iTest] > 0)) ? null : abbott(m, mAACPD[iTest]))
+    : null;
+
+  return {
+    tratamentos, blocos, tempos, testemunha,
+    aacpdParcela: AACPD, mediaAACPD: mAACPD, mediaSeveridade: mSeveridade,
+    eficacia,
+    anova: null, dms: null, letras: tratamentos.map(() => ""), q: null,
+    transformacao: null, alfa: null,
+    semTeste: blocos.length < 2 ? "sem-repeticao" : "descritivo"
+  };
+}
+
 return { soma, media, aacpd, TRANSFORMACOES, anovaDBC,
          lgamma, betai, pF, erfc, Phi, pAmplitude, pAmplitudeStudentizada,
-         qTukey, dmsTukey, letrasTukey, abbott, analisar };
+         qTukey, dmsTukey, letrasTukey, abbott, analisar, descrever };
 });
