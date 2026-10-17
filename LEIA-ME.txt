@@ -1,3 +1,108 @@
+AGRACTA — 37a publicacao                    17/10/2026
+=====================================================
+
+Leva: a folha de graficos sai mesmo com uma repeticao -- descritiva.
+  CODIGO:  estatistica.js (Est.descrever)  prancha.html  app.js
+           index.html  sw.js
+  TESTE:   tests/test_prancha_uma_repeticao.js (novo, 64 verificacoes)
+           tests/test_estatistica.js (secao "descrever", 16)
+  DOCS:    docs/VALIDACAO-SISTEMA.md (2.2: o teste novo em URS-14)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+O motor estatistico em Python NAO mudou: nada em cache e recalculado.
+estatistica.js E ARQUIVO CRITICO DA VALIDACAO (URS-14) -- ver o passo 4
+de "O que conferir depois de subir".
+
+
+O QUE MUDOU
+-----------
+
+Pedido de uso: "tem que gerar grafico mesmo com uma unica repeticao".
+O botao da folha, na ficha do estudo, dizia "precisa de ao menos 2
+repeticoes", e abrir pelo Conhecimento dava "A prancha precisa de ao
+menos 2 repeticoes.". E se abrisse, quebrava: a ANOVA recusa um bloco
+so, o erro padrao virava NaN na curva e as legendas diriam "media de 1
+blocos".
+
+1) A FOLHA SAI, DESCRITIVA
+
+  Estudo com uma repeticao (demonstrativo, triagem de bancada) tem a
+  folha inteira: barras, ranking, curva com AACPD, paineis, por data,
+  tabela, estatistica, trilha BPL e a pagina A4, em PT e EN. Ela mostra
+  o que foi lido: o valor de cada parcela, a AACPD de cada parcela e a
+  eficacia de Abbott sobre eles.
+
+  O que ela NAO mostra, porque nao existe: sem repeticao nao ha residuo,
+  e sem residuo nao ha ANOVA, CV, DMS, letras nem barra de erro. Nada
+  disso e inventado; no lugar, a folha diz por que:
+    - subtitulo: "Uma repeticao · 3 tratamentos · descritivo, sem teste
+      estatistico";
+    - legenda: "Cada barra e o valor da unica parcela do tratamento.
+      Uma repeticao por tratamento: sem residuo nao ha termo de erro..."
+      (nunca "media de 1 blocos");
+    - rodape: "Delineamento: uma parcela por tratamento, sem repeticao"
+      (e nao "1 blocos ao acaso");
+    - tabela e A4: "Analise de variancia -- nao calculada", com o
+      motivo; a coluna Tukey sai;
+    - folha do auditor: o que a folha mostra, por que nao ha teste (e o
+      que faltou: 2 repeticoes) e os valores por tratamento.
+  O painel nao oferece letras, erro padrao nem IC 95% nesse caso. O
+  botao da folha ja avisa "1 repeticao: descritivo, sem teste", e ao
+  abrir sai o aviso junto dos outros.
+
+  A conta mora no nucleo: Est.descrever (estatistica.js), na mesma forma
+  do Est.analisar, com a parte inferencial nula. O Est.analisar continua
+  recusando um bloco so -- inferencia sem replicacao nao se faz calada.
+  A prancha passa a pedir estatistica.js?v=2 (antes ia sem versao, e o
+  aparelho abriria a folha nova com o nucleo velho, sem descrever).
+
+2) DE QUEBRA: "p < 0,001" DE UM TESTE QUE NAO EXISTIU
+
+  Com repeticao mas sem variacao residual (as repeticoes de cada
+  tratamento identicas -- acontece na bancada, com 0% e 100% em todas),
+  a A4 imprimia "CV = 0,0% · F(2, 6) = 0,0; p < 0,001". O p era nulo, e
+  nulo < 0,001 e verdadeiro em JavaScript: a folha anunciava
+  significancia sem teste nenhum. Agora sai "Sem variacao residual: ...
+  nao ha teste F, CV, DMS nem letras", e o p nulo vira "—".
+
+3) COM REPETICAO NADA MUDA
+
+  Conferido nesta publicacao: com 4 repeticoes, as 13 vistas em PT e EN
+  (26 folhas) desenhadas pela versao anterior e por esta saem com o SVG
+  e a legenda identicos, byte a byte.
+
+O que NAO entrou: ensaio em FAIXAS continua recusado na folha (os
+trecos sao subamostras da mesma faixa, e a decisao foi deliberada). Se
+for o caso, ele pode ganhar o mesmo modo descritivo.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. Estudo com 1 repeticao > Estatistica: o botao da folha aparece com
+   "1 repeticao: descritivo, sem teste". Abrir: as figuras saem, sem
+   letras e sem barra de erro, com o motivo na legenda e no rodape.
+3. Estudo com 4 repeticoes: a folha igual a de antes (letras, ANOVA).
+4. estatistica.js e arquivo critico (VALIDACAO-SISTEMA §11.2): gerar o
+   registro novo da OQ automatica
+     bash tools/registro-oq.sh
+   e refazer a OQ-15 (calculos contra referencia) no estudo de teste.
+
+
+TESTES
+------
+  bash conferir.sh --pull-request: PODE SUBIR.
+  tests/test_prancha_uma_repeticao.js (64): botao e payload com 1
+  repeticao; a pagina inteira no jsdom, 13 vistas em PT e EN, sem erro,
+  sem NaN, sem p, sem letra e sem barra de erro, com o motivo escrito;
+  o painel; 4 repeticoes sem mudanca; residuo zero sem "p < 0,001".
+  Reprova o codigo da 36a (a folha recusava e o teste quebra).
+  tests/test_estatistica.js, secao "descrever" (16): AACPD e Abbott
+  contra a conta a mao, Est.analisar recusando um bloco e, com 4
+  blocos, descrever igual ao analisar sem a inferencia.
+  No navegador (Chromium, 390 px e 1300 px): barras, curva, tabela,
+  estatistica e A4 sem erro de console e sem rolagem lateral.
+
 AGRACTA — 36a publicacao                    16/10/2026
 =====================================================
 

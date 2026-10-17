@@ -370,6 +370,49 @@ S("Delineamento grande — 30 tratamentos");
   certo("propriedade das letras continua valendo com 30 tratamentos", viol === 0, `${viol} violações`);
 }
 
+/* ============================================ sem repetição: descrever() == */
+S("descrever() — uma repetição: descrição, sem teste");
+{
+  const tratamentos = ["T1", "T2", "T3"], tempos = [7, 14, 21];
+  const perfil = { T1: [12, 30, 55], T2: [5, 11, 19], T3: [3, 6, 9] };
+  const lanc = [];
+  tratamentos.forEach(tr => tempos.forEach((tp, it) => lanc.push({ trat: tr, bloco: 1, tempo: tp, valor: perfil[tr][it] })));
+  const cfg = { tratamentos, blocos: [1], tempos, lancamentos: lanc, testemunha: "T1" };
+  const d = Est.descrever(cfg);
+
+  /* oráculo: trapézio à mão — (12+30)/2·7 + (30+55)/2·7 e (3+6)/2·7 + (6+9)/2·7 */
+  quase("AACPD da única parcela da testemunha = 444,5 (trapézio à mão)", d.mediaAACPD[0], 444.5);
+  quase("AACPD de T3 = 84", d.mediaAACPD[2], 84);
+  quase("Abbott de T3 = 100·(444,5 − 84)/444,5", d.eficacia[2], 100 * (444.5 - 84) / 444.5);
+  certo("com um bloco, a média É o valor da parcela", d.mediaSeveridade[1].every((m, i) => m === perfil.T2[i]));
+  certo("sem ANOVA, sem DMS e sem q — nulos, não zeros", d.anova === null && d.dms === null && d.q === null);
+  certo("letras vazias, uma por tratamento", d.letras.length === 3 && d.letras.every(l => l === ""));
+  certo("o motivo vem em código, para a figura escrevê-lo no idioma dela", d.semTeste === "sem-repeticao");
+  certo("a testemunha não tem eficácia contra si mesma", d.eficacia[0] === null);
+  lanca("analisar continua recusando um bloco só", () => Est.analisar(cfg));
+  lanca("descrever cobra lançamento faltando", () => Est.descrever(Object.assign({}, cfg, { lancamentos: lanc.slice(1) })));
+  lanca("descrever recusa testemunha inexistente", () => Est.descrever(Object.assign({}, cfg, { testemunha: "T9" })));
+
+  const zerada = lanc.map(l => Object.assign({}, l, { valor: l.trat === "T1" ? 0 : l.valor }));
+  certo("testemunha sem doença: eficácia nula, não infinita nem zero",
+        Est.descrever(Object.assign({}, cfg, { lancamentos: zerada })).eficacia.every(e => e === null));
+  const umaData = Est.descrever(Object.assign({}, cfg, { tempos: [7], lancamentos: lanc.filter(l => l.tempo === 7) }));
+  certo("uma avaliação só: sem AACPD (a curva pede duas)",
+        umaData.aacpdParcela === null && umaData.mediaAACPD === null && umaData.eficacia === null);
+
+  /* propriedade: com repetição, descrever é o analisar sem a parte inferencial */
+  const blocos = [1, 2, 3, 4], l4 = [];
+  tratamentos.forEach(tr => blocos.forEach((b, ib) => tempos.forEach((tp, it) =>
+    l4.push({ trat: tr, bloco: b, tempo: tp, valor: perfil[tr][it] * (0.9 + 0.07 * ib) }))));
+  const c4 = { tratamentos, blocos, tempos, lancamentos: l4, testemunha: "T1" };
+  const a4 = Est.analisar(c4), d4 = Est.descrever(c4);
+  certo("com 4 blocos, as mesmas médias de AACPD do analisar",
+        d4.mediaAACPD.every((m, i) => Math.abs(m - a4.mediaAACPD[i]) < 1e-12));
+  certo("e a mesma eficácia de Abbott",
+        d4.eficacia.every((e, i) => i === 0 ? e === null : Math.abs(e - a4.eficacia[i]) < 1e-12));
+  certo("chamado com repetição, diz que é descrição por escolha", d4.semTeste === "descritivo");
+}
+
 /* ================================================================ resumo */
 console.log("\n" + "─".repeat(58));
 console.log(`${ok} passaram · ${falhou} falharam`);
