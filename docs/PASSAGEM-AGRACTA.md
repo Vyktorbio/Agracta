@@ -95,7 +95,8 @@ atualizado (a seção 3 trancava o desvio antigo).
   de histórico, o lote INTEIRO falha e a sincronização para.** O ponto mais
   sensível é `rev is int`: o SDK JS grava inteiros como integer, mas vale ver
   no emulador.
-- Publicar as regras: `npx firebase-tools deploy --only firestore:rules`.
+- Publicar as regras: pelo CI, aprovando "Regras do banco — publicar" depois do
+  merge (ver `docs/VALIDACAO-SISTEMA.md`, apêndice A). À mão é desvio.
 - No aparelho: salvar algo → abrir "Histórico da nuvem" → a gravação aparece
   com hora e nome; restaurar uma gravação de teste e conferir.
 - **Custo:** cada documento alterado passa a gerar 2 escritas. Com um usuário

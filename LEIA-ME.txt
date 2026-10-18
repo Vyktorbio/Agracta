@@ -1,3 +1,85 @@
+AGRACTA — 38a publicacao                    18/10/2026
+=====================================================
+
+Leva: as regras do banco passam a subir pelo CI, com aprovacao, e o CI
+confere toda semana que o que esta no ar e o do repositorio (lacuna L8).
+  CODIGO:  tools/regras-banco.cjs (novo)
+           .github/workflows/regras-publicar.yml (novo)
+           .github/workflows/regras-conferir.yml (novo)
+  TESTE:   tests/test_regras_banco.js (novo, 15 verificacoes)
+  DOCS:    docs/VALIDACAO-SISTEMA.md (2.3: L8 fechada, URS-16, IQ-04,
+           secao 11.1, apendice A), README, PASSAGEM, OBSERVACAO-E-EVENTOS,
+           INTEGRACOES
+
+NENHUM ARQUIVO DO APP MUDOU: o sw.js fica como esta, nada a reabrir nos
+aparelhos. O PROXY NAO PRECISA SUBIR. As regras do banco NAO mudaram.
+SO FUNCIONA DEPOIS DA CONFIGURACAO (uma vez) -- apendice A da validacao.
+
+
+O QUE MUDOU
+-----------
+
+Ate aqui as regras subiam a mao (npx firebase-tools deploy), separadas
+do site, e nada conferia que o que estava no ar era o firestore.rules do
+repositorio. Bastava esquecer de publicar depois de um merge, ou alguem
+colar uma versao no Console, e a validacao descrevia um banco que nao
+existia.
+
+1) PUBLICAR: "Regras do banco -- publicar"
+   Merge no main que muda o firestore.rules:
+     testes das regras no emulador -> PARA e espera aprovacao no ambiente
+     regras-producao -> publica pela API de regras do Firebase -> le de
+     volta e confere -> guarda o registro (artefato registro-regras).
+   A espera existe por causa da ordem que a 36a ensinou: regra nova antes
+   do app novo trava a sincronizacao. Entao: merge -> abrir o app duas
+   vezes em cada aparelho -> papeis no Painel Admin, se precisar ->
+   aprovar.
+   Se ja estiver no ar, nao mexe em nada.
+
+2) CONFERIR: "Regras do banco -- conferir"
+   Toda segunda 06:17 (e quando pedir, em Run workflow). Le o que esta no
+   ar e compara com o main. Diferente = vermelho, e-mail do GitHub, e a
+   pagina da execucao mostra a diferenca linha a linha. Usa uma conta so
+   de leitura; a chave que publica fica presa no ambiente com aprovacao.
+
+3) VOLTAR
+   Se uma regra travar algum aparelho: Run workflow -> acao "voltar",
+   versao_anterior = "antes.ruleset" do registro da publicacao. Tambem
+   pede aprovacao, tambem deixa registro.
+
+Por que a API e nao o firebase-tools: a conta de servico precisa so do
+papel de regras ("Administrador de regras do Firebase"; para conferir,
+"Leitor"). Nao le nem grava dado nenhum do banco.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+
+1. Fazer a configuracao do apendice A (duas contas de servico, o
+   ambiente regras-producao com aprovacao, os dois segredos).
+2. Actions -> "Regras do banco -- conferir" -> Run workflow.
+   - IGUAIS: pronto.
+   - DIFERENTES: a pagina mostra o que difere. Se for o que a 36a (papeis)
+     trouxe e ainda nao foi publicado, publicar: Actions -> "Regras do
+     banco -- publicar" -> Run workflow -> publicar (respeitando a ordem
+     da 36a) -> aprovar.
+3. Baixar o artefato registro-regras de cada publicacao e arquivar no
+   dossie da GQ: o GitHub apaga em 90 dias.
+
+
+TESTES
+------
+
+  tests/test_regras_banco.js -- contra uma API de regras falsa: iguais /
+  diferentes / nada no ar; publicar nao mexe se ja esta no ar, manda o
+  arquivo byte a byte e confere a leitura de volta; erro de compilacao
+  nao troca o que esta no ar e diz linha e coluna; voltar so aceita versao
+  do proprio projeto; a chave vira um JWT RS256 conferido com a chave
+  publica; codigos de saida, registro e resumo do CI; e os dois workflows
+  nao perdem a ordem (testes -> aprovacao -> publicar; a conferencia nao
+  enxerga a chave de publicar).
+
+
 AGRACTA — 37a publicacao                    17/10/2026
 =====================================================
 

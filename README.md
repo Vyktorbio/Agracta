@@ -133,11 +133,14 @@ fora da própria janela de horário — é essa camada que protege o dado de ver
 já que os arquivos do site são estáticos e públicos.
 
 O horário de cada técnico fica em `members/{email}.janela` e é editado no Painel
-Admin. Depois de mexer nas regras, publique-as:
+Admin.
 
-```bash
-npx firebase-tools deploy --only firestore:rules
-```
+**As regras sobem pelo CI, não à mão.** O merge que muda o `firestore.rules`
+dispara "Regras do banco — publicar": testes no emulador → espera aprovação no
+ambiente `regras-producao` → publica e confere. Aprove **depois** de abrir o app
+novo em cada aparelho. Toda segunda, "Regras do banco — conferir" compara o que
+está no ar com o repositório. Configuração e caminho de volta:
+`docs/VALIDACAO-SISTEMA.md`, apêndice A.
 
 ## Publicar
 - **App** → GitHub Pages (estático, https), direto do `main`: o que entra no `main`
