@@ -433,6 +433,25 @@ const _TRAT0 = TRAT;
    rodapé, que é descrição: figura sem essa frase seria lida como replicada. */
 const SEM_REP = BLOCOS.length < 2;
 
+/* ===== FAIXA ÚNICA POR TRATAMENTO: O MESMO CAMINHO, OUTRA UNIDADE ==========
+   Ensaio em faixas chega aqui com UM bloco: o app já tirou a média dos
+   treços de cada faixa em cada data, porque os treços são subamostras do
+   mesmo pedaço de terra, não repetições. Então a folha é a de SEM_REP — sem
+   resíduo, sem teste —, e o que muda é o nome do valor: não é "a única
+   parcela", é "a média dos N treços da faixa única". `UNI` responde isso
+   para todas as legendas, nos dois idiomas. */
+const EM_FAIXA = (ESTUDO.delineamento && ESTUDO.delineamento.faixa) || null;
+const nTrecos = pt => !EM_FAIXA ? "" : (EM_FAIXA.trecosMin === EM_FAIXA.trecosMax
+  ? String(EM_FAIXA.trecosMin) : `${EM_FAIXA.trecosMin}${pt ? " a " : "–"}${EM_FAIXA.trecosMax}`);
+const UNI = {
+  pt:{ barra:  () => EM_FAIXA ? `a média dos ${nTrecos(true)} treços da faixa única do tratamento` : "o valor da única parcela do tratamento",
+       pontos: () => EM_FAIXA ? `a média dos treços da faixa única de cada tratamento` : "o valor da única parcela de cada tratamento",
+       sobre:  m  => EM_FAIXA ? `a ${m} média dos treços da faixa única de cada tratamento` : `a ${m} da única parcela de cada tratamento` },
+  en:{ barra:  () => EM_FAIXA ? `the mean of the ${nTrecos(false)} subsamples along the treatment's single strip` : "the value of the treatment's single plot",
+       pontos: () => EM_FAIXA ? `the mean of the subsamples along each treatment's single strip` : "the value of each treatment's single plot",
+       sobre:  m  => EM_FAIXA ? `the mean ${m} of the subsamples along each treatment's single strip` : `the ${m} of each treatment's single plot` }
+};
+
 /* AACPD por parcela — trapézios sobre os DAA */
 const aacpd = serie => {
   let a = 0;
@@ -855,6 +874,7 @@ const L = {
         seria erro de revisão, e faria a figura parecer replicada. */
      notaSev:(SEM_REP
        ? (LAB ? `Uma repetição por tratamento: cada ponto é o valor registrado, sem barra de erro.`
+              : EM_FAIXA ? `Uma faixa por tratamento: cada ponto é a média dos ${nTrecos(true)} treços (subamostras), sem barra de erro. A área sombreada sob cada curva é a AACPD.`
               : `Uma parcela por tratamento: cada ponto é o valor registrado, sem barra de erro. A área sombreada sob cada curva é a AACPD.`)
        : LAB ? `Média de ${NB} repetições ± erro padrão.`
              : `Média de ${NB} blocos ± erro padrão. A área sombreada sob cada curva é a AACPD.`),
@@ -864,20 +884,20 @@ const L = {
      tituloSevAv:`${MED.pt} por avaliação`,
      eixoAval:"Avaliação",
      legSevAval:()=>(SEM_REP
-       ? `${MED.pt}${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é o valor da única parcela do tratamento naquela avaliação. ${motivoSemTeste()}${ESCALA.pt}`
+       ? `${MED.pt}${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é ${UNI.pt.barra()} naquela avaliação. ${motivoSemTeste()}${ESCALA.pt}`
        : `${MED.pt} média${ALVO.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`),
      colEficA:"Eficácia", severidadeL:MED.pt,
      legSevAbbott:()=>(SEM_REP
-       ? `${MED.pt}${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a ${MEDl.pt} da única parcela de cada tratamento, em relação à testemunha. ${motivoSemTeste()}${ESCALA.pt}`
+       ? `${MED.pt}${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre ${UNI.pt.sobre(MEDl.pt)}, em relação à testemunha. ${motivoSemTeste()}${ESCALA.pt}`
        : `${MED.pt} média${ALVO.pt} e eficácia de controle por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. A eficácia foi calculada pela fórmula de Abbott sobre a ${MEDl.pt} média de ${NB} blocos, em relação à testemunha.${ESCALA.pt}`),
      legSevSimples:()=>(SEM_REP
-       ? `${MED.pt}${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é o valor da única parcela do tratamento. ${motivoSemTeste()}${ESCALA.pt}`
+       ? `${MED.pt}${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é ${UNI.pt.barra()}. ${motivoSemTeste()}${ESCALA.pt}`
        : `${MED.pt} média${ALVO.pt} por tratamento aos ${rotUlt()} depois ${APLREF.pt}, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} blocos.${ESCALA.pt}`),
      aplic:`${NAPL>1?'última aplicação':'aplicação'}`,
      legSev:()=>(SEM_REP
        ? (_EH_DOENCA
-         ? `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são o valor da única parcela de cada tratamento, sem barra de erro, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`
-         : `${_cap1(MEDl.pt)} por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são o valor da única parcela de cada tratamento, sem barra de erro.${ESCALA.pt}`)
+         ? `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são ${UNI.pt.pontos()}, sem barra de erro, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`
+         : `${_cap1(MEDl.pt)} por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são ${UNI.pt.pontos()}, sem barra de erro.${ESCALA.pt}`)
        : _EH_DOENCA
        ? `Curva de progresso da ${MEDl.pt}${ALVO.pt} por tratamento, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} blocos, barras indicam o erro padrão da média, e a área sombreada sob cada curva corresponde à AACPD.${ESCALA.pt}`
        : `${_cap1(MEDl.pt)} média por tratamento ao longo do tempo, estudo ${ESTUDO.codigo}. Pontos são médias de ${NB} ${LAB?'repetições':'blocos'} e as barras indicam o erro padrão da média.${ESCALA.pt}`),
@@ -911,6 +931,7 @@ const L = {
      eixoSev:`${MED.en} (%)`, eixoDAA:`Days after ${APLREF.en}`,
      notaSev:(SEM_REP
        ? (LAB ? `One replicate per treatment: each point is the recorded value, no error bars.`
+              : EM_FAIXA ? `One strip per treatment: each point is the mean of ${nTrecos(false)} subsamples, no error bars. The shaded area under each curve is the AUDPC.`
               : `One plot per treatment: each point is the recorded value, no error bars. The shaded area under each curve is the AUDPC.`)
        : LAB ? `Mean of ${NB} replicates ± standard error.`
              : `Mean of ${NB} blocks ± standard error. The shaded area under each curve is the AUDPC.`),
@@ -920,20 +941,20 @@ const L = {
      tituloSevAv:`${MED.en} by assessment`,
      eixoAval:"Assessment",
      legSevAval:()=>(SEM_REP
-       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the value of the treatment's single plot at that assessment. ${motivoSemTeste()}${ESCALA.en}`
+       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is ${UNI.en.barra()} at that assessment. ${motivoSemTeste()}${ESCALA.en}`
        : `Mean${ALVO.en} ${MEDl.en} by treatment at each assessment, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`),
      colEficA:"Efficacy", severidadeL:MED.en,
      legSevAbbott:()=>(SEM_REP
-       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the ${MEDl.en} of each treatment's single plot, relative to the untreated check. ${motivoSemTeste()}${ESCALA.en}`
+       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on ${UNI.en.sobre(MEDl.en)}, relative to the untreated check. ${motivoSemTeste()}${ESCALA.en}`
        : `Mean${ALVO.en} ${MEDl.en} and control efficacy by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Efficacy was calculated by Abbott's formula on the mean ${MEDl.en} of ${NB} blocks, relative to the untreated check.${ESCALA.en}`),
      legSevSimples:()=>(SEM_REP
-       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the value of the treatment's single plot. ${motivoSemTeste()}${ESCALA.en}`
+       ? `${_cap1((ALVO.en+" "+MEDl.en).trim())} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is ${UNI.en.barra()}. ${motivoSemTeste()}${ESCALA.en}`
        : `Mean${ALVO.en} ${MEDl.en} by treatment at ${rotUlt()} after ${APLREF.en}, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} blocks.${ESCALA.en}`),
      aplic:`${NAPL>1?'last application':'application'}`,
      legSev:()=>(SEM_REP
        ? (_EH_DOENCA
-         ? `Disease progress curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are the value of each treatment's single plot, with no error bars, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`
-         : `${_cap1(MEDl.en)} by treatment over time, study ${ESTUDO.codigo}. Points are the value of each treatment's single plot, with no error bars.${ESCALA.en}`)
+         ? `Disease progress curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are ${UNI.en.pontos()}, with no error bars, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`
+         : `${_cap1(MEDl.en)} by treatment over time, study ${ESTUDO.codigo}. Points are ${UNI.en.pontos()}, with no error bars.${ESCALA.en}`)
        : _EH_DOENCA
        ? `Disease progress curves for${ALVO.en} ${MEDl.en} by treatment, study ${ESTUDO.codigo}. Points are means of ${NB} blocks, bars indicate the standard error of the mean, and the shaded area under each curve corresponds to the AUDPC.${ESCALA.en}`
        : `Mean ${MEDl.en} by treatment over time, study ${ESTUDO.codigo}. Points are means of ${NB} ${LAB?'replicates':'blocks'} and bars indicate the standard error of the mean.${ESCALA.en}`),
@@ -1027,6 +1048,9 @@ function semTeste(){
 }
 function motivoSemTeste(){
   const pt = estado.idioma === "pt", m = semTeste();
+  if(m === "sem-repeticao" && EM_FAIXA) return pt
+    ? "Faixa única por tratamento: os treços são subamostras da mesma faixa, não repetições — sem termo de erro não há ANOVA, CV, DMS, letras nem barra de erro. Valores descritivos."
+    : "One strip per treatment: subsamples along the same strip are not replicates — with no error term there is no ANOVA, CV, HSD, letters or error bars. Descriptive values.";
   if(m === "sem-repeticao") return pt
     ? "Uma repetição por tratamento: sem resíduo não há termo de erro — sem ANOVA, CV, DMS, letras nem barra de erro. Valores descritivos."
     : "One replicate per treatment: with no residual there is no error term — no ANOVA, CV, HSD, letters or error bars. Descriptive values.";
@@ -1039,6 +1063,9 @@ function motivoSemTeste(){
    as quatro não dizerem coisas diferentes do mesmo ensaio. */
 function subtituloTexto(){
   const pt = estado.idioma === "pt";
+  if(SEM_REP && EM_FAIXA) return pt
+    ? `Faixa única  ·  média de ${nTrecos(true)} treços  ·  ${TRAT.length} tratamentos  ·  descritivo, sem teste estatístico`
+    : `Single strip  ·  mean of ${nTrecos(false)} subsamples  ·  ${TRAT.length} treatments  ·  descriptive, no statistical test`;
   if(SEM_REP) return pt
     ? `Uma repetição  ·  ${TRAT.length} tratamentos  ·  descritivo, sem teste estatístico`
     : `One replicate  ·  ${TRAT.length} treatments  ·  descriptive, no statistical test`;
@@ -1533,9 +1560,12 @@ function secRodape(x,y,w){
     : null;
   /* "1 blocos ao acaso" não é delineamento: com uma parcela por tratamento o
      rodapé diz o que o ensaio é */
-  s += txt(x, y+20, [SEM_REP ? `${d.ref}: ${d.semRep}` : `${d.ref}: ${dl.blocos} ${d.dbc}`,
+  /* faixa: n é de FAIXAS, e os treços vão ditos como subamostras */
+  s += txt(x, y+20, [EM_FAIXA ? `${d.ref}: ${pt?"uma faixa por tratamento, sem repetição":"one strip per treatment, unreplicated"}`
+                     : SEM_REP ? `${d.ref}: ${d.semRep}` : `${d.ref}: ${dl.blocos} ${d.dbc}`,
                      dl.parcela ? `${d.parc} ${dl.parcela}` : null,
-                     `n = ${AN.N} ${pt?"parcelas":"plots"}`,
+                     EM_FAIXA ? `n = ${AN.N} ${pt?"faixas":"strips"} · ${nTrecos(pt)} ${pt?"treços (subamostras) por faixa":"subsamples per strip"}`
+                           : `n = ${AN.N} ${pt?"parcelas":"plots"}`,
                      nInd].filter(Boolean).join(" · "), {t:12, c:GRAF});
   /* Sem "Gerado por … · Agracta": a figura vai para relatório de cliente e o
      nome da ferramenta não tem o que fazer ali. O código do estudo fica. */
@@ -2034,7 +2064,10 @@ function secEstatistica(x, y, w){
         sem ? (pt ? "nenhuma — sem teste, não há escala de teste" : "none — no test, so no test scale")
             : (pt ? "√(x + 0,5)" : "√(x + 0.5)"));
   linha(pt ? "Delineamento" : "Design",
-        SEM_REP
+        EM_FAIXA
+          ? (pt ? `Faixa única por tratamento · ${AN.k} tratamentos · ${nTrecos(true)} treços por faixa, como subamostras (entram pela média)`
+                : `One strip per treatment · ${AN.k} treatments · ${nTrecos(false)} subsamples per strip (averaged)`)
+        : SEM_REP
           ? (pt ? `Uma parcela por tratamento · ${AN.k} tratamentos · N = ${AN.N}`
                 : `One plot per treatment · ${AN.k} treatments · N = ${AN.N}`)
           : (pt ? `Blocos ao acaso · ${AN.k} tratamentos · ${AN.r} blocos · N = ${AN.N}`
@@ -2049,7 +2082,10 @@ function secEstatistica(x, y, w){
   if(sem){
     s += txt(x, cy, pt ? "POR QUE NÃO HÁ TESTE" : "WHY THERE IS NO TEST", {t:11, w:600, ls:1.2, c:GRAF}); cy += 18;
     s += ruleL(x, cy-12, w);
-    const porque = motivoSemTeste() + (SEM_REP
+    const porque = motivoSemTeste() + (EM_FAIXA
+      ? (pt ? " Para comparar tratamentos com teste, cada um precisa de ao menos 2 faixas ou parcelas independentes, casualizadas em blocos. Mais treços na mesma faixa não substituem isso."
+            : " To compare treatments with a test, each needs at least 2 independent strips or plots, randomised in blocks. More subsamples along the same strip do not replace that.")
+      : SEM_REP
       ? (pt ? " Para comparar tratamentos com teste, o ensaio precisa de ao menos 2 repetições (blocos) de cada um."
             : " To compare treatments with a test, the trial needs at least 2 replicates (blocks) of each.")
       : "");
@@ -2059,7 +2095,7 @@ function secEstatistica(x, y, w){
     const colsD = [
       {t:d.trat,   w:w*0.11},
       {t:d.produto, w:w*0.49},
-      {t:(SEM_REP ? (pt?"Valor da parcela":"Plot value") : (pt?"Média (escala original)":"Mean (original scale)")), w:w*0.22, a:"right"},
+      {t:(EM_FAIXA ? (pt?"Média dos treços":"Subsample mean") : SEM_REP ? (pt?"Valor da parcela":"Plot value") : (pt?"Média (escala original)":"Mean (original scale)")), w:w*0.22, a:"right"},
       {t:d.eficC, w:w*0.18, a:"right"}
     ];
     const linhasD = TRAT.map((tr,i)=>[
@@ -2530,8 +2566,8 @@ function legendaTexto(){
     /* Sem teste: nem "média de 1 blocos", nem a frase das letras — o motivo
        ocupa o lugar dela. A ORDEM do ranking continua; ela só não é teste. */
     if(semTeste()) return {rot:`${d.figura} 1`, txt:(estado.idioma==="pt"
-      ? `${q} por tratamento a ${rotMom(avalIdx())}, do melhor para o pior, estudo ${ESTUDO.codigo}. ${SEM_REP ? 'Cada barra é o valor da única parcela do tratamento.' : `Cada barra é a média de ${NB} ${LAB?'repetições':'blocos'}.`}${disp} ${motivoSemTeste()}`
-      : `${q} by treatment at ${rotMom(avalIdx())}, ranked best to worst, study ${ESTUDO.codigo}. ${SEM_REP ? "Each bar is the value of the treatment's single plot." : `Each bar is the mean of ${NB} ${LAB?'replicates':'blocks'}.`}${disp} ${motivoSemTeste()}`)};
+      ? `${q} por tratamento a ${rotMom(avalIdx())}, do melhor para o pior, estudo ${ESTUDO.codigo}. ${SEM_REP ? `Cada barra é ${UNI.pt.barra()}.` : `Cada barra é a média de ${NB} ${LAB?'repetições':'blocos'}.`}${disp} ${motivoSemTeste()}`
+      : `${q} by treatment at ${rotMom(avalIdx())}, ranked best to worst, study ${ESTUDO.codigo}. ${SEM_REP ? `Each bar is ${UNI.en.barra()}.` : `Each bar is the mean of ${NB} ${LAB?'replicates':'blocks'}.`}${disp} ${motivoSemTeste()}`)};
     return {rot:`${d.figura} 1`, txt:(estado.idioma==="pt"
       ? `${q} por tratamento a ${rotMom(avalIdx())}, do melhor para o pior, estudo ${ESTUDO.codigo}. Cada barra é a média de ${NB} ${LAB?'repetições':'blocos'}.${disp}${estado.bv.letras?' Tratamentos seguidos da mesma letra não diferem pelo teste de Tukey (α = 0,05).':''}`
       : `${q} by treatment at ${rotMom(avalIdx())}, ranked best to worst, study ${ESTUDO.codigo}. Each bar is the mean of ${NB} ${LAB?'replicates':'blocks'}.${disp}${estado.bv.letras?" Treatments followed by the same letter do not differ by Tukey's test (α = 0.05).":''}`)};
@@ -2552,8 +2588,8 @@ function legendaTexto(){
     /* sem teste não há "a ANOVA é da data marcada com ●": a figura é descritiva
        por inteiro, e a legenda diz por quê */
     if(semTeste()) return {rot:`${d.figura} 1`, txt:(pt
-      ? `${MED.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. ${SEM_REP ? `Cada barra é o valor da única parcela do tratamento${NIND > 0 ? ` (${NIND} indivíduos)` : ""}.` : `Cada barra é a média de ${NB} ${LAB?"repetições":"blocos"}.`} Figura descritiva. ${motivoSemTeste()}`
-      : `${MED.en} by treatment at each assessment, study ${ESTUDO.codigo}. ${SEM_REP ? `Each bar is the value of the treatment's single plot${NIND > 0 ? ` (${NIND} individuals)` : ""}.` : `Each bar is the mean of ${NB} ${LAB?"replicates":"blocks"}.`} Descriptive figure. ${motivoSemTeste()}`)};
+      ? `${MED.pt} por tratamento em cada avaliação, estudo ${ESTUDO.codigo}. ${SEM_REP ? `Cada barra é ${UNI.pt.barra()}${NIND > 0 ? ` (${NIND} indivíduos)` : ""}.` : `Cada barra é a média de ${NB} ${LAB?"repetições":"blocos"}.`} Figura descritiva. ${motivoSemTeste()}`
+      : `${MED.en} by treatment at each assessment, study ${ESTUDO.codigo}. ${SEM_REP ? `Each bar is ${UNI.en.barra()}${NIND > 0 ? ` (${NIND} individuals)` : ""}.` : `Each bar is the mean of ${NB} ${LAB?"replicates":"blocks"}.`} Descriptive figure. ${motivoSemTeste()}`)};
     const un = (NIND > 0)
       ? (pt ? `${NB} repetições de ${NIND} indivíduos` : `${NB} replicates of ${NIND} individuals`)
       : (pt ? `${NB} ${LAB?"repetições":"blocos"}` : `${NB} ${LAB?"replicates":"blocks"}`);
@@ -3388,9 +3424,13 @@ document.getElementById("btn-legenda").addEventListener("click", async ()=>{
     const o = i.closest(".opt"); if(o) o.classList.toggle("ativo", i.checked);
   });
   const dF = document.getElementById("dica-fig");
-  if(dF) dF.textContent = "Com uma repetição por tratamento não há dispersão a desenhar: sem erro padrão nem intervalo de confiança. Fixar o eixo em 0–100% é o que permite comparar duas figuras lado a lado no relatório.";
+  if(dF) dF.textContent = EM_FAIXA
+    ? "Com uma faixa por tratamento não há dispersão entre unidades a desenhar: a variação entre treços é dentro da mesma faixa, e não vira erro padrão nem intervalo de confiança. Fixar o eixo em 0–100% é o que permite comparar duas figuras lado a lado no relatório."
+    : "Com uma repetição por tratamento não há dispersão a desenhar: sem erro padrão nem intervalo de confiança. Fixar o eixo em 0–100% é o que permite comparar duas figuras lado a lado no relatório.";
   const dD = document.querySelector("#grupo-dados .dica");
-  if(dD) dD.textContent = "Tirar um tratamento muda só a figura. Com uma repetição não há ANOVA nem letras para refazer: os valores são os das parcelas. A testemunha fica sempre, porque é a referência de Abbott.";
+  if(dD) dD.textContent = EM_FAIXA
+    ? "Tirar um tratamento muda só a figura. Com uma faixa por tratamento não há ANOVA nem letras para refazer: os valores são as médias dos treços. A testemunha fica sempre, porque é a referência de Abbott."
+    : "Tirar um tratamento muda só a figura. Com uma repetição não há ANOVA nem letras para refazer: os valores são os das parcelas. A testemunha fica sempre, porque é a referência de Abbott.";
 })();
 _rotulaPainel();
 _montaPainelDados();
