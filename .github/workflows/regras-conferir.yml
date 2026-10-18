@@ -1,0 +1,45 @@
+# Regras do banco — conferir (lacuna L8 da validação, IQ-04)
+#
+# Toda segunda de manhã, e quando alguém pedir (Actions → Run workflow), lê
+# as regras que estão no ar no Firebase e compara com o firestore.rules do
+# main. Diferente = o job fica vermelho e o GitHub manda e-mail; a página da
+# execução mostra a diferença linha a linha.
+#
+# Diferença esperada: entre o merge e a aprovação da publicação, ou depois de
+# um "voltar". Qualquer outra é alguém mexendo no Console, e é desvio.
+#
+# Usa uma conta de serviço SÓ DE LEITURA (FIREBASE_REGRAS_LEITURA). A chave
+# que publica fica no ambiente regras-producao e não chega aqui.
+name: Regras do banco — conferir
+on:
+  schedule:
+    - cron: '17 9 * * 1' # segunda, 06:17 em Brasília
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Conferir no ar = repositório
+        env:
+          FIREBASE_CHAVE_SA: ${{ secrets.FIREBASE_REGRAS_LEITURA }}
+        run: |
+          if [ -z "$FIREBASE_CHAVE_SA" ]; then
+            echo "::warning::Conferência das regras ainda não configurada (falta o segredo FIREBASE_REGRAS_LEITURA). Ver docs/VALIDACAO-SISTEMA.md, apêndice A."
+            echo "**Conferência das regras não configurada** — falta o segredo FIREBASE_REGRAS_LEITURA (docs/VALIDACAO-SISTEMA.md, apêndice A)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node tools/regras-banco.cjs conferir --registro conferencia-regras.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conferencia-regras
+          path: conferencia-regras.json
+          if-no-files-found: ignore
+          retention-days: 90

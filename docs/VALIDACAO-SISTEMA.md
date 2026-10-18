@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Documento** | Plano e protocolo de validação do Agracta |
-| **Versão** | 2.2 — 17/10/2026 |
+| **Versão** | 2.3 — 18/10/2026 |
 | **Base** | OECD GLP Nº 1 (NIT-Dicla-035) · OECD Advisory Document Nº 17 (2016) — sistemas computadorizados (NIT-Dicla-038) · OECD Advisory Document Nº 22 (2021) — integridade de dados · GAMP 5 (abordagem baseada em risco) |
 | **Substitui** | versão 1.0 (14/06/2026, arquitetura anterior) e `docs/conformidade/validacao-sistema.md`, que deixa de existir |
 
@@ -142,7 +142,7 @@ O que os controles **não** fecham está na §10 (lacunas), com ação proposta.
 | URS-13 | Cópia de segurança e restauração de um estado anterior. | Sim |
 | URS-14 | Cálculos corretos: ANOVA/Tukey, eficácia, AACPD, dose, calda e preparo de bancada. | Sim |
 | URS-15 | Relatório do estudo e exportação montados a partir do dado gravado. | Sim |
-| URS-16 | A versão publicada é íntegra (todo arquivo existe) e identificável, e o aparelho instalado recebe a versão nova. | Sim |
+| URS-16 | A versão publicada é íntegra (todo arquivo existe) e identificável, o aparelho instalado recebe a versão nova, e as regras do banco no ar são as do repositório — publicadas só depois dos testes e de aprovação, com registro. | Sim |
 | URS-17 | Cada pessoa tem um papel (técnico, supervisor, diretor). Finalizar, reabrir, aprovar protocolo, emendar e excluir exigem o papel mínimo da tabela que o administrador define, e o **banco** recusa quem não tem. Corrigir avaliação assinada e restaurar versão também exigem papel, conferido pela tela e registrado no evento. | Sim |
 | URS-18 | `[ PREENCHER: requisitos próprios do laboratório ]` | |
 
@@ -194,7 +194,7 @@ completam.
 | URS-13 | `tests/test_backup_local.js` · `tests/test_backup_restauracao.js` · `tests/test_cofre_falha.js` · `tests/test_versoes.js` | OQ-09, OQ-14, PQ-04 |
 | URS-14 | `tests/test_estatistica.js` · `tests/test_prancha_uma_repeticao.js` · `tests/test_motores_estatistica.js` · `tests/test_dose_core.js` · `tests/test_biocalc_mistura.js` · `tests/test_biocalc_lab.js` · `tests/test_aplicacao_core.js` | OQ-15 |
 | URS-15 | `tests/test_relatorio.js` · `tests/test_relatorio_fluxo.js` | OQ-16, PQ-03 |
-| URS-16 | `tests/check-assets.cjs` · `tests/test_cache_modulos.js` | IQ-02, IQ-03 |
+| URS-16 | `tests/check-assets.cjs` · `tests/test_cache_modulos.js` · `tests/test_regras_banco.js` | IQ-02, IQ-03, IQ-04 |
 | URS-17 | `tests/papeis-rules.cjs` · `tests/test_papeis.js` · `tests/test_papeis_app.js` | OQ-17, IQ-09 |
 <!-- matriz:fim -->
 
@@ -209,7 +209,7 @@ O que está no ar é o que foi testado, no ambiente especificado.
 | IQ-01 | Endereço publicado | https://agracta.com.br abre com certificado válido; o app instala como PWA | `[ ]` | captura | `[ ]` |
 | IQ-02 | Versão no ar = versão validada | O `sw.js` publicado traz o mesmo `agracta-app-vNNN` do commit validado, e o `main` do GitHub está nesse commit | `[ ]` | captura do `sw.js` + commit | `[ ]` |
 | IQ-03 | OQ automática no commit validado | Registro de `tools/registro-oq.sh --com-regras`: portão APROVADO, regras APROVADO, **0 pulados**; o `.sha256` confere | `[ ]` | registro anexado | `[ ]` |
-| IQ-04 | Regras do banco publicadas = repositório | Console Firebase → Firestore → Regras: conteúdo igual ao `firestore.rules` do commit validado; anotar a data da publicação | `[ ]` | captura | `[ ]` |
+| IQ-04 | Regras do banco publicadas = repositório | Rodar Actions → "Regras do banco — conferir" com o `main` no commit validado: resultado **IGUAIS**. O SHA-256 do registro da conferência é o mesmo do registro da última publicação ("Regras do banco — publicar"), que traz quem aprovou e quando | `[ ]` | `conferencia-regras.json` + `registro-regras.json` | `[ ]` |
 | IQ-05 | Autenticação | Provedores ativos = e-mail/senha e Google (como no `firebase.json`). O auto-cadastro do Firebase fica ligado porque o Painel Admin cria contas por ele; isso não dá acesso a dado nenhum (URS-01) | `[ ]` | captura | `[ ]` |
 | IQ-06 | Pessoas com acesso | Cadastros ativos = equipe atual, uma pessoa por e-mail, sem conta compartilhada; os dois administradores das regras são os esperados | `[ ]` | lista assinada | `[ ]` |
 | IQ-07 | Fornecedores | Plano do Firebase `[ PREENCHER: Spark/Blaze ]` · região do banco `[ PREENCHER ]` · backup agendado do Firestore `[ PREENCHER: sim/não ]` · termos de serviço arquivados | `[ ]` | capturas | `[ ]` |
@@ -273,7 +273,7 @@ decisão: corrigir, mitigar por procedimento, ou aceitar com justificativa.
 | L5 | Carimbos por célula (`_ts`) usam o relógio do aparelho. A hora oficial é a do servidor, no histórico e nos eventos | B | IQ-08 (hora automática); hora do servidor no histórico | Dizer no POP que a hora oficial é a do histórico | `[ PREENCHER ]` |
 | L6 | Backup do banco depende do plano do Firebase. Sem backup agendado, a cópia fora do Firebase é o arquivo exportado à mão | A | histórico no servidor; cofre no aparelho; export JSON | Rotina de export com responsável e local segregado, ou backup agendado (Blaze) | `[ PREENCHER ]` |
 | L7 | Os dois administradores são contas pessoais, fixas nas regras | M | — | Conta institucional; trocar exige publicar as regras | `[ PREENCHER ]` |
-| L8 | As regras do banco são publicadas à mão, separadas do site; nada confere sozinho que o publicado é o do repositório | M | IQ-04 a cada validação | Publicar as regras pelo CI | `[ PREENCHER ]` |
+| L8 | ~~As regras do banco são publicadas à mão; nada confere que o publicado é o do repositório~~ **Fechada na 38ª publicação.** Merge que muda o `firestore.rules` roda os testes no emulador, espera aprovação no ambiente `regras-producao` e publica pela API, conferindo a leitura de volta e guardando registro. Conferência semanal só de leitura avisa se o que está no ar desviar. Resta: o registro do CI expira em 90 dias (baixar e arquivar) e a aprovação é de uma pessoa | B | aprovação obrigatória; conferência semanal; IQ-04 | Arquivar cada `registro-regras.json` no dossiê da GQ | `[ PREENCHER ]` |
 | L9 | Fotos de parcela ficam só no aparelho que fotografou (desde a 14ª publicação) | A, se foto for dado bruto | slides e originais exportáveis | Definir no POP se foto é dado bruto e, se for, quando e onde arquivar | `[ PREENCHER ]` |
 | L10 | Validação ainda não executada | A | — | Executar IQ/OQ/PQ deste documento | `[ PREENCHER ]` |
 
@@ -289,8 +289,13 @@ decisão: corrigir, mitigar por procedimento, ou aceitar com justificativa.
    portão no computador (duplo clique em "Conferir antes de publicar").
 3. Cada publicação do app ganha uma entrada numerada no `LEIA-ME.txt`: o que
    mudou, por quê, o que conferir depois de subir e quais testes.
-4. As regras do Firestore são publicadas **à parte** e registradas: data, quem
-   publicou, commit de origem (ver L8).
+4. As regras do Firestore são publicadas **pelo CI** ("Regras do banco —
+   publicar"), nunca à mão: o merge que muda o `firestore.rules` roda os testes
+   no emulador e espera aprovação; a aprovação vem **depois** de o app novo
+   entrar nos aparelhos. O registro (`registro-regras.json`: commit, quem
+   aprovou, versão antes e depois, SHA-256) vai para o dossiê. Publicar pelo
+   Console ou pelo `firebase-tools` é desvio, e a conferência semanal acusa
+   (apêndice A).
 
 ### 11.2 Classificação
 
@@ -318,6 +323,7 @@ renomeado, esta lista acompanha):
 - `vendor/dose-core.js` · `vendor/biocalc-campo-core.js` · `vendor/biocalc-lab-core.js` · `vendor/aplicacao-core.js` — URS-14
 - `vendor/relatorio-core.js` · `relatorio-estudo.js` — URS-15
 - `sw.js` — URS-16
+- `tools/regras-banco.cjs` · `.github/workflows/regras-publicar.yml` — URS-16
 - `app.js` — **crítico quando a mudança toca** gravação, avaliação, assinatura, finalização, protocolo, exclusão ou restauração
 <!-- criticos:fim -->
 
@@ -348,11 +354,59 @@ revalidação aprovada ganha a seguinte (`validado-1.1`, `validado-2.0`).
 
 ---
 
+## Apêndice A — Publicação das regras pelo CI: configuração
+
+Feito uma vez, por quem administra o projeto Firebase e o repositório. Sem os
+passos 1 a 4 o CI não publica nada (o job falha dizendo que falta credencial) e
+a conferência semanal só avisa que não está configurada.
+
+1. **Duas contas de serviço** no Google Cloud do projeto `agracta-vyktorbio`
+   (Console do Google Cloud → IAM e administrador → Contas de serviço):
+   - `agracta-regras-publicar`, papel **Administrador de regras do Firebase**
+     (`roles/firebaserules.admin`);
+   - `agracta-regras-leitura`, papel **Leitor de regras do Firebase**
+     (`roles/firebaserules.viewer`).
+
+   Nenhuma das duas lê ou grava dado do banco: só as regras. Para cada uma,
+   Chaves → Adicionar chave → JSON. O arquivo baixado é a credencial: não vai
+   para o repositório nem para e-mail, e é apagado do computador depois do
+   passo 3.
+2. **Ambiente de aprovação** no GitHub (repositório → Settings → Environments →
+   New environment) com o nome `regras-producao`: marcar **Required reviewers**
+   com quem pode aprovar a publicação, e em **Deployment branches** limitar a
+   `main`.
+3. **Segredos**:
+   - dentro do ambiente `regras-producao` → Environment secrets →
+     `FIREBASE_REGRAS_PUBLICAR` = conteúdo do JSON da conta de publicar;
+   - no repositório (Settings → Secrets and variables → Actions → Repository
+     secrets) → `FIREBASE_REGRAS_LEITURA` = conteúdo do JSON da conta de leitura.
+4. **Primeira conferência**: Actions → "Regras do banco — conferir" → Run
+   workflow. Se der DIFERENTES, a página mostra a diferença; publicar o `main`
+   por Actions → "Regras do banco — publicar" → Run workflow → `publicar`.
+
+**Como fica cada mudança de regra:** PR (CI testa) → merge → o job "publicar"
+espera → abrir o app duas vezes em cada aparelho → dar papéis no Painel Admin,
+se a mudança pedir → **Review deployments → Approve** → baixar o artefato
+`registro-regras` e arquivar.
+
+**Se uma regra travar a sincronização de algum aparelho:** Run workflow →
+`voltar`, com `versao_anterior` = o valor de `antes.ruleset` do registro da
+publicação. A conferência semanal fica vermelha até a correção subir — é o
+esperado, e a volta fica registrada.
+
+**Uso local** (emergência, com o CI fora): `FIREBASE_TOKEN_ACESSO=$(gcloud auth
+print-access-token) node tools/regras-banco.cjs conferir` lê sem mudar nada; o
+mesmo com `publicar` publica e confere. Publicação local é desvio: registrar o
+motivo e arquivar o `--registro` gerado.
+
+---
+
 ## Histórico deste documento
 
 | Versão | Data | Alteração |
 |---|---|---|
 | 1.0 | 14/06/2026 | Emissão inicial (Supabase) |
+| 2.3 | 18/10/2026 | L8 fechada: regras do banco publicadas pelo CI depois dos testes no emulador e de aprovação no ambiente `regras-producao`, com registro e leitura de volta; conferência semanal só de leitura; caminho de volta para a versão anterior. URS-16 passa a cobrir as regras (`tests/test_regras_banco.js`), IQ-04 reescrita, §11.1 e apêndice A |
 | 2.2 | 17/10/2026 | URS-14: `tests/test_prancha_uma_repeticao.js` na matriz. A folha de gráficos com uma repetição sai descritiva (`Est.descrever`: médias, AACPD e Abbott, sem ANOVA, letras nem barra de erro) e não imprime p quando não há resíduo. Mudança crítica em `estatistica.js` (§11.2): registro novo da OQ automática e OQ-15 |
 | 2.1 | 16/10/2026 | Papéis (URS-17, R11, OQ-17, IQ-09): papel no cadastro, tabela "quem pode o quê" no Painel Admin, conferida pelo banco para finalizar, reabrir, aprovar, emendar e excluir. L1 passa a cobrir só o que fica na tela |
 | 2.0 | 11/10/2026 | Reescrita para o Firebase: arquitetura atual, histórico e eventos no servidor, protocolo vivo, assinatura por SHA-256; matriz de rastreabilidade conferida por teste; OQ automática com registro; lacunas L1–L10; controle de mudanças por classe. Junta e substitui `docs/conformidade/validacao-sistema.md` |

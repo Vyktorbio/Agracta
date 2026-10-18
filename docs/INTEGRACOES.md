@@ -74,7 +74,7 @@ Formato de importação: objeto com `schema: 1`, `itemId`, `fonte`, `url` HTTPS 
 1. `npm install --ignore-scripts --no-audit --no-fund`.
 2. `npm test`: portão existente, incluindo testes de projeção, matemática, cegamento, interfaces e revogação de callbacks.
 3. `npm run test:regras`: testes adversariais no emulador Firestore local, projeto `demo-agracta-integracoes`. Requer Java 17+ com firebase-tools 14; o CI usa Java 21. Não usa dados nem credenciais de produção.
-4. Antes de ativar a consulta do cliente, publicar `firestore.rules` no projeto correto (`firebase deploy --only firestore:rules --project agracta-vyktorbio`, em sessão autorizada) e publicar os arquivos estáticos pelo fluxo atual do repositório. O cliente falha fechado sem as novas regras.
+4. Antes de ativar a consulta do cliente, publicar `firestore.rules` pelo CI (aprovar "Regras do banco — publicar"; ver `docs/VALIDACAO-SISTEMA.md`, apêndice A) e publicar os arquivos estáticos pelo fluxo atual do repositório. O cliente falha fechado sem as novas regras.
 5. Conferir com duas contas de teste que cada uma vê somente sua seleção; testar remoção, revogação e atualização após uma sincronização. Nenhum acesso de cliente real é criado durante os testes automatizados.
 
 O service worker mantém `cliente.html` em sua própria chave. Abrir a consulta não sobrescreve `index.html` no cache. O HTML público contém somente a interface; os resultados vêm de Firestore após autorização.

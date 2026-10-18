@@ -206,10 +206,10 @@ offline, e isso fica visível como autor ≠ remetente.
 - sincroniza ao abrir a sessão, quando a rede volta, logo depois de gravar um evento
   e quando o Conhecimento abre a aba "Entre estudos".
 
-> **Importante:** o merge **não** publica as regras do Firestore. Até alguém rodar
-> `npx firebase-tools deploy --only firestore:rules`, a coleção `eventos` fica sob a
-> regra genérica: os membros conseguem gravar, mas também alterar. A sincronização
-> funciona nos dois casos. A imutabilidade só passa a valer depois do deploy.
+> **Importante:** o merge sozinho **não** põe as regras no ar: desde a 38ª publicação
+> o CI espera aprovação ("Regras do banco — publicar"). Até ela, a coleção `eventos`
+> fica sob a regra que estava no ar. A sincronização funciona nos dois casos; a
+> imutabilidade só passa a valer depois da publicação aprovada.
 
 ## 5. Tabela EPPO
 
@@ -298,8 +298,7 @@ Em ordem. Cada passo vale por si:
 1. ✅ **Carregar os motores no app** (`index.html` + `sw.js`, com o CACHE incrementado).
 2. ✅ **Gravar o evento junto com a trilha atual**, pelo módulo `eventos-app.js`.
 3. ✅ **Eventos na nuvem** com regras só-de-acréscimo e hash conferido pelo servidor
-   (seção 4). Falta **publicar as regras** (`npx firebase-tools deploy --only
-   firestore:rules`).
+   (seção 4). Publicação das regras pelo CI, com aprovação (desde a 38ª).
 4. ⏸ **Correção de dado finalizado** passa a ser `observacao.corrigida` em vez de
    reabrir o estudo inteiro.
 5. ✅ **Conhecimento** com a aba "Entre estudos" sobre `extrair` + `aplicar` +
