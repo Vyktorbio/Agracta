@@ -12818,12 +12818,24 @@ function _pranchaDatas(s, variavel, trats, reps, base){
   var vistos={}, unicas=[];
   usadas.forEach(function(x){ if(!vistos[x.mom.chave]){ vistos[x.mom.chave]=1; unicas.push(x); } });
   var completas=[], parciais=[];
+  /* EM FAIXAS a grade "cheia" é outra coisa. Os treços são subamostras da
+     mesma faixa e a folha usa a MÉDIA deles (ver _pranchaPayload): a data
+     serve quando todo tratamento tem ao menos um treço lido. Um treço que
+     faltou num tratamento muda quantos entram na média dele, não invalida a
+     data — e o número de treços de cada um vai impresso na folha.
+     `faltam` aqui conta TRATAMENTOS sem treço nenhum. */
+  var faixa=(s.desenho==='faixas');
   unicas.forEach(function(x){
     var faltam=0;
-    trats.forEach(function(t){ for(var r=1;r<=reps;r++){
-      var raw=_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel);
-      if(isNaN(parseFloat(String(raw==null?'':raw).replace(',','.')))) faltam++;
-    } });
+    trats.forEach(function(t){
+      var lidos=0;
+      for(var r=1;r<=reps;r++){
+        var raw=_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel);
+        if(isNaN(parseFloat(String(raw==null?'':raw).replace(',','.')))){ if(!faixa) faltam++; }
+        else lidos++;
+      }
+      if(faixa && !lidos) faltam++;
+    });
     x.faltam=faltam;
     (faltam?parciais:completas).push(x);
   });
@@ -12853,12 +12865,18 @@ function _pranchaDiag(qid, sid){
     if(trats.length<2){ o.motivo='precisa de ao menos 2 tratamentos'; return o; }
     /* Uma repetição não impede a FIGURA, só o teste: a folha sai descritiva
        (ver SEM_REP na prancha), e o botão diz isso antes de abrir. */
-    o.descritivo=(reps<2);
+    /* Faixa única por tratamento também: os treços são subamostras, e a
+       folha sai com a média deles, descritiva (ver _pranchaPayload). */
+    o.faixa=(s.desenho==='faixas');
+    o.descritivo=(reps<2 || o.faixa);
     var dd=_pranchaDatas(s, v, trats, reps, base.data);
     o.datas=dd.usadas.length; o.parciais=dd.parciais.length;
     if(!dd.usadas.length){
+      var _falt=dd.parciais.map(function(x){return x.faltam;}).reduce(function(a,b){return a+b;},0);
       o.motivo = dd.parciais.length
-        ? ('grade incompleta em '+dd.parciais.length+' data(s) — faltam '+dd.parciais.map(function(x){return x.faltam;}).reduce(function(a,b){return a+b;},0)+' notas')
+        ? (o.faixa
+            ? ('nenhuma data com treço lido em todos os tratamentos ('+dd.parciais.length+' data(s) com tratamento sem treço)')
+            : ('grade incompleta em '+dd.parciais.length+' data(s) — faltam '+_falt+' notas'))
         : 'sem avaliação com data utilizável';
       return o;
     }
@@ -13214,7 +13232,17 @@ function _pranchaPayload(qid, sid, variavel){
   var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){ return x && x.id===sid; });
   if(!s) return { erro:'Estudo não encontrado.' };
   s=(typeof normalizeStudy==='function')?normalizeStudy(s):s;
-  if(s.desenho==='faixas') return {erro:'Os treços de uma faixa única são subamostras, não repetições independentes. Consulte os dados e as médias na avaliação; esta prancha com testes estatísticos exige replicação do tratamento.'};
+  /* FAIXA ÚNICA POR TRATAMENTO: a folha sai, descritiva. Até a 38ª ela
+     recusava ("esta prancha exige replicação"), e o ensaio em faixa ficava
+     sem figura nenhuma para o relatório. A recusa protegia uma coisa certa:
+     os treços são SUBAMOSTRAS da mesma faixa, não repetições — se entrassem
+     como blocos, sairiam ANOVA, letras e barra de erro medindo a variação
+     dentro de um pedaço de terra e chamando isso de efeito do produto.
+     Então eles NÃO entram como blocos: cada tratamento vira UMA unidade, com
+     a média dos treços lidos naquela data. A folha cai exatamente no caminho
+     de uma repetição (SEM_REP) — sem resíduo, sem teste — e diz, em cada
+     legenda, que o valor é a média dos treços de uma faixa única. */
+  var faixa=(s.desenho==='faixas');
 
   var trats=(s.tratamentos||[]).filter(function(t){ return t && t.id; });
   var reps=Math.max(1, parseInt(s.numRepeticoes)||1);
@@ -13230,6 +13258,9 @@ function _pranchaPayload(qid, sid, variavel){
   if(!dts.comData) return { erro:'Nenhuma avaliação datada com a variável "'+variavel+'".' };
   if(!dts.usadas.length){
     if(!dts.parciais.length) return { erro:'Nenhuma avaliação com data utilizável para "'+variavel+'".' };
+    if(faixa) return { erro:'Nenhuma data de "'+variavel+'" tem treço lido em todos os tratamentos, que é o mínimo para a folha:\n\n• '+
+      dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' — '+x.faltam+' tratamento'+(x.faltam>1?'s':'')+' sem treço'; }).join('\n• ')+
+      '\n\nLance ao menos um treço de cada faixa numa das datas.' };
     return { erro:'Nenhuma data de "'+variavel+'" está com a grade cheia (todo tratamento × bloco), que é o mínimo para a ANOVA:\n\n• '+
       dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' — faltam '+x.faltam+' de '+(trats.length*reps)+' notas'; }).join('\n• ')+
       '\n\nComplete uma das datas ou remova os tratamentos que não foram avaliados.' };
@@ -13247,18 +13278,37 @@ function _pranchaPayload(qid, sid, variavel){
   if(doseUnidadePendente(s)) avisos.push('Unidade da dose não declarada no estudo: as doses saem '+
     'só com o número. Declare a unidade no cadastro do estudo (L/ha, mL/ha, g/ha, kg/ha ou mg/ha) '+
     'e gere a figura de novo.');
-  if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por grade incompleta: '+
-    dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+')'; }).join(', '));
+  if(dts.parciais.length) avisos.push(dts.parciais.length+' avaliação(ões) fora da folha por '+(faixa?'tratamento sem treço lido':'grade incompleta')+': '+
+    dts.parciais.map(function(x){ return (isoToBR(x.av.data)||'')+' (faltam '+x.faltam+(faixa?' tratamento'+(x.faltam>1?'s':''):'')+')'; }).join(', '));
   if(dts.descartadasPreAplicacao) avisos.push(dts.descartadasPreAplicacao+' avaliação(ões) anterior(es) à aplicação ficaram de fora (linha de base).');
   /* dito ANTES de abrir, como os outros: a figura vai para o relatório, e quem
      a leva precisa saber que ela não tem teste */
-  if(reps<2) avisos.push('Uma repetição por tratamento: a folha sai descritiva — valores das parcelas, curva, AACPD e eficácia de Abbott, sem ANOVA, letras nem barra de erro.');
+  if(faixa) avisos.push('Ensaio em faixas: cada tratamento é uma faixa única e os treços são subamostras dela. A folha sai descritiva — média dos treços, curva, AACPD e eficácia de Abbott, sem ANOVA, letras nem barra de erro.');
+  else if(reps<2) avisos.push('Uma repetição por tratamento: a folha sai descritiva — valores das parcelas, curva, AACPD e eficácia de Abbott, sem ANOVA, letras nem barra de erro.');
   if(base.fonte==='avaliacao') avisos.push('Sem aplicação ou início registrados: os dias são contados a partir da 1ª avaliação.');
   else if(base.fonte==='inicio') avisos.push('Sem aplicação registrada: os dias são contados a partir do início programado do estudo.');
 
-  /* cubo [trat][bloco][avaliação] — só datas completas chegam aqui */
-  var sev=[];
-  trats.forEach(function(t){
+  /* cubo [trat][bloco][avaliação] — só datas completas chegam aqui.
+     Em faixas: um "bloco" só, com a média dos treços lidos em cada data, e a
+     contagem de treços de cada tratamento em cada data (vai para a folha). */
+  var sev=[], trecos=null;
+  if(faixa){
+    trecos=[];
+    trats.forEach(function(t){
+      var serie=[], conta=[];
+      avs.forEach(function(x){
+        var soma=0, n=0;
+        for(var r=1;r<=reps;r++){
+          var raw=_avNota(x.av,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},variavel);
+          var v=parseFloat(String(raw==null?'':raw).replace(',','.'));
+          if(isFinite(v)){ soma+=v; n++; }
+        }
+        serie.push(n?soma/n:NaN); conta.push(n);
+      });
+      sev.push([serie]); trecos.push(conta);
+    });
+  }
+  else trats.forEach(function(t){
     var porBloco=[];
     for(var r=1;r<=reps;r++){
       var serie=[];
@@ -13274,7 +13324,7 @@ function _pranchaPayload(qid, sid, variavel){
   var iTest=trats.findIndex(function(t){ return !!t.testemunha; });
   if(iTest<0) iTest=0;
 
-  var loc=(typeof LOCAIS!=='undefined' && typeof QLOCAL!=='undefined' && LOCAIS[QLOCAL[qid]])||{};
+  var loc=(typeof LOCAIS!=='undefined' && LOCAIS && typeof QLOCAL!=='undefined' && QLOCAL && LOCAIS[QLOCAL[qid]])||{};
   var dd=function(n){ return (n<10?'0':'')+n; };
   var hoje=new Date();
   var autorId=_autorBPL(s);
@@ -13292,7 +13342,15 @@ function _pranchaPayload(qid, sid, variavel){
       codigo:(s.codigo||s.nome||s.id), autor:autor,
       data:{ pt:dd(hoje.getDate())+'/'+dd(hoje.getMonth()+1)+'/'+hoje.getFullYear(),
              en:hoje.getFullYear()+'-'+dd(hoje.getMonth()+1)+'-'+dd(hoje.getDate()) },
-      delineamento:{ blocos:reps, parcelaM2:null, parcela:'', caldaLha:null },
+      delineamento:(function(){
+        var d={ blocos:(faixa?1:reps), parcelaM2:null, parcela:'', caldaLha:null };
+        if(faixa){
+          var todos=[].concat.apply([], trecos);
+          d.faixa={ trecosMin:Math.min.apply(null,todos), trecosMax:Math.max.apply(null,todos),
+                    trecosPlanejados:reps, trecos:trecos };
+        }
+        return d;
+      })(),
       /* alvo = a variável avaliada (Mancha angular, Cercospora...): a prancha já sabe
          usar em todas as legendas, e sem isso toda folha saía sem dizer o alvo.
          escala = a escala diagramática, quando a variável for do tipo escala. */
@@ -13341,7 +13399,7 @@ function _pranchaPayload(qid, sid, variavel){
        sobre ele. `momentos` é só o rótulo: "2 HAT", "7 DAA". */
     daa: avs.map(function(x){ return x.mom?x.mom.dias:x.daa; }),
     momentos: avs.map(function(x){ return x.mom?x.mom.rotulo:(x.daa+' DAA'); }),
-    blocos: Array.from({length:reps},function(_,i){ return i+1; }),
+    blocos: Array.from({length:(faixa?1:reps)},function(_,i){ return i+1; }),
     sev: sev,
     avaliacoes: avs.map(function(x){
       return { daa:x.daa, data:{ pt:(isoToBR(x.av.data)||''), en:(x.av.data||'') } };
@@ -14658,7 +14716,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
   if(_diag.length){
     var _linhas=_diag.map(function(d){
       var det=d.ok
-        ? (d.datas+' data'+(d.datas>1?'s':'')+(d.datas>1?' · curva + AACPD':' · uma data')+(d.parciais?(' · '+d.parciais+' incompleta(s) de fora'):'')+(d.descritivo?' · 1 repetição: descritivo, sem teste':''))
+        ? (d.datas+' data'+(d.datas>1?'s':'')+(d.datas>1?' · curva + AACPD':' · uma data')+(d.parciais?(' · '+d.parciais+' incompleta(s) de fora'):'')+(d.descritivo?(d.faixa?' · faixa única: descritivo, sem teste':' · 1 repetição: descritivo, sem teste'):''))
         : d.motivo;
       if(!d.ok) return '<div style="padding:8px 10px;border:1px dashed #d8dfd9;border-radius:8px;margin-top:5px;color:#8a948e;font-size:11px">'+
         '<b style="color:#6d7a72">'+esc(d.variavel)+'</b> — '+esc(det)+'</div>';

@@ -1,3 +1,85 @@
+AGRACTA — 39a publicacao                    18/10/2026
+=====================================================
+
+Leva: ensaio em FAIXAS ganha a folha de graficos, descritiva, com a
+media dos trecos de cada faixa.
+  CODIGO:  app.js (_pranchaPayload, _pranchaDatas, _pranchaDiag)
+           prancha.html  index.html  sw.js (cache v378, app.js?v=229)
+  TESTE:   tests/test_prancha_faixas.js (novo, 48 verificacoes)
+           tests/test_faixas.js (a prancha agora sai, com um bloco so)
+  DOCS:    docs/VALIDACAO-SISTEMA.md (2.4: o teste novo em URS-14)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+Depende da 38a (PR das regras): fazer o merge dela antes.
+
+
+O QUE MUDOU
+-----------
+
+Print do campo: o botao de graficos de um ensaio em faixas dizia "Os
+trecos de uma faixa unica sao subamostras, nao repeticoes independentes
+(...) esta prancha exige replicacao do tratamento" e nao abria nada. A
+37a tinha deixado isso de fora de proposito.
+
+A recusa protegia uma coisa certa e continua protegendo: os trecos NAO
+entram como blocos. Se entrassem, a folha faria ANOVA, letras e barra de
+erro com a variacao DENTRO de uma faixa, e chamaria isso de efeito do
+produto.
+
+1) A FOLHA SAI, COM A MEDIA DOS TRECOS
+
+  Cada tratamento entra como UMA unidade: a media dos trecos lidos
+  naquela data. A folha cai no mesmo caminho da 37a (uma repeticao):
+  barras, ranking, curva com AACPD, paineis, por data, tabela,
+  estatistica, trilha BPL e A4, em PT e EN, com a eficacia de Abbott
+  sobre as medias. Sem ANOVA, CV, DMS, letras nem barra de erro.
+
+  O que ela diz, no lugar de "unica parcela":
+    - subtitulo: "Faixa unica · media de 3 trecos · 5 tratamentos ·
+      descritivo, sem teste estatistico";
+    - legendas: "Cada barra e a media dos 3 trecos da faixa unica do
+      tratamento";
+    - motivo: "os trecos sao subamostras da mesma faixa, nao
+      repeticoes";
+    - rodape: "uma faixa por tratamento, sem repeticao · n = 5 faixas ·
+      3 trecos (subamostras) por faixa";
+    - folha do auditor: o delineamento como faixa, a coluna "Media dos
+      trecos" e o que faltaria para haver teste (2 faixas ou parcelas
+      independentes por tratamento, casualizadas em blocos).
+
+2) TRECO FALTANDO NAO DERRUBA A DATA
+
+  Em blocos, a data so entra com a grade cheia. Em faixas, a data entra
+  quando TODO tratamento tem ao menos um treco lido; a media usa os que
+  foram lidos, e a folha diz quantos (ex.: "2 a 3 trecos"). Tratamento
+  sem treco nenhum tira a data, com aviso ao abrir.
+
+3) O BOTAO AVISA ANTES
+  "faixa unica: descritivo, sem teste", e o aviso de abertura diz que os
+  trecos sao subamostras.
+
+
+O QUE CONFERIR DEPOIS DE SUBIR
+------------------------------
+
+1. Abrir o Agracta (duas vezes, para a versao nova entrar).
+2. O estudo em faixas do print > Graficos e slides: a folha abre.
+3. Conferir uma barra contra a media dos trecos na avaliacao.
+4. Estudo em blocos com 4 repeticoes: nada mudou (letras, ANOVA).
+
+
+TESTES
+------
+
+  tests/test_prancha_faixas.js -- app: botao descritivo de faixa, um
+  bloco so com a media dos trecos, treco faltando entra pela media,
+  tratamento sem treco tira a data com aviso. Folha (jsdom): as 13
+  vistas em PT e EN sem erro, NaN, p, letras nem barra de erro, e
+  nenhuma falando em "unica parcela" ou "blocos ao acaso"; legenda,
+  subtitulo, rodape e auditor dizendo "media dos trecos". E o ensaio em
+  blocos com uma repeticao continua dizendo "unica parcela".
+
+
 AGRACTA — 38a publicacao                    18/10/2026
 =====================================================
 

@@ -201,8 +201,14 @@ eq(snap3.itens.length, 0, 'três traços também não geram resultado inferencia
 eq(snap3.semAnalise.length, 1, 'a avaliação continua no registro');
 check(/subamostras/.test(snap3.semAnalise[0].porque), 'o motivo documenta a falta de replicação');
 C.data = {BOSQ_A:{estudos:[b3.s]}};
-check(/subamostras/.test(C._pranchaPayload('BOSQ_A',b3.s.id,'Severidade').erro),
-      'a prancha também impede inferência com subamostras');
+/* Até a 38ª a prancha recusava faixa. Desde a 39ª ela sai, DESCRITIVA: um
+   bloco por tratamento com a média dos traços, nunca os traços como blocos
+   (o detalhe está em tests/test_prancha_faixas.js). */
+var pf = C._pranchaPayload('BOSQ_A',b3.s.id,'Severidade');
+check(!pf.erro && JSON.stringify(pf.blocos) === '[1]',
+      'a prancha não faz inferência com subamostras: um bloco só, com a média dos traços');
+check((pf.avisos||[]).some(function(a){ return /subamostras/.test(a) && /descritiva/.test(a); }),
+      'e avisa que os traços são subamostras e a folha é descritiva');
 
 console.log('\n' + (falhas === 0
   ? passes + ' verificações, nenhuma falha.'
