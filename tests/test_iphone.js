@@ -226,7 +226,8 @@ t.d.getElementById('botao').focus(); await esperar(380);
 ok(t.w.chamadas.length===2,'saiu do campo (o teclado fechou) e ficou rolada: volta');
 t=montar(ANDROID); t.w.scrollY=62; t.w.dispatchEvent(new t.w.Event('orientationchange')); await esperar(380);
 ok(t.w.chamadas.length===0,'no Android nada disso liga');
-ok(/'\.\/iphone\.js'|iphone\.js/.test(fs.readFileSync('conferir.sh','utf8')),'o portão confere a sintaxe do iphone.js');
+/* O portão confere a sintaxe de todo *.js da raiz — iphone.js incluído — ou o cita pelo nome. */
+ok(/for f in \*\.js |iphone\.js/.test(fs.readFileSync('conferir.sh','utf8')),'o portão confere a sintaxe do iphone.js');
 
 /* ------------------------------------------------------------------ 8 --- */
 console.log('\n--- 8. Instalar no iPhone: os passos de hoje e o porquê ---');
