@@ -172,7 +172,7 @@
     }
     var pol = politica();
     box.innerHTML =
-      '<div style="font-weight:700;color:#37d684;margin-bottom:3px">Quem pode o quê</div>' +
+      '<div style="font-weight:700;color:var(--text);margin-bottom:3px">Quem pode o quê</div>' +
       '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px">Papel mínimo de cada ação. ' +
         'Técnico &lt; supervisor &lt; diretor; o administrador pode tudo. ' +
         '<b>Banco</b>: o servidor recusa quem não pode. <b>Tela</b>: o app barra e o evento formal registra o papel. ' +
@@ -188,7 +188,7 @@
       '<label style="display:flex;align-items:flex-start;gap:7px;margin-top:8px;font-size:11px;color:#cfe0d4;cursor:pointer">' +
         '<input type="checkbox" id="ppol_propria"' + (pol.corrigirPropria ? ' checked' : '') + ' style="width:auto;margin-top:2px">' +
         '<span>Técnico pode corrigir a avaliação que <b>ele mesmo</b> assinou (sempre com motivo)</span></label>' +
-      '<button onclick="AgractaPapeis._salvarPolitica()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:8px;cursor:pointer">Salvar tabela</button>';
+      '<button onclick="AgractaPapeis._salvarPolitica()" style="width:100%;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:8px;cursor:pointer">Salvar tabela</button>';
   }
 
   function _salvarPolitica() {

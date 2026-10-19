@@ -1,9 +1,10 @@
 /* probit.css — página da análise probit/logit da bancada (probit.html).
-   Mesma família visual do relatório (relatorio-local.css): fundo cinza-verde,
-   verde do Agracta nos botões, cor só para estado. */
+   Mesma família visual do app: botão principal escuro, seleção em azul,
+   cor só para estado e para as séries. */
 :root{
   --bg:#eef1ef; --panel:#fff; --fg:#172923; --muted:#5c6a63; --line:#d5ddd8; --soft:#f2f5f3;
-  --accent:#164f38; --accent-fg:#fff; --accent-soft:#dfece5;
+  --accent:#18191c; --accent-fg:#fff; --accent-soft:#e6f3fb;
+  --sel:#60b9ee; --sel-ink:#102d40; /* azul de seleção do app (skin royal) */
   --ok:#16a34a; --ok-bg:rgba(22,163,74,.10); --warn:#b45309; --warn-bg:rgba(217,119,6,.11);
   --err:#dc2626; --err-bg:rgba(220,38,38,.08); --info:#2563eb; --info-bg:rgba(37,99,235,.08);
   --s0:#1d6a58; --s1:#c27a12; --s2:#7a4a8c; --s3:#2f6fb0; --s4:#b3362b; --s5:#4f7d2f;
@@ -37,7 +38,7 @@ textarea:focus-visible,input:focus-visible,select:focus-visible,button:focus-vis
 .opts .full{grid-column:1/-1}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{flex:1;min-height:40px;font:600 14px system-ui,sans-serif;background:var(--soft);color:var(--muted);border:0;cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.seg button[aria-pressed="true"]{background:var(--sel);color:var(--sel-ink)}
 .chk{display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer}
 .chk input{margin-top:4px;accent-color:var(--accent);width:16px;height:16px}
 .chk small{display:block;color:var(--muted);font-size:12px}

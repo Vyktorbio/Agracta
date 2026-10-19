@@ -1675,8 +1675,8 @@ function _localAplicaTroca(id){
 /* ---- UI: chip do local + menu + modal "Novo local" (busca geocoder) ---- */
 function _locCss(){ if(document.getElementById('locCss'))return; var s=document.createElement('style'); s.id='locCss';
   s.textContent='.loc-chip{display:inline-flex;align-items:center;gap:6px;margin-top:5px;background:var(--surface-3,#161e1a);border:1px solid var(--border,#26322b);color:var(--accent,#37d684);padding:5px 11px;border-radius:999px;font:600 11px/1 -apple-system,system-ui,sans-serif;cursor:pointer;max-width:78vw;white-space:nowrap;transition:background .15s,border-color .15s}.loc-chip:hover{background:#1d2721;border-color:#33453a}.loc-chip b{color:#eaf3ed;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44vw}.loc-chip .car{color:var(--text-3,#6d7f73);font-size:9px}.loc-chip .sub{color:var(--text-3,#6d7f73);font-weight:600}'+
-  '.loc-menu{position:fixed;z-index:1600;background:#0e120e;border:1px solid #2a3a2a;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.6);min-width:230px;max-width:86vw;overflow:hidden;font:13px system-ui,sans-serif}.loc-mi{padding:9px 12px;color:#cfe0cf;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}.loc-mi:hover{background:#16241a}.loc-mi.on{background:#15301a}.loc-mi .sub{color:#6a8a6a;font-size:11px;display:flex;align-items:center;gap:6px}.loc-sep{height:1px;background:#1e2e1e}.loc-new{color:#9ac49a;font-weight:700}.loc-x{color:#7a5a5a;font-size:13px;padding:0 3px;cursor:pointer}.loc-x:hover{color:#ff8a80}'+
-  '.loc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:none;align-items:center;justify-content:center;padding:16px}.loc-box{background:#0e120e;border:1px solid #2a3a2a;border-radius:14px;max-width:440px;width:100%;padding:16px;font:13px system-ui,sans-serif;color:#dfeadf;box-sizing:border-box}.loc-box h3{margin:0 0 6px;font-size:15px;color:#cfe6cf}.loc-box label{display:block;font-size:11px;color:#8aa88a;margin:10px 0 3px;font-weight:600;letter-spacing:.4px}.loc-box input{width:100%;box-sizing:border-box;background:#0a0e0a;border:1px solid #2a3a2a;border-radius:8px;color:#eaf0ea;padding:9px;font-size:14px}.loc-box .row{display:flex;gap:8px}.loc-btn{flex:1;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}.loc-ok{background:#1f5a2a;color:#eafaea}.loc-ok:hover{background:#246a31}.loc-cancel{background:#222;color:#bbb}.loc-2nd{background:#16301c;color:#9ac49a}.loc-res{margin-top:6px;max-height:168px;overflow:auto}.loc-ri{padding:8px;border:1px solid #1e2e1e;border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px;color:#cfe0cf}.loc-ri:hover{background:#16241a}'+
+  '.loc-menu{position:fixed;z-index:1600;background:#0e120e;border:1px solid #2a3a2a;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.6);min-width:230px;max-width:86vw;overflow:hidden;font:13px system-ui,sans-serif}.loc-mi{padding:9px 12px;color:#cfe0cf;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}.loc-mi:hover{background:#16241a}.loc-mi.on{background:#15301a}.loc-mi .sub{color:#6a8a6a;font-size:11px;display:flex;align-items:center;gap:6px}.loc-sep{height:1px;background:#1e2e1e}.loc-new{color:var(--text);font-weight:700}.loc-x{color:#7a5a5a;font-size:13px;padding:0 3px;cursor:pointer}.loc-x:hover{color:#ff8a80}'+
+  '.loc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:none;align-items:center;justify-content:center;padding:16px}.loc-box{background:#0e120e;border:1px solid #2a3a2a;border-radius:14px;max-width:440px;width:100%;padding:16px;font:13px system-ui,sans-serif;color:#dfeadf;box-sizing:border-box}.loc-box h3{margin:0 0 6px;font-size:15px;color:#cfe6cf}.loc-box label{display:block;font-size:11px;color:#8aa88a;margin:10px 0 3px;font-weight:600;letter-spacing:.4px}.loc-box input{width:100%;box-sizing:border-box;background:#0a0e0a;border:1px solid #2a3a2a;border-radius:8px;color:#eaf0ea;padding:9px;font-size:14px}.loc-box .row{display:flex;gap:8px}.loc-btn{flex:1;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}.loc-ok{background:var(--acao-bg);color:var(--acao-ink)}.loc-ok:hover{background:#35373c}.loc-cancel{background:#222;color:#bbb}.loc-2nd{background:var(--surface);color:var(--text);border:1px solid var(--border)}.loc-res{margin-top:6px;max-height:168px;overflow:auto}.loc-ri{padding:8px;border:1px solid #1e2e1e;border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px;color:#cfe0cf}.loc-ri:hover{background:#16241a}'+
   '.lm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-soft,#1e2e1e)}.lm-info{display:flex;flex-direction:column;gap:2px;min-width:0}.lm-info b{color:var(--text,#eaf3ed);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lm-info span{font-size:11px;color:var(--text-3,#6a8a6a)}.lm-del{flex:none;background:rgba(216,75,67,.12);color:var(--danger,#d84b43);border:1px solid rgba(216,75,67,.42);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}.lm-del:hover{background:rgba(216,75,67,.22)}';
   document.head.appendChild(s);
 }
@@ -1826,7 +1826,7 @@ function gerenciarLocais(){
   var rows=Object.keys(LOCAIS).map(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length;
     return '<div class="lm-row"><div class="lm-info"><b>'+esc(Lc.nome)+'</b><span>'+n+' quadra'+(n===1?'':'s')+'</span></div>'+
       '<div class="lm-acts" style="display:flex;gap:6px">'+
-      '<button class="lm-ren" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
+      '<button class="lm-ren" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
       '<button class="lm-del" onclick="excluirLocal(\''+id+'\')">Excluir</button></div></div>';
   }).join('');
   m.innerHTML='<div class="loc-box" style="position:relative"><button class="panel-x-tr" onclick="document.getElementById(\'locManage\').style.display=\'none\'" aria-label="Fechar" title="Fechar">✕</button><h3>'+ic('gear',16)+' Gerenciar locais</h3>'+
@@ -3641,9 +3641,9 @@ function croquiCss(){
      "Salvar" sumiam. Cor de painel sobre mapa não é cor de tema. */
   s.textContent='.croqui-tip{background:rgba(20,22,20,.86);color:#fff;border:none;font:600 10px/1 system-ui,sans-serif;box-shadow:none;padding:3px 5px}.croqui-tip:before{display:none}.croqui-tip-fixa{background:rgba(20,22,20,.55);font-size:var(--croqui-fonte,9px);padding:.22em .36em;line-height:1.1}'+
   '.croqui-panel{position:fixed;left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:1250;width:300px;max-width:calc(100vw - 24px);background:rgba(15,21,18,.97);border:1px solid #2c3a32;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.52);padding:12px;color:#e8efe9;font-family:system-ui,sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'+
-  '.croqui-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.croqui-title{font-size:12px;font-weight:900;letter-spacing:1px;color:#37d684;text-transform:uppercase}.croqui-x{background:none;border:none;color:#93a599;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
+  '.croqui-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.croqui-title{font-size:12px;font-weight:900;letter-spacing:1px;color:var(--text);text-transform:uppercase}.croqui-x{background:none;border:none;color:#93a599;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}'+
   '.croqui-sub{font-size:11px;color:#93a599;margin:-4px 0 9px;line-height:1.4}.croqui-sub b{color:#e8efe9}'+
-  '.croqui-seg{display:flex;gap:6px;margin-bottom:9px}.croqui-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.croqui-seg button.on{background:#37d684;border-color:#37d684;color:#08130c}'+
+  '.croqui-seg{display:flex;gap:6px;margin-bottom:9px}.croqui-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.croqui-seg button.on{background:var(--skin-selection);border-color:var(--skin-selection);color:var(--skin-selection-ink)}'+
   '.croqui-mini{font-size:10px;color:#93a599;padding:8px 0 0}.croqui-nums{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}.croqui-nums label{display:block;font-size:9px;color:#93a599;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}.croqui-nums input{width:100%;background:#0c1210;border:1px solid #2c3a32;color:#e8efe9;border-radius:9px;padding:7px 8px;font:600 13px system-ui,sans-serif}'+
   '.croqui-info{font-size:11px;color:#b9c6bd;background:#0c1210;border:1px solid #2c3a32;border-radius:10px;padding:8px;margin-bottom:9px;line-height:1.45}.croqui-info b{color:#e8efe9}.croqui-info.falta{border-color:#7a3a3a;color:#f0c3c3}'+
   '.croqui-gps{width:100%;margin-bottom:8px;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-gps:disabled{opacity:.75;cursor:progress}'+
@@ -3655,7 +3655,7 @@ function croquiCss(){
   '.croqui-eu-x{position:absolute;top:10px;right:10px;background:#3a1414;color:#ffb3a8;border:1px solid #7a2b22;border-radius:9px;padding:6px 10px;font:800 11px system-ui,sans-serif;cursor:pointer}'+
   '.croqui-eu.dentro .croqui-eu-nome{color:#37d684}.croqui-eu.incerta .croqui-eu-nome{color:#ffd24a}.croqui-eu.vao .croqui-eu-nome,.croqui-eu.fora .croqui-eu-nome{color:#b9c6bd;font-size:19px}'+
   '.croqui-eu.incerta{border-color:#6b5a2f}'+
-    '.croqui-acts{display:flex;gap:7px}.croqui-acts button{flex:1;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acts button.primary{background:#37d684;border-color:#37d684;color:#08130c}.croqui-acts button.primary:disabled{background:#2a3a32;border-color:#2a3a32;color:#6d7d73;cursor:not-allowed}.croqui-acts button.danger{color:#f0a3a3;border-color:#5a2f2f}';
+    '.croqui-acts{display:flex;gap:7px}.croqui-acts button{flex:1;border-radius:10px;padding:9px 6px;font:800 12px system-ui,sans-serif;cursor:pointer;border:1px solid #2c3a32;background:#0c1210;color:#b9c6bd}.croqui-acts button.primary{background:var(--acao-bg);border-color:var(--acao-bg);color:var(--acao-ink)}.croqui-acts button.primary:disabled{background:#2a3a32;border-color:#2a3a32;color:#6d7d73;cursor:not-allowed}.croqui-acts button.danger{color:#f0a3a3;border-color:#5a2f2f}';
   document.head.appendChild(s);
 }
 function croquiEditRedraw(){
@@ -4672,11 +4672,11 @@ function _cardinal(b){ return ['Norte','Nordeste','Leste','Sudeste','Sul','Sudoe
 function _navCss(){ if(document.getElementById('navCss'))return; var s=document.createElement('style'); s.id='navCss';
   s.textContent='.nav-hud{position:fixed;top:46px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(12,18,15,.94);color:#eafaea;border:1px solid #2a4a2a;border-radius:14px;padding:10px 12px;box-shadow:0 8px 30px rgba(0,0,0,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);width:min(92vw,360px);font-family:-apple-system,system-ui,sans-serif}'+
   '.nav-row{display:flex;align-items:center;gap:12px}'+
-  '.nav-arrow{font-size:30px;line-height:1;color:#37d684;transition:transform .25s ease;flex:none;width:34px;text-align:center}'+
+  '.nav-arrow{font-size:30px;line-height:1;color:var(--skin-royal);transition:transform .25s ease;flex:none;width:34px;text-align:center}'+
   '.nav-info{flex:1;min-width:0}.nav-dist{font-size:26px;font-weight:900;line-height:1;color:#eafaea}'+
   '.nav-dir{font-size:12px;color:#bfe6cd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
   '.nav-stop{flex:none;background:#3a1414;color:#ffb3a8;border:1px solid #7a2b22;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}'+
-  '.nav-sub{font-size:11px;color:#9ac49a;margin-top:6px;text-align:center}'+
+  '.nav-sub{font-size:11px;color:var(--text-2);margin-top:6px;text-align:center}'+
   '.nav-target .nav-tg{width:20px;height:20px;border-radius:50%;background:rgba(55,214,132,.3);border:3px solid #37d684;box-shadow:0 0 0 2px rgba(0,0,0,.35)}';
   document.head.appendChild(s); }
 function navStartQuadra(id){ var c=(typeof quadraCenter==='function')?quadraCenter(id):null; if(!c){ alert('Esta quadra não tem geometria no mapa.'); return; } navStart(c[0],c[1],'Quadra '+quadraNome(id)); }
@@ -6035,7 +6035,7 @@ function _isoShift(iso,days){
 }
 function _stxCopyFallback(text){ try{ var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=document.execCommand('copy'); document.body.removeChild(ta); return ok; }catch(e){ return false; } }
 function _stxCopy(text){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function(){return true;},function(){return _stxCopyFallback(text);}); }catch(e){} return Promise.resolve(_stxCopyFallback(text)); }
-function _stxToast(msg, ms){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:#1f5a2a;color:#eafaea;padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none;max-width:min(92vw,520px);white-space:normal;text-align:center;line-height:1.35'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt);
+function _stxToast(msg, ms){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:var(--acao-bg);color:var(--acao-ink);padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none;max-width:min(92vw,520px);white-space:normal;text-align:center;line-height:1.35'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt);
   /* 1,9 s dá para "✓ salvo". Não dá para uma frase que explica algo e pede uma
      ação — some antes de ser lida, e aí o aviso é o mesmo que silêncio. Quem
      precisa de mais tempo pede; ninguém mais muda de comportamento. */
@@ -7016,9 +7016,9 @@ function showStudyExportModal(qid,s,from,to){
   m.innerHTML='<div class="ndvi-modal-box" style="max-width:620px">'+
     '<div class="ndvi-modal-top"><b>'+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
     '<div class="ndvi-status"><b>Para a SUA planilha (modelo.xls):</b> cabeçalho, tratamentos, clima e grade (a/b/c/d/média/E%/grupo) nas células certas — <b>sem despejar rótulos nem seções extras</b>.<br>• <b>Modelo limpo</b>: cole em <b>A1</b> de uma cópia <b>em branco</b> do modelo (Excel ou Sheets).<br>• <b>Só dados</b>: no <b>Excel</b>, sobre o seu arquivo já preenchido — <b>Colar Especial → Pular células em branco</b> em A1 (preenche só os dados, não apaga nada).</div>'+
-    '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:#0a110a;color:#cfe0cf;border:1px solid #2a3a2a;border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
+    '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
     '<div id="stxNdvi" style="margin-top:8px"></div>'+
-    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">Copiar modelo Agracta</button><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">Só dados Agracta</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+s.id+'\')">'+ic('download',13)+' Escolher planilha</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">Copiar tudo (livre)</button></div>'+
+    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:var(--acao-bg);color:var(--acao-ink);border-color:var(--acao-bg)" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">Copiar modelo Agracta</button><button class="ndvi-ix" style="flex:1 1 46%;background:var(--acao-bg);color:var(--acao-ink);border-color:var(--acao-bg)" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">Só dados Agracta</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+s.id+'\')">'+ic('download',13)+' Escolher planilha</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">Copiar tudo (livre)</button></div>'+
     '<div style="margin-top:10px;padding:9px;border:1px solid #31513a;border-radius:9px"><b style="font-size:12px">Protocolo Sinergista</b><div class="ndvi-status">Segundo formato, em inglês, sem substituir o modelo Agracta.</div><div class="gr-btns" style="margin-top:7px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaModelo(\''+qid+'\',\''+s.id+'\')">Copiar modelo</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaDados(\''+qid+'\',\''+s.id+'\')">Só dados</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="downloadStudySinergista(\''+qid+'\',\''+s.id+'\')">'+ic('download',13)+' Baixar</button></div></div>'+
     '<div class="gr-btns" style="margin-top:10px"><button class="gr-cancel" style="flex:1" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
   '</div>';
@@ -8960,7 +8960,7 @@ function _calcCss(){
   '.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.calc-f{display:flex;flex-direction:column;gap:3px}.calc-f.full{grid-column:1 / -1}'+
   '.calc-lab{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3,#7c8a80);font-weight:800}'+
   '.calc-inp,.calc-sel{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;color:var(--text,#e8efe9);padding:9px;font-size:14px;outline:none;width:100%;box-sizing:border-box}'+
-  '.calc-inp:focus{border-color:#2e7d3e}'+
+  '.calc-inp:focus{border-color:var(--skin-selection)}'+
   '.calc-t{font-size:11px;border-collapse:collapse;width:100%;margin-top:4px}.calc-t th,.calc-t td{padding:6px 5px;border-bottom:1px solid var(--border,#26322b);text-align:right}.calc-t th:first-child,.calc-t td:first-child{text-align:left}.calc-t th{color:var(--text-3,#7c8a80);font-size:10px;text-transform:uppercase;letter-spacing:.4px}'+
   '.calc-tname{color:#9fe0b6;font-weight:700}.calc-terr{color:#ff9a8a;font-size:10px}.calc-empty{color:#8aa88a;font-size:12px;padding:10px 0;text-align:center}'+
   '.calc-card{background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:11px;padding:9px 11px;margin-bottom:8px}.calc-cardh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}.calc-kv{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:11px}.calc-kv span{color:var(--text-2,#9fb1a5)}.calc-kv b{color:var(--text,#e8efe9);font-weight:700}'+
@@ -8977,7 +8977,7 @@ function _calcCss(){
   '.calc-mixr.falta{background:rgba(251,191,36,.10)}.calc-mixr.falta span:first-child{color:var(--text,#e8efe9);font-weight:600}'+
   '.calc-mixr.falta b,.calc-mixr.falta span:not(:first-child){color:#fbbf24;font-weight:700}'+
   '.calc-prep{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin:2px 0 7px;padding:7px 9px;border-radius:8px;background:rgba(74,170,105,.10);border:1px solid rgba(95,190,125,.24)}'+
-  '.calc-prep span{font-size:9px;letter-spacing:.7px;font-weight:900;color:#82c99a}.calc-prep b{font-size:15px;color:var(--text,#e8efe9)}.calc-prep small{font-size:10px;color:var(--text-2,#9fb1a5)}'+
+  '.calc-prep span{font-size:9px;letter-spacing:.7px;font-weight:900;color:var(--text-2)}.calc-prep b{font-size:15px;color:var(--text,#e8efe9)}.calc-prep small{font-size:10px;color:var(--text-2,#9fb1a5)}'+
   '.calc-prep.bad{background:rgba(210,75,65,.10);border-color:rgba(230,100,85,.32)}.calc-prep.bad span{color:#ff9a8a}'+
   '.calc-eq{display:block;font-style:normal;font-size:10px;color:var(--text-3,#7f9085);margin-top:1px}'+
   '.calc-warn{color:#fbbf24;font-size:10px;margin-top:4px}'+
@@ -8986,7 +8986,7 @@ function _calcCss(){
   '.calc-cfg{border:1px solid var(--border,#26322b);border-radius:10px;margin:6px 0 8px;overflow:hidden}'+
   '.calc-cfgh{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;background:var(--surface-3,#111a16)}'+
   '.calc-cfgr{flex:1;min-width:0;font-size:11.5px;font-weight:700;color:var(--text,#e8efe9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
-  '.calc-cfgb{flex:0 0 auto;font-size:10.5px;font-weight:800;color:#82c99a}'+
+  '.calc-cfgb{flex:0 0 auto;font-size:10.5px;font-weight:800;color:var(--text-2)}'+
   '.calc-cfg .calc-grid{padding:8px 10px}'+
   '.calc-abas{display:flex;gap:5px;overflow-x:auto;padding:1px 0 7px;-webkit-overflow-scrolling:touch}'+
   '.calc-aba{flex:0 0 auto;border:1px solid var(--border,#26322b);background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border-radius:999px;padding:6px 13px;font:800 12px inherit;cursor:pointer}'+
@@ -9000,12 +9000,12 @@ function _calcCss(){
   '.calc-inpi{width:60px;flex:0 0 60px;background:var(--surface-3,#111a16);border:1px solid var(--border,#26322b);color:var(--text,#e8efe9);border-radius:6px;padding:3px 5px;font:700 11px inherit}'+
   '.calc-seli{flex:1;min-width:60px;max-width:118px;background:var(--surface-3,#111a16);border:1px solid var(--border,#26322b);color:var(--text,#e8efe9);border-radius:6px;padding:3px 4px;font:600 10.5px inherit}'+
   '.calc-mixr.ed{align-items:center}'+
-  '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:#1f5a2a;color:#eafaea}.calc-close{background:#222;color:#bbb}';
+  '.calc-actions{display:flex;gap:8px;margin-top:10px}.calc-actions button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer}.calc-copy{background:var(--acao-bg);color:var(--acao-ink)}.calc-close{background:#222;color:#bbb}';
     s.textContent+='.calc-mem{margin-top:12px;border-top:1px solid rgba(255,255,255,.10);padding-top:10px}'+
    '.calc-memh{font-size:10px;letter-spacing:.8px;color:#9fb1a5;font-weight:700;margin-bottom:6px}'+
    '.calc-memrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}'+
    '.calc-memrow select{flex:1 1 160px;min-width:0;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.14);color:#e9ede9;border-radius:7px;padding:7px 8px;font-size:12.5px;font-family:inherit}'+
-   '.calc-memrow button{flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:8px 13px;font-size:11.5px;font-weight:700;cursor:pointer}'+
+   '.calc-memrow button{flex:none;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:7px;padding:8px 13px;font-size:11.5px;font-weight:700;cursor:pointer}'+
    '.calc-memrow button:hover{background:#246a31}'+
    '.calc-memmsg{margin-top:6px;font-size:10.5px;color:#7f8e84;line-height:1.5}';
   /* barra e calibracao */
@@ -15373,17 +15373,17 @@ function openRandomizacaoModal(qid,sid){
   if(!m){ m=document.createElement('div'); m.id='rzModal'; m.onclick=function(e){ if(e.target===m) closeRandomizacaoModal(); }; document.body.appendChild(m); }
   var ids=(study.tratamentos||[]).map(function(t){return t.id;}).join(', ');
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:flex-start;justify-content:center;z-index:3300;overflow:auto;padding:18px 10px';
-  m.innerHTML='<div style="background:#0d150d;border:1px solid #2a3a2a;border-radius:12px;width:520px;max-width:96vw;color:#d0d8d0;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.6)">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="font-size:16px;font-weight:800;color:#afa">Randomização</div><div style="font-size:11px;color:#8aa88a;margin-top:2px">'+esc(study.tratamentos.length+' tratamentos × '+study.numRepeticoes+' repetições')+'</div></div><button onclick="closeRandomizacaoModal()" aria-label="Fechar randomização" title="Fechar" style="background:none;border:none;color:#aaa;font-size:24px;cursor:pointer">×</button></div>'+
-    '<div style="font-size:12px;color:#9a8;line-height:1.5;margin-bottom:8px">Cole uma repetição por linha, na ordem das parcelas. Pode usar <b>T1 T3 T2</b> ou só <b>1 3 2</b>. Tratamentos esperados: '+esc(ids)+'.</div>'+
-    '<textarea id="rzText" rows="9" style="width:100%;box-sizing:border-box;background:#050805;border:1px solid #2a3a2a;color:#eaf3ed;border-radius:8px;padding:10px;font:14px ui-monospace,Menlo,monospace;line-height:1.45">'+esc(randomizacaoToText(study))+'</textarea>'+
-    '<div id="rzErr" style="min-height:18px;color:#ff9a8a;font-size:12px;margin-top:7px"></div>'+
+  m.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;width:520px;max-width:96vw;color:var(--text);padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.6)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="font-size:16px;font-weight:800;color:var(--ag-ok)">Randomização</div><div style="font-size:11px;color:var(--text-2);margin-top:2px">'+esc(study.tratamentos.length+' tratamentos × '+study.numRepeticoes+' repetições')+'</div></div><button onclick="closeRandomizacaoModal()" aria-label="Fechar randomização" title="Fechar" style="background:none;border:none;color:var(--text-2);font-size:24px;cursor:pointer">×</button></div>'+
+    '<div style="font-size:12px;color:var(--text-2);line-height:1.5;margin-bottom:8px">Cole uma repetição por linha, na ordem das parcelas. Pode usar <b>T1 T3 T2</b> ou só <b>1 3 2</b>. Tratamentos esperados: '+esc(ids)+'.</div>'+
+    '<textarea id="rzText" rows="9" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font:14px ui-monospace,Menlo,monospace;line-height:1.45">'+esc(randomizacaoToText(study))+'</textarea>'+
+    '<div id="rzErr" style="min-height:18px;color:var(--ag-err);font-size:12px;margin-top:7px"></div>'+
     '<div style="border-top:1px solid #1a2a1a;margin-top:10px;padding-top:10px">'+
-      '<div style="font-size:12px;font-weight:800;color:#9ac49a;margin-bottom:6px">Biblioteca de randomizações ('+RZLIB.length+'/20)</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="rzLibName" value="'+esc(study.codigo||'Randomização')+'" placeholder="Nome para salvar" style="flex:1;min-width:170px;background:#050805;border:1px solid #2a3a2a;color:#eaf3ed;border-radius:8px;padding:9px;font-size:13px"><button onclick="saveRandomizacaoLibrary()" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:9px 11px;font-weight:800;cursor:pointer">Salvar na biblioteca</button></div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><select id="rzLibSelect" style="flex:1;min-width:190px;background:#050805;border:1px solid #2a3a2a;color:#eaf3ed;border-radius:8px;padding:9px;font-size:13px">'+_rzLibOptions(study)+'</select><button onclick="applyRandomizacaoLibrary()" style="background:#18251b;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:9px 11px;font-weight:800;cursor:pointer">Usar salva</button><button onclick="deleteRandomizacaoLibrary()" style="background:#3a1a1a;color:#f8a0a0;border:1px solid #5a2a2a;border-radius:8px;padding:9px 11px;font-weight:800;cursor:pointer">Excluir</button></div>'+
+      '<div style="font-size:12px;font-weight:800;color:var(--ag-ok);margin-bottom:6px">Biblioteca de randomizações ('+RZLIB.length+'/20)</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="rzLibName" value="'+esc(study.codigo||'Randomização')+'" placeholder="Nome para salvar" style="flex:1;min-width:170px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px;font-size:13px"><button onclick="saveRandomizacaoLibrary()" style="background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:9px 11px;font-weight:800;cursor:pointer">Salvar na biblioteca</button></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><select id="rzLibSelect" style="flex:1;min-width:190px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px;font-size:13px">'+_rzLibOptions(study)+'</select><button onclick="applyRandomizacaoLibrary()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-weight:800;cursor:pointer">Usar salva</button><button onclick="deleteRandomizacaoLibrary()" style="background:#3a1a1a;color:var(--ag-err);border:1px solid #5a2a2a;border-radius:8px;padding:9px 11px;font-weight:800;cursor:pointer">Excluir</button></div>'+
     '</div>'+
-    '<div style="display:flex;gap:8px;margin-top:12px"><button onclick="saveRandomizacaoModal()" style="flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:11px;font-weight:800;cursor:pointer">Salvar ordem</button><button onclick="resetRandomizacaoAuto()" style="background:#18251b;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:11px;font-weight:800;cursor:pointer">Gerar automática</button><button onclick="closeRandomizacaoModal()" style="background:#222;color:#bbb;border:none;border-radius:8px;padding:11px;font-weight:800;cursor:pointer">Cancelar</button></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px"><button onclick="saveRandomizacaoModal()" style="flex:1;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:11px;font-weight:800;cursor:pointer">Salvar ordem</button><button onclick="resetRandomizacaoAuto()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:11px;font-weight:800;cursor:pointer">Gerar automática</button><button onclick="closeRandomizacaoModal()" style="background:#222;color:var(--text-2);border:none;border-radius:8px;padding:11px;font-weight:800;cursor:pointer">Cancelar</button></div>'+
   '</div>';
   setTimeout(function(){ var t=document.getElementById('rzText'); if(t)t.focus(); },60);
 }
@@ -17896,11 +17896,11 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-trat small{display:block;margin-top:1px;font-size:10px;font-weight:500;opacity:.8}'+
   '.av-trat small.av-trat-tag{font-style:italic;opacity:.65}'+
   '.av-cellwrap{display:flex;align-items:center;gap:3px}'+
-  '.av-step{flex:none;width:30px;height:32px;border:1px solid var(--border,#2a3a2a);background:rgba(127,170,127,.14);color:#9ac49a;border-radius:7px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation}'+
+  '.av-step{flex:none;width:30px;height:32px;border:1px solid var(--border,#2a3a2a);background:var(--surface-2);color:var(--text);border-radius:7px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation}'+
   '.av-step:active{background:rgba(127,170,127,.3)}'+
   '.av-cell{width:48px;box-sizing:border-box;background:var(--surface,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:6px;padding:5px 3px;font-size:13px;text-align:center}'+
   '.av-cell-num{width:60px}'+
-  '.av-addcol{background:rgba(127,170,127,.15);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'+
+  '.av-addcol{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'+
   '.av-delcol{background:none;border:none;color:#a77;cursor:pointer;font-size:13px;margin-left:5px;padding:0}.av-delcol:hover{color:#ff8a80}'+
   '.av-hint{font-size:11px;color:#9a8;font-style:italic;margin:4px 0}.av-gridbtns{margin-top:6px}'+
   /* razão n/N, escala e sub-amostras */
@@ -17912,36 +17912,36 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-subbtn.cheia{border-color:rgba(55,214,132,.55)}.av-subbtn.cheia small{color:#9fe0b6}'+
   '.av-sub-ovl{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3400;display:none;align-items:center;justify-content:center;padding:16px}'+
   '.av-sub-box{background:var(--surface,#0e150e);border:1px solid var(--border,#2a3a2a);border-radius:14px;max-width:400px;width:100%;padding:15px;box-sizing:border-box;color:var(--text,#eaf3ed);box-shadow:0 12px 40px rgba(0,0,0,.5)}'+
-  '.av-sub-title{font-size:15px;font-weight:800;color:var(--accent,#37d684)}'+
+  '.av-sub-title{font-size:15px;font-weight:800;color:var(--text)}'+
   '.av-sub-sub{font-size:11px;color:#9a8;margin:2px 0 10px}'+
   '.av-sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:7px}'+
   '.av-sub-f{display:flex;flex-direction:column;gap:2px}.av-sub-f label{font-size:9px;color:#7c8a80;font-weight:700;text-transform:uppercase;letter-spacing:.4px}'+
   '.av-sub-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:8px;padding:9px 4px;font-size:16px;text-align:center;font-weight:700}'+
-  '.av-sub-inp:focus{border-color:#37d684;outline:none}'+
-  '.av-sub-res{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px;padding-top:9px;border-top:1px solid var(--border,#2a3a2a);font-size:12px;color:#9a8}'+
+  '.av-sub-inp:focus{border-color:var(--skin-selection);outline:none}'+
+  '.av-sub-res{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px;padding-top:9px;border-top:1px solid var(--border,#2a3a2a);font-size:12px;color:var(--text-2)}'+
   '.av-sub-res b{font-size:18px;color:var(--text,#eafaea)}'+ /* var(--text): a caixa segue o tema, texto fixo claro sumia no tema claro */
   '.av-sub-warn{font-size:10px;color:#fbbf24;margin-top:5px}'+
   '.av-sub-btns{display:flex;gap:8px;margin-top:12px}.av-sub-btns button{flex:1;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer}'+
-  '.av-sub-ok{background:#1f5a2a;color:#eafaea}.av-sub-clr{flex:none!important;background:#222;color:#bbb;padding:11px 13px!important}'+
+  '.av-sub-ok{background:var(--acao-bg);color:var(--acao-ink)}.av-sub-clr{flex:none!important;background:#222;color:#bbb;padding:11px 13px!important}'+
   '.av-auto-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px}'+
-  '.av-auto-toggle{background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer}'+
-  '.av-auto-toggle.off{background:#18251b;color:#9ac49a;border:1px solid #2a3a2a}'+
+  '.av-auto-toggle{background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer}'+
+  '.av-auto-toggle.off{background:var(--surface);color:var(--text);border:1px solid var(--border)}'+
   '.av-auto-note{font-size:11px;color:#9a8}'+
   '.av-auto-box{background:rgba(31,90,42,.13);border:1px solid #2a4a2a;border-radius:10px;padding:10px;margin:4px 0 10px}'+
   '.av-auto-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px;font-size:12px;color:#9ac49a;font-weight:700}'+
   '.av-auto-card{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}'+
   '.av-auto-main{font-size:24px;font-weight:900;color:#eafaea;line-height:1.05}'+
   '.av-auto-sub{font-size:12px;color:#9a8;margin-top:4px}'+
-  '.av-auto-input{width:112px;background:#050805;border:1px solid #37d684;color:#fff;border-radius:10px;padding:10px;font-size:28px;font-weight:900;text-align:center}'+
-  '.av-auto-count{display:flex;gap:6px;align-items:center}.av-auto-count button{width:46px;height:48px;border-radius:10px;border:1px solid #2a4a2a;background:#1f5a2a;color:#eafaea;font-size:26px;font-weight:900}'+
-  '.av-auto-nav{display:flex;gap:8px;margin-top:10px}.av-auto-nav button{flex:1;background:#18251b;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}'+
-  '.av-auto-prog{height:7px;background:#18251b;border-radius:6px;overflow:hidden;margin-bottom:3px}.av-auto-prog-fill{height:100%;background:#37d684;transition:width .15s}'+
+  '.av-auto-input{width:112px;background:var(--surface);border:1px solid var(--skin-selection);color:var(--text);border-radius:10px;padding:10px;font-size:28px;font-weight:900;text-align:center}'+
+  '.av-auto-count{display:flex;gap:6px;align-items:center}.av-auto-count button{width:46px;height:48px;border-radius:10px;border:1px solid var(--acao-bg);background:var(--acao-bg);color:var(--acao-ink);font-size:26px;font-weight:900}'+
+  '.av-auto-nav{display:flex;gap:8px;margin-top:10px}.av-auto-nav button{flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}'+
+  '.av-auto-prog{height:7px;background:var(--skin-edge);border-radius:6px;overflow:hidden;margin-bottom:3px}.av-auto-prog-fill{height:100%;background:var(--skin-royal);transition:width .15s}'+
   '.av-auto-progtxt{font-size:10px;color:#9a8;text-align:right;margin-bottom:8px}'+
   '.av-auto-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}'+
-  '.av-auto-preset{flex:1 1 18%;min-width:56px;background:#22262c;color:#eafaea;border:1px solid rgba(55,214,132,.35);border-radius:10px;padding:13px 4px;font-size:19px;font-weight:800;cursor:pointer}.av-auto-preset.on{background:#1f5a2a;border-color:#37d684}.av-auto-preset:active{transform:scale(.96)}'+
+  '.av-auto-preset{flex:1 1 18%;min-width:56px;background:#22262c;color:#eafaea;border:1px solid rgba(55,214,132,.35);border-radius:10px;padding:13px 4px;font-size:19px;font-weight:800;cursor:pointer}.av-auto-preset.on{background:var(--skin-selection);border-color:var(--skin-selection);color:var(--skin-selection-ink)}.av-auto-preset:active{transform:scale(.96)}'+
   '.avcol-ovl{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3200;display:none;align-items:center;justify-content:center;padding:16px}'+
   '.avcol-box{background:var(--surface,#0e150e);border:1px solid var(--border,#2a3a2a);border-radius:14px;max-width:380px;width:100%;padding:16px;box-sizing:border-box;font:13px system-ui,sans-serif;color:var(--text,#eaf3ed);box-shadow:0 12px 40px rgba(0,0,0,.5)}'+
-  '.avcol-title{font-size:15px;font-weight:700;color:var(--accent,#37d684);margin-bottom:6px}'+
+  '.avcol-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px}'+
   '.avcol-lab{display:block;font-size:11px;color:var(--text-3,#8aa88a);font-weight:600;letter-spacing:.3px;margin:10px 0 4px}'+
   '.avcol-inp{width:100%;box-sizing:border-box;background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:8px;padding:10px;font-size:15px}'+
   '.avcol-types{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}'+
@@ -17952,9 +17952,9 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.avcol-note{font-size:10px;color:var(--text-3,#8aa88a);line-height:1.4;margin-top:7px}'+
   '.avcol-type{flex:1;display:flex;flex-direction:column;gap:2px;background:var(--surface-2,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:9px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;text-align:center}'+
   '.avcol-type small{font-weight:400;font-size:10px;color:var(--text-3,#8aa88a)}'+
-  '.avcol-type.on{border-color:var(--accent,#37d684);background:rgba(55,214,132,.12);color:var(--accent,#37d684)}'+
+  '.avcol-type.on{border-color:var(--skin-selection);background:var(--skin-selection);color:var(--skin-selection-ink)}'+
   '.avcol-btns{display:flex;gap:8px;margin-top:14px}'+
-  '.avcol-ok{flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:9px;padding:11px;font-weight:700;font-size:14px;cursor:pointer}'+
+  '.avcol-ok{flex:1;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:9px;padding:11px;font-weight:700;font-size:14px;cursor:pointer}'+
   '.avcol-cancel{background:#222;color:#bbb;border:none;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer}'+
   /* NÃO DIMINUI: a leitura abaixo da avaliação anterior sai em vermelho, sem
      travar nada. A cor é a de erro do padrão (cores-padrao.css), legível nos
@@ -19832,21 +19832,21 @@ function openAvalRecovery(){
   var m=document.getElementById('avalRecModal');
   if(!m){ m=document.createElement('div'); m.id='avalRecModal'; m.style.cssText='position:fixed;inset:0;z-index:3500;background:rgba(0,0,0,.66);display:flex;align-items:flex-start;justify-content:center;padding:18px 12px;overflow-y:auto;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   m.style.display='flex';
-  m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:520px;width:100%;padding:18px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7)">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Recuperação de avaliações</b><button onclick="document.getElementById(\'avalRecModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px;line-height:1.5">Diário local deste aparelho (caixa-preta, independente da nuvem). Toda avaliação salva aqui fica registrada para recuperação.</div>'+
-    '<div id="avalRecList" style="max-height:46vh;overflow-y:auto;margin-top:10px;border:1px solid #2a3a2a;border-radius:10px;padding:8px;background:#090f0a">Carregando…</div>'+
-    '<button onclick="exportAvalJournal()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:9px;padding:11px;font-weight:800;margin-top:12px;cursor:pointer">Exportar diário (JSON)</button>'+
+  m.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;max-width:520px;width:100%;padding:18px;box-sizing:border-box;color:var(--text);font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Recuperação de avaliações</b><button onclick="document.getElementById(\'avalRecModal\').style.display=\'none\'" style="background:none;border:none;color:var(--text-2);font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px;line-height:1.5">Diário local deste aparelho (caixa-preta, independente da nuvem). Toda avaliação salva aqui fica registrada para recuperação.</div>'+
+    '<div id="avalRecList" style="max-height:46vh;overflow-y:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--surface-2)">Carregando…</div>'+
+    '<button onclick="exportAvalJournal()" style="width:100%;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:9px;padding:11px;font-weight:800;margin-top:12px;cursor:pointer">Exportar diário (JSON)</button>'+
   '</div>';
   journalGetAll().then(function(arr){
     var box=document.getElementById('avalRecList'); if(!box) return;
-    if(!arr.length){ box.innerHTML='<div style="color:#8aa88a;font-size:12px;text-align:center;padding:10px">Nenhuma avaliação registrada neste aparelho ainda.</div>'; return; }
+    if(!arr.length){ box.innerHTML='<div style="color:var(--text-2);font-size:12px;text-align:center;padding:10px">Nenhuma avaliação registrada neste aparelho ainda.</div>'; return; }
     arr=arr.slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
-    box.innerHTML='<div style="font-size:11px;color:#8aa88a;margin-bottom:6px">'+arr.length+' registro(s) — mais recente primeiro</div>'+arr.slice(0,300).map(function(r){
+    box.innerHTML='<div style="font-size:11px;color:var(--text-2);margin-bottom:6px">'+arr.length+' registro(s) — mais recente primeiro</div>'+arr.slice(0,300).map(function(r){
       var d=new Date(r.ts||0), dt=isNaN(d)?'':_agFormatDateTime(d);
       return '<div style="border-bottom:1px solid #1f2c22;padding:7px 0;font-size:12px">'+
-        '<div style="color:#cfe0d4;font-weight:700">'+esc(r.quadra||r.qid||'—')+' · '+esc(r.data||'')+(r.tipo?' · '+esc(r.tipo):'')+'</div>'+
-        '<div style="color:#8aa88a;font-size:11px">'+_avjCells(r)+' valor(es) · '+esc(r.who||'—')+' · '+dt+'</div>'+
+        '<div style="color:var(--text);font-weight:700">'+esc(r.quadra||r.qid||'—')+' · '+esc(r.data||'')+(r.tipo?' · '+esc(r.tipo):'')+'</div>'+
+        '<div style="color:var(--text-2);font-size:11px">'+_avjCells(r)+' valor(es) · '+esc(r.who||'—')+' · '+dt+'</div>'+
       '</div>';
     }).join('');
   });
@@ -20206,42 +20206,42 @@ function safetyApply(snap){
 }
 /* ===================== HISTÓRICO DA NUVEM (restaurar versões) ===================== */
 function _chShell(inner){
-  return '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Histórico da nuvem</b><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cada gravação guarda a versão anterior na nuvem. Restaurar guarda o estado atual antes — nada se perde.</div>'+
+  return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:var(--text);max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Histórico da nuvem</b><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="background:none;border:none;color:var(--text-2);font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">Cada gravação guarda a versão anterior na nuvem. Restaurar guarda o estado atual antes — nada se perde.</div>'+
     inner+
-    '<div style="margin-top:12px"><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
+    '<div style="margin-top:12px"><button onclick="document.getElementById(\'chModal\').style.display=\'none\'" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
   '</div>';
 }
 function openCloudHistory(){
   var m=document.getElementById('chModal');
   if(!m){ m=document.createElement('div'); m.id='chModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   m.style.display='flex';
-  m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
+  m.innerHTML=_chShell('<div style="color:var(--text-2);font-size:12px;margin:16px 0;text-align:center">Carregando…</div>');
   var V=window.AgractaVersoes;
   if(!V || !V.disponivel()){
-    m.innerHTML=_chShell('<div style="color:#fbbf24;font-size:13px;margin-top:12px">Sem conexão com a nuvem agora. O histórico fica no servidor e precisa de internet para abrir.</div>'+
-      '<button onclick="document.getElementById(\'chModal\').style.display=\'none\';openBackups()" style="margin-top:10px;width:100%;background:#16301c;color:#eaf3ed;border:1px solid #2a3a2a;border-radius:9px;padding:10px">Abrir os backups deste aparelho</button>');
+    m.innerHTML=_chShell('<div style="color:var(--ag-warn);font-size:13px;margin-top:12px">Sem conexão com a nuvem agora. O histórico fica no servidor e precisa de internet para abrir.</div>'+
+      '<button onclick="document.getElementById(\'chModal\').style.display=\'none\';openBackups()" style="margin-top:10px;width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px">Abrir os backups deste aparelho</button>');
     return;
   }
   V.listar(600).then(function(grupos){
     if(!grupos.length){
-      m.innerHTML=_chShell('<div style="color:#8aa88a;font-size:13px;margin-top:12px">Nenhuma versão guardada ainda. A partir desta atualização, cada gravação deixa a versão anterior no servidor — a lista começa na próxima vez que você salvar algo.</div>');
+      m.innerHTML=_chShell('<div style="color:var(--text-2);font-size:13px;margin-top:12px">Nenhuma versão guardada ainda. A partir desta atualização, cada gravação deixa a versão anterior no servidor — a lista começa na próxima vez que você salvar algo.</div>');
       return;
     }
     var html=grupos.slice(0,60).map(function(g){
       var dt=g.em?new Date(g.em):null;
       var quando=(dt&&!isNaN(dt.getTime()))?_agFormatDateTime(dt,{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'hora do servidor pendente';
       var quem=_identidadeBPL(g.porNome,g.por).nome;
-      return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-        '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+esc(quando)+'</div>'+
-        '<div style="font-size:11px;color:#8aa88a">'+esc(quem||'—')+' · gravação '+esc(String(g.rev))+'</div>'+
-        '<div style="font-size:11px;color:#b9c9bd">'+esc(VersoesCore.resumo(g))+(g.grandes?' · '+g.grandes+' grande(s) demais para guardar':'')+'</div></div>'+
-        '<button onclick="cloudHistoryRestore('+(+g.rev)+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer" title="Volta tudo para como estava logo antes desta gravação">Voltar para antes</button></div>';
+      return '<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div style="min-width:0"><div style="font-size:13px;color:var(--text);font-weight:600">'+esc(quando)+'</div>'+
+        '<div style="font-size:11px;color:var(--text-2)">'+esc(quem||'—')+' · gravação '+esc(String(g.rev))+'</div>'+
+        '<div style="font-size:11px;color:var(--text-2)">'+esc(VersoesCore.resumo(g))+(g.grandes?' · '+g.grandes+' grande(s) demais para guardar':'')+'</div></div>'+
+        '<button onclick="cloudHistoryRestore('+(+g.rev)+')" style="flex:none;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer" title="Volta tudo para como estava logo antes desta gravação">Voltar para antes</button></div>';
     }).join('');
-    m.innerHTML=_chShell('<div style="font-size:11px;color:#8aa88a;margin-top:8px">Hora e autor são os do servidor. Estes registros não podem ser editados nem apagados pelo app.</div>'+html);
+    m.innerHTML=_chShell('<div style="font-size:11px;color:var(--text-2);margin-top:8px">Hora e autor são os do servidor. Estes registros não podem ser editados nem apagados pelo app.</div>'+html);
   }, function(e){
-    m.innerHTML=_chShell('<div style="color:#fbbf24;font-size:13px;margin-top:12px">Não consegui ler o histórico: '+esc((e&&e.message)||'rede')+'.</div>');
+    m.innerHTML=_chShell('<div style="color:var(--ag-warn);font-size:13px;margin-top:12px">Não consegui ler o histórico: '+esc((e&&e.message)||'rede')+'.</div>');
   });
 }
 function cloudHistoryRestore(rev){
@@ -20335,13 +20335,13 @@ function openIntegridade(){
   var sevcor={alta:'#ffb3a8',media:'#fbbf24',baixa:'#9ac49a'}, sevlab={alta:'CRÍTICO',media:'ATENÇÃO',baixa:'INFO'};
   var m=document.getElementById('integModal');
   if(!m){ m=document.createElement('div'); m.id='integModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
-  var body = ig.length ? ig.map(function(x){ return '<div style="border:1px solid #2a3a2a;border-left:3px solid '+(sevcor[x.sev]||'#888')+';border-radius:8px;padding:9px 11px;margin-top:7px"><div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:'+(sevcor[x.sev]||'#888')+'">'+(sevlab[x.sev]||'')+'</div><div style="font-size:13px;color:#eaf3ed;margin-top:2px">'+esc(x.msg)+'</div></div>'; }).join('')
-    : '<div style="text-align:center;color:#9ac49a;font-size:14px;margin:18px 0"><div style="font-size:30px;line-height:1">✓</div>Tudo certo — nenhuma inconsistência encontrada.</div>';
-  m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Verificação de integridade</b><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Confere estudos, tratamentos, testemunha e vínculos. Não altera nada — só aponta o que revisar.'+(ig.length?(' <b style="color:#fbbf24">'+ig.length+' aviso(s).</b>'):'')+'</div>'+
+  var body = ig.length ? ig.map(function(x){ return '<div style="border:1px solid var(--border);border-left:3px solid '+(sevcor[x.sev]||'#888')+';border-radius:8px;padding:9px 11px;margin-top:7px"><div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:'+(sevcor[x.sev]||'#888')+'">'+(sevlab[x.sev]||'')+'</div><div style="font-size:13px;color:var(--text);margin-top:2px">'+esc(x.msg)+'</div></div>'; }).join('')
+    : '<div style="text-align:center;color:var(--ag-ok);font-size:14px;margin:18px 0"><div style="font-size:30px;line-height:1">✓</div>Tudo certo — nenhuma inconsistência encontrada.</div>';
+  m.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:var(--text);max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Verificação de integridade</b><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="background:none;border:none;color:var(--text-2);font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">Confere estudos, tratamentos, testemunha e vínculos. Não altera nada — só aponta o que revisar.'+(ig.length?(' <b style="color:var(--ag-warn)">'+ig.length+' aviso(s).</b>'):'')+'</div>'+
     body+
-    '<div style="margin-top:12px"><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
+    '<div style="margin-top:12px"><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
   '</div>';
   m.style.display='flex';
 }
@@ -20354,8 +20354,8 @@ function openArmazenamento(){
   var AC=window.ArmazenamentoCore;
   var m=document.getElementById('armModal');
   if(!m){ m=document.createElement('div'); m.id='armModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
-  if(!AC){ m.innerHTML='<div style="background:#0e150e;color:#eaf3ed;padding:16px;border-radius:14px">O módulo de armazenamento não carregou. Recarregue o app.</div>'; m.style.display='flex'; return; }
-  var md=AC.medir(localStorage), cor={dados:'#37d684',seguranca:'#d69431',cache:'#2f85c9',outros:'#8a948e'};
+  if(!AC){ m.innerHTML='<div style="background:var(--surface);color:var(--text);padding:16px;border-radius:14px">O módulo de armazenamento não carregou. Recarregue o app.</div>'; m.style.display='flex'; return; }
+  var md=AC.medir(localStorage), cor={dados:'var(--ag-ok)',seguranca:'#d69431',cache:'#2f85c9',outros:'#8a948e'};
   var img={rubricas:{n:0,chars:0},outras:{n:0,chars:0}}; try{ img=AC.imagens(data); }catch(e){}
   var fotosNoEstado=0; try{ ensureNotas(); (NOTAS_CAMPO||[]).forEach(function(n){ if(n&&typeof n.foto==='string') fotosNoEstado+=n.foto.length; }); }catch(e){}
   var descart=md.itens.filter(function(i){ return i.descartavel; }), descartChars=descart.reduce(function(a,i){ return a+i.chars; },0);
@@ -20364,30 +20364,30 @@ function openArmazenamento(){
   var leg=['dados','seguranca','cache','outros'].map(function(g){ return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:9px;height:9px;border-radius:2px;background:'+cor[g]+';display:inline-block"></span>'+esc(AC.GRUPOS[g])+' '+_armMB(md.porGrupo[g])+'</span>'; }).join('');
   var top=md.itens.slice(0,8).map(function(i){ return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px solid #1a241c"><span>'+esc(i.rotulo)+'</span><b>'+_armMB(i.chars)+'</b></div>'; }).join('');
   var nSeg=safetyList().length;
-  var h='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Armazenamento do aparelho</b><button onclick="document.getElementById(\'armModal\').style.display=\'none\'" style="background:none;border:0;color:#8aa88a;font-size:22px;cursor:pointer">×</button></div>'+
-    '<div style="margin-top:10px;font-weight:700">Armazenamento rápido: '+Math.round(md.usoPct)+'% <span style="font-weight:400;color:#8aa88a">de ~'+_armMB(md.limite)+' (estimativa)</span></div>'+barra+
-    '<div style="font-size:11px;color:#a7b0aa;line-height:1.9">'+leg+'</div>'+
-    (md.usoPct>80?'<div style="margin-top:6px;padding:8px;border-radius:8px;background:#2a210c;border:1px solid #6b531b;color:#ffd98a;font-size:12px">Quase cheio. Com ele cheio, uma edição pode não gravar aqui — o app segue pelo cofre, mas é melhor liberar espaço.</div>':'')+
+  var h='<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:var(--text);max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Armazenamento do aparelho</b><button onclick="document.getElementById(\'armModal\').style.display=\'none\'" style="background:none;border:0;color:var(--text-2);font-size:22px;cursor:pointer">×</button></div>'+
+    '<div style="margin-top:10px;font-weight:700">Armazenamento rápido: '+Math.round(md.usoPct)+'% <span style="font-weight:400;color:var(--text-2)">de ~'+_armMB(md.limite)+' (estimativa)</span></div>'+barra+
+    '<div style="font-size:11px;color:var(--text-2);line-height:1.9">'+leg+'</div>'+
+    (md.usoPct>80?'<div style="margin-top:6px;padding:8px;border-radius:8px;background:#2a210c;border:1px solid #6b531b;color:var(--ag-warn);font-size:12px">Quase cheio. Com ele cheio, uma edição pode não gravar aqui — o app segue pelo cofre, mas é melhor liberar espaço.</div>':'')+
     '<div style="margin-top:10px">'+top+'</div>'+
     '<div style="margin-top:12px;font-weight:700">Dentro dos seus dados</div>'+
-    '<div style="font-size:12px;color:#a7b0aa;margin-top:3px">'+img.rubricas.n+' rubrica(s): '+_armMB(img.rubricas.chars)+
+    '<div style="font-size:12px;color:var(--text-2);margin-top:3px">'+img.rubricas.n+' rubrica(s): '+_armMB(img.rubricas.chars)+
       (img.outras.n?(' · '+img.outras.n+' outra(s) imagem(ns): '+_armMB(img.outras.chars)):'')+
       (fotosNoEstado?(' · fotos de notas ainda por migrar: '+_armMB(fotosNoEstado)):'')+
       '<br>Rubricas novas já saem recortadas e reduzidas. As já feitas não são mexidas — assinatura feita não se altera.</div>'+
-    '<div style="margin-top:12px;font-weight:700">Banco do aparelho</div><div id="armIdb" style="font-size:12px;color:#a7b0aa;margin-top:3px">medindo…</div>'+
+    '<div style="margin-top:12px;font-weight:700">Banco do aparelho</div><div id="armIdb" style="font-size:12px;color:var(--text-2);margin-top:3px">medindo…</div>'+
     '<div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">'+
-      '<button onclick="armLimparCache()" '+(descartChars?'':'disabled ')+'style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Limpar cache descartável ('+_armMB(descartChars)+')</button>'+
-      '<button onclick="armAjustarCopias()" '+(nSeg?'':'disabled ')+'style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Ajustar cópias de segurança ('+nSeg+' hoje · '+_armMB(md.porGrupo.seguranca)+')</button>'+
-      '<button onclick="armProteger()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Proteger o banco do aparelho contra limpeza automática</button>'+
-      ((typeof isAdmin==='function'&&isAdmin())?'<button onclick="armFotosAntigas()" style="background:#1a2230;color:#a9c7e6;border:1px solid #2a3a4a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fotos antigas no servidor…</button>':'')+
-    '</div><div id="armMsg" style="font-size:12px;color:#9ac49a;margin-top:8px"></div></div>';
+      '<button onclick="armLimparCache()" '+(descartChars?'':'disabled ')+'style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Limpar cache descartável ('+_armMB(descartChars)+')</button>'+
+      '<button onclick="armAjustarCopias()" '+(nSeg?'':'disabled ')+'style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Ajustar cópias de segurança ('+nSeg+' hoje · '+_armMB(md.porGrupo.seguranca)+')</button>'+
+      '<button onclick="armProteger()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Proteger o banco do aparelho contra limpeza automática</button>'+
+      ((typeof isAdmin==='function'&&isAdmin())?'<button onclick="armFotosAntigas()" style="background:#1a2230;color:var(--ag-info);border:1px solid #2a3a4a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fotos antigas no servidor…</button>':'')+
+    '</div><div id="armMsg" style="font-size:12px;color:var(--ag-ok);margin-top:8px"></div></div>';
   m.innerHTML=h; m.style.display='flex';
   try{
     if(navigator.storage&&navigator.storage.estimate) Promise.all([navigator.storage.estimate(), navigator.storage.persisted?navigator.storage.persisted():Promise.resolve(null)]).then(function(r){
       var e=r[0]||{}, el=document.getElementById('armIdb'); if(!el) return;
       el.innerHTML='Em uso: <b>'+_armMB((e.usage||0)/2)+'</b> de '+_armMB((e.quota||0)/2)+' disponíveis. Cofre offline, fotos e diário de avaliações moram aqui.'+
-        (r[1]===true?' <b style="color:#37d684">Protegido.</b>':(r[1]===false?' Ainda não protegido contra limpeza automática.':''));
+        (r[1]===true?' <b style="color:var(--text)">Protegido.</b>':(r[1]===false?' Ainda não protegido contra limpeza automática.':''));
     });
     else { var el=document.getElementById('armIdb'); if(el) el.textContent='Este navegador não informa o tamanho do banco do aparelho.'; }
   }catch(e){}
@@ -20459,16 +20459,16 @@ function _showBackups(list){
   var arr=list.slice().sort(function(a,b){return b.ts-a.ts;});_safetyView=arr;
   var rows=arr.length? arr.map(function(s,i){
     var c=s.counts||_safetyCounts(s), dt=new Date(s.ts);
-    return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-      '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
-      '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
-      '<button onclick="safetyRestoreAt('+i+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
-  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
-  m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cópias automáticas antes de excluir/importar (só neste aparelho). Incluem as observações; mantenha também os arquivos das fotos salvos no aparelho. Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+      '<div style="min-width:0"><div style="font-size:13px;color:var(--text);font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:var(--text-2);font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
+      '<div style="font-size:11px;color:var(--text-2)">'+c.quadras+' quadras · '+(c.itens||0)+' itens · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
+      '<button onclick="safetyRestoreAt('+i+')" style="flex:none;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+  }).join('') : '<div style="color:var(--text-2);font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
+  m.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:var(--text);max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:var(--text-2);font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">Cópias automáticas antes de excluir/importar (só neste aparelho). Incluem as observações; mantenha também os arquivos das fotos salvos no aparelho. Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
     rows+
-    '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Exportar tudo agora (arquivo)</button></div>'+
+    '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Exportar tudo agora (arquivo)</button></div>'+
   '</div>';
   m.style.display='flex';
 }
@@ -21305,21 +21305,21 @@ function openComplianceISMS(){
   var ovl=document.getElementById('ismsOvl');
   if(!ovl){ ovl=document.createElement('div'); ovl.id='ismsOvl'; ovl.style.cssText='position:fixed;inset:0;z-index:3500;background:rgba(0,0,0,.66);display:flex;align-items:flex-start;justify-content:center;padding:16px 10px;overflow-y:auto;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)'; ovl.onclick=function(e){ if(e.target===ovl) ovl.style.display='none'; }; document.body.appendChild(ovl); }
   ovl.style.display='flex';
-  function chip(s){ var c=s==='ok'?'#0f2a1a;color:#37d684;border-color:#245a36':(s==='parcial'?'#2a210c;color:#ffce5a;border-color:#6b531b':'#10202a;color:#7fc0e6;border-color:#274a5a'); var t=s==='ok'?'✓':(s==='parcial'?'parcial':'doc'); return '<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;border:1px solid;background:'+c+'">'+t+'</span>'; }
-  var mapa=_ISMS_MAPA.map(function(r){ return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #1f2c22"><div style="min-width:0"><div style="font-size:11px;color:#cfe0d4;font-weight:700">'+esc(r[0])+'</div><div style="font-size:10px;color:#8aa88a">'+esc(r[1])+'</div></div>'+chip(r[2])+'</div>'; }).join('');
+  function chip(s){ var c=s==='ok'?'var(--ag-ok-bg);color:var(--ag-ok);border-color:var(--ag-ok-line)':(s==='parcial'?'var(--ag-warn-bg);color:var(--ag-warn);border-color:var(--ag-warn-line)':'var(--ag-info-bg);color:var(--ag-info);border-color:var(--ag-info-line)'); var t=s==='ok'?'✓':(s==='parcial'?'parcial':'doc'); return '<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;border:1px solid;background:'+c+'">'+t+'</span>'; }
+  var mapa=_ISMS_MAPA.map(function(r){ return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #1f2c22"><div style="min-width:0"><div style="font-size:11px;color:var(--text);font-weight:700">'+esc(r[0])+'</div><div style="font-size:10px;color:var(--text-2)">'+esc(r[1])+'</div></div>'+chip(r[2])+'</div>'; }).join('');
   var campos=_ISMS_FIELDS.map(function(f){ var big=(['riscos','incidentes','politica','soa','treinamento'].indexOf(f.k)>=0); var v=esc(m[f.k]||'');
-    return '<label style="display:block;margin-top:10px"><span style="font-size:11px;font-weight:700;color:#37d684">'+esc(f.l)+'</span>'+
+    return '<label style="display:block;margin-top:10px"><span style="font-size:11px;font-weight:700;color:var(--text)">'+esc(f.l)+'</span>'+
       (big? '<textarea id="isms_'+f.k+'" rows="3" class="delpwd-inp" style="width:100%;box-sizing:border-box;margin-top:4px;font-size:12px;resize:vertical" placeholder="'+esc(f.ph)+'">'+v+'</textarea>'
           : '<input id="isms_'+f.k+'" class="delpwd-inp" style="width:100%;box-sizing:border-box;margin-top:4px;font-size:12px" placeholder="'+esc(f.ph)+'" value="'+v+'">')+
     '</label>'; }).join('');
-  ovl.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:600px;width:100%;padding:18px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:10px auto;box-shadow:0 20px 60px rgba(0,0,0,.7)">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Conformidade BPL/GLP &amp; ISO/IEC 27001 — ISMS</b><button onclick="document.getElementById(\'ismsOvl\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:10px;color:#8aa88a;margin-top:3px;line-height:1.5">Alinhado a OECD Nº 17/22 (ALCOA+) e ISO 27001:2022. Detalhes em <b>docs/conformidade/</b> e <b>docs/VALIDACAO-SISTEMA.md</b>.</div>'+
-    '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#090f0a"><div style="font-weight:800;color:#37d684;margin-bottom:4px;font-size:12px">Mapa de controles (técnicos — no app)</div>'+mapa+'</div>'+
-    '<div style="margin-top:14px;font-weight:800;color:#37d684;font-size:12px">ISMS do laboratório — preencha (sincroniza + entra no backup)</div>'+
+  ovl.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;max-width:600px;width:100%;padding:18px;box-sizing:border-box;color:var(--text);font:13px system-ui,sans-serif;margin:10px auto;box-shadow:0 20px 60px rgba(0,0,0,.7)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Conformidade BPL/GLP &amp; ISO/IEC 27001 — ISMS</b><button onclick="document.getElementById(\'ismsOvl\').style.display=\'none\'" style="background:none;border:none;color:var(--text-2);font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:10px;color:var(--text-2);margin-top:3px;line-height:1.5">Alinhado a OECD Nº 17/22 (ALCOA+) e ISO 27001:2022. Detalhes em <b>docs/conformidade/</b> e <b>docs/VALIDACAO-SISTEMA.md</b>.</div>'+
+    '<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2)"><div style="font-weight:800;color:var(--text);margin-bottom:4px;font-size:12px">Mapa de controles (técnicos — no app)</div>'+mapa+'</div>'+
+    '<div style="margin-top:14px;font-weight:800;color:var(--text);font-size:12px">ISMS do laboratório — preencha (sincroniza + entra no backup)</div>'+
     campos+
-    '<div style="display:flex;gap:8px;margin-top:14px"><button onclick="saveISMS()" style="flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">Salvar ISMS</button>'+
-      '<button onclick="exportISMS()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer">Exportar (.md)</button></div>'+
+    '<div style="display:flex;gap:8px;margin-top:14px"><button onclick="saveISMS()" style="flex:1;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">Salvar ISMS</button>'+
+      '<button onclick="exportISMS()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer">Exportar (.md)</button></div>'+
   '</div>';
 }
 function saveISMS(){
@@ -21350,16 +21350,16 @@ function openAdminPanel(){
     document.body.appendChild(modal);
   }
   modal.style.display='flex';
-  modal.innerHTML='<div style="width:100%;max-width:350px;background:linear-gradient(135deg,#0e1612,#070a08);border:1px solid rgba(55,214,132,0.25);border-radius:20px;box-shadow:0 20px 50px rgba(0,0,0,0.6),0 0 25px rgba(55,214,132,0.08);padding:24px;color:#eaf3ed;font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box;text-align:center;margin:60px auto 20px auto;position:relative">'+
-    '<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:rgba(55,214,132,0.1);border:1px solid rgba(55,214,132,0.25);border-radius:50%;font-size:22px;color:#37d684;box-shadow:0 0 15px rgba(55,214,132,0.15)">'+ic('lock',22)+'</div>'+
-    '<div style="font-size:18px;font-weight:800;color:#fff;margin-top:14px;margin-bottom:6px;letter-spacing:0.3px">Painel do Administrador</div>'+
-    '<div style="font-size:12px;color:#8aa88a;line-height:1.5;margin-bottom:20px">Área Restrita — Digite a senha do Agracta para continuar.</div>'+
-    '<label style="display:block;font-size:9px;font-weight:800;color:#37d684;letter-spacing:1.5px;text-align:left;margin-bottom:6px;margin-left:2px;text-transform:uppercase">Senha de Acesso</label>'+
-    '<input id="adminAuthPass" style="width:100%;box-sizing:border-box;background:#070b08;border:1px solid #1a2a20;border-radius:12px;color:#eafaea;padding:14px;font-size:16px;text-align:center;outline:none;transition:all 0.3s;font-family:monospace;letter-spacing:4px" type="password" onkeydown="if(event.key===\'Enter\')confirmAdminAuth()" onfocus="this.style.borderColor=\'#37d684\';this.style.boxShadow=\'0 0 10px rgba(55,214,132,0.2)\'" onblur="this.style.borderColor=\'#1a2a20\';this.style.boxShadow=\'none\'">'+
-    '<div id="adminAuthErr" style="color:#ff8a8a;font-size:11px;margin-top:8px;min-height:16px;font-weight:600;text-align:center"></div>'+
+  modal.innerHTML='<div style="width:100%;max-width:350px;background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:0 20px 50px rgba(0,0,0,0.6);padding:24px;color:var(--text);font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box;text-align:center;margin:60px auto 20px auto;position:relative">'+
+    '<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:var(--surface-2);border:1px solid var(--border);border-radius:50%;font-size:22px;color:var(--text)">'+ic('lock',22)+'</div>'+
+    '<div style="font-size:18px;font-weight:800;color:var(--text);margin-top:14px;margin-bottom:6px;letter-spacing:0.3px">Painel do Administrador</div>'+
+    '<div style="font-size:12px;color:var(--text-2);line-height:1.5;margin-bottom:20px">Área Restrita — Digite a senha do Agracta para continuar.</div>'+
+    '<label style="display:block;font-size:9px;font-weight:800;color:var(--text);letter-spacing:1.5px;text-align:left;margin-bottom:6px;margin-left:2px;text-transform:uppercase">Senha de Acesso</label>'+
+    '<input id="adminAuthPass" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:14px;font-size:16px;text-align:center;outline:none;transition:all 0.3s;font-family:monospace;letter-spacing:4px" type="password" onkeydown="if(event.key===\'Enter\')confirmAdminAuth()" onfocus="this.style.borderColor=\'#60b9ee\';this.style.boxShadow=\'0 0 0 3px #60b9ee50\'" onblur="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'">'+
+    '<div id="adminAuthErr" style="color:var(--ag-err);font-size:11px;margin-top:8px;min-height:16px;font-weight:600;text-align:center"></div>'+
     '<div style="display:flex;gap:10px;margin-top:16px">'+
-      '<button style="background:transparent;border:1px solid #26322b;border-radius:12px;color:#8aa88a;padding:13px 18px;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s" onclick="document.getElementById(\'adminAuthModal\').style.display=\'none\'" onmouseover="this.style.color=\'#fff\';this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.color=\'#8aa88a\';this.style.background=\'transparent\'">Cancelar</button>'+
-      '<button style="flex:1;background:linear-gradient(135deg,#1f5a2a,#133c1c);border:1px solid #2e7d3e;border-radius:12px;color:#eafaea;padding:13px;font-weight:700;font-size:14px;cursor:pointer;transition:all 0.2s" onclick="confirmAdminAuth()" onmouseover="this.style.opacity=\'0.95\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.opacity=\'1\';this.style.transform=\'none\'">Entrar</button>'+
+      '<button style="background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--text-2);padding:13px 18px;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s" onclick="document.getElementById(\'adminAuthModal\').style.display=\'none\'" onmouseover="this.style.color=\'var(--text)\';this.style.background=\'var(--surface-2)\'" onmouseout="this.style.color=\'var(--text-2)\';this.style.background=\'transparent\'">Cancelar</button>'+
+      '<button style="flex:1;background:var(--acao-bg);border:1px solid var(--acao-bg);border-radius:12px;color:var(--acao-ink);padding:13px;font-weight:700;font-size:14px;cursor:pointer;transition:all 0.2s" onclick="confirmAdminAuth()" onmouseover="this.style.opacity=\'0.95\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.opacity=\'1\';this.style.transform=\'none\'">Entrar</button>'+
     '</div>'+
   '</div>';
   setTimeout(function(){ var i=document.getElementById('adminAuthPass'); if(i)i.focus(); }, 100);
@@ -21418,66 +21418,66 @@ function renderAdminDashboard(){
 
   /* Caixa de credenciais recém-criadas (sobrevive ao re-render) */
   var ac = window._ultimoAcessoCriado;
-  var credsHtml = ac ? ('<div style="margin-top:12px;border:1px solid #2e7d3e;border-radius:10px;padding:10px;background:#0c1f12;text-align:left">'+
-    '<div style="font-weight:800;color:#37d684;margin-bottom:4px">✓ Acesso '+(ac.criado?'criado':'redefinido')+' &mdash; passe ao técnico</div>'+
-    '<div style="font-size:12px;color:#eaf3ed;line-height:1.7">E-mail: <b>'+esc(ac.email)+'</b><br>Senha: <b style="font-family:monospace;font-size:13px;letter-spacing:.5px">'+esc(ac.senha)+'</b></div>'+
+  var credsHtml = ac ? ('<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2);text-align:left">'+
+    '<div style="font-weight:800;color:var(--text);margin-bottom:4px">✓ Acesso '+(ac.criado?'criado':'redefinido')+' &mdash; passe ao técnico</div>'+
+    '<div style="font-size:12px;color:var(--text);line-height:1.7">E-mail: <b>'+esc(ac.email)+'</b><br>Senha: <b style="font-family:monospace;font-size:13px;letter-spacing:.5px">'+esc(ac.senha)+'</b></div>'+
     '<div style="display:flex;gap:6px;margin-top:8px">'+
-      '<button onclick="_copiarCreds()" style="flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:7px;font-weight:700;font-size:12px;cursor:pointer">Copiar credenciais</button>'+
-      '<button onclick="window._ultimoAcessoCriado=null;renderAdminDashboard()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:7px;padding:7px 12px;font-size:12px;cursor:pointer">Ok</button>'+
+      '<button onclick="_copiarCreds()" style="flex:1;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:7px;padding:7px;font-weight:700;font-size:12px;cursor:pointer">Copiar credenciais</button>'+
+      '<button onclick="window._ultimoAcessoCriado=null;renderAdminDashboard()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:12px;cursor:pointer">Ok</button>'+
     '</div>'+
-    '<div style="font-size:10px;color:#8aa88a;margin-top:6px">O técnico entra em www.agracta.com.br com esse e-mail e senha.</div>'+
+    '<div style="font-size:10px;color:var(--text-2);margin-top:6px">O técnico entra em www.agracta.com.br com esse e-mail e senha.</div>'+
   '</div>') : '';
 
-  m.innerHTML = '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:460px;width:100%;padding:20px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
-    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Controle de acesso BPL para sincronização de dados.</div>'+
+  m.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;max-width:460px;width:100%;padding:20px;box-sizing:border-box;color:var(--text);font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:var(--text);font-size:15px">Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:var(--text-2);font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:var(--text-2);margin-top:4px">Controle de acesso BPL para sincronização de dados.</div>'+
     /* Quem assina. O administrador nunca passa pela criação de técnico, então
        seu nome não estava em lugar nenhum e a trilha registrava "Administrador"
        ou o e-mail cru — inútil numa auditoria. Aqui ele declara como assina. */
-    '<div style="margin-top:14px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
-      '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Como você assina</div>'+
-      '<div style="font-size:12px;color:#eaf3ed;line-height:1.6">Trilha BPL e rubrica saem como:<br><b style="font-size:13px">'+esc(_currentUserName())+'</b></div>'+
-      '<button onclick="definirMeuNome()" style="margin-top:8px;width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:8px;font-weight:700;font-size:12px;cursor:pointer">Mudar o nome da assinatura</button>'+
-      '<div style="font-size:10px;color:#8aa88a;margin-top:6px">Use o formato do relatório — ex.: Machado, V. C. — CRBio-01. Vale para as PRÓXIMAS assinaturas; o que já foi assinado não muda, por exigência de BPL.</div>'+
+    '<div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2);text-align:left">'+
+      '<div style="font-weight:700;color:var(--text);margin-bottom:6px">Como você assina</div>'+
+      '<div style="font-size:12px;color:var(--text);line-height:1.6">Trilha BPL e rubrica saem como:<br><b style="font-size:13px">'+esc(_currentUserName())+'</b></div>'+
+      '<button onclick="definirMeuNome()" style="margin-top:8px;width:100%;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:7px;padding:8px;font-weight:700;font-size:12px;cursor:pointer">Mudar o nome da assinatura</button>'+
+      '<div style="font-size:10px;color:var(--text-2);margin-top:6px">Use o formato do relatório — ex.: Machado, V. C. — CRBio-01. Vale para as PRÓXIMAS assinaturas; o que já foi assinado não muda, por exigência de BPL.</div>'+
     '</div>'+
     credsHtml+
 
-    '<div style="margin-top:14px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
-      '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Configurações de Acesso Admin</div>'+
+    '<div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2);text-align:left">'+
+      '<div style="font-weight:700;color:var(--text);margin-bottom:6px">Configurações de Acesso Admin</div>'+
       '<div style="display:flex;flex-direction:column;gap:8px">'+
-        '<label style="display:block"><span style="font-size:10px;color:#8aa88a">E-mail do Administrador</span>'+
+        '<label style="display:block"><span style="font-size:10px;color:var(--text-2)">E-mail do Administrador</span>'+
         '<input id="admEmail" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="email" value="'+esc(conf.adminEmail)+'" placeholder="ex: admin@agracta.com"></label>'+
-        '<label style="display:block"><span style="font-size:10px;color:#8aa88a">Senha do Painel Admin</span>'+
+        '<label style="display:block"><span style="font-size:10px;color:var(--text-2)">Senha do Painel Admin</span>'+
         '<input id="admPass" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="password" value="'+esc(conf.adminPassword)+'" placeholder="Senha do painel"></label>'+
-        '<button onclick="saveAdminSettings()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:4px;cursor:pointer">Salvar Configurações</button>'+
+        '<button onclick="saveAdminSettings()" style="width:100%;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:4px;cursor:pointer">Salvar Configurações</button>'+
       '</div>'+
     '</div>'+
     
     '<div style="margin-top:14px;text-align:left">'+
-      '<b style="color:#37d684">Técnicos (contas Firebase)</b>'+
-      '<div style="font-size:10px;color:#8aa88a;margin-top:2px">Nome vinculado ao e-mail para a auditoria BPL (quem avaliou/aplicou). Editável.</div>'+
-      '<div id="admPerfisList" style="max-height:230px;overflow-y:auto;margin-top:6px;border:1px solid #2a3a2a;border-radius:10px;padding:8px;background:#090f0a">'+
-        '<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Carregando contas…</div>'+
+      '<b style="color:var(--text)">Técnicos (contas Firebase)</b>'+
+      '<div style="font-size:10px;color:var(--text-2);margin-top:2px">Nome vinculado ao e-mail para a auditoria BPL (quem avaliou/aplicou). Editável.</div>'+
+      '<div id="admPerfisList" style="max-height:230px;overflow-y:auto;margin-top:6px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--surface-2)">'+
+        '<div style="color:var(--text-2);font-size:12px;text-align:center;padding:8px">Carregando contas…</div>'+
       '</div>'+
     '</div>'+
     
-    '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
-      '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Autorizar Novo Técnico</div>'+
-      '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px;background:#0c140d;border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">Cria o <b>login</b> no Firebase e libera o técnico no Agracta. Se o e-mail já existir, o acesso é reativado; use <b>redefinir senha</b> para enviar um link ao técnico.</div>'+
+    '<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2);text-align:left">'+
+      '<div style="font-weight:700;color:var(--text);margin-bottom:6px">Autorizar Novo Técnico</div>'+
+      '<div style="font-size:10px;color:var(--text-2);line-height:1.45;margin-bottom:8px;background:var(--surface-2);border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">Cria o <b>login</b> no Firebase e libera o técnico no Agracta. Se o e-mail já existir, o acesso é reativado; use <b>redefinir senha</b> para enviar um link ao técnico.</div>'+
       '<div style="display:flex;gap:6px">'+
         '<input id="addUsrEmail" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="email" placeholder="E-mail" autocomplete="off" autocapitalize="none">'+
         '<input id="addUsrNome" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Nome do Técnico" autocomplete="off">'+
       '</div>'+
       '<div style="display:flex;gap:6px;margin-top:6px">'+
         '<input id="addUsrSenha" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Senha (vazio = gerar)" autocomplete="off" autocapitalize="none">'+
-        '<button onclick="adminGenSenha()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:0 12px;font-weight:700;font-size:12px;cursor:pointer">Gerar</button>'+
+        '<button onclick="adminGenSenha()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 12px;font-weight:700;font-size:12px;cursor:pointer">Gerar</button>'+
       '</div>'+
-      '<div id="addUsrMsg" style="font-size:11px;margin-top:7px;min-height:14px;color:#ff8a8a"></div>'+
-      '<button id="addUsrBtn" onclick="criarAcessoTecnico()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:10px;font-weight:800;margin-top:4px;cursor:pointer">Criar acesso do técnico</button>'+
+      '<div id="addUsrMsg" style="font-size:11px;margin-top:7px;min-height:14px;color:var(--ag-err)"></div>'+
+      '<button id="addUsrBtn" onclick="criarAcessoTecnico()" style="width:100%;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:10px;font-weight:800;margin-top:4px;cursor:pointer">Criar acesso do técnico</button>'+
       '<button onclick="addAllowedUser()" style="width:100%;background:transparent;color:#6f8f76;border:none;padding:6px;font-size:10px;cursor:pointer;margin-top:2px;text-decoration:underline">só registrar na lista (sem criar login)</button>'+
     '</div>'+
     
-    '<div style="margin-top:14px"><button onclick="closeAdminDashboard()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar e Sair</button></div>'+
+    '<div style="margin-top:14px"><button onclick="closeAdminDashboard()" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar e Sair</button></div>'+
   '</div>';
   if(typeof _carregarPerfis==='function') _carregarPerfis();
 }
@@ -21523,16 +21523,16 @@ function _renderPerfisList(arr, disabledSet){
   box.innerHTML=arr.map(function(p,i){
     var isAdm=p.papel==='admin';
     var off=!isAdm && !!disabledSet[(p.email||'').toLowerCase()];
-    var badge='<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;'+(isAdm?'background:#3a2a0c;color:#ffce5a;border:1px solid #6b531b':'background:#0f2a1a;color:#37d684;border:1px solid #245a36')+'">'+(isAdm?'ADMIN':'TÉCNICO')+'</span>';
-    var offBadge= off?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;background:#3a1212;color:#ff9a8a;border:1px solid #6b1f1f;margin-right:6px">DESATIVADO</span>':'';
+    var badge='<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;'+(isAdm?'background:var(--ag-warn-bg);color:var(--ag-warn);border:1px solid var(--ag-warn-line)':'background:var(--ag-ok-bg);color:var(--ag-ok);border:1px solid var(--ag-ok-line)')+'">'+(isAdm?'ADMIN':'TÉCNICO')+'</span>';
+    var offBadge= off?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;background:var(--ag-err-bg);color:var(--ag-err);border:1px solid #6b1f1f;margin-right:6px">DESATIVADO</span>':'';
     return '<div style="border-bottom:1px solid #1f2c22;padding:8px 0;'+(off?'opacity:.7':'')+'">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:12px;color:#cfe0d4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.email)+'</div><div style="white-space:nowrap">'+offBadge+badge+'</div></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:12px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.email)+'</div><div style="white-space:nowrap">'+offBadge+badge+'</div></div>'+
       '<div style="display:flex;gap:6px;margin-top:6px">'+
         '<input id="pf_'+i+'" class="delpwd-inp" style="padding:7px;font-size:12px;flex:1" type="text" value="'+esc(p.nome||'')+'" placeholder="Nome completo (auditoria)">'+
-        '<button onclick="salvarNomePerfil('+i+')" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer">Salvar nome</button>'+
+        '<button onclick="salvarNomePerfil('+i+')" style="background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:7px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer">Salvar nome</button>'+
       '</div>'+
-      (isAdm?'':'<div style="display:flex;gap:14px;margin-top:6px"><button onclick="redefinirSenhaTecnico('+i+')" style="background:transparent;color:#8a9f90;border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">redefinir senha</button>'+
-        '<button onclick="alternarAcessoTecnico('+i+','+(off?'true':'false')+')" style="background:transparent;color:'+(off?'#37d684':'#ff9a8a')+';border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">'+(off?'reativar acesso':'desativar acesso')+'</button>'+
+      (isAdm?'':'<div style="display:flex;gap:14px;margin-top:6px"><button onclick="redefinirSenhaTecnico('+i+')" style="background:transparent;color:var(--text-2);border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">redefinir senha</button>'+
+        '<button onclick="alternarAcessoTecnico('+i+','+(off?'true':'false')+')" style="background:transparent;color:'+(off?'var(--ag-ok)':'#ff9a8a')+';border:none;padding:0;font-size:10px;cursor:pointer;text-decoration:underline">'+(off?'reativar acesso':'desativar acesso')+'</button>'+
         /* Apagar fica por último e em vermelho fechado: é o único daqui que não
            tem volta, e não pode ficar do lado do "desativar" parecendo irmão
            dele. A margem à esquerda o afasta dos outros dois. */
@@ -21800,7 +21800,7 @@ function _soloCss(){
    '.solo-f label{display:block;font-size:9.5px;letter-spacing:.5px;color:var(--gp-text-3,#727c75);font-weight:700;margin-bottom:3px}'+
    '.solo-f input,.solo-f select{width:100%;box-sizing:border-box;background:rgba(0,0,0,.25);border:1px solid var(--gp-line,rgba(255,255,255,.14));border-radius:7px;color:var(--gp-text,#e9ede9);padding:7px 8px;font-size:12.5px;font-family:inherit}'+
    '.solo-fb{display:flex;gap:6px;margin-top:9px}'+
-   '.solo-ok{background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:6px 13px;font-size:11px;font-weight:700;cursor:pointer}'+
+   '.solo-ok{background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:7px;padding:6px 13px;font-size:11px;font-weight:700;cursor:pointer}'+
    '.solo-ok:hover{background:#246a31}';
   document.head.appendChild(s);
 }
@@ -23024,7 +23024,7 @@ function _histData(iso){
 }
 
 function _histListaHtml(r){
-  var h='<div style="border-left:2px solid #2a3a2a;margin:5px 0 2px;padding:2px 0 2px 8px">';
+  var h='<div style="border-left:2px solid var(--border);margin:5px 0 2px;padding:2px 0 2px 8px">';
   r.ensaios.forEach(function(e){
     var p=[];
     if(e.cultura) p.push(esc(e.cultura));
@@ -23209,7 +23209,7 @@ function _itensCss(){
    '.it-f{margin-bottom:9px}.it-f label{display:block;font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--text-3,#7f9085);font-weight:800;margin-bottom:4px}'+
    '.it-f input,.it-f select,.it-f textarea{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:9px;color:var(--text,#e8efe9);padding:9px 10px;font-size:14px;outline:none;font-family:inherit}'+
    '.it-row{display:flex;gap:9px}.it-row>*{flex:1;min-width:0}'+
-   '.it-btn{background:#1f7a44;color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;font-family:inherit;font-size:13px}'+
+   '.it-btn{background:var(--acao-bg);color:var(--acao-ink);border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;font-family:inherit;font-size:13px}'+
    '.it-btn.alt{background:var(--surface-2,#0c1210);color:var(--text-2,#9fb1a5);border:1px solid var(--border,#26322b)}'+
    '.it-dup{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.32);color:#fbbf24;border-radius:9px;padding:8px 10px;font-size:11.5px;line-height:1.5;margin-bottom:9px}'+
    '.it-dose{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 9px;border-radius:9px;border:1px solid var(--border,#26322b);margin-bottom:5px;font-size:12.5px}'+

@@ -14,9 +14,9 @@
      no <html> fica para a regra de CSS que só deva valer no iPhone/iPad. -->
 <script>(function(){try{var n=navigator,ios=/iP(hone|od|ad)/.test(n.userAgent||'')||(n.platform==='MacIntel'&&n.maxTouchPoints>1);if(!ios)return;document.documentElement.classList.add('ios');var m=document.querySelector('meta[name="viewport"]');if(m&&!/maximum-scale/.test(m.content))m.content+=', maximum-scale=1';}catch(e){}})();</script>
 <title>Agracta</title>
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 <link rel="stylesheet" href="integracoes.css?v=5">
-<link rel="stylesheet" href="estudo-pagina.css?v=11">
+<link rel="stylesheet" href="estudo-pagina.css?v=12">
 <link rel="stylesheet" href="croqui-parcelas.css?v=4">
 <link rel="stylesheet" href="fotos-estudo.css?v=4">
 <!-- Porta de entrada: nada do app é pintado antes da autenticação. A classe entra
@@ -32,11 +32,11 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 </style>
 <script>document.documentElement.classList.add('pre-auth');try{if(localStorage.getItem('agracta-theme')!=='dark'){document.documentElement.classList.add('light');}else{document.addEventListener('DOMContentLoaded',function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content='#151619';});}}catch(e){document.documentElement.classList.add('light');}</script>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="theme-2026.css?v=11">
+<link rel="stylesheet" href="theme-2026.css?v=12">
 <link rel="stylesheet" href="ui-campo.css?v=13">
 <link rel="stylesheet" href="satelites.css?v=3">
 <link rel="stylesheet" href="agroapi.css?v=2">
-<link rel="stylesheet" href="profundidade.css?v=2">
+<link rel="stylesheet" href="profundidade.css?v=3">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
@@ -49,8 +49,8 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
      O icon-192 é transparente e virava traço cinza num quadrado preto. Este é
      opaco, no fundo do app, no tamanho que o iPhone usa (180). -->
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=384').catch(function(){});});}</script>
-<link rel="stylesheet" href="interface-neutra.css?v=5">
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=385').catch(function(){});});}</script>
+<link rel="stylesheet" href="interface-neutra.css?v=6">
 <link rel="stylesheet" href="clima-pagina.css?v=4">
 <link rel="stylesheet" href="tipografia.css?v=1">
 </head>
@@ -174,7 +174,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/jszip.min.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script src="alvos-catalogo.js?v=2"></script>
-<script src="app.js?v=232"></script>
+<script src="app.js?v=233"></script>
 <script src="aplicacoes-recolhiveis.js?v=1"></script>
 <link rel="stylesheet" href="protocolo-vivo.css?v=1">
 <link rel="stylesheet" href="protocolo-avaliacoes.css?v=2">
@@ -197,8 +197,8 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="firebase-sync.js?v=31"></script>
 <!-- Camadas de 2027: controle de horário de acesso e a nova casca de uso
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
-<script src="acesso-horario.js?v=5"></script>
-<script src="papeis-app.js?v=1"></script>
+<script src="acesso-horario.js?v=6"></script>
+<script src="papeis-app.js?v=2"></script>
 <script src="ui-campo.js?v=28"></script>
 <script src="vendor/satelites-core.js?v=2"></script>
 <script src="satelites.js?v=2"></script>
@@ -215,7 +215,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="croqui-parcelas.js?v=8"></script>
 <script src="mapa-medir.js?v=5"></script>
 <script src="notas-local.js?v=4"></script>
-<script src="croqui-livre.js?v=3"></script>
+<script src="croqui-livre.js?v=4"></script>
 <script src="mapa-inicio.js?v=3"></script>
 <script src="relatorio-estudo.js?v=2"></script>
 <script src="integracoes-fontes.js?v=2"></script>

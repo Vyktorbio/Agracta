@@ -9,6 +9,7 @@
  --ag-green:#292b30;--ag-green-strong:#18191c;--ag-focus:0 0 0 3px #60b9ee50;
  --skin-royal:#4169e1;--skin-selection:#60b9ee;--skin-selection-ink:#102d40;
  --skin-glass:rgba(255,255,255,.88);--skin-card:rgba(255,255,255,.78);--skin-edge:#d9dde1;--skin-ink:#191b1f;
+ --acao-bg:#18191c;--acao-ink:#fff;
  --gp-glass:var(--skin-glass);--gp-glass-strong:var(--skin-glass);--gp-blur:blur(20px);
  --accent:#202124;--accent-d:#101114;--accent-deep:#fff;--accent-soft:#2021240d;
  --depth-canvas:#fff;--depth-surface:#fff;--depth-edge:#dedee2;--depth-highlight:#ffffff80;--depth-wash:transparent;--depth-recess:#1618200a;
@@ -26,6 +27,7 @@ html:not(.light):has(#authGate){
  --gp-text:#f6f6f7;--gp-text-2:#c4c6cc;--gp-text-3:#a9adb7;--gp-green:#e6e7ea;--ag-green:#e6e7ea;
  --skin-glass:rgba(15,17,20,.92);--skin-card:rgba(36,39,43,.90);--skin-edge:#42464b;--skin-ink:#fff;
  --gp-glass:var(--skin-glass);--gp-glass-strong:var(--skin-glass);--gp-blur:blur(20px);--ag-focus:0 0 0 3px #60b9ee50;
+ --acao-bg:#eceef1;--acao-ink:#111315;
  --depth-canvas:#000;--depth-surface:#111315;--depth-edge:#41434b;--depth-highlight:#ffffff08;
 }
 /* Navegação escura — no tema ESCURO. Ela já foi escura nos dois, e isso
@@ -49,7 +51,7 @@ html .ep-hero :is(.ep-eyebrow,.ep-location,small){color:#d3d5dc}
 html .ep-progress progress{accent-color:var(--skin-royal)}
 html .ep-progress progress::-webkit-progress-value{background:var(--skin-royal)}
 html .ep-progress progress::-moz-progress-bar{background:var(--skin-royal)}
-html :is(.con-btn.ativo,.con-btn.primary,.btn-save,.auth-btn,.av-photo-btn,.calc-copy,.btn-principal){background:#18191c!important;background-image:none!important;border-color:#18191c!important;color:#fff!important;box-shadow:var(--depth-raised)!important}
+html :is(.con-btn.ativo,.con-btn.primary,.btn-save,.auth-btn,.av-photo-btn,.calc-copy,.btn-principal){background:var(--acao-bg)!important;background-image:none!important;border-color:var(--acao-bg)!important;color:var(--acao-ink)!important;box-shadow:var(--depth-raised)!important}
 /* Ligado/primário é azul de seleção; fica depois do grupo escuro para vencer
    com a mesma força. O hover escuro, mais específico, continua valendo. */
 html :is(.con-btn.ativo,.con-btn.primary){background:var(--skin-selection)!important;background-image:none!important;border-color:var(--skin-selection)!important;color:var(--skin-selection-ink)!important;box-shadow:var(--depth-raised)!important}

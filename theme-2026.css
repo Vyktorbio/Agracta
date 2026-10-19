@@ -535,7 +535,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .auth-sub{margin-bottom:25px!important;color:var(--gp-text-3)!important;font-size:14px!important}
 .auth-l{margin:15px 0 7px!important;color:var(--gp-text-2)!important;font:700 11px/1 var(--ag-font)!important;letter-spacing:.06em!important}
 .auth-i{min-height:50px!important;padding:12px 14px!important;color:var(--gp-text)!important;background:var(--gp-s1)!important;border:1px solid var(--gp-line-2)!important;border-radius:14px!important;font-size:15px!important}
-.auth-i:focus{border-color:var(--gp-green-deep)!important;box-shadow:var(--ag-focus)!important}
+.auth-i:focus{border-color:var(--skin-selection)!important;box-shadow:var(--ag-focus)!important}
 .auth-btn{min-height:50px!important;margin-top:22px!important;color:#fff!important;background:var(--gp-green-deep)!important;border:0!important;border-radius:14px!important;box-shadow:0 9px 22px rgba(24,118,71,.24)!important;font:750 15px/1 var(--ag-font)!important}
 .auth-btn:hover{background:var(--gp-green-hover)!important;transform:translateY(-1px)}
 .auth-foot{margin-top:20px!important;color:var(--gp-text-3)!important;font-size:12px!important}
