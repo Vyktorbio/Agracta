@@ -66,7 +66,7 @@ function pinoHtml(estudos,labTipo){
   vm.runInContext('var ic, LAB_CORES, LAB_ICONES, labTipoCor, labTipoIcone, renderQuadraLab;\n'+
     IC+';\n'+CORES+'\n'+ICONES+
     '\nlabTipoCor=function(t){ return LAB_CORES[t]||\'#21a86b\'; };\n'+
-    '\nlabTipoIcone=function(t){ return LAB_ICONES[t]||\'microscope\'; };\n'+
+    '\nlabTipoIcone=function(t){ return LAB_ICONES[t]||\'ciliado\'; };\n'+
     fatia('function renderQuadraLab(id){'),ctx);
   ctx.renderQuadraLab('LAB1');
   assert.ok(html!=null,'a função chegou a montar o ícone do pino');

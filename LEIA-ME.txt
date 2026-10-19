@@ -1,3 +1,38 @@
+AGRACTA — 44a publicacao                    19/10/2026
+=====================================================
+
+Leva: o laboratorio em geral troca o microscopio por um ciliado.
+  CODIGO:  app.js (ic: desenho 'ciliado' no lugar de 'microscope')
+           index.html  sw.js (cache v383, app.js?v=231)
+  TESTE:   tests/test_lab_icone.js, tests/test_lab_mapa_finalizados.js
+           (o laboratorio sem especialidade volta ao ciliado)
+
+Depende da 43a (croqui em PNG/SVG), que depende da 42a: merge nessa ordem.
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido do campo, com uma ilustracao de ciliado: "acho que esse fica melhor
+pra laboratorio, fica geral".
+
+- O desenho do laboratorio em geral agora e um ciliado (protozoario):
+  corpo oval, cilios em volta e um flagelo atras. Desenho do proprio app.
+- Aparece na escolha Campo ou Laboratorio, no botao de tipo da quadra e
+  no pino de laboratorio ainda sem especialidade.
+- Entomologia (percevejo), Fitopatologia (folha) e Nematologia
+  (nematoide) continuam com o desenho proprio.
+- Continua na regua dos icones: tres tracos (corpo, cilios num traco so
+  que vai e volta em cada pelo, flagelo) e nenhum traco solto miudo.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v383.
+
+Versoes: app.js?v=231, agracta-app-v383 / sw.js?v=383.
+
+
 AGRACTA — 43a publicacao                    18/10/2026
 =====================================================
 
