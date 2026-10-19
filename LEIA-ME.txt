@@ -1,3 +1,70 @@
+AGRACTA — 49a publicacao                    19/10/2026
+=====================================================
+
+Leva: a sincronizacao le so o que mudou. Em 19/10, de manha, o selo dizia
+"nao subiu (resource-exhausted)": a cota diaria de leituras do plano
+gratuito do Firebase acabou e nenhum aparelho enviava nem recebia.
+  CODIGO:  firebase-sync.js (leitura incremental + copia do servidor no
+           aparelho)  index.html  sw.js (cache v388)
+  TESTE:   tests/test_leitura_incremental.js (novo)
+           tests/test_sync_envio_pendente.js (Firestore falso aceita
+           consulta e conta leitura como o Firebase cobra)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram: a consulta
+usa o `historico`, que todo membro ativo ja le. O motor estatistico nao
+mudou.
+
+
+POR QUE ESTOUROU
+----------------
+Cada gravacao de qualquer pessoa fazia CADA aparelho aberto reler o banco
+INTEIRO (as 12 colecoes), e cada abertura do app tambem. Com a equipe
+lancando junto, cada nota lancada custava centenas de leituras por
+aparelho. O plano gratuito da 50 mil leituras por dia.
+
+
+O QUE MUDOU
+-----------
+- Cada envio ja grava, na mesma transacao, um registro em `historico`
+  por documento alterado, com o `rev` daquele envio. Agora o aparelho
+  que esta na revisao L e ve a raiz em R consulta o historico com
+  L < rev <= R e rele so os documentos citados. Uma nota lancada por um
+  colega custa ~4 leituras em vez do banco inteiro (no teste, com 200
+  notas: 4 contra ~214).
+- A copia do servidor que o aparelho ja tem fica guardada nele
+  (IndexedDB, chave 'remoto', a mesma base do cofre). Reabrir o app sem
+  nada novo custa 2 leituras (a raiz), nao o banco inteiro.
+- NA DUVIDA, LE TUDO, como antes. Volta a leitura completa quando falta
+  registro de alguma revisao (app antigo, envio no modo sem historico,
+  faxina das fotos antigas), quando o registro e malformado ou cita
+  colecao que nao e de dado, quando ha revisoes ou registros demais,
+  quando o servidor recusa a consulta, quando a copia guardada e de
+  outro login e quando a ultima leitura completa deste aparelho passou
+  de 24 h (rede de seguranca diaria).
+- Sair da conta apaga a copia guardada.
+- AgractaFirebase.status() mostra como foi a ultima leitura
+  (completa / incremental / cache).
+
+VERIFICACAO
+-----------
+- conferir.sh --pull-request: PODE SUBIR.
+- tests/test_leitura_incremental.js: 47 conferencias, inclusive que a
+  copia do servidor no aparelho fica identica ao banco depois de cada
+  leitura incremental e que receber nao provoca gravacao de eco.
+  Conferido que o teste reprova com a incremental desligada, sem a
+  checagem de lacuna de revisao e sem aplicar exclusao.
+
+DEPOIS DE ATUALIZAR
+------------------
+Enquanto a cota do dia estiver estourada, nada sobe nem desce: as
+alteracoes ficam no aparelho e vao sozinhas quando a cota renovar
+(por volta das 4h). Nao limpe os dados do navegador. Cada aparelho faz
+uma leitura completa na primeira abertura com a versao nova; dai em
+diante, so a diferenca.
+
+Versoes: firebase-sync.js?v=32, agracta-app-v388 / sw.js?v=388.
+
+
 AGRACTA — 48a publicacao                    19/10/2026
 =====================================================
 
