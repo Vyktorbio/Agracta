@@ -1,3 +1,37 @@
+AGRACTA — 40a publicacao                    18/10/2026
+=====================================================
+
+Leva: download direto das imagens na pagina do estudo.
+Complementa as publicacoes 38 e 39, sem alterar regras do banco ou prancha.
+
+- Barras por data, evolucao e ranking agora tem Baixar PNG e Baixar SVG.
+- A imagem leva estudo, titulo, datas, legenda e notas descritivas. Inclui
+  todos os tratamentos, mesmo quando o grafico rola para os lados no celular.
+- A exportacao usa a projecao cegada ja exibida. Preserva zero, sinal,
+  ausencias, ordem do ranking e a referencia selecionada para o grafico.
+- Nos ensaios em faixas, a legenda identifica os trechos como subamostras.
+- Sem servico externo, biblioteca adicional ou alteracao dos dados.
+
+VERIFICACAO
+-----------
+- tests/test_estudo_figuras.js: SVG inteiro, legenda, datas, sinal, zero,
+  ranking, cegamento e ausencia de resultados.
+- tests/test_estudo_pagina.js: selecao atual, botoes, erro recuperavel e
+  leitura sem mutacao.
+- Chromium: downloads reais PNG/SVG em tela de 390 e 1300 px, 12 tratamentos,
+  eficacia e uma repeticao. OQ automatica: tools/registro-oq.sh.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v379. Estudo > Graficos > Baixar PNG
+ou Baixar SVG em cada figura. Conferir o arquivo em Downloads/Arquivos.
+O botao Graficos e slides continua abrindo a prancha descritiva em faixas,
+conforme a 39a publicacao. Nenhum motor estatistico ou regra mudou.
+
+Versoes: estudo-pagina.js?v=28, estudo-pagina.css?v=11,
+estudo-figuras.js?v=1, agracta-app-v379 / sw.js?v=379. app.js segue v229.
+
+
 AGRACTA — 39a publicacao                    18/10/2026
 =====================================================
 

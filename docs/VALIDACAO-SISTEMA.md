@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Documento** | Plano e protocolo de validação do Agracta |
-| **Versão** | 2.4 — 18/10/2026 |
+| **Versão** | 2.5 — 18/10/2026 |
 | **Base** | OECD GLP Nº 1 (NIT-Dicla-035) · OECD Advisory Document Nº 17 (2016) — sistemas computadorizados (NIT-Dicla-038) · OECD Advisory Document Nº 22 (2021) — integridade de dados · GAMP 5 (abordagem baseada em risco) |
 | **Substitui** | versão 1.0 (14/06/2026, arquitetura anterior) e `docs/conformidade/validacao-sistema.md`, que deixa de existir |
 
@@ -406,6 +406,7 @@ motivo e arquivar o `--registro` gerado.
 | Versão | Data | Alteração |
 |---|---|---|
 | 1.0 | 14/06/2026 | Emissão inicial (Supabase) |
+| 2.5 | 18/10/2026 | Mudança normal de interface: download direto de PNG/SVG dos gráficos de barras, evolução e ranking (`tests/test_estudo_figuras.js`, `tests/test_estudo_pagina.js`). Exporta a projeção cegada, incluindo a área fora da rolagem, sem alterar dados ou cálculos. Preserva a prancha em faixas da 39ª publicação. OQ automática registrada por `tools/registro-oq.sh`. |
 | 2.4 | 18/10/2026 | URS-14: `tests/test_prancha_faixas.js` na matriz. Ensaio em faixas passa a ter folha de gráficos, descritiva: cada tratamento entra com a média dos treços lidos (subamostras), nunca com os treços como blocos; sem ANOVA, letras nem barra de erro. Mudança normal (`app.js` na montagem da folha, `prancha.html`): OQ automática |
 | 2.3 | 18/10/2026 | L8 fechada: regras do banco publicadas pelo CI depois dos testes no emulador e de aprovação no ambiente `regras-producao`, com registro e leitura de volta; conferência semanal só de leitura; caminho de volta para a versão anterior. URS-16 passa a cobrir as regras (`tests/test_regras_banco.js`), IQ-04 reescrita, §11.1 e apêndice A |
 | 2.2 | 17/10/2026 | URS-14: `tests/test_prancha_uma_repeticao.js` na matriz. A folha de gráficos com uma repetição sai descritiva (`Est.descrever`: médias, AACPD e Abbott, sem ANOVA, letras nem barra de erro) e não imprime p quando não há resíduo. Mudança crítica em `estatistica.js` (§11.2): registro novo da OQ automática e OQ-15 |

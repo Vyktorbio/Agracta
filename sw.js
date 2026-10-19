@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v378';
+var CACHE = 'agracta-app-v379';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './skin-royal.css?v=1',
@@ -13,7 +13,7 @@ var ASSETS = [
   './galeria-fotos.js?v=10', './fotos-estudo.js?v=3', './fotos-estudo.css?v=4', './vendor/fotos-core.js?v=3', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=10', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
   './croqui-parcelas.js?v=7', './mapa-medir.js?v=5', './notas-local.js?v=4', './croqui-livre.js?v=3', './mapa-inicio.js?v=2', './cores-padrao.css?v=2', './croqui-parcelas.css?v=4',
   './profundidade.css?v=2',
-  './estudo-pagina.js?v=27', './estudo-pagina.css?v=10',
+  './estudo-figuras.js?v=1', './estudo-pagina.js?v=28', './estudo-pagina.css?v=11',
   /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem

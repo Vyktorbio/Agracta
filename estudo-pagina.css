@@ -61,3 +61,10 @@
 .ep-croqui-legenda i{width:10px;height:10px;border-radius:3px;flex:none}
 @media(max-width:1200px){.ep-campo-grid{grid-template-columns:1fr}}
 @media print{.ep-kpis{grid-auto-flow:row;grid-auto-columns:auto;overflow:visible}.ep-campo-grid{grid-template-columns:1fr}.ep-campo-host,.ep-croqui{box-shadow:none;break-inside:avoid}}
+
+/* Downloads da figura inteira, inclusive fora da área de rolagem. */
+.ep-figure-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px}
+.ep-figure-actions .con-btn{min-height:44px}
+.ep-figure-actions [role="status"]{width:100%;font-size:.875rem;color:var(--text-2,#64748b);overflow-wrap:anywhere}
+.ep-figure-actions [role="status"]:empty{display:none}
+@media print{.ep-figure-actions{display:none}}
