@@ -586,6 +586,8 @@
     if(typeof closeMainMenu==='function')closeMainMenu();
     checkpointPut(localState(),true).catch(checkpointFalhou);
     try{localStorage.removeItem(TRUST_KEY);}catch(e){}
+    /* A cópia do servidor guardada para a leitura incremental é deste login. */
+    apagarCacheRemoto();
     if(FB.auth)FB.auth.signOut();
     FB.user=null;window._authUser=null;
     showAuthGate();
@@ -832,10 +834,130 @@
     FB.remoteFlat=r.flat;FB.lastRev=r.meta.rev||0;
     FB.lastSeenWrite=r.meta.writeId||'';FB.remoteToken=remoteToken(r.meta);
   }
+  /* ===== LER SÓ O QUE MUDOU (49a publicação) ================================
+     19/10/2026: "não subiu (resource-exhausted)" — a cota diária de leituras
+     do plano gratuito do Firebase acabou de manhã e ninguém sincronizava. A
+     causa: cada gravação de qualquer pessoa fazia CADA aparelho aberto reler
+     o banco INTEIRO (as 12 coleções), e cada abertura do app também. Com a
+     equipe lançando junto, eram centenas de documentos lidos por nota lançada.
+
+     Agora o aparelho lê só o que mudou desde a revisão que ele já tem:
+       1. cada envio grava, na MESMA transação, um registro em `historico` por
+          documento alterado, com o `rev` daquele envio (versoes-core.js);
+       2. de posse da revisão L e vendo a raiz em R, o aparelho consulta
+          historico com L < rev <= R, e relê só os documentos citados;
+       3. a cópia do servidor que ele já tem fica guardada no aparelho
+          (IndexedDB, chave 'remoto'), então abrir o app também não relê tudo.
+
+     NA DÚVIDA, LÊ TUDO, como antes. Volta à leitura completa quando:
+       - falta registro de alguma revisão entre L e R (envio de app antigo,
+         envio que caiu no modo sem histórico, faxina das fotos antigas);
+       - o registro cita coleção que não é de dado, ou vem malformado;
+       - são revisões ou registros demais (sairia mais caro que ler tudo);
+       - a consulta é recusada pelo servidor (regra, índice);
+       - a última leitura completa deste aparelho tem mais de 24 h — rede de
+         segurança contra qualquer divergência que a regra acima não pegue. */
+  var REMOTO_KEY='remoto',REMOTO_VERSAO=1;
+  var INCR_MAX_REVS=200,INCR_MAX_REGISTROS=1500,COMPLETA_VALE_MS=24*60*60*1000;
+  function _contaDocs(flat){
+    var n=0;COLLECTIONS.forEach(function(c){n+=Object.keys((flat||{})[c]||{}).length;});return n;
+  }
+  function _cacheRemotoLer(){
+    return checkpointOpen().then(function(db){
+      return new Promise(function(resolve){
+        try{
+          var tx=db.transaction(CHECKPOINT_STORE,'readonly');
+          var req=tx.objectStore(CHECKPOINT_STORE).get(REMOTO_KEY);
+          req.onsuccess=function(){var v=req.result||null;db.close();resolve(v);};
+          req.onerror=function(){db.close();resolve(null);};
+        }catch(e){try{db.close();}catch(_e){}resolve(null);}
+      });
+    }).catch(function(){return null;});
+  }
+  function _cacheRemotoGravar(valor){
+    return checkpointOpen().then(function(db){
+      return new Promise(function(resolve){
+        try{
+          var tx=db.transaction(CHECKPOINT_STORE,'readwrite'),st=tx.objectStore(CHECKPOINT_STORE);
+          if(valor)st.put(valor,REMOTO_KEY);else st.delete(REMOTO_KEY);
+          tx.oncomplete=function(){db.close();resolve(true);};
+          tx.onerror=tx.onabort=function(){db.close();resolve(false);};
+        }catch(e){try{db.close();}catch(_e){}resolve(false);}
+      });
+    }).catch(function(){return false;});
+  }
+  /* Uma gravação por vez; se pedirem outra no meio, grava só a mais nova. */
+  function salvarCacheRemoto(){
+    if(!FB.user||!FB.remoteFlat||!(FB.lastRev>0))return Promise.resolve(false);
+    FB.cacheRemotoPendente=true;
+    if(FB.cacheRemotoGravando)return FB.cacheRemotoGravando;
+    var run=Promise.resolve().then(function laco(){
+      if(!FB.cacheRemotoPendente||!FB.user||!FB.remoteFlat)return true;
+      FB.cacheRemotoPendente=false;
+      var v={versao:REMOTO_VERSAO,email:FB.user.email||'',projeto:CFG.projectId||'',
+        rev:FB.lastRev,writeId:FB.lastSeenWrite||'',completaEm:FB.completaEm||0,
+        savedAt:Date.now(),flat:FB.remoteFlat};
+      return _cacheRemotoGravar(v).then(laco);
+    }).finally(function(){FB.cacheRemotoGravando=null;});
+    FB.cacheRemotoGravando=run;
+    return run;
+  }
+  function apagarCacheRemoto(){
+    FB.remoteFlat=null;FB.remoteToken=null;FB.lastRev=0;FB.lastSeenWrite='';
+    FB.completaEm=0;FB.cacheRemotoTentado=false;FB.cacheRemotoPendente=false;
+    return _cacheRemotoGravar(null);
+  }
+  /* Só na primeira leitura da sessão, e só se for do MESMO login e projeto. */
+  async function carregarCacheRemoto(){
+    if(FB.remoteFlat||FB.cacheRemotoTentado)return;
+    FB.cacheRemotoTentado=true;
+    var v=await _cacheRemotoLer();
+    if(FB.remoteFlat||!v||v.versao!==REMOTO_VERSAO||!v.flat||!(Number(v.rev)>0))return;
+    if(!FB.user||v.email!==(FB.user.email||'')||v.projeto!==(CFG.projectId||''))return;
+    FB.remoteFlat=v.flat;FB.lastRev=Number(v.rev);FB.lastSeenWrite=v.writeId||'';
+    FB.remoteToken=null;FB.completaEm=Number(v.completaEm)||0;
+  }
+  /* null = não dá para ler só a diferença com segurança: o chamador lê tudo. */
+  async function lerIncremental(de,ate){
+    if(!(de>0)||!(ate>de)||ate-de>INCR_MAX_REVS)return null;
+    var lim=Math.min(INCR_MAX_REGISTROS,Math.max(50,_contaDocs(FB.remoteFlat)));
+    var snap;
+    try{
+      snap=await _comPrazo(collectionRef('historico').where('rev','>',de).where('rev','<=',ate)
+        .limit(lim).get({source:'server'}),12000);
+    }catch(e){
+      /* Recusa da consulta (regra, índice) não é falta de rede: lê tudo. */
+      var c=String((e&&e.code)||'');
+      if(/permission-denied|failed-precondition|invalid-argument|unimplemented/.test(c))return null;
+      throw e;
+    }
+    var regs=[];snap.forEach(function(d){regs.push(d.data()||{});});
+    if(regs.length>=lim)return null;
+    var revs={},alvo={},lista=[];
+    for(var i=0;i<regs.length;i++){
+      var r=regs[i],rv=Number(r.rev);
+      if(!(rv>de&&rv<=ate)||COLLECTIONS_GRAVACAO.indexOf(r.colecao)<0||typeof r.docId!=='string'||!r.docId)return null;
+      revs[rv]=1;
+      var k=r.colecao+'/'+r.docId;
+      if(!alvo[k]){alvo[k]=1;lista.push({c:r.colecao,id:r.docId});}
+    }
+    for(var v=de+1;v<=ate;v++)if(!revs[v])return null;
+    var docs=await Promise.all(lista.map(function(x){
+      return _comPrazo(collectionRef(x.c).doc(x.id).get({source:'server'}),12000);
+    }));
+    var flat={};COLLECTIONS.forEach(function(c){flat[c]=Object.assign({},FB.remoteFlat[c]||{});});
+    lista.forEach(function(x,j){
+      var s=docs[j];
+      if(s&&s.exists)flat[x.c][x.id]=s.data();else delete flat[x.c][x.id];
+    });
+    FB.ultimaIncremental={revs:ate-de,registros:regs.length,documentos:lista.length};
+    return flat;
+  }
   async function readRemote(force){
     if(!firebaseInit()||!FB.user)throw new Error('sem login');
     FB.pulling=true;
     try{
+      await carregarCacheRemoto();
       for(var attempt=0;attempt<5;attempt++){
         var root=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000);
         var meta=root.exists?root.data():{};
@@ -843,12 +965,25 @@
            também detecta os revs repetidos publicados por clientes antigos. */
         if(!force&&FB.remoteFlat&&remoteToken(meta)===FB.remoteToken)
           return {flat:FB.remoteFlat,meta:meta,state:buildState(FB.remoteFlat,meta)};
-        var all=await Promise.all(COLLECTIONS.map(readCollection));
+        var flat=null,modo='completa',rev=Number(meta.rev)||0;
+        var completaVencida=!(FB.completaEm>0)||(Date.now()-FB.completaEm)>COMPLETA_VALE_MS;
+        if(FB.remoteFlat&&!completaVencida){
+          /* A mesma revisão, com o mesmo writeId, é a cópia que já temos. */
+          if(rev===FB.lastRev&&meta.writeId&&meta.writeId===FB.lastSeenWrite){flat=FB.remoteFlat;modo='cache';}
+          else if(rev>FB.lastRev){flat=await lerIncremental(FB.lastRev,rev);if(flat)modo='incremental';}
+        }
+        if(!flat){
+          var all=await Promise.all(COLLECTIONS.map(readCollection));
+          flat={};COLLECTIONS.forEach(function(c,i){flat[c]=all[i]||{};});
+        }
         var end=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000);
         if(remoteToken(meta)!==remoteToken(end.exists?end.data():{}))continue;
-        var flat={};COLLECTIONS.forEach(function(c,i){flat[c]=all[i]||{};});
         var r={flat:flat,meta:meta,state:buildState(flat,meta)};
-        rememberRemote(r);return r;
+        rememberRemote(r);
+        FB.ultimaLeitura=modo;
+        if(modo==='completa')FB.completaEm=Date.now();
+        salvarCacheRemoto();
+        return r;
       }
       throw syncConflict();
     }finally{FB.pulling=false;}
@@ -914,6 +1049,7 @@
         FB.remoteFlat=Object.assign({},next,{media:r.flat.media||{}});
         FB.lastRev=newRev;FB.lastSeenWrite=writeId;FB.remoteToken=null;
         FB.myWrites=FB.myWrites||{};FB.myWrites[writeId]=1;
+        salvarCacheRemoto();
         try{
           var confirmed=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000),cm=confirmed.exists?confirmed.data():{};
           if(cm.rev===newRev&&cm.writeId===writeId)FB.remoteToken=remoteToken(cm);
@@ -1857,7 +1993,7 @@
   }
   window.AgractaFirebase={
     configured:configured,
-    status:function(){return {configured:configured(),user:FB.user&&FB.user.email,ready:FB.ready,rev:FB.lastRev,pendingWrites:FB.pendingWrites};},
+    status:function(){return {configured:configured(),user:FB.user&&FB.user.email,ready:FB.ready,rev:FB.lastRev,pendingWrites:FB.pendingWrites,leitura:FB.ultimaLeitura||'',incremental:FB.ultimaIncremental||null};},
     pull:cloudPull,push:cloudSave,checkpoint:checkpointGet,
     flushLocal:function(){return checkpointPut(localState(),true);},
     offlineAccessAllowed:offlineAccessAllowed,trustedDevice:trustedDevice,

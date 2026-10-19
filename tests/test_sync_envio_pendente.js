@@ -8,9 +8,24 @@ const DEL=Object.freeze({__deleteField:true});
 function FieldPath(){this.segments=Array.from(arguments);}
 function initial(){return {data:{__config:{},Q1:{cultura:'Soja',estudos:[{id:'S1',aplicacoes:[],avaliacoes:[{id:'A1',variaveis:['v'],tipos:{v:'pct'},notas:{T1R1:{v:1},T1R2:{v:2}},notasMeta:{T1R1:{v:{ts:1}},T1R2:{v:{ts:1}}}}]}]}},locais:{L:{nome:'Local'}},qlocal:{Q1:'L'},qgeo:{},rev:1};}
 function database(){
-  const env={docs:{},commits:[],attempts:[],listeners:[],reads:0,offline:false,beforeRead:null,beforeCommit:null,afterCommit:null,autoId:0};
+  /* `reads` conta chamadas; `docReads` conta como o Firebase COBRA: um por
+     documento devolvido (consulta vazia ou documento ausente custam 1). */
+  const env={docs:{},commits:[],attempts:[],listeners:[],reads:0,docReads:0,queries:[],offline:false,beforeRead:null,beforeQuery:null,beforeCommit:null,afterCommit:null,autoId:0};
   function snapshot(p){return {exists:!!env.docs[p],data:()=>clone(env.docs[p]||{}),metadata:{hasPendingWrites:false}};}
-  env.db={doc(p){return {path:p,get:async()=>{env.reads++;if(env.beforeRead)await env.beforeRead(p);if(env.offline)throw new Error('sem rede');return snapshot(p);},collection(n){return {doc(id){return env.db.doc(p+'/'+n+'/'+(id||'auto-'+(++env.autoId)));},get:async()=>{env.reads++;if(env.offline)throw new Error('sem rede');const prefix=p+'/'+n+'/';return {forEach(fn){Object.keys(env.docs).filter(k=>k.startsWith(prefix)).forEach(k=>fn({id:k.slice(prefix.length),data:()=>clone(env.docs[k])}));}};}};},onSnapshot(options,fn){env.listeners.push(fn);return ()=>{};}};},async runTransaction(fn){
+  const OPS={'==':(a,b)=>a===b,'>':(a,b)=>a>b,'>=':(a,b)=>a>=b,'<':(a,b)=>a<b,'<=':(a,b)=>a<=b};
+  function query(p,n,filters,lim){
+    return {where(f,op,v){return query(p,n,filters.concat([[f,op,v]]),lim);},limit(k){return query(p,n,filters,k);},
+      get:async()=>{env.reads++;if(env.offline)throw new Error('sem rede');
+        env.queries.push({colecao:n,filters:clone(filters),limit:lim});
+        if(env.beforeQuery)await env.beforeQuery(n,filters,lim);
+        const prefix=p+'/'+n+'/';
+        let ks=Object.keys(env.docs).filter(k=>k.startsWith(prefix)&&k.slice(prefix.length).indexOf('/')<0)
+          .filter(k=>filters.every(([f,op,v])=>env.docs[k][f]!==undefined&&OPS[op](env.docs[k][f],v)));
+        if(lim!=null)ks=ks.slice(0,lim);
+        env.docReads+=Math.max(1,ks.length);
+        return {size:ks.length,forEach(fn){ks.forEach(k=>fn({id:k.slice(prefix.length),data:()=>clone(env.docs[k])}));}};}};
+  }
+  env.db={doc(p){return {path:p,get:async()=>{env.reads++;env.docReads++;if(env.beforeRead)await env.beforeRead(p);if(env.offline)throw new Error('sem rede');return snapshot(p);},collection(n){const q=query(p,n,[],null);return {doc(id){return env.db.doc(p+'/'+n+'/'+(id||'auto-'+(++env.autoId)));},where:q.where,limit:q.limit,get:q.get};},onSnapshot(options,fn){env.listeners.push(fn);return ()=>{};}};},async runTransaction(fn){
     const reads={},writes=[];
     const tx={get:async ref=>{reads[ref.path]=JSON.stringify(env.docs[ref.path]);return snapshot(ref.path);},set:(ref,data,opts)=>writes.push({path:ref.path,data:clone(data),merge:opts&&opts.merge}),delete:ref=>writes.push({path:ref.path,deleted:true}),update:(ref,...args)=>{const fields=[];for(let i=0;i<args.length;i+=2)fields.push({path:args[i].segments,value:args[i+1]===DEL?DEL:clone(args[i+1])});writes.push({path:ref.path,fields});}};
     const val=await fn(tx);
