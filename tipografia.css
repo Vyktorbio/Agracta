@@ -17,3 +17,12 @@
  --gp-font:Arial,sans-serif;--gp-display:Arial,sans-serif;--gp-mono:Arial,sans-serif;
 }
 html body,html body :is(button,input,select,textarea,label,h1,h2,h3,h4,p,span,div,small,strong,b,td,th,a){font-family:Arial,sans-serif!important}
+
+/* ⚠ é glifo de TEXTO no Agracta (tests/test_sem_emoji.js), mas é um dos
+   caracteres que o Unicode também lista como emoji. No Chrome do Android a
+   fonte do sistema não tem o desenho de texto dele, e o aparelho busca o da
+   fonte de emoji: o triângulo saía amarelo e colorido no Galaxy, no meio de
+   um app que tirou todo emoji. Esta regra pede a forma de texto (o mesmo
+   efeito do seletor U+FE0E) em todo glifo desse tipo, inclusive nos <text>
+   das figuras. O alert() nativo não lê CSS e continua por conta do sistema. */
+html{font-variant-emoji:text}

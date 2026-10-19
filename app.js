@@ -6697,7 +6697,7 @@ function _sinergistaSaveBlob(blob,nome){
 }
 async function downloadStudySinergista(qid,sid){
   try{
-    if(!window.JSZip)throw new Error('Compactador de Excel indisponível. Recarregue o app.');
+    var JSZip=await _libJSZip();
     var q=data[qid]||{},s=(q.estudos||[]).find(function(x){return x.id===sid;});if(!s)throw new Error('Estudo não encontrado.');
     s=normalizeStudy(s);var cells=_sinergistaDynamicCells(qid,s);
     _stxToast('Montando o protocolo Sinergista…');
@@ -6913,7 +6913,7 @@ function _bioestatAppendSheet(wb,nome,aoa){
 }
 async function downloadStudyWorkbook(qid,sid){
   try{
-    if(!window.XLSX)throw new Error('Leitor de Excel indisponível.');
+    await _libXLSX();
     var q=data[qid]||{}, s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s)throw new Error('Estudo não encontrado.');
     s=normalizeStudy(s);
     if((s.tratamentos||[]).length>7)throw new Error('Este modelo possui espaço para até 7 tratamentos. Use “Copiar” para protocolos maiores.');
@@ -14916,7 +14916,9 @@ function closeImport(){ var ov=document.getElementById('impOvl'); if(ov) ov.styl
 function _impTextChanged(){ /* placeholder p/ futura pré-análise ao vivo */ }
 function _impFromFile(input){
   var file=input&&input.files&&input.files[0]; if(!file) return;
-  if(typeof XLSX==='undefined'){ alert('Leitor de planilha não carregou.'); return; }
+  _libXLSX().then(function(){ _impLerArquivo(file); },function(err){ alert(err.message); });
+}
+function _impLerArquivo(file){
   var fr=new FileReader();
   fr.onload=function(e){
     try{
@@ -15885,10 +15887,12 @@ function importStudyProtocolPaste(){
 }
 function importStudyProtocolFile(inp){
   var file=inp&&inp.files&&inp.files[0]; if(!file)return;
+  _libXLSX().then(function(){ _importStudyProtocolLer(inp,file); },function(e){ alert('Não consegui ler a planilha: '+e.message); inp.value=''; });
+}
+function _importStudyProtocolLer(inp,file){
   var rd=new FileReader();
   rd.onload=function(){
     try{
-      if(!window.XLSX)throw new Error('Leitor de Excel indisponível.');
       var wb=XLSX.read(rd.result,{type:'array',cellDates:true,cellFormula:true});
       var ws=wb.Sheets[wb.SheetNames[0]], rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
       applyStudyProtocol(parseStudyProtocolRows(rows,file.name));
@@ -20511,12 +20515,33 @@ function exportData(){
   }catch(e){alert('Erro ao exportar: '+e.message)}
 }
 /* ===================== EXPORTAR PLANILHA EXCEL (.xlsx) ===================== */
-function _loadSheetJS(cb){
-  if(window.XLSX){ cb(); return; }
-  function add(src,onerr){ var s=document.createElement('script'); s.src=src; s.onload=function(){ cb(window.XLSX?null:new Error('Biblioteca não carregou.')); }; s.onerror=onerr; document.head.appendChild(s); }
-  /* offline-first: usa a cópia vendorizada (cacheada pelo Service Worker); cai no CDN se faltar */
-  add('./vendor/xlsx.full.min.js', function(){ add('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js', function(){ cb(new Error('Não consegui carregar a biblioteca da planilha.')); }); });
+/* BIBLIOTECAS SOB DEMANDA. O SheetJS (~930 KB) e o JSZip (~95 KB) só servem
+   para gerar ou ler planilha, e o index.html os carregava na abertura: quase
+   1 MB de JavaScript lido pelo celular a cada vez que o app abre, para uma
+   função que se usa de vez em quando. Agora entram na primeira vez que alguém
+   exporta ou importa. Continuam no pré-cache do sw.js com a MESMA URL daqui,
+   então offline no campo elas abrem do aparelho, sem rede.
+   _libSob devolve uma Promise; a mesma Promise é reaproveitada se dois cliques
+   pedirem a biblioteca ao mesmo tempo. */
+var _libPromessas={};
+function _libSob(global,src,reserva){
+  if(window[global]) return Promise.resolve(window[global]);
+  if(_libPromessas[global]) return _libPromessas[global];
+  _libPromessas[global]=new Promise(function(ok,falha){
+    function add(u,senao){
+      var el=document.createElement('script'); el.src=u;
+      el.onload=function(){ if(window[global]) ok(window[global]); else senao(); };
+      el.onerror=senao; document.head.appendChild(el);
+    }
+    function desiste(){ delete _libPromessas[global]; falha(new Error('Não consegui carregar a biblioteca ('+global+'). Confira a conexão e tente de novo.')); }
+    add(src, reserva ? function(){ add(reserva, desiste); } : desiste);
+  });
+  return _libPromessas[global];
 }
+/* offline-first: a cópia vendorizada (pré-cache do sw.js); o CDN só se ela faltar */
+function _libXLSX(){ return _libSob('XLSX','./vendor/xlsx.full.min.js','https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'); }
+function _libJSZip(){ return _libSob('JSZip','./vendor/jszip.min.js'); }
+function _loadSheetJS(cb){ _libXLSX().then(function(){ cb(null); },function(e){ cb(e); }); }
 function _locNome(qid){ try{ ensureLocais(); }catch(e){} var l=(QLOCAL&&QLOCAL[qid])||HOME_LOCAL; return (LOCAIS&&LOCAIS[l]&&LOCAIS[l].nome)||(LOCAIS&&LOCAIS[HOME_LOCAL]&&LOCAIS[HOME_LOCAL].nome)||''; }
 function exportXlsx(soDoLocal){
   _loadSheetJS(function(err){

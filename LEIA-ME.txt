@@ -1,3 +1,71 @@
+AGRACTA — 48a publicacao                    19/10/2026
+=====================================================
+
+Leva: o que saiu da revisao geral de 19/10. App mais leve para abrir,
+duas partes que nao abriam offline voltam a abrir, e o portao confere mais.
+  CODIGO:  app.js (planilha e compactador sob demanda)  index.html
+           tipografia.css (glifo de texto)  cliente.html  sw.js (cache v387)
+           prancha.html croqui.html probit.html galeria-local.html
+           relatorio-local.html estatistica/index.html (tipografia.css?v=2)
+           estatistica/sw.js (bioensaio-v63-revisao)
+  PORTAO:  conferir.sh (sintaxe de todo .js; o que a tela carrega precisa
+           estar no pre-cache)
+  TESTE:   tests/test_libs_sob_demanda.js (novo)
+           test_protocolo_sinergista, test_sem_emoji, test_iphone
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram. O motor
+estatistico nao mudou.
+
+
+O QUE MUDOU
+-----------
+
+- Abertura mais leve. O SheetJS (~930 KB) e o JSZip (~95 KB) saem do
+  index.html e entram na primeira vez que alguem exporta ou importa
+  planilha (modelo Agracta, protocolo Sinergista, importar protocolo,
+  assistente de importacao, exportar ensaios). Continuam no pre-cache
+  com a mesma URL: offline a planilha sai do mesmo jeito. Medido no
+  Chromium com a CPU 4x mais lenta: DOMContentLoaded 696 -> 501 ms.
+- Offline no campo: aplicacoes-recolhiveis.js e protocolo-vivo.css
+  (desde 1/out) eram carregados pelo index.html mas nao estavam no
+  pre-cache, e o sw.js nao guarda arquivo fora da lista. Sem sinal, essas
+  duas partes nao abriam. Entraram na lista.
+- cliente.html pedia integracoes.css?v=4 e profundidade.css?v=3; o
+  pre-cache tem v=5 e v=4. Agora pede as mesmas.
+- O ⚠ e glifo de texto no app, mas o Unicode tambem o lista como emoji:
+  no Chrome do Android ele podia sair como o triangulo amarelo colorido.
+  tipografia.css pede a forma de texto (font-variant-emoji:text) em todas
+  as paginas. O alert() nativo nao le CSS.
+
+PORTAO (conferir.sh)
+--------------------
+- Sintaxe: confere TODO .js (raiz, vendor/, estatistica/), nao uma lista
+  escrita a mao. A lista antiga deixava ~50 de fora (probit.js,
+  estudo-pagina.js, croqui-parcelas.js, sw.js...) e citava mesa.js e
+  mapa-mesa.js, que nao existem mais.
+- Novo: tudo o que index.html e as folhas avulsas carregam precisa estar
+  no ASSETS do sw.js com o mesmo ?v=. Foi esta checagem que faltou para
+  pegar o furo offline acima (conferido: com o sw.js antigo ela reprova).
+
+VERIFICACAO
+-----------
+- conferir.sh --pull-request: PODE SUBIR (360 conferencias).
+- Chromium, celular 412 px: com o service worker instalado e a rede
+  DESLIGADA, o app abre, aplicacoes-recolhiveis.js e protocolo-vivo.css
+  carregam, e o SheetJS e o JSZip sobem do cache e geram arquivo.
+- Paginas index, probit, prancha, croqui, cliente e estatistica abrem
+  sem erro de JavaScript.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v387. Na primeira exportacao de
+planilha depois da atualizacao, a biblioteca carrega do aparelho (menos
+de 1 segundo).
+
+Versoes: app.js?v=234, agracta-app-v387 / sw.js?v=387,
+tipografia.css?v=2, bioensaio-v63-revisao.
+
+
 AGRACTA — 47a publicacao                    19/10/2026
 =====================================================
 

@@ -120,10 +120,11 @@ async function arquivos(){
   ck(/function downloadStudyWorkbook\(/.test(src)&&/modelos\/modelo-protocolo\.xls/.test(src),'o modelo Agracta atual continua no código');
   ck(/function downloadStudySinergista\(/.test(src)&&/showStudyWorkbookFormats/.test(src),'o Sinergista é uma segunda opção explícita');
   ck(/protocolo-sinergista\.xlsx/.test(sw)&&/jszip\.min\.js/.test(sw),'template e compactador entram no pré-cache offline');
-  /* A ordem é que importa, não o número da versão: prender o teste a "v=87" faria
-   ele quebrar a cada bump de cache, que é justamente a mudança mais rotineira. */
-var posZip=html.indexOf('vendor/jszip.min.js'), mApp=html.match(/app\.js\?v=\d+/);
-ck(posZip>=0&&!!mApp&&posZip<html.indexOf(mApp[0]),'JSZip carrega antes do app');
+  /* Desde a 48ª publicação o JSZip entra sob demanda (tests/test_libs_sob_demanda.js):
+     o Sinergista espera a biblioteca antes de abrir o modelo, em vez de exigir
+     que o index.html a tenha carregado na abertura do app. */
+  ck(html.indexOf('vendor/jszip.min.js')<0,'JSZip não pesa na abertura do app');
+  ck(/async function downloadStudySinergista[\s\S]{0,120}await _libJSZip\(\)/.test(src),'o Sinergista carrega o JSZip antes de usar');
 }
 
 arquivos().then(function(){

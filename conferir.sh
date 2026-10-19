@@ -63,7 +63,11 @@ titulo "1. Os arquivos abrem sem erro de sintaxe?"
 if ! command -v node >/dev/null 2>&1; then
   avisar "node não encontrado — não dá para conferir sintaxe nem rodar teste."
 else
-  for f in vendor/versoes-core.js vendor/fotos-notas-core.js vendor/arena-core.js vendor/bioensaio-core.js vendor/fotos-core.js fotos-estudo.js vendor/colonia-core.js colonia-medida.js vendor/armazenamento-core.js vendor/protocolo-vivo-core.js vendor/papeis-core.js papeis-app.js vendor/observacao-core.js vendor/eventos-core.js vendor/eppo-core.js eventos-app.js trilha-formal.js conhecimento-canonico.js campo-3d-exportar.js campo-3d-realista.js mapa-medir.js notas-local.js croqui-livre.js mapa-inicio.js protocolo-menu.js vendor/avaliacao-core.js vendor/pendencias-core.js vendor/agenda-core.js vendor/conhecimento-core.js vendor/mascara-core.js vendor/fontes-core.js vendor/portal-core.js vendor/biocalc-campo-core.js vendor/drone-core.js calculadora-drone.js integracoes.js integracoes-fontes.js integracoes-clientes.js cliente.js app.js estatistica.js firebase-sync.js ui-campo.js satelites.js vendor/satelites-core.js mesa.js mapa-mesa.js clima-pagina.js agroapi.js vendor/agroapi-core.js acesso-horario.js alvos-catalogo.js iphone.js estatistica/app.js; do
+  # Todo arquivo .js do app, nao uma lista escrita a mao: a lista fixa tinha
+  # ficado sem uns 50 arquivos (probit.js, estudo-pagina.js, croqui-parcelas.js,
+  # o proprio sw.js...) e ainda citava dois que ja nao existem. Arquivo novo
+  # entra sozinho.
+  for f in *.js vendor/*.js estatistica/*.js; do
     [ -f "$f" ] || continue
     if node -e "new Function(require('fs').readFileSync('$f','utf8'))" 2>/dev/null; then
       ok "$f"
@@ -200,6 +204,44 @@ NODE
   fi
 fi
 
+
+# O QUE A TELA CARREGA PRECISA ESTAR NO PRE-CACHE (so o app principal).
+# O pareamento acima pula, de proposito, o arquivo que nem esta na lista ASSETS.
+# Mas no app principal isso e o furo: o ultimo ramo do sw.js e cache-first SEM
+# guardar nada em tempo de execucao, entao arquivo fora da lista nunca vai para
+# o aparelho. Online ninguem nota; no campo, sem sinal, aquela parte da tela
+# simplesmente nao carrega. Foi assim com aplicacoes-recolhiveis.js e
+# protocolo-vivo.css, do 1/out ate a 48a publicacao.
+# Vale para o index.html e para as folhas avulsas servidas pelo mesmo sw.js.
+# A estatistica fica de fora: o sw.js dela guarda em tempo de execucao.
+if command -v node >/dev/null 2>&1; then
+  FORA_DO_CACHE=$(node - <<'NODE' 2>/dev/null
+var fs=require("fs"), fora=[];
+function ler(a){ return fs.existsSync(a)?fs.readFileSync(a,"utf8"):""; }
+var m=ler("sw.js").match(/var ASSETS\s*=\s*\[([\s\S]*?)\]/); if(!m){ console.log("sw.js: lista ASSETS nao encontrada"); process.exit(0); }
+var corpo=m[1].replace(/\/\*[\s\S]*?\*\//g,"");
+var lista={}; (corpo.match(/'[^']+'/g)||[]).forEach(function(s){ lista[s.slice(1,-1).replace(/^\.\//,"")]=1; });
+["index.html","cliente.html","probit.html","prancha.html","croqui.html","galeria-local.html","relatorio-local.html"].forEach(function(pg){
+  var html=ler(pg).replace(/<!--[\s\S]*?-->/g,""), r=/<(?:script|link)\b[^>]*?(?:src|href)="([^"]+)"/g, x;
+  while((x=r.exec(html))){
+    var u=x[1].replace(/^\.\//,"");
+    if(/^(https?:|\/\/|data:|#|mailto:)/.test(u)) continue;
+    if(!fs.existsSync(u.replace(/[?#].*$/,""))) continue;   /* inexistente: a checagem de baixo cobra */
+    if(!lista[u]) fora.push(pg+" carrega '"+u+"', que nao esta no pre-cache do sw.js");
+  }
+});
+console.log(fora.join("\n"));
+NODE
+)
+  if [ -z "$FORA_DO_CACHE" ]; then
+    ok "tudo o que as telas do app carregam está no pré-cache (abre offline)"
+  else
+    echo "$FORA_DO_CACHE" | while IFS= read -r l; do
+      [ -n "$l" ] && avisar "$l — sem sinal no campo essa parte não carrega. Ponha na lista ASSETS com o mesmo ?v="
+    done
+    PROBLEMAS=$(( PROBLEMAS + $(echo "$FORA_DO_CACHE" | grep -c .) ))
+  fi
+fi
 
 # Todo arquivo pre-carregado precisa existir. O sw.js usa cache.addAll(), que e
 # tudo-ou-nada: um unico 404 na lista faz a instalacao inteira falhar, o Service

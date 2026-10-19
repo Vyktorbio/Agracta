@@ -71,4 +71,10 @@ const app = fs.readFileSync('app.js', 'utf8');
 ['lock', 'trash', 'copy', 'pin', 'ruler', 'download', 'archive', 'pencil', 'map'].forEach(n =>
   assert.match(app, new RegExp('\\n  ' + n + ":'<"), 'o ic() tem o desenho "' + n + '"'));
 
+/* Glifo de texto que o Unicode também lista como emoji (⚠) sai colorido no
+   Android se ninguém pedir a forma de texto: a fonte do sistema não o tem e o
+   aparelho busca na de emoji. A folha comum a todas as páginas pede. */
+assert.match(fs.readFileSync('tipografia.css', 'utf8'), /html\s*\{\s*font-variant-emoji\s*:\s*text\s*\}/,
+  'tipografia.css pede a forma de texto dos glifos (font-variant-emoji:text)');
+
 console.log('Sem emoji: ' + arquivos.length + ' arquivos do app varridos, nenhum emoji; os glifos de texto ficam OK.');
