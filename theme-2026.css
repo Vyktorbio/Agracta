@@ -5,60 +5,9 @@
 /* ========================================================================== */
 
 :root{
-  --ag-font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  --ag-display:var(--ag-font);
-  --ag-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
   --ag-radius-sm:12px;
   --ag-radius:14px;
   --ag-radius-lg:20px;
-  --ag-green:#51c58a;
-  --ag-green-strong:#178a50;
-  --ag-focus:0 0 0 4px rgba(59,210,127,.18);
-  --gp-bg:#11191d;
-  --gp-s1:#172126;
-  --gp-s2:#1e2a30;
-  --gp-s3:#29383e;
-  --gp-line:rgba(232,244,235,.10);
-  --gp-line-2:rgba(232,244,235,.20);
-  --gp-text:#f2f7f3;
-  --gp-text-2:#bdc9c0;
-  --gp-text-3:#a1b0b8;
-  --gp-green:#51c58a;
-  --gp-green-deep:#16844c;
-  --gp-green-hover:#1d9859;
-  --gp-red:#ff7968;
-  --gp-amber:#efb24b;
-  --gp-blue:#75afe5;
-  --gp-glass:rgba(23,33,38,.94);
-  --gp-glass-strong:rgba(23,33,38,.98);
-  --gp-blur:blur(22px) saturate(1.35);
-  --gp-shadow:0 22px 60px rgba(0,0,0,.36),0 4px 14px rgba(0,0,0,.22);
-  --ag-card-shadow:0 14px 34px rgba(0,0,0,.24),0 2px 8px rgba(0,0,0,.16);
-}
-
-html.light{
-  --ag-green:#238452;
-  --ag-green-strong:#156d42;
-  --ag-focus:0 0 0 4px rgba(35,132,82,.15);
-  --gp-bg:#f3f5f7;
-  --gp-s1:#ffffff;
-  --gp-s2:#ffffff;
-  --gp-s3:#edf2f4;
-  --gp-line:rgba(24,55,35,.10);
-  --gp-line-2:rgba(24,55,35,.20);
-  --gp-text:#18252c;
-  --gp-text-2:#52636e;
-  --gp-text-3:#657681;
-  --gp-green:#238452;
-  --gp-green-deep:#197647;
-  --gp-green-hover:#125f39;
-  --gp-red:#bd4b3e;
-  --gp-amber:#9c6817;
-  --gp-blue:#356da4;
-  --gp-glass:rgba(255,255,252,.82);
-  --gp-glass-strong:rgba(255,255,252,.97);
-  --gp-shadow:0 22px 60px rgba(28,54,37,.14),0 4px 14px rgba(28,54,37,.08);
-  --ag-card-shadow:0 12px 30px rgba(30,62,41,.10),0 2px 7px rgba(30,62,41,.06);
 }
 
 html,body{
@@ -78,38 +27,28 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(35,132,82,.35)!impor
 /* MAPA EM TELA INTEIRA + BARRA EM ILHAS                                      */
 /* -------------------------------------------------------------------------- */
 .top-bar{
-  position:absolute!important;
   inset:0 0 auto 0!important;
   z-index:850!important;
-  min-height:0!important;
   height:0!important;
   padding:12px 14px!important;
   overflow:visible!important;
-  pointer-events:none!important;
-  background:transparent!important;
-  border:0!important;
-  box-shadow:none!important;
   backdrop-filter:none!important;
   -webkit-backdrop-filter:none!important;
 }
 
 .tb-brand,.top-bar-right{
-  height:50px!important;
   display:flex!important;
   align-items:center!important;
-  gap:5px!important;
-  padding:6px!important;
   color:var(--gp-text)!important;
   background:var(--gp-glass-strong)!important;
   border:1px solid var(--gp-line)!important;
   border-radius:17px!important;
-  box-shadow:0 10px 32px rgba(17,42,26,.14),0 2px 8px rgba(17,42,26,.08)!important;
   backdrop-filter:var(--gp-blur)!important;
   -webkit-backdrop-filter:var(--gp-blur)!important;
   pointer-events:auto!important;
 }
 
-.tb-brand{max-width:min(48vw,430px)!important;min-width:0!important}
+.tb-brand{min-width:0!important}
 .tb-brand::before{width:25px!important;height:25px!important;margin:0 1px 0 4px!important}
 .top-bar-right{margin-left:auto!important;flex-wrap:nowrap!important}
 
@@ -148,17 +87,10 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(35,132,82,.35)!impor
 }
 
 .top-bar .btn-sm{
-  height:38px!important;
-  min-width:38px!important;
-  padding:0 12px!important;
-  gap:6px!important;
   color:var(--gp-text-2)!important;
   background:transparent!important;
   border:0!important;
-  border-radius:11px!important;
-  box-shadow:none!important;
   font:700 12px/1 var(--ag-font)!important;
-  letter-spacing:0!important;
   text-transform:none!important;
   transition:background .16s ease,color .16s ease,transform .1s ease!important;
 }
@@ -169,9 +101,6 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(35,132,82,.35)!impor
 .btn-search::before{content:none!important}
 .btn-search svg{width:17px!important;height:17px!important}
 .today-badge,#agendaBadge{
-  min-width:19px!important;
-  height:19px!important;
-  padding:0 5px!important;
   color:#fff!important;
   background:var(--gp-green-deep)!important;
   border-radius:999px!important;
@@ -218,24 +147,13 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .clima-chip{
   top:76px!important;
   right:64px!important;
-  min-height:44px!important;
-  max-width:min(48vw,310px)!important;
-  padding:7px 11px!important;
   gap:8px!important;
-  color:var(--gp-text)!important;
-  background:var(--gp-glass-strong)!important;
-  border:1px solid var(--gp-line)!important;
-  border-radius:15px!important;
-  box-shadow:0 9px 26px rgba(12,30,18,.16),0 2px 8px rgba(12,30,18,.10)!important;
-  backdrop-filter:var(--gp-blur)!important;
-  -webkit-backdrop-filter:var(--gp-blur)!important;
 }
-.clima-chip:hover{background:var(--gp-s2)!important}
-.clima-chip .cc-t{font:800 16px/1 var(--ag-font)!important;letter-spacing:-.03em!important}
+.clima-chip .cc-t{font:800 16px/1 var(--ag-font)!important}
 .clima-chip .cc-v{color:var(--gp-text-2)!important;font:600 11px/1.2 var(--ag-font)!important}
 .clima-chip .cc-src{padding:3px 6px!important;border-radius:999px!important;font:750 8px/1 var(--ag-font)!important}
 
-.toolbar-extra{right:16px!important;bottom:16px!important;gap:0!important}
+.toolbar-extra{gap:0!important}
 .tool-ico{
   width:48px!important;
   height:48px!important;
@@ -289,7 +207,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   background:var(--gp-glass-strong)!important;
   border:1px solid var(--gp-line)!important;
   border-radius:19px!important;
-  box-shadow:var(--gp-shadow)!important;
   backdrop-filter:var(--gp-blur)!important;
   -webkit-backdrop-filter:var(--gp-blur)!important;
 }
@@ -317,12 +234,11 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   -webkit-backdrop-filter:blur(10px) saturate(.85)!important;
 }
 
-.panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.loc-box{
+.panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.loc-box{
   color:var(--gp-text-2)!important;
   background:var(--gp-glass-strong)!important;
   border:1px solid var(--gp-line)!important;
   border-radius:var(--ag-radius-lg)!important;
-  box-shadow:var(--gp-shadow)!important;
   backdrop-filter:var(--gp-blur)!important;
   -webkit-backdrop-filter:var(--gp-blur)!important;
 }
@@ -357,7 +273,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
    faixa + 8px de folga + o indicador). Em tela larga elas nem se cruzam. */
 @media(min-width:721px) and (max-width:1209px){.agenda-panel{max-height:calc(100dvh - 156px - env(safe-area-inset-bottom,0px))!important}}
 
-.study-card,.study-card-v2,.sd-meta,.today-card,.today-sum-item,.trat-table,.evento-item,.se-trat,.ag-item,.search-item,.clima-card,.sd-descricao,.sd-empty,.today-empty,.se-empty,.q-noest,.study-plan-card,.study-dossier{
+.study-card,.study-card-v2,.sd-meta,.today-card,.today-sum-item,.trat-table,.evento-item,.se-trat,.ag-item,.search-item,.clima-card,.sd-descricao,.sd-empty,.se-empty,.q-noest,.study-plan-card,.study-dossier{
   color:var(--gp-text-2)!important;
   background:var(--gp-s2)!important;
   border:1px solid var(--gp-line)!important;
@@ -402,7 +318,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   background:var(--gp-green-hover)!important;
   transform:translateY(-1px);
 }
-.btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back,.ndvi-ix,.sd-actions .btn-sm,.search-close{
+.btn-cancel,.e-cancel,.gr-cancel,.sd-back,.ndvi-ix,.sd-actions .btn-sm,.search-close{
   min-height:42px!important;
   padding:0 14px!important;
   color:var(--gp-text-2)!important;
@@ -412,7 +328,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   box-shadow:none!important;
   font:700 12px/1 var(--ag-font)!important;
 }
-.btn-cancel:hover,.e-cancel:hover,.gr-cancel:hover,.p-btn-close:hover,.today-back:hover,.sd-back:hover,.search-close:hover{
+.btn-cancel:hover,.e-cancel:hover,.gr-cancel:hover,.sd-back:hover,.search-close:hover{
   color:var(--gp-text)!important;background:var(--gp-s3)!important;border-color:var(--gp-line-2)!important
 }
 
@@ -522,21 +438,18 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .auth-box{
   width:100%!important;
   max-width:430px!important;
-  padding:38px 36px 32px!important;
   color:var(--gp-text)!important;
   background:var(--gp-glass-strong)!important;
   border:1px solid var(--gp-line)!important;
-  border-radius:30px!important;
-  box-shadow:0 34px 90px rgba(13,43,24,.20)!important;
 }
-.auth-logo{color:var(--gp-text)!important;font:800 13px/1 var(--ag-display)!important;letter-spacing:.24em!important}
+.auth-logo{font:800 13px/1 var(--ag-display)!important;letter-spacing:.24em!important}
 .auth-logo::before{width:44px!important;height:44px!important;margin-bottom:16px!important}
 .auth-title{margin:18px 0 7px!important;color:var(--gp-text)!important;font:800 32px/1 var(--ag-display)!important;letter-spacing:-.04em!important}
 .auth-sub{margin-bottom:25px!important;color:var(--gp-text-3)!important;font-size:14px!important}
 .auth-l{margin:15px 0 7px!important;color:var(--gp-text-2)!important;font:700 11px/1 var(--ag-font)!important;letter-spacing:.06em!important}
 .auth-i{min-height:50px!important;padding:12px 14px!important;color:var(--gp-text)!important;background:var(--gp-s1)!important;border:1px solid var(--gp-line-2)!important;border-radius:14px!important;font-size:15px!important}
 .auth-i:focus{border-color:var(--skin-selection)!important;box-shadow:var(--ag-focus)!important}
-.auth-btn{min-height:50px!important;margin-top:22px!important;color:#fff!important;background:var(--gp-green-deep)!important;border:0!important;border-radius:14px!important;box-shadow:0 9px 22px rgba(24,118,71,.24)!important;font:750 15px/1 var(--ag-font)!important}
+.auth-btn{min-height:50px!important;margin-top:22px!important;color:#fff!important;background:var(--gp-green-deep)!important;border:0!important;border-radius:14px!important;font:750 15px/1 var(--ag-font)!important}
 .auth-btn:hover{background:var(--gp-green-hover)!important;transform:translateY(-1px)}
 .auth-foot{margin-top:20px!important;color:var(--gp-text-3)!important;font-size:12px!important}
 
@@ -544,45 +457,11 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 /* MOBILE: localização em cima e navegação principal embaixo                  */
 /* -------------------------------------------------------------------------- */
 @media(max-width:720px){
-  .top-bar{padding:10px!important;align-items:flex-start!important;flex-direction:row!important}
-  .tb-brand{height:50px!important;max-width:calc(100vw - 76px)!important;padding:6px!important}
+  .top-bar{align-items:flex-start!important;flex-direction:row!important}
   .tb-brand::before{width:24px!important;height:24px!important;margin-left:3px!important}
-  .loc-chip{max-width:calc(100vw - 118px)!important;padding:0 7px!important}
-  .loc-chip b{max-width:calc(100vw - 190px)!important;font-size:12.5px!important}
+  .loc-chip b{font-size:12.5px!important}
   .loc-chip .sub{font-size:10px!important}
-
-  .top-bar-right{
-    position:fixed!important;
-    left:10px!important;
-    right:10px!important;
-    bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;
-    z-index:1600!important;
-    width:auto!important;
-    height:66px!important;
-    margin:0!important;
-    padding:6px!important;
-    justify-content:space-around!important;
-    gap:3px!important;
-    border-radius:21px!important;
-    box-shadow:0 18px 50px rgba(12,35,20,.22),0 4px 13px rgba(12,35,20,.10)!important;
-  }
-  .top-bar-info{display:none!important}
-  .top-bar .btn-sm{
-    position:relative!important;
-    flex:1 1 0!important;
-    min-width:0!important;
-    height:54px!important;
-    padding:4px 3px!important;
-    flex-direction:column!important;
-    justify-content:center!important;
-    gap:3px!important;
-    border-radius:15px!important;
-    font-size:10.5px!important;
-    line-height:1!important;
-  }
   .top-bar .btn-sm::before{
-    content:'';
-    display:block;
     width:20px;height:20px;flex:none;
     background:currentColor;
     -webkit-mask-position:center;-webkit-mask-repeat:no-repeat;-webkit-mask-size:contain;
@@ -592,20 +471,18 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   .btn-today::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='3'/%3E%3Cpath d='M8 3v4M16 3v4M3 10h18M8 14h3v3H8z'/%3E%3C/g%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='3'/%3E%3Cpath d='M8 3v4M16 3v4M3 10h18M8 14h3v3H8z'/%3E%3C/g%3E%3C/svg%3E")}
   #btnAgenda::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/g%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/g%3E%3C/svg%3E")}
   .btn-search::before{content:none!important}
-  .btn-search::after{content:'Buscar';font:700 10.5px/1 var(--ag-font)}
+  .btn-search::after{font:700 10.5px/1 var(--ag-font)}
   .btn-search svg{width:20px!important;height:20px!important}
-  .today-badge,#agendaBadge{position:absolute!important;top:4px!important;right:calc(50% - 22px)!important;min-width:17px!important;height:17px!important;font-size:9px!important}
 
   .leaflet-top.leaflet-left,.leaflet-top.leaflet-right{top:64px!important}
-  .clima-chip{top:74px!important;right:64px!important;max-width:calc(100vw - 130px)!important;min-height:44px!important}
-  .toolbar-extra{right:11px!important;bottom:calc(90px + env(safe-area-inset-bottom,0px))!important}
+  .clima-chip{top:74px!important;right:64px!important}
   .tool-ico{width:48px!important;height:48px!important;min-width:48px!important}
   .cloud-badge{bottom:calc(91px + env(safe-area-inset-bottom,0px))!important;max-width:52vw!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
   .leaflet-bottom{bottom:76px!important}
 
   .main-menu{min-width:min(292px,calc(100vw - 20px))!important}
   .main-menu button{min-height:48px!important;font-size:13.5px!important}
-  .agenda-panel{top:72px!important;right:10px!important;left:10px!important;width:auto!important;max-width:none!important;max-height:calc(100dvh - 160px)!important}
+  .agenda-panel{width:auto!important;max-width:none!important;max-height:calc(100dvh - 160px)!important}
 
   .overlay,.se-overlay,.loc-modal,.ndvi-modal{align-items:flex-end!important;padding:0!important}
   .panel,.edit-panel,.se-panel,.loc-box{
@@ -634,7 +511,7 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   .studies-dashboard-list{grid-template-columns:1fr!important}
 
   .today-head,.sd-header{padding-left:12px!important;padding-right:12px!important}
-  .today-main,.sd-main{padding-bottom:calc(86px + env(safe-area-inset-bottom,0px))!important}
+  .sd-main{padding-bottom:calc(86px + env(safe-area-inset-bottom,0px))!important}
   #sdPnl{padding:10px 12px calc(94px + env(safe-area-inset-bottom,0px))!important}
   .sd-header{margin:0 -2px 13px!important;padding:8px 2px 13px!important}
   .sd-codigo{order:1!important;flex:1 1 calc(100% - 100px)!important;font-size:21px!important}
@@ -647,25 +524,14 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   .studies-dashboard-empty-start{grid-template-columns:1fr!important;text-align:center!important;padding:36px 20px!important}.studies-dashboard-empty-start .empty-mark{grid-row:auto!important;margin:0 auto 5px!important}.studies-dashboard-empty-start button{justify-self:center!important}
   .se-panel{padding:18px!important}.se-panel:has(>.se-actions:last-child){padding-bottom:0!important}.se-actions{bottom:0!important;margin:20px -18px 0!important;padding-left:18px!important;padding-right:18px!important}
   .auth-gate{padding:14px!important;align-items:center!important}
-  .auth-box{padding:30px 22px 25px!important;border-radius:25px!important}
   .auth-title{font-size:29px!important}
 }
 
 @media(max-width:430px){
-  .loc-chip .sub{display:none!important}
-  .loc-chip b{max-width:calc(100vw - 150px)!important}
-  .clima-chip{max-width:calc(100vw - 126px)!important;padding:7px 9px!important}
   .clima-chip .cc-v .cc-w{display:none!important}
-  .clima-chip .cc-src{display:none!important}
   .study-workflow-step{flex-basis:132px!important}
   .study-plan-grid{grid-template-columns:1fr!important}
   .study-plan-grid>div:last-child{grid-column:auto!important}
-}
-
-@media(min-width:721px) and (max-width:980px){
-  .top-bar-info{display:none!important}
-  .tb-brand{max-width:43vw!important}
-  .top-bar .btn-sm{padding:0 10px!important}
 }
 
 @media(prefers-reduced-motion:reduce){
@@ -697,7 +563,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
   gap:2px!important;
   border-radius:18px!important;
 }
-.top-bar-info{display:none!important}
 .top-bar .btn-sm{
   position:relative!important;
   width:70px!important;
@@ -734,12 +599,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 
 /* Local + temperatura formam uma única ilha. O painel detalhado do clima
    continua a um toque; umidade, vento e origem ficam dentro dele. */
-.tb-brand{
-  height:48px!important;
-  max-width:min(58vw,560px)!important;
-  padding:5px 7px!important;
-  gap:3px!important;
-}
 .tb-brand::before{order:0!important;flex:0 0 auto!important}
 #localChip{order:1!important;flex:1 1 auto!important;min-width:0!important}
 .clima-chip{
@@ -789,7 +648,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 .toolbar-extra.open{
   width:min(286px,calc(100vw - 28px))!important;
   padding:10px 10px 72px!important;
-  display:grid!important;
   grid-template-columns:repeat(2,minmax(0,1fr))!important;
   gap:8px!important;
   background:var(--gp-glass-strong)!important;
@@ -854,11 +712,6 @@ body.nav-gps-active .gps-dot,body.gps-manual-visible .gps-dot{display:block!impo
 
 @media(max-width:720px){
   .top-bar{padding:8px!important}
-  .tb-brand{
-    height:46px!important;
-    max-width:calc(100vw - 74px)!important;
-    padding:5px!important;
-  }
   .loc-chip{max-width:calc(100vw - 140px)!important;padding:0 7px!important}
   .loc-chip b{max-width:calc(100vw - 205px)!important}
   .clima-chip{min-width:42px!important;max-width:50px!important;height:32px!important;padding:0 6px!important}

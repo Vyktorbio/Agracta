@@ -14,9 +14,9 @@
      no <html> fica para a regra de CSS que só deva valer no iPhone/iPad. -->
 <script>(function(){try{var n=navigator,ios=/iP(hone|od|ad)/.test(n.userAgent||'')||(n.platform==='MacIntel'&&n.maxTouchPoints>1);if(!ios)return;document.documentElement.classList.add('ios');var m=document.querySelector('meta[name="viewport"]');if(m&&!/maximum-scale/.test(m.content))m.content+=', maximum-scale=1';}catch(e){}})();</script>
 <title>Agracta</title>
-<link rel="stylesheet" href="styles.css?v=41">
+<link rel="stylesheet" href="styles.css?v=42">
 <link rel="stylesheet" href="integracoes.css?v=5">
-<link rel="stylesheet" href="estudo-pagina.css?v=12">
+<link rel="stylesheet" href="estudo-pagina.css?v=13">
 <link rel="stylesheet" href="croqui-parcelas.css?v=4">
 <link rel="stylesheet" href="fotos-estudo.css?v=4">
 <!-- Porta de entrada: nada do app é pintado antes da autenticação. A classe entra
@@ -32,11 +32,11 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 </style>
 <script>document.documentElement.classList.add('pre-auth');try{if(localStorage.getItem('agracta-theme')!=='dark'){document.documentElement.classList.add('light');}else{document.addEventListener('DOMContentLoaded',function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content='#151619';});}}catch(e){document.documentElement.classList.add('light');}</script>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="theme-2026.css?v=12">
-<link rel="stylesheet" href="ui-campo.css?v=13">
+<link rel="stylesheet" href="theme-2026.css?v=13">
+<link rel="stylesheet" href="ui-campo.css?v=14">
 <link rel="stylesheet" href="satelites.css?v=3">
 <link rel="stylesheet" href="agroapi.css?v=2">
-<link rel="stylesheet" href="profundidade.css?v=3">
+<link rel="stylesheet" href="profundidade.css?v=4">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
@@ -49,7 +49,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
      O icon-192 é transparente e virava traço cinza num quadrado preto. Este é
      opaco, no fundo do app, no tamanho que o iPhone usa (180). -->
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=385').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=386').catch(function(){});});}</script>
 <link rel="stylesheet" href="interface-neutra.css?v=6">
 <link rel="stylesheet" href="clima-pagina.css?v=4">
 <link rel="stylesheet" href="tipografia.css?v=1">
