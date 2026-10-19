@@ -15,6 +15,19 @@ w.abrirConhecimento({aba:'estudos'});q('.con-acoes [data-con="estudo"]').click()
 const openedCharts=[];w.openPranchaEstudo=(...args)=>openedCharts.push(args);
 const overlay=d.createElement('div');overlay.id='prOvl';d.body.prepend(overlay);
 q('[data-ep-action="charts"]').click();assert.deepEqual(openedCharts[0],['Q1','S1','Severidade']);assert.equal(overlay.style.zIndex,'4001');assert(q('.ep-page'));assert.equal(JSON.stringify(w.data),before);
+// Cada imagem possui download próprio, sem chamar a prancha estatística.
+assert.equal(qa('[data-ep-action="figure"][data-ep-format="png"]').length,3);
+const figures=[];w.AgractaFiguras={baixar:async(card,meta,format)=>figures.push({card,meta,format})};
+q('[data-ep-kind="ranking"][data-ep-format="png"]').click();
+await new Promise(r=>setTimeout(r,0));
+assert.equal(figures[0].meta.tipo,'ranking');assert.equal(figures[0].meta.avaliacao,'A2');assert.equal(figures[0].meta.variavel,'Severidade');
+assert.equal(figures[0].format,'png');assert.equal(openedCharts.length,1);assert.equal(JSON.stringify(w.data),before);
+assert.match(figures[0].card.querySelector('[role="status"]').textContent,/Download iniciado/);
+// Falha de exportação é visível e devolve o botão para tentar novamente.
+w.AgractaFiguras.baixar=async()=>{throw Error('Falha simulada de imagem');};
+q('[data-ep-kind="ranking"][data-ep-format="png"]').click();await new Promise(r=>setTimeout(r,0));
+assert.match(figures[0].card.querySelector('[role="status"]').textContent,/Falha simulada/);
+assert.equal(q('[data-ep-kind="ranking"][data-ep-format="png"]').disabled,false);
 let exportado;w.abrirRelatorioEstudo=c=>exportado=c;
 q('[data-ep-action="report"]').click();assert.equal(exportado.study.id,'S1');assert.equal(exportado.projection.sid,'S1');assert.equal(JSON.stringify(w.data),before);
 change('[data-ep="assessment"]','A0');assert.deepEqual(qa('.ep-rank').map(x=>x.textContent),['1','1','1']);
