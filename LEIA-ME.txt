@@ -1,3 +1,52 @@
+AGRACTA — 41a publicacao                    18/10/2026
+=====================================================
+
+Leva: a skin royal (Arial, vidro, azul royal) deixa de ser uma camada por
+cima da interface e passa a ser a propria interface. Mesma cara.
+  CODIGO:  interface-neutra.css (tokens --skin-* nos dois temas, vidro,
+           selecao, progresso)  tipografia.css (novo)  probit.css
+           skin-royal.css (removido)  index.html  sw.js  estatistica/sw.js
+           cliente, croqui, prancha, probit, galeria-local, relatorio-local,
+           estatistica/index.html (pedem tipografia.css)
+  TESTE:   tests/test_skin_consolidada.js (novo)
+           tests/test_tema_navegacao.js (le fundo de vidro em rgba)
+           tests/test_probit_lab_botao.js (versoes lidas da propria pagina)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram. app.js nao mudou.
+
+
+O QUE MUDOU
+-----------
+
+- skin-royal.css repintava interface-neutra.css com !important. As cores
+  foram para dentro de interface-neutra.css; a fonte foi para tipografia.css.
+- O app nao baixa mais Inter, Archivo e IBM Plex Mono do Google. Eram
+  carregadas num <link> que trava a primeira pintura e depois nem apareciam
+  (tudo ja era Arial). No campo, sem sinal, era espera a toa na abertura.
+- Croqui e prancha: a regra de Arial alcancava o texto das figuras. Na tela
+  aparecia Arial; no arquivo baixado, IBM Plex Sans Condensed, que e a fonte
+  com que a prancha calcula a largura dos rotulos. Agora a tela mostra a
+  figura com a fonte do arquivo. E a unica diferenca visivel desta leva.
+- Probit: o vidro do painel passou para o probit.css.
+
+VERIFICACAO
+-----------
+- Chromium a 390 px, temas claro e escuro: login, mapa, menu, ferramentas,
+  locais, hoje, buscar, agenda, laboratorio e admin. Estilo computado de cada
+  elemento visivel e imagem, antes e depois: 0 diferencas.
+- cliente, galeria-local, relatorio-local, estatistica, probit: 0 diferencas.
+  croqui e prancha: so o font-family do <text> das figuras mudou (73 textos).
+- conferir.sh --pull-request: PODE SUBIR.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v380. Nada a fazer nos aparelhos.
+
+Versoes: interface-neutra.css?v=5 (todas as paginas), tipografia.css?v=1,
+probit.css?v=2, agracta-app-v380 / sw.js?v=380, estatistica
+bioensaio-v60-tipografia. app.js segue v229.
+
+
 AGRACTA — 40a publicacao                    18/10/2026
 =====================================================
 

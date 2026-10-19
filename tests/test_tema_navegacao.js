@@ -28,7 +28,14 @@ function luz(hex){
   const v=[0,2,4].map(i=>parseInt(n.slice(i,i+2),16)/255);
   return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2];
 }
-function fundo(corpo){ const m=corpo.match(/background:(#[0-9a-f]{3,6})/i); return m&&m[1]; }
+/* O fundo pode ser cor cheia (#fff) ou vidro (rgba): o vidro escuro da skin
+   royal é rgba(15,17,20,.92). Para a luminância, vale a cor sem o alfa. */
+function fundo(corpo){
+  const m=corpo.match(/background:(#[0-9a-f]{3,6}|rgba?\([^)]*\))/i); if(!m) return null;
+  if(m[1][0]==='#') return m[1];
+  const v=m[1].match(/[\d.]+/g).slice(0,3).map(n=>Math.round(+n).toString(16).padStart(2,'0'));
+  return '#'+v.join('');
+}
 function texto(corpo){ const m=corpo.match(/color:(#[0-9a-f]{3,6})/i); return m&&m[1]; }
 
 /* ---------------------------------------- 1. os dois passos existem ------- */
