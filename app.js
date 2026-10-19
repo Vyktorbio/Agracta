@@ -198,21 +198,19 @@ function ic(n,sz){ var P={
      diferente do resto do app em todos. Agora é desenho daqui, no mesmo traço
      dos outros — e, por herdar currentColor, veste a cor da especialidade.
 
-     E É SÓ O CONTORNO, DE PROPÓSITO. O primeiro desenho tinha seis traços,
-     dois deles de duas unidades — um risco na platina e a tampa da ocular —
-     todos espremidos entre x=7 e x=13, enquanto o resto da caixa eram duas
-     linhas finas e um arco. Os vizinhos com que ele divide a tela (map,
-     sheet, calendar, gauge) são feitos de duas ou três formas grandes, e ao
-     lado deles o microscópio saía mais escuro e mais pesado. Nos dois
-     tamanhos em que ele mais aparece — 13px no botão de tipo, 14px no pino do
-     mapa — aquela tinta toda virava borrão: nenhum detalhe menor que quatro
-     unidades sobrevive a essa redução.
-
-     Agora são quatro: base, braço, platina e a cabeça inteira (ocular e tubo)
-     como UMA peça. O braço em C fica porque é ele que faz o desenho ser lido
-     como microscópio — tirando ele, as versões de três traços que testei
-     viraram tomada, prego e avião de papel. */
-  microscope:'<path d="M3 21h18"/><path d="M14 21a7 7 0 1 0 0-14h-1"/><path d="M6 17h6"/><path d="M9 3h3v3h1v6H8V6h1z"/>',
+     E É SÓ O CONTORNO, DE PROPÓSITO: o primeiro microscópio tinha seis
+     traços, dois de duas unidades, e virava borrão a 13-14px ao lado dos
+     vizinhos de duas ou três formas grandes. A régua que saiu dali (poucos
+     traços, nenhum solto menor que quatro unidades) vale para o desenho de
+     hoje, abaixo. */
+  /* O LABORATÓRIO EM GERAL é um ciliado (protozoário): corpo oval, cílios em
+     volta e um flagelo atrás. Relato de uso, com uma ilustração de ciliado em
+     anexo: "acho que esse fica melhor pra laboratório, fica geral". O
+     microscópio dizia "equipamento"; o ciliado diz "o que se estuda aqui",
+     sem tomar partido de inseto, fungo ou nematoide, que têm desenho próprio.
+     Os cílios são UM traço só, que vai e volta em cada pelo: assim o desenho
+     cabe na régua do conjunto (poucos traços, nenhum miúdo solto). */
+  ciliado:'<path stroke-width="1.8" d="M5.7 7A6.2 3.1 38 1 1 15.5 14.6A6.2 3.1 38 1 1 5.7 7Z"/><path stroke-width="1" d="M13.6 15.3 12.4 18.5 13.6 15.3 11.7 15 9.6 17.6 11.7 15 9.7 13.9 7 16.1 9.7 13.9 7.8 12.5 4.8 14 7.8 12.5 6.3 10.7 3 11.6 6.3 10.7 5.5 9 2.1 8.8 5.5 9 5.4 7.5 2.7 5.6 5.4 7.5 6.2 6.6 5.5 3.3 6.2 6.6 7.6 6.3 8.8 3.1 7.6 6.3 9.5 6.6 11.6 4 9.5 6.6 11.5 7.7 14.2 5.5 11.5 7.7 13.4 9.1 16.4 7.6 13.4 9.1 14.9 10.9 18.2 10 14.9 10.9 15.7 12.6 19.1 12.8 15.7 12.6"/><path stroke-width="1.4" d="M15.5 14.6 16.8 16.2 18.4 16.4 19.6 18.7"/>',
   /* A ESPECIALIDADE GANHA DESENHO, NÃO SÓ COR.
      O mapa já pintava Entomologia de âmbar, Fitopatologia de roxo e
      Nematologia de azul, e os três pinos eram o mesmo microscópio. Cor
@@ -1351,7 +1349,7 @@ function labTipoCor(t){ return LAB_CORES[t]||'#21a86b'; }
    volta ao microscópio, que é o que ela é: um laboratório, ainda sem dizer de
    quê. Mesma escolha que labTipoCor faz com o verde. */
 var LAB_ICONES={Entomologia:'bug', Fitopatologia:'leaf', Nematologia:'nematode'};
-function labTipoIcone(t){ return LAB_ICONES[t]||'microscope'; }
+function labTipoIcone(t){ return LAB_ICONES[t]||'ciliado'; }
 function setQuadraLabTipo(id,tipo){
   if(!data[id]||!isQuadraLab(id)) return false;
   if(LAB_TIPOS.indexOf(tipo)<0) return false;
@@ -2073,7 +2071,7 @@ function novaQuadraTipo(){
         '<div class="qtipo-ico">'+ic('map',22)+'</div><div><div class="qtipo-t">Campo</div>'+
         '<div class="qtipo-d">Desenha o polígono no mapa. Área, NDVI e fenologia funcionam.</div></div></button>'+
       '<button class="qtipo-op" onclick="novaQuadraLabTipo()">'+
-        '<div class="qtipo-ico">'+ic('microscope',22)+'</div><div><div class="qtipo-t">Laboratório</div>'+
+        '<div class="qtipo-ico">'+ic('ciliado',22)+'</div><div><div class="qtipo-t">Laboratório</div>'+
         '<div class="qtipo-d">Sem desenho. Entomologia, Fitopatologia ou Nematologia.</div></div></button>'+
     '</div></div>';
   ov.style.display='flex';
@@ -2266,7 +2264,7 @@ function buildEditPanel(){
            :'Arraste os <b>pontos amarelos</b>; clique no <b>+</b> para inserir; <b>duplo-clique</b> remove. Clique em outra quadra para troc&aacute;-la. (Salva sozinho.)')+'</div>'+
       '<div class="gr-tipo"><span class="gr-tipo-lbl">Tipo</span>'+
         '<button class="gr-tipo-op'+(_lab?'':' on')+'" onclick="trocarTipoQuadra(\'campo\')">'+ic('map',13)+' Campo</button>'+
-        '<button class="gr-tipo-op'+(_lab?' on':'')+'" onclick="trocarTipoQuadra(\'lab\')">'+ic('microscope',13)+' Laborat&oacute;rio</button></div>'+
+        '<button class="gr-tipo-op'+(_lab?' on':'')+'" onclick="trocarTipoQuadra(\'lab\')">'+ic('ciliado',13)+' Laborat&oacute;rio</button></div>'+
       (_lab?('<div class="gr-tipo"><span class="gr-tipo-lbl">Lab</span>'+
         LAB_TIPOS.map(function(t){
           var on=(quadraLabTipo(editId)===t);

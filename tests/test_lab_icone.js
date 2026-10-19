@@ -40,14 +40,14 @@ ctxI.window=ctxI; ctxI.globalThis=ctxI;
 vm.createContext(ctxI);
 vm.runInContext('var ic;\n'+fatia('function ic(n,sz){'),ctxI);
 
-const micro=ctxI.ic('microscope',14);
-assert.match(micro,/<svg/,'ic("microscope") devolve um SVG');
+const micro=ctxI.ic('ciliado',14);
+assert.match(micro,/<svg/,'ic("ciliado") devolve um SVG');
 assert.match(micro,/viewBox="0 0 24 24"/,'no mesmo viewBox dos outros ícones');
 assert.match(micro,/stroke="currentColor"/,'herdando a cor do texto — é assim que ele veste a especialidade');
 assert.match(micro,/fill="none"/,'monocromático de traço, como o resto do conjunto');
 assert.match(micro,/width="14" height="14"/,'e no tamanho pedido');
-assert.ok(ctxI.ic('microscope',14).length>ctxI.ic('naoexiste',14).length,
-  'o nome "microscope" está mesmo na tabela, não caiu no desenho vazio');
+assert.ok(ctxI.ic('ciliado',14).length>ctxI.ic('naoexiste',14).length,
+  'o nome "ciliado" está mesmo na tabela, não caiu no desenho vazio');
 assert.ok(ctxI.ic('map',13).length>ctxI.ic('naoexiste',13).length,
   'e "map" também: Campo e Laboratório aparecem lado a lado, e trocar só um desirmanaria o par');
 
@@ -94,9 +94,9 @@ function fonteDoIcone(nome){
 
 const vizinhos=['map','sheet','calendar','gauge','archive','globe'];
 const teto=Math.max(...vizinhos.map(tracos));
-assert.ok(tracos('microscope')<=teto,
+assert.ok(tracos('ciliado')<=teto,
   'o microscópio não pode ser mais cheio que o vizinho mais cheio ('+
-  tracos('microscope')+' traços contra um teto de '+teto+', dado por '+
+  tracos('ciliado')+' traços contra um teto de '+teto+', dado por '+
   vizinhos.map(n=>n+':'+tracos(n)).join(' ')+')');
 
 /* O que se mede é o TRAÇO SOLTO, não o segmento. Um risco de duas unidades
@@ -146,7 +146,7 @@ function extensoes(d){
   }
   return fora;
 }
-const miudos=extensoes(fonteDoIcone('microscope')).filter(v=>v<4);
+const miudos=extensoes(fonteDoIcone('ciliado')).filter(v=>v<4);
 assert.deepEqual(miudos,[],
   'nenhum traço solto do microscópio pode medir menos que 4 unidades — em '+
   '13px cada unidade vale meio pixel, e o que for menor que isso não é '+
@@ -212,7 +212,7 @@ Object.entries(ESPECIALIDADES).forEach(([esp,nome])=>{
 
 /* E a ligação especialidade -> desenho, com a volta ao microscópio no fim. */
 const LIGA=fatia('function labTipoIcone(t){');
-assert.match(LIGA,/LAB_ICONES\[t\]\|\|'microscope'/,
+assert.match(LIGA,/LAB_ICONES\[t\]\|\|'ciliado'/,
   'especialidade desconhecida ou em branco volta ao microscópio, não a um desenho em branco');
 assert.match(src,/var LAB_ICONES=\{[^}]*Entomologia:'bug'[^}]*\}/,
   'a tabela liga cada especialidade ao seu desenho');
@@ -231,7 +231,7 @@ assert.equal(TIPOS.length,Object.keys(ESPECIALIDADES).length,
   assert.match(trecho,/ic\(labTipoIcone\(/, onde+' desenha o ícone da especialidade');
 });
 /* E onde ela NÃO é conhecida, continua o microscópio. */
-assert.match(fatia('function novaQuadraTipo(){'),/ic\('microscope'/,
+assert.match(fatia('function novaQuadraTipo(){'),/ic\('ciliado'/,
   'a escolha "Campo ou Laboratório" fica no microscópio: ali ainda não há especialidade');
 
 /* ------------------------------------------------------------- 2. o pino ---
@@ -258,7 +258,7 @@ function pino(labTipo,estudos){
   vm.runInContext('var ic, LAB_CORES, LAB_ICONES, labTipoCor, labTipoIcone, renderQuadraLab;\n'+
     fatia('function ic(n,sz){')+';\n'+CORES+'\n'+ICONES+
     '\nlabTipoCor=function(t){ return LAB_CORES[t]||\'#21a86b\'; };\n'+
-    '\nlabTipoIcone=function(t){ return LAB_ICONES[t]||\'microscope\'; };\n'+
+    '\nlabTipoIcone=function(t){ return LAB_ICONES[t]||\'ciliado\'; };\n'+
     fatia('function renderQuadraLab(id){'),ctx);
   ctx.renderQuadraLab('LAB1');
   return html;
