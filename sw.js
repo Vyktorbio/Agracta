@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v381';
+var CACHE = 'agracta-app-v382';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './tipografia.css?v=1',
@@ -11,9 +11,9 @@ var ASSETS = [
   './interface-neutra.css?v=5', './clima-pagina.css?v=4', './clima-pagina.js?v=4',
   './relatorio-estudo.js?v=2', './relatorio-local.html', './relatorio-local.js?v=3', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=3', './vendor/relatorio-docx.js?v=1',
   './galeria-fotos.js?v=10', './fotos-estudo.js?v=3', './fotos-estudo.css?v=4', './vendor/fotos-core.js?v=3', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=10', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
-  './croqui-parcelas.js?v=7', './mapa-medir.js?v=5', './notas-local.js?v=4', './croqui-livre.js?v=3', './mapa-inicio.js?v=2', './cores-padrao.css?v=2', './croqui-parcelas.css?v=4',
+  './croqui-parcelas.js?v=8', './mapa-medir.js?v=5', './notas-local.js?v=4', './croqui-livre.js?v=3', './mapa-inicio.js?v=2', './cores-padrao.css?v=2', './croqui-parcelas.css?v=4',
   './profundidade.css?v=2',
-  './estudo-figuras.js?v=1', './estudo-pagina.js?v=28', './estudo-pagina.css?v=11',
+  './estudo-figuras.js?v=2', './estudo-pagina.js?v=28', './estudo-pagina.css?v=11',
   /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem

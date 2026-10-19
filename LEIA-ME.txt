@@ -1,3 +1,51 @@
+AGRACTA — 43a publicacao                    18/10/2026
+=====================================================
+
+Leva: o croqui das parcelas do estudo sai como imagem (PNG e SVG).
+  CODIGO:  croqui-parcelas.js (figura e botoes Baixar PNG / Baixar SVG)
+           estudo-figuras.js (exportar: qualquer figura vira PNG ou SVG)
+           index.html  sw.js (cache v382)
+  TESTE:   tests/test_croqui_parcelas_figura.js (novo)
+
+Depende da 42a (percevejo): fazer o merge dela antes.
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido do campo: "nao posso baixar a imagem desse croqui? Era legal ter o
+croqui do estudo alem do que ja tem, que e das quadras".
+
+- Croqui das parcelas > Baixar PNG ou Baixar SVG.
+- A figura e o mesmo desenho da tela (mesma geometria e mesmo norte), mas
+  limpa para o relatorio: cada parcela com o codigo de campo e o
+  tratamento; sem as cores de andamento da avaliacao e sem o percurso.
+- Leva titulo (codigo do estudo), quadra, tamanho da parcela, numero de
+  parcelas e tratamentos, seta de norte, barra de escala em metros e a
+  tabela de tratamentos da mesma projecao que a ficha mostra (cegada
+  quando o estudo e cego).
+- Rodape como a prancha do croqui de quadras: coordenadas locais em
+  metros, origem e data. Sem o nome do app nem de quem gerou.
+- Funciona com grade (retangulos) e com parcelas marcadas planta a planta.
+- Sem croqui posicionado no mapa, os botoes nao aparecem.
+
+VERIFICACAO
+-----------
+- tests/test_croqui_parcelas_figura.js: botoes, nome do arquivo, cada
+  parcela e tratamento na figura, sem cores de andamento nem percurso,
+  norte, escala, tabela cegada, rodape sem nome, estudo intacto.
+- Chromium a 390 px: download real do PNG pelo dialogo do croqui.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v382. Estudo > Croqui das
+parcelas > Baixar PNG ou Baixar SVG.
+
+Versoes: croqui-parcelas.js?v=8, estudo-figuras.js?v=2,
+agracta-app-v382 / sw.js?v=382. app.js segue v230.
+
+
 AGRACTA — 42a publicacao                    18/10/2026
 =====================================================
 

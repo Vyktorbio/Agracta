@@ -76,9 +76,15 @@ function salvar(blob,nome){
  /* Downloads no celular precisam manter o endereço vivo após o clique. */
  w.setTimeout(function(){URL.revokeObjectURL(url);},60000);
 }
+function nomeArquivo(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'_').slice(0,180);}
 async function baixar(card,meta,formato){
- var fig=montar(card,meta),nome=('Agracta-'+meta.estudo+'-'+meta.variavel+'-'+meta.tipo+(meta.avaliacao?'-'+meta.avaliacao:''))
-  .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'_').slice(0,180);
+ var fig=montar(card,meta),nome=nomeArquivo('Agracta-'+meta.estudo+'-'+meta.variavel+'-'+meta.tipo+(meta.avaliacao?'-'+meta.avaliacao:''));
+ return exportar(fig,nome,formato);
+}
+/* Qualquer figura pronta ({svg,width,height}) sai como SVG ou PNG. Usado
+   pelos gráficos do estudo e pelo croqui das parcelas. */
+async function exportar(fig,nome,formato){
+ nome=nomeArquivo(nome);
  var blob=new Blob([fig.svg],{type:'image/svg+xml;charset=utf-8'});
  if(formato==='svg'){salvar(blob,nome+'.svg');return;}
  await new Promise(function(resolve,reject){
@@ -99,5 +105,5 @@ async function baixar(card,meta,formato){
   img.src=url;
  });
 }
-w.AgractaFiguras={montar:montar,baixar:baixar};
+w.AgractaFiguras={montar:montar,baixar:baixar,exportar:exportar};
 })(window);

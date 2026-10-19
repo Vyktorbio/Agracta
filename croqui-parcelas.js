@@ -86,6 +86,63 @@ function diagram(st,g,av,selected,mode,grid){
  svg+='<circle class="pc-start" cx="'+start[0]+'" cy="'+start[1]+'" r="5"/><text class="pc-start-label" x="'+start[0]+'" y="'+(start[1]+22)+'">Início</text></svg>';
  return '<div class="pc-map-meta"><span>'+(g.livre?(g.parcelas.length+' parcelas marcadas no mapa'+(g.faltam?' · '+g.faltam+' sem lugar':'')):(g.colunas+' colunas × '+g.linhas+' linhas · '+e(g.serpentina?'Vai e volta':'Sempre no mesmo sentido')))+'</span><span title="Norte geográfico">↑ N</span></div><div class="pc-viewport" tabindex="0" aria-label="Croqui rolável">'+svg+'</div>'+legend(counts)+'<p class="pc-hint">Toque na parcela. Arraste a área ou use a rolagem para percorrer o desenho. Dimensões, vãos e orientação seguem o croqui salvo.</p>';
 }
+/* A FIGURA DO CROQUI PARA O RELATÓRIO. Relato de uso: "não posso baixar a
+   imagem desse croqui? Era legal ter o croqui do estudo além do das quadras".
+   É o mesmo desenho da tela (mesma geometria, mesmo norte), mas limpo:
+   cada parcela com o código de campo e o tratamento, sem as cores de
+   andamento da avaliação nem o percurso, que são instrumentos de campo.
+   Leva título, norte, escala em metros e a tabela de tratamentos da
+   projeção que a ficha já mostra (cegada quando o estudo é cego). O rodapé
+   segue a prancha do croqui de quadras: sem nome do app nem de quem gerou. */
+function figura(st,g){
+ const F='Arial, sans-serif',TINTA='#15181a',GRAF='#5b6470',LINHA='#c9ced3';
+ const angle=g.pos.ang||0,ca=Math.cos(angle),sa=Math.sin(angle);
+ const rot=(x,y)=>[x*ca-y*sa,-(x*sa+y*ca)];
+ const forma=p=>(w.CroquiCore.formaLocal?w.CroquiCore.formaLocal(p):[[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]]]);
+ const aneis=g.parcelas.map(p=>forma(p).map(a=>a.map(v=>rot(v[0],v[1]))));
+ const todos=aneis.flat(2),mx=Math.min(...todos.map(v=>v[0])),Mx=Math.max(...todos.map(v=>v[0])),my=Math.min(...todos.map(v=>v[1])),My=Math.max(...todos.map(v=>v[1]));
+ const larg=Math.max(Mx-mx,0.5),alt=Math.max(My-my,0.5);
+ /* Escala: cabe numa área de ~1000 x 1300 px, mas nunca menor que a da tela
+    (48 px na menor parcela), senão os rótulos se atropelam. */
+ const menor=Math.max(0.5,Math.min(...g.parcelas.map(p=>Math.max(p.w||0,p.h||0)||1)));
+ const k=Math.max(Math.min(1000/larg,1300/alt),g.livre?Math.min(30,Math.max(4,48/menor)):48/menor);
+ const M=48,TOPO=118,DW=larg*k,DH=alt*k;
+ const proj=w.agConhecimento&&w.agConhecimento.projetar?w.agConhecimento.projetar(current.qid,st,w.data[current.qid]):null;
+ const trats=((proj&&proj.tratamentos)||(st.tratamentos||[])).map(t=>({id:t.id,txt:[t.produto||t.nome||'',t.dose||''].filter(Boolean).join(' · ')}));
+ const COLW=trats.length?300:0,W=Math.ceil(Math.max(DW+2*M+(COLW?COLW+32:0),720)),H0=Math.ceil(TOPO+DH+M+90);
+ const linhaTab=22,H=Math.max(H0,TOPO+40+trats.length*linhaTab+70);
+ const X=x=>M+(x-mx)*k,Y=y=>TOPO+(y-my)*k,pt=v=>X(v[0]).toFixed(1)+','+Y(v[1]).toFixed(1);
+ const t=(x,y,s,o={})=>'<text x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" font-family="'+F+'" font-size="'+(o.t||12)+'"'+(o.w?' font-weight="'+o.w+'"':'')+(o.a?' text-anchor="'+o.a+'"':'')+' fill="'+(o.c||TINTA)+'">'+e(s)+'</text>';
+ let s='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'"><rect width="100%" height="100%" fill="#fff"/>';
+ const hoje=(()=>{const d=w.todayISO();return d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4);})();
+ s+=t(M,40,'Croqui das parcelas — '+(st.codigo||st.nome||st.id),{t:22,w:700});
+ s+=t(M,66,[w.quadraNome(current.qid),(st.protocolo||{}).tamanhoParcela||'',g.parcelas.length+' parcelas',(st.tratamentos||[]).length+' tratamentos'].filter(Boolean).join(' · '),{t:14,c:GRAF});
+ s+='<line x1="'+M+'" y1="84" x2="'+(W-M)+'" y2="84" stroke="'+LINHA+'"/>';
+ g.parcelas.forEach((p,i)=>{
+  s+='<g>'+aneis[i].map(a=>'<polygon points="'+a.map(pt).join(' ')+'" fill="#f3f5f4" stroke="'+TINTA+'" stroke-width="1.2"/>').join('');
+  const c=rot(p.x+p.w/2,p.y+p.h/2),cx=X(c[0]),cy=Y(c[1]);
+  const nome=p.row.campo||p.row.label||p.key;
+  s+='<text x="'+cx.toFixed(1)+'" y="'+(cy-2).toFixed(1)+'" font-family="'+F+'" font-size="13" font-weight="700" text-anchor="middle" fill="'+TINTA+'" stroke="#fff" stroke-width="3" paint-order="stroke">'+e(nome)+'</text>';
+  if(p.row.tratId&&p.row.tratId!==nome)s+='<text x="'+cx.toFixed(1)+'" y="'+(cy+13).toFixed(1)+'" font-family="'+F+'" font-size="11" text-anchor="middle" fill="'+GRAF+'" stroke="#fff" stroke-width="3" paint-order="stroke">'+e(p.row.tratId)+'</text>';
+  s+='</g>';
+ });
+ /* Norte (o desenho já está orientado ao norte) e escala em metros. */
+ const alvo=Math.max(DW*0.3,120)/k,passos=[0.5,1,2,5,10,20,25,50,100,200,500],m=passos.filter(v=>v<=alvo).pop()||passos[0];
+ const ey=TOPO+DH+34;
+ /* O norte fica ao lado da escala, embaixo: em cima ele disputava lugar com a
+    tabela de tratamentos. */
+ const nx=M+m*k+48,ny=ey-28;
+ s+='<path d="M'+nx.toFixed(1)+' '+(ny+30)+'L'+(nx+8).toFixed(1)+' '+ny+'L'+(nx+16).toFixed(1)+' '+(ny+30)+'L'+(nx+8).toFixed(1)+' '+(ny+23)+'Z" fill="'+TINTA+'"/>'+t(nx+8,ny+46,'N',{t:13,w:700,a:'middle'});
+ s+='<path d="M'+M+' '+(ey-6)+'V'+ey+'H'+(M+m*k).toFixed(1)+'V'+(ey-6)+'" fill="none" stroke="'+TINTA+'" stroke-width="1.5"/>'+t(M,ey+18,'0',{t:11,c:GRAF,a:'middle'})+t(M+m*k,ey+18,String(m).replace('.',',')+' m',{t:11,c:GRAF,a:'middle'});
+ if(trats.length){
+  const tx=W-M-COLW;let ty=TOPO+8;
+  s+=t(tx,ty,'TRATAMENTOS',{t:11,w:700,c:GRAF});ty+=22;
+  trats.forEach(tr=>{s+=t(tx,ty,tr.id,{t:12,w:700})+t(tx+44,ty,tr.txt.length>40?tr.txt.slice(0,39)+'…':tr.txt,{t:12,c:TINTA});ty+=linhaTab;});
+ }
+ s+='<line x1="'+M+'" y1="'+(H-34)+'" x2="'+(W-M)+'" y2="'+(H-34)+'" stroke="'+LINHA+'"/>';
+ s+=t(M,H-16,'Coordenadas locais em metros, orientadas ao norte geográfico · origem: croqui posicionado no mapa · extraído em '+hoje,{t:11,c:GRAF});
+ return {svg:s+'</svg>',width:W,height:H};
+}
 function rowList(st,g){
  if(g.parcelas.length)return '';
  return '<div class="pc-list">'+w._avRowsForStudy(JSON.parse(JSON.stringify(st)),false).map(r=>'<button type="button" data-pc-pick="'+e(r.key)+'">'+e(r.campo||r.label)+'</button>').join('')+'</div>';
@@ -117,7 +174,7 @@ function render(){
  const st=study(current.qid,current.sid);if(!st||!allowed()){close();return;}
  const old=dialog.querySelector('.pc-viewport'),scroll=old?{top:old.scrollTop,left:old.scrollLeft}:null;
  const g=layout(st),av=chosen(st);
- dialog.innerHTML='<header class="pc-head"><div><p>CROQUI DAS PARCELAS</p><h2>'+e(st.codigo||st.nome||st.id)+'</h2><span>'+e(w.quadraNome(current.qid))+' · '+e((st.protocolo||{}).tamanhoParcela||'Dimensões não informadas')+'</span></div><button type="button" data-pc-action="close" aria-label="Fechar croqui">×</button></header><div class="pc-toolbar"><label>Avaliação<select id="pc-assessment">'+(av?assessments(st).map(a=>'<option value="'+e(a.id)+'"'+(a.id===av.id?' selected':'')+'>'+e(dateText(a))+'</option>').join(''):'<option value="">Nenhuma avaliação cadastrada</option>')+'</select></label><button type="button" data-pc-action="fit">'+(current.fit?'Ampliar croqui':'Enquadrar tudo')+'</button>'+(!w.estudoFinalizado(st)?'<button type="button" data-pc-action="position">'+(g.pos?'Ajustar posição':'Posicionar no mapa')+'</button>':'')+'</div><div class="pc-body"><section class="pc-drawing">'+diagram(st,g,av,current.key,'pick')+rowList(st,g)+(g.parcelas.length&&(g.problemas||[]).length?'<p class="pc-notice">'+e(g.problemas.join(' '))+'</p>':'')+'</section><aside class="pc-detail" aria-labelledby="pc-detail-title">'+detail(st)+'</aside></div>';
+ dialog.innerHTML='<header class="pc-head"><div><p>CROQUI DAS PARCELAS</p><h2>'+e(st.codigo||st.nome||st.id)+'</h2><span>'+e(w.quadraNome(current.qid))+' · '+e((st.protocolo||{}).tamanhoParcela||'Dimensões não informadas')+'</span></div><button type="button" data-pc-action="close" aria-label="Fechar croqui">×</button></header><div class="pc-toolbar"><label>Avaliação<select id="pc-assessment">'+(av?assessments(st).map(a=>'<option value="'+e(a.id)+'"'+(a.id===av.id?' selected':'')+'>'+e(dateText(a))+'</option>').join(''):'<option value="">Nenhuma avaliação cadastrada</option>')+'</select></label><button type="button" data-pc-action="fit">'+(current.fit?'Ampliar croqui':'Enquadrar tudo')+'</button>'+(!w.estudoFinalizado(st)?'<button type="button" data-pc-action="position">'+(g.pos?'Ajustar posição':'Posicionar no mapa')+'</button>':'')+(g.parcelas.length?'<button type="button" data-pc-action="png">Baixar PNG</button><button type="button" data-pc-action="svg">Baixar SVG</button>':'')+'</div><div class="pc-body"><section class="pc-drawing">'+diagram(st,g,av,current.key,'pick')+rowList(st,g)+(g.parcelas.length&&(g.problemas||[]).length?'<p class="pc-notice">'+e(g.problemas.join(' '))+'</p>':'')+'</section><aside class="pc-detail" aria-labelledby="pc-detail-title">'+detail(st)+'</aside></div>';
  const next=dialog.querySelector('.pc-viewport');if(next)next.classList.toggle('pc-fit',!!current.fit);if(scroll&&next){next.scrollTop=scroll.top;next.scrollLeft=scroll.left;}
 }
 function close(){if(dialog&&dialog.open)dialog.close();}
@@ -144,6 +201,14 @@ function open(qid,sid,key){
    if(action==='close'){close();return;}
    if(action==='fit'){current.fit=!current.fit;render();const vp=dialog.querySelector('.pc-viewport');if(vp){vp.scrollTop=0;vp.scrollLeft=0;}if(!current.fit)locate();return;}
    if(action==='position'){if(w.estudoFinalizado(s))return;close();w.posicionarCroquiDoEstudo(current.qid,current.sid);return;}
+   if(action==='png'||action==='svg'){
+    const g=layout(s);if(!g.parcelas.length)return;
+    if(!w.AgractaFiguras||!w.AgractaFiguras.exportar){alert('O módulo de imagens não carregou. Reabra o Agracta e tente novamente.');return;}
+    b.disabled=true;
+    w.AgractaFiguras.exportar(figura(s,g),'Croqui-'+(s.codigo||s.nome||s.id),action)
+     .catch(err=>alert(err&&err.message||'Não foi possível gerar a imagem.')).finally(()=>{b.disabled=false;});
+    return;
+   }
    const row=rowFor(s,current.key);if(!row)return;
    const av=chosen(s);
    if(action==='photos'){
@@ -181,5 +246,5 @@ document.addEventListener('click',ev=>{const el=ev.target.closest&&ev.target.clo
 document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('[data-pc-eval]')){ev.preventDefault();w.avCroquiSelect(ev.target.dataset.pcEval);}});
 // Fecha imediatamente quando a porta de acesso esconde o aplicativo.
 new MutationObserver(()=>{if(!allowed())close();}).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
-w.AgractaParcelas={open,close,layout,status,notes,schema,mapStyle,evaluation,refresh(){render();refreshMap();}};
+w.AgractaParcelas={open,close,layout,status,notes,schema,mapStyle,evaluation,figura,refresh(){render();refreshMap();}};
 })(window);
