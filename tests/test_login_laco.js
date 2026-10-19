@@ -95,8 +95,19 @@ const gateOn = (d) => { const g = d.getElementById('authGate'); return !!(g && g
 (async () => {
   console.log('\n--- 1. Relógio do celular atrasado: o banco aceitou, o servidor diz "dentro" ---');
   {
-    /* Janela que começa daqui a 10 min no relógio do celular; o servidor está 30 min à frente. */
-    const j = { on: true, dias: [spDia], iniMin: spMin(Date.now()) + 10, fimMin: spMin(Date.now()) + 60 };
+    /* O servidor está 30 min à frente do celular. A janela é montada em volta
+       da hora do SERVIDOR (de 20 min antes a 30 min depois dela, no dia dele),
+       e o celular fica 10 min antes do início: fora pelo relógio dele, dentro
+       pelo do servidor.
+
+       Antes ela era "agora + 10 até agora + 60" no dia de hoje, e depois das
+       23 h passava da meia-noite (fimMin acima de 1440, servidor já no dia
+       seguinte): o teste reprovava o app à noite e passava de dia. Perto da
+       virada, a janela é cortada em 00:00 e 23:59, e o celular cai no dia
+       anterior, fora do mesmo jeito. */
+    const servidor = Date.now() + 30 * 60000, sMin = spMin(servidor);
+    const sDia = new Date(servidor - 180 * 60000).getUTCDay();
+    const j = { on: true, dias: [sDia], iniMin: Math.max(0, sMin - 20), fimMin: Math.min(1439, sMin + 30) };
     const p = montar({ cadastro: { active: true, janela: j }, servidorMin: 30, leituraOk: true });
     p.w._authUser = { email: EM };
     p.w.hideAuthGate(); await p.avancar(0);
