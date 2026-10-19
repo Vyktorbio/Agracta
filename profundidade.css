@@ -39,10 +39,7 @@ html.light,html.ag-depth-light{
 }
 /* Nível 3: janelas, menus e ferramentas acima do mapa. Sem transform: os
    descendentes fixos conservam sua referência ao viewport. */
-.panel,.edit-panel,.se-panel,.loc-box,.ndvi-panel,.gr-panel,.agenda-panel,
-.legend-panel,.main-menu,.loc-menu,.search-wrap,.auth-box,.calc-box,
-.ag-drawer,.ag-ndvibar,.tb-brand,.top-bar-right,.leaflet-control-zoom,
-.leaflet-popup-content-wrapper{
+.panel,.edit-panel,.se-panel,.loc-box,.ndvi-panel,.gr-panel,.agenda-panel,.main-menu,.loc-menu,.search-wrap,.auth-box,.calc-box,.ag-drawer,.ag-ndvibar,.tb-brand,.top-bar-right,.leaflet-control-zoom,.leaflet-popup-content-wrapper{
   box-shadow:var(--depth-float)!important;
   border-color:var(--depth-edge)!important;
 }

@@ -1,3 +1,56 @@
+AGRACTA — 47a publicacao                    19/10/2026
+=====================================================
+
+Leva: faxina no CSS. A tela nao muda; o CSS fica menor e com menos
+!important brigando entre si.
+  CODIGO:  styles.css  theme-2026.css  ui-campo.css  estudo-pagina.css
+           profundidade.css  index.html  cliente.html
+           estatistica/index.html  sw.js (cache v386)
+           estatistica/sw.js (bioensaio-v62-faxina)
+  FERRAMENTA: tools/css-sobrepostas.cjs  tools/css-mortas.cjs (novas)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram. app.js nao mudou.
+
+
+O QUE MUDOU
+-----------
+
+- 1.564 declaracoes que SEMPRE perdiam na cascata sairam (544 delas com
+  !important). Criterio: mesmo seletor, mesma propriedade, mesmo contexto
+  de @media, e outra declaracao depois, na ordem em que o index.html
+  carrega as folhas, com forca igual ou maior. So em folhas que apenas o
+  index.html carrega. Fallbacks de propriedade (dvh, -webkit-, clamp,
+  env...) ficaram.
+- 9 regras e 22 seletores que citavam classes que nao existem em nenhum
+  JS ou HTML sairam. Classe montada no codigo ('k'+i, 'sev-'+x) conta
+  como viva.
+- styles.css: 146 KB -> 102 KB, !important 888 -> 455.
+  theme-2026.css: 49 KB -> 44 KB, !important 921 -> 815.
+
+VERIFICACAO
+-----------
+- Chromium a 390 px, temas claro e escuro, 22 telas cada (mapa, menus,
+  hoje, agenda, buscar, laboratorio, admin, backups, integridade,
+  armazenamento, conformidade, itens, calculadora, ficha do estudo,
+  edicao do protocolo, avaliacao...), com um estudo de exemplo: estilo
+  computado de cada elemento visivel (31 propriedades e os ::before/
+  ::after), antes x depois: 0 diferencas.
+- cliente, galeria, relatorio, estatistica, probit, croqui, prancha:
+  0 diferencas.
+- conferir.sh --pull-request: PODE SUBIR.
+
+COMO REPETIR
+------------
+npm i --no-save postcss postcss-selector-parser
+node tools/css-sobrepostas.cjs .            (so conta)
+node tools/css-mortas.cjs .                 (so conta)
+Com --aplicar, removem. Conferir a tela antes de publicar.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v386.
+
+
 AGRACTA — 46a publicacao                    19/10/2026
 =====================================================
 
