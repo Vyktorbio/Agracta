@@ -6,8 +6,10 @@
  --gp-bg:#fff;--gp-s1:#fff;--gp-s2:#f7f7f8;--gp-s3:#eeeef0;
  --gp-line:#dedee2;--gp-line-2:#c3c5ca;--gp-text:#202124;--gp-text-2:#555860;--gp-text-3:#666a73;
  --gp-green:#292b30;--gp-green-deep:#18191c;--gp-green-hover:#35373c;
- --ag-green:#292b30;--ag-green-strong:#18191c;--ag-focus:0 0 0 4px #1477e526;
- --gp-glass:rgba(255,255,255,.96);--gp-glass-strong:#fff;
+ --ag-green:#292b30;--ag-green-strong:#18191c;--ag-focus:0 0 0 3px #60b9ee50;
+ --skin-royal:#4169e1;--skin-selection:#60b9ee;--skin-selection-ink:#102d40;
+ --skin-glass:rgba(255,255,255,.88);--skin-card:rgba(255,255,255,.78);--skin-edge:#d9dde1;--skin-ink:#191b1f;
+ --gp-glass:var(--skin-glass);--gp-glass-strong:var(--skin-glass);--gp-blur:blur(20px);
  --accent:#202124;--accent-d:#101114;--accent-deep:#fff;--accent-soft:#2021240d;
  --depth-canvas:#fff;--depth-surface:#fff;--depth-edge:#dedee2;--depth-highlight:#ffffff80;--depth-wash:transparent;--depth-recess:#1618200a;
  --depth-sheen:none;--depth-raised:0 1px 2px #1011140a,0 5px 12px -6px #10111430;
@@ -18,11 +20,13 @@
 }
 /* O tema escuro existente também perde o tom esverdeado. */
 html:not(.light):has(#authGate){
- --bg:#151619;--surface:#202125;--surface-2:#27282d;--surface-3:#33353b;--border:#41434b;--border-soft:#33353b;
+ --bg:#000;--surface:#111315;--surface-2:#202327;--surface-3:#33353b;--border:#41434b;--border-soft:#33353b;
  --text:#f6f6f7;--text-2:#c4c6cc;--text-3:#a9adb7;
- --gp-bg:#151619;--gp-s1:#202125;--gp-s2:#27282d;--gp-s3:#33353b;--gp-line:#41434b;--gp-line-2:#5b5e68;
+ --gp-bg:#000;--gp-s1:#111315;--gp-s2:#202327;--gp-s3:#33353b;--gp-line:#41434b;--gp-line-2:#5b5e68;
  --gp-text:#f6f6f7;--gp-text-2:#c4c6cc;--gp-text-3:#a9adb7;--gp-green:#e6e7ea;--ag-green:#e6e7ea;
- --gp-glass:#202125;--gp-glass-strong:#202125;--depth-canvas:#151619;--depth-surface:#202125;--depth-edge:#41434b;--depth-highlight:#ffffff08;
+ --skin-glass:rgba(15,17,20,.92);--skin-card:rgba(36,39,43,.90);--skin-edge:#42464b;--skin-ink:#fff;
+ --gp-glass:var(--skin-glass);--gp-glass-strong:var(--skin-glass);--gp-blur:blur(20px);--ag-focus:0 0 0 3px #60b9ee50;
+ --depth-canvas:#000;--depth-surface:#111315;--depth-edge:#41434b;--depth-highlight:#ffffff08;
 }
 /* Navegação escura — no tema ESCURO. Ela já foi escura nos dois, e isso
    destoava: no modo dia o app inteiro é branco e chumbo, e a gaveta chegava
@@ -32,18 +36,23 @@ html:not(.light):has(#authGate){
 html :is(.main-menu,.loc-menu,.ag-drawer){
  --gp-text:#fafafa;--gp-text-2:#d3d4d8;--gp-text-3:#b5b8c0;--gp-s1:#202125;--gp-s2:#2c2e33;--gp-s3:#373940;
  --gp-line:#41434b;--gp-line-2:#5d6069;--gp-green:#fff;--ag-green:#fff;--depth-surface:#2c2e33;
- background:#202125!important;background-image:none!important;color:#fafafa!important;border-color:#41434b!important;
+ background:rgba(15,17,20,.92)!important;background-image:none!important;color:#fff!important;border-color:#42464b!important;
 }
 html :is(.main-menu button,.loc-mi,.ag-row,.ag-dw-x){color:var(--gp-text)!important}
 html :is(.main-menu button,.loc-mi,.ag-row):hover{background:#373940!important;color:#fff!important}
-html .ag-row.on{background:#36383f!important;border-color:#626772!important;color:#fff!important}
-html .ag-row.on .ag-chk{background:#fff!important}html .ag-row.on .ag-chk::after{background:#202125!important}
+html .ag-row.on{background:var(--skin-selection)!important;border-color:var(--skin-selection)!important;color:var(--skin-selection-ink)!important}
+html .ag-row.on .ag-chk{background:var(--skin-selection-ink)!important}html .ag-row.on .ag-chk::after{background:#fff!important}
 html :is(.ag-dw-head,.ag-sec-t,.mm-user,.mm-user b){color:var(--gp-text)!important}
 /* Cabeçalhos e controles principais. */
 html .ep-hero{background:linear-gradient(125deg,#18191c,#34363c);box-shadow:var(--depth-card);color:#fff}
 html .ep-hero :is(.ep-eyebrow,.ep-location,small){color:#d3d5dc}
-html .ep-progress progress{accent-color:#fff}
+html .ep-progress progress{accent-color:var(--skin-royal)}
+html .ep-progress progress::-webkit-progress-value{background:var(--skin-royal)}
+html .ep-progress progress::-moz-progress-bar{background:var(--skin-royal)}
 html :is(.con-btn.ativo,.con-btn.primary,.btn-save,.auth-btn,.av-photo-btn,.calc-copy,.btn-principal){background:#18191c!important;background-image:none!important;border-color:#18191c!important;color:#fff!important;box-shadow:var(--depth-raised)!important}
+/* Ligado/primário é azul de seleção; fica depois do grupo escuro para vencer
+   com a mesma força. O hover escuro, mais específico, continua valendo. */
+html :is(.con-btn.ativo,.con-btn.primary){background:var(--skin-selection)!important;background-image:none!important;border-color:var(--skin-selection)!important;color:var(--skin-selection-ink)!important;box-shadow:var(--depth-raised)!important}
 html :is(.con-btn.ativo,.con-btn.primary,.btn-save,.auth-btn,.av-photo-btn,.calc-copy,.btn-principal):hover{background:#35373c!important}
 html :is(.btn-cancel,.con-btn:not(.ativo):not(.primary):not(.perigo):not(.link),.calc-navb){background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
 html .con-estudo>.con-btn.card{background:transparent!important}
@@ -79,8 +88,8 @@ html.light :is(.main-menu,.loc-menu,.ag-drawer){
 }
 html.light :is(.main-menu button,.loc-mi,.ag-row,.ag-dw-x){color:var(--gp-text)!important}
 html.light :is(.main-menu button,.loc-mi,.ag-row):hover{background:#f0f0f2!important;color:#202124!important}
-html.light .ag-row.on{background:#eeeef0!important;border-color:#c3c5ca!important;color:#202124!important}
-html.light .ag-row.on .ag-chk{background:#202124!important}
+html.light .ag-row.on{background:var(--skin-selection)!important;border-color:var(--skin-selection)!important;color:var(--skin-selection-ink)!important}
+html.light .ag-row.on .ag-chk{background:var(--skin-selection-ink)!important}
 html.light .ag-row.on .ag-chk::after{background:#fff!important}
 html.light :is(.ag-dw-head,.ag-sec-t,.mm-user,.mm-user b){color:var(--gp-text)!important}
 /* O véu atrás da gaveta escurecia como se fosse noite: no dia ele só precisa
@@ -90,3 +99,38 @@ html.light .ag-drawer-bg{background:rgba(32,33,36,.28)!important}
    escura nos dois temas. A coluna saiu do app — o computador voltou a navegar
    pelo dock de baixo, igual ao celular — e a ressalva saiu com ela: regra de
    tema apontando para peça removida é endereço de casa demolida. */
+
+/* -------------------------------------------------------------------------- */
+/* VIDRO E AZUL ROYAL (skin aprovada em 16/10/2026)                            */
+/* -------------------------------------------------------------------------- */
+/* Antes uma folha à parte (skin-royal.css) repintava por cima desta. Agora a
+   skin É a interface: os tokens --skin-* nascem lá em cima, nos dois temas, e
+   as regras abaixo são o que sobrou de componente. Cores de estado do mapa,
+   dos dados e dos gráficos continuam fora daqui (cores-padrao.css). */
+html :is(.panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.loc-box){
+ background:var(--skin-glass)!important;background-image:none!important;
+ color:var(--skin-ink)!important;border-color:var(--skin-edge)!important;
+}
+html :is(.panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.loc-box,.main-menu,.loc-menu,.ag-drawer){
+ border-radius:20px!important;backdrop-filter:var(--gp-blur)!important;-webkit-backdrop-filter:var(--gp-blur)!important;
+ box-shadow:0 12px 36px #00000020,inset 0 1px 0 #ffffff25!important;
+}
+html :is(.study-card,.study-card-v2,.fen-item){background:var(--skin-card)!important;border-color:var(--skin-edge)!important}
+html .prog-bar{background:var(--skin-edge)!important}
+html .prog-fill{background:var(--skin-royal)!important}
+html .fen-item[style],html .fen-item.on,html .fen-item.atual{background:var(--skin-royal)!important;border-color:var(--skin-royal)!important}
+html .fen-item[style] :is(.fen-code,.fen-dap){color:#fff!important}
+html :is(.btn-save,.btn-cancel,.con-btn,.studies-add,.sd-add,.p-btn-edit){border-radius:13px!important}
+html :is(.panel-qid,.panel-qlbl,.info-l,.prog-t,.fen-title){letter-spacing:normal!important}
+/* Sem desfoque no aparelho, vidro vira superfície sólida — legível no sol. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+ :root{--skin-glass:#fff}html:not(.light):has(#authGate){--skin-glass:#111315}
+}
+@media print{html body{background:#fff!important;color:#111!important}html :is(.panel,.main-menu,.ag-drawer){box-shadow:none!important;backdrop-filter:none!important}}
+/* O símbolo original reaparece como assinatura, sem capturar toques no mapa. */
+html .tb-brand::before{
+ display:block!important;position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));
+ width:38px!important;height:38px!important;margin:0!important;
+ background-color:var(--skin-glass);background-size:24px 24px;
+ border:1px solid var(--skin-edge);border-radius:12px;pointer-events:none;
+}

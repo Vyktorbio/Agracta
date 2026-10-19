@@ -74,8 +74,10 @@ do laboratório; motor em `vendor/probit-core.js`).
 
 `styles.css` é a base (extraída do antigo `index.html`). Por cima dela, na ordem
 do `index.html`: `theme-2026.css` (camada visual de campo), `ui-campo.css`,
-`profundidade.css`, `interface-neutra.css` (superfícies neutras) e
-`cores-padrao.css` (cores de estado, carregada por último). Os outros `.css`
+`profundidade.css`, `interface-neutra.css` (superfícies, vidro, azul royal e
+azul de seleção, nos dois temas — os tokens `--skin-*`), `tipografia.css`
+(Arial em todas as páginas, sem fonte baixada; não toca o `<text>` das figuras)
+e `cores-padrao.css` (cores de estado, carregada por último). Os outros `.css`
 são de uma tela só (`integracoes.css`, `estudo-pagina.css`, `clima-pagina.css`,
 `fotos-estudo.css`, `croqui-parcelas.css`, `protocolo-*.css`, `campo-3d.css`).
 

@@ -2,13 +2,13 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v379';
+var CACHE = 'agracta-app-v380';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
-  './skin-royal.css?v=1',
+  './tipografia.css?v=1',
   './agroapi.css?v=2', './vendor/agroapi-core.js?v=1', './agroapi.js?v=2',
   './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=3', './protocolo-menu.js?v=4', './protocolo-avaliacoes.css?v=2',
-  './interface-neutra.css?v=4', './clima-pagina.css?v=4', './clima-pagina.js?v=4',
+  './interface-neutra.css?v=5', './clima-pagina.css?v=4', './clima-pagina.js?v=4',
   './relatorio-estudo.js?v=2', './relatorio-local.html', './relatorio-local.js?v=3', './relatorio-local.css?v=1', './vendor/relatorio-core.js?v=3', './vendor/relatorio-docx.js?v=1',
   './galeria-fotos.js?v=10', './fotos-estudo.js?v=3', './fotos-estudo.css?v=4', './vendor/fotos-core.js?v=3', './vendor/colonia-core.js?v=1', './colonia-medida.js?v=1', './galeria-local.html', './galeria-local.js?v=10', './galeria-local.css?v=3', './vendor/fotos-store.js?v=1', './vendor/fotos-pptx.js?v=3',
   './croqui-parcelas.js?v=7', './mapa-medir.js?v=5', './notas-local.js?v=4', './croqui-livre.js?v=3', './mapa-inicio.js?v=2', './cores-padrao.css?v=2', './croqui-parcelas.css?v=4',
@@ -41,7 +41,7 @@ var ASSETS = [
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js?v=2', './croqui.html', './prancha.html',
   /* Análise probit da bancada (botão Probit na ficha do laboratório) */
-  './probit.html', './probit.js?v=1', './probit.css?v=1', './vendor/probit-core.js?v=1',
+  './probit.html', './probit.js?v=1', './probit.css?v=2', './vendor/probit-core.js?v=1',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
   './estatistica/index.html', './estatistica/app.js', './estatistica/styles.css',
   './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js',

@@ -50,7 +50,14 @@ assert.doesNotMatch(js, /style="|\.style\.|style=\\"/, 'a tela não pinta estilo
 assert.doesNotMatch(js, /fill="var\(|stroke="var\(/, 'nem var() em atributo de SVG');
 
 const sw = fs.readFileSync('sw.js', 'utf8');
-['./probit.html', './probit.js?v=1', './probit.css?v=1', './vendor/probit-core.js?v=1'].forEach(f =>
+/* As versões vêm do que a página pede: subir o ?v= da folha (41ª, vidro nos
+   painéis) não pode quebrar o teste, só esquecer de subir no sw.js. */
+const pagina = fs.readFileSync('probit.html', 'utf8');
+const pedidos = ['probit.js', 'probit.css', 'vendor/probit-core.js'].map(n => {
+  const m = pagina.match(new RegExp(n.replace(/[./]/g, '\\$&') + '\\?v=\\d+'));
+  assert.ok(m, 'probit.html precisa pedir ' + n + ' com ?v='); return './' + m[0];
+});
+['./probit.html', ...pedidos].forEach(f =>
   assert.ok(sw.indexOf("'" + f + "'") > 0, 'sw.js pré-carrega ' + f));
 assert.match(sw, /\(prancha\|croqui\|cliente\|galeria-local\|relatorio-local\|probit\)\\\.html/,
   'probit.html entra no ramo das folhas próprias: aberta em iframe ela não sobrescreve o index no cache');

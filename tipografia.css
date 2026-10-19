@@ -1,0 +1,19 @@
+/* Tipografia comum a todas as páginas do Agracta: Arial, sem fonte baixada.
+   Era a metade de fontes da skin royal (skin-royal.css); a metade de cores foi
+   para interface-neutra.css.
+
+   Por que ainda há uma regra com !important: dezenas de folhas e de estilos
+   gerados em JS antigos declaram Inter, Archivo, IBM Plex ou system-ui direto
+   no elemento. Os tokens abaixo resolvem tudo o que já usa var(); a regra
+   seguinte segura o resto.
+
+   A regra NÃO alcança <text> de SVG. As figuras (croqui, prancha, gráficos do
+   estudo) declaram a própria fonte no atributo font-family, e é com ela que
+   são baixadas e com ela que a prancha calcula a largura dos rótulos. Forçar
+   Arial na tela mostrava uma figura diferente da que sai no arquivo. */
+:root,html.light,html.ag-depth-light,html:not(.light):has(#authGate){
+ --font:Arial,sans-serif;--font-title:Arial,sans-serif;
+ --ag-font:Arial,sans-serif;--ag-display:Arial,sans-serif;--ag-mono:Arial,sans-serif;
+ --gp-font:Arial,sans-serif;--gp-display:Arial,sans-serif;--gp-mono:Arial,sans-serif;
+}
+html body,html body :is(button,input,select,textarea,label,h1,h2,h3,h4,p,span,div,small,strong,b,td,th,a){font-family:Arial,sans-serif!important}
