@@ -206,7 +206,7 @@ function atualizarContagens(){
     rows.forEach(function(r){ porKey[r.key]=FC.chaveParcela(r.tratId,r.rep); });
     Array.prototype.forEach.call(d.querySelectorAll('[data-av-fotos]'),function(b){
       var k=porKey[b.getAttribute('data-av-fotos')], n=(mapa||{})[k]||0, t=(_cont.todas||{})[k]||0;
-      b.hidden=!(t>0); b.textContent=n?(n+' 📷'):(t+' ant.');
+      b.hidden=!(t>0); b.textContent=n?(n+(n>1?' fotos':' foto')):(t+' ant.');
       b.title=n?(n+' foto(s) desta parcela nesta leitura — ver'):(t+' foto(s) desta parcela em outras leituras — ver');
     });
   }).catch(function(){});
@@ -252,7 +252,7 @@ w.fotosDaParcela=function(key, qid, sid, avFoco){
     ordem.sort(function(a,b){ return cols.indexOf(a)-cols.indexOf(b); });
     var h='<div class="fe-parcela-sub">'+esc(p.tratamento+(p.produto?' · '+p.produto:'')+' · R'+p.rep)+'</div>';
     var podeFotografar=!(w.estudoFinalizado&&w.estudoFinalizado(ctx.st));
-    if(podeFotografar) h+='<div class="fe-acoes"><button type="button" data-fe="camera">📷 Tirar foto</button><button type="button" data-fe="arquivos">🖼 Da galeria do aparelho</button></div>';
+    if(podeFotografar) h+='<div class="fe-acoes"><button type="button" data-fe="camera">Tirar foto</button><button type="button" data-fe="arquivos">Da galeria do aparelho</button></div>';
     if(!minhas.length) h+='<p class="fe-vazio">Nenhuma foto desta parcela neste aparelho.</p>';
     ordem.forEach(function(k){
       var rot=k.indexOf('data:')===0?((FC.br(k.slice(5))||'Sem data')+' · sem avaliação'):(avRotulo(ctx,k)||k);
@@ -329,8 +329,8 @@ w.abrirPainelFotos=function(qid, sid){
        prévia, seleção e ordem. O PPTX próprio deste painel saía com 4 fotos
        fixas por slide e a legenda inteira numa linha só — "saiu tudo errado". */
     var podeFotografar=!(w.estudoFinalizado&&w.estudoFinalizado(ctx.st));
-    h+='<div class="fe-acoes">'+(podeFotografar&&ctx.parcelas.length>1?'<button type="button" data-p="sequencia">📷 Fotos em sequência</button>':'')+
-      '<button type="button" data-p="slides">🖼 Slides e originais</button></div>';
+    h+='<div class="fe-acoes">'+(podeFotografar&&ctx.parcelas.length>1?'<button type="button" data-p="sequencia">Fotos em sequência</button>':'')+
+      '<button type="button" data-p="slides">Slides e originais</button></div>';
     if(!M.total) h+='<p class="fe-vazio">Nenhuma foto ainda. Na avaliação, o botão <b>Foto</b> de cada parcela abre a câmera — a foto já sai identificada. Para fotografar uma parcela atrás da outra, use <b>Fotos em sequência</b>.</p>';
     else{
       h+='<div class="fe-matriz-wrap"><table class="fe-matriz"><thead><tr><th>Parcela</th>'+M.colunas.map(function(c){ return '<th>'+esc(c.rotulo)+'</th>'; }).join('')+'</tr></thead><tbody>';
@@ -391,7 +391,7 @@ w.abrirGaleriaFotos=function(s, initial){
   }
   w.abrirPainelFotos(s.qid,s.sid);
 };
-/* "N 📷" ao lado do botão Foto: abre as fotos da parcela. "Fotos em sequência"
+/* "N fotos" ao lado do botão Foto: abre as fotos da parcela. "Fotos em sequência"
    da avaliação: a galeria de sempre, com a sequência ligada. Captura, não
    bolha: o painel da avaliação (#eePnl) para a propagação do clique. */
 d.addEventListener('click',function(ev){

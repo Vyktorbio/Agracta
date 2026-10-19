@@ -58,7 +58,7 @@ function cicloClima(){
         var ak=it.sid+'|'+it.p.id;
         if(!avisados()[ak]){
           marcaAvisado(ak);
-          toast('🌧 '+(s&&(s.codigo||s.nome)||'Estudo')+': choveu '+String(r.chuvaMm).replace('.',',')+' mm, a primeira '+
+          toast(''+(s&&(s.codigo||s.nome)||'Estudo')+': choveu '+String(r.chuvaMm).replace('.',',')+' mm, a primeira '+
             String(r.primeiraChuvaHoras).replace('.',',')+' h depois da aplicação de '+
             ((typeof w.isoToBR==='function'&&w.isoToBR(r.data))||r.data)+' — possível lavagem.',9000);
         }
@@ -179,7 +179,7 @@ function cartao(qid,s){
   if(!r&&!(b&&b.proxima)) return '';
   var out='<div class="ci-card" id="ciAgenda"><div class="jan-t">AGENDA DO CAMPO</div>';
   if(r) out+='<p>'+esc(r.texto)+'</p><button type="button" onclick="campoReancorar(\''+esc(qid)+'\',\''+esc(s.id)+'\')">Ajustar as avaliações previstas</button>';
-  if(b&&b.proxima) out+='<p class="'+(b.alerta?'ci-alerta':'')+'">'+(b.alerta?'⚠ ':'🌱 ')+esc(b.texto)+'</p>';
+  if(b&&b.proxima) out+='<p class="'+(b.alerta?'ci-alerta':'')+'">'+(b.alerta?'⚠ ':'')+esc(b.texto)+'</p>';
   return out+'</div>';
 }
 envolve('openStudyDetail',function(ctx,args){

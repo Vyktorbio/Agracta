@@ -54,7 +54,7 @@ function perto(a,b,pct){ return Math.abs(a-b)<=b*pct/100; }
 (async function(){
   console.log('\n[1] o botão do editor da placa abre a câmera');
   var app=fs.readFileSync('app.js','utf8');
-  ck(/avSubMedirFoto\(\)[^]{0,80}📷 Medir por foto/.test(app),'o editor do diâmetro em cruz tem "📷 Medir por foto"');
+  ck(/avSubMedirFoto\(\)[^]{0,80}>Medir por foto/.test(app),'o editor do diâmetro em cruz tem "Medir por foto"');
   fotoDaVez=placa({ruido:6, colonia:{r1:150,r2:150}});
   w.avSubMedirFoto();
   ck(cliques.length===1 && cliques[0].getAttribute('capture')==='environment','abre a câmera traseira direto, no mesmo toque');

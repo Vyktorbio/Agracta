@@ -1089,7 +1089,7 @@
     if(m==='cota')cloudBadge('error','=⚠ Servidor sem cota (Firebase) · '+g+' · toque');
     else if(m==='rede')cloudBadge('offline','=⌁ Sem conexão com o servidor · '+g);
     else if(m==='travado')cloudBadge('error','=⚠ Servidor não confirma o envio · '+g+' · toque');
-    else cloudBadge('offline','=⌛ '+n+' alterações aguardando o servidor · toque');
+    else cloudBadge('offline','='+n+' alterações aguardando o servidor · toque');
   }
   /* O que o servidor disse, por extenso, para quem precisa ver (ou mandar print). */
   function _detalheTecnico(){

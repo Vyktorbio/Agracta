@@ -20,7 +20,7 @@ async function fixture(options={}){
 }
 (async()=>{
  let {env,a}=await fixture();prazo(a,15000).fn();
- assert.ok(/^=⌛ \d+ alterações aguardando o servidor/.test(a.badges.at(-1)));
+ assert.ok(/^=\d+ alterações aguardando o servidor/.test(a.badges.at(-1)));
  assert.equal(a.c.__testFB.pushing,true);
  a.c.__testFB.queixas={cota:Date.now()};a.c.__testFB.ultimaQueixa='Firestore (12.15.0): FirebaseError: [code=resource-exhausted]: Quota exceeded.';
  prazo(a,15000).fn();assert.ok(/^=⚠ Servidor sem cota/.test(a.badges.at(-1)));

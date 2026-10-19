@@ -109,7 +109,7 @@
   }
   function html(qid, st) {
     var r = resumo(qid, st), dg = diagnostico(qid, st), fin = r.finalizado;
-    var h = '<div class="pm-head"><div><h2>📋 Protocolo · ' + esc(r.codigo) +
+    var h = '<div class="pm-head"><div><h2>Protocolo · ' + esc(r.codigo) +
       (r.aprovado ? '<span class="pm-chip pm-ok">Aprovado · v' + esc(r.versao) + '</span>' : '<span class="pm-chip pm-warn">Rascunho</span>') +
       (fin ? '<span class="pm-chip pm-err">Finalizado</span>' : '') + '</h2>' +
       '<p>Tudo do protocolo num lugar só. Cada botão abre o editor certo; nada é gravado nesta tela.</p></div>' +
@@ -120,37 +120,37 @@
         dg.aviso.map(function (f) { return '<li>' + esc(f.txt) + ' — <a ' + (f.papel ? 'data-pm="papeis"' : 'data-pm-etapa="' + f.etapa + '"') + '>conferir</a></li>'; }).join('') + '</ul></div>';
     } else h += '<div class="pm-falta" style="border-color:var(--ag-ok-line,rgba(22,163,74,.3));background:var(--ag-ok-bg,rgba(22,163,74,.06))"><b>✓ Protocolo completo.</b></div>';
 
-    h += '<section class="pm-sec"><h3><span>🧾</span>1. Identificação</h3><dl class="pm-dl">' +
+    h += '<section class="pm-sec"><h3>1. Identificação</h3><dl class="pm-dl">' +
       '<dt>Código</dt><dd>' + esc(r.codigo) + '</dd><dt>Tipo de estudo</dt><dd>' + esc(r.tipo) + '</dd>' +
       (r.objetivo ? '<dt>Objetivo</dt><dd>' + esc(r.objetivo) + '</dd>' : '') +
       '<dt>Cultura · alvo</dt><dd>' + esc([r.cultura || 'cultura da quadra', r.alvo || 'sem alvo'].join(' · ')) + '</dd>' +
       '<dt>Parcela</dt><dd>' + esc(r.parcela ? r.parcela + ' m' : 'não informada') + '</dd></dl>' +
       botoes([['etapa1', 'Editar identificação e parcela', true], ['etapa2', 'Cultura, alvo e execução'], ['importar', 'Importar de planilha']], fin) + '</section>';
 
-    h += '<section class="pm-sec"><h3><span>🧪</span>2. Tratamentos, doses e papéis</h3><table class="pm-tab"><tr><th>Trat.</th><th>Produto</th><th>Dose</th><th>Papel</th></tr>' +
+    h += '<section class="pm-sec"><h3>2. Tratamentos, doses e papéis</h3><table class="pm-tab"><tr><th>Trat.</th><th>Produto</th><th>Dose</th><th>Papel</th></tr>' +
       r.tratamentos.map(function (t) { return '<tr><td><b>' + esc(t.id) + '</b></td><td>' + esc(t.produto) + '</td><td>' + esc(t.dose || '—') + '</td><td>' + esc(t.papel) + (t.testemunha ? ' ✓' : '') + '</td></tr>'; }).join('') +
       '</table><div style="font-size:11.5px;color:var(--text-2,#55615b)">✓ = marcado como Testemunha (base do % de controle e da AACPD).</div>' +
       botoes([['etapa3', 'Tratamentos, doses e testemunha', true], ['papeis', 'Papéis dos tratamentos']], fin) + '</section>';
 
-    h += '<section class="pm-sec"><h3><span>🧩</span>3. Delineamento e parcelas</h3><dl class="pm-dl">' +
+    h += '<section class="pm-sec"><h3>3. Delineamento e parcelas</h3><dl class="pm-dl">' +
       '<dt>Desenho</dt><dd>' + esc(r.desenho) + '</dd><dt>Repetições</dt><dd>' + r.reps + ' · ' + r.parcelas + ' parcelas</dd>' +
       '<dt>Randomização</dt><dd>' + (r.randomizado ? 'sorteada' : 'não sorteada (ordem de cadastro)') + '</dd>' +
       '<dt>Croqui</dt><dd>' + esc(r.croqui) + '</dd></dl>' +
       botoes([['etapa3', 'Delineamento e repetições', true], [r.randomizado ? 'ordem' : 'randomizar', r.randomizado ? 'Ordem das parcelas' : 'Sortear a ordem'],
         ['croqui', 'Croqui em grade no mapa'], ['livre', 'Parcelas livres (pomar / árvores)']].concat(r.lab ? [] : []), fin) + '</section>';
 
-    h += '<section class="pm-sec"><h3><span>💧</span>4. Aplicação</h3><dl class="pm-dl">' +
+    h += '<section class="pm-sec"><h3>4. Aplicação</h3><dl class="pm-dl">' +
       '<dt>Método</dt><dd>' + esc(r.metodo) + '</dd><dt>1ª aplicação</dt><dd>' + esc(r.inicio || 'não informada') + '</dd>' +
       '<dt>Aplicações</dt><dd>' + r.nApl + (r.nApl > 1 ? ' · a cada ' + r.intervalo + ' dias' : '') + '</dd>' +
       '<dt>Janela de condições</dt><dd>' + (r.janela ? 'declarada' : 'não declarada (opcional)') + '</dd></dl>' +
       botoes([['etapa2', 'Datas, nº e janela', true], ['etapa3', 'Método de aplicação'], ['etapa4', 'Preparo de calda'], ['calc', 'Calculadora', false, true]], fin) + '</section>';
 
-    h += '<section class="pm-sec"><h3><span>📊</span>5. Avaliações</h3><dl class="pm-dl">' +
+    h += '<section class="pm-sec"><h3>5. Avaliações</h3><dl class="pm-dl">' +
       '<dt>Variáveis</dt><dd>' + (r.variaveis.length ? esc(r.variaveis.join(', ')) : 'nenhuma ainda') + '</dd>' +
       '<dt>Programação</dt><dd>' + (r.avalNum ? r.avalNum + ' avaliação(ões) a cada ' + r.avalIntervalo + ' dias' + (r.avalInicio ? ', a partir de ' + esc(r.avalInicio) : '') : 'sem datas geradas') + '</dd></dl>' +
       botoes([['papeis', 'Variáveis, escalas e aplicabilidade', true], ['etapa4', 'Programação das datas']], fin) + '</section>';
 
-    h += '<section class="pm-sec"><h3><span>📜</span>6. Aprovação, emendas e desvios</h3><dl class="pm-dl">' +
+    h += '<section class="pm-sec"><h3>6. Aprovação, emendas e desvios</h3><dl class="pm-dl">' +
       '<dt>Situação</dt><dd>' + (r.aprovado ? 'aprovado, versão ' + esc(r.versao) + ' — mudar o protocolo vira emenda com motivo' : 'rascunho — editável livremente') + '</dd>' +
       '<dt>Emendas</dt><dd>' + r.emendas + '</dd><dt>Desvios</dt><dd>' + r.desvios + '</dd></dl>' +
       botoes((r.aprovado ? [] : [['aprovar', 'Aprovar protocolo', true]]).concat([['desvio', 'Registrar desvio'], ['historico', 'Ver histórico na ficha', false, true], ['planilha', 'Exportar planilha', false, true]]), fin) + '</section>';
@@ -198,7 +198,7 @@
     } catch (e) { try { console.warn('[protocolo-menu]', k, e); } catch (x) {} }
   }
 
-  /* Botão "📋 Protocolo" na ficha do estudo, ao lado do antigo
+  /* Botão "Protocolo" na ficha do estudo, ao lado do antigo
      "Protocolo: avaliações e controles" (que continua lá). */
   function injetar() {
     var antigos = d.querySelectorAll('button[onclick*="openProtocoloAvaliacoes"]');
@@ -207,7 +207,7 @@
       var m = /openProtocoloAvaliacoes\(([^,]+),([^)]+)\)/.exec(b.getAttribute('onclick') || ''); if (!m) return;
       var qid, sid; try { qid = JSON.parse(m[1].replace(/&quot;/g, '"')); sid = JSON.parse(m[2].replace(/&quot;/g, '"')); } catch (e) { return; }
       var nb = d.createElement('button'); nb.type = 'button'; nb.className = b.className || 'btn-sm';
-      nb.setAttribute('data-protomenu', '1'); nb.textContent = '📋 Protocolo (tudo)';
+      nb.setAttribute('data-protomenu', '1'); nb.textContent = 'Protocolo (tudo)';
       nb.style.cssText = 'font-weight:800;margin-right:6px';
       nb.addEventListener('click', function () { abrir(qid, sid); });
       b.parentNode.insertBefore(nb, b);

@@ -1,3 +1,47 @@
+AGRACTA — 45a publicacao                    19/10/2026
+=====================================================
+
+Leva: o app inteiro sem emoji, e a Entomologia ganha um frasco no lugar do
+percevejo.
+  CODIGO:  app.js (ic: frasco, cadeado, lixeira; textos sem emoji)
+           protocolo-menu.js  trilha-formal.js  campo-inteligente.js
+           firebase-sync.js  mapa-inicio.js  fotos-estudo.js
+           colonia-medida.js  index.html  sw.js (cache v384, app.js?v=232)
+  TESTE:   tests/test_sem_emoji.js (novo: varre todas as telas do app)
+           tests/test_lab_icone.js (Entomologia = frasco)
+           test_quadra_finalizados, test_colonia_medida, test_envio_perdido,
+           test_fotos_estudo (textos sem emoji)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido do campo: "quero remover todos os emoticons do Agracta" e "nao
+gostei do percevejo, vamos usar um erlenmeyer e pronto".
+
+- Saiu todo emoji: o que o aparelho pinta colorido por conta propria
+  (camera, cadeado, pastas, bolinhas coloridas, prancheta, lupa...),
+  inclusive os escritos escapados ou como entidade HTML.
+- Onde o emoji era o unico desenho (cadeado do estudo finalizado, lixeira
+  da amostra, botoes de copiar, banco de itens, pino e regua na ficha da
+  quadra, Usar meu GPS / Tocar no mapa, baixar planilha), entrou um icone
+  do proprio app. Onde ele so enfeitava um texto, saiu.
+- Ficam os glifos de TEXTO que o app usa de proposito: x de fechar, ✓, ⚠,
+  ☰, setas e pontos. Eles saem no traco da fonte, nao coloridos.
+- Entomologia: o percevejo virou um frasco (boca, gargalo, bojo com
+  liquido e duas bolhas). A folha da ilustracao ficou de fora porque folha
+  ja e o desenho da Fitopatologia.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v384.
+
+Versoes: app.js?v=232, agracta-app-v384 / sw.js?v=384 e os modulos acima
+com o ?v= somado em 1.
+
+
 AGRACTA — 44a publicacao                    19/10/2026
 =====================================================
 
