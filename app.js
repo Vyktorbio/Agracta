@@ -224,14 +224,19 @@ function ic(n,sz){ var P={
      escolha "Campo ou Laboratório", onde ainda não há especialidade nenhuma.
      Estes três só entram onde a especialidade já é conhecida.
 
-     Os três obedecem à mesma régua do microscópio (test_lab_icone.js): no
-     máximo o número de traços do vizinho mais cheio, e nenhum traço solto com
-     menos de quatro unidades. */
-  /* Pentatomídeo visto de cima: ombro largo e anguloso, abdome arredondado,
-     antenas abertas. Tentei o escudo com o escutelo dentro e ele lia "brasão
-     de segurança"; tentei sem antena e virou bolota. O que faz o desenho ser
-     inseto é o par ombro-largo + antena. */
-  bug:'<path d="M10 4h4l1 3 6 2-1 4a8 8 0 0 1-16 0l-1-4 6-2z"/><path d="M10 4 6 1"/><path d="M14 4l4-3"/>',
+     Folha e nematoide obedecem à mesma régua do microscópio
+     (test_lab_icone.js): no máximo o número de traços do vizinho mais cheio,
+     e nenhum traço solto com menos de quatro unidades. O percevejo é a
+     exceção, abaixo. */
+  /* Percevejo (pentatomídeo) visto de cima, em SILHUETA CHEIA. Relato de uso,
+     com uma ilustração de percevejo marrom em anexo: "no Labin eu quero essa
+     imagem". O contorno de antes lia como escudo. Este é desenho do app (não
+     a ilustração, que é de banco de imagem): cabeça, pronoto de ombro
+     anguloso, escutelo em V, cório dos dois lados e membrana embaixo, cada
+     peça cheia, separadas por um vão que deixa ver as suturas; pernas e
+     antenas em traço fino. Cheio, ele se lê mesmo pequeno no pino do mapa.
+     A cor continua sendo a da especialidade (currentColor). */
+  bug:'<path stroke-width="1.3" d="M10.9 5.6 8.6 3.2 5.4 1M13.1 5.6 15.4 3.2 18.6 1M6.4 9.9 3.6 9 3 5.4M17.6 9.9 20.4 9 21 5.4M6.3 14 3.2 15.2 2.6 18.4M17.7 14 20.8 15.2 21.4 18.4M6.9 18.2 4.4 20.2 4.4 23.2M17.1 18.2 19.6 20.2 19.6 23.2"/><path fill="currentColor" stroke="none" d="M10 5.74Q12 5 14 5.74L14.4 8.24H9.6ZM9.82 8.89 14.18 8.89 18.38 10.56 18.05 11.67 5.95 11.67 5.62 10.56ZM8.89 12.41 15.11 12.41 12.84 17.23Q12 18.52 11.16 17.23ZM6.04 12.41 8.05 12.41 10.87 18.4 7.14 20.07Q6.04 17.6 6.04 12.41ZM17.96 12.41 15.95 12.41 13.13 18.4 16.86 20.07Q17.96 17.6 17.96 12.41ZM12 18.89 16.54 20.93Q14.69 22.6 12 22.6 9.31 22.6 7.46 20.93Z"/>',
   /* Folha com a nervura. A LESÃO FICA DE FORA de propósito: uma mancha no
      meio da folha, em qualquer tamanho que sobreviva, lê como OLHO. */
   leaf:'<path d="M20 4C10 4 4 10 4 20c10 0 16-6 16-16z"/><path d="M4 20 15 9"/>',

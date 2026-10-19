@@ -1,3 +1,40 @@
+AGRACTA — 42a publicacao                    18/10/2026
+=====================================================
+
+Leva: o laboratorio de Entomologia (Labin) ganha o percevejo cheio.
+  CODIGO:  app.js (ic: desenho 'bug')  index.html  sw.js
+           (cache v381, app.js?v=230)
+  TESTE:   tests/test_lab_icone.js (o percevejo e silhueta: seis pecas
+           cheias, pernas e antenas em traco fino, cor da especialidade)
+           tests/test_login_laco.js (a janela do caso 1 passava da
+           meia-noite depois das 23 h e o teste reprovava a noite)
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido do campo, com uma ilustracao de percevejo marrom: "no Labin eu
+quero essa imagem". O desenho anterior era so contorno e lia como escudo.
+
+- O icone da Entomologia agora e um pentatomideo em silhueta cheia:
+  cabeca, pronoto de ombro anguloso, escutelo em V, os dois corios e a
+  membrana, separados por um vao fino que deixa ver as suturas; seis
+  pernas e duas antenas em traco fino.
+- O desenho e do proprio app. A ilustracao enviada e de banco de imagem
+  (com marca d'agua) e nao foi copiada.
+- Continua na cor da especialidade (ambar). Aparece no pino do mapa, na
+  ficha do laboratorio e na escolha do tipo de laboratorio.
+- Fitopatologia e Nematologia nao mudaram.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v381.
+
+Versoes: app.js?v=230, agracta-app-v381 / sw.js?v=381.
+
+
 AGRACTA — 41a publicacao                    18/10/2026
 =====================================================
 
