@@ -52,7 +52,7 @@
       '<div style="font-size:12px;color:#8aa88a;line-height:1.4">Onde o mapa abre toda vez. Com um lugar escolhido, o GPS não arrasta o mapa ao abrir — o botão ⌂ do mapa volta para cá.</div>' +
       ops +
       '<label style="display:flex;gap:10px;align-items:center;padding:10px;border:1px solid #2a3a2a;border-radius:10px;margin-top:6px;cursor:pointer;font-size:14px;color:#eaf0ea;text-transform:none;letter-spacing:0">' +
-      '<input type="radio" name="abrirEm" value="gps"' + (atual === 'gps' ? ' checked' : '') + ' style="width:auto"> 📍 Minha posição (GPS)</label>' +
+      '<input type="radio" name="abrirEm" value="gps"' + (atual === 'gps' ? ' checked' : '') + ' style="width:auto"> Minha posição (GPS)</label>' +
       '<div class="row" style="margin-top:12px"><button class="loc-btn loc-ok" data-abrir-em="ok">Salvar</button><button class="loc-btn loc-cancel" data-abrir-em="cancelar">Cancelar</button></div></div>';
     m.style.display = 'flex';
     m.querySelector('[data-abrir-em="cancelar"]').onclick = function () { m.style.display = 'none'; };

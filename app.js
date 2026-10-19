@@ -181,6 +181,10 @@ function ic(n,sz){ var P={
   weather:'<path d="M12 2v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="M20 12h2"/><path d="m17.7 6.3 1.4-1.4"/><path d="M16 12a4 4 0 1 0-8 0"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
   globe:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/>',
   search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  /* Cadeado e lixeira entram no lugar dos emojis de cadeado e lixeira (estudo finalizado,
+     assinatura e remover amostra). */
+  lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 15h10l1-15"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   refresh:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
   thermo:'<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/>',
@@ -193,7 +197,7 @@ function ic(n,sz){ var P={
   calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   ruler:'<path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/>',
   gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
-  /* O laboratório era um emoji 🧪, e emoji quem desenha é o sistema do
+  /* O laboratório era um emoji de tubo de ensaio, e emoji quem desenha é o sistema do
      aparelho: saía colorido e brilhante no iPhone, chapado no Android, e
      diferente do resto do app em todos. Agora é desenho daqui, no mesmo traço
      dos outros — e, por herdar currentColor, veste a cor da especialidade.
@@ -224,17 +228,14 @@ function ic(n,sz){ var P={
 
      Folha e nematoide obedecem à mesma régua do microscópio
      (test_lab_icone.js): no máximo o número de traços do vizinho mais cheio,
-     e nenhum traço solto com menos de quatro unidades. O percevejo é a
-     exceção, abaixo. */
-  /* Percevejo (pentatomídeo) visto de cima, em SILHUETA CHEIA. Relato de uso,
-     com uma ilustração de percevejo marrom em anexo: "no Labin eu quero essa
-     imagem". O contorno de antes lia como escudo. Este é desenho do app (não
-     a ilustração, que é de banco de imagem): cabeça, pronoto de ombro
-     anguloso, escutelo em V, cório dos dois lados e membrana embaixo, cada
-     peça cheia, separadas por um vão que deixa ver as suturas; pernas e
-     antenas em traço fino. Cheio, ele se lê mesmo pequeno no pino do mapa.
-     A cor continua sendo a da especialidade (currentColor). */
-  bug:'<path stroke-width="1.3" d="M10.9 5.6 8.6 3.2 5.4 1M13.1 5.6 15.4 3.2 18.6 1M6.4 9.9 3.6 9 3 5.4M17.6 9.9 20.4 9 21 5.4M6.3 14 3.2 15.2 2.6 18.4M17.7 14 20.8 15.2 21.4 18.4M6.9 18.2 4.4 20.2 4.4 23.2M17.1 18.2 19.6 20.2 19.6 23.2"/><path fill="currentColor" stroke="none" d="M10 5.74Q12 5 14 5.74L14.4 8.24H9.6ZM9.82 8.89 14.18 8.89 18.38 10.56 18.05 11.67 5.95 11.67 5.62 10.56ZM8.89 12.41 15.11 12.41 12.84 17.23Q12 18.52 11.16 17.23ZM6.04 12.41 8.05 12.41 10.87 18.4 7.14 20.07Q6.04 17.6 6.04 12.41ZM17.96 12.41 15.95 12.41 13.13 18.4 16.86 20.07Q17.96 17.6 17.96 12.41ZM12 18.89 16.54 20.93Q14.69 22.6 12 22.6 9.31 22.6 7.46 20.93Z"/>',
+     e nenhum traço solto com menos de quatro unidades. */
+  /* Entomologia: um frasco de laboratório (balão com líquido e bolhas).
+     Relato de uso: "não gostei do percevejo, vamos usar um erlenmeyer e
+     pronto", com uma ilustração de balão em anexo. Desenho do próprio app,
+     no traço do conjunto: boca, gargalo e bojo em contorno, o líquido cheio
+     e duas bolhas. A folha da ilustração ficou de fora: folha já é o desenho
+     da Fitopatologia, e os dois pinos ficariam parecidos. */
+  frasco:'<path d="M8.5 1.6h7v2.2h-7z"/><path d="M10 3.8V8.2A7.3 7.3 0 1 0 14 8.2V3.8"/><path fill="currentColor" stroke="none" d="M5.9 16.4H18.1A6.2 6.2 0 0 1 5.9 16.4Z"/><circle stroke-width="1.5" cx="10" cy="13.2" r="1.2"/><circle stroke-width="1.5" cx="13.8" cy="11" r="1"/>',
   /* Folha com a nervura. A LESÃO FICA DE FORA de propósito: uma mancha no
      meio da folha, em qualquer tamanho que sobreviva, lê como OLHO. */
   leaf:'<path d="M20 4C10 4 4 10 4 20c10 0 16-6 16-16z"/><path d="M4 20 15 9"/>',
@@ -1211,7 +1212,7 @@ function buildGrPanel(){
   if(!p){ p=document.createElement('div'); p.id='grPanel'; p.className='gr-panel'; document.body.appendChild(p); }
   var rot=_gr?(_gr.ang*180/Math.PI).toFixed(1):0, w=_gr?Math.round(_gr.hw):320, h=_gr?Math.round(_gr.hh):220;
   p.innerHTML=
-    '<div class="gr-title">&#128205; ALINHAR MAPA</div>'+
+    '<div class="gr-title">ALINHAR MAPA</div>'+
     '<div class="gr-hint">Arraste o <b>+</b> azul para <b>mover</b>. Use os controles para <b>girar</b> e ajustar <b>largura/altura</b> at&eacute; encaixar nos talh&otilde;es. A imagem nunca entorta &mdash; se bagun&ccedil;ar, clique <b>Resetar</b>.</div>'+
     '<label class="gr-ctl"><span>Girar</span><input type="range" min="-180" max="180" step="0.5" value="'+rot+'" oninput="setGrRot(this.value)"></label>'+
     '<label class="gr-ctl"><span>Largura</span><input type="range" min="50" max="1500" step="5" value="'+w+'" oninput="setGrW(this.value)"></label>'+
@@ -1224,7 +1225,7 @@ function showGrPanel(){
   var p=document.getElementById('grPanel');
   if(!p){
     p=document.createElement('div'); p.id='grPanel'; p.className='gr-panel';
-    p.innerHTML='<div class="gr-title">\ud83d\udccd ALINHAR MAPA</div>'+
+    p.innerHTML='<div class="gr-title">ALINHAR MAPA</div>'+
       '<div class="gr-hint">Posicione o mapa sobre a fazenda (Plantec, SP-147). Arraste <b>NO</b>, <b>NE</b> e <b>SO</b> para girar e dimensionar, e o <b>&#10010;</b> central para mover tudo, at\u00e9 encaixar no sat\u00e9lite. Use a opacidade para conferir.</div>'+
       '<label class="gr-op">Opacidade <input type="range" min="0.15" max="1" step="0.05" value="0.6" oninput="setGrOpacity(this.value)"></label>'+
       '<div class="gr-btns"><button class="gr-ok" onclick="lockGeoref()">Travar e gerar quadras</button><button class="gr-cancel" onclick="cancelGeoref()">Cancelar</button></div>';
@@ -1348,7 +1349,7 @@ function labTipoCor(t){ return LAB_CORES[t]||'#21a86b'; }
 /* O desenho da especialidade. Quadra de laboratório sem especialidade marcada
    volta ao microscópio, que é o que ela é: um laboratório, ainda sem dizer de
    quê. Mesma escolha que labTipoCor faz com o verde. */
-var LAB_ICONES={Entomologia:'bug', Fitopatologia:'leaf', Nematologia:'nematode'};
+var LAB_ICONES={Entomologia:'frasco', Fitopatologia:'leaf', Nematologia:'nematode'};
 function labTipoIcone(t){ return LAB_ICONES[t]||'ciliado'; }
 function setQuadraLabTipo(id,tipo){
   if(!data[id]||!isQuadraLab(id)) return false;
@@ -1840,7 +1841,7 @@ function abrirNovoLocal(){
   if(!m){ m=document.createElement('div'); m.id='locModal'; m.className='loc-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   _locPick=null;
   m.innerHTML='<div class="loc-box">'+
-    '<h3>📍 Novo local</h3>'+
+    '<h3>Novo local</h3>'+
     '<div style="font-size:11px;color:#6a8a6a;margin-bottom:2px">Crie um local em qualquer lugar do mundo. Depois desenhe as quadras dele (já georreferenciadas).</div>'+
     '<label>Nome do local</label><input id="locNome" placeholder="Ex.: Fazenda Cordeirópolis" autocomplete="off">'+
     '<label>Buscar endereço / cidade</label>'+
@@ -1880,7 +1881,7 @@ function criarLocal(){
   LOCAIS[id]={nome:nome, centro:centro, zoom:zoom}; _touchLocal(id); saveLocais(); _locPick=null;
   var m=document.getElementById('locModal'); if(m) m.style.display='none';
   setLocalAtivo(id);
-  setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ☰ Menu → ✏️ Editar quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
+  setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ☰ Menu → Editar quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
 }
 
 function renomearLocal(id){
@@ -1924,7 +1925,7 @@ function isiOS(){ var n=navigator||{}; return /iphone|ipad|ipod/i.test(n.userAge
    apagar o que o site guardou no aparelho depois de 7 dias sem uso, e o app da
    Tela de Início fica fora dessa limpeza. Ele guarda os dados separado do
    Safari, por isso a pessoa entra de novo depois de instalar. */
-var INSTALAR_IOS_TXT='📲 Instalar no iPhone:\n\n'+
+var INSTALAR_IOS_TXT='Instalar no iPhone:\n\n'+
   '1) Abra o Agracta no SAFARI (não dentro do WhatsApp/Instagram).\n'+
   '2) Toque em ••• (ao lado do endereço) e depois em Compartilhar. Em iOS mais antigo, o Compartilhar (quadrado com a seta ↑) fica direto na barra.\n'+
   '3) Role e toque em "Adicionar à Tela de Início".\n'+
@@ -1935,7 +1936,7 @@ function installApp(){
   if(typeof closeMainMenu==='function') closeMainMenu();
   if(_deferredPrompt){ _deferredPrompt.prompt(); try{ _deferredPrompt.userChoice.then(function(){ _deferredPrompt=null; }); }catch(e){} return; }
   if(isiOS()){ alert(INSTALAR_IOS_TXT); return; }
-  alert('📲 Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
+  alert('Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
 }
 /* Atualização: limpa service worker + caches (preserva o Pyodide) e recarrega na versão nova.
    Resolve o PWA preso numa versão velha sem precisar desinstalar. Os dados ficam salvos (localStorage/Firestore). */
@@ -1975,7 +1976,7 @@ function toggleMainMenu(){
   var _menuNome=''; try{_menuNome=_currentUserName();}catch(e){}
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
-    '<button onclick="forcarAtualizacao()">🔄 Atualizar</button>'+
+    '<button onclick="forcarAtualizacao()">Atualizar</button>'+
     '<button onclick="toggleTheme()">'+(document.documentElement.classList.contains('light')?'◑ Tema escuro':'◐ Tema claro')+'</button>'+
     '<button onclick="closeMainMenu();definirMeuNome()">'+ic('pencil')+' Meu nome e assinatura</button>'+
     '<div class="mm-sep"></div>'+
@@ -2127,10 +2128,10 @@ function labOndeFica(){
     '<div class="calc-sub">'+esc(_labPend.nome)+(_labPend.labTipo?' · '+esc(_labPend.labTipo):'')+'</div>'+
     '<div class="qtipo-opts">'+
       '<button class="qtipo-op" onclick="labPontoGps()">'+
-        '<div class="qtipo-ico">📍</div><div><div class="qtipo-t">Usar meu GPS</div>'+
+        '<div class="qtipo-ico">'+ic('pin',22)+'</div><div><div class="qtipo-t">Usar meu GPS</div>'+
         '<div class="qtipo-d">Se você está no laboratório agora. Pega a posição mais precisa em alguns segundos.</div></div></button>'+
       '<button class="qtipo-op" onclick="labPontoMapa()">'+
-        '<div class="qtipo-ico">👆</div><div><div class="qtipo-t">Tocar no mapa</div>'+
+        '<div class="qtipo-ico">'+ic('map',22)+'</div><div><div class="qtipo-t">Tocar no mapa</div>'+
         '<div class="qtipo-d">Fecha esta janela e você toca no prédio do laboratório.</div></div></button>'+
     '</div></div>';
   ov.style.display='flex';
@@ -2140,7 +2141,7 @@ function labPontoGps(){
   if(!_labPend) return;
   var ov=document.getElementById('qtipoOvl');
   var box=ov&&ov.querySelector('.calc-box');
-  if(box) box.innerHTML='<div class="calc-top"><div class="calc-title">📍 Procurando o GPS…</div></div>'+
+  if(box) box.innerHTML='<div class="calc-top"><div class="calc-title">Procurando o GPS…</div></div>'+
     '<div class="calc-sub" id="labGpsMsg">Segure o aparelho parado. Isso leva alguns segundos.</div>'+
     '<div class="calc-actions"><button class="calc-close" onclick="labCancelar()">Cancelar</button></div>';
   gpsBest({target:12, maxWait:9000, maxAcc:120}, function(b){
@@ -2182,7 +2183,7 @@ function labFinalizar(ponto, origem){
   /* NÃO abre openE aqui: aquilo é o formulário de cultura/cultivar/plantio, que
      não existe em laboratório — ele cobria o mapa e escondia o marcador novo. */
   /* Texto de alert() é texto puro: aqui não cabe o SVG do ícone, e descrever
-     o desenho ("como 🧪") era justamente o que amarrava a frase ao emoji. */
+     o desenho ("como o tubo de ensaio") era justamente o que amarrava a frase ao emoji. */
   alert('Laboratório "'+p.nome+'"'+(p.labTipo?' ('+p.labTipo+')':'')+' criado ('+origem+').\n\nEstá marcado no mapa, no centro da tela. Em modo de edição dá para arrastar o marcador.');
 }
 
@@ -2247,7 +2248,7 @@ function trocarLabTipo(t){
 function buildEditPanel(){
   var p=document.getElementById('edPanel');
   if(!p){ p=document.createElement('div'); p.id='edPanel'; p.className='gr-panel'; document.body.appendChild(p); }
-  var html='<div class="gr-title">&#9999;&#65039; EDITAR QUADRAS</div>';
+  var html='<div class="gr-title">EDITAR QUADRAS</div>';
   if(_labPick){
     html+='<div class="gr-hint">Toque no <b>mapa</b>, em cima do pr&eacute;dio do laborat&oacute;rio'+
       (_labPend?' <b>'+esc(_labPend.nome)+'</b>':'')+'. D&aacute; para arrastar o marcador depois.</div>'+
@@ -2271,7 +2272,7 @@ function buildEditPanel(){
           return '<button class="gr-tipo-op'+(on?' on':'')+'"'+(on?' style="background:'+labTipoCor(t)+';border-color:'+labTipoCor(t)+';color:#fff"':'')+
                  ' onclick="trocarLabTipo(\''+t+'\')">'+t+'</button>';
         }).join('')+'</div>'):'')+
-      '<div class="gr-btns"><button class="gr-ok" onclick="novaQuadraTipo()">&#43; Nova</button><button class="gr-reset" onclick="deleteQuadra()">&#128465; Excluir</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
+      '<div class="gr-btns"><button class="gr-ok" onclick="novaQuadraTipo()">&#43; Nova</button><button class="gr-reset" onclick="deleteQuadra()">Excluir</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
   } else {
     html+='<div class="gr-hint">Clique numa <b>quadra</b> para ajustar os v&eacute;rtices ou trocar o tipo, ou crie uma <b>nova</b>. Tudo salva automaticamente.</div>'+
       '<div class="gr-btns"><button class="gr-ok" onclick="novaQuadraTipo()">&#43; Nova quadra</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
@@ -4235,11 +4236,11 @@ function _agListaHtml(){
     arr.forEach(function(e){ gh+=_agItemHtml(e,cls); });
     return gh+'</div>';
   }
-  h+=renderGroup('⚠️ ATRASADOS',groups.overdue,'overdue');
-  h+=renderGroup('🔴 HOJE',groups.today,'today');
-  h+=renderGroup('🟠 PRÓXIMOS 3 DIAS',groups.soon,'soon');
-  h+=renderGroup('📅 ESTA SEMANA',groups.week,'');
-  h+=renderGroup('📆 PRÓXIMOS 30 DIAS',groups.month,'');
+  h+=renderGroup('ATRASADOS',groups.overdue,'overdue');
+  h+=renderGroup('HOJE',groups.today,'today');
+  h+=renderGroup('PRÓXIMOS 3 DIAS',groups.soon,'soon');
+  h+=renderGroup('ESTA SEMANA',groups.week,'');
+  h+=renderGroup('PRÓXIMOS 30 DIAS',groups.month,'');
   if(!events.length)h+='<div class="ag-empty">'+(_nDisp&&!agVerDispensados?'Nenhum lembrete ativo.<br>Há '+_nDisp+' dispensado'+(_nDisp>1?'s':'')+' — use o botão acima para ver.':'Nenhum evento programado.<br>Adicione estudos nas quadras para visualizar aqui.')+'</div>';
   return h;
 }
@@ -4968,35 +4969,35 @@ function openNoteModal(lat, lng){
      '<label class="e-lbl">CATEGORIA</label>'+
      '<select id="noteCategory" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
        '<optgroup label="Agronômico">'+
-         '<option value="praga">🕷️ Praga</option>'+
-         '<option value="doenca">🦠 Doença</option>'+
-         '<option value="daninha">🌱 Planta Daninha</option>'+
-         '<option value="deficiencia">🧪 Deficiência Nutricional</option>'+
+         '<option value="praga">Praga</option>'+
+         '<option value="doenca">Doença</option>'+
+         '<option value="daninha">Planta Daninha</option>'+
+         '<option value="deficiencia">Deficiência Nutricional</option>'+
        '</optgroup>'+
        '<optgroup label="Manutenção / Infraestrutura">'+
-         '<option value="irrigacao">💧 Irrigação</option>'+
-         '<option value="vazamento">💦 Vazamento</option>'+
-         '<option value="buraco">🕳️ Buraco / Erosão</option>'+
-         '<option value="manutencao">🔧 Manutenção (geral)</option>'+
+         '<option value="irrigacao">Irrigação</option>'+
+         '<option value="vazamento">Vazamento</option>'+
+         '<option value="buraco">Buraco / Erosão</option>'+
+         '<option value="manutencao">Manutenção (geral)</option>'+
        '</optgroup>'+
-       '<option value="outro">📝 Outro / Observação Geral</option>'+
+       '<option value="outro">Outro / Observação Geral</option>'+
      '</select>'+
      
      '<div class="e-row">'+
        '<div>'+
          '<label class="e-lbl">SEVERIDADE</label>'+
          '<select id="noteSeverity" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
-           '<option value="baixa">🟢 Baixa</option>'+
-           '<option value="media">🟡 Média</option>'+
-           '<option value="alta">🔴 Alta</option>'+
+           '<option value="baixa">Baixa</option>'+
+           '<option value="media">Média</option>'+
+           '<option value="alta">Alta</option>'+
          '</select>'+
        '</div>'+
        '<div>'+
          '<label class="e-lbl">RECOMENDAÇÃO</label>'+
          '<select id="noteRecommendation" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
-           '<option value="monitorar">🔍 Apenas Monitorar</option>'+
-           '<option value="aplicar">⚠️ Aplicar Tratamento</option>'+
-           '<option value="nenhuma">✅ Nenhuma Ação</option>'+
+           '<option value="monitorar">Apenas Monitorar</option>'+
+           '<option value="aplicar">Aplicar Tratamento</option>'+
+           '<option value="nenhuma">Nenhuma Ação</option>'+
          '</select>'+
        '</div>'+
      '</div>'+
@@ -5211,15 +5212,15 @@ function renderNotas(force){
 
 function getNotePopupHtml(n){
   var catLabels={
-    praga:'🕷️ Praga',
-    doenca:'🦠 Doença',
-    daninha:'🌱 Planta Daninha',
-    deficiencia:'🧪 Deficiência',
-    irrigacao:'💧 Irrigação',
-    vazamento:'💦 Vazamento',
-    buraco:'🕳️ Buraco / Erosão',
-    manutencao:'🔧 Manutenção',
-    outro:'📝 Geral'
+    praga:'Praga',
+    doenca:'Doença',
+    daninha:'Planta Daninha',
+    deficiencia:'Deficiência',
+    irrigacao:'Irrigação',
+    vazamento:'Vazamento',
+    buraco:'Buraco / Erosão',
+    manutencao:'Manutenção',
+    outro:'Geral'
   };
   
   var catColors={
@@ -5249,14 +5250,14 @@ function getNotePopupHtml(n){
   }
   
   var sevLabels={
-    baixa:'🟢 Baixa',
-    media:'🟡 Média',
-    alta:'🔴 Alta'
+    baixa:'Baixa',
+    media:'Média',
+    alta:'Alta'
   };
   var recLabels={
-    monitorar:'🔍 Monitorar',
-    aplicar:'⚠️ Aplicar Tratamento',
-    nenhuma:'✅ Nenhuma Ação'
+    monitorar:'Monitorar',
+    aplicar:'Aplicar Tratamento',
+    nenhuma:'Nenhuma Ação'
   };
   
   if(n.severidade || n.recomendacao){
@@ -5281,7 +5282,7 @@ function getNotePopupHtml(n){
        '</div>'+
        '<button type="button" onclick="baixarFotoNota(\''+n.id+'\')" style="display:block;margin:0 0 10px 0;background:none;border:0;padding:0;color:var(--accent, #8c8);font-size:11px;cursor:pointer;text-decoration:underline;" title="'+esc((n.fotoLocal&&n.fotoLocal.nome)||'')+'">Baixar foto</button>';
   }else if(n.fotoLocal){
-    h+='<p style="margin:0 0 10px 0;font-size:11px;color:var(--text-3, #8aa88a);">📷 A foto está guardada em outro aparelho: <b>'+esc(n.fotoLocal.nome||'')+'</b></p>';
+    h+='<p style="margin:0 0 10px 0;font-size:11px;color:var(--text-3, #8aa88a);">A foto está guardada em outro aparelho: <b>'+esc(n.fotoLocal.nome||'')+'</b></p>';
   }
   
   h+='<div style="display:flex;gap:6px;margin-top:8px;">'+
@@ -5526,7 +5527,7 @@ function climaLocalLoad(ll,fromGps){
   }
   /* Só avisa quando NÃO HÁ mesmo posição nenhuma: nem centro do Local, nem
      quadra desenhada. Aí o aviso é informação, não obstáculo. */
-  if(!ll){ climaSay('Este Local ainda não tem quadra desenhada no mapa. Desenhe uma quadra, ou toque em 📍 GPS para ver o clima de onde você está agora.'); return; }
+  if(!ll){ climaSay('Este Local ainda não tem quadra desenhada no mapa. Desenhe uma quadra, ou toque em GPS para ver o clima de onde você está agora.'); return; }
   _climaWhere=ll;
   climaSay('Buscando previsão do local…');
   var url='https://api.open-meteo.com/v1/forecast?latitude='+(+ll[0]).toFixed(4)+'&longitude='+(+ll[1]).toFixed(4)+
@@ -5571,8 +5572,8 @@ function climaLocalRender(j, ll, fromGps){
     }
     h+='</div></div>';
   }
-  var lbl = fromGps ? ('📍 onde estou ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')')
-    : ('📍 centro do mapa ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')');
+  var lbl = fromGps ? ('onde estou ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')')
+    : ('centro do mapa ('+(+ll[0]).toFixed(3)+', '+(+ll[1]).toFixed(3)+')');
   var atual=(c.time&&String(c.time).indexOf('T')>=0)?String(c.time).split('T')[1].slice(0,5):'';
   h+='<div class="clima-foot">'+lbl+' · previsão Open-Meteo'+(atual?(' · atualizado '+atual):'')+'</div>';
   b.innerHTML=h;
@@ -6717,12 +6718,12 @@ function showStudyWorkbookFormats(qid,sid){
   var m=document.getElementById('stxWorkbookModal');
   if(!m){m=document.createElement('div');m.id='stxWorkbookModal';m.className='ndvi-modal';m.onclick=function(e){if(e.target===m)m.style.display='none';};document.body.appendChild(m);}
   function botoes(download,modelo,dados){return '<div class="gr-btns" style="margin-top:8px;flex-wrap:wrap">'+
-    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+download+'">⬇ Baixar</button>'+
-    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+modelo+'">📋 Copiar modelo</button>'+
-    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+dados+'">📋 Só dados</button></div>';}
+    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+download+'">'+ic('download',13)+' Baixar</button>'+
+    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+modelo+'">Copiar modelo</button>'+
+    '<button class="ndvi-ix" style="flex:1 1 30%" onclick="'+dados+'">Só dados</button></div>';}
   var qa="'"+qid+"','"+sid+"'";
   m.innerHTML='<div class="ndvi-modal-box" style="max-width:620px">'+
-   '<div class="ndvi-modal-top"><b>📊 Planilhas — '+esc(s.codigo||'(sem código)')+'</b><button onclick="document.getElementById(\'stxWorkbookModal\').style.display=\'none\'">✕</button></div>'+
+   '<div class="ndvi-modal-top"><b>Planilhas — '+esc(s.codigo||'(sem código)')+'</b><button onclick="document.getElementById(\'stxWorkbookModal\').style.display=\'none\'">✕</button></div>'+
    '<div style="padding:11px;border:1px solid #31513a;border-radius:10px;margin-top:8px"><b>Modelo Agracta <span style="font-size:10px;color:#9fb1a5">ATUAL</span></b><div class="ndvi-status">Planilha completa com protocolo, clima, avaliações, Estatística e Forense. Até 7 tratamentos.</div>'+botoes('downloadStudyWorkbook('+qa+')','copyStudyModelo('+qa+')','copyStudyDados('+qa+')')+'</div>'+
    '<div style="padding:11px;border:1px solid #31513a;border-radius:10px;margin-top:10px"><b>Protocolo Sinergista <span style="font-size:10px;color:#9fb1a5">NOVO</span></b><div class="ndvi-status">Layout em inglês do arquivo enviado, com a formatação e a logo originais. Até 9 tratamentos e 10 avaliações.</div>'+botoes('downloadStudySinergista('+qa+')','copyStudySinergistaModelo('+qa+')','copyStudySinergistaDados('+qa+')')+'</div>'+
    '<div class="gr-btns" style="margin-top:10px"><button class="gr-cancel" style="flex:1" onclick="document.getElementById(\'stxWorkbookModal\').style.display=\'none\'">Fechar</button></div></div>';
@@ -7013,12 +7014,12 @@ function showStudyExportModal(qid,s,from,to){
   if(!m){ m=document.createElement('div'); m.id='stxModal'; m.className='ndvi-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   var title=esc((s.codigo||'(sem codigo)')+' — '+quadraNome(qid));
   m.innerHTML='<div class="ndvi-modal-box" style="max-width:620px">'+
-    '<div class="ndvi-modal-top"><b>📄 '+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
+    '<div class="ndvi-modal-top"><b>'+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
     '<div class="ndvi-status"><b>Para a SUA planilha (modelo.xls):</b> cabeçalho, tratamentos, clima e grade (a/b/c/d/média/E%/grupo) nas células certas — <b>sem despejar rótulos nem seções extras</b>.<br>• <b>Modelo limpo</b>: cole em <b>A1</b> de uma cópia <b>em branco</b> do modelo (Excel ou Sheets).<br>• <b>Só dados</b>: no <b>Excel</b>, sobre o seu arquivo já preenchido — <b>Colar Especial → Pular células em branco</b> em A1 (preenche só os dados, não apaga nada).</div>'+
     '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:#0a110a;color:#cfe0cf;border:1px solid #2a3a2a;border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
     '<div id="stxNdvi" style="margin-top:8px"></div>'+
-    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar modelo Agracta</button><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">📋 Só dados Agracta</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+s.id+'\')">⬇ Escolher planilha</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo (livre)</button></div>'+
-    '<div style="margin-top:10px;padding:9px;border:1px solid #31513a;border-radius:9px"><b style="font-size:12px">Protocolo Sinergista</b><div class="ndvi-status">Segundo formato, em inglês, sem substituir o modelo Agracta.</div><div class="gr-btns" style="margin-top:7px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaModelo(\''+qid+'\',\''+s.id+'\')">📋 Copiar modelo</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaDados(\''+qid+'\',\''+s.id+'\')">📋 Só dados</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="downloadStudySinergista(\''+qid+'\',\''+s.id+'\')">⬇ Baixar</button></div></div>'+
+    '<div class="gr-btns" style="margin-top:10px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyModelo(\''+qid+'\',\''+s.id+'\')">Copiar modelo Agracta</button><button class="ndvi-ix" style="flex:1 1 46%;background:#1f5a2a;color:#eafaea;border-color:#2e7d3e" onclick="copyStudyDados(\''+qid+'\',\''+s.id+'\')">Só dados Agracta</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="showStudyWorkbookFormats(\''+qid+'\',\''+s.id+'\')">'+ic('download',13)+' Escolher planilha</button><button class="ndvi-ix" style="flex:1 1 46%" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">Copiar tudo (livre)</button></div>'+
+    '<div style="margin-top:10px;padding:9px;border:1px solid #31513a;border-radius:9px"><b style="font-size:12px">Protocolo Sinergista</b><div class="ndvi-status">Segundo formato, em inglês, sem substituir o modelo Agracta.</div><div class="gr-btns" style="margin-top:7px;flex-wrap:wrap"><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaModelo(\''+qid+'\',\''+s.id+'\')">Copiar modelo</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="copyStudySinergistaDados(\''+qid+'\',\''+s.id+'\')">Só dados</button><button class="ndvi-ix" style="flex:1 1 30%" onclick="downloadStudySinergista(\''+qid+'\',\''+s.id+'\')">'+ic('download',13)+' Baixar</button></div></div>'+
     '<div class="gr-btns" style="margin-top:10px"><button class="gr-cancel" style="flex:1" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
   '</div>';
   m.style.display='flex';
@@ -7051,7 +7052,7 @@ function showD(id){
       '</div>';
     var _lp=quadraPonto(id)||ctr;
     if(_lp) h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--gp-text-3,#727c75);border-top:1px solid var(--gp-line,rgba(255,255,255,.09));padding-top:10px">'+
-      '<span title="Onde o laborat\u00f3rio est\u00e1 marcado no mapa">&#128205; <b style="color:var(--gp-text,#e9ede9)">'+_lp[0].toFixed(5)+', '+_lp[1].toFixed(5)+'</b></span></div>';
+      '<span title="Onde o laborat\u00f3rio est\u00e1 marcado no mapa">'+ic('pin',12)+' <b style="color:var(--gp-text,#e9ede9)">'+_lp[0].toFixed(5)+', '+_lp[1].toFixed(5)+'</b></span></div>';
     if(_labT==='Nematologia') h+=nemPainel(id);
   }else{
   h='<div class="panel-header" style="position:relative;border-bottom:1px solid '+ac+'22"><button class="panel-x-tr" onclick="closeDetail()" aria-label="Fechar" title="Fechar">✕</button><div><div class="panel-qlbl" style="color:'+ac+'">QUADRA</div><div class="panel-qid">'+esc(quadraNome(id))+'</div></div><div class="panel-sbox" style="background:'+st.c+'15;border:1px solid '+st.c+'55;margin-right:36px"><div class="panel-scode" style="color:'+st.c+'">'+esc(st.s)+'</div><div class="panel-slbl" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
@@ -7059,9 +7060,9 @@ function showD(id){
   h+='<div class="panel-body"><div class="info-grid"><div><div class="info-l">CULTURA</div><div class="info-v" style="color:'+ac+'">'+esc(d.cultura||"\u2014")+'</div></div><div><div class="info-l">CULTIVAR</div><div class="info-v">'+esc(d.cultivar||"\u2014")+'</div></div><div><div class="info-l">PLANTIO</div><div class="info-v">'+(pd?pd.toLocaleDateString("pt-BR"):"\u2014")+'</div></div><div><div class="info-l">DAP</div><div class="info-v" style="color:'+st.c+'">'+(dap!==null?(dap>=0?dap+" dias":"em "+Math.abs(dap)+"d"):"\u2014")+'</div></div><div><div class="info-l">\u00c1REA</div><div class="info-v">'+(aHa!=null?aHa.toFixed(2)+" ha":d.area?d.area+" ha":"\u2014")+'</div></div><div><div class="info-l">EST\u00c1GIO</div><div class="info-v" style="color:'+st.c+'">'+esc(st.l)+'</div></div></div>';
 
   h+='<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--gp-text-3,#727c75);border-top:1px solid var(--gp-line,rgba(255,255,255,.09));padding-top:10px">'+
-     '<span title="Área calculada do polígono">&#128208; <b style="color:var(--gp-text,#e9ede9)">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:var(--gp-text-3,#727c75)">medida</span></span>'+
-     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">&#128207; <b style="color:var(--gp-text,#e9ede9)">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:var(--gp-text-3,#727c75)">C&times;L</span></span>':'')+
-     (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:var(--gp-text,#e9ede9)">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
+     '<span title="Área calculada do polígono">'+ic('ruler',12)+' <b style="color:var(--gp-text,#e9ede9)">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:var(--gp-text-3,#727c75)">medida</span></span>'+
+     (dim?'<span title="Comprimento × largura — retângulo de menor área que encaixa na quadra (medido ao longo dos eixos dela)">'+ic('ruler',12)+' <b style="color:var(--gp-text,#e9ede9)">'+Math.round(dim.comprimento)+' &times; '+Math.round(dim.largura)+' m</b> <span style="color:var(--gp-text-3,#727c75)">C&times;L</span></span>':'')+
+     (ctr?'<span title="Coordenadas do centro da quadra">'+ic('pin',12)+' <b style="color:var(--gp-text,#e9ede9)">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
      '</div>';
   try{ h+=soloBlocoHtml(id); }catch(e){}
   var _cs=getCulturas(d);
@@ -7179,7 +7180,7 @@ function renderStudyCard(qid,study){
 
   var html='<div class="study-card '+cls+'">';
   html+='<div class="study-top"><div class="study-name">'+esc(study.nome||'(sem nome)')+'</div>';
-  html+='<div class="study-actions"><button class="study-btn" onclick="studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">📄</button><button class="study-btn" onclick="openStudyEdit(\''+qid+'\',\''+study.id+'\')" title="Editar">✎</button><button class="study-btn del" onclick="deleteStudy(\''+qid+'\',\''+study.id+'\')" title="Excluir">×</button></div></div>';
+  html+='<div class="study-actions"><button class="study-btn" onclick="studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">'+ic('copy',14)+'</button><button class="study-btn" onclick="openStudyEdit(\''+qid+'\',\''+study.id+'\')" title="Editar">✎</button><button class="study-btn del" onclick="deleteStudy(\''+qid+'\',\''+study.id+'\')" title="Excluir">×</button></div></div>';
   html+='<div class="study-meta"><b>Início:</b> '+(study.dataInicio?fD(pD(isoToBR(study.dataInicio))):'—')+' • <b>'+nApl+'</b> aplicação(ões) • '+intInfo+' • <b>'+nAval+'</b> avaliação(ões)</div>';
   html+=nextHtml;
   html+=tlHtml;
@@ -7933,13 +7934,13 @@ function studyAuditHtml(study){
   var s = study;
   if(!s.audit || !s.audit.length) {
     return '<div class="sd-section">' +
-      '<div class="sd-section-title">🛡️ Trilha de Auditoria BPL</div>' +
+      '<div class="sd-section-title">Trilha de Auditoria BPL</div>' +
       '<div class="sd-empty" style="color:var(--text-3,#8aa88a)">Nenhum registro de auditoria gravado ainda.</div>' +
       '</div>';
   }
   
   var html = '<div class="sd-section">' +
-    '<div class="sd-section-title">🛡️ Trilha de Auditoria BPL</div>' +
+    '<div class="sd-section-title">Trilha de Auditoria BPL</div>' +
     '<div style="background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:12px;padding:12px;max-height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
     
   s.audit.slice().reverse().forEach(function(entry){
@@ -9129,7 +9130,7 @@ function _nemRender(){
   if(!est){ ov.innerHTML='<div class="calc-box"><div class="calc-top"><div class="calc-title">Amostras</div><button class="calc-x" onclick="closeNemAmostras()">×</button></div><div class="calc-empty">Estudo não encontrado.</div></div>'; return; }
   var am=nemAmostras(est), r=nemResumo(est);
   var h='<div class="calc-box" style="max-width:840px">'+
-    '<div class="calc-top"><div class="calc-title">🧫 Amostras · '+esc(est.codigo||est.nome||est.id)+'</div>'+
+    '<div class="calc-top"><div class="calc-title">Amostras · '+esc(est.codigo||est.nome||est.id)+'</div>'+
     '<button class="calc-x" onclick="closeNemAmostras()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">'+am.length+' amostra'+(am.length===1?'':'s')+' · '+
       r.entregue+' entregue'+(r.entregue===1?'':'s')+' · '+(am.length-r.entregue-r['sem-entrada'])+' em andamento</div>';
@@ -9158,7 +9159,7 @@ function _nemRender(){
            return '<td><input type="date" class="nem-dt'+(a[e.k]?' ok':'')+'" value="'+esc(a[e.k]||'')+'" onchange="nemSetData('+i+',\''+e.k+'\',this.value)"></td>';
          }).join('')+
          '<td><span class="nem-chip" style="background:'+st.cor+'1a;border:1px solid '+st.cor+'66;color:'+st.cor+'">'+st.rot+'</span></td>'+
-         '<td><button class="nem-del" title="Remover esta amostra" onclick="nemRemover('+i+')">🗑</button></td></tr>';
+         '<td><button class="nem-del" title="Remover esta amostra" onclick="nemRemover('+i+')">'+ic('trash',14)+'</button></td></tr>';
     });
     h+='</tbody></table></div>';
   }
@@ -9334,7 +9335,7 @@ function _labRenderShell(){
   }
 
   ov.innerHTML='<div class="calc-box">'+
-    '<div class="calc-top"><div class="calc-title">🧪 Calculadora de laboratório</div><button class="calc-x" onclick="closeCalcLab()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-top"><div class="calc-title">Calculadora de laboratório</div><button class="calc-x" onclick="closeCalcLab()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">'+esc(s?((s.codigo||s.nome||s.id)+(s.tipoEstudo?' · '+s.tipoEstudo:'')):'Nenhum estudo de laboratório cadastrado')+'</div>'+
     (selHtml?'<div class="calc-grid">'+selHtml+'</div>':'')+
     tabs+campos+
@@ -11918,7 +11919,7 @@ function aplicacaoHerancaHtml(study, qid, ap){
     h+='<div class="calc-ok">✓ Esta aplicação já tem memória de cálculo'+
        ((ap.memoriaCalculo.origem==='conferida')?' conferida na calculadora':' derivada do estudo')+'.</div>';
   }else{
-    h+='<div class="e-hint" style="margin:2px 0 0">Ao salvar, a memória de cálculo é gravada automaticamente a partir destes dados. Abrir a 🧪 calculadora e gravar por lá substitui por uma <b>conferida</b>.</div>';
+    h+='<div class="e-hint" style="margin:2px 0 0">Ao salvar, a memória de cálculo é gravada automaticamente a partir destes dados. Abrir a calculadora e gravar por lá substitui por uma <b>conferida</b>.</div>';
   }
   return h;
 }
@@ -13620,7 +13621,7 @@ function _openBioestatFrame(modo){
   var ov=document.getElementById('bioOvl');
   if(!ov){ ov=document.createElement('div'); ov.id='bioOvl'; ov.style.cssText='position:fixed;inset:0;z-index:4000;background:#0a110a;display:flex;flex-direction:column'; document.body.appendChild(ov); }
   ov.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#101613;border-bottom:1px solid #26322b;color:#e8efe9;font:700 13px system-ui;flex:0 0 auto">'+
-    '<span>'+(modo==='forense'?'🔎 Triagem forense':'📊 Análise estatística')+'</span>'+
+    '<span>'+(modo==='forense'?'Triagem forense':'Análise estatística')+'</span>'+
     '<button onclick="closeBioestat()" style="background:#222;color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer">Fechar</button>'+
   '</div>'+
   '<iframe id="bioFrame" title="Análise bioestatística" src="estatistica/index.html'+(modo==='forense'?'#forense':'')+'" style="flex:1 1 auto;width:100%;border:0;background:#0a110a"></iframe>';
@@ -14725,7 +14726,7 @@ function _bioestatIntegratedHtml(qid,sid,study){
         '<b style="color:#6d7a72">'+esc(d.variavel)+'</b> — '+esc(det)+'</div>';
       return '<button onclick="openPranchaEstudo(\''+qid+'\',\''+sid+'\','+esc(JSON.stringify(d.variavel))+')" '+
         'style="width:100%;text-align:left;padding:9px 11px;border:1px solid #bfd3c6;background:#f4f9f6;color:#1f5136;border-radius:9px;font:700 12px system-ui;cursor:pointer;margin-top:5px">'+
-        '&#128200; '+esc(d.variavel)+'<div style="font-weight:400;font-size:10.5px;color:#6d8579;margin-top:2px">'+esc(det)+'</div></button>';
+        ''+esc(d.variavel)+'<div style="font-weight:400;font-size:10.5px;color:#6d8579;margin-top:2px">'+esc(det)+'</div></button>';
     }).join('');
     _btnPrancha='<div style="margin:8px 0 2px"><div style="font-size:11px;color:#728078;margin-bottom:2px">Folha de gráficos para o relatório — uma por alvo avaliado. Baixa em SVG ou PNG.</div>'+_linhas+'</div>';
   }
@@ -14903,11 +14904,11 @@ function openImportProtocolo(){
   if(!ov){ ov=document.createElement('div'); ov.id='impOvl'; ov.className='calc-ovl'; ov.onclick=function(e){ if(e.target===ov) closeImport(); }; document.body.appendChild(ov); }
   ov.style.display='flex';
   ov.innerHTML='<div class="calc-box">'+
-    '<div class="calc-top"><div class="calc-title">📥 Importar protocolo (planilha)</div><button class="calc-x" onclick="closeImport()" aria-label="Fechar">×</button></div>'+
+    '<div class="calc-top"><div class="calc-title">Importar protocolo (planilha)</div><button class="calc-x" onclick="closeImport()" aria-label="Fechar">×</button></div>'+
     '<div class="calc-sub">Cole as células copiadas do Excel <b>ou</b> escolha o arquivo. Leio o que der; o resto você ajusta. A planilha é a fonte do protocolo.</div>'+
     '<input type="file" id="impFile" accept=".xls,.xlsx,.csv" class="calc-inp" style="padding:7px" onchange="_impFromFile(this)">'+
     '<textarea id="impText" class="calc-inp" rows="5" placeholder="…ou cole aqui as células copiadas da planilha (Ctrl+V)" style="margin-top:8px;font:12px ui-monospace,Menlo,monospace" oninput="_impTextChanged()"></textarea>'+
-    '<div class="calc-actions" style="margin-top:8px"><button class="calc-copy" onclick="_impAnalyze()">🔎 Analisar planilha</button></div>'+
+    '<div class="calc-actions" style="margin-top:8px"><button class="calc-copy" onclick="_impAnalyze()">Analisar planilha</button></div>'+
     '<div id="impPreview"></div>'+
   '</div>';
 }
@@ -15046,7 +15047,7 @@ function openStudyDetail(qid,sid){
 
   var h="";
   if(_fin){
-    h+='<div class="study-finalized-banner"><span aria-hidden="true">🔒</span><div><b>Estudo finalizado</b><small>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+
+    h+='<div class="study-finalized-banner"><span aria-hidden="true">'+ic('lock',16)+'</span><div><b>Estudo finalizado</b><small>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+
        '</small><span>Somente leitura — a estatística está congelada. Para editar, use <b>Reabrir estudo</b> lá embaixo.</span></div></div>';
   }
   h+='<div class="sd-header">';
@@ -15061,8 +15062,8 @@ function openStudyDetail(qid,sid){
   /* Grânulos não têm calda: a quantidade por pote já está na ficha. */
   if(isQuadraLab(qid) && studyMetodo(study,qid)==='granulado'){}
   else h+=isQuadraLab(qid)
-    ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório: a receita de cada tratamento deste estudo, mais o ajuste de i.a.">🧪 Calc lab</button>'
-    : '<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">🧪 Calc</button>';
+    ? '<button class="btn-sm" onclick="openCalcLab(\''+qid+'\',\''+sid+'\')" title="Calculadora de laboratório: a receita de cada tratamento deste estudo, mais o ajuste de i.a.">Calc lab</button>'
+    : '<button class="btn-sm" onclick="openCalcAplicacao(\''+qid+'\',\''+sid+'\')" title="Calculadora de aplicação (calda/dose) com os tratamentos deste estudo">Calc</button>';
   h+='<button class="btn-sm" onclick="navStartQuadra(\''+qid+'\')" title="Navegar (GPS) até a quadra deste estudo">'+ic('pin',15)+' Ir até</button>';
   /* Finalizado: some tudo que escreve. Ler, copiar e baixar continuam valendo. */
   if(!_fin){
@@ -15142,7 +15143,7 @@ function openStudyDetail(qid,sid){
       h+='<span>'+esc(t.produto||"—")+'</span>';
       h+='<span>'+esc(t.dose||"—")+'</span>';
       h+='<span>'+esc(t.volume||"—")+(t.veiculo?' <span style="opacity:.65">em '+esc(t.veiculo)+'</span>':'')+'</span>';
-      if(t.obs)h+='<span class="trat-obs">📝 '+esc(t.obs)+'</span>';
+      if(t.obs)h+='<span class="trat-obs">'+esc(t.obs)+'</span>';
       h+='</div>';
     });
     h+='</div>';
@@ -15255,7 +15256,7 @@ function openStudyDetail(qid,sid){
          mesmo dia. Sai o momento quando declarado, senão a hora da leitura. */
       var _mrot=''; try{ if(a.momento){ var _mm2=avMomento(a,null); if(_mm2&&_mm2.explicito) _mrot=' · '+_mm2.rotulo; } }catch(e){}
       if(!_mrot && a.hora) _mrot=' · '+esc(String(a.hora).slice(0,5));
-      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação assinada" style="margin-left:6px;font-size:12px">✍️</span>':'');
+      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+_mrot+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação assinada" style="margin-left:6px;font-size:12px">'+ic('pencil',12)+'</span>':'');
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       var _prog=AvaliacaoCore.avaliacao(study,a);h+='<small>'+(_prog.complete?'Concluída':(_prog.started?'Parcial · '+_prog.pending+' campos pendentes':'Pendente'))+'</small></summary>';
@@ -15310,12 +15311,12 @@ function openStudyDetail(qid,sid){
   if(_fin){
     h+='<div class="sd-section-title">Finalização</div>'+
        '<div class="study-finalized-card">'+
-       '<b>🔒 Estudo finalizado</b><span>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+'</span>'+
+       '<b>Estudo finalizado</b><span>'+esc(_finEm)+(_finQuem?(' · '+esc(_finQuem)):'')+'</span>'+
        '<p>'+esc(String(_finN))+' resultado(s) de estatística congelados — o relatório usa este retrato, não um recálculo.</p>'+
        (_finFuso?('<small>Fuso do carimbo: '+esc(_finFuso)+'</small>'):'')+
        _seloAssinatura(study.finalizacao.assinatura,(window.AssinaturaCore&&study.finalizacao.assinatura)?AssinaturaCore.conteudoFinalizacao(study):null,study.finalizacao.rubrica,'Rubrica de quem finalizou')+
        '</div>'+
-       '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">🔓 Reabrir estudo</button>';
+       '<button class="btn-sm" style="margin-top:9px" onclick="reabrirEstudo(\''+qid+'\',\''+sid+'\')">Reabrir estudo</button>';
   }else{
     var _closeReview=_studyFinalizationReview(qid,study);
     /* CONFERÊNCIA ANTES DE FINALIZAR. Antes daqui saía a contagem — "3
@@ -16228,7 +16229,7 @@ function renderStudyEditModal(){
     h+='<div class="se-field"><label>Pureza (%) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabPureza" value="'+esc(s.labPureza==null?'':String(s.labPureza))+'" placeholder="100" inputmode="decimal"></div>';
     h+='<div class="se-field"><label>Densidade (g/mL) <span style="opacity:.6">opcional</span></label><input type="text" id="seLabDens" value="'+esc(s.labDensidade==null?'':String(s.labDensidade))+'" placeholder="1,00" inputmode="decimal"></div>';
     h+='</div>';
-    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de laboratório deste estudo. O volume do pote costuma ser o do falcon (50 mL). Densidade é obrigatória quando a fonte é g/kg.</div>';
+    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na calculadora de laboratório deste estudo. O volume do pote costuma ser o do falcon (50 mL). Densidade é obrigatória quando a fonte é g/kg.</div>';
     /* Bioensaio de bancada: o protocolo (Torre de Potter ou placa) é escrito aqui,
        uma vez. A placa não tem arena de pote — a unidade é a própria placa. */
     var _bioM='';
@@ -16248,7 +16249,7 @@ function renderStudyEditModal(){
        por outra. */
     h+='<div class="se-field"><label>Capacidade do frasco</label><input type="text" inputmode="decimal" id="seCapFrasco" placeholder="0 = não conferir · ex.: 200 mL" value="'+esc(_capFrascoTexto(s.capacidadeFrasco))+'" oninput="_seCapDica()"><div class="e-hint" id="seCapDica" style="margin:2px 0 0"></div></div>';
     h+='</div>';
-    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na 🧪 calculadora de aplicação deste estudo. Volume morto = calda que sobra no equipamento. Capacidade 0 = não conferir se a calda cabe nos frascos.</div>';
+    h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Já vêm prontos na calculadora de aplicação deste estudo. Volume morto = calda que sobra no equipamento. Capacidade 0 = não conferir se a calda cabe nos frascos.</div>';
   }
 
   h+='<div class="se-section-title">Avaliações (programação)</div>';
@@ -16386,7 +16387,7 @@ function renderStudyEditModal(){
            return '<option value="'+esc(x.id)+'"'+(_itSel&&_itSel.id===x.id?' selected':'')+'>'+esc(x.nome||x.id)+(x.codigo?(' · '+esc(x.codigo)):'')+'</option>';
          }).join('')+
          '</select>'+
-         '<button type="button" class="btn-sm" style="flex:0 0 auto" onclick="abrirItens()" title="Abrir o banco de itens">📦</button>'+
+         '<button type="button" class="btn-sm" style="flex:0 0 auto" onclick="abrirItens()" title="Abrir o banco de itens">'+ic('archive',16)+'</button>'+
          '</div>';
       h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'"'+((_itSel||_cps.length)?' readonly style="opacity:.7"':'')+'>';
       if(_itSel){
@@ -17256,7 +17257,7 @@ function openStudyEditAplicacao(aid){
     var el = document.getElementById('aeWeatherAlert');
     if(!el) return;
     if(!cl){
-      el.innerHTML = '<span class="bpl-warn">⚠️ Não foi possível obter o clima atual para avaliar a janela de pulverização.</span>';
+      el.innerHTML = '<span class="bpl-warn">Não foi possível obter o clima atual para avaliar a janela de pulverização.</span>';
       return;
     }
     var temp = cl.temp;
@@ -17457,7 +17458,7 @@ function carimboHtml(c,recDate,recHora){
     var rhOk = (cl.umidade != null && cl.umidade > 50);
     var windOk = (cl.vento != null && cl.vento < 10);
     var bplBadge = (cl.temp != null && cl.umidade != null && cl.vento != null)
-      ? (tempOk && rhOk && windOk ? ' <span class="bpl-ok" style="font-weight:700">🟢 Janela Ideal BPL</span>' : ' <span class="bpl-bad" style="font-weight:700">🔴 Fora da Janela</span>')
+      ? (tempOk && rhOk && windOk ? ' <span class="bpl-ok" style="font-weight:700">Janela Ideal BPL</span>' : ' <span class="bpl-bad" style="font-weight:700">Fora da Janela</span>')
       : '';
       
     var _src=(cl.fonte&&cl.fonte.indexOf('estacao')===0)?'estação':'previsão';
@@ -18284,7 +18285,7 @@ function renderAvGrid(){
   html+='<div id="avForenseLive" class="av-forense-live" role="status" aria-live="polite"></div>';
   /* A tela de "fotos seguidas": tira a foto e a identificação já passa para a
      próxima parcela, sem voltar à grade (fotos-estudo.js, fotosEmSequencia). */
-  if(croquiRows.length>1) html+='<div class="av-foto-seq"><button type="button" class="av-photo-btn" data-av-photo-seq="1">📷 Fotos em sequência</button><span>parcela por parcela, sem voltar à grade</span></div>';
+  if(croquiRows.length>1) html+='<div class="av-foto-seq"><button type="button" class="av-photo-btn" data-av-photo-seq="1">Fotos em sequência</button><span>parcela por parcela, sem voltar à grade</span></div>';
   html+=avCroquiHtml(st,croquiRows,vs);
   html+=_avFichaHtml(croquiRows,vs);
   html+='<div class="av-scroll"><table class="av-table"><thead><tr><th>Parc.</th>';
@@ -18412,7 +18413,7 @@ function _avSubRender(){
   if(_pl) h+='<div class="av-sub-cresc" style="font-size:11px;color:#8a948e;margin:-2px 0 6px">'+_avSubCrescTexto(der,_pl)+'</div>';
   var al=_avSubOutlier(vals)||_avSubPlacaAviso(vals,_pl); h+='<div class="av-sub-warn"'+(al?'':' style="display:none"')+'>'+esc(al)+'</div>';
   /* a placa é a régua: com o Ø no protocolo, a foto mede a cruz sozinha */
-  if(_cruz&&_pl.placaMm>0&&typeof avSubMedirFoto==='function') h+='<div class="av-sub-btns" style="margin-bottom:6px"><button type="button" class="av-sub-ok" onclick="avSubMedirFoto()" style="flex:1">📷 Medir por foto</button></div>';
+  if(_cruz&&_pl.placaMm>0&&typeof avSubMedirFoto==='function') h+='<div class="av-sub-btns" style="margin-bottom:6px"><button type="button" class="av-sub-ok" onclick="avSubMedirFoto()" style="flex:1">Medir por foto</button></div>';
   h+='<div class="av-sub-btns">'+(_pl&&_pl.placaMm>0?'<button type="button" class="av-sub-clr" onclick="avSubTomouPlaca()" title="A colônia cobriu a placa inteira">Tomou a placa ('+_pl.placaMm+' mm)</button>':'')+
      '<button type="button" class="av-sub-clr" onclick="avSubLimpar()">Limpar</button><button type="button" class="av-sub-ok" onclick="avCloseSub()">Pronto</button></div></div>';
   m.innerHTML=h;
@@ -19365,7 +19366,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
   if(av.carimbo){ assinPor=_identidadeBPL(av.carimbo.rubricaNome,av.carimbo.rubricaPor).nome; }
 
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()" aria-label="Fechar avaliação" title="Fechar">×</button></div>';
-  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?'🔒 ':'✏️ ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+
+  if(signed){ h+='<div style="margin:0 0 10px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.45;'+(locked?'background:#102218;border:1px solid #245a36;color:#9fe0b6':'background:#2a210c;border:1px solid #6b531b;color:#ffd98a')+'">'+(locked?ic('lock',12)+' ':ic('pencil',12)+' ')+'<b>Assinada</b>'+(assinEm?(' em '+esc(assinEm)):'')+(assinPor?(' por '+esc(assinPor)):'')+'.'+(locked?' Somente leitura — toque em “Reabrir para editar”.':' Reaberta — a alteração será registrada na trilha e exigirá nova assinatura.')+
     ((locked&&av.carimbo.assinatura&&window.AssinaturaCore)?_seloAssinatura(av.carimbo.assinatura,AssinaturaCore.conteudoAvaliacao(av)):'')+'</div>'; }
   if(reopened){ h+='<div style="margin:0 0 10px;padding:7px 10px;border-radius:9px;background:#241a2a;border:1px solid #5a3a6b;color:#d8b6e6;font-size:11px">Motivo desta edição: <b>'+esc(_avReopen.motivo)+'</b></div>'; }
   if(inheritedFrom){h+='<div class="av-schema-inherited">✓ Campos herdados da avaliação de '+esc(isoToBR(inheritedFrom.data)||inheritedFrom.data||'data anterior')+'. A grade veio vazia para esta leitura.</div>';}
@@ -19393,7 +19394,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
      ensaio; salvar uma leitura de hoje sem hora preenche sozinho (ver saveAvaliacao). */
   h+='<div class="se-field"><label>Hora <span style="opacity:.6">da leitura</span></label>'+
      '<div style="display:flex;gap:6px"><input type="time" id="vHora" value="'+esc(av.hora||'')+'" style="flex:1">'+
-     '<button type="button" class="btn-sm" onclick="_avHoraAgora()" title="Carimbar a hora deste momento">🕐 agora</button></div></div>';
+     '<button type="button" class="btn-sm" onclick="_avHoraAgora()" title="Carimbar a hora deste momento">agora</button></div></div>';
   h+='</div>';
   h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Deixe em branco e o momento sai da data, como sempre. Preencha quando houver mais de uma leitura no MESMO dia (ex.: knockdown a 1, 2, 4 e 24 HAT) — sem isto o app guarda só a primeira.</div>';
   /* §10 — leitura dupla: a escolha de quem está com a prancheta vem ANTES da grade,
@@ -19428,7 +19429,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido,forceUnlock,irParaParcela){
   h+='<div class="se-field"><label>Notas por tratamento</label><div id="avGridWrap"></div></div>';
   h+='<div class="se-field"><label>Observações / Resultados</label><textarea id="vObs" rows="4" placeholder="Dados coletados, notas de campo...">'+esc(av.obs||"")+'</textarea></div>';
   h+='</fieldset>';
-  if(locked){ h+='<div class="se-actions"><button class="btn-save" onclick="reabrirAvaliacao(\''+av.id+'\')">🔓 Reabrir para editar</button><button class="btn-cancel" onclick="closeEventEdit()">Fechar</button></div>'; }
+  if(locked){ h+='<div class="se-actions"><button class="btn-save" onclick="reabrirAvaliacao(\''+av.id+'\')">Reabrir para editar</button><button class="btn-cancel" onclick="closeEventEdit()">Fechar</button></div>'; }
   else { h+='<div class="se-actions"><button class="btn-save" onclick="saveAvaliacao()">Salvar avaliação</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>'; }
 
   document.getElementById("eePnl").innerHTML=h;
@@ -19655,7 +19656,7 @@ function _pvAutor(){
 function protocoloVivoHtml(qid,sid,study){
   var PV=window.ProtocoloVivoCore; if(!PV) return '';
   var inf=PV.info(study), fin=estudoFinalizado(study);
-  var h='<div class="sd-section" id="study-protocolo-vivo"><div class="sd-section-title">📜 Protocolo</div>';
+  var h='<div class="sd-section" id="study-protocolo-vivo"><div class="sd-section-title">Protocolo</div>';
   if(!inf.aprovado){
     h+='<div class="pv-card pv-rascunho"><b>Rascunho</b><span>Editável livremente. Ao aprovar, o protocolo ganha versão: dali em diante, mudar tratamentos, doses, repetições ou o plano vira emenda com motivo.</span></div>';
     if(!fin) h+='<button class="btn-sm" onclick="aprovarProtocolo(\''+qid+'\',\''+sid+'\')">Aprovar protocolo</button>';
@@ -20464,10 +20465,10 @@ function _showBackups(list){
       '<button onclick="safetyRestoreAt('+i+')" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
   }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
   m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
     '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Cópias automáticas antes de excluir/importar (só neste aparelho). Incluem as observações; mantenha também os arquivos das fotos salvos no aparelho. Restaurar guarda o estado atual antes — e não restaura se não conseguir guardar. Exporte uma cópia para recuperar em outro aparelho.</div>'+
     rows+
-    '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">💾 Exportar tudo agora (arquivo)</button></div>'+
+    '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Exportar tudo agora (arquivo)</button></div>'+
   '</div>';
   m.style.display='flex';
 }
@@ -20678,8 +20679,8 @@ renderStudyCard=function(qid,study){
   }
   var code=study.codigo||study.nome||'(sem código)';
   var h='<div class="study-card-v2'+(fim?' finalizada':'')+'" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
-  h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do estudo + NDVI p/ planilha" aria-label="Copiar estudo '+esc(code)+'" style="float:right;background:rgba(31,36,42,.05);border:1px solid #d7dbe0;color:#3a4149;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">📄</button>';
-  h+='<div class="study-card-v2-codigo">'+(fim?'<span class="study-lock" aria-hidden="true">🔒</span> ':'')+esc(code)+'</div>';
+  h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do estudo + NDVI p/ planilha" aria-label="Copiar estudo '+esc(code)+'" style="float:right;background:rgba(31,36,42,.05);border:1px solid #d7dbe0;color:#3a4149;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">'+ic('copy',14)+'</button>';
+  h+='<div class="study-card-v2-codigo">'+(fim?'<span class="study-lock" aria-hidden="true">'+ic('lock',12)+'</span> ':'')+esc(code)+'</div>';
   if(study.descricao)h+='<div class="study-card-v2-desc">'+esc(study.descricao.slice(0,100))+(study.descricao.length>100?'…':'')+'</div>';
   h+='<div class="study-card-v2-meta">';
   h+='<span>'+study.tratamentos.length+' trat. × '+study.numRepeticoes+' rep.</span>';
@@ -21350,7 +21351,7 @@ function openAdminPanel(){
   }
   modal.style.display='flex';
   modal.innerHTML='<div style="width:100%;max-width:350px;background:linear-gradient(135deg,#0e1612,#070a08);border:1px solid rgba(55,214,132,0.25);border-radius:20px;box-shadow:0 20px 50px rgba(0,0,0,0.6),0 0 25px rgba(55,214,132,0.08);padding:24px;color:#eaf3ed;font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box;text-align:center;margin:60px auto 20px auto;position:relative">'+
-    '<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:rgba(55,214,132,0.1);border:1px solid rgba(55,214,132,0.25);border-radius:50%;font-size:22px;color:#37d684;box-shadow:0 0 15px rgba(55,214,132,0.15)">🔑</div>'+
+    '<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:rgba(55,214,132,0.1);border:1px solid rgba(55,214,132,0.25);border-radius:50%;font-size:22px;color:#37d684;box-shadow:0 0 15px rgba(55,214,132,0.15)">'+ic('lock',22)+'</div>'+
     '<div style="font-size:18px;font-weight:800;color:#fff;margin-top:14px;margin-bottom:6px;letter-spacing:0.3px">Painel do Administrador</div>'+
     '<div style="font-size:12px;color:#8aa88a;line-height:1.5;margin-bottom:20px">Área Restrita — Digite a senha do Agracta para continuar.</div>'+
     '<label style="display:block;font-size:9px;font-weight:800;color:#37d684;letter-spacing:1.5px;text-align:left;margin-bottom:6px;margin-left:2px;text-transform:uppercase">Senha de Acesso</label>'+
@@ -21428,7 +21429,7 @@ function renderAdminDashboard(){
   '</div>') : '';
 
   m.innerHTML = '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:460px;width:100%;padding:20px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">⚙️ Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
     '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Controle de acesso BPL para sincronização de dados.</div>'+
     /* Quem assina. O administrador nunca passa pela criação de técnico, então
        seu nome não estava em lugar nenhum e a trilha registrava "Administrador"
@@ -22132,7 +22133,7 @@ function janelaBlocoHtml(qid, sid, av){
     if(estado==='buscando') return '<div class="jan-linha">Montando a janela ambiental…</div>';
     return '<div class="jan-linha">'+
       '<button class="jan-btn" onclick="janelaBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(av.id)+'\')">'+
-      '🌦 Ambiente desde a aplicação de '+esc(isoToBR(ap.data)||ap.data)+'</button>'+
+      'Ambiente desde a aplicação de '+esc(isoToBR(ap.data)||ap.data)+'</button>'+
       (estado==='erro'?'<span class="jan-erro">não consegui na última tentativa</span>':'')+'</div>';
   }
 
@@ -22280,7 +22281,7 @@ function posBlocoHtml(qid, sid, ap){
     if(estado==='buscando') return '<div class="jan-linha">Lendo a chuva depois da aplicação…</div>';
     return '<div class="jan-linha">'+
       '<button class="jan-btn" onclick="posBuscar(\''+esc(qid)+'\',\''+esc(sid)+'\',\''+esc(ap.id)+'\')">'+
-      '🌧 Choveu depois? (48 h)</button>'+
+      'Choveu depois? (48 h)</button>'+
       (estado==='erro'?'<span class="jan-erro">não consegui na última tentativa</span>':'')+'</div>';
   }
 
@@ -23260,14 +23261,14 @@ function _itensPinta(){
     return normStr(it.nome).indexOf(q)>=0 || normStr(it.codigo).indexOf(q)>=0 ||
            normStr(it.titular).indexOf(q)>=0 || normStr(it.ativos).indexOf(q)>=0;
   });
-  var h='<div class="it-box"><div class="it-top"><div class="it-t">📦 Banco de itens</div>'+
+  var h='<div class="it-box"><div class="it-top"><div class="it-t">Banco de itens</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">×</button></div>';
   h+='<input class="it-busca" placeholder="Buscar por nome, código, patrocinador ou ingrediente ativo" value="'+esc(_itemBusca)+'" oninput="_itensBusca(this.value)">';
   h+='<button class="it-btn" onclick="itemAbrirNovo()">+ Cadastrar item</button>';
   /* So aparece quando ha o que migrar. Um botao permanente para uma fila vazia e
      exatamente o tipo de ruido que a tela nao deve ter. */
   if(_migPendentes>0){
-    h+='<button class="it-btn alt" onclick="migracaoAbrir()">🔗 '+_migPendentes+' produto'+(_migPendentes===1?'':'s')+
+    h+='<button class="it-btn alt" onclick="migracaoAbrir()">'+_migPendentes+' produto'+(_migPendentes===1?'':'s')+
        ' ja digitado'+(_migPendentes===1?'':'s')+' esperando cadastro</button>';
   }
   h+='<div style="margin-top:12px">';
@@ -23600,7 +23601,7 @@ function migracaoAcaoLigar(chave, sel){
 
 function _migracaoHtml(){
   var r=_migResumo||{candidatos:[], finalizados:0, ligaveis:0};
-  var h='<div class="it-box"><div class="it-top"><div class="it-t">🔗 Produtos ja digitados</div>'+
+  var h='<div class="it-box"><div class="it-top"><div class="it-t">Produtos ja digitados</div>'+
         '<button class="it-x" onclick="fecharItens()" aria-label="Fechar">&times;</button></div>';
   h+='<button class="it-btn alt" onclick="migracaoVoltar()">&lsaquo; Banco de itens</button><div style="height:10px"></div>';
 
@@ -23883,7 +23884,7 @@ function agrofitIdadeHtml(){
 function _agLigHtml(it){
   if(_agLigItem!==it.id)
     return '<button class="it-btn alt" style="margin:2px 0 10px" onclick="agrofitLigarToggle('+esc(JSON.stringify(it.id))+')">'+
-           (it.registro?'🔎 Conferir no Agrofit':'🔎 Ligar ao Agrofit')+'</button>';
+           (it.registro?'Conferir no Agrofit':'Ligar ao Agrofit')+'</button>';
   var h='<div class="it-agf-sel" style="margin-bottom:10px">'+
     '<div class="it-agf-selh"><b>Agrofit</b>'+
     '<button type="button" onclick="agrofitLigarToggle('+esc(JSON.stringify(it.id))+')">fechar</button></div>'+

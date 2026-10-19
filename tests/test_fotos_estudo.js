@@ -70,7 +70,7 @@ function entregar(files){ var inp=w.__cliques[w.__cliques.length-1]; Object.defi
   for(i=0;i<100&&!w.__toasts.length;i++) await espera();
   ck(/Foto salva · 2A \(1 nesta leitura\)/.test(w.__toasts[0]||''),'confirma na hora: "Foto salva · 2A (1 nesta leitura)"');
   var chip=w.document.querySelector('[data-av-fotos="T2R1"]');
-  ck(!chip.hidden && chip.textContent==='1 📷','a grade mostra o contador na parcela');
+  ck(!chip.hidden && chip.textContent==='1 foto','a grade mostra o contador na parcela');
   ck(w.document.querySelector('[data-av-fotos="T1R1"]').hidden,'parcela sem foto continua sem contador');
 
   console.log('\n[2] regras');

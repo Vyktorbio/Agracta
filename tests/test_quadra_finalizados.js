@@ -45,7 +45,8 @@ const ctx={ console, String, Number, Math, JSON, Object, Array, isFinite,
   _avTemNota:()=>false,
   _agFormatDateTime:v=>'20/11/2025, 11:30',
   estudoFinalizado:s=>!!(s&&s.finalizacao&&s.finalizacao.em),
-  nextEventV2:()=>({ev:{type:'aval',idx:1},diff:0})   /* HOJE, urgente */
+  nextEventV2:()=>({ev:{type:'aval',idx:1},diff:0}),  /* HOJE, urgente */
+  ic:n=>'<svg data-ic="'+n+'"></svg>'
 };
 ctx.window=ctx; ctx.globalThis=ctx;
 vm.createContext(ctx);
@@ -66,7 +67,7 @@ assert.ok(!/study-card-v2-next/.test(hFim),
 assert.ok(!/HOJE|atrasado/.test(hFim),
   'e nenhuma palavra de urgência — ele acabou, não está atrasado');
 assert.match(hFim,/study-card-v2 finalizada|finalizada/,'o cartão se declara finalizado por classe');
-assert.match(hFim,/🔒/,'com o cadeado ao lado do código');
+assert.match(hFim,/data-ic="lock"/,'com o cadeado ao lado do código (desenho do app, não emoji)');
 assert.match(hFim,/Finalizado em/,'e dizendo quando terminou');
 assert.match(hFim,/Victor/,'e por quem, quando o registro tem quem');
 

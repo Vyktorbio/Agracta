@@ -1,7 +1,7 @@
 /* ============================================================================
    Medir a colônia pela foto — no editor do diâmetro em cruz da placa
    ----------------------------------------------------------------------------
-   "📷 Medir por foto" abre a câmera. A foto é medida pelo ColoniaCore, com o Ø
+   "Medir por foto" abre a câmera. A foto é medida pelo ColoniaCore, com o Ø
    interno da placa do protocolo como régua, e a tela mostra O QUE foi medido —
    o círculo da placa, o contorno da colônia e a cruz — para quem está com a
    placa na mão conferir antes de usar. Nada entra na grade sem esse "Usar".

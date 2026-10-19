@@ -177,44 +177,25 @@ assert.deepEqual(extensoes('<path d="M2 2 2 9 9 9"/>'),[7],
    ele que uma quadra sem especialidade marcada volta, pela mesma razão que
    labTipoCor a devolve ao verde: dizer "é um laboratório" sem inventar de qual
    é. */
-const ESPECIALIDADES={Entomologia:'bug', Fitopatologia:'leaf', Nematologia:'nematode'};
+const ESPECIALIDADES={Entomologia:'frasco', Fitopatologia:'leaf', Nematologia:'nematode'};
 Object.entries(ESPECIALIDADES).forEach(([esp,nome])=>{
   assert.ok(ctxI.ic(nome,14).length>ctxI.ic('naoexiste',14).length,
     esp+' tem desenho próprio na tabela do ic() ("'+nome+'")');
   /* A MESMA RÉGUA DO MICROSCÓPIO, senão o conjunto volta a desirmanar: foi
      por densidade que o microscópio foi redesenhado, e um ícone novo que a
-     ignore recria o problema no pino do lado.
-
-     O percevejo é a exceção pedida: "no Labin eu quero essa imagem", com uma
-     ilustração de percevejo marrom e cheio. A régua de traços mede contorno;
-     uma silhueta cheia não vira borrão do mesmo jeito, porque as peças são
-     massa e os vãos entre elas é que desenham. Para ele vale outra cobrança,
-     logo abaixo do laço. A régua dos 4 unidades continua valendo para todos. */
-  if(nome!=='bug') assert.ok(tracos(nome)<=teto,
+     ignore recria o problema no pino do lado. */
+  assert.ok(tracos(nome)<=teto,
     esp+': '+tracos(nome)+' traços contra o teto de '+teto+' da vizinhança');
   const finos=extensoes(fonteDoIcone(nome)).filter(v=>v<4);
   assert.deepEqual(finos,[],
     esp+' não pode ter traço solto abaixo de 4 unidades (achei: '+finos.join(', ')+')');
 });
 
-/* O percevejo é silhueta: peças cheias (cabeça, pronoto, escutelo, os dois
-   córios, membrana) e pernas/antenas em traço. Se ele voltar a ser só
-   contorno, volta a ler como escudo — foi o que motivou a troca. */
-{
-  const d=fonteDoIcone('bug');
-  const cheio=(d.match(/<path fill="currentColor" stroke="none" d="([^"]*)"/)||[])[1]||'';
-  assert.ok(cheio,'o percevejo tem as peças do corpo cheias (fill=currentColor)');
-  assert.ok((cheio.match(/M/g)||[]).length>=6,
-    'cabeça, pronoto, escutelo, dois córios e membrana: seis peças separadas, que deixam ver as suturas');
-  assert.ok(/stroke-width="1\.[0-9]"/.test(d),'pernas e antenas em traço mais fino que o padrão 2');
-  assert.ok(!/#[0-9a-f]{3,6}/i.test(d),'sem cor própria: veste a cor da especialidade');
-}
-
 /* E a ligação especialidade -> desenho, com a volta ao microscópio no fim. */
 const LIGA=fatia('function labTipoIcone(t){');
 assert.match(LIGA,/LAB_ICONES\[t\]\|\|'ciliado'/,
   'especialidade desconhecida ou em branco volta ao microscópio, não a um desenho em branco');
-assert.match(src,/var LAB_ICONES=\{[^}]*Entomologia:'bug'[^}]*\}/,
+assert.match(src,/var LAB_ICONES=\{[^}]*Entomologia:'frasco'[^}]*\}/,
   'a tabela liga cada especialidade ao seu desenho');
 /* As três especialidades que existem têm de estar TODAS na tabela: com duas
    cobertas e uma no microscópio, o mapa vira meio sistema. */
