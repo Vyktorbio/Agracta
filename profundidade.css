@@ -95,7 +95,7 @@ html.light,html.ag-depth-light{
   border-color:var(--depth-edge)!important;
 }
 :is(.auth-i,.calc-inp,.calc-sel,.con-shell input,.con-shell select,.con-shell textarea):focus-visible{
-  outline:3px solid #328967!important;outline-offset:2px!important;
+  outline:3px solid var(--skin-selection,#60b9ee)!important;outline-offset:2px!important;
   box-shadow:var(--depth-pressed)!important;
 }
 /* A consulta do cliente compartilha os cartões, sem carregar o casco do mapa. */

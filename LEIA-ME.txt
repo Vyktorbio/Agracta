@@ -1,3 +1,51 @@
+AGRACTA — 46a publicacao                    19/10/2026
+=====================================================
+
+Leva: os restos do verde antigo passam para o visual da skin royal.
+  CODIGO:  app.js  styles.css  theme-2026.css  interface-neutra.css
+           profundidade.css  estudo-pagina.css  probit.css
+           acesso-horario.js  papeis-app.js  croqui-livre.js
+           paginas que pedem essas folhas, sw.js (cache v385, app.js?v=233),
+           estatistica/sw.js (bioensaio-v61-verdes)
+  TESTE:   sem teste novo; conferencia visual e de cores abaixo.
+
+O PROXY NAO PRECISA SUBIR. As regras do banco nao mudaram.
+
+
+O QUE MUDOU
+-----------
+
+Pedido do campo: atacar os "restos verdes" do design.
+
+- Botao principal (Salvar, Criar, Copiar, Entrar...) usa os tokens
+  --acao-bg / --acao-ink: escuro no tema claro, claro no tema escuro.
+  Antes ele era escuro tambem no tema escuro e quase sumia no fundo.
+- Item ligado ou escolhido (abas da calculadora de laboratorio, Campo /
+  Laboratorio, dias da janela de acesso, botoes de modo do croqui) usa o
+  azul de selecao. Foco de campo (login, calculadoras, avaliacao) tambem.
+- Paineis que eram verde-escuro nos dois temas agora seguem o tema:
+  Painel do Administrador e a tela de senha dele, Backups, Historico da
+  nuvem, Integridade, Armazenamento, Conformidade, Recuperacao de
+  avaliacoes, Randomizacao, Novo local.
+- Titulos que eram verdes viram texto comum; barras de progresso, azul royal.
+- Probit: botao principal escuro e selecao em azul, como no app.
+- O verde que FICA e de estado (concluido, tudo certo, "Nada pendente para
+  hoje", selo ok), agora pelos tokens de cores-padrao.css nos dois temas.
+
+VERIFICACAO
+-----------
+- Chromium a 390 px, temas claro e escuro, 19 telas: varredura de todo
+  elemento visivel com cor verde. Sobrou so verde de estado.
+- Comparacao de imagem antes x depois: mudaram so as telas acima; mapa,
+  menu, ferramentas, locais, hoje, buscar, agenda e bioestatistica
+  ficaram identicos.
+- conferir.sh --pull-request: PODE SUBIR.
+
+DEPOIS DE ATUALIZAR
+------------------
+Reabrir o Agracta para receber o cache v385.
+
+
 AGRACTA — 45a publicacao                    19/10/2026
 =====================================================
 

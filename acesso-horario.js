@@ -476,14 +476,14 @@
               var on = j.dias.indexOf(k) >= 0;
               return '<button type="button" id="jn_d_'+i+'_'+k+'" onclick="_janelaDia('+i+','+k+')" '+
                 'style="flex:1;min-width:34px;padding:5px 0;border-radius:7px;cursor:pointer;font:700 10px system-ui;text-transform:uppercase;'+
-                (on?'background:#1f5a2a;color:#eafaea;border:1px solid #2e7d3e':'background:#111b13;color:#6f8f76;border:1px solid #24332a')+'">'+d+'</button>';
+                (on?'background:var(--skin-selection);color:var(--skin-selection-ink);border:1px solid var(--skin-selection)':'background:#111b13;color:#6f8f76;border:1px solid #24332a')+'">'+d+'</button>';
             }).join('')+
           '</div>'+
           '<div style="display:flex;gap:6px;align-items:center">'+
             '<input type="time" id="jn_i_'+i+'" value="'+hhmm(j.iniMin)+'" class="delpwd-inp" style="padding:6px;font-size:12px;flex:1">'+
             '<span style="color:#6f8f76;font-size:11px">até</span>'+
             '<input type="time" id="jn_f_'+i+'" value="'+hhmm(j.fimMin)+'" class="delpwd-inp" style="padding:6px;font-size:12px;flex:1">'+
-            '<button onclick="_janelaSalvar('+i+')" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:0 12px;font-size:11px;font-weight:700;cursor:pointer;align-self:stretch">Salvar</button>'+
+            '<button onclick="_janelaSalvar('+i+')" style="background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:7px;padding:0 12px;font-size:11px;font-weight:700;cursor:pointer;align-self:stretch">Salvar</button>'+
           '</div>'+
         '</div>';
       linha.appendChild(wrap);
@@ -503,7 +503,7 @@
     var b = document.getElementById('jn_d_'+i+'_'+k);
     var on = p.janela.dias.indexOf(k) >= 0;
     if(b) b.style.cssText = b.style.cssText.replace(/background:[^;]+;color:[^;]+;border:[^;"]+/,
-      on ? 'background:#1f5a2a;color:#eafaea;border:1px solid #2e7d3e'
+      on ? 'background:var(--skin-selection);color:var(--skin-selection-ink);border:1px solid var(--skin-selection)'
          : 'background:#111b13;color:#6f8f76;border:1px solid #24332a');
   };
   window._janelaSalvar = function(i){

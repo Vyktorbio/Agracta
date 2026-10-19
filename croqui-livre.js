@@ -68,7 +68,7 @@
   function estilo() {
     if (d.getElementById('croquiLivreCss')) return;
     var s = d.createElement('style'); s.id = 'croquiLivreCss';
-    s.textContent = '.livre-seg{display:flex;gap:6px;margin-bottom:9px}.livre-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.livre-seg button.on{background:#37d684;border-color:#37d684;color:#08130c}' +
+    s.textContent = '.livre-seg{display:flex;gap:6px;margin-bottom:9px}.livre-seg button{flex:1;background:#0c1210;border:1px solid #2c3a32;color:#b9c6bd;border-radius:9px;padding:7px 4px;font:700 11px system-ui,sans-serif;cursor:pointer}.livre-seg button.on{background:var(--skin-selection);border-color:var(--skin-selection);color:var(--skin-selection-ink)}' +
       '.livre-so{display:none}.croqui-modo-livre .livre-so{display:block}.croqui-modo-livre .livre-seg.livre-so,.croqui-modo-livre .livre-acts.livre-so{display:flex}.croqui-modo-livre .croqui-nums.livre-so{display:grid}' +
       '.croqui-modo-livre .croqui-ajustes>.croqui-seg,.croqui-modo-livre .croqui-ajustes>.croqui-nums{display:none}' +
       '.livre-prox{font-size:12px;line-height:1.45;background:#0c1210;border:1px solid #6b5a2f;color:#ffd24a;border-radius:10px;padding:8px;margin-bottom:9px}.livre-prox b{font-size:15px;color:#fff}' +

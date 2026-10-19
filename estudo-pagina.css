@@ -15,7 +15,7 @@
 .ep-group-svg .ep-group-label{font-size:14px}
 .ep-baseline{stroke:var(--text-2,#617468);stroke-width:1}
 .ep-bar{cursor:pointer}.ep-bar:hover>rect:first-of-type,.ep-bar:focus>rect:first-of-type{stroke:var(--text,#1d3028);stroke-width:2}
-.ep-bar:focus-visible{outline:2px solid #328967;outline-offset:3px}
+.ep-bar:focus-visible{outline:2px solid var(--skin-selection,#60b9ee);outline-offset:3px}
 .ep-date-legend{font-size:.875rem;gap:10px 18px}
 .ep-date-legend i{border:1px solid rgba(0,0,0,.12);width:12px;height:12px}
 .ep-bar-detail{display:block;min-height:44px;font-size:.9375rem;line-height:1.5;padding:10px 12px;border-radius:10px;background:var(--bg,#edf3ef);overflow-wrap:anywhere}
