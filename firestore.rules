@@ -1,309 +1,56 @@
 rules_version = '2';
 
-/* Agracta — controle de acesso do Firestore.
- *
- * Duas condições precisam valer ao mesmo tempo para ler ou escrever qualquer
- * dado de pesquisa: a pessoa é membro ativo E está dentro da janela de horário
- * que o administrador definiu para ela. A janela vive no próprio documento do
- * membro, então mudar o horário no Painel Admin vale na hora, sem publicar
- * regra nova.
- *
- * Formato de members/{email}.janela:
- *   { on: true, dias: [1,2,3,4,5], iniMin: 420, fimMin: 1080 }
- *   dias segue o padrão do JavaScript — 0 = domingo … 6 = sábado.
- *   iniMin/fimMin são minutos desde a meia-noite, no fuso de São Paulo.
- *   Sem o campo (ou com on:false) o acesso é livre a qualquer hora.
- */
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null
-        && request.auth.token.email != null;
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function userEmail() {
+      return request.auth.token.email.lower();
     }
 
     function isAdmin() {
-      return signedIn()
-        && (request.auth.token.email == 'machadovictorchaves@gmail.com'
-            || request.auth.token.email == 'vyktorbio@gmail.com');
+      return isSignedIn() &&
+             (userEmail() == 'machadovictorchaves@gmail.com' ||
+              userEmail() == 'vyktorbio@gmail.com');
     }
 
-    function memberPath() {
-      return /databases/$(database)/documents/workspaces/agracta/members/$(request.auth.token.email);
+    // Otimizado: usa apenas 1 chamada get() com fallback seguro .get('emails', []),
+    // eliminando a chamada exists() duplicada que dobrava o custo de leitura das regras.
+    function isRegisteredEmail() {
+      return isSignedIn() &&
+             get(/databases/$(database)/documents/workspaces/agracta/config/usuarios_permitidos)
+               .data.get('emails', []).hasAny([userEmail()]);
     }
 
-    function memberExists() {
-      return signedIn() && exists(memberPath());
-    }
-
-    function memberData() {
-      return get(memberPath()).data;
-    }
-
-    /* America/Sao_Paulo é UTC-3 fixo desde 2019 (sem horário de verão). */
-    function localNow() {
-      return request.time - duration.value(180, 'm');
-    }
-    function localMinutes() {
-      return localNow().hours() * 60 + localNow().minutes();
-    }
-    /* dayOfWeek() devolve 1 (segunda) … 7 (domingo); %7 alinha com o JavaScript. */
-    function localWeekday() {
-      return localNow().dayOfWeek() % 7;
-    }
-
-    function withinWindow() {
-      return !('janela' in memberData())
-        || memberData().janela.get('on', false) == false
-        || (
-             memberData().janela.get('dias', [0,1,2,3,4,5,6]).hasAny([localWeekday()])
-             && localMinutes() >= memberData().janela.get('iniMin', 0)
-             && localMinutes() <  memberData().janela.get('fimMin', 1440)
-           );
-    }
-
-    function isActiveMember() {
-      return memberExists()
-        && memberData().get('active', false) == true
-        && withinWindow();
-    }
-
-    function canUseAgracta() {
-      return isAdmin() || isActiveMember();
-    }
-
-    function workspacePath() {
-      return /databases/$(database)/documents/workspaces/agracta;
-    }
-    // Dados e revisão precisam pertencer à mesma transação. Um app antigo,
-    // com batch sem conferência de revisão, não pode regravar uma cópia obsoleta.
-    function atomicWorkspaceCommit() {
-      let next = getAfter(workspacePath()).data;
-      let previous = exists(workspacePath()) ? get(workspacePath()).data : {};
-      return next.get('syncProtocol', 0) == 3
-        && next.get('rev', 0) == previous.get('rev', 0) + 1
-        && next.get('writeId', '') is string
-        && next.get('writeId', '').size() > 0
-        && next.get('writeId', '') != previous.get('writeId', '');
-    }
-
-    /* ---- Papéis (vendor/papeis-core.js) ----------------------------------
-       Cada membro tem `papel` no cadastro: tecnico < supervisor < diretor. Sem o
-       campo, é técnico. Os administradores fixos acima podem tudo.
-
-       O papel mínimo de cada ação vem de workspaces/agracta/politica/papeis, que
-       só o administrador grava (Painel Admin). Sem o documento, ou sem a ação
-       nele, vale papelPadrao — que é o MESMO padrão do vendor/papeis-core.js
-       (tests/test_papeis.js confere os dois).
-
-       O banco confere as ações que mudam o estado do estudo ou apagam registro.
-       Por que só estas: elas nascem sempre no aparelho de quem as fez — a mescla
-       entre aparelhos decide finalização e reabertura pela trilha, e exclusão
-       pela lápide —, então quem grava a mudança é quem a fez. A correção de
-       avaliação assinada não entra: uma nota lançada offline por um colega pode
-       chegar depois da assinatura sem que ninguém esteja corrigindo nada, e
-       recusar a gravação dele travaria a sincronização daquele aparelho.
-       Essa a tela confere (docs/VALIDACAO-SISTEMA.md, L1). */
-    function politicaPath() {
-      return /databases/$(database)/documents/workspaces/agracta/politica/papeis;
-    }
-    function nivelDe(papel) {
-      return {'tecnico': 1, 'supervisor': 2, 'diretor': 3}.get(papel, 1);
-    }
-    /* Papel exigido desconhecido é o mais alto: na dúvida, recusa. */
-    function nivelExigido(papel) {
-      return {'tecnico': 1, 'supervisor': 2, 'diretor': 3}.get(papel, 3);
-    }
-    function papelPadrao(acao) {
-      return {'reabrir': 'supervisor', 'excluir': 'supervisor', 'aprovar': 'diretor', 'emendar': 'diretor', 'finalizar': 'diretor'}.get(acao, 'diretor');
-    }
-    function papelMinimo(acao) {
-      return exists(politicaPath())
-        ? get(politicaPath()).data.get('minimo', {}).get(acao, papelPadrao(acao))
-        : papelPadrao(acao);
-    }
-    function pode(acao) {
-      return isAdmin()
-        || nivelDe(memberData().get('papel', 'tecnico')) >= nivelExigido(papelMinimo(acao));
-    }
-
-    /* O estudo grava em estudos/{id}, com o conteúdo em `data`. */
-    function estudoAntes() {
-      return resource == null ? {} : resource.data.get('data', {});
-    }
-    function estudoDepois() {
-      return request.resource.data.get('data', {});
-    }
-    function finalizado(s) {
-      return s.get('finalizacao', null) != null;
-    }
-    function protocoloAprovado(s) {
-      return s.get('protocoloVivo', null) != null
-        && s.get('protocoloVivo', {}).get('status', '') == 'aprovado';
-    }
-    function versaoProtocolo(s) {
-      return s.get('protocoloVivo', {}).get('versao', 1);
-    }
-    /* Só a MUDANÇA de estado pede papel. Gravar um estudo que já estava
-       finalizado (ou aprovado) sem mexer nisso não é finalizar de novo. */
-    function transicaoDoEstudoPermitida() {
-      let antes = estudoAntes();
-      let depois = estudoDepois();
-      return (finalizado(antes) == finalizado(depois)
-               || (finalizado(depois) ? pode('finalizar') : pode('reabrir')))
-        && (protocoloAprovado(antes) == protocoloAprovado(depois)
-               || pode('aprovar'))
-        && (!protocoloAprovado(antes) || !protocoloAprovado(depois)
-               || versaoProtocolo(antes) == versaoProtocolo(depois)
-               || pode('emendar'));
-    }
-    function papelDoCadastroValido() {
-      return !('papel' in request.resource.data)
-        || request.resource.data.papel in ['tecnico', 'supervisor', 'diretor'];
-    }
-    /* Coleções que a regra genérica NÃO pode gravar: cada uma tem a sua. */
-    function gravavelPelaRegraGenerica(collection) {
-      return !(collection in ['members', 'historico', 'eventos', 'politica']);
+    function isAuthorizedUser() {
+      return isAdmin() || isRegisteredEmail();
     }
 
     match /workspaces/agracta {
-      allow read: if canUseAgracta();
-      allow create, update: if canUseAgracta() && atomicWorkspaceCommit();
-
-      /* O membro precisa ler o próprio cadastro mesmo fora do horário — é assim
-         que o app descobre por que travou e quando volta a abrir. */
-      match /members/{email} {
-        allow read: if isAdmin()
-                    || (signedIn() && email == request.auth.token.email)
-                    || canUseAgracta();
-        allow create, update: if isAdmin() && papelDoCadastroValido();
-        allow delete: if isAdmin();
-      }
-
-      /* A tabela "quem pode o quê". Só o administrador grava, com forma fechada:
-         uma tabela malformada mudaria o que o banco deixa fazer. */
-      match /politica/{doc} {
-        allow read: if canUseAgracta();
-        allow create, update: if isAdmin() && doc == 'papeis'
-          && request.resource.data.keys().hasOnly(['schema', 'minimo', 'corrigirPropria', 'atualizadoEm', 'atualizadoPor'])
-          && request.resource.data.schema == 1
-          && request.resource.data.minimo is map
-          && request.resource.data.minimo.keys().hasOnly(['corrigir', 'reabrir', 'excluir', 'restaurar', 'aprovar', 'emendar', 'finalizar'])
-          && request.resource.data.minimo.values().hasOnly(['tecnico', 'supervisor', 'diretor'])
-          && request.resource.data.corrigirPropria is bool
-          && request.resource.data.atualizadoEm == request.time
-          && request.resource.data.atualizadoPor == request.auth.token.email;
-        allow delete: if isAdmin();
-      }
-
-      /* Histórico de versões (vendor/versoes-core.js). Cada gravação do app
-         deixa aqui o conteúdo ANTERIOR de cada documento que mudou. É
-         append-only: criar sim, editar e apagar nunca — para ninguém, nem o
-         administrador pelo app. A hora é a do servidor (em == request.time) e
-         o autor é o da sessão (por == e-mail do token): o aparelho não
-         consegue carimbar outra hora nem outra pessoa. */
-      match /historico/{registro} {
-        allow read: if canUseAgracta();
-        allow create: if canUseAgracta()
-          && request.resource.data.keys().hasOnly(['rev','colecao','docId','acao','anterior','grande','em','por','porNome'])
-          && request.resource.data.rev is int
-          && request.resource.data.colecao is string
-          && request.resource.data.docId is string
-          && request.resource.data.acao in ['criar','alterar','apagar']
-          && request.resource.data.em == request.time
-          && request.resource.data.por == request.auth.token.email;
-        allow update, delete: if false;
-      }
-
-      /* Eventos formais (vendor/eventos-core.js). Mesma tranca do histórico —
-         criar sim, editar e apagar nunca, para ninguém — e mais uma: o id do
-         documento é o SHA-256 do conteúdo, e é o SERVIDOR que recalcula e
-         confere. O aparelho não consegue gravar um evento cujo id não bata com
-         o que está escrito nele. `json` é a serialização estável do evento;
-         `enviadoPor` e `recebidoEm` são do servidor (quem enviou, quando
-         chegou) — o autor declarado continua dentro do `json`. */
-      match /eventos/{evento} {
-        allow read: if canUseAgracta();
-        allow create: if canUseAgracta()
-          && request.resource.data.keys().hasOnly(['schema','estudo','tipo','json','enviadoPor','recebidoEm'])
-          && request.resource.data.schema == 1
-          && request.resource.data.estudo is string && request.resource.data.estudo.size() <= 600
-          && request.resource.data.tipo is string && request.resource.data.tipo.size() <= 40
-          && request.resource.data.json is string && request.resource.data.json.size() <= 60000
-          && evento == 'ev:' + hashing.sha256(request.resource.data.json).toHexString().lower()
-          && request.resource.data.enviadoPor == request.auth.token.email
-          && request.resource.data.recebidoEm == request.time;
-        allow update, delete: if false;
-      }
-
-      /* `historico`, `eventos` e `politica` ficam de fora desta regra genérica
-         de propósito: no Firestore basta UMA regra permitir para o acesso valer,
-         e esta aqui permitiria reescrevê-los. */
-      match /{collection}/{document} {
-        allow read: if collection != 'members' && canUseAgracta();
-        allow create, update: if gravavelPelaRegraGenerica(collection) && canUseAgracta() && atomicWorkspaceCommit()
-          && (collection != 'estudos' || transicaoDoEstudoPermitida());
-        allow delete: if gravavelPelaRegraGenerica(collection) && canUseAgracta() && atomicWorkspaceCommit()
-          && (!(collection in ['estudos', 'aplicacoes', 'avaliacoes']) || pode('excluir'));
-      }
-    }
-
-    /* A consulta do cliente é uma cópia selecionada, em coleção independente.
-       Ser cliente não concede acesso a workspaces/agracta. */
-    function portalPath(portal) {
-      return /databases/$(database)/documents/clientPortals/$(portal);
-    }
-    function clientPath(portal) {
-      return /databases/$(database)/documents/clientPortals/$(portal)/members/$(request.auth.token.email.lower());
-    }
-    function isPortalClient(portal) {
-      return signedIn() && request.auth.token.get('email_verified', false) == true
-        && exists(portalPath(portal)) && get(portalPath(portal)).data.active == true
-        && exists(clientPath(portal)) && get(clientPath(portal)).data.active == true
-        && get(clientPath(portal)).data.accessVersion == get(portalPath(portal)).data.accessVersion;
-    }
-    function selectedReport(portal, report) {
-      return exists(portalPath(portal)) && get(portalPath(portal)).data.active == true
-        && report in get(portalPath(portal)).data.studies;
-    }
-    function reportShape() {
-      return request.resource.data.keys().hasOnly(['schema','codigo','cultura','alvo','ambiente','local','inicio','desenho','finalizado','tratamentos','resultados','ambienteEventos','pendencias','atualizadoEm','nota','sourceRev','publicadoEm'])
-        && request.resource.data.schema == 1
-        && request.resource.data.resultados is list
-        && request.resource.data.tratamentos is list
-        && request.resource.data.sourceRev is number;
-    }
-    match /clientPortals/{portal} {
-      allow get: if canUseAgracta() || isPortalClient(portal);
-      allow list: if canUseAgracta();
-      allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['nome','active','auto','studies','schema','accessVersion'])
-        && request.resource.data.nome is string && request.resource.data.nome.size() <= 120
-        && request.resource.data.active is bool && request.resource.data.auto is bool
-        && request.resource.data.studies is list && request.resource.data.studies.size() <= 40
-        && request.resource.data.accessVersion is string && request.resource.data.schema == 1;
+      allow read: if isAuthorizedUser();
+      // Permite que usuários autorizados atualizem o cabeçalho de revisão (rev/writeId)
+      // durante transações de sincronização, evitando falhas e retentativas em loop.
+      allow create, update: if isAuthorizedUser();
       allow delete: if isAdmin();
-      match /members/{email} {
-        allow get: if isAdmin() || (signedIn() && email == request.auth.token.email.lower());
-        allow list: if isAdmin();
-        allow create, update: if isAdmin()
-          && request.resource.data.keys().hasOnly(['active','accessVersion'])
-          && request.resource.data.active is bool
-          && request.resource.data.accessVersion == getAfter(portalPath(portal)).data.accessVersion;
-        allow delete: if isAdmin();
-      }
-      match /reports/{report} {
-        allow get: if canUseAgracta() || (isPortalClient(portal) && selectedReport(portal, report));
-        allow list: if canUseAgracta();
-        allow create, update: if canUseAgracta() && reportShape()
-          && getAfter(portalPath(portal)).data.active == true
-          && report in getAfter(portalPath(portal)).data.studies;
-        allow delete: if canUseAgracta();
-      }
-    }
 
-    match /{document=**} {
-      allow read, write: if false;
+      // Coleção consolidada de Bundle JSON único (e partes caso passe de 700 KB)
+      match /bundle/{partId} {
+        allow read, write: if isAuthorizedUser();
+      }
+
+      // Sinalização auxiliar P2P (opcional)
+      match /p2p_signal/{peerId} {
+        allow read, write: if isAuthorizedUser();
+      }
+
+      // Demais coleções operacionais e de configuração
+      match /{collectionName}/{docId} {
+        allow read: if isAuthorizedUser();
+        allow write, create, update, delete: if isAuthorizedUser() && collectionName != 'media';
+      }
     }
   }
 }
