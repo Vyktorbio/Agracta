@@ -1,3 +1,39 @@
+AGRACTA — 52a publicacao                    04/11/2026
+SINCRONIZACAO P2P COM MENOR LATENCIA
+
+O QUE MUDOU
+- A malha P2P envia automaticamente cada checkpoint local conectado apos 60 ms de coalescencia.
+- O Firebase continua sincronizando como reserva quando WebRTC nao conecta ou o pacote P2P excede o limite.
+- Versoes: P2p Sync.js?v=2, agracta-app-v391 / sw.js?v=391.
+
+AGRACTA — 51a publicacao                    04/11/2026
+SINCRONIZACAO AUTOMATICA P2P
+
+O QUE MUDOU
+- O P2P web inicia automaticamente depois do login autorizado; cada par valida a presenca pela colecao protegida do workspace antes de receber dados.
+- Alteracoes locais sao enviadas aos aparelhos conectados assim que o checkpoint termina, com coalescencia curta; o destinatario mescla pelo mesmo fluxo do Agracta e salva localmente.
+- Apos uma gravacao confirmada, o estado sincronizado tambem segue pelo P2P. Se a conexao nao existir ou o pacote for grande, a sincronizacao automatica do Firebase continua como reserva.
+- A malha P2P e encerrada no logout/fechamento da pagina; mudancas em avaliacao aberta continuam pendentes ate o momento seguro de aplicar.
+- Versoes: firebase-sync.js?v=33, P2p Sync.js?v=1, agracta-app-v390 / sw.js?v=390.
+
+DEPOIS DE ATUALIZAR
+- Abra o Agracta em dois aparelhos com contas autorizadas. A conexao e o envio iniciam sem acao manual.
+- A disponibilidade P2P depende da rede permitir WebRTC; quando nao conecta, o sync do Firebase continua ativo.
+
+AGRACTA — 50a publicacao                    04/11/2026
+ESTABILIDADE E ATUALIZACAO SEGURA
+
+O QUE MUDOU
+- A triagem forense completa deixou de iniciar em segundo plano ao abrir um estudo ou uma grade de avaliacao. A analise continua disponivel pelo botao explicito na tela; a triagem local imediata permanece ativa.
+- O motor Pyodide, que carrega bibliotecas cientificas pesadas, so e iniciado quando a pessoa solicita uma analise completa.
+- O Service Worker instala a nova versao em cache separado e aguarda a acao "Atualizar agora". A versao em uso permanece ativa durante a coleta; a primeira instalacao continua imediata.
+- O comando manual de atualizacao deixa de apagar os caches e passa a usar o mesmo fluxo de atualizacao segura.
+- Versoes: app.js?v=235, pwa-update.js?v=1, agracta-app-v389 / sw.js?v=389.
+
+DEPOIS DE ATUALIZAR
+- Ao abrir uma versao antiga com rede, aparece "Nova versao pronta". Salve o que estiver em edicao e toque em "Atualizar agora" quando for seguro.
+- Sem rede, a versao atual continua disponivel; a verificacao pode ser repetida quando a conexao voltar.
+
 AGRACTA — 49a publicacao                    19/10/2026
 =====================================================
 

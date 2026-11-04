@@ -49,7 +49,6 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
      O icon-192 é transparente e virava traço cinza num quadrado preto. Este é
      opaco, no fundo do app, no tamanho que o iPhone usa (180). -->
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=388').catch(function(){});});}</script>
 <link rel="stylesheet" href="interface-neutra.css?v=6">
 <link rel="stylesheet" href="clima-pagina.css?v=4">
 <link rel="stylesheet" href="tipografia.css?v=2">
@@ -172,7 +171,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/biocalc-lab-core.js?v=4"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script src="alvos-catalogo.js?v=2"></script>
-<script src="app.js?v=234"></script>
+<script src="app.js?v=235"></script>
 <script src="aplicacoes-recolhiveis.js?v=1"></script>
 <link rel="stylesheet" href="protocolo-vivo.css?v=1">
 <link rel="stylesheet" href="protocolo-avaliacoes.css?v=2">
@@ -192,7 +191,8 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-sync.js?v=32"></script>
+<script src="firebase-sync.js?v=33"></script>
+<script src="P2p Sync.js?v=2"></script>
 <!-- Camadas de 2027: controle de horário de acesso e a nova casca de uso
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
 <script src="acesso-horario.js?v=6"></script>
@@ -223,5 +223,6 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="agroapi.js?v=2"></script>
 <!-- iPhone: devolve a página ao lugar quando o iOS a deixa deslocada (teclado, girar). -->
 <script src="iphone.js?v=1"></script>
+<script src="pwa-update.js?v=1"></script>
 </body>
 </html>

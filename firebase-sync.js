@@ -1369,6 +1369,8 @@
     if(window._cloudApplying)return Promise.resolve(false);
     setUnsavedChanges(true);
     var localPromise=checkpointPut(localState());
+    /* O P2P envia o estado depois que o checkpoint local foi concluído. */
+    localPromise.then(function(){try{window.dispatchEvent(new CustomEvent('agracta:local-change'));}catch(_e){}},function(){});
     if(!FB.user){
       cloudBadge('offline','=↻ salvando neste aparelho…');
       localPromise.then(function(){cloudBadge('offline','=⌁ sessão local · sem sincronização');},function(e){
@@ -1388,6 +1390,96 @@
     return commitState(st);
   };
   window.cloudSyncNow=function(){return cloudSave();};
+
+  /* ===== Canal P2P autenticado: Firestore continua sendo a autoridade =====
+     A presença curta é autorizada pelas mesmas regras de workspace. O token
+     aleatório só sai pelo DataChannel WebRTC; sem uma presença válida o par
+     não recebe dados. */
+  var _p2pSeenSeq={};
+  function _p2pPresenceRef(peerId){
+    if(!FB.db||!peerId)return null;
+    return FB.db.doc(ROOT).collection('p2p_signal').doc(String(peerId));
+  }
+  function _p2pPresenceData(peerId,token){
+    return {peerId:String(peerId),token:String(token),email:String((FB.user&&FB.user.email)||'').toLowerCase(),
+      uid:String((FB.user&&FB.user.uid)||''),projectId:String(CFG.projectId||''),
+      expiresAt:Date.now()+8*60*1000,updatedAt:window.firebase.firestore.FieldValue.serverTimestamp()};
+  }
+  window.AgractaBundleEngine={
+    canStart:function(){return !!(firebaseInit()&&FB.user&&FB.db);},
+    registerPeer:function(peerId,token){
+      var ref=_p2pPresenceRef(peerId);
+      if(!ref||!FB.user)return Promise.reject(new Error('P2P exige login autorizado'));
+      return ref.set(_p2pPresenceData(peerId,token),{merge:true});
+    },
+    refreshPeer:function(peerId,token){
+      var ref=_p2pPresenceRef(peerId);
+      if(!ref||!FB.user)return Promise.reject(new Error('P2P sem sessão'));
+      return ref.set(_p2pPresenceData(peerId,token),{merge:true});
+    },
+    removePeer:function(peerId,token){
+      var ref=_p2pPresenceRef(peerId);
+      if(!ref||!FB.user)return Promise.resolve(false);
+      return ref.get({source:'server'}).then(function(s){
+        if(s.exists&&(s.data()||{}).token===token)return ref.delete().then(function(){return true;});
+        return false;
+      }).catch(function(){return false;});
+    },
+    verifyPeer:function(peerId,token){
+      var ref=_p2pPresenceRef(peerId);
+      if(!ref||!FB.user)return Promise.resolve(false);
+      return ref.get({source:'server'}).then(function(s){
+        var v=s.exists?(s.data()||{}):{};
+        return !!(s.exists&&v.peerId===String(peerId)&&v.token===String(token)&&
+          v.projectId===String(CFG.projectId||'')&&Number(v.expiresAt)>Date.now()&&v.uid&&v.email);
+      }).catch(function(){return false;});
+    },
+    getCurrentBundle:function(local,sender,seq){
+      if(!FB.user)return Promise.resolve(null);
+      var st=null;
+      if(local)st=stateForCommit()||localState();
+      else if(FB.remoteFlat)st=buildState(FB.remoteFlat,{rev:FB.lastRev||0});
+      var flat=st?splitState(st):null;
+      return Promise.resolve({projectId:String(CFG.projectId||''),rev:Number(FB.lastRev||window._cloudRev||0),
+        writeId:String(FB.lastSeenWrite||''),flat:flat,local:!!local,
+        sender:String(sender||''),seq:Number(seq)||0});
+    },
+    receiveRemoteP2PBundle:function(bundle){
+      if(!FB.user||!bundle||bundle.projectId!==String(CFG.projectId||'')||
+         !bundle.flat||typeof bundle.flat!=='object')return Promise.resolve(false);
+      var rev=Number(bundle.rev),wid=String(bundle.writeId||''),local=!!bundle.local;
+      if(!isFinite(rev)||rev<Number(FB.lastRev||0)||(!local&&(!(rev>0)||!wid)))return Promise.resolve(false);
+      if(!COLLECTIONS.every(function(c){return bundle.flat[c]&&typeof bundle.flat[c]==='object'&&!Array.isArray(bundle.flat[c]);}))
+        return Promise.resolve(false);
+      if(local){
+        var sender=String(bundle.sender||''),seq=Number(bundle.seq)||0;
+        if(!sender||!(seq>0)||seq<=(_p2pSeenSeq[sender]||0))return Promise.resolve(false);
+        _p2pSeenSeq[sender]=seq;
+      }else if(rev===Number(FB.lastRev||0)&&wid===String(FB.lastSeenWrite||'')){
+        return Promise.resolve(false);
+      }
+      var remote;
+      try{remote=buildState(bundle.flat,{rev:rev,writeId:wid});}
+      catch(e){return Promise.resolve(false);}
+      var current=stateForCommit()||localState();
+      var flatBefore=splitState(current),flatIncoming=clone(bundle.flat);
+      var incomingDiffers=!sameWritable(flatBefore,flatIncoming);
+      var merged=typeof cloudMerge==='function'?cloudMerge(current,remote):remote;
+      merged.rev=Math.max(rev,Number(current.rev)||0);
+      var flatMerged=splitState(merged),changed=!sameWritable(flatMerged,flatIncoming);
+      if(!local){
+        if(!flatIncoming.media)flatIncoming.media=(FB.remoteFlat&&FB.remoteFlat.media)||{};
+        FB.remoteFlat=flatIncoming;FB.lastRev=rev;FB.lastSeenWrite=wid;
+        FB.remoteToken=null;FB.completaEm=Date.now();window._cloudRev=rev;
+      }
+      setUnsavedChanges(false);cloudApply(merged);setUnsavedChanges(changed||FB.pushing||(local&&incomingDiffers));
+      checkpointPut(merged).catch(checkpointFalhou);
+      if(!local)salvarCacheRemoto();
+      if(local)return incomingDiffers?Promise.resolve(window.cloudSaveSoon?window.cloudSaveSoon():false).then(function(){return true;}):Promise.resolve(true);
+      if(changed)return commitState(merged).then(function(){return true;});
+      cloudBadge('saved');return Promise.resolve(true);
+    }
+  };
   function _agractaAcessoBanner(email){
     try{
       if(document.getElementById('acessoBanner')) return;
@@ -1444,6 +1536,7 @@
       if(FB.pullPromise===pulling)FB.pullPromise=null;
       if(changed&&!FB.pushing)await commitState(merged);
       else if(!FB.pushing)cloudBadge('saved');
+      try{window.dispatchEvent(new CustomEvent('agracta:cloud-ready'));}catch(_e){}
       return true;
     }).catch(function(e){
       cloudBadge('offline','=⌁ usando dados do aparelho · sem sincronização');

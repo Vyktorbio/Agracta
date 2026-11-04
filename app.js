@@ -1942,19 +1942,9 @@ function installApp(){
    Resolve o PWA preso numa versão velha sem precisar desinstalar. Os dados ficam salvos (localStorage/Firestore). */
 function forcarAtualizacao(){
   if(typeof closeMainMenu==='function') closeMainMenu();
-  if(!confirm('Atualizar o app para a versão mais nova?\n\nSeus dados continuam salvos. O app vai recarregar.')) return;
-  var done=false, go=function(){ if(done) return; done=true; try{ location.reload(true); }catch(e){ location.reload(); } };
-  try{
-    var ps=[];
-    if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
-      ps.push(navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all((rs||[]).map(function(r){ return r.unregister(); })); }).catch(function(){}));
-    }
-    if(window.caches && caches.keys){
-      ps.push(caches.keys().then(function(ks){ return Promise.all((ks||[]).map(function(k){ if(k==='agracta-pyodide-v1') return Promise.resolve(); /* não re-baixar 115MB */ return caches.delete(k); })); }).catch(function(){}));
-    }
-    Promise.all(ps).then(go).catch(go);
-    setTimeout(go, 4000); /* fallback se algo travar */
-  }catch(e){ go(); }
+  if(!confirm('Procurar uma atualização?\n\nSalve qualquer edição em andamento. O app oferecerá a nova versão quando estiver pronta.')) return;
+  if(typeof window.agractaSolicitarAtualizacao==='function'){ window.agractaSolicitarAtualizacao(); return; }
+  location.reload();
 }
 /* Tela cheia: esconde o "casco" e mostra só o mapa */
 function toggleFullscreenMap(){
@@ -14666,10 +14656,10 @@ function _bioestatIntegratedHtml(qid,sid,study){
       abrir+_pendHtml+'</div>';
   }
   var key=qid+'|'+sid, sig=_bioestatSignature(study), c=_bioAutoCache[key];
-  setTimeout(function(){_bioestatEnsureStudy(qid,sid);},0);
+  /* O motor pesado agora só inicia por ação explícita do técnico. */
   if(_bioSolicitado[key]!==sig && !(c&&c.sig===sig&&c.manual)){
     var fhtml='';_bioestatJobsForense(qid,study,jobs).forEach(function(j){var r=c&&c.sig===sig&&c.results&&c.results[j.jobKey];if(r)fhtml+=_bioestatForenseCard(j,r);});
-    return '<div class="sd-section"><div class="sd-section-title">Análise estatística</div>'+abrir+_bioBotaoCalcular(qid,sid)+'<p>Os cálculos estatísticos iniciam por este botão. Após mudar os dados, inicie novamente.</p></div><div class="sd-section"><div class="sd-section-title">Triagem forense automática</div>'+(fhtml||'<p>A triagem completa é preparada em segundo plano. Alertas locais aparecem durante a digitação.</p>')+'</div>';
+    return '<div class="sd-section"><div class="sd-section-title">Análise estatística</div>'+abrir+_bioBotaoCalcular(qid,sid)+'<p>Os cálculos estatísticos iniciam por este botão. Após mudar os dados, inicie novamente.</p></div><div class="sd-section"><div class="sd-section-title">Triagem forense automática</div>'+(fhtml||'<p>A triagem completa inicia junto com os cálculos somente quando você tocar em Calcular estatísticas. Os alertas locais continuam ativos durante a digitação.</p>')+'</div>';
   }
   var tot=(c&&c.sig===sig&&c.total)||(jobs.length+_bioestatJobsForense(qid,study,jobs).length), body='', fbody='';
   if(!c||c.sig!==sig){
@@ -25483,7 +25473,6 @@ function avForenseCompletaAgendar(atraso){
  clearTimeout(_avFcT);
  _avFcT=setTimeout(function(){
   if(!_avGradeAberta()||_avDuplaAberta())return;
-  try{_bioestatEnsureStudy(curV,curSid);}catch(e){}
   avForenseCompletaPintar();
  },atraso==null?3500:atraso);
 }
@@ -25510,20 +25499,24 @@ function avForenseCompletaPintar(){
  if(_avFcJobs.sig===key+'|'+sig)jobs=_avFcJobs.jobs;
  else{try{jobs=_bioestatJobsForense(curV,st);}catch(e){}_avFcJobs={sig:key+'|'+sig,jobs:jobs};}
  var porVar={};jobs.forEach(function(j){porVar[j.variavel]=j;});
- var itens=[],pendente=false,falha=false;
+ var itens=[],pendente=false,falha=false,rodando=!!(c&&c.sig===sig&&c.status==='loading');
  (_avGrid.variaveis||[]).forEach(function(v){
   var j=porVar[v];
   if(!j){itens.push('<li><b>'+esc(v)+'</b>: começa quando houver ao menos 2 tratamentos com 2 repetições lançados.</li>');return;}
   var r=(c&&c.sig===sig&&c.results)?c.results[j.jobKey]:null,velho=false;
   if(r&&r.ok)_avFcUltimo[key+'|'+v]=r;
   if(!r){pendente=true;r=_avFcUltimo[key+'|'+v]||null;velho=!!r;}
-  if(!r){itens.push('<li><b>'+esc(v)+'</b>: calculando…</li>');return;}
+  if(!r){itens.push('<li><b>'+esc(v)+'</b>: '+(rodando?'calculando…':'aguarda solicitação')+'</li>');return;}
   if(!r.ok){falha=true;itens.push('<li><b>'+esc(v)+'</b>: não rodou — '+esc(r.erro||'motor indisponível')+'</li>');return;}
-  itens.push('<li>'+_avFcResumo(v,j,r)+(velho?' <i>(antes da última alteração; recalculando)</i>':'')+'</li>');
+  itens.push('<li>'+_avFcResumo(v,j,r)+(velho?' <i>(antes da última alteração; execute novamente)</i>':'')+'</li>');
  });
+ var acao='';
+ var alvo=esc(JSON.stringify(curV))+','+esc(JSON.stringify(curSid));
+ if(falha||(c&&c.sig===sig&&c.status==='erro')) acao='<button type="button" onclick="_bioestatRepetir('+alvo+')">Tentar novamente</button>';
+ else if(jobs.length&&(!c||c.sig!==sig||c.status==='empty')) acao='<button type="button" onclick="_bioestatEnsureStudy('+alvo+');avForenseCompletaPintar()">Executar triagem completa</button>';
  el.innerHTML='<b>Triagem forense completa</b> <span style="opacity:.8">· o motor da página do estudo, sobre o que já está lançado</span>'+
   '<ul>'+itens.join('')+'</ul><small data-fc-status></small>'+
-  (falha?'<button type="button" onclick="_bioestatRepetir('+esc(JSON.stringify(curV))+','+esc(JSON.stringify(curSid))+')">Tentar de novo</button>':'');
+  acao;
  avForenseCompletaStatus(pendente);
 }
 /* Só a linha de status — o motor avisa a cada poucos segundos enquanto sobe e
@@ -25532,9 +25525,10 @@ function avForenseCompletaStatus(pendente){
  var box=document.getElementById('avForenseLive'),s=box&&box.querySelector('[data-fc-status]');if(!s)return;
  var key=curV+'|'+curSid,c=_bioAutoCache[key],t=null;
  try{if(c&&c.status==='loading')t=_bioestatStatusTexto(key);}catch(e){}
- s.textContent=t?(t.txt+(t.sub?' '+t.sub:'')):(pendente
-  ?'Recalcula alguns segundos depois que você para de digitar.'
-  :'Atualiza sozinha alguns segundos depois que você para de digitar. Sinal é indício para conferir, não prova de erro.');
+ s.textContent=t?(t.txt+(t.sub?' '+t.sub:'')):(c&&c.status==='loading'
+  ?'Análise completa em andamento no aparelho…'
+  :pendente?'A triagem completa aguarda solicitação. Os alertas locais continuam ativos.'
+  :'Triagem completa em dia. Sinal é indício para conferir, não prova de erro.');
 }
 
 var _avDetailsOpen={};
