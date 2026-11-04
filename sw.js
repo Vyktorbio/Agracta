@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v388';
+var CACHE = 'agracta-app-v389';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './tipografia.css?v=2',
@@ -27,7 +27,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=2',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=234',
+  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=235',
   './satelites.css?v=3', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=3', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=4', './trilha-formal.js?v=3',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
@@ -38,7 +38,7 @@ var ASSETS = [
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=32',
   './acesso-horario.js?v=6', './vendor/papeis-core.js?v=1', './papeis-app.js?v=2', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
-  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1',
+  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=1',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js?v=2', './croqui.html', './prancha.html',
   /* Análise probit da bancada (botão Probit na ficha do laboratório) */
@@ -49,7 +49,13 @@ var ASSETS = [
   './modelos/modelo-protocolo.xls', './modelos/protocolo-sinergista.xlsx'
 ];
 self.addEventListener('install', function(e){
-  e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }).then(function(){ return self.skipWaiting(); }));
+  e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }).then(function(){
+    /* Primeira instalação assume o cliente atual. Em atualizações, espera o técnico aplicar. */
+    if(!self.registration.active) return self.skipWaiting();
+  }));
+});
+self.addEventListener('message', function(e){
+  if(e.data && e.data.type === 'AGR_ACTIVATE_UPDATE') self.skipWaiting();
 });
 /* CADA MÓDULO LIMPA SÓ A PRÓPRIA CASA.
    O CacheStorage é da ORIGEM, não do escopo: este service worker e o da

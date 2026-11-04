@@ -1,3 +1,17 @@
+AGRACTA — 50a publicacao                    04/11/2026
+ESTABILIDADE E ATUALIZACAO SEGURA
+
+O QUE MUDOU
+- A triagem forense completa deixou de iniciar em segundo plano ao abrir um estudo ou uma grade de avaliacao. A analise continua disponivel pelo botao explicito na tela; a triagem local imediata permanece ativa.
+- O motor Pyodide, que carrega bibliotecas cientificas pesadas, so e iniciado quando a pessoa solicita uma analise completa.
+- O Service Worker instala a nova versao em cache separado e aguarda a acao "Atualizar agora". A versao em uso permanece ativa durante a coleta; a primeira instalacao continua imediata.
+- O comando manual de atualizacao deixa de apagar os caches e passa a usar o mesmo fluxo de atualizacao segura.
+- Versoes: app.js?v=235, pwa-update.js?v=1, agracta-app-v389 / sw.js?v=389.
+
+DEPOIS DE ATUALIZAR
+- Ao abrir uma versao antiga com rede, aparece "Nova versao pronta". Salve o que estiver em edicao e toque em "Atualizar agora" quando for seguro.
+- Sem rede, a versao atual continua disponivel; a verificacao pode ser repetida quando a conexao voltar.
+
 AGRACTA — 49a publicacao                    19/10/2026
 =====================================================
 
