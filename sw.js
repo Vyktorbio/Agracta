@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v390';
+var CACHE = 'agracta-app-v391';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './tipografia.css?v=2',
@@ -38,7 +38,7 @@ var ASSETS = [
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
   './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=33',
   './acesso-horario.js?v=6', './vendor/papeis-core.js?v=1', './papeis-app.js?v=2', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
-  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=1', './P2p Sync.js?v=1',
+  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=1', './P2p Sync.js?v=2',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js?v=2', './croqui.html', './prancha.html',
   /* Análise probit da bancada (botão Probit na ficha do laboratório) */
