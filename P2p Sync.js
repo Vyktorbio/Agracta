@@ -7,7 +7,7 @@
   'use strict';
   if(window.AgractaP2P)return;
   var ROOM_PREFIX='agracta-vyktorbio-mesh-v1-slot-',MAX_SLOTS=8;
-  var CHUNK_SIZE=16000,MAX_P2P_CHARS=500000,MAX_CHUNKS=Math.ceil(MAX_P2P_CHARS/CHUNK_SIZE)+1;
+  var CHUNK_SIZE=16000,MAX_P2P_CHARS=500000,MAX_CHUNKS=Math.ceil(MAX_P2P_CHARS/CHUNK_SIZE)+1,LOCAL_SYNC_COALESCE_MS=60;
   var PEERJS_CDNS=['https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js','https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js'];
   var ICE_SERVERS=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}];
   var p2p={deviceId:'dev_'+Math.random().toString(36).slice(2,10),slotIndex:1,peer:null,peerId:null,sessionToken:'',
@@ -194,7 +194,7 @@
       e.getCurrentBundle(true,p2p.deviceId,++p2p.localSeq).then(function(b){
         if(b&&b.flat)broadcastPacket({type:'BUNDLE_PUSH',msgUid:'local_'+p2p.deviceId+'_'+b.seq,sender:p2p.deviceId,bundle:b});
       }).catch(function(){});
-    },180);
+    },LOCAL_SYNC_COALESCE_MS);
   }
   function sendCommittedBundle(){
     if(!p2p.ready)return;
