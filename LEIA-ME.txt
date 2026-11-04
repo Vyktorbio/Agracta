@@ -1,3 +1,11 @@
+AGRACTA — 52a publicacao                    04/11/2026
+SINCRONIZACAO P2P COM MENOR LATENCIA
+
+O QUE MUDOU
+- A malha P2P envia automaticamente cada checkpoint local conectado apos 60 ms de coalescencia.
+- O Firebase continua sincronizando como reserva quando WebRTC nao conecta ou o pacote P2P excede o limite.
+- Versoes: P2p Sync.js?v=2, agracta-app-v391 / sw.js?v=391.
+
 AGRACTA — 51a publicacao                    04/11/2026
 SINCRONIZACAO AUTOMATICA P2P
 
