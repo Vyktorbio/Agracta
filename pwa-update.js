@@ -1,7 +1,7 @@
 (function(w,d,n){
   'use strict';
   if(!n.serviceWorker) return;
-  var swUrl='sw.js?v=389', reg=null, waiting=null, reloadAfterActivate=false, hadController=!!n.serviceWorker.controller, panel=null;
+  var swUrl='sw.js?v=390', reg=null, waiting=null, reloadAfterActivate=false, hadController=!!n.serviceWorker.controller, panel=null;
   function closePanel(){ if(panel&&panel.parentNode) panel.parentNode.removeChild(panel); panel=null; }
   function show(message, actions){
     if(!panel){
