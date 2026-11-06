@@ -84,15 +84,20 @@ const M = e => 'workspaces/agracta/members/' + e, POL = 'workspaces/agracta/poli
   /* cadastro sem papel e e-mail nunca visto */
   t = montar('sem@x.com', { [M('sem@x.com')]: { active: true } });
   eq(t.w.AgractaPapeis.papel(), 'tecnico', 'cadastro sem papel é técnico');
+  /* E-mail removido e cadastro/cache antigos não concedem administrador. */
+  t = montar('vyktorbio@gmail.com', { [M('vyktorbio@gmail.com')]: { active:true,papel:'admin' } });
+  eq(t.w.AgractaPapeis.papel(),'tecnico','admin legado do cadastro não concede privilégio');
+  t.w.localStorage.setItem('agracta-papel-cache',JSON.stringify({email:'vyktorbio@gmail.com',papel:'admin'}));
+  eq(t.w.AgractaPapeis.papel(),'tecnico','cache antigo não restabelece administrador removido');
   /* administrador das regras */
-  t = montar('vyktorbio@gmail.com', {});
+  t = montar('machadovictorchaves@gmail.com', {});
   eq(t.w.AgractaPapeis.papel(), 'admin', 'administrador fixo');
   ok(t.w.AgractaPapeis.exigir('finalizar') && t.w.AgractaPapeis.exigir('restaurar'), 'administrador pode tudo');
 
   /* 3. Painel Admin (como administrador) */
   const d = t.w.document;
   t.w._perfisCache = [
-    { email: 'vyktorbio@gmail.com', nome: 'Victor', papel: 'admin' },
+    { email: 'machadovictorchaves@gmail.com', nome: 'Victor', papel: 'admin' },
     { email: 'ana@x.com', nome: 'Ana', papelEquipe: 'supervisor' },
     { email: 'ze@x.com', nome: 'Zé', papelEquipe: '' }
   ];
@@ -120,7 +125,7 @@ const M = e => 'workspaces/agracta/members/' + e, POL = 'workspaces/agracta/poli
   eq(Object.keys(gp.data).sort(), ['atualizadoEm', 'atualizadoPor', 'corrigirPropria', 'minimo', 'schema'], 'com a forma exata que as regras aceitam');
   eq(gp.data.minimo.finalizar, 'supervisor', 'com a escolha feita');
   eq(gp.data.corrigirPropria, false, 'e a opção da própria avaliação');
-  eq(gp.data.atualizadoPor, 'vyktorbio@gmail.com', 'carimbada com quem salvou');
+  eq(gp.data.atualizadoPor, 'machadovictorchaves@gmail.com', 'carimbada com quem salvou');
 
   /* técnico não vê a tabela */
   t = montar('tec@x.com', { [M('tec@x.com')]: { active: true } });

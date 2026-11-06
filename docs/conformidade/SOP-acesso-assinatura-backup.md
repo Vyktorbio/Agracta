@@ -125,3 +125,7 @@ Treinamento da equipe: `[ PREENCHER lista e datas ]` · Revisão do POP: `[ PREE
 | 1.0 | 14/06/2026 | Emissão inicial |
 | 2.1 | 16/10/2026 | Papéis e a tabela "quem pode o quê" |
 | 2.0 | 11/10/2026 | Reescrito para a arquitetura atual: cadastro e janela no Firebase, desativar × apagar, assinatura por SHA-256, ações que pedem senha, histórico da nuvem e restauração, fotos no aparelho |
+
+## Complemento proposto em 06/11/2026
+
+Administrador fixo da candidata v392: `machadovictorchaves@gmail.com`. Antes de trabalho excepcional, o gestor confere e amplia a janela. Cofre local e envio confirmado são estados diferentes; não encerrar a conferência só porque a tela fechou. Aplicar o [POP de incidentes e contingência](POP-incidentes-e-contingencia.md), após aprovação da instalação. Validação e vigência permanecem pendentes.

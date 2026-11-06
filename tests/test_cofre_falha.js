@@ -88,8 +88,8 @@ ck(!estourou,'o mesmo na recuperação');
 console.log('\n--- Nenhum ponto do sincronizador engole mais a falha ---');
 ck(!/catch\(function\(e\)\{console\.error\('\[Agracta offline\] checkpoint:',e\);\}\)/.test(src),
    'o padrão que só logava no console sumiu do arquivo');
-ck((src.match(/catch\(checkpointFalhou\)/g)||[]).length===6,
-   'e os seis pontos passam pelo tratador');
+ck((src.match(/catch\(checkpointFalhou\)/g)||[]).length>=6,
+   'os pontos de persistência continuam passando pelo tratador, inclusive os novos');
 
 console.log('');
 if(falhas){ console.log('FALHOU: '+falhas+' de '+(falhas+passou)); process.exit(1); }

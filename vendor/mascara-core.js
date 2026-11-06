@@ -1,4 +1,5 @@
-/* Máscara das quadras no mapa — a cor é lembrete de PRAZO (estadoPrazo):
+/* Máscara das quadras no mapa — estadoAndamento mostra o registro real.
+ * O motor legado de PRAZO (estadoPrazo) permanece para consultas de agenda:
  * vermelho hoje/atrasado, amarelo em até 3 dias, verde no prazo, cinza sem
  * estudo, azul selecionada. O estado do lançamento (estadoQuadra, abaixo)
  * continua no motor e no croqui das parcelas.
@@ -34,9 +35,9 @@
    50% de opacidade ficavam pastéis, apagadas: "as cores no mapa continuam
    feias". Por cima da imagem a cor precisa de saturação para ser lida. */
 var CORES={
-  avaliada:    {cor:'#00ff00', preenchimento:0.50, rotulo:'Avaliada'},
-  parcial:     {cor:'#ffff00', preenchimento:0.50, rotulo:'Parcial'},
-  pendente:    {cor:'#ff0000', preenchimento:0.50, rotulo:'Pendente'},
+  avaliada:    {cor:'#00ff00', preenchimento:0.50, rotulo:'Coleta concluída — aguardando revisão'},
+  parcial:     {cor:'#ffff00', preenchimento:0.50, rotulo:'Em execução'},
+  pendente:    {cor:'#ff0000', preenchimento:0.50, rotulo:'Aguardando execução'},
   selecionada: {cor:'#2563eb', preenchimento:0.55, rotulo:'Selecionada'},
   fora:        {cor:'#9ca3af', preenchimento:0.16, rotulo:'Fora do estudo'},
   /* A COR DA QUADRA É LEMBRETE DE DATA (pedido de uso): o que importa de longe
@@ -45,9 +46,11 @@ var CORES={
   vencida:     {cor:'#ff0000', preenchimento:0.50, rotulo:'Hoje ou atrasado'},
   proxima:     {cor:'#ffff00', preenchimento:0.50, rotulo:'Nos próximos 3 dias'},
   emdia:       {cor:'#00ff00', preenchimento:0.50, rotulo:'No prazo'},
+  finalizada:  {cor:'#a855f7', preenchimento:0.50, rotulo:'Estudos finalizados'},
   semestudo:   {cor:'#9ca3af', preenchimento:0.16, rotulo:'Sem estudo'}
 };
 /* Ordem da legenda da máscara de prazos. */
+var ORDEM_ANDAMENTO=['pendente','parcial','avaliada','finalizada','semestudo','selecionada'];
 var ORDEM_PRAZO=['vencida','proxima','emdia','semestudo','selecionada'];
 
 function inteiro(v){ var n=Number(v); return (isFinite(n)&&n>0)?Math.floor(n):0; }
@@ -89,9 +92,18 @@ function estadoPrazo(info, opcoes){
   return 'emdia';
 }
 
+/* Registro real de aplicações e avaliações; o prazo continua na agenda. */
+function estadoAndamento(info,opcoes){
+  var i=info||{};
+  if(opcoes&&opcoes.selecionada)return 'selecionada';
+  if(!i.temEstudo)return i.temFinalizado?'finalizada':'semestudo';
+  if(i.coletaCompleta)return 'avaliada';
+  return i.iniciado?'parcial':'pendente';
+}
+
 function estilo(chave){ return CORES[chave]||CORES.fora; }
 
-var api={CORES:CORES, ORDEM_PRAZO:ORDEM_PRAZO, estadoParcela:estadoParcela, estadoQuadra:estadoQuadra, estadoPrazo:estadoPrazo, estilo:estilo};
+var api={CORES:CORES, ORDEM_ANDAMENTO:ORDEM_ANDAMENTO, estadoAndamento:estadoAndamento, ORDEM_PRAZO:ORDEM_PRAZO, estadoParcela:estadoParcela, estadoQuadra:estadoQuadra, estadoPrazo:estadoPrazo, estilo:estilo};
 if(typeof module==='object'&&module.exports) module.exports=api;
 root.MascaraCore=api;
 })(typeof self!=='undefined'?self:this);

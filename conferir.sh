@@ -170,7 +170,8 @@ fi
 # E o mesmo furo que a checagem de existencia ja tinha tapado ali embaixo
 # ("sao DUAS casas com esse mesmo risco"); faltava tapar aqui.
 if command -v node >/dev/null 2>&1; then
-  DESPAREADOS=$(node - <<'NODE' 2>/dev/null
+  CACHE_CHECK=$(mktemp) || exit 1
+  node - >"$CACHE_CHECK" <<'NODE' 2>/dev/null
 var fs=require("fs"), fora=[];
 function ler(a){ return fs.existsSync(a)?fs.readFileSync(a,"utf8"):""; }
 function semQuery(u){ return String(u).replace(/^\.\//,"").replace(/[?#].*$/,""); }
@@ -193,7 +194,8 @@ function semQuery(u){ return String(u).replace(/^\.\//,"").replace(/[?#].*$/,"")
 });
 console.log(fora.join("\n"));
 NODE
-)
+  DESPAREADOS=$(cat "$CACHE_CHECK")
+  rm -f "$CACHE_CHECK"
   if [ -z "$DESPAREADOS" ]; then
     ok "as duas casas pré-carregam as versões que o HTML pede (app e estatística)"
   else
@@ -215,7 +217,8 @@ fi
 # Vale para o index.html e para as folhas avulsas servidas pelo mesmo sw.js.
 # A estatistica fica de fora: o sw.js dela guarda em tempo de execucao.
 if command -v node >/dev/null 2>&1; then
-  FORA_DO_CACHE=$(node - <<'NODE' 2>/dev/null
+  CACHE_CHECK=$(mktemp) || exit 1
+  node - >"$CACHE_CHECK" <<'NODE' 2>/dev/null
 var fs=require("fs"), fora=[];
 function ler(a){ return fs.existsSync(a)?fs.readFileSync(a,"utf8"):""; }
 var m=ler("sw.js").match(/var ASSETS\s*=\s*\[([\s\S]*?)\]/); if(!m){ console.log("sw.js: lista ASSETS nao encontrada"); process.exit(0); }
@@ -232,7 +235,8 @@ var lista={}; (corpo.match(/'[^']+'/g)||[]).forEach(function(s){ lista[s.slice(1
 });
 console.log(fora.join("\n"));
 NODE
-)
+  FORA_DO_CACHE=$(cat "$CACHE_CHECK")
+  rm -f "$CACHE_CHECK"
   if [ -z "$FORA_DO_CACHE" ]; then
     ok "tudo o que as telas do app carregam está no pré-cache (abre offline)"
   else

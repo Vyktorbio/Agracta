@@ -22,7 +22,7 @@
   'use strict';
   var ROOT = 'workspaces/agracta';
   var CACHE = 'agracta-papel-cache';
-  var ADMINS = { 'machadovictorchaves@gmail.com': 1, 'vyktorbio@gmail.com': 1 };
+  var ADMINS = { 'machadovictorchaves@gmail.com': 1 };
   var estado = { email: '', papel: null, politica: null, unsubM: null, unsubP: null };
 
   function core() { return w.PapeisCore; }
@@ -52,13 +52,17 @@
   }
 
   /* ---- 1. papel e tabela em vigor ----------------------------------------- */
+  function papelDoCadastro(p) {
+    var normalizado=core().normalizarPapel(p);
+    return normalizado==='admin'?'tecnico':normalizado;
+  }
   function papel() {
     var C = core(), e = emailAtual();
     if (!C) return null;
-    if (ADMINS[e]) return 'admin';
-    if (e && estado.email === e && estado.papel) return C.normalizarPapel(estado.papel);
+    if (Object.prototype.hasOwnProperty.call(ADMINS,e)) return 'admin';
+    if (e && estado.email === e && estado.papel) return papelDoCadastro(estado.papel);
     var c = lerCache();
-    if (c && (!e || c.email === e)) return C.normalizarPapel(c.papel);
+    if (c && (!e || c.email === e)) return papelDoCadastro(c.papel);
     return 'tecnico';
   }
   function politica() {
@@ -162,7 +166,7 @@
   /* A tabela "quem pode o quê", logo abaixo da lista de contas. */
   function pintarPolitica() {
     var C = core(), lista = document.getElementById('admPerfisList');
-    if (!C || !lista || !ADMINS[emailAtual()]) return;
+    if (!C || !lista || !Object.prototype.hasOwnProperty.call(ADMINS,emailAtual())) return;
     var box = document.getElementById('admPapeisPolitica');
     if (!box) {
       box = document.createElement('div');

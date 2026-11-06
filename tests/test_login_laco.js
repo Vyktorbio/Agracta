@@ -177,7 +177,7 @@ const gateOn = (d) => { const g = d.getElementById('authGate'); return !!(g && g
     const fora = M(EM, { active: true, janela: { on: true, dias: [spDia], iniMin: spMin(Date.now()) + 60, fimMin: spMin(Date.now()) + 120 } });
     ok(/Fora do horário de acesso: agora são \d\d:\d\d no horário do servidor\. Janela permitida: /.test(fora), 'fora do horário: diz a hora do servidor e a janela');
     ok(M(EM, { active: true }) === null, 'dentro e ativo: nenhum motivo');
-    ok(M('vyktorbio@gmail.com', null) === null, 'administrador nunca é barrado por janela');
+    ok(M('machadovictorchaves@gmail.com', null) === null, 'administrador nunca é barrado por janela');
   }
 
   console.log('\n--- 7. firebase-sync: o banco aceitou, o banco recusou ---');

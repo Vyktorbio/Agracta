@@ -16,7 +16,8 @@ function extract(name){
  }
  throw Error('Função incompleta '+name);
 }
-const tick=()=>new Promise(r=>setImmediate(r));
+/* A interface agenda a pintura com setTimeout(0); aguardar a mesma fase. */
+const tick=()=>new Promise(r=>setTimeout(r,0));
 function montar(configurado){
  const dom=new JSDOM('<!doctype html><html class="light"><body><div id="climaPanel" style="display:block"></div><div id="conhecimentoOvl"></div></body></html>',{url:'https://agracta.test',runScripts:'outside-only'});
  const w=dom.window,d=w.document,pedidos=[];

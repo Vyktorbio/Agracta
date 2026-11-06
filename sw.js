@@ -2,9 +2,10 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v391';
+var CACHE = 'agracta-app-v392';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
+  './runtime-status.js?v=1',
   './tipografia.css?v=2',
   './agroapi.css?v=2', './vendor/agroapi-core.js?v=1', './agroapi.js?v=2',
   './vendor/protocolo-avaliacao-core.js?v=1', './protocolo-avaliacoes.js?v=3', './protocolo-menu.js?v=5', './protocolo-avaliacoes.css?v=2',
@@ -22,23 +23,23 @@ var ASSETS = [
   './campo-3d.js?v=16', './campo-3d.css?v=10', './campo-3d-exportar.js?v=6', './vendor/mp4-muxer.js?v=1', './campo-3d-realista.js?v=5', './vendor/three-agracta.min.js?v=1',
   './vendor/drone-core.js?v=2', './calculadora-drone.js?v=3',
   './', './index.html',
-  './integracoes.css?v=5', './integracoes.js?v=18', './integracoes-fontes.js?v=2', './integracoes-clientes.js?v=2',
-  './vendor/avaliacao-core.js?v=4', './vendor/pendencias-core.js?v=1', './vendor/agenda-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=4', './vendor/croqui-campo-core.js?v=4', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
+  './integracoes.css?v=5', './integracoes.js?v=18', './integracoes-fontes.js?v=2', './integracoes-clientes.js?v=3',
+  './vendor/avaliacao-core.js?v=4', './vendor/pendencias-core.js?v=1', './vendor/agenda-core.js?v=1', './vendor/conhecimento-core.js?v=1', './vendor/mascara-core.js?v=5', './vendor/croqui-campo-core.js?v=4', './vendor/fontes-core.js?v=1', './vendor/portal-core.js?v=1',
   './cliente.html', './cliente.js?v=2',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=235',
+  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=236',
   './satelites.css?v=3', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
-  './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=3', './vendor/assinatura-core.js?v=1', './eventos-app.js?v=4', './trilha-formal.js?v=3',
+  './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=3', './vendor/assinatura-core.js?v=2', './eventos-app.js?v=4', './trilha-formal.js?v=3',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/leaflet-rotate.js',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=9', './vendor/aplicacao-core.js?v=2', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=7', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=2', './vendor/versoes-core.js?v=3', './vendor/campo-inteligente-core.js?v=1', './campo-inteligente.js?v=3', './vendor/fotos-notas-core.js?v=1', './vendor/arena-core.js?v=3', './vendor/bioensaio-core.js?v=3', './vendor/armazenamento-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=4', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
-  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=33',
-  './acesso-horario.js?v=6', './vendor/papeis-core.js?v=1', './papeis-app.js?v=2', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
-  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=1', './P2p Sync.js?v=2',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=34',
+  './acesso-horario.js?v=7', './vendor/papeis-core.js?v=1', './papeis-app.js?v=3', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
+  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=2', './P2p Sync.js?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js?v=2', './croqui.html', './prancha.html',
   /* Análise probit da bancada (botão Probit na ficha do laboratório) */

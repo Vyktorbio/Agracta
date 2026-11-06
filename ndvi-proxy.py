@@ -1459,7 +1459,7 @@ FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "agracta-vyktorbio")
 JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
 MEMBRO_URL = ("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/"
               "workspaces/agracta/members/%s")
-ADMINS = {"machadovictorchaves@gmail.com", "vyktorbio@gmail.com"}   # os mesmos de firestore.rules
+ADMINS = {"machadovictorchaves@gmail.com"}   # os mesmos de firestore.rules
 ROTAS_ABERTAS = {"/health", "/solo/legenda"}   # acordar o servidor; legenda pública da Embrapa
 TRANSICAO_ATE = "2026-10-04"
 FOLGA_RELOGIO = 120   # s de tolerância entre o relógio deste servidor e o do Google

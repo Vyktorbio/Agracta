@@ -4,7 +4,7 @@
    (clientPortals, cliente.html, data-con="cliente…") continuam como eram. */
 (function(w){
   'use strict';
-  var C=w.ConhecimentoCore,P=w.PortalCore,portais=[],edicao=null,rascunho=null,confirmado=null,autoFila=Promise.resolve();
+  var C=w.ConhecimentoCore,P=w.PortalCore,portais=[],edicao=null,rascunho=null,confirmado=null,autoPendente=null,autoRodando=false,autoRetry=null,ultimaFalha=null;
   function ui(){return w.agConhecimento;}function e(x){return ui().esc(x);}
   function admin(){if(!w.isAdmin||!w.isAdmin())throw Error('Somente o administrador pode alterar acessos.');}
   function db(){if(!w.firebase||!w.firebase.apps.length||!w.firebase.auth().currentUser)throw Error('Entre online para gerenciar a consulta dos patrocinadores.');return w.firebase.firestore();}
@@ -94,11 +94,37 @@
       });
     }
   }
+  function agendarRetry(){
+    if(autoRetry)return;
+    autoRetry=w.setTimeout(function(){autoRetry=null;drenarAutomatico();},60000);
+  }
+  async function drenarAutomatico(){
+    if(autoRodando||autoRetry)return;
+    if(w.navigator&&w.navigator.onLine===false){agendarRetry();return;}
+    autoRodando=true;
+    try{
+      while(autoPendente){
+        var s=autoPendente;autoPendente=null;
+        try{await atualizarAutomaticamente(s);ultimaFalha=null;}
+        catch(err){
+          /* Consulta derivada: falha não interrompe o campo e não empilha avisos. */
+          var codigo=String(err.code||'erro');
+          if(!ultimaFalha||ultimaFalha.codigo!==codigo)console.warn('[Agracta patrocinadores] atualização pendente:',codigo);
+          ultimaFalha={codigo:codigo,em:Date.now(),rev:s.rev};
+          if(!autoPendente||Number(autoPendente.rev)<Number(s.rev))autoPendente=s;
+          agendarRetry();break;
+        }
+      }
+    }finally{autoRodando=false;}
+  }
+  w.addEventListener('online',function(){if(autoRetry){w.clearTimeout(autoRetry);autoRetry=null;}drenarAutomatico();});
+  w.AgractaClientes={status:function(){return {atualizando:autoRodando,pendente:!!autoPendente,ultimaFalha:ultimaFalha};}};
   w.addEventListener('agracta:sincronizado',function(ev){
-    confirmado=ev.detail;var s=ev.detail;
-    autoFila=autoFila.then(function(){return atualizarAutomaticamente(s);}).catch(function(err){
-      // Falhar no portal não reverte uma gravação de pesquisa já confirmada.
-      ui().msg('Estudos salvos. A consulta dos patrocinadores não foi atualizada: '+(err.code==='permission-denied'?'confira a publicação das regras de acesso.':err.message));
-    });
+    var s=ev.detail;if(!s||!s.state)return;
+    if(confirmado&&Number(s.rev)<Number(confirmado.rev))return;
+    confirmado=s;
+    /* Só a cópia mais nova precisa ir ao portal. Guardar uma promessa por
+       salvamento retinha estados completos durante rede lenta. */
+    autoPendente=s;drenarAutomatico();
   });
 })(window);

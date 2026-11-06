@@ -20,8 +20,7 @@
   };
   var ROOT='workspaces/agracta';
   var ADMIN_EMAILS={
-    'machadovictorchaves@gmail.com':true,
-    'vyktorbio@gmail.com':true
+    'machadovictorchaves@gmail.com':true
   };
   var COLLECTIONS=['locais','quadras','estudos_arquivo','estudos','aplicacoes','avaliacoes','lancamentos','notas_campo','randomizacoes','itens','config','media'];
   /* `media` (fotos das notas em fatias de base64) é só LEITURA desde a 14a
@@ -38,7 +37,7 @@
     return !!(CFG.apiKey&&CFG.authDomain&&CFG.projectId&&CFG.appId&&window.firebase);
   }
   function isFirebaseAdminEmail(email){
-    return !!ADMIN_EMAILS[String(email||'').trim().toLowerCase()];
+    return typeof email==='string' && Object.prototype.hasOwnProperty.call(ADMIN_EMAILS,email.trim().toLowerCase());
   }
   function clone(v){
     if(v==null)return v;
@@ -993,7 +992,7 @@
   }
   function queueOps(next,prev,rev){
     prev=prev||{};var ops=[],V=window.VersoesCore;
-    FB.historicoAtivo=!!(V&&!FB.semHistorico);
+    FB.historicoAtivo=!!V;
     if(FB.historicoAtivo){
       var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
       V.mudancas(prev,next,COLLECTIONS_GRAVACAO).forEach(function(m){
@@ -1056,7 +1055,19 @@
           else FB.lerDepois=true;
         }catch(_e){FB.lerDepois=true;}
         return {state:merged,flat:next,rev:newRev,written:true};
-      }catch(e){if(e.code!=='agracta/conflict')throw e;}
+      }catch(e){
+        if(e.code==='agracta/conflict')continue;
+        /* Uma gravação concorrente pode fazer a regra de revisão recusar antes
+           do retry do SDK. Só repetir se o servidor comprovar revisão diferente;
+           uma recusa com a mesma revisão continua sendo recusa de permissão. */
+        if(e.code==='permission-denied'){
+          try{
+            var latest=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000);
+            if(remoteToken(latest.exists?latest.data():{})!==remoteToken(r.meta))continue;
+          }catch(_readError){}
+        }
+        throw e;
+      }
     }
     throw syncConflict();
   }
@@ -1117,10 +1128,7 @@
         FB.semParcial={em:Date.now(),codigo:cod};
         return commitState(stateForCommit()||st);
       }
-      if(FB.historicoAtivo&&!FB.semHistorico&&(cod==='permission-denied'||cod==='invalid-argument')){
-        FB.semHistorico={em:Date.now(),codigo:cod};FB.historicoAtivo=false;
-        return commitState(stateForCommit()||st);
-      }
+      /* Uma recusa não autoriza reenviar sem histórico. O dado fica pendente. */
       var grandeDemais=cod==='invalid-argument'?_documentoGrandeDemais(plan.next):null;
       if(grandeDemais)
         cloudBadge('error','=⚠ não subiu: '+grandeDemais.nome+' passou de 1 MB ('+grandeDemais.kb+' KB) · salvo neste aparelho');
@@ -1732,7 +1740,8 @@
   var esc = window.esc || function(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   var originalIsAdmin=window.isAdmin;
   window.isAdmin=function(){
-    if(FB.user&&isFirebaseAdminEmail(FB.user.email))return true;
+    /* A sessão Firebase ativa prevalece sobre qualquer identidade local antiga. */
+    if(FB.user)return isFirebaseAdminEmail(FB.user.email);
     return typeof originalIsAdmin==='function' ? originalIsAdmin() : false;
   };
   var originalOpenAdminPanel=window.openAdminPanel;

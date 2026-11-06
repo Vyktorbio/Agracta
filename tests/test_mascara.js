@@ -61,7 +61,7 @@ function contar(estudos, eventos){
     _avRowsForStudy:st=>st.__parcelas,
     _avNota:(av,row,v)=>((av.notas||{})[row.key]||{})[v]
   });
-  vm.runInContext('var _mascaraPrazoCache=null;\n'+pega(app,'_mascaraContagem')+'\n'+pega(app,'_mascaraPrazos')+'\n'+pega(app,'_mascaraEstilo'),ctx);
+  vm.runInContext('var _mascaraPrazoCache=null;\n'+pega(app,'_mascaraContagem')+'\n'+pega(app,'_mascaraPrazos')+'\n'+pega(app,'_mascaraAndamento')+'\n'+pega(app,'_mascaraEstilo'),ctx);
   return {
     /* Cópia simples: o objeto volta do contexto do vm com outro protótipo,
        e deepEqual compararia realidade com realidade e reprovaria. */
@@ -75,13 +75,13 @@ const avaliacao=notas=>({variaveis:['Severidade'],notas:notas});
 /* Nada lançado: pendente. */
 let r=contar([{__parcelas:parcelas,avaliacoes:[avaliacao({})]}]);
 assert.deepEqual(r.contagem,{done:0,partial:0,empty:4});
-assert.equal(r.estilo(false).cor,M.CORES.emdia.cor,'sem evento pendente: no prazo');
+assert.equal(r.estilo(false).cor,M.CORES.pendente.cor,'sem lançamento: aguardando execução');
 
 /* Tudo lançado: avaliada. Zero é valor lançado — "0 %" de severidade é um
    resultado, não uma lacuna. */
 r=contar([{__parcelas:parcelas,avaliacoes:[avaliacao({T1R1:{Severidade:0},T1R2:{Severidade:'3,5'},T2R1:{Severidade:9},T2R2:{Severidade:'12'}})]}]);
 assert.deepEqual(r.contagem,{done:4,partial:0,empty:0});
-assert.equal(r.estilo(false).cor,M.CORES.emdia.cor);
+assert.equal(r.estilo(false).cor,M.CORES.parcial.cor);
 assert.equal(r.estilo(true).cor,M.CORES.selecionada.cor,'em edição a quadra fica azul');
 
 /* Duas avaliações, só a primeira lançada: a parcela está parcial. */
@@ -89,7 +89,7 @@ r=contar([{__parcelas:parcelas,avaliacoes:[
   avaliacao({T1R1:{Severidade:1},T1R2:{Severidade:2},T2R1:{Severidade:3},T2R2:{Severidade:4}}),
   avaliacao({})]}]);
 assert.deepEqual(r.contagem,{done:0,partial:4,empty:0});
-assert.equal(r.estilo(false).cor,M.CORES.emdia.cor);
+assert.equal(r.estilo(false).cor,M.CORES.parcial.cor);
 
 /* Espaço em branco não é lançamento. */
 r=contar([{__parcelas:[{key:'T1R1'}],avaliacoes:[avaliacao({T1R1:{Severidade:'   '}})]}]);
@@ -98,7 +98,7 @@ assert.deepEqual(r.contagem,{done:0,partial:0,empty:1},'espaço em branco contin
 /* Estudo sem avaliação cadastrada não pinta nada — fica fora do estudo. */
 r=contar([{__parcelas:parcelas,avaliacoes:[]}]);
 assert.deepEqual(r.contagem,{done:0,partial:0,empty:0});
-assert.equal(r.estilo(false).cor,M.CORES.emdia.cor,'estudo sem avaliação não vira vermelho');
+assert.equal(r.estilo(false).cor,M.CORES.pendente.cor,'estudo sem execução continua aguardando');
 assert.equal(contar([]).estilo(false).cor,M.CORES.semestudo.cor,'quadra sem estudo fica cinza');
 
 /* ESTUDO FINALIZADO NÃO ENTRA NA CONTA.
@@ -111,21 +111,21 @@ assert.equal(contar([]).estilo(false).cor,M.CORES.semestudo.cor,'quadra sem estu
    estudo: fora de estudo. O ensaio continua no app, na ficha da quadra. */
 r=contar([{finalizado:true,__parcelas:parcelas,avaliacoes:[avaliacao({T1R1:{Severidade:1}})]}]);
 assert.deepEqual(r.contagem,{done:0,partial:0,empty:0},'estudo finalizado não conta parcela nenhuma');
-assert.equal(r.estilo(false).cor,M.CORES.semestudo.cor,
-  'e a quadra só com finalizado fica cinza — não verde de "no prazo"');
+assert.equal(r.estilo(false).cor,M.CORES.finalizada.cor,
+  'quadra só com finalizado mostra encerramento, sem gerar pendência');
 /* E não apaga o que ainda está rodando ao lado dele. */
 r=contar([
   {finalizado:true,__parcelas:[{key:'T1R1'}],avaliacoes:[avaliacao({T1R1:{Severidade:1}})]},
   {__parcelas:[{key:'T2R1'}],avaliacoes:[avaliacao({})]}]);
 assert.deepEqual(r.contagem,{done:0,partial:0,empty:1},'só o que está rodando pinta a quadra');
-assert.equal(r.estilo(false).cor,M.CORES.emdia.cor,'e a cor é a do estudo que segue rodando');
+assert.equal(r.estilo(false).cor,M.CORES.pendente.cor,'e a cor é a do estudo ativo ainda sem execução');
 
 /* Duas execuções na mesma quadra somam parcelas. */
 r=contar([
   {__parcelas:[{key:'T1R1'}],avaliacoes:[avaliacao({T1R1:{Severidade:1}})]},
   {__parcelas:[{key:'T1R1'}],avaliacoes:[avaliacao({})]}]);
 assert.deepEqual(r.contagem,{done:1,partial:0,empty:1});
-assert.equal(r.estilo(false).cor,M.CORES.emdia.cor);
+assert.equal(r.estilo(false).cor,M.CORES.parcial.cor);
 
 /* ------------------- 2a. a cor é lembrete de data (prazo da agenda) ------- */
 assert.equal(M.estadoPrazo({temEstudo:true,menorDiff:-5}),'vencida','atrasado: vermelho');
@@ -140,10 +140,10 @@ assert.equal(new Set(M.ORDEM_PRAZO.map(k=>M.estilo(k).cor)).size,5,'cinco estado
 {
   const um=[{__parcelas:parcelas,avaliacoes:[avaliacao({})]}];
   const ev=d=>[{qid:'Q1',diff:d},{qid:'Q2',diff:-9}];
-  assert.equal(contar(um,ev(-2)).estilo(false).cor,M.CORES.vencida.cor,'evento atrasado na quadra: vermelho');
-  assert.equal(contar(um,ev(2)).estilo(false).cor,M.CORES.proxima.cor,'evento em 2 dias: amarelo');
-  assert.equal(contar(um,[{qid:'Q1',diff:5},{qid:'Q1',diff:0}]).estilo(false).cor,M.CORES.vencida.cor,'manda o evento mais urgente');
-  assert.equal(contar(um,[{qid:'Q2',diff:-1}]).estilo(false).cor,M.CORES.emdia.cor,'atraso de OUTRA quadra não pinta esta');
+  assert.equal(contar(um,ev(-2)).estilo(false).cor,M.CORES.pendente.cor,'sem execução, continua aguardando');
+  assert.equal(contar(um,ev(2)).estilo(false).cor,M.CORES.pendente.cor,'prazo futuro não inventa execução');
+  assert.equal(contar(um,[{qid:'Q1',diff:5},{qid:'Q1',diff:0}]).estilo(false).cor,M.CORES.pendente.cor,'urgência não altera o progresso');
+  assert.equal(contar(um,[{qid:'Q2',diff:-1}]).estilo(false).cor,M.CORES.pendente.cor,'atraso de outra quadra não altera esta');
 }
 
 /* --------------------- 2b. o mapa inteiro segue a mesma regra -------------

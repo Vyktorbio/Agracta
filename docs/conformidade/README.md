@@ -13,6 +13,8 @@ Dossiê de entrada: o que o Agracta faz pela integridade dos dados, o que ele
 > cópias preenchidas, assinadas, e os registros de execução ficam no arquivo
 > controlado do laboratório.
 
+> **Revisão 06/11/2026:** candidata v392 em validação. Proteções restauradas no código local e testadas em emulador; produção e validação formal ainda não comprovadas. Ver o estado atual em `../VALIDACAO-SISTEMA.md`.
+
 ## Os documentos
 
 | Documento | O quê | Quem preenche e mantém |
@@ -20,6 +22,7 @@ Dossiê de entrada: o que o Agracta faz pela integridade dos dados, o que ele
 | [../VALIDACAO-SISTEMA.md](../VALIDACAO-SISTEMA.md) | **Validação do sistema (CSV):** escopo, arquitetura, risco, requisitos, matriz de rastreabilidade, IQ/OQ/PQ, lacunas, controle de mudanças | Dono do sistema + GQ |
 | [integridade-dados-ALCOA.md](integridade-dados-ALCOA.md) | Política de integridade de dados: cada princípio ALCOA+ e como o app atende | RT + GQ |
 | [SOP-acesso-assinatura-backup.md](SOP-acesso-assinatura-backup.md) | POP de acesso, assinatura eletrônica, cópia de segurança e restauração | RT + administrador |
+| [POP-incidentes-e-contingencia.md](POP-incidentes-e-contingencia.md) | Incidentes, última hora, queda de navegador e contingência de campo — proposta | Responsável da instalação + GQ |
 | [ISMS-ISO27001.md](ISMS-ISO27001.md) | Modelo de SGSI (cláusulas 4–10), inventário, riscos e Declaração de Aplicabilidade (Anexo A) | Responsável pela SI + Gerência |
 
 Ferramenta de apoio: `tools/registro-oq.sh` gera o registro de execução da OQ

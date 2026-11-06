@@ -40,6 +40,14 @@
       variaveis: Array.isArray(av.variaveis) ? av.variaveis.slice() : [], tipos: obj(av.tipos),
       varcfg: obj(av.varcfg), notas: obj(av.notas), bruto: obj(av.bruto) };
   }
+  /* Retira somente o carimbo técnico de merge; o registro experimental permanece. */
+  function registroAssinado(v) {
+    if (Array.isArray(v)) return v.map(registroAssinado);
+    if (v && typeof v === 'object') {
+      var out={};Object.keys(v).forEach(function(k){if(k!=='_ts')out[k]=registroAssinado(v[k]);});return out;
+    }
+    return v;
+  }
   /* Finalização: a estatística congelada e o conteúdo de cada avaliação. */
   function conteudoFinalizacao(st) {
     st = obj(st);
@@ -47,19 +55,27 @@
       .map(function (a) { return { id: a.id || null, hash: h(conteudoAvaliacao(a)) }; })
       .sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
     return { estudo: st.id || null, codigo: st.codigo || null, tratamentos: Array.isArray(st.tratamentos) ? st.tratamentos : [],
-      numRepeticoes: st.numRepeticoes || null, estatisticaFinal: st.estatisticaFinal || null, avaliacoes: avs };
+      numRepeticoes: st.numRepeticoes || null, estatisticaFinal: st.estatisticaFinal || null, avaliacoes: avs,
+      aplicacoes: registroAssinado(Array.isArray(st.aplicacoes)?st.aplicacoes:[]),
+      protocolo: registroAssinado(st.protocoloVivo||null),
+      emendas: registroAssinado(st.emendas||[]), desvios: registroAssinado(st.desvios||[]),
+      plano: {dataInicio:st.dataInicio||null,numAplicacoes:st.numAplicacoes==null?null:st.numAplicacoes,
+        intervaloDias:st.intervaloDias==null?null:st.intervaloDias,desenho:st.desenho||null,
+        randomizacao:registroAssinado(st.randomizacao||null),metodoAplicacao:st.metodoAplicacao||null,
+        doseUnidade:st.doseUnidade||null,avaliacaoProtocolo:registroAssinado(st.avaliacaoProtocolo||null)} };
   }
   /* Protocolo aprovado: o retrato que o ProtocoloVivoCore congelou. */
   function conteudoProtocolo(pv) { return { retrato: obj(pv).retrato || null, versao: obj(pv).versao || 1 }; }
 
   /* ---- assinar e conferir ------------------------------------------------ */
   function cabecalho(a) {
-    return { escopo: a.escopo, conteudoHash: a.conteudoHash, em: a.em, por: a.por || '', nome: a.nome || '', significado: a.significado || '' };
+    var out={ escopo: a.escopo, conteudoHash: a.conteudoHash, em: a.em, por: a.por || '', nome: a.nome || '', significado: a.significado || '' };
+    if(a.v===2)out.v=2;return out;
   }
   function assinar(escopo, conteudo, quem) {
     quem = obj(quem);
     if (!escopo) throw new Error('Assinatura sem escopo.');
-    var a = { alg: 'SHA-256', v: 1, escopo: String(escopo), conteudoHash: h(conteudo),
+    var a = { alg: 'SHA-256', v: escopo==='estudo.finalizacao'?2:1, escopo: String(escopo), conteudoHash: h(conteudo),
       em: quem.em || new Date().toISOString(), por: String(quem.por || ''), nome: String(quem.nome || ''),
       significado: String(quem.significado || '') };
     a.hash = h(cabecalho(a));
@@ -69,8 +85,13 @@
      ok: tudo bate · 'conteudo': o dado mudou depois de assinado ·
      'cabecalho': alguém mexeu em quem/quando/significado · 'invalida': não é uma assinatura. */
   function conferir(a, conteudo) {
-    if (!a || a.alg !== 'SHA-256' || !a.hash || !a.conteudoHash) return { ok: false, motivo: 'invalida' };
+    if (!a || a.alg !== 'SHA-256' || (a.v!==1&&a.v!==2) || !a.hash || !a.conteudoHash) return { ok: false, motivo: 'invalida' };
     if (h(cabecalho(a)) !== a.hash) return { ok: false, motivo: 'cabecalho' };
+    /* Assinaturas antigas conservam exatamente o escopo que foi assinado. */
+    if(a.v===1&&a.escopo==='estudo.finalizacao'){
+      conteudo=obj(conteudo);conteudo={estudo:conteudo.estudo,codigo:conteudo.codigo,tratamentos:conteudo.tratamentos,
+        numRepeticoes:conteudo.numRepeticoes,estatisticaFinal:conteudo.estatisticaFinal,avaliacoes:conteudo.avaliacoes};
+    }
     if (h(conteudo) !== a.conteudoHash) return { ok: false, motivo: 'conteudo' };
     return { ok: true, motivo: null };
   }

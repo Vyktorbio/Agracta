@@ -1,3 +1,31 @@
+AGRACTA — 53a publicacao (CANDIDATA)          06/11/2026
+ADMINISTRADOR UNICO, ESTABILIDADE, CAMPO E BPL
+
+O QUE MUDOU
+- Administrador fixo unico: machadovictorchaves@gmail.com. Sessao Firebase ativa prevalece; fallback local continua reconhecendo essa identidade. Configuracao editavel e propriedades herdadas nao concedem esse papel.
+- Regras restauram cadastro ativo, janela, papeis, revisao atomica, historico/eventos imutaveis e portal separado. Presenca P2P exige a identidade da propria sessao e prazo curto. A publicacao depende do fluxo controlado e da conferencia dos cadastros atuais.
+- Recusa do historico nao provoca mais reenvio sem trilha: registro fica pendente e a retentativa preserva o historico.
+- P2P limita conexoes pendentes, libera peers com falha e encerra sem recursao. Nao monta snapshots completos sem pares autenticados; rede lenta nao acumula snapshots; segundo plano libera a malha. Firebase permanece sincronizando automaticamente.
+- Atualizacao automatica dos patrocinadores agrupa salvamentos e nao mostra aviso repetitivo sobre o mapa; conserva apenas o estado mais recente em espera. Croquis livres de arvores preservam as copas sem inventar moldura retangular ou trajeto de maquina.
+- Versao v392 visivel no mapa. Tocar abre diagnostico local. Erros e operacoes nao tratadas geram aviso sem recarregar nem descartar a edicao. Quando a marca da aba anterior sobrevive, informa possivel encerramento anormal, sem inventar a causa.
+- Mapa mostra andamento derivado dos dados: aguardando execucao, em execucao, coleta concluida aguardando revisao, finalizados e sem estudo. Prazos continuam na agenda e alertas. NDVI mantem sua escala propria.
+- Ao terminar a janela, captura o rascunho e tenta a copia local antes de sair. A tela nao afirma sincronizacao sem confirmacao. Coleta extra continua exigindo ampliacao da janela pelo gestor ou contingencia aprovada.
+- Dossie BPL e POP de contingencia atualizados como proposta, usando identidades e assinaturas existentes. Validacao formal de producao e ensaio de permanencia nos aparelhos reais ainda pendentes.
+- Novas assinaturas de finalizacao incluem aplicacoes, protocolo e plano, mantendo a verificacao das assinaturas antigas no escopo original. O gesto de assinar permanece igual. Fragmentos antigos de fotos sao somente leitura; limpeza controlada apenas pelo administrador.
+- Portao compativel com o Bash do macOS.
+
+VERSOES
+app.js?v=236, firebase-sync.js?v=34, acesso-horario.js?v=7,
+papeis-app.js?v=3, P2p Sync.js?v=3, vendor/mascara-core.js?v=5,
+runtime-status.js?v=1, vendor/assinatura-core.js?v=2, integracoes-clientes.js?v=3, pwa-update.js?v=2, agracta-app-v392.
+
+CONFERIR ANTES DE PUBLICAR
+- Portao completo, regras no emulador e manifest de arquivos da candidata.
+- Cadastros, horarios e papeis da equipe; backups e pendencias offline dos clientes antigos.
+- OQ-18/19/20: ultima hora, mapa entre aparelhos e permanencia durante uma sessao representativa em iPhone, Android e computador.
+- Regras e proxy exigem publicacoes proprias; a copia local nao modifica producao.
+- A lacuna de historico obrigatorio para clientes adulterados (L2) e as demais decisoes da instalacao continuam documentadas. Esta candidata nao declara BPL concluida ou validada.
+
 AGRACTA — 52a publicacao                    04/11/2026
 SINCRONIZACAO P2P COM MENOR LATENCIA
 

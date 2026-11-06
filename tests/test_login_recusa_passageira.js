@@ -36,7 +36,7 @@ function colegaGravou(env) {
 async function montar(autorizado) {
   const env = database(), A = client(env.db, initial());
   let renovou = 0;
-  A.c.__testFB.user = { email: 'vyktorbio@gmail.com', uid: 'uidA', getIdToken: (f) => { if (f) renovou++; return Promise.resolve('tk'); } };
+  A.c.__testFB.user = { email: 'machadovictorchaves@gmail.com', uid: 'uidA', getIdToken: (f) => { if (f) renovou++; return Promise.resolve('tk'); } };
   seed(env, A.c, initial());
   const login = []; A.c.showAuthGate = () => login.push(1);
   const msgs = []; A.c.authErr = m => { if (m) msgs.push(m); };

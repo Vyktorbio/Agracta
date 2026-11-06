@@ -107,7 +107,12 @@ const triagem = () => d.getElementById('avForenseLive').textContent.replace(/\s+
   /* ---- 5. a triagem forense completa, ao vivo ---- */
   w.renderAvGrid();
   await espera(700);
-  ok(pedidos[pedidos.length - 1] === 'Q1|S1', 'a grade aberta pede a triagem ao motor de sempre');
+  ok(pedidos.length===0,'abrir a grade não inicia o motor pesado');
+  const executar=d.querySelector('#avForenseLive button');
+  ok(executar&&/Executar triagem completa/.test(executar.textContent),'triagem completa disponível sob solicitação');
+  w.eval(executar.getAttribute('onclick'));
+  w._bioAutoCache['Q1|S1']={sig:'sigA',status:'loading',results:{}};w.avForenseCompletaPintar();
+  ok(pedidos[pedidos.length-1]==='Q1|S1','o botão solicita o motor');
   ok(/Severidade: calculando/.test(triagem()) && /Insetos mortos: começa quando houver ao menos 2 tratamentos/.test(triagem()), 'enquanto calcula, diz; variável sem dado suficiente diz o que falta');
   w._bioAutoCache['Q1|S1'] = { sig: 'sigA', status: 'ready', results: { '__forense__|Severidade': { ok: true, veredito: { flags: 1, watches: 0, cobertura_suficiente: true },
     achados: [{ nome: 'Duplicatas', severidade: 'flag', leitura: '3 pares idênticos' }, { nome: 'Dígito final', severidade: 'na', leitura: 'inconclusivo' }] } } };
@@ -117,17 +122,17 @@ const triagem = () => d.getElementById('avForenseLive').textContent.replace(/\s+
   /* dado novo: a assinatura muda; o resultado velho fica, marcado, até o novo chegar */
   sig = 'sigB'; w._bioAutoCache['Q1|S1'] = { sig: 'sigB', status: 'loading', results: {} };
   w.avForenseCompletaPintar();
-  ok(/Duplicatas/.test(triagem()) && /antes da última alteração; recalculando/.test(triagem()), 'recalculando: o último resultado continua à vista, marcado');
+  ok(/Duplicatas/.test(triagem()) && /antes da última alteração; execute novamente/.test(triagem()), 'recalculando: o último resultado continua à vista, marcado');
   ok(/Abrindo o motor estatístico/.test(triagem()), 'com a linha de status do motor');
   /* digitar reagenda: o motor só é chamado quando a pessoa para */
   const antes = pedidos.length;
   sev.value = '27'; w.avForenseCompletaAgendar(30); w.avForenseCompletaAgendar(30);
   await espera(60);
-  ok(pedidos.length === antes + 1, 'duas mudanças seguidas, um pedido só');
+  ok(pedidos.length === antes, 'digitação não inicia análise pesada em segundo plano');
   /* falha do motor: diz o motivo e oferece de novo */
   w._bioAutoCache['Q1|S1'] = { sig: 'sigB', status: 'ready', results: { '__forense__|Severidade': { ok: false, erro: 'O motor estatístico não abriu neste aparelho.' } } };
   w.avForenseCompletaPintar();
-  ok(/não rodou — O motor estatístico não abriu/.test(triagem()) && Array.from(d.querySelectorAll('#avForenseLive button')).some((b) => /Tentar de novo/.test(b.textContent)), 'falha: motivo e "Tentar de novo"');
+  ok(/não rodou — O motor estatístico não abriu/.test(triagem()) && Array.from(d.querySelectorAll('#avForenseLive button')).some((b) => /Tentar novamente/.test(b.textContent)), 'falha: motivo e "Tentar de novo"');
   /* leitura dupla: nada do motor na grade */
   w.avDupla = () => true;
   const antesD = pedidos.length; w.avForenseCompletaPintar(); w.avForenseCompletaAgendar(0); await espera(20);

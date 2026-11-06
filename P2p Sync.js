@@ -12,7 +12,7 @@
   var ICE_SERVERS=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}];
   var p2p={deviceId:'dev_'+Math.random().toString(36).slice(2,10),slotIndex:1,peer:null,peerId:null,sessionToken:'',
     connections:{},authenticated:{},authenticating:{},incomingBuffers:{},seenMessages:{},ready:false,connecting:false,
-    discoveryTimer:null,presenceTimer:null,monitorTimer:null,localTimer:null,retryAfter:0,localSeq:0,sentCount:0,receivedCount:0};
+    discoveryTimer:null,presenceTimer:null,monitorTimer:null,localTimer:null,generation:0,retryAfter:0,localSeq:0,sentCount:0,receivedCount:0};
   function engine(){return window.AgractaBundleEngine||null;}
   function tokenAleatorio(){
     try{var a=new Uint8Array(24);window.crypto.getRandomValues(a);return Array.prototype.map.call(a,function(x){return ('0'+x.toString(16)).slice(-2);}).join('');}
@@ -36,6 +36,8 @@
   function sendRawOverConn(conn,obj,allowUnauthenticated){
     if(!conn||!conn.open||(!allowUnauthenticated&&!p2p.authenticated[conn.peer]))return false;
     try{
+      /* Rede lenta não pode acumular snapshots na fila do navegador. O Firebase segue automático. */
+      if(obj&&obj.type==='BUNDLE_PUSH'&&(Number(conn.bufferSize)>0||(conn.dataChannel&&conn.dataChannel.bufferedAmount>2000000)))return false;
       var raw=JSON.stringify(obj);
       if(raw.length>MAX_P2P_CHARS){
         if(obj&&obj.type==='BUNDLE_PUSH')return sendRawOverConn(conn,{type:'SYNC_HINT',rev:Number((obj.bundle||{}).rev)||0},false);
@@ -79,7 +81,9 @@
     if(msg.type==='AUTH'&&typeof msg.sessionToken==='string'){authenticate(conn,msg.sessionToken);return;}
     if(!p2p.authenticated[conn.peer])return;
     if(msg.msgUid){
+      if(typeof msg.msgUid!=='string'||msg.msgUid.length>180)return;
       if(p2p.seenMessages[msg.msgUid])return;
+      var seen=Object.keys(p2p.seenMessages);if(seen.length>=1000)delete p2p.seenMessages[seen[0]];
       p2p.seenMessages[msg.msgUid]=Date.now();
     }
     var e=engine();
@@ -108,15 +112,15 @@
   }
   function onRawFrameReceived(conn,frame){
     if(!frame||typeof frame!=='object')return;
-    if(frame.t==='MSG'&&typeof frame.d==='string'){try{handleDecodedMessage(conn,JSON.parse(frame.d));}catch(e){}return;}
-    if(frame.t!=='CHK'||!p2p.authenticated[conn.peer]||!frame.id||typeof frame.i!=='number'||
-       typeof frame.n!=='number'||typeof frame.c!=='string'||frame.n<1||frame.n>MAX_CHUNKS||
+    if(frame.t==='MSG'&&typeof frame.d==='string'&&frame.d.length<=CHUNK_SIZE){try{handleDecodedMessage(conn,JSON.parse(frame.d));}catch(e){}return;}
+    if(frame.t!=='CHK'||!p2p.authenticated[conn.peer]||typeof frame.id!=='string'||!frame.id||frame.id.length>160||!Number.isInteger(frame.i)||
+       !Number.isInteger(frame.n)||typeof frame.c!=='string'||frame.n<1||frame.n>MAX_CHUNKS||
        frame.i<0||frame.i>=frame.n||frame.c.length>CHUNK_SIZE)return;
-    var buf=p2p.incomingBuffers[frame.id];
-    if(!buf){if(Object.keys(p2p.incomingBuffers).length>=2)return;buf=p2p.incomingBuffers[frame.id]={total:frame.n,parts:new Array(frame.n),count:0,ts:Date.now()};}
+    var bufferId=conn.peer+'|'+frame.id,buf=p2p.incomingBuffers[bufferId];
+    if(!buf){if(Object.keys(p2p.incomingBuffers).length>=2)return;buf=p2p.incomingBuffers[bufferId]={total:frame.n,parts:new Array(frame.n),count:0,ts:Date.now()};}
     if(buf.total!==frame.n)return;
     if(buf.parts[frame.i]===undefined){buf.parts[frame.i]=frame.c;buf.count++;}
-    if(buf.count===buf.total){var full=buf.parts.join('');delete p2p.incomingBuffers[frame.id];try{handleDecodedMessage(conn,JSON.parse(full));}catch(e){}}
+    if(buf.count===buf.total){var full=buf.parts.join('');delete p2p.incomingBuffers[bufferId];if(full.length>MAX_P2P_CHARS)return;try{handleDecodedMessage(conn,JSON.parse(full));}catch(e){}}
   }
   function sendAuth(conn){
     if(!p2p.ready||!conn||!conn.open||conn.__agractaAuthSent)return;
@@ -124,16 +128,22 @@
   }
   function registerConnection(conn){
     if(!conn||!conn.peer||conn.peer===p2p.peerId)return;
-    function opened(){p2p.connections[conn.peer]=conn;if(p2p.ready)sendAuth(conn);}
+    if(!p2p.connections[conn.peer]&&Object.keys(p2p.connections).length>=MAX_SLOTS){try{conn.close();}catch(_){}return;}
+    var old=p2p.connections[conn.peer];
+    if(old&&old!==conn){try{conn.close();}catch(_){}return;}
+    /* Também conta conexões que ainda estão abrindo: não criar outra a cada descoberta. */
+    p2p.connections[conn.peer]=conn;
+    var deadline=setTimeout(function(){if(!conn.open){remove();try{conn.close();}catch(_){}}},15000);
+    function opened(){clearTimeout(deadline);if(p2p.connections[conn.peer]!==conn)return;if(p2p.ready)sendAuth(conn);}
     conn.on('open',opened);conn.on('data',function(data){onRawFrameReceived(conn,data);});
-    function remove(){delete p2p.connections[conn.peer];delete p2p.authenticated[conn.peer];delete p2p.authenticating[conn.peer];}
+    function remove(){clearTimeout(deadline);if(p2p.connections[conn.peer]!==conn)return;delete p2p.connections[conn.peer];delete p2p.authenticated[conn.peer];delete p2p.authenticating[conn.peer];}
     conn.on('close',remove);conn.on('error',remove);if(conn.open)opened();
   }
   function connectToMeshPeers(){
     if(!p2p.peer||!p2p.ready||p2p.peer.destroyed)return;
     for(var s=1;s<=MAX_SLOTS;s++){
       var id=ROOM_PREFIX+s;if(id===p2p.peerId)continue;
-      if(p2p.connections[id]&&p2p.connections[id].open)continue;
+      if(p2p.connections[id])continue;
       try{registerConnection(p2p.peer.connect(id,{reliable:true}));}catch(e){}
     }
   }
@@ -141,23 +151,27 @@
   function stopMeshNode(){
     clearPeerTimers();clearTimeout(p2p.localTimer);p2p.localTimer=null;
     var e=engine(),id=p2p.peerId,token=p2p.sessionToken,peer=p2p.peer;
+    /* Solta a referência ANTES de destroy(): o evento close pode ser síncrono. */
+    p2p.generation++;p2p.peer=null;p2p.ready=false;p2p.connecting=false;
     if(id&&token&&e&&e.removePeer)e.removePeer(id,token);
     Object.keys(p2p.connections).forEach(function(k){try{p2p.connections[k].close();}catch(_){}});
     if(peer)try{peer.destroy();}catch(_){}
     p2p.peer=null;p2p.peerId=null;p2p.sessionToken='';p2p.connections={};p2p.authenticated={};p2p.authenticating={};
-    p2p.ready=false;p2p.connecting=false;
+    p2p.ready=false;p2p.connecting=false;p2p.incomingBuffers={};p2p.seenMessages={};
   }
   function startMeshNode(slotIdx){
-    if(p2p.connecting||p2p.ready||Date.now()<p2p.retryAfter)return;
+    if(document.hidden||p2p.connecting||p2p.ready||Date.now()<p2p.retryAfter)return;
     var e=engine();if(!e||!e.canStart||!e.canStart())return;
-    p2p.connecting=true;p2p.slotIndex=slotIdx||1;
+    p2p.connecting=true;p2p.slotIndex=slotIdx||1;var generation=p2p.generation;
     loadPeerJsLibrary().then(function(PeerCtor){
+      if(generation!==p2p.generation)return;
       if(!PeerCtor){p2p.connecting=false;p2p.retryAfter=Date.now()+30000;return;}
       var id=p2p.slotIndex<=MAX_SLOTS?ROOM_PREFIX+p2p.slotIndex:ROOM_PREFIX+'dyn-'+p2p.deviceId,peer;
       try{peer=new PeerCtor(id,{config:{iceServers:ICE_SERVERS}});}
       catch(err){p2p.connecting=false;p2p.retryAfter=Date.now()+30000;return;}
+      p2p.peer=peer;
       peer.on('open',function(openId){
-        if(p2p.peer&&p2p.peer!==peer)return;
+        if(p2p.peer!==peer)return;
         p2p.peer=peer;p2p.peerId=openId;p2p.sessionToken=tokenAleatorio();
         e.registerPeer(openId,p2p.sessionToken).then(function(){
           if(p2p.peer!==peer)return;
@@ -171,25 +185,26 @@
           },25000);
           p2p.presenceTimer=setInterval(function(){if(p2p.ready)e.refreshPeer(openId,p2p.sessionToken).catch(function(){});},120000);
           if(window._unsavedChanges)pushLocalBundle();
-        }).catch(function(){p2p.connecting=false;p2p.retryAfter=Date.now()+30000;try{peer.destroy();}catch(_){}});
+        }).catch(function(){if(p2p.peer!==peer)return;stopMeshNode();p2p.retryAfter=Date.now()+30000;});
       });
       peer.on('connection',registerConnection);
       peer.on('error',function(err){
+        if(p2p.peer!==peer)return;
         var type=String((err&&err.type)||'');
         if(type==='unavailable-id'){
-          p2p.connecting=false;try{peer.destroy();}catch(_){}
-          startMeshNode(p2p.slotIndex+1);return;
+          var nextSlot=p2p.slotIndex+1;stopMeshNode();
+          startMeshNode(nextSlot);return;
         }
-        if(!p2p.ready){p2p.connecting=false;p2p.retryAfter=Date.now()+30000;}
+        if(!p2p.ready&&p2p.peer===peer){stopMeshNode();p2p.retryAfter=Date.now()+30000;}
       });
-      peer.on('disconnected',function(){p2p.ready=false;try{peer.reconnect();}catch(_){p2p.retryAfter=Date.now()+30000;}});
+      peer.on('disconnected',function(){if(p2p.peer!==peer)return;stopMeshNode();p2p.retryAfter=Date.now()+10000;});
       peer.on('close',function(){if(p2p.peer===peer){stopMeshNode();p2p.retryAfter=Date.now()+10000;}});
-    }).catch(function(){p2p.connecting=false;p2p.retryAfter=Date.now()+30000;});
+    }).catch(function(){if(generation!==p2p.generation)return;p2p.connecting=false;p2p.retryAfter=Date.now()+30000;});
   }
   function pushLocalBundle(){
     clearTimeout(p2p.localTimer);
     p2p.localTimer=setTimeout(function(){
-      if(!p2p.ready)return;
+      if(!p2p.ready||!activePeerIds().length)return;
       var e=engine();if(!e)return;
       e.getCurrentBundle(true,p2p.deviceId,++p2p.localSeq).then(function(b){
         if(b&&b.flat)broadcastPacket({type:'BUNDLE_PUSH',msgUid:'local_'+p2p.deviceId+'_'+b.seq,sender:p2p.deviceId,bundle:b});
@@ -197,13 +212,14 @@
     },LOCAL_SYNC_COALESCE_MS);
   }
   function sendCommittedBundle(){
-    if(!p2p.ready)return;
+    if(!p2p.ready||!activePeerIds().length)return;
     var e=engine();if(!e)return;
     e.getCurrentBundle(false).then(function(b){
       if(b&&b.flat)broadcastPacket({type:'BUNDLE_PUSH',msgUid:'push_'+p2p.deviceId+'_'+b.rev+'_'+b.writeId,sender:p2p.deviceId,bundle:b});
     }).catch(function(){});
   }
   function maybeStart(){
+    if(document.hidden){if(p2p.peer||p2p.connecting)stopMeshNode();return;}
     var e=engine();if(e&&e.canStart&&e.canStart()){startMeshNode(1);return;}
     if(p2p.peer||p2p.connecting)stopMeshNode();
   }
@@ -235,6 +251,7 @@
   window.addEventListener('pagehide',stopMeshNode);
   window.addEventListener('pageshow',function(){p2p.retryAfter=0;maybeStart();});
   document.addEventListener('visibilitychange',function(){
+    if(document.hidden){stopMeshNode();return;}
     if(!document.hidden){maybeStart();if(p2p.ready){var e=engine();if(e)e.refreshPeer(p2p.peerId,p2p.sessionToken).catch(function(){});connectToMeshPeers();requestSyncFromPeers();}}
   });
   p2p.monitorTimer=setInterval(maybeStart,2500);

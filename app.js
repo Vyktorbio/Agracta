@@ -1957,7 +1957,13 @@ function toggleFullscreenMap(){
   } else if(ex){ ex.style.display='none'; }
   setTimeout(function(){ try{ if(_map) _map.invalidateSize(); }catch(e){} }, 160);
 }
-function isAdmin(){ try{ var c=data&&data.__config, e=(_authUser&&_authUser.email||'').toLowerCase().trim(); if(!e) return false; var adm=String((c&&c.adminEmail)||'machadovictorchaves@gmail.com').toLowerCase().trim(); return e===adm || e==='machadovictorchaves@gmail.com'; }catch(e){ return false; } }
+function isAdmin(){
+  /* Configuração editável e senha do painel não concedem o papel de admin. */
+  var u=window._authUser, email=u&&u.email;
+  if(typeof email!=='string')return false;
+  email=email.trim().toLowerCase();
+  return email==='machadovictorchaves@gmail.com';
+}
 function toggleMainMenu(){
   if(document.getElementById('mainMenu')){ closeMainMenu(); return; }
   _menuCss();
@@ -2412,7 +2418,10 @@ function cloudApply(st){
     render(); try{ enquadrarLocalInicial(); }catch(e){}
     if(typeof updateAgendaBadge==='function') updateAgendaBadge();
     enforceAccess();
-  }catch(e){}
+  }catch(e){
+    if(window.AgractaRuntime)window.AgractaRuntime.report('sincronização','Os dados chegaram, mas a atualização da tela falhou.',e&&e.message);
+    console.error('[Agracta] aplicação do estado sincronizado:',e);
+  }
   _cloudApplying=false;
 }
 var _cloudAllowShrink=false; /* exclusão de quadra/local: merge preserva adições de outros + tombstone remove o alvo */
@@ -2986,9 +2995,8 @@ function _mascaraContagem(qid){
 }
 /* Estilo da máscara de uma quadra. Devolve null quando o motor não carregou,
    e aí render() mantém o comportamento antigo. */
-/* A cor da quadra é LEMBRETE DE DATA: o evento pendente mais próximo da
-   agenda (aplicação ou avaliação, não feita, não dispensada). Uma passada pela
-   agenda por desenho do mapa, não uma por quadra. */
+/* A cor da quadra mostra execução real, derivada dos dados sincronizados.
+   Prazos e atrasos continuam na agenda e nos alertas; não mudam o progresso. */
 var _mascaraPrazoCache=null;
 function _mascaraPrazos(){
   if(_mascaraPrazoCache) return _mascaraPrazoCache;
@@ -2996,12 +3004,23 @@ function _mascaraPrazos(){
   try{ allUpcomingEvents(4).forEach(function(e){ if(m[e.qid]==null||e.diff<m[e.qid]) m[e.qid]=e.diff; }); }catch(e){}
   return (_mascaraPrazoCache=m);
 }
+function _mascaraAndamento(qid){
+  var estudos=((data[qid]||{}).estudos)||[], ativos=estudosAtivos(qid), c=_mascaraContagem(qid);
+  var aplicado=0, previsto=0;
+  ativos.forEach(function(st){
+    previsto+=Math.max(1,parseInt(st.numAplicacoes)||1);
+    aplicado+=Math.min(Math.max(1,parseInt(st.numAplicacoes)||1),(st.aplicacoes||[]).filter(function(ap){return ap&&ap.data;}).length);
+  });
+  return {temEstudo:ativos.length>0,
+    temFinalizado:estudos.some(function(st){return estudoFinalizado(st);}),
+    iniciado:aplicado>0||c.done>0||c.partial>0,
+    coletaCompleta:ativos.length>0&&aplicado>=previsto&&c.done>0&&!c.partial&&!c.empty&&
+      ativos.every(function(st){return AvaliacaoCore.estudo(st).complete;})};
+}
 function _mascaraEstilo(qid,selecionada){
   if(typeof MascaraCore!=='object'||!MascaraCore) return null;
   try{
-    if(!MascaraCore.estadoPrazo) return MascaraCore.estilo(MascaraCore.estadoQuadra(_mascaraContagem(qid),{selecionada:!!selecionada}));
-    var dif=_mascaraPrazos()[qid];
-    return MascaraCore.estilo(MascaraCore.estadoPrazo({temEstudo:estudosAtivos(qid).length>0, menorDiff:(dif==null?null:dif)},{selecionada:!!selecionada}));
+    return MascaraCore.estilo(MascaraCore.estadoAndamento(_mascaraAndamento(qid),{selecionada:!!selecionada}));
   }
   catch(e){ return null; }
 }
@@ -3102,7 +3121,7 @@ function buildMascaraPanel(){
    segunda tabela aqui sairia do lugar assim que a primeira mudasse. */
 function _mascaraLegendaHtml(){
   if(typeof MascaraCore!=='object'||!MascaraCore||!MascaraCore.CORES) return '';
-  var ordem=MascaraCore.ORDEM_PRAZO||['pendente','parcial','avaliada','fora'], C=MascaraCore.CORES, h='';
+  var ordem=MascaraCore.ORDEM_ANDAMENTO||['pendente','parcial','avaliada','fora'], C=MascaraCore.CORES, h='';
   for(var i=0;i<ordem.length;i++){
     var c=C[ordem[i]]; if(!c) continue;
     h+='<div class="masc-item"><i class="masc-sw" data-base="'+c.preenchimento+'" data-cor="'+c.cor+'" '+
@@ -3313,7 +3332,8 @@ function croquiDesenhar(camada,st,pos,emEdicao,qid){
   var rotulos=(fonte>=7);
   if(rotulos) _croquiFonte(fonte);
 
-  LF.polygon(CroquiCore.cantosDoConjunto(g,pos),
+  /* Em parcelas livres a caixa é só um limite de enquadramento, não área real. */
+  if(!g.livre)LF.polygon(CroquiCore.cantosDoConjunto(g,pos),
     {color:'#fff',weight:emEdicao?2:1.5,opacity:emEdicao?1:.85,dashArray:'6,4',fill:false,interactive:false}).addTo(camada);
   if(!detalhe) return g;
 
@@ -3321,10 +3341,10 @@ function croquiDesenhar(camada,st,pos,emEdicao,qid){
      anda avaliando — o sentido da randomização. Vai por baixo das parcelas
      para não comer o contorno delas. */
   try{
-    var traco=CroquiCore.caminho(g).map(function(pt){ return CroquiCore.pontoLatLng(pt[0],pt[1],pos); });
+    var traco=(g.livre?[]:CroquiCore.caminho(g)).map(function(pt){ return CroquiCore.pontoLatLng(pt[0],pt[1],pos); });
     if(traco.length>1) LF.polyline(traco,
       {color:'#ffd24a',weight:emEdicao?3:2,opacity:.75,interactive:false}).addTo(camada);
-    CroquiCore.setas(g).forEach(function(seta){
+    (g.livre?[]:CroquiCore.setas(g)).forEach(function(seta){
       LF.polyline(seta.map(function(pt){ return CroquiCore.pontoLatLng(pt[0],pt[1],pos); }),
         {color:'#ffd24a',weight:emEdicao?3:2,opacity:.95,fill:false,interactive:false}).addTo(camada);
     });
@@ -19765,7 +19785,8 @@ function _seloAssinatura(ass,conteudo,rubricaAntiga,alt){
     return '<div title="SHA-256 '+esc(ass.hash)+'" style="margin-top:8px;padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.4;'+
       (c.ok?'background:#e8f4ec;color:#1d5a34;border:1px solid #b9dcc5':'background:#fdecea;color:#8a2a1f;border:1px solid #efb9b1')+'">'+
       (c.ok?'✓ Assinatura eletrônica':'⚠ '+(c.motivo==='conteudo'?'Conteúdo alterado depois da assinatura':'Assinatura não confere'))+
-      ' · SHA-256 <code>'+esc(AssinaturaCore.curto(ass.hash))+'…</code></div>';
+      ' · SHA-256 <code>'+esc(AssinaturaCore.curto(ass.hash))+'…</code>'+
+      (ass.v===1&&ass.escopo==='estudo.finalizacao'?'<br>Escopo da versão anterior: avaliações, tratamentos e estatística.':'')+'</div>';
   }
   if(rubricaAntiga&&!(window.AssinaturaCore&&AssinaturaCore.ehEletronica(rubricaAntiga)))
     return '<div style="margin-top:8px"><img src="'+esc(rubricaAntiga)+'" alt="'+esc(alt||'Rubrica')+'" style="max-height:56px;background:#fff;border-radius:6px;padding:3px"></div>';
@@ -21241,7 +21262,7 @@ function updateTodayBadge(){
 
 
 /* ============ INIT ============ */
-window.onerror=function(msg,src,line,col,err){
+if(!window.AgractaRuntime)window.onerror=function(msg,src,line,col,err){
   var b=document.createElement('div');
   b.style.cssText='position:fixed;top:50px;left:8px;right:8px;background:#300;color:#fff;padding:10px;z-index:9999;font:12px monospace;border:1px solid #f55;border-radius:6px;white-space:pre-wrap';
   b.textContent='ERRO: '+msg+'\nLinha: '+line+':'+col+'\n'+(err&&err.stack?err.stack:'');
@@ -21461,7 +21482,7 @@ function renderAdminDashboard(){
       '<div style="font-weight:700;color:var(--text);margin-bottom:6px">Configurações de Acesso Admin</div>'+
       '<div style="display:flex;flex-direction:column;gap:8px">'+
         '<label style="display:block"><span style="font-size:10px;color:var(--text-2)">E-mail do Administrador</span>'+
-        '<input id="admEmail" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="email" value="'+esc(conf.adminEmail)+'" placeholder="ex: admin@agracta.com"></label>'+
+        '<input id="admEmail" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="email" readonly value="machadovictorchaves@gmail.com"></label>'+
         '<label style="display:block"><span style="font-size:10px;color:var(--text-2)">Senha do Painel Admin</span>'+
         '<input id="admPass" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="password" value="'+esc(conf.adminPassword)+'" placeholder="Senha do painel"></label>'+
         '<button onclick="saveAdminSettings()" style="width:100%;background:var(--acao-bg);color:var(--acao-ink);border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:4px;cursor:pointer">Salvar Configurações</button>'+
@@ -21499,7 +21520,7 @@ function renderAdminDashboard(){
 
 function saveAdminSettings(){
   if(!isAdmin() && !window._adminUnlocked){ alert('Para mudar as configurações de admin, destrave o Painel com a senha de administrador.'); return; }
-  var email = (document.getElementById('admEmail')||{}).value.trim();
+  var email = 'machadovictorchaves@gmail.com';
   var pass = (document.getElementById('admPass')||{}).value;
   if(!email || !pass){ alert('Preencha o e-mail e a senha.'); return; }
   

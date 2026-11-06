@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Documento** | Plano e protocolo de validação do Agracta |
-| **Versão** | 2.5 — 18/10/2026 |
+| **Versão** | 2.6 — 06/11/2026 (candidata, não aprovada) |
 | **Base** | OECD GLP Nº 1 (NIT-Dicla-035) · OECD Advisory Document Nº 17 (2016) — sistemas computadorizados (NIT-Dicla-038) · OECD Advisory Document Nº 22 (2021) — integridade de dados · GAMP 5 (abordagem baseada em risco) |
 | **Substitui** | versão 1.0 (14/06/2026, arquitetura anterior) e `docs/conformidade/validacao-sistema.md`, que deixa de existir |
 
@@ -21,6 +21,20 @@
 > citado precisa existir. Se o documento e o código se separarem, o portão reprova.
 
 ---
+
+## Estado da revisão de 06/11/2026
+
+A candidata `agracta-app-v392` ainda não foi publicada nem liberada para uso BPL. A restauração das regras de acesso, janela, papéis, histórico e eventos foi testada em emulador; isso não comprova o estado do banco de produção. O aplicativo deixa de tentar reenviar dados sem histórico quando o servidor recusa a trilha. A lacuna L2 continua aberta: as regras ainda não exigem um registro de histórico correspondente para cada documento alterado por um cliente adulterado.
+
+O código passa a identificar a versão, registrar falhas locais e indicar uma possível interrupção anormal. Foram corrigidos caminhos de acúmulo e limpeza de conexões P2P; a causa das quedas nos aparelhos reais ainda requer ensaio de permanência e diagnóstico. A fila da consulta dos patrocinadores mantém só a cópia mais recente pendente, sem aviso automático sobre o mapa. Croquis livres mostram as formas realmente marcadas, sem moldura retangular fictícia.
+
+A cor de andamento é derivada das aplicações e avaliações sincronizadas; não é aprovação de qualidade científica nem finalização formal.
+
+Pré-condições para publicar as regras: conferir os cadastros `members`, horários e papéis da equipe; inventariar clientes antigos e pendências offline; validar o P2P e o portal; preservar backups; executar a aprovação controlada existente. Não aplicar regras diretamente a produção durante um ensaio.
+
+As novas assinaturas de finalização (v2) também vinculam aplicações, protocolo e plano experimental. Assinaturas v1 continuam verificáveis no escopo original, explicitado na tela; não passam retroativamente a cobrir campos adicionais. O fluxo de assinatura e os cadastros existentes permanecem.
+
+O POP [Incidentes e contingência](conformidade/POP-incidentes-e-contingencia.md) acompanha esta versão como proposta. IQ de produção, OQ manual, PQ, responsáveis, treinamento, decisões das lacunas e assinaturas continuam pendentes. Testes de desenvolvimento não autorizam marcar essas etapas como aprovadas.
 
 ## 0. Identificação
 
@@ -90,8 +104,8 @@ diferente da do servidor ou autor diferente da sessão.
 
 **Quem decide o acesso é o banco**, não a tela. As `firestore.rules` exigem, a cada
 leitura e escrita: sessão autenticada, cadastro em `members/{email}` com
-`active: true`, e hora do servidor dentro da janela daquela pessoa. Dois
-administradores são fixos nas regras por e-mail.
+`active: true`, e hora do servidor dentro da janela daquela pessoa. O
+administrador fixo nas regras é `machadovictorchaves@gmail.com`.
 
 **Fornecedores (infraestrutura, Categoria 1).** Google Firebase (autenticação e
 banco), GitHub (código, CI e hospedagem), Render (proxy informativo). A
@@ -189,12 +203,12 @@ completam.
 | URS-08 | `tests/eventos-rules.cjs` · `tests/test_eventos_nuvem.js` · `tests/test_observacao_eventos.js` · `tests/test_trilha_formal.js` | OQ-07, OQ-11 |
 | URS-09 | `tests/test_protocolo_vivo.js` | OQ-10 |
 | URS-10 | `tests/test_finalizacao.js` · `tests/test_trilha_finalizacao.js` · `tests/test_reabertura_sync.js` | OQ-11 |
-| URS-11 | `tests/test_offline_local.js` · `tests/test_sync_edicao_aberta.js` · `tests/test_sync_envio_pendente.js` · `tests/test_sync_falha_visivel.js` · `tests/test_envio_perdido.js` · `tests/test_sw_shell_offline.js` · `tests/sync-firestore.cjs` | OQ-12, PQ-01, PQ-02 |
+| URS-11 | `tests/test_offline_local.js` · `tests/test_sync_edicao_aberta.js` · `tests/test_sync_envio_pendente.js` · `tests/test_sync_falha_visivel.js` · `tests/test_envio_perdido.js` · `tests/test_sw_shell_offline.js` · `tests/sync-firestore.cjs` · `tests/p2p-rules.cjs` · `tests/test_mapa_sync_andamento.js` · `tests/test_fim_janela_campo.js` | OQ-12, OQ-18, OQ-19, OQ-20, PQ-01, PQ-02 |
 | URS-12 | `tests/test_lapides_merge.js` · `tests/test_versoes.js` | OQ-13 |
 | URS-13 | `tests/test_backup_local.js` · `tests/test_backup_restauracao.js` · `tests/test_cofre_falha.js` · `tests/test_versoes.js` | OQ-09, OQ-14, PQ-04 |
 | URS-14 | `tests/test_estatistica.js` · `tests/test_prancha_uma_repeticao.js` · `tests/test_prancha_faixas.js` · `tests/test_motores_estatistica.js` · `tests/test_dose_core.js` · `tests/test_biocalc_mistura.js` · `tests/test_biocalc_lab.js` · `tests/test_aplicacao_core.js` | OQ-15 |
 | URS-15 | `tests/test_relatorio.js` · `tests/test_relatorio_fluxo.js` | OQ-16, PQ-03 |
-| URS-16 | `tests/check-assets.cjs` · `tests/test_cache_modulos.js` · `tests/test_regras_banco.js` | IQ-02, IQ-03, IQ-04 |
+| URS-16 | `tests/check-assets.cjs` · `tests/test_cache_modulos.js` · `tests/test_regras_banco.js` · `tests/test_runtime_status.js` · `tests/test_p2p_lifecycle.js` | IQ-02, IQ-03, IQ-04 |
 | URS-17 | `tests/papeis-rules.cjs` · `tests/test_papeis.js` · `tests/test_papeis_app.js` | OQ-17, IQ-09 |
 <!-- matriz:fim -->
 
@@ -211,7 +225,7 @@ O que está no ar é o que foi testado, no ambiente especificado.
 | IQ-03 | OQ automática no commit validado | Registro de `tools/registro-oq.sh --com-regras`: portão APROVADO, regras APROVADO, **0 pulados**; o `.sha256` confere | `[ ]` | registro anexado | `[ ]` |
 | IQ-04 | Regras do banco publicadas = repositório | Rodar Actions → "Regras do banco — conferir" com o `main` no commit validado: resultado **IGUAIS**. O SHA-256 do registro da conferência é o mesmo do registro da última publicação ("Regras do banco — publicar"), que traz quem aprovou e quando | `[ ]` | `conferencia-regras.json` + `registro-regras.json` | `[ ]` |
 | IQ-05 | Autenticação | Provedores ativos = e-mail/senha e Google (como no `firebase.json`). O auto-cadastro do Firebase fica ligado porque o Painel Admin cria contas por ele; isso não dá acesso a dado nenhum (URS-01) | `[ ]` | captura | `[ ]` |
-| IQ-06 | Pessoas com acesso | Cadastros ativos = equipe atual, uma pessoa por e-mail, sem conta compartilhada; os dois administradores das regras são os esperados | `[ ]` | lista assinada | `[ ]` |
+| IQ-06 | Pessoas com acesso | Cadastros ativos = equipe atual, uma pessoa por e-mail, sem conta compartilhada; o administrador fixo é machadovictorchaves@gmail.com e os cadastros estão conferidos | `[ ]` | lista assinada | `[ ]` |
 | IQ-07 | Fornecedores | Plano do Firebase `[ PREENCHER: Spark/Blaze ]` · região do banco `[ PREENCHER ]` · backup agendado do Firestore `[ PREENCHER: sim/não ]` · termos de serviço arquivados | `[ ]` | capturas | `[ ]` |
 | IQ-08 | Aparelhos de campo | Para cada aparelho: modelo, sistema, navegador e versão; **data e hora automáticas ligadas**; app instalado | `[ ]` | lista | `[ ]` |
 | IQ-09 | Papéis e tabela | Cada cadastro ativo tem o papel que a pessoa exerce no laboratório; a tabela "quem pode o quê" do Painel Admin é a aprovada pela GQ (anotar a data de "Salvar tabela") | `[ ]` | captura do Painel Admin | `[ ]` |
@@ -242,6 +256,9 @@ técnico B) cadastradas só para isso.
 | OQ-15 | Cálculos contra referência | Lançar um conjunto de dados com resultado conhecido (calculado no R ou em tabela publicada) e conferir ANOVA, Tukey e eficácia. Conferir uma calda contra cálculo à mão | Valores iguais dentro do arredondamento declarado | `[ ]` | `[ ]` |
 | OQ-17 | Papéis | Técnico A tenta finalizar, reabrir, aprovar e excluir; corrige uma avaliação que ele assinou e uma assinada pelo técnico B. Promover A a diretor no Painel Admin e repetir a finalização | A tela recusa cada ação dizendo o papel que ela pede; a correção da própria passa (com motivo) e a do colega não; promovido, A finaliza sem reabrir o app; a trilha formal mostra o papel de quem fez | `[ ]` | `[ ]` |
 | OQ-16 | Relatório | Gerar o relatório do estudo de teste (Word/PDF) | Tratamentos, doses, aplicações, avaliações e estatística batem com o dado gravado | `[ ]` | `[ ]` |
+| OQ-18 | Última hora e horário | Registrar perto do fim da janela, retirar a rede e deixar a janela encerrar. O gestor amplia o horário e o técnico retorna | O rascunho é preservado quando a cópia local confirma; envio pendente é explícito; retoma com autor, valor e histórico; não afirma sincronização sem confirmação | `[ ]` | `[ ]` |
+| OQ-19 | Mapa entre aparelhos | Dois técnicos lançam em parcelas diferentes; gestor acompanha sem comando manual | Valores e cores de andamento convergem; parcial não aparece como concluído; nenhuma alteração perde autoria | `[ ]` | `[ ]` |
+| OQ-20 | Permanência e contingência | Manter aberto por toda a duração de sessão definida, em iPhone, Android e computador. Suspender/retomar e simular encerramento da aba | Sem crescimento continuado de conexões, travamento ou perda; versão identificável; conferir recuperação do último registro; registrar cada falha e repetir após correção | `[ ]` | `[ ]` |
 
 ---
 
@@ -272,9 +289,9 @@ decisão: corrigir, mitigar por procedimento, ou aceitar com justificativa.
 | L4 | Assinar avaliação é um toque, sem senha (escolha do laboratório). Finalizar, aprovar, reabrir, excluir e restaurar pedem senha | M | login individual; janela de horário; sessão por pessoa | Decidir se a assinatura da avaliação também pede senha | `[ PREENCHER ]` |
 | L5 | Carimbos por célula (`_ts`) usam o relógio do aparelho. A hora oficial é a do servidor, no histórico e nos eventos | B | IQ-08 (hora automática); hora do servidor no histórico | Dizer no POP que a hora oficial é a do histórico | `[ PREENCHER ]` |
 | L6 | Backup do banco depende do plano do Firebase. Sem backup agendado, a cópia fora do Firebase é o arquivo exportado à mão | A | histórico no servidor; cofre no aparelho; export JSON | Rotina de export com responsável e local segregado, ou backup agendado (Blaze) | `[ PREENCHER ]` |
-| L7 | Os dois administradores são contas pessoais, fixas nas regras | M | — | Conta institucional; trocar exige publicar as regras | `[ PREENCHER ]` |
+| L7 | O administrador fixo usa conta pessoal (machadovictorchaves@gmail.com) | M | — | Conta institucional; trocar exige publicar as regras | `[ PREENCHER ]` |
 | L8 | ~~As regras do banco são publicadas à mão; nada confere que o publicado é o do repositório~~ **Fechada na 38ª publicação.** Merge que muda o `firestore.rules` roda os testes no emulador, espera aprovação no ambiente `regras-producao` e publica pela API, conferindo a leitura de volta e guardando registro. Conferência semanal só de leitura avisa se o que está no ar desviar. Resta: o registro do CI expira em 90 dias (baixar e arquivar) e a aprovação é de uma pessoa | B | aprovação obrigatória; conferência semanal; IQ-04 | Arquivar cada `registro-regras.json` no dossiê da GQ | `[ PREENCHER ]` |
-| L9 | Fotos de parcela ficam só no aparelho que fotografou (desde a 14ª publicação) | A, se foto for dado bruto | slides e originais exportáveis | Definir no POP se foto é dado bruto e, se for, quando e onde arquivar | `[ PREENCHER ]` |
+| L9 | Fotos de parcela ficam só no aparelho que fotografou, por decisão de produto reafirmada em 06/11/2026; os metadados seguem sincronizando | A, se foto for dado bruto | slides e originais exportáveis | Definir no POP se foto é dado bruto e, se for, quando e onde arquivar | `[ PREENCHER ]` |
 | L10 | Validação ainda não executada | A | — | Executar IQ/OQ/PQ deste documento | `[ PREENCHER ]` |
 
 ---
@@ -322,7 +339,9 @@ renomeado, esta lista acompanha):
 - `estatistica.js` — URS-14
 - `vendor/dose-core.js` · `vendor/biocalc-campo-core.js` · `vendor/biocalc-lab-core.js` · `vendor/aplicacao-core.js` — URS-14
 - `vendor/relatorio-core.js` · `relatorio-estudo.js` — URS-15
-- `sw.js` — URS-16
+- `sw.js` · `runtime-status.js` · `pwa-update.js` — URS-16
+- `P2p Sync.js` — URS-11, 16
+- `vendor/mascara-core.js` — visualização de andamento, OQ-19
 - `tools/regras-banco.cjs` · `.github/workflows/regras-publicar.yml` — URS-16
 - `app.js` — **crítico quando a mudança toca** gravação, avaliação, assinatura, finalização, protocolo, exclusão ou restauração
 <!-- criticos:fim -->
@@ -409,6 +428,7 @@ motivo e arquivar o `--registro` gerado.
 | 2.5 | 18/10/2026 | Mudança normal de interface: download direto de PNG/SVG dos gráficos de barras, evolução e ranking (`tests/test_estudo_figuras.js`, `tests/test_estudo_pagina.js`). Exporta a projeção cegada, incluindo a área fora da rolagem, sem alterar dados ou cálculos. Preserva a prancha em faixas da 39ª publicação. OQ automática registrada por `tools/registro-oq.sh`. |
 | 2.4 | 18/10/2026 | URS-14: `tests/test_prancha_faixas.js` na matriz. Ensaio em faixas passa a ter folha de gráficos, descritiva: cada tratamento entra com a média dos treços lidos (subamostras), nunca com os treços como blocos; sem ANOVA, letras nem barra de erro. Mudança normal (`app.js` na montagem da folha, `prancha.html`): OQ automática |
 | 2.3 | 18/10/2026 | L8 fechada: regras do banco publicadas pelo CI depois dos testes no emulador e de aprovação no ambiente `regras-producao`, com registro e leitura de volta; conferência semanal só de leitura; caminho de volta para a versão anterior. URS-16 passa a cobrir as regras (`tests/test_regras_banco.js`), IQ-04 reescrita, §11.1 e apêndice A |
+| 2.6 | 06/11/2026 | Candidata v392: administrador único, restauração das proteções, fim de janela sem promessa falsa de envio, versão e diagnóstico, P2P e mapa de andamento. OQ-18/19/20 e POP de contingência. Validação formal pendente |
 | 2.2 | 17/10/2026 | URS-14: `tests/test_prancha_uma_repeticao.js` na matriz. A folha de gráficos com uma repetição sai descritiva (`Est.descrever`: médias, AACPD e Abbott, sem ANOVA, letras nem barra de erro) e não imprime p quando não há resíduo. Mudança crítica em `estatistica.js` (§11.2): registro novo da OQ automática e OQ-15 |
 | 2.1 | 16/10/2026 | Papéis (URS-17, R11, OQ-17, IQ-09): papel no cadastro, tabela "quem pode o quê" no Painel Admin, conferida pelo banco para finalizar, reabrir, aprovar, emendar e excluir. L1 passa a cobrir só o que fica na tela |
 | 2.0 | 11/10/2026 | Reescrita para o Firebase: arquitetura atual, histórico e eventos no servidor, protocolo vivo, assinatura por SHA-256; matriz de rastreabilidade conferida por teste; OQ automática com registro; lacunas L1–L10; controle de mudanças por classe. Junta e substitui `docs/conformidade/validacao-sistema.md` |

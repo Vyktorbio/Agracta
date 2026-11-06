@@ -14,6 +14,7 @@
      no <html> fica para a regra de CSS que só deva valer no iPhone/iPad. -->
 <script>(function(){try{var n=navigator,ios=/iP(hone|od|ad)/.test(n.userAgent||'')||(n.platform==='MacIntel'&&n.maxTouchPoints>1);if(!ios)return;document.documentElement.classList.add('ios');var m=document.querySelector('meta[name="viewport"]');if(m&&!/maximum-scale/.test(m.content))m.content+=', maximum-scale=1';}catch(e){}})();</script>
 <title>Agracta</title>
+<script src="runtime-status.js?v=1"></script>
 <link rel="stylesheet" href="styles.css?v=42">
 <link rel="stylesheet" href="integracoes.css?v=5">
 <link rel="stylesheet" href="estudo-pagina.css?v=13">
@@ -28,7 +29,7 @@
    continua achando que mede zero — carrega um tile só e fica quebrado. Com
    visibility o layout acontece igual, só não é pintado. */
 html.pre-auth,html.pre-auth body{background:#eef0f2}
-html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important;pointer-events:none!important}
+html.pre-auth body>*:not(#authGate):not(#acessoLock):not(#agracta-runtime-notice):not(#agracta-runtime-details){visibility:hidden!important;pointer-events:none!important}
 </style>
 <script>document.documentElement.classList.add('pre-auth');try{if(localStorage.getItem('agracta-theme')!=='dark'){document.documentElement.classList.add('light');}else{document.addEventListener('DOMContentLoaded',function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content='#151619';});}}catch(e){document.documentElement.classList.add('light');}</script>
 <link rel="stylesheet" href="vendor/leaflet.css">
@@ -63,6 +64,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 </div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
+<button type="button" id="agracta-version" title="Versão e diagnóstico" aria-label="Versão e diagnóstico" style="font:600 11px Arial;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px;cursor:pointer;flex-shrink:0">v392</button>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">
   <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
   <span class="tb-nav-label">Agenda</span><span id="agendaBadge"></span>
@@ -164,14 +166,14 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/avaliacao-core.js?v=4"></script>
 <script src="vendor/pendencias-core.js?v=1"></script>
 <script src="vendor/agenda-core.js?v=1"></script>
-<script src="vendor/mascara-core.js?v=4"></script>
+<script src="vendor/mascara-core.js?v=5"></script>
 <script src="vendor/croqui-campo-core.js?v=4"></script>
 <script src="vendor/fontes-core.js?v=1"></script>
 <script src="vendor/portal-core.js?v=1"></script>
 <script src="vendor/biocalc-lab-core.js?v=4"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script src="alvos-catalogo.js?v=2"></script>
-<script src="app.js?v=235"></script>
+<script src="app.js?v=236"></script>
 <script src="aplicacoes-recolhiveis.js?v=1"></script>
 <link rel="stylesheet" href="protocolo-vivo.css?v=1">
 <link rel="stylesheet" href="protocolo-avaliacoes.css?v=2">
@@ -180,7 +182,7 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="protocolo-menu.js?v=5"></script>
 <script src="vendor/observacao-core.js?v=1"></script>
 <script src="vendor/eventos-core.js?v=3"></script>
-<script src="vendor/assinatura-core.js?v=1"></script>
+<script src="vendor/assinatura-core.js?v=2"></script>
 <script src="vendor/eppo-core.js?v=1"></script>
 <script src="eventos-app.js?v=4"></script>
 <script src="trilha-formal.js?v=3"></script>
@@ -191,12 +193,12 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-sync.js?v=33"></script>
-<script src="P2p Sync.js?v=2"></script>
+<script src="firebase-sync.js?v=34"></script>
+<script src="P2p Sync.js?v=3"></script>
 <!-- Camadas de 2027: controle de horário de acesso e a nova casca de uso
      (gaveta única + faixa de datas). Carregam por último e sobrepõem o legado. -->
-<script src="acesso-horario.js?v=6"></script>
-<script src="papeis-app.js?v=2"></script>
+<script src="acesso-horario.js?v=7"></script>
+<script src="papeis-app.js?v=3"></script>
 <script src="ui-campo.js?v=28"></script>
 <script src="vendor/satelites-core.js?v=2"></script>
 <script src="satelites.js?v=2"></script>
@@ -217,12 +219,12 @@ html.pre-auth body>*:not(#authGate):not(#acessoLock){visibility:hidden!important
 <script src="mapa-inicio.js?v=3"></script>
 <script src="relatorio-estudo.js?v=2"></script>
 <script src="integracoes-fontes.js?v=2"></script>
-<script src="integracoes-clientes.js?v=2"></script>
+<script src="integracoes-clientes.js?v=3"></script>
 <script src="clima-pagina.js?v=4"></script>
 <script src="vendor/agroapi-core.js?v=1"></script>
 <script src="agroapi.js?v=2"></script>
 <!-- iPhone: devolve a página ao lugar quando o iOS a deixa deslocada (teclado, girar). -->
 <script src="iphone.js?v=1"></script>
-<script src="pwa-update.js?v=1"></script>
+<script src="pwa-update.js?v=2"></script>
 </body>
 </html>

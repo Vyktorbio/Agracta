@@ -23,7 +23,7 @@
   var CHECAGEM_MS   = 30000;
   var CACHE_KEY     = 'agracta-janela-cache';
   var ROOT          = 'workspaces/agracta';
-  var ADMINS        = {'machadovictorchaves@gmail.com':1,'vyktorbio@gmail.com':1};
+  var ADMINS        = {'machadovictorchaves@gmail.com':1};
 
   var DIAS = ['dom','seg','ter','qua','qui','sex','sáb'];
 
@@ -201,7 +201,7 @@
       '<div class="lk">'+
         '<div class="lk-ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>'+
         '<div class="lk-t">Fora do horário de acesso</div>'+
-        '<div class="lk-s">Seus dados foram salvos e sincronizados. O Agracta volta a abrir dentro do horário liberado pelo administrador.</div>'+
+        '<div class="lk-s">O horário de acesso terminou. Confira o selo de sincronização: registros pendentes serão enviados quando o acesso e a conexão estiverem disponíveis. O gestor pode ampliar a janela de trabalho.</div>'+
         '<div class="lk-w">'+String(motivo||'').replace(/[<>&]/g,'')+'</div>'+
         '<button class="lk-b" onclick="location.reload()">Tentar de novo</button>'+
       '</div>';
@@ -231,7 +231,11 @@
   function encerrar(motivo){
     if(estado.travado) return;
     esconderAviso();
-    try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){}
+    /* Captura o lançamento ainda aberto ANTES de encerrar a sessão. */
+    try{ if(typeof window._avPersistNow==='function') window._avPersistNow(); }catch(e){if(window.AgractaRuntime)window.AgractaRuntime.report('salvamento','Não foi possível confirmar o último lançamento.',e.message);}
+    try{ if(typeof window.save==='function') window.save(); }catch(e){if(window.AgractaRuntime)window.AgractaRuntime.report('salvamento','Não foi possível confirmar a cópia local.',e.message);}
+    try{ if(window.AgractaFirebase&&window.AgractaFirebase.flushLocal) window.AgractaFirebase.flushLocal().catch(function(e){if(window.AgractaRuntime)window.AgractaRuntime.report('salvamento','Falhou a cópia de segurança local.',e.message);}); }catch(e){}
+    try{ if(typeof cloudSave==='function') Promise.resolve(cloudSave()).catch(function(){/* permanece pendente; não afirmar sincronização */}); }catch(e){}
     setTimeout(function(){
       mostrarTrava(motivo);
       try{ if(window.firebase && window.firebase.apps && window.firebase.apps.length) window.firebase.auth().signOut(); }catch(e){}
@@ -242,7 +246,7 @@
 
   function checar(){
     if(estado.travado) return;
-    if(ADMINS[estado.email]) return;                 /* administrador nunca é travado */
+    if(Object.prototype.hasOwnProperty.call(ADMINS,estado.email)) return;                 /* administrador nunca é travado */
     var j = estado.janela;
     if(!j || !normalizar(j).on){ esconderAviso(); return; }
     var rest = minutosRestantes(j);
@@ -297,13 +301,13 @@
       estado.verificado = true;
       /* Fora do horário, a tela NÃO é liberada antes da trava: liberar e travar
          1,2 s depois era o app "entrando sozinho e saindo de novo". */
-      if(ADMINS[email] || !foraAgora(estado.janela)){ liberarTela(); checar(); }
+      if(Object.prototype.hasOwnProperty.call(ADMINS,email) || !foraAgora(estado.janela)){ liberarTela(); checar(); }
       else encerrar('Janela permitida: '+descrever(estado.janela));
     }, function(){
       /* sem leitura (offline ou regra recusou): usa o último horário conhecido */
       estado.janela = normalizar(lerCache(email));
       estado.verificado = true;
-      if(ADMINS[email] || !foraAgora(estado.janela)) liberarTela();
+      if(Object.prototype.hasOwnProperty.call(ADMINS,email) || !foraAgora(estado.janela)) liberarTela();
       else encerrar('Janela permitida: '+descrever(estado.janela));
     });
     return true;
@@ -321,7 +325,7 @@
       iniciarVigilancia();
       return;
     }
-    if(ADMINS[email]){ liberarTela(); iniciarVigilancia(); return; }
+    if(Object.prototype.hasOwnProperty.call(ADMINS,email)){ liberarTela(); iniciarVigilancia(); return; }
 
     /* Decide já com o horário em cache para não piscar a interface, e confirma
        com a nuvem em seguida. Se o banco acabou de aceitar a leitura, a tela
@@ -398,7 +402,7 @@
      "não está liberado". É isso que o administrador precisa ler na tela. */
   window.agAcessoMotivo = function(email, membro){
     email = String(email || '').trim().toLowerCase();
-    if(ADMINS[email]) return null;
+    if(Object.prototype.hasOwnProperty.call(ADMINS,email)) return null;
     if(!membro) return 'O e-mail '+email+' não está cadastrado no Painel Admin.';
     if(membro.active !== true) return 'A conta '+email+' está inativa no Painel Admin.';
     var j = normalizar(membro.janela);

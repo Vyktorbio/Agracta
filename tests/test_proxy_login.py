@@ -101,7 +101,7 @@ m._membros.clear()
 check(m.membro_ativo('a@lab.com','t',AGORA,ler_ativo),'active: true é membro')
 check(not m.membro_ativo('b@lab.com','t',AGORA,ler_inativo),'active: false não é')
 check(not m.membro_ativo('c@lab.com','t',AGORA,ler_nada),'sem cadastro (403/404) não é')
-check(m.membro_ativo('Vyktorbio@gmail.com','t',AGORA,ler_quebra),'administrador passa sem ler cadastro')
+check(m.membro_ativo('Machadovictorchaves@gmail.com','t',AGORA,ler_quebra),'administrador passa sem ler cadastro')
 eq(lidos,['a@lab.com','b@lab.com','c@lab.com'],'administrador nem consulta o Firestore')
 del lidos[:]
 check(m.membro_ativo('a@lab.com','t',AGORA+300,ler_quebra),'sim guardado por 10 min: não relê')

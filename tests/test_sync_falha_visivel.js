@@ -10,14 +10,20 @@ const denied=()=>Object.assign(Error('Missing or insufficient permissions.'),{co
 (async()=>{
  let {env,a}=await fixture();
  env.beforeCommit=ops=>{if(ops.some(w=>w.path.startsWith(root+'/historico/')))throw denied();};
+ await assert.rejects(a.c.cloudSave(),e=>e.code==='permission-denied');
+ assert.equal(env.attempts.length,1);assert.equal(env.commits.length,0,'recusa do histórico não envia dado sem trilha');
+ assert.equal(av(a.state).notas.T1R1.v,2,'registro permanece no aparelho');
+ assert.equal(a.c._unsavedChanges,true);
+ env.beforeCommit=null;await a.c.cloudSave();
+ assert.ok(env.commits[0].some(w=>w.path.startsWith(root+'/historico/')),'retomada preserva histórico');
+ ({env,a}=await fixture());let dispute=true;
+ env.beforeCommit=()=>{if(dispute){dispute=false;env.docs[root].rev++;env.docs[root].writeId='colega';throw denied();}};
  await a.c.cloudSave();
- assert.equal(env.attempts.length,2);assert.equal(env.commits.length,1);
- assert.ok(!env.commits[0].some(w=>w.path.startsWith(root+'/historico/')));
- assert.equal(av(remote(env,a.c)).notas.T1R1.v,2);
- assert.equal(a.c.__testFB.semHistorico.codigo,'permission-denied');assert.equal(a.c._unsavedChanges,false);
+ assert.equal(env.attempts.length,2,'revisão concorrente comprovada refaz a gravação');
+ assert.ok(env.commits[0].some(w=>w.path.startsWith(root+'/historico/')),'disputa não remove histórico');
  ({env,a}=await fixture());env.beforeCommit=()=>{throw denied();};
  await assert.rejects(a.c.cloudSave(),e=>e.code==='permission-denied');
- assert.equal(env.attempts.length,2,'fallback sem histórico ocorre só uma vez');
+ assert.equal(env.attempts.length,1,'permissão negada não tenta contornar o histórico');
  assert.equal(env.commits.length,0);
  assert.ok(a.badges.some(b=>/não subiu \(permission-denied\)/.test(b)));
  ({env,a}=await fixture());env.beforeCommit=()=>{throw Object.assign(Error('offline'),{code:'unavailable'});};
@@ -36,5 +42,5 @@ const denied=()=>Object.assign(Error('Missing or insufficient permissions.'),{co
  assert.ok(a.badges.some(b=>/deadline-exceeded/.test(b)));
  assert.ok(a.c.__timers.some(t=>t.ms===60000&&!t.cancelled));
  env.beforeRead=null;await a.c.cloudSave();assert.equal(av(remote(env,a.c)).notas.T1R1.v,2);
- console.log('Sincronização visível: fallback do histórico, motivo da falha, retry e leitura com prazo OK.');
+ console.log('Sincronização visível: preservação do histórico, motivo da falha, retry e leitura com prazo OK.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

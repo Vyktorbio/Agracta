@@ -1,0 +1,22 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {JSDOM}=require('jsdom');
+const code=fs.readFileSync('runtime-status.js','utf8');
+function boot(previous){const dom=new JSDOM('<button id="agracta-version"></button><input id="medida" value="12,5">',{url:'https://agracta.test',runScripts:'outside-only'});const w=dom.window;if(previous)w.sessionStorage.setItem('agracta-runtime-session',JSON.stringify(previous));w.eval(code);w.document.dispatchEvent(new w.Event('DOMContentLoaded'));return w;}
+const w=boot();assert.equal(w.document.getElementById('agracta-version').textContent,'v392');
+assert.equal(w.document.getElementById('agracta-runtime-notice'),null);
+w.dispatchEvent(new w.ErrorEvent('error',{message:'Falha de cálculo',filename:'https://agracta.test/app.js?v=236',lineno:12}));
+assert.match(w.document.getElementById('agracta-runtime-notice').textContent,/Falha de cálculo/);
+assert.equal(w.document.getElementById('medida').value,'12,5','o diagnóstico não perde a edição');
+const rejection=new w.Event('unhandledrejection');rejection.reason=new Error('Falhou ao salvar');w.dispatchEvent(rejection);
+assert.match(w.document.getElementById('agracta-runtime-notice').textContent,/Falhou ao salvar/);
+for(let i=0;i<40;i++)w.AgractaRuntime.report('erro','falha '+i,'app.js');
+assert.equal(JSON.parse(w.sessionStorage.getItem('agracta-runtime-errors')).length,20,'registro limitado');
+w.AgractaRuntime.showDetails();assert.match(w.document.querySelector('textarea').value,/Agracta v392/);
+w.dispatchEvent(new w.Event('pagehide'));assert.equal(JSON.parse(w.sessionStorage.getItem('agracta-runtime-session')).state,'closed');
+const clean=boot({version:'391',state:'closed'});assert.equal(clean.document.getElementById('agracta-runtime-notice'),null);
+const interrupted=boot({version:'391',state:'active'});assert.match(interrupted.document.getElementById('agracta-runtime-notice').textContent,/sessão anterior/);
+const hostile=boot();hostile.AgractaRuntime.report('erro','<img src=x onerror=alert(1)>','');assert.equal(hostile.document.querySelector('aside img'),null,'texto de erro nunca vira HTML');
+const src=fs.readFileSync('index.html','utf8');assert.match(src,/runtime-status.js\?v=1/);assert.match(fs.readFileSync('sw.js','utf8'),/runtime-status.js\?v=1/);
+for(const dom of [w,clean,interrupted,hostile])dom.close();
+console.log('Diagnóstico: versão, erros, rejeições, histórico limitado, interrupção e edição preservada OK.');

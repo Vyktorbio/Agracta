@@ -41,6 +41,23 @@ assert.equal(A.conferir(f,A.conteudoFinalizacao(st2)).motivo,'conteudo','nota mu
 const st3=JSON.parse(JSON.stringify(st));st3.estatisticaFinal.itens[0].p=0.5;
 assert.equal(A.conferir(f,A.conteudoFinalizacao(st3)).motivo,'conteudo','estatística congelada mexida');
 
+/* Finalização v2 vincula também aplicação, protocolo e plano, sem outro formulário. */
+assert.equal(f.v,2);
+for(const change of [x=>x.aplicacoes=[{data:'2026-11-06',dose:'2 L/ha'}],x=>x.protocoloVivo={versao:2},x=>x.numAplicacoes=3]){
+ const altered=JSON.parse(JSON.stringify(st));change(altered);
+ assert.equal(A.conferir(f,A.conteudoFinalizacao(altered)).motivo,'conteudo');
+}
+assert.equal(A.conferir({...f,v:1},A.conteudoFinalizacao(st)).motivo,'cabecalho','não permite rebaixar o escopo de uma assinatura v2');
+const oldContent={estudo:'S1',codigo:'E1',tratamentos:st.tratamentos,numRepeticoes:3,estatisticaFinal:st.estatisticaFinal,
+ avaliacoes:[{id:av.id,hash:crypto.createHash('sha256').update(E.estavel(A.conteudoAvaliacao(av))).digest('hex')}]};
+const hash=x=>crypto.createHash('sha256').update(E.estavel(x)).digest('hex');
+const oldHeader={escopo:'estudo.finalizacao',conteudoHash:hash(oldContent),em:quem.em,por:quem.por,nome:quem.nome,significado:quem.significado};
+const legacy={alg:'SHA-256',v:1,...oldHeader,hash:hash(oldHeader)};
+assert.equal(A.conferir(legacy,A.conteudoFinalizacao(st)).ok,true,'assinatura antiga confere com o escopo original');
+const applied={...st,aplicacoes:[{data:'2026-11-06',_ts:1}]};
+const bound=A.assinar('estudo.finalizacao',A.conteudoFinalizacao(applied),quem);
+applied.aplicacoes[0]._ts=2;assert.equal(A.conferir(bound,A.conteudoFinalizacao(applied)).ok,true,'carimbo técnico de merge não invalida aplicação');
+
 /* Protocolo: cobre o retrato aprovado. */
 const pv={versao:1,retrato:{tratamentos:[{id:'T1',dose:'1 L/ha'}]}};
 const p=A.assinar('protocolo.aprovado',A.conteudoProtocolo(pv),quem);
