@@ -2837,8 +2837,8 @@ function buildAuthGate(){
     '<div class="auth-logo">Agracta</div>'+
     '<div class="auth-title">Entrar</div>'+
     '<div class="auth-sub">Estudos de campo, do protocolo ao relatório.</div>'+
-    '<label class="auth-l">E-MAIL</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
-    '<label class="auth-l">SENHA</label><input id="authPass" class="auth-i" type="password" autocomplete="current-password" placeholder="••••••••">'+
+    '<label class="auth-l" for="authEmail">E-mail</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
+    '<label class="auth-l" for="authPass">Senha</label><input id="authPass" class="auth-i" type="password" autocomplete="current-password" placeholder="••••••••">'+
     '<div id="authErr" class="auth-err"></div>'+
     '<button id="authBtn" class="auth-btn" onclick="doLogin()">Entrar</button>'+
     '<div class="auth-foot">Esqueceu a senha? Fale com o administrador.</div>'+
