@@ -18292,7 +18292,7 @@ function renderAvGrid(){
   var html='';
   if(st){
     if(st.randomizado)ensureStudyRandomizacao(st);
-    html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle '+(_avAuto.on?'':'off')+'" onclick="avAutoToggle()">'+(_avAuto.on?'Modo automático ligado':'Modo automático')+'</button><span class="av-auto-note">'+(st.randomizado?'Ordem randomizada salva':'Ordem sequencial de tratamentos e repetições')+'</span></div>';
+    html+='<div class="av-auto-bar"><button type="button" class="av-auto-toggle '+(_avAuto.on?'':'off')+'" onclick="avAutoToggle()">'+(_avAuto.on?'Modo automático ligado':'Modo automático')+'</button><span class="av-auto-note">'+(st.randomizado?'Ordem randomizada salva':'Ordem de cadastro · sem randomização experimental')+'</span></div>';
     if(_avAuto.on)html+=renderAvAutoBox();
   }
   vs.forEach(function(v){html+=_avLegendaHtml(_avGrid,v);});
