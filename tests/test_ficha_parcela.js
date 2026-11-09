@@ -55,10 +55,38 @@ w._avCss=()=>{};w.avCroquiHtml=()=>'';w._avSyncInputs=()=>{};
 w._avUsaBruto=c=>c.tipo==='razao'||c.tipo==='escala'||c.sub>1;
 ['_avLegendaHtml','_avAutoRows','_avAutoSteps','_avAutoState','_avStepVal','renderAvAutoBox','renderAvGrid','avAutoToggle'].forEach(n=>w.eval(fn(n)));
 w._avGrid.bruto={};w._avGrid.varcfg={Doentes:{naTratamentos:['T1']}};
+const ordemIndicada=()=>d.querySelector('.av-auto-note')?.textContent.trim();
 w._avAuto.on=false;w.renderAvGrid();assert.ok(d.querySelector('.av-auto-toggle'),'botão sem randomização');
+assert.equal(ordemIndicada(),'Ordem de cadastro · sem randomização experimental','não apresenta cadastro como sorteio');
+const estudoAntes=JSON.stringify(w.stGuiado);
 w.avAutoToggle();assert.equal(w._avAuto.on,true);assert.equal(w.stGuiado.randomizado,false);assert.ok(d.getElementById('avAutoInput'));
+assert.equal(ordemIndicada(),'Ordem de cadastro · sem randomização experimental','aviso permanece ao ativar o modo');
+assert.equal(JSON.stringify(w.stGuiado),estudoAntes,'ativar modo automático não altera o estudo');
 assert.ok(w._avAutoSteps().every(s=>!(s.v==='Doentes'&&s.row.tratId==='T1')),'modo guiado pula não aplicáveis');
 w.stGuiado.ambiente='laboratorio';w.renderAvGrid();assert.ok(d.getElementById('avAutoInput'),'mesmo modo guiado na bancada');
+assert.equal(ordemIndicada(),'Ordem de cadastro · sem randomização experimental','aviso também na bancada');
 w.avAutoToggle();assert.equal(w._avAuto.on,false);assert.equal(w.stGuiado.randomizado,false);
-console.log('Modo automático disponível no campo e laboratório sem randomizar; NA excluído da sequência OK.');
+assert.equal(ordemIndicada(),'Ordem de cadastro · sem randomização experimental','aviso ao desligar');
+
+/* Randomização persistida: informar a ordem existente, sem gerar outra. */
+w.stGuiado.randomizado=true;
+w.stGuiado.randomizacao={ordem:[
+  {parcela:1,tratId:'T2',tratNum:2,rep:1},
+  {parcela:2,tratId:'T1',tratNum:1,rep:1},
+  {parcela:3,tratId:'T1',tratNum:1,rep:2},
+  {parcela:4,tratId:'T2',tratNum:2,rep:2}
+]};
+w.ensureStudyRandomizacao=s=>s.randomizacao;
+const randomizadoAntes=JSON.stringify(w.stGuiado);
+w.renderAvGrid();
+assert.equal(ordemIndicada(),'Ordem randomizada salva','distingue sorteio registrado de cadastro');
+assert.equal(JSON.stringify(w.stGuiado),randomizadoAntes,'consulta não modifica ordem salva');
+
+/* Compatibilidade: estudo antigo sem campo de randomização. */
+delete w.stGuiado.randomizado;delete w.stGuiado.randomizacao;
+const antigoAntes=JSON.stringify(w.stGuiado);
+w.renderAvGrid();
+assert.equal(ordemIndicada(),'Ordem de cadastro · sem randomização experimental');
+assert.equal(JSON.stringify(w.stGuiado),antigoAntes,'consulta de estudo antigo não cria sorteio');
+console.log('Modo automático: aviso explícito com/sem randomização, bancada, legado e dados imutáveis OK.');
 dom.window.close();
