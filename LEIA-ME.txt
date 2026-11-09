@@ -1,3 +1,21 @@
+AGRACTA — AJUSTE DO MODO AUTOMATICO (CANDIDATA)     09/11/2026
+ORDEM DE CADASTRO NAO E RANDOMIZACAO EXPERIMENTAL
+
+O QUE MUDOU
+- O modo automatico de avaliacao indica explicitamente "Ordem de cadastro · sem randomização experimental" quando o estudo nao esta marcado como randomizado.
+- A rotulagem existente "Ordem randomizada salva" e preservada para estudos com randomizacao.
+- Teste de regressao protege o aviso no campo, na bancada e em estudo antigo, e verifica que abrir o modo nao modifica o estudo nem gera sorteio.
+
+VERSOES
+app.js?v=238, pwa-update.js?v=4, sw.js?v=394, agracta-app-v394.
+
+CONFERIR ANTES DE PUBLICAR
+- Rodar bash conferir.sh --pull-request, conferir o texto na interface e os dados do estudo sem e com randomizacao.
+- Nao altera Firestore, protocolo, notas, ordem de parcelas ou regras de permissao.
+- PR de revisao: esta entrada nao registra publicacao em producao.
+
+----------------------------------------------------------------
+
 AGRACTA — 53a publicacao (CANDIDATA)          06/11/2026
 ADMINISTRADOR UNICO, ESTABILIDADE, CAMPO E BPL
 
