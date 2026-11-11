@@ -20624,7 +20624,12 @@ function importData(ev){
   if(!f)return;
   if(!_papelPermite('restaurar')){ ev.target.value=''; return; }
   if(!confirm('Importar esse backup vai substituir os dados atuais (e o alinhamento/formato das quadras, se o backup tiver). Continuar?')){ev.target.value='';return}
-  if(!safetyBackup('antes de importar backup')){
+  /* A cópia grande pode não caber no localStorage. Só prosseguir depois
+     da confirmação real do cofre IndexedDB, como na exclusão de notas. */
+  var done, archived=new Promise(function(resolve){done=resolve;});
+  var local=safetyBackup('antes de importar backup',null,done);
+  return (local?Promise.resolve(true):archived).then(function(guardado){
+  if(!guardado){
     alert('Não consegui guardar o estado atual neste aparelho. Exporte uma cópia e libere espaço antes de importar.');
     ev.target.value='';return;
   }
@@ -20691,6 +20696,7 @@ function importData(ev){
     ev.target.value='';
   };
   r.readAsText(f);
+  });
 }
 
 /* ============ OVERRIDE DO renderStudyCard PARA USAR NOVO PAINEL ============ */
