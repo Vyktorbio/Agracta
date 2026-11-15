@@ -401,7 +401,7 @@ function save(){
   var ok=false, savedAt=Date.now(), err=null;
   /* save() grava o `data` inteiro: a gravação adiada da grade de avaliação fica
      coberta por esta e não precisa rodar de novo depois. */
-  try{ if(_avGravaTimer){ clearTimeout(_avGravaTimer); _avGravaTimer=null; } }catch(e){}
+  try{ _avGravaGeracao++; if(_avGravaTimer){ clearTimeout(_avGravaTimer); _avGravaTimer=null; } }catch(e){}
   /* O indice entre ensaios foi montado a partir do que estava gravado. Gravou de
      novo, ele deixa de valer -- e histórico velho é pior que histórico nenhum. */
   try{ _histInvalida(); }catch(e){}
@@ -18634,11 +18634,40 @@ function _avCloudSoon(){ /* nuvem com FOLGA: no máximo 1 gravação a cada ~15s
   _avCloudTimer=setTimeout(function(){ _avCloudTimer=null; try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){} }, 15000);
 }
 var _avGravaTimer=null;
+var _avGravaGeracao=0;
 function _avGravaLocal(){
   _avGravaTimer=null;
-  try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){}
+  var ok=false, savedAt=Date.now(), geracao=_avGravaGeracao;
+  try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); ok=true; }catch(e){}
+  window._agractaLocalSaveOk=ok;
+  if(ok){
+    window._agractaLocalSavedAt=savedAt;
+    try{localStorage.setItem(AGR_LOCAL_STATE_TS_KEY,String(savedAt));}catch(e){}
+  }
+  /* Mesmo contrato de save(): o cofre recebe a edição ainda com a grade
+     aberta, inclusive se a quota do armazenamento rápido acabou. Sem isso,
+     fechar o processo antes de pagehide podia perder o último lançamento. */
+  function informar(cofreOk){
+    if(geracao!==_avGravaGeracao || document.visibilityState==='hidden')return;
+    if(typeof cloudBadge!=='function')return;
+    try{
+    if(!ok&&!cofreOk)cloudBadge('error','=⚠ avaliação não salva neste aparelho · mantenha o app aberto e tente salvar novamente');
+    else if(!cofreOk)cloudBadge('offline','=⌁ avaliação salva no armazenamento rápido · cópia no cofre não atualizada');
+    else if(window._unsavedChanges)cloudBadge('offline','=⌁ avaliação salva neste aparelho · envio à nuvem pendente');
+    else cloudBadge('saved');
+    }catch(e){} /* A tela fechando não pode interromper a gravação. */
+  }
+  if(window.AgractaFirebase && typeof window.AgractaFirebase.flushLocal==='function'){
+    return Promise.resolve().then(function(){return window.AgractaFirebase.flushLocal();}).then(function(saved){
+      informar(saved===true);return ok||saved===true;
+    },function(){informar(false);return ok;});
+  }
+  informar(false);
+  return Promise.resolve(ok);
 }
 function _avGravaLocalLogo(){
+  _avGravaGeracao++;
+  try{if(typeof cloudBadge==='function')cloudBadge('offline','=↻ salvando avaliação neste aparelho…');}catch(e){}
   if(_avGravaTimer) clearTimeout(_avGravaTimer);
   _avGravaTimer=setTimeout(_avGravaLocal,700);
 }
@@ -18647,7 +18676,7 @@ function _avGravaLocalLogo(){
 function _avGravaLocalJa(){
   if(!_avGravaTimer) return;
   clearTimeout(_avGravaTimer);
-  _avGravaLocal();
+  return _avGravaLocal();
 }
 if(typeof document!=='undefined' && !window.__avGravaEv){
   window.__avGravaEv=true;
