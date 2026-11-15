@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v395';
+var CACHE = 'agracta-app-v396';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './runtime-status.js?v=1',
@@ -15,7 +15,7 @@ var ASSETS = [
   './croqui-parcelas.js?v=8', './mapa-medir.js?v=5', './notas-local.js?v=4', './croqui-livre.js?v=4', './mapa-inicio.js?v=3', './cores-padrao.css?v=2', './croqui-parcelas.css?v=4',
   './profundidade.css?v=4',
   './aplicacoes-recolhiveis.js?v=1', './protocolo-vivo.css?v=1',
-  './estudo-figuras.js?v=2', './estudo-pagina.js?v=29', './estudo-pagina.css?v=14',
+  './estudo-figuras.js?v=2', './estudo-pagina.js?v=30', './estudo-pagina.css?v=14',
   /* Vista do campo em 3D: carregada sob demanda pelo estudo-pagina.js, nunca
      no index.html. Fica no pre-cache para abrir offline sem pesar o arranque.
      Sem aspas neste comentario: o portao le strings entre aspas como se fossem
@@ -28,7 +28,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=2',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=239',
+  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=240',
   './satelites.css?v=3', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=3', './vendor/assinatura-core.js?v=2', './eventos-app.js?v=4', './trilha-formal.js?v=3',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',

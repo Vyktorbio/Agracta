@@ -11,6 +11,12 @@ const s={id:'S1',codigo:'SC 024 193',cultura:'Soja',alvo:'Phakopsora pachyrhizi'
 w.data={Q1:{estudos:[s]}};const before=JSON.stringify(w.data);
 const q=x=>d.querySelector(x),qa=x=>Array.from(d.querySelectorAll(x)),change=(sel,val)=>{q(sel).value=val;q(sel).dispatchEvent(new w.Event('change',{bubbles:true}));};
 w.abrirConhecimento({aba:'estudos'});q('.con-acoes [data-con="estudo"]').click();await new Promise(r=>setTimeout(r,0));assert.equal(opened,0);assert(q('.ep-page'));assert.equal(qa('.ep-line circle').length,9);assert.match(q('.ep-ranking li b').textContent,/T2/);assert.match(q('.ep-ranking li strong').textContent,/11,5/);assert.match(q('.ep-caption').textContent,/05\/09\/2026/);
+// Duas datas futuras sem variáveis não podem desaparecer do denominador.
+s.avaliacoes.push({id:'F1',variaveis:[],notas:{}},{id:'F2',variaveis:[],notas:{}});
+w.abrirConhecimento({qid:'Q1',sid:'S1'});
+assert.equal(q('.ep-progress progress').value,60);
+assert.match(q('.ep-progress').textContent,/avaliações cadastradas concluídas/);
+s.avaliacoes.splice(-2);w.abrirConhecimento({qid:'Q1',sid:'S1'});
 // Reutiliza a prancha do estudo correto, inclusive se o overlay já existia.
 const openedCharts=[];w.openPranchaEstudo=(...args)=>openedCharts.push(args);
 const overlay=d.createElement('div');overlay.id='prOvl';d.body.prepend(overlay);

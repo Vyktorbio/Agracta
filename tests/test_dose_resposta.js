@@ -131,6 +131,8 @@ var avR={id:'a2',data:'2026-09-01',variaveis:['mort'],tipos:{mort:'razao'},
 var aoaN=ctx._bioestatJobAoa('q1',serie,avR,'mort');
 ck(aoaN[0].indexOf('Afetados')>=0 && aoaN[0].indexOf('N_total')>=0,'cabeçalho ganha Afetados e N_total');
 var iA=aoaN[0].indexOf('Afetados'), iN=aoaN[0].indexOf('N_total');
+var comparacao=ctx._bioestatJobAoa('q1',rastreio,avR,'mort');
+ck(comparacao[0].includes('Afetados') && comparacao[0].includes('N_total') && !comparacao[0].includes('Dose'),'comparação de produtos também leva n/N sem inventar série de doses');
 ck(aoaN[1][iA]===30 && aoaN[1][iN]===50,'x de n vai como contagem, não como porcentagem');
 
 console.log('\n--- Parcela com meio par não entra pela metade ---');
