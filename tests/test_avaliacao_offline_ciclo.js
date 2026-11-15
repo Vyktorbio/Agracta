@@ -1,0 +1,82 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {createContext}=require('./state-harness.cjs');
+const {JSDOM}=require('jsdom');
+const {database,client,seed,remote,clone}=require('./test_sync_envio_pendente.js');
+const tick=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+ const c=createContext(), badges=[];
+ c.cloudBadge=(kind,text)=>badges.push({kind,text});
+ c.document=new JSDOM('<div id="avGridWrap"></div>').window.document;
+ const av={id:'A1',variaveis:['Mort'],tipos:{Mort:'razao'},varcfg:{Mort:{N:10}},notas:{},bruto:{}};
+ c.data={Q1:{estudos:[{id:'S1',numRepeticoes:1,tratamentos:[{id:'T1'}],avaliacoes:[av]}]}};
+ c.curV='Q1';c.curSid='S1';c.editingAvId='A1';c._avGrid=av;
+ c.avTriagemImediata=()=>{};c.avForenseCompletaAgendar=()=>{};
+ c._avAutoState=()=>({row:{key:'T1R1'},v:'Mort',campo:'n',total:1});
+ await tick();await tick();
+ const originalSet=c.localStorage.setItem;
+ const antes=clone(c.data);
+ originalSet('iracema-v7',JSON.stringify(c.data));
+ originalSet('agracta-local-state-ts','1');
+ c.localStorage.setItem=(k,v)=>{if(k==='iracema-v7')throw Error('QuotaExceededError');originalSet(k,v);};
+ c.avAutoWrite('7');
+ await c._avGravaLocalJa();
+ await tick();await tick();
+ assert.equal(c._agractaLocalSaveOk,false,'autosave registra falha no armazenamento rápido');
+ assert.ok(c.__testFB.checkpointChain,'cofre disponível');
+ await c.__testFB.checkpointChain;
+ const db=await new Promise((resolve,reject)=>{const r=c.indexedDB.open('agracta-local-first',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+ const snap=await new Promise((resolve,reject)=>{const r=db.transaction('snapshots').objectStore('snapshots').get('active');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});db.close();
+ assert.equal(snap.state.data.Q1.estudos[0].avaliacoes[0].bruto.T1R1.Mort.n,'7');
+ assert.ok(badges.some(b=>/salva neste aparelho/.test(b.text)));
+ // Novo processo: só armazenamento persistente e cofre sobrevivem.
+ const reaberto=createContext({store:{...c.__store},indexedDB:c.indexedDB});
+ for(let i=0;i<12;i++)await tick();
+ const restaurado=JSON.parse(reaberto.__store['iracema-v7']);
+ assert.equal(restaurado.Q1.estudos[0].avaliacoes[0].bruto.T1R1.Mort.n,'7','reabertura recupera o cofre mesmo quando o armazenamento rápido ficou velho');
+ assert.equal(restaurado.Q1.estudos[0].avaliacoes.length,1,'reabrir não duplica avaliação');
+ // Firestore simulado: sem conexão preserva o trabalho; voltar e reenviar é idempotente.
+ const env=database(), recuperado={...snap.state,data:restaurado};
+ const emissor=client(env.db,recuperado);
+ seed(env,emissor.c,{...snap.state,data:antes});
+ env.offline=true;
+ await assert.rejects(emissor.c.cloudSave(),/sem rede/);
+ assert.equal(emissor.c._unsavedChanges,true);
+ env.offline=false;await emissor.c.cloudSave();
+ let nuvem=remote(env,emissor.c);
+ assert.equal(nuvem.data.Q1.estudos[0].avaliacoes.length,1);
+ assert.equal(nuvem.data.Q1.estudos[0].avaliacoes[0].bruto.T1R1.Mort.n,'7');
+ assert.equal(Number(nuvem.data.Q1.estudos[0].avaliacoes[0].notas.T1R1.Mort),70);
+ const commits=env.commits.length;
+ await emissor.c.cloudSave();
+ assert.equal(env.commits.length,commits,'reenviar não duplica a transação');
+ const receptor=client(env.db,{...snap.state,data:antes});
+ await receptor.c.cloudPull();
+ assert.equal(receptor.state.data.Q1.estudos[0].avaliacoes[0].bruto.T1R1.Mort.n,'7','outro cliente recebe o dado recuperado');
+ // Os dois meios indisponíveis: jamais confirmar uma gravação que não ocorreu.
+ c.AgractaFirebase.flushLocal=()=>Promise.reject(Error('IndexedDB indisponível'));
+ c.avAutoWrite('8');await c._avGravaLocalJa();
+ assert.match(badges.at(-1).text,/avaliação não salva/);
+ assert.equal(av.bruto.T1R1.Mort.n,'8','mantém a edição em memória para tentar de novo');
+ // Armazenamento rápido recuperado: persiste o dado e o carimbo de recuperação.
+ c.localStorage.setItem=originalSet;
+ c.avAutoWrite('0');await c._avGravaLocalJa();
+ assert.equal(JSON.parse(c.__store['iracema-v7']).Q1.estudos[0].avaliacoes[0].bruto.T1R1.Mort.n,'0');
+ assert.equal(c._agractaLocalSaveOk,true);
+ assert.ok(Number(c.__store['agracta-local-state-ts'])>0);
+ assert.match(badges.at(-1).text,/cofre não atualizada/);
+ // Uma confirmação antiga não pode dizer que uma edição posterior está salva.
+ let confirmar;
+ c.AgractaFirebase.flushLocal=()=>new Promise(r=>{confirmar=r;});
+ c.avAutoWrite('2');const pendente=c._avGravaLocalJa();await tick();
+ c.avAutoWrite('3');confirmar(true);await pendente;
+ assert.match(badges.at(-1).text,/salvando avaliação/);
+ c.AgractaFirebase.flushLocal=()=>Promise.resolve(true);
+ await c._avGravaLocalJa();
+ assert.match(badges.at(-1).text,/salva neste aparelho/);
+ // Uma falha na interface não interrompe nem deixa a persistência rejeitada.
+ c.cloudBadge=()=>{throw Error('tela fechando');};
+ c.avAutoWrite('9');assert.equal(await c._avGravaLocalJa(),true);
+ assert.equal(JSON.parse(c.__store['iracema-v7']).Q1.estudos[0].avaliacoes[0].bruto.T1R1.Mort.n,'9');
+ console.log('Avaliação offline: quota, reabertura, reenvio sem duplicação, zero e confirmação assíncrona OK.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

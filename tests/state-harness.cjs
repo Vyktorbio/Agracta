@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('fs'),vm=require('vm');
-exports.createContext=function(){
+exports.createContext=function(options){
+options=options||{};
 function elStub(){
   return new Proxy(function(){}, {
     get: function(t, k){
@@ -15,7 +16,7 @@ function elStub(){
   });
 }
 
-var store = {'iracema-v7':'{}'};
+var store = options.store || {'iracema-v7':'{}'};
 var timers=[];
 var context = {
   console: console, Promise: Promise, setTimeout:function(fn,ms){var t={fn:fn,ms:ms};timers.push(t);return t;}, clearTimeout:function(t){if(t)t.cancelled=true;},
@@ -56,7 +57,7 @@ context.requestAnimationFrame = function(){};
 context.matchMedia = function(){ return {matches:false, addListener:function(){}, addEventListener:function(){}}; };
 context.fetch = function(){ return Promise.resolve({json: function(){ return Promise.resolve({}); }}); };
 
-context.indexedDB=new (require('fake-indexeddb').IDBFactory)();
+context.indexedDB=options.indexedDB||new (require('fake-indexeddb').IDBFactory)();
 vm.createContext(context);
 /* Os motores que alteram os dados de sincronização precedem app.js, como no index. */
 vm.runInContext(fs.readFileSync('vendor/versoes-core.js', 'utf8'), context, {filename:'vendor/versoes-core.js'});
