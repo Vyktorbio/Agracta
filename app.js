@@ -9599,10 +9599,10 @@ function _calcRenderShell(){
   _calcRenderKey=_calcSel?JSON.stringify([_calcSel.qid,_calcSel.sid]):null;
   var all=_calcAllStudies();
   var study=_calcStudy();
-  /* parcela: PREFERE o tamanho do protocolo do estudo (modelo.xls); senão o salvo pelo usuário
-     (padrão 10×5). O campo continua editável e o que ficar é salvo p/ a próxima. */
+  /* Estudo sem dimensões pede preenchimento: preferências de outro ensaio
+     não podem passar por dados deste protocolo. */
   var protoParc=study?_parseParcelaDim((study.protocolo||{}).tamanhoParcela):null;
-  var dims=protoParc||_calcParcelaDefault();
+  var dims=protoParc||(study?{comprimento:'',largura:''}:_calcParcelaDefault());
   var fromProto=!!protoParc;
   var defLen=dims.comprimento, defWid=dims.largura;
   var defReps=study?Math.max(1,parseInt(study.numRepeticoes)||1):4;
@@ -9636,7 +9636,8 @@ function _calcRenderShell(){
                             dead:defDead, bottles:defBottles, capL:defCap});
   var avisos=[];
   if(volsVariam) avisos.push('volumes diferentes por tratamento — cada um usa o seu');
-  if(fromProto) avisos.push('parcela e volume vindos do protocolo');
+  if(fromProto) avisos.push('dimensões da parcela vindas do protocolo');
+  else if(study) avisos.push('informe as dimensões da parcela deste estudo antes de calcular');
 
   var cfgHtml='<div class="calc-cfg'+(_calcCfgAberta?' aberta':'')+'">'+
     '<button type="button" class="calc-cfgh" onclick="calcCfgToggle()" aria-expanded="'+_calcCfgAberta+'" title="Abrir ou fechar a configuração">'+
@@ -13703,7 +13704,7 @@ function _bioestatJobAoa(qid,study,av,v){
      ainda ajusta a curva sobre a proporção, mas perde o peso amostral — então
      eles vão quando existem, e a coluna some quando não. */
   var tipo=(typeof _avTipo==='function')?_avTipo(av,v):'pct';
-  var comNN=(serie&&tipo==='razao');
+  var comNN=(tipo==='razao'); /* comparação de produtos também precisa do tamanho amostral */
   var header=['Local','Quadra','Cultura','Estudo','Data_avaliacao','Tipo','BBCH','Tratamento','Repeticao','Produto','Variavel','Valor'];
   if(serie) header.push('Dose');
   if(comNN) header=header.concat(['Afetados','N_total']);
@@ -13757,7 +13758,7 @@ var MOTOR_VERSAO='agracta-20';
    A versão 20 devolve o tamanho do efeito ao lado do p (ω² parcial, CV%, % contra
    a testemunha com IC de Fieller) e a interação tratamento × local.
    Resultados em cache precisam ser recalculados; fechamentos permanecem preservados. */
-var MOTOR_CALCULO='agracta-20';
+var MOTOR_CALCULO='agracta-21';
 /* O pedido de cálculo vale para ESTES dados (assinatura) e sobrevive a fechar o
    app: sem isto, reabrir escondia a estatística já calculada e guardada até
    alguém apertar o botão de novo. Mudou o dado, muda a assinatura e o pedido
@@ -13893,7 +13894,7 @@ function _bioestatRepetir(qid,sid){
 }
 function _bioestatSignature(study){
   var slim={motor:MOTOR_CALCULO,config:study.estatisticaPlanejada,protocolo:study.protocolo,desenho:study.desenho,r:study.numRepeticoes,t:(study.tratamentos||[]).map(function(t){return [t.id,t.produto,t.dose,t.testemunha,t.papelControle];}),
-    a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.tipos,a.varcfg,a.momento,a.variaveis,a.notas];})};
+    a:(study.avaliacoes||[]).map(function(a){return [a.id,a.data,a.tipo,a.tipos,a.varcfg,a.momento,a.variaveis,a.notas,a.bruto];})};
   return String(_hashSeed(JSON.stringify(slim)));
 }
 function _bioestatEnsureFrame(){
@@ -18687,7 +18688,14 @@ function avEnableStudyRandomizado(){
 }
 function avAutoWrite(val){
   var a=_avAutoState(); if(!a)return;
-  if(a.campo){ _avWriteBruto(a.row.key,a.v,a.campo,val,true); _avPersistNow(); } /* a cada tecla: quieto; o aviso vem no blur (avValidateCell) */
+  if(a.campo){
+    var gravado=_avWriteBruto(a.row.key,a.v,a.campo,val,true);
+    /* A persistência lê também ficha/tabela. Espelhar antes impede que um
+       campo antigo apague o lançamento automático, inclusive nos atalhos. */
+    _avEspelhar({value:gravado,getAttribute:function(k){return k==='data-t'?a.row.key:k==='data-v'?a.v:k==='data-b'?a.campo:null;}});
+    _avRefreshDer();
+    _avPersistNow();
+  }
   else _avSetCell(a.row.key,a.v,val);
 }
 function avAutoBump(delta){
@@ -22292,8 +22300,9 @@ function posResumo(p){
   var horas=p.horas+' h';
   if(p.chuvaMm==null) return 'sem leitura da estação nas '+horas+' seguintes';
   function n(v){ return (v==null||!isFinite(v))?null:String(Number(v).toFixed(1)).replace('.',','); }
-  if(!p.choveu) return 'não choveu nas '+horas+' seguintes';
-  var s=n(p.chuvaMm)+' mm nas '+horas+' seguintes';
+  var parcial=!p.completa || p.coberturaPct<100;
+  if(!p.choveu) return parcial?'sem chuva nas leituras disponíveis — janela de '+horas+' parcial':'não choveu nas '+horas+' seguintes';
+  var s=n(p.chuvaMm)+' mm '+(parcial?'nas leituras disponíveis — janela de '+horas+' parcial':'nas '+horas+' seguintes');
   if(p.primeiraChuvaHoras!=null) s+=' — a primeira chuva '+n(p.primeiraChuvaHoras)+' h depois';
   return s;
 }
