@@ -1,3 +1,22 @@
+AGRACTA — LOCALIDADES NO GERENCIAR LOCAIS (CANDIDATA)     15/11/2026
+AGRUPAR LOCAIS JA SALVOS SOB UMA LOCALIDADE
+
+O QUE MUDOU
+- Em Gerenciar locais, novo botao "Nova localidade": o nome e os locais ja salvos que entram nela (ex.: as duas areas do Bosqueiro). Locais e quadras nao sao alterados.
+- Cada localidade tem Editar (renomear, incluir e tirar locais) e Desfazer; dentro dela, cada local tem Separar. Separar e desfazer nao apagam nada.
+- O menu do nome do lugar mostra os locais agrupados sob a localidade; o botao do mapa mostra "Localidade › Local" quando o nome do local nao traz o da localidade.
+- A localidade e guardada no proprio local (campo "localidade") e sincroniza com ele. Nao cria colecao nova nem muda regras do Firestore.
+
+VERSOES
+app.js?v=241, pwa-update.js?v=4, sw.js?v=395, agracta-app-v397.
+
+CONFERIR ANTES DE PUBLICAR
+- Rodar bash conferir.sh. Em Gerenciar locais: criar a localidade com as duas areas, separar uma, editar para incluir de novo, desfazer; conferir o menu de locais e o botao do mapa.
+- Com dois aparelhos: a localidade criada em um aparece no outro depois da sincronizacao.
+- Nao altera Firestore, regras, quadras, estudos nem permissoes.
+
+----------------------------------------------------------------
+
 AGRACTA — AJUSTE DO MODO AUTOMATICO (CANDIDATA)     09/11/2026
 ORDEM DE CADASTRO NAO E RANDOMIZACAO EXPERIMENTAL
 

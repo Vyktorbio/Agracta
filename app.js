@@ -1677,7 +1677,10 @@ function _locCss(){ if(document.getElementById('locCss'))return; var s=document.
   s.textContent='.loc-chip{display:inline-flex;align-items:center;gap:6px;margin-top:5px;background:var(--surface-3,#161e1a);border:1px solid var(--border,#26322b);color:var(--accent,#37d684);padding:5px 11px;border-radius:999px;font:600 11px/1 -apple-system,system-ui,sans-serif;cursor:pointer;max-width:78vw;white-space:nowrap;transition:background .15s,border-color .15s}.loc-chip:hover{background:#1d2721;border-color:#33453a}.loc-chip b{color:#eaf3ed;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44vw}.loc-chip .car{color:var(--text-3,#6d7f73);font-size:9px}.loc-chip .sub{color:var(--text-3,#6d7f73);font-weight:600}'+
   '.loc-menu{position:fixed;z-index:1600;background:#0e120e;border:1px solid #2a3a2a;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.6);min-width:230px;max-width:86vw;overflow:hidden;font:13px system-ui,sans-serif}.loc-mi{padding:9px 12px;color:#cfe0cf;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}.loc-mi:hover{background:#16241a}.loc-mi.on{background:#15301a}.loc-mi .sub{color:#6a8a6a;font-size:11px;display:flex;align-items:center;gap:6px}.loc-sep{height:1px;background:#1e2e1e}.loc-new{color:var(--text);font-weight:700}.loc-x{color:#7a5a5a;font-size:13px;padding:0 3px;cursor:pointer}.loc-x:hover{color:#ff8a80}'+
   '.loc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:none;align-items:center;justify-content:center;padding:16px}.loc-box{background:#0e120e;border:1px solid #2a3a2a;border-radius:14px;max-width:440px;width:100%;padding:16px;font:13px system-ui,sans-serif;color:#dfeadf;box-sizing:border-box}.loc-box h3{margin:0 0 6px;font-size:15px;color:#cfe6cf}.loc-box label{display:block;font-size:11px;color:#8aa88a;margin:10px 0 3px;font-weight:600;letter-spacing:.4px}.loc-box input{width:100%;box-sizing:border-box;background:#0a0e0a;border:1px solid #2a3a2a;border-radius:8px;color:#eaf0ea;padding:9px;font-size:14px}.loc-box .row{display:flex;gap:8px}.loc-btn{flex:1;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}.loc-ok{background:var(--acao-bg);color:var(--acao-ink)}.loc-ok:hover{background:#35373c}.loc-cancel{background:#222;color:#bbb}.loc-2nd{background:var(--surface);color:var(--text);border:1px solid var(--border)}.loc-res{margin-top:6px;max-height:168px;overflow:auto}.loc-ri{padding:8px;border:1px solid #1e2e1e;border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px;color:#cfe0cf}.loc-ri:hover{background:#16241a}'+
-  '.lm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-soft,#1e2e1e)}.lm-info{display:flex;flex-direction:column;gap:2px;min-width:0}.lm-info b{color:var(--text,#eaf3ed);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lm-info span{font-size:11px;color:var(--text-3,#6a8a6a)}.lm-del{flex:none;background:rgba(216,75,67,.12);color:var(--danger,#d84b43);border:1px solid rgba(216,75,67,.42);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}.lm-del:hover{background:rgba(216,75,67,.22)}';
+  '.lm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-soft,#1e2e1e)}.lm-info{display:flex;flex-direction:column;gap:2px;min-width:0}.lm-info b{color:var(--text,#eaf3ed);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lm-info span{font-size:11px;color:var(--text-3,#6a8a6a)}.lm-del{flex:none;background:rgba(216,75,67,.12);color:var(--danger,#d84b43);border:1px solid rgba(216,75,67,.42);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}.lm-del:hover{background:rgba(216,75,67,.22)}'+
+  '.lm-sec{flex:none;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer}.lm-grp{margin-top:12px;border:1px solid var(--border,#26322b);border-radius:10px;padding:0 10px}.lm-grp .lm-row:last-child{border-bottom:none}.lm-grp-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0 8px;border-bottom:1px solid var(--border,#26322b)}.lm-in{flex-wrap:wrap}.lm-in .lm-info{flex:1 1 120px}'+
+  '.lm-chks{max-height:46vh;overflow:auto}.loc-box .lm-chk{display:flex;align-items:center;gap:10px;margin:0;padding:9px 2px;border-bottom:1px solid var(--border-soft,#1e2e1e);cursor:pointer;color:var(--text,#eaf3ed);font-size:13px;font-weight:400;letter-spacing:0}.loc-box .lm-chk input{width:18px;height:18px;padding:0;margin:0;flex:none}.lm-chk span{display:flex;flex-direction:column;gap:2px;min-width:0}.lm-chk b{font-weight:700}.lm-chk i{font-style:normal;font-size:11px;color:var(--text-3,#6a8a6a)}'+
+  '.loc-grp{padding:8px 12px 3px;font-size:11px;font-weight:700;color:#8aa88a}.loc-in{padding-left:24px}';
   document.head.appendChild(s);
 }
 /* Aviso de abertura por palpite: uma vez por sessão, e só quando havia escolha
@@ -1701,6 +1704,8 @@ function buildLocalChip(){
   var chip=document.getElementById('localChip');
   if(!chip){ chip=document.createElement('div'); chip.id='localChip'; chip.className='loc-chip'; chip.onclick=toggleLocalMenu; host.appendChild(chip); }
   var nome=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
+  var _ld=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].localidade)||'';
+  if(_ld && _locNorm(nome).indexOf(_locNorm(_ld))<0) nome=_ld+' › '+nome;
   var n=quadrasDoLocal(localAtivo).length;
   chip.innerHTML='<b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
   _localAvisaPalpite();
@@ -1767,8 +1772,11 @@ function openLocalMenu(){
   var chip=document.getElementById('localChip'), r=chip?chip.getBoundingClientRect():{left:12,bottom:50};
   var m=document.createElement('div'); m.id='localMenu'; m.className='loc-menu';
   var html='';
-  Object.keys(LOCAIS).forEach(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length, on=(id===localAtivo);
-    html+='<div class="loc-mi'+(on?' on':'')+'" data-go="'+id+'"><span>'+(on?'✓ ':'')+esc(Lc.nome)+'</span><span class="sub">'+n+'q</span></div>';
+  _localidadesBlocos().forEach(function(b){
+    if(b.nome) html+='<div class="loc-grp">'+esc(b.nome)+'</div>';
+    b.ids.forEach(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length, on=(id===localAtivo);
+      html+='<div class="loc-mi'+(on?' on':'')+(b.nome?' loc-in':'')+'" data-go="'+id+'"><span>'+(on?'✓ ':'')+esc(Lc.nome)+'</span><span class="sub">'+n+'q</span></div>';
+    });
   });
   var _dup=diagnosticarLugares().duplicados;
   if(_dup.length){
@@ -1819,18 +1827,106 @@ function excluirLocal(id){
   });
 }
 /* Painel "Gerenciar locais" — excluir qualquer local (com confirmação forte) */
+/* ---- Localidades: agrupam locais JÁ salvos sob um nome (ex.: as duas áreas do
+   Bosqueiro). O nome fica no próprio local (LOCAIS[id].localidade), então vai
+   para a nuvem junto com ele, sem coleção nova. Separar = tirar esse campo:
+   o local e as quadras dele não mudam. */
+var _locdChave='';
+function _kq(k){ return encodeURIComponent(k).replace(/'/g,'%27'); }
+function _localidadeDe(id){ var L=LOCAIS&&LOCAIS[id]; return (L&&L.localidade)||''; }
+function _localidadesBlocos(){
+  var blocos=[], porChave={};
+  Object.keys(LOCAIS).forEach(function(id){
+    var nm=_localidadeDe(id), k=nm?_locNorm(nm):'';
+    if(!k){ blocos.push({nome:'', ids:[id]}); return; }
+    if(!porChave[k]){ porChave[k]={nome:nm, ids:[]}; blocos.push(porChave[k]); }
+    porChave[k].ids.push(id);
+  });
+  return blocos;
+}
+function _localidadesRefresh(msg){
+  var m=document.getElementById('locModal'); if(m) m.style.display='none';
+  try{ buildLocalChip(); }catch(e){}
+  if(document.getElementById('locManage')) gerenciarLocais();
+  if(msg && typeof _stxToast==='function') _stxToast(msg);
+}
+function abrirLocalidade(kEnc){
+  _locCss(); ensureLocais();
+  _locdChave=kEnc?decodeURIComponent(kEnc):'';
+  var atual='', sel={}, ids=[];
+  if(_locdChave) Object.keys(LOCAIS).forEach(function(id){ if(_locNorm(_localidadeDe(id))===_locdChave){ atual=_localidadeDe(id); sel[id]=1; } });
+  _localidadesBlocos().forEach(function(b){ ids=ids.concat(b.ids); });
+  var lista=ids.map(function(id){
+    var Lc=LOCAIS[id], n=quadrasDoLocal(id).length, outra=_localidadeDe(id);
+    var dica=(outra && !sel[id]) ? ' · está em '+esc(outra) : '';
+    return '<label class="lm-chk"><input type="checkbox" value="'+id+'"'+(sel[id]?' checked':'')+'><span><b>'+esc(Lc.nome)+'</b><i>'+n+' quadra'+(n===1?'':'s')+dica+'</i></span></label>';
+  }).join('');
+  var m=document.getElementById('locModal');
+  if(!m){ m=document.createElement('div'); m.id='locModal'; m.className='loc-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; }
+  document.body.appendChild(m); /* por último no DOM: fica acima do painel Gerenciar locais */
+  m.innerHTML='<div class="loc-box"><h3>'+(_locdChave?'Editar localidade':'Nova localidade')+'</h3>'+
+    '<div style="font-size:11px;color:#6a8a6a;margin-bottom:2px">Junta locais já salvos sob um nome. Os locais e as quadras ficam como estão, e dá pra separar depois.</div>'+
+    '<label>Nome da localidade</label><input id="locdNome" placeholder="Ex.: Bosqueiro" autocomplete="off" value="'+esc(atual)+'">'+
+    '<label>Locais que entram nela</label><div class="lm-chks">'+lista+'</div>'+
+    '<div class="row" style="margin-top:12px"><button class="loc-btn loc-ok" onclick="salvarLocalidade()">'+(_locdChave?'Salvar':'Criar localidade')+'</button><button class="loc-btn loc-cancel" onclick="document.getElementById(\'locModal\').style.display=\'none\'">Cancelar</button></div></div>';
+  m.style.display='flex';
+  setTimeout(function(){ var i=document.getElementById('locdNome'); if(i && !_locdChave) i.focus(); },60);
+}
+function salvarLocalidade(){
+  ensureLocais();
+  var nome=((document.getElementById('locdNome')||{}).value||'').trim();
+  if(!nome){ alert('Dê um nome à localidade.'); return; }
+  var marc={}, nMarc=0;
+  document.querySelectorAll('#locModal .lm-chks input:checked').forEach(function(c){ marc[c.value]=1; nMarc++; });
+  if(!nMarc){ alert('Marque pelo menos um local.'); return; }
+  var k=_locNorm(nome), mudou=0;
+  if(!_locdChave){ /* nova, mas já existe uma com esse nome: os locais entram nela, com o nome que ela já tem */
+    Object.keys(LOCAIS).forEach(function(id){ var a=_localidadeDe(id); if(a && _locNorm(a)===k && !marc[id]) nome=a; });
+  }
+  Object.keys(LOCAIS).forEach(function(id){
+    var L=LOCAIS[id], atual=L.localidade||'';
+    if(marc[id]){ if(atual!==nome){ L.localidade=nome; _touchLocal(id); mudou++; } }
+    else if(_locdChave && atual && _locNorm(atual)===_locdChave){ delete L.localidade; _touchLocal(id); mudou++; }
+  });
+  if(mudou) saveLocais();
+  _localidadesRefresh(mudou ? 'Localidade "'+nome+'" · '+nMarc+' local'+(nMarc===1?'':'is') : '');
+}
+function separarDaLocalidade(id){
+  ensureLocais(); var L=LOCAIS[id]; if(!L||!L.localidade) return;
+  var ld=L.localidade; delete L.localidade; _touchLocal(id); saveLocais();
+  _localidadesRefresh('"'+L.nome+'" separado de '+ld);
+}
+function desfazerLocalidade(kEnc){
+  ensureLocais();
+  var k=decodeURIComponent(kEnc||''), ids=Object.keys(LOCAIS).filter(function(id){ return _locNorm(_localidadeDe(id))===k; });
+  if(!ids.length) return;
+  var nome=_localidadeDe(ids[0]);
+  if(!confirm('Desfazer a localidade "'+nome+'"?\n\nOs '+ids.length+' local'+(ids.length===1?'':'is')+' e as quadras continuam como estão; só deixam de ficar agrupados.')) return;
+  ids.forEach(function(id){ delete LOCAIS[id].localidade; _touchLocal(id); });
+  saveLocais();
+  _localidadesRefresh('Localidade "'+nome+'" desfeita');
+}
 function gerenciarLocais(){
   _locCss(); ensureLocais();
   var m=document.getElementById('locManage');
   if(!m){ m=document.createElement('div'); m.id='locManage'; m.className='loc-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
-  var rows=Object.keys(LOCAIS).map(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length;
-    return '<div class="lm-row"><div class="lm-info"><b>'+esc(Lc.nome)+'</b><span>'+n+' quadra'+(n===1?'':'s')+'</span></div>'+
+  function linha(id, dentro){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length;
+    return '<div class="lm-row'+(dentro?' lm-in':'')+'"><div class="lm-info"><b>'+esc(Lc.nome)+'</b><span>'+n+' quadra'+(n===1?'':'s')+'</span></div>'+
       '<div class="lm-acts" style="display:flex;gap:6px">'+
-      '<button class="lm-ren" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
+      '<button class="lm-sec" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
+      (dentro?'<button class="lm-sec" onclick="separarDaLocalidade(\''+id+'\')">Separar</button>':'')+
       '<button class="lm-del" onclick="excluirLocal(\''+id+'\')">Excluir</button></div></div>';
+  }
+  var rows=_localidadesBlocos().map(function(b){
+    if(!b.nome) return linha(b.ids[0], false);
+    var k=_kq(_locNorm(b.nome)), q=b.ids.length;
+    return '<div class="lm-grp"><div class="lm-grp-h"><div class="lm-info"><b>'+esc(b.nome)+'</b><span>Localidade · '+q+' local'+(q===1?'':'is')+'</span></div>'+
+      '<div class="lm-acts" style="display:flex;gap:6px"><button class="lm-sec" onclick="abrirLocalidade(\''+k+'\')">Editar</button><button class="lm-sec" onclick="desfazerLocalidade(\''+k+'\')">Desfazer</button></div></div>'+
+      b.ids.map(function(id){ return linha(id, true); }).join('')+'</div>';
   }).join('');
   m.innerHTML='<div class="loc-box" style="position:relative"><button class="panel-x-tr" onclick="document.getElementById(\'locManage\').style.display=\'none\'" aria-label="Fechar" title="Fechar">✕</button><h3>'+ic('gear',16)+' Gerenciar locais</h3>'+
-    '<div style="font-size:11px;color:#8a948e;margin-bottom:8px">Excluir um local remove ele e as quadras dele (pede confirmação digitando o nome). Não dá pra excluir o último.</div>'+
+    '<div style="font-size:11px;color:#8a948e;margin-bottom:8px">Excluir um local remove ele e as quadras dele (pede confirmação digitando o nome). Não dá pra excluir o último. Localidade junta locais já salvos (ex.: as duas áreas do Bosqueiro) sem mexer nas quadras.</div>'+
+    '<button class="loc-btn loc-2nd" style="width:100%;flex:none;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:2px" onclick="abrirLocalidade(\'\')">'+ic('plus',15)+' Nova localidade</button>'+
     rows+
     '<div class="row" style="margin-top:12px"><button class="loc-btn loc-cancel" onclick="document.getElementById(\'locManage\').style.display=\'none\'">Fechar</button></div></div>';
   m.style.display='flex';
