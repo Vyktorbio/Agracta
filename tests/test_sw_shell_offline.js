@@ -15,16 +15,17 @@
 'use strict';
 const assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm');
 
-function carregarSW(){
+function carregarSW(addAll=()=>Promise.resolve()){
   const guardado=new Map(), ouvintes={};
   const caches={
     open:()=>Promise.resolve({ put:(k,v)=>{ guardado.set(String(k.url||k),v); return Promise.resolve(); },
-                               match:k=>Promise.resolve(guardado.get(String(k.url||k))), addAll:()=>Promise.resolve() }),
+                               match:k=>Promise.resolve(guardado.get(String(k.url||k))), addAll }),
     match:k=>Promise.resolve(guardado.get(String(k.url||k))),
     keys:()=>Promise.resolve([]), delete:()=>Promise.resolve(true)
   };
   let proxima=null;
   const ctx={URL,Promise,console,caches,
+    Request:class extends Request{constructor(url,options){super(new URL(url,"https://agracta.test/"),options);}},
     fetch:()=>proxima?Promise.resolve(proxima):Promise.reject(new Error('sem rede')),
     self:{addEventListener:(k,f)=>{ouvintes[k]=f;},skipWaiting:()=>Promise.resolve(),
           clients:{claim:()=>Promise.resolve()},registration:{scope:'https://agracta.test/'}}};
@@ -33,6 +34,7 @@ function carregarSW(){
   vm.runInContext(fs.readFileSync('sw.js','utf8'),ctx);
   return {
     guardado,
+    instalar(){ let pronto; ouvintes.install({waitUntil:p=>{pronto=p;}}); return pronto; },
     rede(resp){ proxima=resp; },
     async navegar(caminho){
       let p; ouvintes.fetch({request:{url:'https://agracta.test'+caminho,method:'GET',mode:'navigate'},respondWith:x=>{p=x;}});
@@ -62,6 +64,27 @@ function resposta(corpo,o){ o=o||{};
 
   sw.rede(null); const off=await sw.navegar('/');
   ck(off&&off.corpo==='APP','sem rede, a navegação abre o app guardado');
+
+  for(const pagina of ['prancha','croqui','cliente','galeria-local','relatorio-local','probit']){
+    const caminho='/'+pagina+'.html';
+    sw.rede(resposta(pagina)); await sw.navegar(caminho+'?estudo=1');
+    for(const opcoes of [{redirected:true},{status:404},{type:'cors'}]){
+      sw.rede(resposta('resposta inválida',opcoes)); await sw.navegar(caminho);
+      sw.rede(null);
+      assert.equal((await sw.navegar(caminho+'?estudo=2')).corpo,pagina,caminho);
+    }
+    sw.rede(resposta(pagina+' atualizada')); await sw.navegar(caminho);
+    sw.rede(null); assert.equal((await sw.navegar(caminho)).corpo,pagina+' atualizada');
+  }
+  ck(shell()==='APP','documentos independentes preservam sua cópia válida e o shell');
+
+  const atualizar=carregarSW(async pedidos=>{
+    assert.ok(pedidos.some(p=>p.url==='https://agracta.test/croqui.html'));
+    assert.ok(pedidos.every(p=>p.redirect==='error'),'pré-cache recusa redirecionamentos');
+    throw new TypeError('redirecionamento durante o download');
+  });
+  await assert.rejects(atualizar.instalar(),/redirecionamento durante o download/);
+  await carregarSW().instalar();
 
   if(f){ console.log('\n'+f+' falha(s).'); process.exitCode=1; }
   else console.log('Shell offline: só o app entra; 404, portal cativo e outras páginas ficam de fora.');

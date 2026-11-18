@@ -24,7 +24,7 @@ const Store=require('../vendor/fotos-store.js'),Pptx=require('../vendor/fotos-pp
  const handlers={},puts=[],scope={URL,Promise,self:{addEventListener:(type,fn)=>handlers[type]=fn},fetch:()=>Promise.reject(Error('offline')),caches:{match:key=>Promise.resolve(key==='https://agracta.test/galeria-local.html'?'galeria':'app'),open:()=>Promise.resolve({put:(key)=>puts.push(key)})}};
  vm.runInNewContext(fs.readFileSync('sw.js','utf8'),scope);
  let response;handlers.fetch({request:{url:'https://agracta.test/galeria-local.html?v=1',method:'GET',mode:'navigate'},respondWith:r=>response=r});assert.equal(await response,'galeria');
- scope.fetch=()=>Promise.resolve({ok:true,clone:()=>({})});
+ scope.fetch=()=>Promise.resolve({ok:true,type:'basic',redirected:false,clone:()=>({})});
  handlers.fetch({request:{url:'https://agracta.test/galeria-local.html?v=1',method:'GET',mode:'navigate'},respondWith:r=>response=r});await response;await Promise.resolve();assert.deepEqual(puts,['https://agracta.test/galeria-local.html']);
  assert(fs.readFileSync('sw.js','utf8').includes("'./galeria-local.html'"));
  // Estrutura, relações, número de páginas, legendas escapadas e proporções.
