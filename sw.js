@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v398';
+var CACHE = 'agracta-app-v399';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './runtime-status.js?v=1',
@@ -50,7 +50,10 @@ var ASSETS = [
   './modelos/modelo-protocolo.xls', './modelos/protocolo-sinergista.xlsx'
 ];
 self.addEventListener('install', function(e){
-  e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }).then(function(){
+  /* Um portal de Wi-Fi pode redirecionar também durante a atualização.
+     addAll é atômico: se houver redirecionamento, a versão ativa continua disponível. */
+  var pedidos = ASSETS.map(function(url){ return new Request(url, {redirect:'error'}); });
+  e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(pedidos); }).then(function(){
     /* Primeira instalação assume o cliente atual. Em atualizações, espera o técnico aplicar. */
     if(!self.registration.active) return self.skipWaiting();
   }));
@@ -76,6 +79,9 @@ self.addEventListener('activate', function(e){
     }));
   }).then(function(){ return self.clients.claim(); }));
 });
+function documentoValido(resp){
+  return resp && resp.ok && !resp.redirected && resp.type === 'basic';
+}
 self.addEventListener('fetch', function(e){
   if(e.request.method !== 'GET') return;
   var u = new URL(e.request.url);
@@ -109,7 +115,7 @@ self.addEventListener('fetch', function(e){
     var chave = u.origin + u.pathname;
     e.respondWith(
       fetch(e.request).then(function(resp){
-        if(resp && resp.ok){ var cp=resp.clone(); caches.open(CACHE).then(function(c){ c.put(chave, cp); }); }
+        if(documentoValido(resp)){ var cp=resp.clone(); caches.open(CACHE).then(function(c){ c.put(chave, cp); }); }
         return resp;
       }).catch(function(){ return caches.match(chave); })
     );
@@ -125,7 +131,7 @@ self.addEventListener('fetch', function(e){
            app abria essa página no lugar do Agracta. */
         var raiz = new URL('./', self.registration.scope).pathname;
         var ehApp = (u.pathname === raiz || u.pathname === raiz + 'index.html');
-        if(ehApp && resp && resp.ok && !resp.redirected && resp.type === 'basic'){
+        if(ehApp && documentoValido(resp)){
           var copy = resp.clone();
           caches.open(CACHE).then(function(c){ c.put('./index.html', copy); });
         }
