@@ -138,6 +138,27 @@ if command -v python3 >/dev/null 2>&1; then
       grep -E "FALHA|Error" /tmp/agracta_teste.log | head -4 | sed 's/^/        /'
     fi
   done
+  PY_MOTOR="${AGRACTA_PYTHON:-}"
+  if [ -z "$PY_MOTOR" ]; then
+    for cand in python3 "$HOME/.claude-science/conda/envs/python/bin/python3"; do
+      if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "import numpy,scipy,pandas,statsmodels" >/dev/null 2>&1; then
+        PY_MOTOR="$cand"; break
+      fi
+    done
+  fi
+  if [ -n "$PY_MOTOR" ]; then
+    for t in tests/motor_*.py; do
+      [ -f "$t" ] || continue
+      if PYTHONPATH=estatistica "$PY_MOTOR" "$t" >/tmp/agracta_teste.log 2>&1; then
+        ok "$t"
+      else
+        avisar "$t FALHOU:"
+        tail -n 6 /tmp/agracta_teste.log | sed 's/^/        /'
+      fi
+    done
+  else
+    pulado "tests/motor_*.py (numpy/scipy/pandas/statsmodels ausentes no python3)"
+  fi
 fi
 
 # ------------------------------------------------- 3. cache: o erro silencioso

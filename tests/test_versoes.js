@@ -125,4 +125,5 @@ ok(!/SB\.rpc/.test(tela),'a tela não chama mais o Supabase');
 ok(/AgractaVersoes/.test(tela),'a tela lê o histórico do Firebase');
 ok(/function opEscrita/.test(sync)&&/type==='update'/.test(sync),'o sync grava por campos');
 ok(/FB\.semParcial=/.test(sync),'recusa do update volta ao documento inteiro');
+ok(/V\.lotes\(todosOps\._pares/.test(sync),'envio grande usa VersoesCore.lotes em writeReconciled');
 console.log('Versões: '+n+' verificações — mudanças, registro, golden de restauração, lotes e ligação.');

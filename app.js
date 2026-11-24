@@ -2420,7 +2420,7 @@ function cloudState(){
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
     var s=document.createElement('style'); s.id='cloudBadgeCss';
-    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#fbbf24;border-color:#5a4d1f;opacity:1}';
+    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:1250;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#fbbf24;border-color:#5a4d1f;opacity:1}';
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
@@ -14470,7 +14470,7 @@ function _bioestatRotuloDose(p){
 function _bioestatDoseHtml(a,nf,pf){
   var curvas=(a&&a.curvas)||(a&&a.doses_letais?[a]:null);
   if(!curvas||!curvas.length) return '';
-  var un=(a.comparacao&&a.comparacao.unidade)||'';
+  var un=(a.unidade||(a.comparacao&&a.comparacao.unidade))||'';
   var blocos=curvas.map(function(c){
     /* Um CL50 sem intervalo parece exato. Quando Fieller não fecha, isso é
        resultado — e tem de aparecer escrito, não como célula em branco. */

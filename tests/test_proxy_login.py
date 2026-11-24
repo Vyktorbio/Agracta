@@ -192,5 +192,19 @@ finally:
     os.environ.pop('EXIGIR_LOGIN',None)
     m.HOST=host0
 
+print('\nSegurança CORS, normalização de e-mail e cache limitado')
+check(m.origin_permitida('http://localhost:8080'),'localhost com porta numérica é permitido')
+check(not m.origin_permitida('http://localhost:80.evil.com'),'localhost com sufixo malicioso é recusado')
+check(not m.origin_permitida('http://127.0.0.1:80.evil.com'),'127.0.0.1 com sufixo malicioso é recusado')
+m._membros.clear()
+lidos_norm=[]
+check(m.membro_ativo('Tec@Lab.Com','t',AGORA,lambda em,tk:(lidos_norm.append(em),{'fields':{'active':{'booleanValue':True}}})[1]),'e-mail com maiúsculas normaliza para minúsculo')
+eq(lidos_norm,['tec@lab.com'],'e consulta o Firestore já em minúsculas')
+check(m.membro_ativo('TEC@LAB.COM','t',AGORA+60,lambda em,tk:(_ for _ in ()).throw(AssertionError('deveria vir do cache'))),'cache de membro acerta independente de maiúsculas')
+bc=m._BoundedCache(3)
+for i in range(5): bc['k'+str(i)]=i
+eq(len(bc),3,'_BoundedCache respeita teto máximo')
+check('k0' not in bc and 'k4' in bc,'_BoundedCache remove entrada mais antiga')
+
 print('\n%d ok, %d falha(s)'%(passes[0],falhas[0]))
 sys.exit(1 if falhas[0] else 0)

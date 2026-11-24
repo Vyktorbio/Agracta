@@ -62,6 +62,8 @@ def ep(dia, hora):
 print("\n--- O instante da aplicacao ---")
 eq(ep("2026-09-03", "09:31") - ep("2026-09-03", "08:31"), 3600, "uma hora sao 3600 s")
 eq(ep("2026-09-03", None), ep("2026-09-03", "00:00"), "sem hora, o dia comeca a meia-noite")
+from datetime import datetime, timezone, timedelta
+eq(ep("2026-09-03", "09:31"), int(datetime(2026, 9, 3, 9, 31, tzinfo=timezone(timedelta(hours=-3))).timestamp()), "epoch fixo em America/Sao_Paulo (UTC-3), independente do fuso do servidor")
 try:
     proxy._epoch_de("ontem", "09:31")
     ck(False, "data que nao e data deveria ser recusada")

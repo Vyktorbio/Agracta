@@ -72,11 +72,19 @@ def _decisao_letras(valores, grupos, alfa=0.05, sk_threshold=6):
         out["metodo"] = "Sem teste (sem variância)"
         out["letras"] = {g: "a" for g in niveis}
         return out
-    # repetição mínima
+    # repetição mínima: isola tratamentos com < 2 repetições sem cancelar os demais
     reps = {g: int(np.sum(grupos == g)) for g in niveis}
-    if any(r < 2 for r in reps.values()):
+    niveis_validos = [g for g in niveis if reps[g] >= 2]
+    if len(niveis_validos) < 2:
         out["metodo"] = "Sem teste (sem repetição)"
         return out
+    if len(niveis_validos) < len(niveis):
+        mask_v = np.isin(grupos, niveis_validos)
+        valores = valores[mask_v]
+        grupos = grupos[mask_v]
+        niveis = niveis_validos
+        reps = {g: reps[g] for g in niveis}
+        out["omitidos_sem_repeticao"] = [g for g in out["medias"] if g not in niveis]
 
     gs = [valores[grupos == g] for g in niveis]
     # homogeneidade (Levene) e normalidade dos resíduos (Shapiro)
@@ -152,19 +160,21 @@ def _kaplan_meier(df, alfa=0.05):
         n_ant = n_total0
         for i, tv in enumerate(tempos):
             if tv <= 0:
-                n_ant = vivos[i] if not np.isnan(vivos[i]) else n_ant
+                if not np.isnan(vivos[i]):
+                    n_ant = float(vivos[i])
                 continue
             cur = vivos[i]
-            mortes = int(round(max((n_ant if not np.isnan(n_ant) else 0) -
-                                   (cur if not np.isnan(cur) else 0), 0)))
+            if np.isnan(cur):
+                continue
+            base_ant = float(n_ant) if not np.isnan(n_ant) else float(cur)
+            cur_ef = min(float(cur), base_ant)
+            mortes = int(round(max(base_ant - cur_ef, 0.0)))
             for _ in range(mortes):
                 eventos.append((str(trat), float(tv), 1))
-            n_ant = cur
-        # sobreviventes no último tempo -> censurados
-        ult = g[g["Tempo"] == tempos.max()]
-        nv = ult["N_vivos"].iloc[-1]
-        if not np.isnan(nv) and nv > 0:
-            for _ in range(int(round(nv))):
+            n_ant = cur_ef
+        # sobreviventes no último tempo -> censurados (monotonicamente consistente com as mortes)
+        if not np.isnan(n_ant) and n_ant > 0:
+            for _ in range(int(round(n_ant))):
                 eventos.append((str(trat), float(tempos.max()), 0))
 
     if not eventos:
@@ -342,13 +352,13 @@ def analisar_tempo(dados, papeis, opcoes=None):
     if not tempos:
         return {"ok": False, "erro": "Não há avaliações com tempo > 0."}
 
-    # ---------- correção de controle: Abbott/SO (uniforme) ou Henderson-Tilton ----------
+    # ---------- correção de controle: Abbott/SO (uniforme ou sem t=0) ou Henderson-Tilton ----------
     correcao = "—"
     df["Efic_pct"] = np.nan
     base0 = df[df["Tempo"] == 0].groupby(["Tratamento", "Repeticao"])["N_total"].first()
-    uniforme = (base0.nunique() == 1) if len(base0) else False
+    uniforme = (base0.nunique() == 1) if len(base0) else (df["N_total"].dropna().nunique() == 1)
 
-    if uniforme:
+    if uniforme or not tem_t0:
         correcao = "Abbott / Schneider-Orelli"
         mc = df[df["Tratamento"] == controle].groupby("Tempo")["Mort_pct"].mean()
         def efic_row(r):
@@ -359,6 +369,11 @@ def analisar_tempo(dados, papeis, opcoes=None):
                 return np.nan
             return min(max((r["Mort_pct"] - MC) / (100 - MC) * 100, 0), 100)
         df["Efic_pct"] = df.apply(efic_row, axis=1)
+        if not tem_t0 and not uniforme:
+            avisos.append("Sem tempo 0 e com N inicial variável: eficácia estimada por Abbott sobre % de mortalidade; "
+                          "inclua a avaliação inicial para Henderson-Tilton.")
+        elif not tem_t0:
+            avisos.append("Sem tempo 0: N inicial uniforme — eficácia calculada por Abbott / Schneider-Orelli.")
     else:
         correcao = "Henderson-Tilton"
         T0 = df[df["Tempo"] == 0].groupby("Tratamento")["N_vivos"].mean()

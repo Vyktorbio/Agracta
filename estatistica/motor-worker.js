@@ -31,7 +31,7 @@ async function iniciar(cfg){
   avisar('Preparando o motor…', '');
   const arquivos = {}, hashes = {};
   for (const f of cfg.arquivos){
-    const r = await fetch('bioengine/' + f + '?v=' + cfg.versao, { cache: 'no-store' });
+    const r = await fetch('bioengine/' + f + '?v=' + cfg.versao);
     if (!r.ok) throw new Error('HTTP ' + r.status + ' em bioengine/' + f);
     const conteudo = await r.text();
     arquivos[f] = conteudo;

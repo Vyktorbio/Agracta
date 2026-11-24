@@ -1,28 +1,20 @@
 /* Service worker - cache local do app.
    App shell, ícones, fontes, bioengine e Pyodide ficam em cache para uso offline. */
-const CACHE = "bioensaio-v64-interface";
+const CACHE = "bioensaio-v65-interface";
+const PYO_CACHE = "agracta-pyodide-v1";
 const SHELL = [
   "../interface-neutra.css?v=7",
+  "../profundidade.css?v=4",
+  "../tipografia.css?v=2",
   /* MANTER igual ao estatistica/index.html: o pré-cache é por URL. Uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede, e deixa sem
      pré-carga justamente o que o HTML vai buscar — a casa parece offline e
      não está. O portão passa a conferir este pareamento (conferir.sh). */
-  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-20", "./app.js?v=bioensaio-auditoria-23", "./exemplos.js?v=bioensaio-auditoria-20", "./motor-worker.js?v=bioensaio-auditoria-21",
-  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-20",
+  "./", "./index.html", "./styles.css?v=bioensaio-auditoria-24", "./app.js?v=bioensaio-auditoria-24", "./exemplos.js?v=bioensaio-auditoria-24", "./motor-worker.js?v=bioensaio-auditoria-24",
+  "./manifest.webmanifest", "./manifest.webmanifest?v=bioensaio-auditoria-24",
   "./fonts/inter.woff2", "./fonts/sora.woff2",
   "./lib/xlsx.full.min.js",
-  "./pyodide/pyodide.js", "./pyodide/pyodide.asm.js", "./pyodide/pyodide.asm.wasm",
-  "./pyodide/python_stdlib.zip", "./pyodide/pyodide-lock.json",
-  "./pyodide/numpy-1.26.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
-  "./pyodide/openblas-0.3.26.zip",
-  "./pyodide/packaging-23.2-py3-none-any.whl",
-  "./pyodide/pandas-2.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
-  "./pyodide/patsy-0.5.6-py2.py3-none-any.whl",
-  "./pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
-  "./pyodide/pytz-2024.1-py2.py3-none-any.whl",
-  "./pyodide/scipy-1.12.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
-  "./pyodide/six-1.16.0-py2.py3-none-any.whl",
-  "./pyodide/statsmodels-0.14.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+  "./pyodide/pyodide.js",
   "./bioengine/__init__.py", "./bioengine/detect.py", "./bioengine/diagnostics.py",
   "./bioengine/doseresponse.py", "./bioengine/posthoc.py", "./bioengine/anova.py",
   "./bioengine/contrastes.py", "./bioengine/mistos.py", "./bioengine/equivalencia.py", "./bioengine/dosecontinua.py", "./bioengine/poder.py", "./bioengine/glmcount.py", "./bioengine/decide.py", "./bioengine/tempo.py", "./bioengine/validacao.py", "./bioengine/forense.py", "./bioengine/efeito.py",
@@ -66,6 +58,18 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const path = new URL(req.url).pathname;
+  if (path.indexOf("/pyodide/") >= 0 && !path.endsWith("/pyodide/pyodide.js")) {
+    e.respondWith(
+      caches.open(PYO_CACHE).then(c => c.match(req).then(hit => {
+        if (hit) return hit;
+        return fetch(req).then(resp => {
+          if (resp && resp.status === 200) c.put(req, resp.clone());
+          return resp;
+        });
+      }))
+    );
+    return;
+  }
   const interfaceFresh = req.mode === "navigate" ||
     /\/(index\.html|app\.js|styles\.css|exemplos\.js|manifest\.webmanifest|sw\.js)$/.test(path) ||
     /\/bioengine\/[^/]+\.py$/.test(path);

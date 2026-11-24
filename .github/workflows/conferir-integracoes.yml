@@ -17,9 +17,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet numpy scipy pandas statsmodels
       - run: npm install --ignore-scripts --no-audit --no-fund
       # O portao e o mesmo do duplo clique, mas a pergunta aqui e outra: este PR
       # esta sadio, nao "vou arrastar agora". Sem --pull-request, todo PR que nao
       # mexe no sw.js reprovava por CACHE igual ao do ar -- que e o correto para ele.
       - run: npm test -- --pull-request
+      - run: for t in tests/motor_*.py; do PYTHONPATH=estatistica python3 "$t"; done
       - run: npm run test:regras

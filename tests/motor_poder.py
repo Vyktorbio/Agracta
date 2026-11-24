@@ -58,6 +58,9 @@ assert poder_contraste(10., 8., 5, 4, 'dic') > poder_contraste(10., 8., 5, 4, 'd
 # ------------------------------------------------------- ida e volta do delta
 d = diferenca_detectavel(10., 6, 5, 'dbc', .05, .8, 'tukey', 'todos')
 assert abs(poder_contraste(10., d, 6, 5, 'dbc', .05, 'tukey', 'todos') - .8) < 1e-6
+# ncp extremo nao pode devolver NaN no brentq nem em poder_contraste
+p_ext = poder_contraste(10., 1000., 6, 5, 'dbc', .05, 'tukey', 'todos')
+assert np.isfinite(p_ext) and 0.999 <= p_ext <= 1.0, p_ext
 
 # ------------------------------------------------------------------ o plano
 p = planejar(k=4, delta=8., dp=10., poder_alvo=.8)

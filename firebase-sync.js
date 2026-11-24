@@ -991,7 +991,7 @@
     return COLLECTIONS_GRAVACAO.every(function(c){return stable(a[c]||{})===stable(b[c]||{});});
   }
   function queueOps(next,prev,rev){
-    prev=prev||{};var ops=[],V=window.VersoesCore;
+    prev=prev||{};var ops=[],pares=[],V=window.VersoesCore;
     FB.historicoAtivo=!!V;
     if(FB.historicoAtivo){
       var porNome=(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||''))||'';
@@ -1001,17 +1001,31 @@
         var reg=V.registro(m,rev);
         reg.em=window.firebase.firestore.FieldValue.serverTimestamp();
         reg.por=FB.user.email||'';reg.porNome=String(porNome).slice(0,120);
+        if(w.op.bytes==null)w.op.bytes=w.op.data?V.bytes(w.op.data):64;
         ops.push(w.op,{type:'set',ref:collectionRef('historico').doc(),data:reg});
+        var opHist=ops[ops.length-1];
+        opHist.bytes=reg.anterior?V.bytes(reg.anterior)+256:256;
+        pares.push([w.op,opHist]);
       });
     }else{
       COLLECTIONS_GRAVACAO.forEach(function(c){
         var n=next[c]||{},p=prev[c]||{};
         Object.keys(n).forEach(function(id){
-          if(!p[id]||stable(p[id])!==stable(n[id]))ops.push(opEscrita(c,id,p[id],n[id]).op);
+          if(!p[id]||stable(p[id])!==stable(n[id])){
+            var op=opEscrita(c,id,p[id],n[id]).op;
+            if(op.bytes==null&&V)op.bytes=op.data?V.bytes(op.data):64;
+            ops.push(op);pares.push([op]);
+          }
         });
-        Object.keys(p).forEach(function(id){if(!n[id])ops.push({type:'delete',ref:collectionRef(c).doc(id)});});
+        Object.keys(p).forEach(function(id){
+          if(!n[id]){
+            var del={type:'delete',ref:collectionRef(c).doc(id),bytes:64};
+            ops.push(del);pares.push([del]);
+          }
+        });
       });
     }
+    try{Object.defineProperty(ops,'_pares',{value:pares,enumerable:false});}catch(_e){ops._pares=pares;}
     return ops;
   }
   async function writeReconciled(st){
@@ -1019,39 +1033,58 @@
       var r=await readRemote(attempt>0);
       var merged=typeof cloudMerge==='function'?cloudMerge(st,r.state):st;
       var next=splitState(merged),newRev=(Number(r.meta.rev)||0)+1;
-      var ops=queueOps(next,r.flat,newRev);
-      FB.writePlan={next:next,ops:ops};FB.pendingWrites=ops.length;
-      if(!ops.length){
+      var todosOps=queueOps(next,r.flat,newRev);
+      FB.writePlan={next:next,ops:todosOps};FB.pendingWrites=todosOps.length;
+      if(!todosOps.length){
         merged.rev=r.meta.rev||0;
         return {state:merged,flat:next,rev:merged.rev,written:false};
       }
-      cloudBadge('saving','· '+ops.length+' alterações');
+      cloudBadge('saving','· '+todosOps.length+' alterações');
       try{
-        var writeId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-        /* Dados, histórico e revisão são uma única gravação. Se outro aparelho
-           avançou a raiz, relê e refaz o merge antes de tentar novamente. */
-        await FB.db.runTransaction(async function(tx){
-          var root=await tx.get(FB.db.doc(ROOT)),meta=root.exists?root.data():{};
-          if(remoteToken(meta)!==remoteToken(r.meta))throw syncConflict();
-          ops.forEach(function(o){naBatch(tx,o);});
-          tx.set(FB.db.doc(ROOT),{
-            rev:newRev,writeId:writeId,syncProtocol:3,
-            updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
-            updatedBy:FB.user.email||'',
-            updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
-            schema:2
-          },{merge:true});
-        });
+        var V=window.VersoesCore;
+        var fatias=(V&&typeof V.lotes==='function'&&todosOps._pares)?V.lotes(todosOps._pares,4000,7500000):[todosOps];
+        var curMeta=r.meta,confirmado=false,lastWriteId='';
+        for(var fi=0;fi<fatias.length;fi++){
+          var ops=fatias[fi],fatiaRev=(Number(curMeta.rev)||0)+1;
+          var writeId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+          ops.forEach(function(o){
+            if(o&&o.type==='set'&&o.data&&o.data.rev!=null&&o.data.colecao&&o.data.acao)o.data.rev=fatiaRev;
+          });
+          /* Dados, histórico e revisão são uma única gravação por lote. Se outro aparelho
+             avançou a raiz, relê e refaz o merge antes de tentar novamente. */
+          await FB.db.runTransaction(async function(tx){
+            var root=await tx.get(FB.db.doc(ROOT)),meta=root.exists?root.data():{};
+            if(fi===0&&!confirmado){if(remoteToken(meta)!==remoteToken(curMeta))throw syncConflict();}
+            else if(confirmado){if(remoteToken(meta)!==remoteToken(curMeta))throw syncConflict();}
+            else{if(Number(meta.rev||0)!==Number(curMeta.rev||0)||(meta.writeId||'')!==(curMeta.writeId||''))throw syncConflict();}
+            ops.forEach(function(o){naBatch(tx,o);});
+            tx.set(FB.db.doc(ROOT),{
+              rev:fatiaRev,writeId:writeId,syncProtocol:3,
+              updatedAt:window.firebase.firestore.FieldValue.serverTimestamp(),
+              updatedBy:FB.user.email||'',
+              updatedByName:(typeof window._currentUserName==='function'?window._currentUserName():(FB.user.displayName||'')),
+              schema:2
+            },{merge:true});
+          });
+          newRev=fatiaRev;lastWriteId=writeId;
+          curMeta={rev:fatiaRev,writeId:writeId,syncProtocol:3,schema:2};confirmado=false;
+          FB.myWrites=FB.myWrites||{};FB.myWrites[writeId]=1;
+          if(fi+1<fatias.length){
+            try{
+              var confF=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000),cmF=confF.exists?confF.data():{};
+              if(cmF.rev===fatiaRev&&cmF.writeId===writeId){curMeta=cmF;confirmado=true;}
+            }catch(_e){}
+          }
+        }
         merged.rev=newRev;
         /* Fotos antigas são só leitura e ficam no cache de leitura até a
            próxima revisão. Não comparar essas fatias com o estado gravável. */
         FB.remoteFlat=Object.assign({},next,{media:r.flat.media||{}});
-        FB.lastRev=newRev;FB.lastSeenWrite=writeId;FB.remoteToken=null;
-        FB.myWrites=FB.myWrites||{};FB.myWrites[writeId]=1;
+        FB.lastRev=newRev;FB.lastSeenWrite=lastWriteId;FB.remoteToken=null;
         salvarCacheRemoto();
         try{
           var confirmed=await _comPrazo(FB.db.doc(ROOT).get({source:'server'}),12000),cm=confirmed.exists?confirmed.data():{};
-          if(cm.rev===newRev&&cm.writeId===writeId)FB.remoteToken=remoteToken(cm);
+          if(cm.rev===newRev&&cm.writeId===lastWriteId)FB.remoteToken=remoteToken(cm);
           else FB.lerDepois=true;
         }catch(_e){FB.lerDepois=true;}
         return {state:merged,flat:next,rev:newRev,written:true};
@@ -1123,13 +1156,13 @@
       settled();setUnsavedChanges(true);
       console.error('[Agracta Firebase] gravação:',e);
       var cod=(e&&(e.code||e.name))||'erro',plan=FB.writePlan||{ops:[],next:null};
-      if(!FB.semParcial&&plan.ops.some(function(o){return o.type==='update';})&&
+      var grandeDemais=cod==='invalid-argument'?_documentoGrandeDemais(plan.next):null;
+      if(!FB.semParcial&&!grandeDemais&&plan.ops.some(function(o){return o.type==='update';})&&
          (cod==='not-found'||cod==='invalid-argument'||cod==='failed-precondition')){
         FB.semParcial={em:Date.now(),codigo:cod};
         return commitState(stateForCommit()||st);
       }
       /* Uma recusa não autoriza reenviar sem histórico. O dado fica pendente. */
-      var grandeDemais=cod==='invalid-argument'?_documentoGrandeDemais(plan.next):null;
       if(grandeDemais)
         cloudBadge('error','=⚠ não subiu: '+grandeDemais.nome+' passou de 1 MB ('+grandeDemais.kb+' KB) · salvo neste aparelho');
       else cloudBadge('error','=⚠ não subiu ('+cod+') · salvo neste aparelho · toque para tentar de novo');

@@ -420,12 +420,24 @@
   }
 
   function diagnosticar(){
-    fetch(NDVI_PROXY + '/health').then(function(r){ return r.json(); }).then(function(h){
-      if(!h || !h.hasCreds) ndviStatus('Servidor de imagens sem credencial do Copernicus.', 'err');
-      else ndviStatus('O servidor respondeu, mas não achei imagem nesta área. Dê zoom-out e tente de novo.', 'err');
-    }).catch(function(){
-      ndviStatus('Servidor de imagens dormindo — acordando, tente de novo em ~1 min.', 'err');
-    });
+    if(typeof navigator !== 'undefined' && navigator.onLine === false){
+      ndviStatus('Sem conexão com a internet no momento.', 'err');
+      return;
+    }
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ try{ ctrl.abort(); }catch(_e){} }, 8000) : null;
+    fetch(NDVI_PROXY + '/health', ctrl ? {signal: ctrl.signal} : undefined)
+      .then(function(r){ if(timer) clearTimeout(timer); return r.json(); })
+      .then(function(h){
+        if(!h || !h.hasCreds) ndviStatus('Servidor de imagens sem credencial do Copernicus.', 'err');
+        else ndviStatus('O servidor respondeu, mas não achei imagem nesta área. Dê zoom-out e tente de novo.', 'err');
+      }).catch(function(){
+        if(timer) clearTimeout(timer);
+        if(typeof navigator !== 'undefined' && navigator.onLine === false)
+          ndviStatus('Sem conexão com a internet no momento.', 'err');
+        else
+          ndviStatus('Servidor de imagens dormindo — acordando, tente de novo em ~1 min.', 'err');
+      });
   }
 
   window.ndviLoadDates = function(){

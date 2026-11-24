@@ -342,6 +342,7 @@ def _rodar_dose_resposta(dados, papeis, rinfo, chaves, fatores_cols, opcoes, alf
                 link=link_op, probs=probs, alfa=alfa,
                 natural=opcoes.get("natural", "auto"))
             r["grupo"] = grp
+            r["unidade"] = unidade
             curvas.append(r)
             # os avisos da curva (desenho, g, heterogeneidade) vão para o log de
             # decisão — é lá que a tela e o laudo os leem
@@ -356,6 +357,8 @@ def _rodar_dose_resposta(dados, papeis, rinfo, chaves, fatores_cols, opcoes, alf
 
     if len(curvas) == 1:
         return curvas[0]
+    if not curvas:
+        raise ValueError("Não foi possível ajustar nenhuma curva de dose-resposta." + (" " + avisos[-1] if avisos else ""))
 
     resultado = {"tipo_analise": "Dose-resposta (múltiplas curvas)", "curvas": curvas}
     if len(curvas) > 1:
@@ -529,5 +532,5 @@ def analisar(dados,papeis,opcoes=None):
                 rel['comparacao_medias'] = {'equivalencia': _equivalencia(
                     cm['misto'], opcoes, float(opcoes.get('alfa',.05)), bool(opcoes.get('maior_melhor',True)))}
         return rel
-    except (ValueError, np.linalg.LinAlgError) as e:
+    except (ValueError, RuntimeError, np.linalg.LinAlgError) as e:
         return {'ok':False,'erro':str(e)}

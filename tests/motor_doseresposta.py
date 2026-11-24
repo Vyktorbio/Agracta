@@ -183,6 +183,15 @@ a = rel['analise']
 ok(rel['ok'] and a.get('resposta_natural', {}).get('metodo') == 'estimada', 'roteador: dose-resposta com C estimado')
 ok('Robertson' in rel['decisao'], 'decisão cita Robertson et al. (2007)')
 
+# ------------------------------------------------------------------ 7. casos extremos e seguranca numerica
+_, lo0, hi0, g0 = dr._fieller(0.0, 0.0, 1.0, np.array([[0.1, 0.0], [0.0, 0.0]]), 1.96)
+ok(lo0 is None and hi0 is None and g0 == float('inf'), '_fieller com vD == 0 nao divide por zero')
+rel_plano = analisar({'dose': [0., 1., 2., 4., 8.], 'mortos': [5., 5., 5., 5., 5.], 'n': [10., 10., 10., 10., 10.]},
+                     {'resposta': 'mortos', 'dose': 'dose', 'n_total': 'n'}, {'unidade_dose': 'mL/L'})
+ok(not rel_plano['ok'] and rel_plano.get('erro'), 'curva plana retorna erro claro em vez de OverflowError ou curvas=[]')
+rel_u = analisar(dados, {'resposta': 'mortos', 'dose': 'dose', 'n_total': 'n'}, {'unidade_dose': 'g/L'})
+ok(rel_u['analise'].get('unidade') == 'g/L', 'curva unica preserva unidade da dose')
+
 print('Dose-resposta (Robertson et al., 2007): resposta natural por máxima verossimilhança, g, '
       'heterogeneidade de Finney, tabela por dose e razão de CL50/CL90 OK.' if not falhas
       else 'FALHAS: %d' % len(falhas))

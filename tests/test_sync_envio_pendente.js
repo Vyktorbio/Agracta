@@ -138,6 +138,17 @@ if(require.main===module)(async()=>{
   // A transaction write failure publishes nothing, including its root revision.
   edit(a,'T1R1',60,500);env.beforeCommit=async()=>{throw new Error('commit recusado');};const prior=JSON.stringify(env.docs);
   await assert.rejects(a.c.cloudSave(),/commit recusado/);assert.equal(JSON.stringify(env.docs),prior);assert.equal(a.c._unsavedChanges,true);
-  console.log('Sincronização: conflitos, corrida, edição durante envio, falha offline, ausência de eco, histórico atômico, update parcial, mídia legada intacta e 420 notas/fotos locais OK.');
+  // Batches exceeding 7.5 MB split into sequential atomic transactions with matching rev and history.
+  const fatiaEnv=database(),fa=client(fatiaEnv.db,initial());seed(fatiaEnv,fa.c,initial());await fa.c.cloudPull();
+  const textoGrande='X'.repeat(500000);
+  fa.state.notas_campo=Array.from({length:18},(_,i)=>({id:'L'+i,titulo:textoGrande,_ts:700}));
+  fa.c._unsavedChanges=true;const revAntesFatia=fatiaEnv.docs[root].rev,commitsAntesFatia=fatiaEnv.commits.length;
+  await fa.c.cloudSave();
+  const commitsFatia=fatiaEnv.commits.length-commitsAntesFatia;
+  assert.ok(commitsFatia>=2,'envio acima de 7,5 MB divide em múltiplas transações ('+commitsFatia+')');
+  assert.equal(fatiaEnv.docs[root].rev,revAntesFatia+commitsFatia,'revisão avança exatamente um por fatia');
+  assert.equal(remote(fatiaEnv,fa.c).notas_campo.length,18,'todos os documentos chegam após o fatiamento');
+  assertAtomicHistory(fatiaEnv);
+  console.log('Sincronização: conflitos, corrida, edição durante envio, falha offline, ausência de eco, histórico atômico, update parcial, mídia legada intacta, fatiamento > 7,5 MB e 420 notas/fotos locais OK.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
 module.exports={initial,database,client,seed,remote,av,edit,root,clone,tick,withDeadline,assertAtomicHistory};

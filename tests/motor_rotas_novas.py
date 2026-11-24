@@ -1,6 +1,7 @@
 import numpy as np
 from bioengine import analisar, planejar
 from bioengine.dosecontinua import _llog4
+from bioengine.tempo import analisar_tempo
 
 # ------------------------------------------------- curva de dose pelo roteador
 g = np.random.default_rng(20260910)
@@ -68,5 +69,26 @@ assert not gl['ok'] and 'ligação' in gl['erro'], gl
 pl = planejar(k=4, delta=8., dp=10., poder_alvo=.8)
 assert pl['ok'] and pl['repeticoes_minimas'] and pl['curva']
 assert any(c['repeticoes'] == pl['repeticoes_minimas'] for c in pl['curva'])
+
+# --------------------------------------------------- tempo sem t=0 e KM monotono
+t_sem0 = {
+    'trat': ['Testemunha'] * 9 + ['ProdA'] * 9 + ['ProdB'] * 7,
+    'rep':  ['1','1','1','2','2','2','3','3','3'] * 2 + ['1','1','1','2','2','2','3'],
+    't':    [1, 3, 7] * 6 + [1, 3, 7, 1, 3, 7, 1],
+    'nt':   [20] * 25,
+    'nv':   [20, 19, 18, 20, 20, 19, 19, 18, 18,
+             10, 4, 2, 11, 5, 3, 9, 4, 1,
+             14, 15, 6, 15, 10, 5, 14],  # ProdB tem 1 rep em t=3,7 e oscilacao 14->15
+}
+rt = analisar_tempo(t_sem0, {'tratamento': 'trat', 'repeticao': 'rep', 'tempo': 't', 'n_total': 'nt', 'n_vivos': 'nv'},
+                    {'controle_neg': 'Testemunha'})
+assert rt['ok'], rt.get('erro')
+at = rt
+assert at['rankings']['efic_final'], 'sem tempo 0 deve calcular eficacia por Abbott em vez de 100% NaN'
+assert all(np.isfinite(x['valor']) for x in at['rankings']['efic_final']), at['rankings']['efic_final']
+km_b = next(c for c in at['kaplan_meier']['curvas'] if c['tratamento'] == 'ProdB')
+assert km_b['n'] <= 60, f"Kaplan-Meier nao pode inflar n acima de N_total=60: {km_b}"
+let_t3 = next(l for l in at['letras_mortalidade'] if l['tempo'] == 3.0)
+assert let_t3.get('letras') and 'ProdA' in let_t3['letras'] and 'Testemunha' in let_t3['letras'], let_t3
 
 print('Rotas novas: curva de dose, equivalência, não-inferioridade, recusas e planejamento OK.')

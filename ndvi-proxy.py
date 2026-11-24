@@ -30,8 +30,75 @@ Login: fora /health e /solo/legenda, todo pedido leva  Authorization: Bearer <ID
 Firebase>  de um membro ativo do Agracta (veja a seção "login"). Local, sem $PORT, é livre.
 """
 import base64, hashlib, hmac, json, math, os, re, sys, threading, time, urllib.request, urllib.parse, urllib.error
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+TZ_BR = timezone(timedelta(hours=-3))
+
+
+class _BoundedCache(dict):
+    """Dicionário LRU com teto fixo e trava thread-safe, mantendo interface dict (.clear/.get)."""
+    def __init__(self, max_items=512):
+        super().__init__()
+        self._max = max_items
+        self._lock = threading.RLock()
+        self._order = OrderedDict()
+
+    def get(self, key, default=None):
+        with self._lock:
+            if key in self:
+                self._order.move_to_end(key, last=True)
+                return super().get(key)
+            return default
+
+    def __getitem__(self, key):
+        with self._lock:
+            val = super().__getitem__(key)
+            self._order.move_to_end(key, last=True)
+            return val
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            super().__setitem__(key, value)
+            self._order[key] = None
+            self._order.move_to_end(key, last=True)
+            while len(self._order) > self._max:
+                oldest, _ = self._order.popitem(last=False)
+                super().pop(oldest, None)
+
+    def clear(self):
+        with self._lock:
+            self._order.clear()
+            super().clear()
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_opener_sem_redirect = urllib.request.build_opener(_NoRedirect)
+
+
+def _validar_data_iso(s, nome="data"):
+    if not isinstance(s, str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", s.strip()):
+        raise ValueError("%s inválida (esperado AAAA-MM-DD)." % nome)
+    s = s.strip()
+    datetime.strptime(s, "%Y-%m-%d")
+    return s
+
+
+def _validar_bbox(bbox):
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        raise ValueError("bbox inválido (esperado 4 coordenadas w,s,e,n).")
+    w, s, e, n = [float(v) for v in bbox]
+    if not all(math.isfinite(v) for v in (w, s, e, n)):
+        raise ValueError("bbox contém valor não finito.")
+    if not (-180.0 <= w < e <= 180.0 and -90.0 <= s < n <= 90.0):
+        raise ValueError("bbox fora dos limites geográficos válidos.")
+    return w, s, e, n
 
 PORT = int(os.environ.get("PORT", "8799"))
 HOST = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"  # nuvem (Render) usa $PORT e 0.0.0.0; local fica em 127.0.0.1
@@ -55,9 +122,8 @@ def origin_permitida(origin):
         return False
     if origin in ALLOWED_ORIGINS:
         return True
-    # desenvolvimento local (qualquer porta)
-    return origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:") \
-        or origin in ("http://localhost", "http://127.0.0.1")
+    # desenvolvimento local (apenas localhost/127.0.0.1 com porta numérica opcional)
+    return bool(re.match(r"^http://(localhost|127\.0\.0\.1)(:\d{1,5})?$", origin))
 TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/process/v1"
 STATS_URL   = "https://sh.dataspace.copernicus.eu/statistics/v1"
@@ -80,24 +146,26 @@ def load_creds():
     return None, None
 
 _token = {"value": None, "exp": 0}
+_trava_token = threading.Lock()
 def get_token():
-    if _token["value"] and time.time() < _token["exp"] - 60:
+    with _trava_token:
+        if _token["value"] and time.time() < _token["exp"] - 60:
+            return _token["value"]
+        cid, csec = load_creds()
+        if not cid or not csec:
+            raise RuntimeError("SEM_CREDENCIAL")
+        body = urllib.parse.urlencode({
+            "grant_type": "client_credentials",
+            "client_id": cid,
+            "client_secret": csec,
+        }).encode()
+        req = urllib.request.Request(TOKEN_URL, data=body,
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read().decode())
+        _token["value"] = d["access_token"]
+        _token["exp"] = time.time() + int(d.get("expires_in", 600))
         return _token["value"]
-    cid, csec = load_creds()
-    if not cid or not csec:
-        raise RuntimeError("SEM_CREDENCIAL")
-    body = urllib.parse.urlencode({
-        "grant_type": "client_credentials",
-        "client_id": cid,
-        "client_secret": csec,
-    }).encode()
-    req = urllib.request.Request(TOKEN_URL, data=body,
-                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        d = json.loads(r.read().decode())
-    _token["value"] = d["access_token"]
-    _token["exp"] = time.time() + int(d.get("expires_in", 600))
-    return _token["value"]
 
 # ---------------------------------------------------------------- evalscripts
 def index_formula(index):
@@ -163,7 +231,7 @@ def api_post(url, payload, accept):
         "Content-Type": "application/json",
         "Accept": accept,
     })
-    with urllib.request.urlopen(req, timeout=90) as r:
+    with _opener_sem_redirect.open(req, timeout=90) as r:
         return r.read(), r.headers.get("Content-Type", accept)
 
 def evalscript_raw(index):
@@ -174,16 +242,13 @@ def evalscript_raw(index):
         "  var v=" + index_formula(index) + "; if(v<-1)v=-1; if(v>1)v=1; return [(v+1)/2, 1]; }")
 
 def do_index(index, date, bbox, width, geometry=None, raw=False):
-    w, s, e, n = bbox
+    w, s, e, n = _validar_bbox(bbox)
+    date = _validar_data_iso(date, "date")
     width = max(64, min(2500, int(width or 1024)))
     height = max(64, min(2500, int(round(width * (n - s) / (e - w))))) if e != w else width
-    from datetime import datetime, timedelta
-    try:
-        d0 = datetime.strptime(date, "%Y-%m-%d")
-        frm = (d0 - timedelta(days=3)).strftime("%Y-%m-%d")
-        to2 = (d0 + timedelta(days=3)).strftime("%Y-%m-%d")
-    except Exception:
-        frm = date; to2 = date
+    d0 = datetime.strptime(date, "%Y-%m-%d")
+    frm = (d0 - timedelta(days=3)).strftime("%Y-%m-%d")
+    to2 = (d0 + timedelta(days=3)).strftime("%Y-%m-%d")
     payload = {
         "input": {
             "bounds": {"bbox": [w, s, e, n], "properties": {"crs": CRS84}},
@@ -206,6 +271,8 @@ def do_index(index, date, bbox, width, geometry=None, raw=False):
     return api_post(PROCESS_URL, payload, "image/png")
 
 def do_stats(index, frm, to, geometry):
+    frm = _validar_data_iso(frm, "from")
+    to = _validar_data_iso(to, "to")
     payload = {
         "input": {
             "bounds": {"geometry": geometry, "properties": {"crs": CRS84}},
@@ -239,18 +306,17 @@ def do_stats(index, frm, to, geometry):
     return out
 
 def do_point(lat, lng, date):
-    import math
-    from datetime import datetime, timedelta
+    lat, lng = float(lat), float(lng)
+    if not (math.isfinite(lat) and math.isfinite(lng) and -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        raise ValueError("Coordenadas lat/lng inválidas.")
+    date = _validar_data_iso(date, "date")
     dlat = 12.0 / 110540.0
-    dlng = 12.0 / (111320.0 * math.cos(lat * math.pi / 180))
+    dlng = 12.0 / (111320.0 * max(math.cos(lat * math.pi / 180), 1e-6))
     poly = {"type": "Polygon", "coordinates": [[[lng - dlng, lat - dlat], [lng + dlng, lat - dlat],
             [lng + dlng, lat + dlat], [lng - dlng, lat + dlat], [lng - dlng, lat - dlat]]]}
-    try:
-        d0 = datetime.strptime(date, "%Y-%m-%d")
-        frm = (d0 - timedelta(days=3)).strftime("%Y-%m-%d")
-        to = (d0 + timedelta(days=4)).strftime("%Y-%m-%d")
-    except Exception:
-        frm = date; to = date
+    d0 = datetime.strptime(date, "%Y-%m-%d")
+    frm = (d0 - timedelta(days=3)).strftime("%Y-%m-%d")
+    to = (d0 + timedelta(days=4)).strftime("%Y-%m-%d")
     evalscript = ("//VERSION=3\n"
         "function setup(){ return { input:[{bands:[\"B03\",\"B04\",\"B05\",\"B08\",\"B11\",\"SCL\",\"dataMask\"]}], "
         "output:[{id:\"ndvi\",bands:1,sampleType:\"FLOAT32\"},{id:\"ndre\",bands:1,sampleType:\"FLOAT32\"},"
@@ -281,7 +347,9 @@ def do_point(lat, lng, date):
 
 def do_dates(bbox, frm, to):
     # Datas com imagem via Statistical API (mais confiavel que o catalog): dias com pixels validos.
-    w, s, e, n = bbox
+    w, s, e, n = _validar_bbox(bbox)
+    frm = _validar_data_iso(frm, "from")
+    to = _validar_data_iso(to, "to")
     poly = {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
     evalscript = ("//VERSION=3\n"
         "function setup(){ return { input:[{bands:[\"SCL\",\"dataMask\"]}], "
@@ -499,14 +567,14 @@ def do_clima_history(mac, date, hora=None):
     rain_daily = _hist_values(r.get("daily"))
     rain_rate = _hist_values(r.get("rain_rate"))
 
-    # Instante pedido (HH:MM). O epoch sai da data+hora no fuso da estação, que é
-    # o mesmo em que a Ecowitt grava o histórico — por isso o offset vem de time.
+    # Instante pedido (HH:MM). O epoch sai da data+hora em America/Sao_Paulo (UTC-3),
+    # independente do fuso do servidor (ex.: UTC no Render).
     alvo = None
     if hora:
         try:
             hh, mm = str(hora).strip().split(":")[:2]
-            tm = time.strptime("%s %02d:%02d" % (date, int(hh), int(mm)), "%Y-%m-%d %H:%M")
-            alvo = int(time.mktime(tm))
+            dt = datetime.strptime("%s %02d:%02d" % (date, int(hh), int(mm)), "%Y-%m-%d %H:%M")
+            alvo = int(dt.replace(tzinfo=TZ_BR).timestamp())
         except (ValueError, TypeError):
             alvo = None
 
@@ -641,7 +709,7 @@ SOLO_CAMPOS_CLASSE = ["legenda", "classe", "sibcs", "descricao", "desc_", "unida
                       "ordem", "solo", "nome", "label", "leg", "tipo_solo", "classe_sol"]
 SOLO_CAMPOS_SIGLA = ["sigla", "simbolo", "cod", "codigo", "unidade_ma", "um", "id_leg"]
 
-_solo_cache = {}   # chave -> {"ts": epoch, "val": resposta}
+_solo_cache = _BoundedCache(512)   # chave -> {"ts": epoch, "val": resposta}
 
 def _solo_norm(s):
     """Minusculas sem acento — so para casar nome de campo e nome de ordem."""
@@ -910,7 +978,7 @@ SOLO_PROPS = {
 SOLO_PROFS = [("0-5cm", 5), ("5-15cm", 10), ("15-30cm", 15)]
 SOLO_PROPS_TTL = 30 * 24 * 3600
 
-_solo_props_cache = {}
+_solo_props_cache = _BoundedCache(512)
 
 def _sg_valor(prop, prof, lon, lat):
     """GetFeatureInfo de UMA camada. Uma camada por requisicao de proposito: com
@@ -1151,25 +1219,24 @@ def do_solo_mapa(bbox, width):
 JANELA_MAX_DIAS = 180      # janela maior que isso e erro de digitacao, nao pedido
 JANELA_TTL = 6 * 3600      # dia fechado nao muda; o de hoje ainda muda, dai TTL curto
 JANELA_CHUVA_MIN = 0.2     # mm: abaixo disso e orvalho no pluviometro, nao "dia com chuva"
-_janela_cache = {}
+_janela_cache = _BoundedCache(512)
 
 
 def _dias_entre(de, ate):
     """Lista de YYYY-MM-DD de `de` ate `ate`, inclusive nas duas pontas."""
     try:
-        t0 = time.strptime(de, "%Y-%m-%d")
-        t1 = time.strptime(ate, "%Y-%m-%d")
+        d0 = datetime.strptime(de, "%Y-%m-%d").date()
+        d1 = datetime.strptime(ate, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         raise RuntimeError("CLIMA:datas invalidas (esperado AAAA-MM-DD).")
-    e0, e1 = int(time.mktime(t0)), int(time.mktime(t1))
-    if e1 < e0:
+    if d1 < d0:
         raise RuntimeError("CLIMA:a data final e anterior a inicial.")
-    dias, passo = [], e0
-    while passo <= e1:
-        dias.append(time.strftime("%Y-%m-%d", time.localtime(passo)))
+    dias, passo = [], d0
+    while passo <= d1:
+        dias.append(passo.strftime("%Y-%m-%d"))
         if len(dias) > JANELA_MAX_DIAS:
             raise RuntimeError("CLIMA:janela de mais de %d dias." % JANELA_MAX_DIAS)
-        passo += 86400
+        passo += timedelta(days=1)
     return dias
 
 
@@ -1279,11 +1346,11 @@ def do_clima_janela(mac, de, ate):
 POS_MAX_HORAS = 168        # sete dias; alem disso a pergunta e a da janela
 POS_TTL = 3600             # a janela recem-fechada ainda muda; TTL curto
 POS_CHUVA_MIN = 0.2        # mm: abaixo disso e orvalho no pluviometro
-_pos_cache = {}
+_pos_cache = _BoundedCache(512)
 
 
 def _epoch_de(data, hora=None):
-    """Epoch local de AAAA-MM-DD [HH:MM]. Sem hora, meia-noite do dia."""
+    """Epoch em America/Sao_Paulo (UTC-3) de AAAA-MM-DD [HH:MM]. Sem hora, meia-noite do dia."""
     hh, mm = 0, 0
     if hora:
         try:
@@ -1292,10 +1359,10 @@ def _epoch_de(data, hora=None):
         except (ValueError, TypeError, IndexError):
             hh, mm = 0, 0
     try:
-        tm = time.strptime("%s %02d:%02d" % (data, hh, mm), "%Y-%m-%d %H:%M")
+        dt = datetime.strptime("%s %02d:%02d" % (data, hh, mm), "%Y-%m-%d %H:%M")
     except (ValueError, TypeError):
         raise RuntimeError("CLIMA:data ou hora invalida (esperado AAAA-MM-DD e HH:MM).")
-    return int(time.mktime(tm))
+    return int(dt.replace(tzinfo=TZ_BR).timestamp())
 
 
 def _chuva_serie_dia(mac, dia):
@@ -1313,9 +1380,9 @@ def _chuva_serie_dia(mac, dia):
 
 
 def _meia_noite_de(epoch):
-    """Epoch das 00:00 do dia a que este instante pertence."""
-    t = time.localtime(epoch)
-    return int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+    """Epoch das 00:00 (America/Sao_Paulo, UTC-3) do dia a que este instante pertence."""
+    dt = datetime.fromtimestamp(epoch, tz=TZ_BR)
+    return int(datetime(dt.year, dt.month, dt.day, 0, 0, 0, tzinfo=TZ_BR).timestamp())
 
 
 def _chuva_no_intervalo(serie, ini, fim):
@@ -1479,7 +1546,7 @@ class LoginRecusado(Exception):
 
 _trava_login = threading.Lock()
 _jwks = {"chaves": {}, "ate": 0.0, "forcado": 0.0}
-_membros = {}   # e-mail -> (ativo, válido até)
+_membros = _BoundedCache(512)   # e-mail (minúsculo) -> (ativo, válido até)
 _contagem = {"ok": 0, "sem_token": 0, "token_invalido": 0, "nao_membro": 0, "indisponivel": 0}
 
 def modo_login(agora=None):
@@ -1603,11 +1670,12 @@ def verificar_token(token, agora=None, chaves=None):
     return dec
 
 def _ler_membro(email, token):
+    email = (email or "").strip().lower()
     url = MEMBRO_URL % (FIREBASE_PROJECT_ID, urllib.parse.quote(email, safe="@."))
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token,
                                                "User-Agent": "agracta-proxy"})
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with _opener_sem_redirect.open(req, timeout=10) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
         if e.code in (403, 404):
@@ -1620,7 +1688,8 @@ def membro_ativo(email, token, agora=None, ler=None):
     então o proxy não precisa de conta de serviço. A resposta fica guardada 10 min quando
     é sim (desativar alguém vale em até 10 min) e 1 min quando é não."""
     agora = time.time() if agora is None else agora
-    if email.lower() in ADMINS:
+    email = (email or "").strip().lower()
+    if email in ADMINS:
         return True
     with _trava_login:
         c = _membros.get(email)
@@ -1708,17 +1777,24 @@ class H(BaseHTTPRequestHandler):
         import urllib.error as ue
         if isinstance(e, RuntimeError) and str(e) == "SEM_CREDENCIAL":
             return self._json({"error": "Sem credencial. Configure rodando python3 ndvi-proxy.py."}, 400)
+        if isinstance(e, (ValueError, KeyError, json.JSONDecodeError)):
+            return self._json({"error": "Parâmetro inválido: " + str(e)}, 400)
         if isinstance(e, ue.HTTPError):
             try: detail = e.read().decode()[:500]
             except Exception: detail = ""
             return self._json({"error": "Sentinel Hub %s: %s" % (e.code, detail)}, 502)
-        return self._json({"error": repr(e)}, 500)
+        print("[erro]", repr(e), flush=True)
+        return self._json({"error": "Erro interno no servidor de integração."}, 500)
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
         if not self._login_ok(u.path):
             return
         try:
             ln = int(self.headers.get("Content-Length", 0) or 0)
+            if ln < 0:
+                return self._json({"error": "Content-Length inválido."}, 400)
+            if ln > 524288:
+                return self._json({"error": "Corpo da requisição excede o limite de 512 KB."}, 413)
             body = json.loads(self.rfile.read(ln).decode()) if ln else {}
             if u.path == "/index":
                 img, ctype = do_index(body.get("index", "NDVI"), body["date"], body["bbox"],
@@ -1832,8 +1908,11 @@ class H(BaseHTTPRequestHandler):
             self._json({"error": "Sentinel Hub %s: %s" % (e.code, detail)}, 502)
         except KeyError as e:
             self._json({"error": "Parametro obrigatorio ausente: " + str(e)}, 400)
+        except ValueError as e:
+            self._json({"error": "Parametro invalido: " + str(e)}, 400)
         except Exception as e:
-            self._json({"error": repr(e)}, 500)
+            print("[erro]", repr(e), flush=True)
+            self._json({"error": "Erro interno no servidor de integração."}, 500)
 
 def setup_creds_interactive():
     """Pergunta a credencial no Terminal (fica só na sua máquina) e salva localmente."""

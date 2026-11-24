@@ -2,7 +2,7 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'agracta-app-v399';
+var CACHE = 'agracta-app-v400';
 var PYO_CACHE = 'agracta-pyodide-v1'; /* Pyodide pesado (~115MB) — cache próprio, persiste entre updates do app */
 var ASSETS = [
   './runtime-status.js?v=1',
@@ -28,7 +28,7 @@ var ASSETS = [
   './cliente.html', './cliente.js?v=2',
   /* MANTER igual ao index.html: o pré-cache é por URL, então uma versão
      defasada aqui pré-carrega um arquivo que ninguém mais pede. */
-  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=242',
+  './styles.css?v=42', './theme-2026.css?v=13', './ui-campo.css?v=14', './app.js?v=243',
   './satelites.css?v=3', './vendor/satelites-core.js?v=2', './satelites.js?v=2',
   './vendor/observacao-core.js?v=1', './vendor/eventos-core.js?v=3', './vendor/assinatura-core.js?v=2', './eventos-app.js?v=4', './trilha-formal.js?v=3',
   './vendor/eppo-core.js?v=1', './data/eppo.json?v=1', './conhecimento-canonico.js?v=1',
@@ -37,16 +37,24 @@ var ASSETS = [
   './vendor/Leaflet.ImageOverlay.Rotated.js',
   './vendor/quadras-default.js?v=2', './vendor/biocalc-campo-core.js?v=9', './vendor/aplicacao-core.js?v=2', './vendor/nutricao-core.js', './vendor/concordancia-core.js', './vendor/dose-core.js?v=7', './vendor/consumo-core.js', './vendor/protocolo-core.js', './vendor/protocolo-vivo-core.js?v=2', './vendor/versoes-core.js?v=3', './vendor/campo-inteligente-core.js?v=1', './campo-inteligente.js?v=3', './vendor/fotos-notas-core.js?v=1', './vendor/arena-core.js?v=3', './vendor/bioensaio-core.js?v=3', './vendor/armazenamento-core.js?v=1', './vendor/agrofit-core.js?v=2', './vendor/ativos-en-core.js?v=1', './vendor/bbch-core.js?v=2', './vendor/janela-core.js?v=1', './vendor/historico-core.js?v=1', './data/agrofit.json?v=1', './data/agrofit-culturas.json?v=1', './vendor/biocalc-lab-core.js?v=4', './vendor/xlsx.full.min.js', './vendor/jszip.min.js',
   './vendor/firebase-app-compat.js', './vendor/firebase-auth-compat.js',
-  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=34',
-  './acesso-horario.js?v=7', './vendor/papeis-core.js?v=1', './papeis-app.js?v=3', './ui-campo.js?v=28', './alvos-catalogo.js?v=2',
-  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=4', './P2p Sync.js?v=3',
+  './vendor/firebase-firestore-compat.js', './firebase-config.js', './firebase-sync.js?v=35',
+  './acesso-horario.js?v=7', './vendor/papeis-core.js?v=1', './papeis-app.js?v=3', './ui-campo.js?v=29', './alvos-catalogo.js?v=2',
+  './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './apple-touch-icon.png?v=1', './iphone.js?v=1', './pwa-update.js?v=5', './P2p Sync.js?v=3',
   /* Núcleo estatístico auditado + as pranchas de figura do relatório */
   './estatistica.js?v=2', './croqui.html', './prancha.html',
   /* Análise probit da bancada (botão Probit na ficha do laboratório) */
   './probit.html', './probit.js?v=1', './probit.css?v=3', './vendor/probit-core.js?v=1',
   /* Shell do BioEstat embutido (estatística). Pyodide pesado fica em cache próprio (runtime, 1º uso). */
-  './estatistica/index.html', './estatistica/app.js', './estatistica/styles.css',
-  './estatistica/exemplos.js', './estatistica/lib/xlsx.full.min.js',
+  './estatistica/index.html', './estatistica/app.js?v=bioensaio-auditoria-24', './estatistica/styles.css?v=bioensaio-auditoria-24',
+  './estatistica/exemplos.js?v=bioensaio-auditoria-24', './estatistica/motor-worker.js?v=bioensaio-auditoria-24',
+  './estatistica/manifest.webmanifest?v=bioensaio-auditoria-24', './estatistica/lib/xlsx.full.min.js',
+  './estatistica/pyodide/pyodide.js',
+  './estatistica/bioengine/__init__.py', './estatistica/bioengine/detect.py', './estatistica/bioengine/diagnostics.py',
+  './estatistica/bioengine/doseresponse.py', './estatistica/bioengine/posthoc.py', './estatistica/bioengine/anova.py',
+  './estatistica/bioengine/contrastes.py', './estatistica/bioengine/mistos.py', './estatistica/bioengine/equivalencia.py',
+  './estatistica/bioengine/dosecontinua.py', './estatistica/bioengine/poder.py', './estatistica/bioengine/glmcount.py',
+  './estatistica/bioengine/decide.py', './estatistica/bioengine/tempo.py', './estatistica/bioengine/validacao.py',
+  './estatistica/bioengine/forense.py', './estatistica/bioengine/efeito.py',
   './modelos/modelo-protocolo.xls', './modelos/protocolo-sinergista.xlsx'
 ];
 self.addEventListener('install', function(e){
@@ -101,8 +109,18 @@ self.addEventListener('fetch', function(e){
   }
   /* Resto do BioEstat (shell + motor .py): cache-first, runtime-cache o que faltar (NÃO cai no index do Agracta). */
   if(u.pathname.indexOf('/estatistica/') >= 0){
-    e.respondWith(caches.match(e.request).then(function(r){
-      return r || fetch(e.request).then(function(resp){ if(resp && resp.ok){ var copy=resp.clone(); caches.open(CACHE).then(function(c){ c.put(e.request, copy); }); } return resp; });
+    e.respondWith(caches.open(CACHE).then(function(c){
+      return c.match(e.request).then(function(r){
+        if(r) return r;
+        return fetch(e.request).then(function(resp){
+          if(resp && resp.ok) c.put(e.request, resp.clone());
+          return resp;
+        }).catch(function(){
+          return c.match(e.request, {ignoreSearch:true}).then(function(r2){
+            return r2 || caches.match(e.request, {ignoreSearch:true});
+          });
+        });
+      });
     }));
     return;
   }
@@ -140,5 +158,13 @@ self.addEventListener('fetch', function(e){
     );
     return;
   }
-  e.respondWith(caches.match(e.request).then(function(r){ return r || fetch(e.request); }));
+  e.respondWith(caches.match(e.request).then(function(r){
+    return r || fetch(e.request).then(function(resp){
+      if(documentoValido(resp)){
+        var cp=resp.clone();
+        caches.open(CACHE).then(function(c){ c.put(e.request, cp); });
+      }
+      return resp;
+    });
+  }));
 });

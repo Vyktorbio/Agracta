@@ -74,6 +74,19 @@ def _critico(k, gl, alfa, ajuste, familia):
     raise ValueError('Correção de multiplicidade não reconhecida.')
 
 
+def _poder_nct_seguro(crit, gl, ncp):
+    """Poder bilateral de t não-central com fallback por quadratura se nct retornar NaN (SciPy >=1.11 em ncp alto)."""
+    val = float(stats.nct.sf(crit, gl, ncp) + stats.nct.cdf(-crit, gl, ncp))
+    if np.isfinite(val):
+        return min(max(val, 0.0), 1.0)
+    u = np.linspace(1e-6, 1.0 - 1e-6, 513)
+    v = stats.chi2.ppf(u, gl)
+    s = np.sqrt(v / gl)
+    p = stats.norm.sf(crit * s - ncp) + stats.norm.cdf(-crit * s - ncp)
+    est = float(np.sum(0.5 * (p[:-1] + p[1:]) * np.diff(u)))
+    return min(max(est, 0.0), 1.0)
+
+
 def poder_contraste(dp, delta, r, k, desenho='dbc', alfa=.05, ajuste='tukey', familia='todos', crit=None):
     """Poder de UMA comparação entre dois tratamentos, com a multiplicidade da
        família em que ela vai ser testada. EP(diferença) = dp*raiz(2/r).
@@ -85,7 +98,7 @@ def poder_contraste(dp, delta, r, k, desenho='dbc', alfa=.05, ajuste='tukey', fa
     if crit is None:
         crit = _critico(k, gl, alfa, ajuste, familia)
     ncp = float(delta / (dp * np.sqrt(2.0 / r)))
-    return float(stats.nct.sf(crit, gl, ncp) + stats.nct.cdf(-crit, gl, ncp))
+    return _poder_nct_seguro(crit, gl, ncp)
 
 
 def poder_f(dp, delta, r, k, desenho='dbc', alfa=.05):
@@ -111,7 +124,11 @@ def diferenca_detectavel(dp, r, k, desenho='dbc', alfa=.05, poder_alvo=.8,
     crit = _critico(k, gl, alfa, ajuste, familia)   # uma vez, não a cada passo da busca
     def f(d):
         return poder_contraste(dp, d, r, k, desenho, alfa, ajuste, familia, crit) - poder_alvo
-    lo, hi = 1e-9 * max(dp, 1e-12), dp * 100.0
+    lo = 1e-9 * max(dp, 1e-12)
+    teto = dp * 100.0
+    hi = min(teto, max(dp * np.sqrt(2.0 / r) * (crit + 1.0), lo * 10.0))
+    while hi < teto and f(hi) < 0:
+        hi = min(teto, hi * 2.0)
     if f(hi) < 0:
         return None
     return float(optimize.brentq(f, lo, hi, xtol=dp * 1e-6))

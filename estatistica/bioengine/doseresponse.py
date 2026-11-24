@@ -82,13 +82,17 @@ def _fieller(theta, b0, b1, cov, tcrit):
 
     N = theta - b0
     D = b1
+    if D == 0 or not np.isfinite(D):
+        return float("nan"), None, None, float("inf")
     r = N / D
     vN = v_b0
     vD = v_b1
     cND = -cov_b0b1
+    if vD <= 0 or not np.isfinite(vD):
+        return r, None, None, float("inf")
 
     g = (tcrit ** 2) * vD / (D ** 2)
-    if g >= 1:
+    if g >= 1 or not np.isfinite(g):
         return r, None, None, g  # denominador não diferente de zero: IC ilimitado
 
     centro = (r - g * cND / vD) / (1 - g)
@@ -208,6 +212,8 @@ def _ajustar_ml(x, y, n, link, yc=0.0, nc=0.0, c_fixo=None, chute=(0.0, 1.0)):
                           options={"xatol": 1e-9, "fatol": 1e-11, "maxiter": 4000})
             if estima_c and not (0.0 <= r2.x[0] < 0.99 and r2.x[2] > 0):
                 r2 = r
+            elif not estima_c and not (-100.0 <= r2.x[0] <= 100.0 and r2.x[1] > 0):
+                r2 = r
             if melhor is None or r2.fun < melhor.fun:
                 melhor = r2
         except Exception:  # pragma: no cover
@@ -326,6 +332,9 @@ def analisar_dose_resposta(dose, y, n, controle_mort=None, log_dose=True,
             # resposta natural detectável — segue o modelo sem ela
             metodo_nat = "ausente"
             validos = {lk: _ajustar_glm(x, yt, nt, lk) for lk in validos}
+        elif metodo_nat == "declarada" and not ml:
+            # ML não convergiu com C fixo: o ajuste válido foi feito sobre y_glm (Abbott)
+            abbott_aplicado = True
 
     # escolha de ligação — menor AIC na mesma família de modelo
     if ml:
@@ -346,6 +355,8 @@ def analisar_dose_resposta(dose, y, n, controle_mort=None, log_dose=True,
         loglik, k_par = float(res.llf), 2
 
     se_b1 = float(np.sqrt(max(cov[1, 1], 0.0)))
+    if not np.isfinite(b1) or b1 <= 0:
+        raise ValueError("A curva não apresenta inclinação positiva estimável (dose-resposta inválida ou plana).")
     Fm = _cdf(melhor)
 
     # ----- aderência (Pearson) e heterogeneidade — linhas como entraram -----
@@ -390,12 +401,14 @@ def analisar_dose_resposta(dose, y, n, controle_mort=None, log_dose=True,
     for p in probs:
         theta = _quantil(melhor, p)
         xp, lo, hi, g = _fieller(theta, b0, b1, cov, tcrit)
+        if not np.isfinite(xp) or (log_dose and abs(xp) > 300):
+            raise ValueError("Dose letal estimada fora da faixa numérica (inclinação próxima de zero).")
         registro = {"p": p, "log_dose": float(xp), "g": float(g),
-                    "ic_confiavel": bool(g < G_LIMITE)}
+                    "ic_confiavel": bool(np.isfinite(g) and g < G_LIMITE)}
         if log_dose:
             registro["dose"] = float(10 ** xp)
-            registro["ic_inf"] = float(10 ** lo) if lo is not None else None
-            registro["ic_sup"] = float(10 ** hi) if hi is not None else None
+            registro["ic_inf"] = float(10 ** lo) if (lo is not None and np.isfinite(lo) and abs(lo) <= 300) else None
+            registro["ic_sup"] = float(10 ** hi) if (hi is not None and np.isfinite(hi) and abs(hi) <= 300) else None
         else:
             registro["dose"] = float(xp)
             registro["ic_inf"] = float(lo) if lo is not None else None
